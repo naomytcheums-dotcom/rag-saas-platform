@@ -14,7 +14,18 @@ from celery.schedules import crontab
 
 from api.config import settings
 
-celery_app = Celery("rag_saas_platform", broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND)
+celery_app = Celery(
+    "rag_saas_platform",
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
+    # Explicit, not autodiscover_tasks(): autodiscover_tasks(["api.tasks"])
+    # looks for a submodule literally named api/tasks/tasks.py, which
+    # doesn't exist here (the task lives in account_purge.py) -- it would
+    # silently register zero tasks. `include` is resolved lazily, after
+    # `celery_app` below is fully constructed, so account_purge.py's own
+    # `from api.tasks.celery_app import celery_app` doesn't circular-import.
+    include=["api.tasks.account_purge"],
+)
 
 celery_app.conf.update(
     task_serializer="json",
@@ -30,7 +41,3 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0),  # low-traffic hour, UTC
     }
 }
-
-# Registers the task with the app above without a manual import list
-# growing stale as more tasks get added later (billing, reindexing, ...).
-celery_app.autodiscover_tasks(["api.tasks"])

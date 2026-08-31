@@ -176,6 +176,53 @@ async def test_email_verification_flow(client, register_payload, monkeypatch):
     assert profile.json()["is_email_verified"] is True
 
 
+async def test_email_otp_cannot_be_reused_after_success(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: captured.update(code=code))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    first = await client.post("/auth/verify-email/confirm", json={"code": captured["code"]}, headers=auth_header)
+    assert first.status_code == 200
+
+    replay = await client.post("/auth/verify-email/confirm", json={"code": captured["code"]}, headers=auth_header)
+    assert replay.status_code == 400  # the token was marked used_at, so no unused row matches anymore
+
+
+async def test_email_otp_expired_code_is_rejected(client, register_payload, monkeypatch, db_session):
+    import datetime as dt
+    from sqlalchemy import select
+    from api.models.token import EmailVerificationToken
+
+    captured = {}
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: captured.update(code=code))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    token_row = await db_session.scalar(select(EmailVerificationToken))
+    token_row.expires_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await client.post("/auth/verify-email/confirm", json={"code": captured["code"]}, headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 400
+
+
+async def test_email_otp_max_attempts_exceeded(client, register_payload, monkeypatch):
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: None)
+    monkeypatch.setattr("api.config.settings.EMAIL_OTP_MAX_ATTEMPTS", 3)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    for _ in range(3):
+        r = await client.post("/auth/verify-email/confirm", json={"code": "000000"}, headers=auth_header)
+        assert r.status_code == 400
+
+    locked_out = await client.post("/auth/verify-email/confirm", json={"code": "000000"}, headers=auth_header)
+    assert locked_out.status_code == 429
+
+
 # ---------------------------------------------------------------- 1.1.3 --
 async def test_password_reset_flow(client, register_payload, monkeypatch):
     captured = {}
@@ -204,6 +251,46 @@ async def test_password_reset_flow(client, register_payload, monkeypatch):
 async def test_forgot_password_is_silent_for_unknown_email(client):
     response = await client.post("/auth/password/forgot", json={"email": "nobody@example.com"})
     assert response.status_code == 200  # never reveals whether the account exists
+
+
+async def test_password_reset_token_cannot_be_reused(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    first = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "first-new-password"})
+    assert first.status_code == 200
+
+    replay = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "second-new-password"})
+    assert replay.status_code == 400  # used_at is set after the first reset
+
+
+async def test_password_reset_expired_token_is_rejected(client, register_payload, monkeypatch, db_session):
+    import datetime as dt
+    from sqlalchemy import select
+    from api.models.token import PasswordResetToken
+
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    token_row = await db_session.scalar(select(PasswordResetToken))
+    token_row.expires_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "a-new-password"})
+    assert response.status_code == 400
+
+
+async def test_password_reset_garbage_token_is_rejected(client):
+    response = await client.post("/auth/password/reset", json={"token": "this-was-never-issued", "new_password": "a-new-password"})
+    assert response.status_code == 400
 
 
 # ---------------------------------------------------------------- 1.1.7 --
