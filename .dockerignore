@@ -1,0 +1,25 @@
+# Build/dev artifacts -- never useful inside the image
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Version control and CI, not runtime
+.git/
+.github/
+
+# Secrets -- must never be baked into an image layer
+.env
+.streamlit/secrets.toml
+
+# Derived/local-only data -- chroma is rebuilt on first run from the
+# committed data/processed/fastapi_docs.json; raw docs are a gitignored
+# copy of another repo and aren't needed once data/processed exists
+data/chroma/
+data/raw/
+
+# Not needed at runtime
+tests/
+AUDIT.md
+calibration/

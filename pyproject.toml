@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+# Makes `api.*` importable from anywhere pytest is invoked from (repo root),
+# without the sys.path-hacking every tests/test_*.py file does today to
+# reach src/ -- api/ is a real package (has __init__.py), so this is the
+# standard, non-hacky way to make it importable under test.
+pythonpath = ["."]
+asyncio_mode = "auto"

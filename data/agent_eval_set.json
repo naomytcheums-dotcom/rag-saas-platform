@@ -1,0 +1,86 @@
+[
+  {
+    "id": "a001",
+    "category": "usage",
+    "question": "How do I declare a path parameter with an integer type in FastAPI?",
+    "expected_tools": ["search_fastapi_docs"],
+    "note": "Ordinary usage question, fully answerable from the documentation."
+  },
+  {
+    "id": "a002",
+    "category": "usage",
+    "question": "What's the difference between a query parameter and a path parameter?",
+    "expected_tools": ["search_fastapi_docs"],
+    "note": "Conceptual usage question, no bug or escalation involved."
+  },
+  {
+    "id": "a003",
+    "category": "usage",
+    "question": "How do I set a default value for a request body field with Pydantic?",
+    "expected_tools": ["search_fastapi_docs"],
+    "note": "Usage question about a specific, well-documented feature."
+  },
+  {
+    "id": "a004",
+    "category": "usage",
+    "question": "How does FastAPI handle dependency injection with the Depends() function?",
+    "expected_tools": ["search_fastapi_docs"],
+    "note": "Core-concept usage question."
+  },
+  {
+    "id": "a005",
+    "category": "usage",
+    "question": "What middleware does FastAPI provide out of the box for CORS?",
+    "expected_tools": ["search_fastapi_docs"],
+    "note": "Usage question about a built-in feature."
+  },
+  {
+    "id": "a006",
+    "category": "known-issue",
+    "question": "Is there a known bug where WebSocket connections silently drop after a ping timeout?",
+    "expected_tools": ["search_github_issues"],
+    "note": "Explicitly asks whether something is a known bug -- not answerable from usage docs."
+  },
+  {
+    "id": "a007",
+    "category": "known-issue",
+    "question": "Has anyone reported an issue with background tasks not running under certain ASGI servers?",
+    "expected_tools": ["search_github_issues"],
+    "note": "Asks about a reported problem, not how the feature is meant to work."
+  },
+  {
+    "id": "a008",
+    "category": "known-issue",
+    "question": "Is native gRPC support an open feature request for FastAPI?",
+    "expected_tools": ["search_github_issues"],
+    "note": "Asks about an open feature request, which lives in GitHub issues, not the docs."
+  },
+  {
+    "id": "a009",
+    "category": "off-topic",
+    "question": "What's the best way to season a cast iron pan?",
+    "expected_tools": [],
+    "note": "Unrelated to FastAPI -- correct behavior is to decline, not guess or call a tool."
+  },
+  {
+    "id": "a010",
+    "category": "off-topic",
+    "question": "Can you recommend a good Python course for absolute beginners?",
+    "expected_tools": [],
+    "note": "Python-adjacent but not a FastAPI question -- still off-topic for this assistant."
+  },
+  {
+    "id": "a011",
+    "category": "needs-both",
+    "question": "I followed the docs for OAuth2 password flow but tokens still expire immediately -- is this how it's supposed to work, or a known bug?",
+    "expected_tools": ["search_fastapi_docs", "search_github_issues"],
+    "note": "Genuinely ambiguous between intended behavior and a bug -- needs both sources to answer well."
+  },
+  {
+    "id": "a012",
+    "category": "needs-both",
+    "question": "The docs say StreamingResponse should support server-sent events, but mine disconnects after 30 seconds -- expected or a bug?",
+    "expected_tools": ["search_fastapi_docs", "search_github_issues"],
+    "note": "Same shape as a011: behavior contradicts documented expectation, worth checking both."
+  }
+]

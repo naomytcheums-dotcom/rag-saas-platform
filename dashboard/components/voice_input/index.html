@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; font-family: -apple-system, "Public Sans", sans-serif; }
+    #mic {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d7dbe0;
+      background: #ffffff; color: #1b2430; cursor: pointer; font-size: 14px;
+    }
+    #mic:disabled { color: #8993a3; cursor: not-allowed; }
+    #mic.listening { border-color: #c4632a; color: #c4632a; }
+    #status { font-size: 12px; color: #8993a3; margin-top: 4px; min-height: 14px; }
+  </style>
+</head>
+<body>
+  <button id="mic">Ask by voice</button>
+  <div id="status"></div>
+  <script>
+    // Streamlit's static-component protocol, hand-written (no build step,
+    // no streamlit-component-lib dependency): componentReady on load,
+    // setFrameHeight once sized, setComponentValue whenever we have a
+    // transcript to hand back to Python.
+    function sendToStreamlit(type, data) {
+      window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+    }
+    function setComponentValue(value) {
+      sendToStreamlit("streamlit:setComponentValue", { value: value });
+    }
+
+    window.addEventListener("load", function () {
+      sendToStreamlit("streamlit:componentReady", { apiVersion: 1 });
+      sendToStreamlit("streamlit:setFrameHeight", { height: 56 });
+    });
+
+    var micBtn = document.getElementById("mic");
+    var statusEl = document.getElementById("status");
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      micBtn.disabled = true;
+      statusEl.textContent = "Voice input isn't supported in this browser.";
+    } else {
+      var recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      micBtn.addEventListener("click", function () {
+        micBtn.classList.add("listening");
+        statusEl.textContent = "Listening...";
+        recognition.start();
+      });
+
+      recognition.addEventListener("result", function (event) {
+        var transcript = event.results[0][0].transcript;
+        statusEl.textContent = "Heard: “" + transcript + "”";
+        setComponentValue(transcript);
+      });
+
+      recognition.addEventListener("error", function (event) {
+        statusEl.textContent = "Couldn't hear that (" + event.error + ") -- try again.";
+      });
+
+      recognition.addEventListener("end", function () {
+        micBtn.classList.remove("listening");
+      });
+    }
+  </script>
+</body>
+</html>

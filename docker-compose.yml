@@ -1,0 +1,22 @@
+# Local dev convenience: `docker compose up --build`. Not used by the
+# Render deploy (render.yaml builds the Dockerfile directly) -- this is
+# for running the same image on your own machine without retyping the
+# env vars every time.
+services:
+  nova:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_SERVICE_ACCOUNT_FILE=${GOOGLE_SERVICE_ACCOUNT_FILE:-}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID:-}
+    volumes:
+      # Persists the vector store across container restarts -- without
+      # this, every `docker compose up` would re-embed the whole corpus
+      # from scratch instead of reusing what's already built.
+      - chroma-data:/app/data/chroma
+
+volumes:
+  chroma-data:

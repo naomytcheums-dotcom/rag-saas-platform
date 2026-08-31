@@ -1,0 +1,48 @@
+# Dependencies for api/ (Partie 1.1 -- multi-tenant auth backend), kept in
+# a separate file from requirements.txt (the RAG pipeline's own deps) so
+# `pip install -r requirements.txt` still works standalone for anyone only
+# touching src/ or dashboard/ -- installing both files together is what a
+# full `uvicorn api.main:app` run actually needs.
+#
+# Exact versions frozen from the environment this was built and tested
+# against (Python 3.13, Windows) -- same reasoning as requirements.txt's
+# own header: relax the pin and re-run `pytest tests/test_auth_*.py`
+# before trusting the result. Passlib is deliberately NOT used for
+# password hashing -- see api/security/hashing.py's docstring: it's
+# unmaintained and its own backend self-test crashes against current
+# bcrypt releases.
+
+# -- Web framework / server -------------------------------------------------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+itsdangerous==2.2.0
+
+# -- Database (PostgreSQL, async) --------------------------------------------
+sqlalchemy[asyncio]==2.0.52
+asyncpg==0.31.0
+psycopg2-binary==2.9.12
+alembic==1.19.1
+
+# -- Settings / validation ---------------------------------------------------
+pydantic-settings==2.15.0
+email-validator==2.3.0
+
+# -- Auth: passwords, JWT, OAuth, 2FA -----------------------------------------
+bcrypt==5.0.0
+pyjwt[crypto]==2.13.0
+authlib==1.8.0
+pyotp==2.10.0
+qrcode[pil]==8.2
+
+# -- Object storage (avatar uploads, 1.1.13) ----------------------------------
+boto3==1.43.83
+
+# -- Background jobs (1.1.10's account-purge sweep) --------------------------
+celery==5.6.3
+redis==8.1.0
+
+# -- Tests (tests/test_auth_*.py) ---------------------------------------------
+aiosqlite==0.22.1
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0

@@ -1,0 +1,89 @@
+"""
+Central settings for the api/ package, loaded once from environment
+variables and a project-root .env file in dev -- pydantic-settings reads
+the .env file itself (env_file below), so this deliberately does NOT reuse
+src/generation.py's loader: that module pulls in `anthropic` and the rest
+of the RAG pipeline's dependencies at import time, which api/ has no other
+reason to depend on. Same intent (project-root .env, dev convenience,
+never overriding real environment variables), zero coupling to src/.
+
+Fields with no default are genuinely required in production; Settings()
+raises a clear pydantic ValidationError naming every missing one instead of
+failing later with a confusing AttributeError the first time a route uses
+one, so a misconfigured deployment is caught at process startup.
+"""
+
+from pathlib import Path
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", env_prefix="", case_sensitive=True, extra="ignore"
+    )
+
+    # -- Database -----------------------------------------------------
+    # postgresql+asyncpg://user:password@host:port/dbname
+    DATABASE_URL: str
+
+    # -- JWT ------------------------------------------------------------
+    JWT_SECRET_KEY: str = Field(min_length=32)
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    MFA_TOKEN_EXPIRE_MINUTES: int = 5
+
+    # -- Password / token hashing ---------------------------------------
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+    EMAIL_OTP_EXPIRE_MINUTES: int = 10
+    EMAIL_OTP_MAX_ATTEMPTS: int = 5
+
+    # -- RGPD -------------------------------------------------------------
+    TERMS_VERSION: str = "2026-01-01"
+    ACCOUNT_PURGE_DELAY_DAYS: int = 30
+
+    # -- Cookies / CORS -----------------------------------------------------
+    FRONTEND_URL: str = "http://localhost:3000"
+    COOKIE_DOMAIN: str | None = None
+    COOKIE_SECURE: bool = True
+    SESSION_MIDDLEWARE_SECRET: str = Field(min_length=32)
+
+    # -- OAuth ------------------------------------------------------------
+    GOOGLE_OAUTH_CLIENT_ID: str | None = None
+    GOOGLE_OAUTH_CLIENT_SECRET: str | None = None
+    GITHUB_OAUTH_CLIENT_ID: str | None = None
+    GITHUB_OAUTH_CLIENT_SECRET: str | None = None
+    OAUTH_REDIRECT_BASE_URL: str = "http://localhost:8000"
+
+    # -- Transactional email (Resend) --------------------------------------
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM_ADDRESS: str = "no-reply@example.com"
+
+    # -- Object storage (S3 or Cloudflare R2, both S3-compatible) -------
+    S3_ENDPOINT_URL: str | None = None  # leave unset for real AWS S3
+    S3_BUCKET_NAME: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_REGION: str = "auto"
+    S3_PUBLIC_BASE_URL: str | None = None  # CDN/public URL prefix for uploaded objects
+
+    # -- Celery -------------------------------------------------------------
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _require_asyncpg_driver(cls, value):
+        if value.startswith("postgresql://"):
+            raise ValueError(
+                "DATABASE_URL must use the asyncpg driver: "
+                "postgresql+asyncpg://... (got a plain postgresql:// URL)"
+            )
+        return value
+
+
+settings = Settings()

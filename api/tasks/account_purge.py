@@ -1,0 +1,46 @@
+"""
+1.1.10 -- the actual hard-delete, run daily by celery beat (see
+celery_app.py's beat_schedule), never inline in the DELETE /account
+request itself: the user gets an immediate, fast response, and the
+30-day grace window (settings.ACCOUNT_PURGE_DELAY_DAYS) is enforced here
+by simply not selecting rows whose window hasn't elapsed yet.
+
+A plain synchronous SQLAlchemy engine is used in this module rather than
+the app's async one -- Celery's worker model is sync-by-default, and
+pulling the async engine into a sync task would need its own event loop
+plumbing for no real benefit at this scale (a once-a-day batch job).
+"""
+
+import datetime as dt
+import logging
+
+from sqlalchemy import create_engine, delete, select
+from sqlalchemy.orm import Session as SyncSession
+
+from api.config import settings
+from api.models.user import User
+from api.tasks.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
+
+_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
+
+
+@celery_app.task(name="api.tasks.account_purge.purge_deleted_accounts")
+def purge_deleted_accounts() -> int:
+    now = dt.datetime.now(dt.timezone.utc)
+    purged = 0
+
+    with SyncSession(_sync_engine) as db:
+        due = db.scalars(
+            select(User).where(User.deletion_scheduled_at.is_not(None), User.deletion_scheduled_at <= now)
+        ).all()
+        for user in due:
+            # ON DELETE CASCADE (see api/models/*.py's ForeignKey definitions)
+            # takes oauth_accounts, sessions, and tokens with it.
+            db.execute(delete(User).where(User.id == user.id))
+            purged += 1
+        db.commit()
+
+    logger.info("purge_deleted_accounts: hard-deleted %d account(s) past their %d-day grace window", purged, settings.ACCOUNT_PURGE_DELAY_DAYS)
+    return purged
