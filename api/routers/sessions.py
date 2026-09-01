@@ -10,18 +10,21 @@ in the sense that gate is meant to require fresh consent for.
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user_any_consent_status, get_db
+from api.models.audit_log import AuditAction
 from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import MessageResponse
 from api.schemas.user import SessionResponse
+from api.security.audit_log import log_audit_action
 from api.security.csrf import clear_csrf_cookie
 from api.security.hashing import hash_token
 from api.security.sessions import clear_refresh_cookie, revoke_session
+from api.utils import client_ip
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -62,6 +65,7 @@ async def list_sessions(
 @router.delete("/{session_id}", response_model=MessageResponse)
 async def revoke_session_by_id(
     session_id: uuid.UUID,
+    request: Request,
     response: Response,
     current_user: User = Depends(get_current_user_any_consent_status),
     refresh_token: str | None = Cookie(default=None),
@@ -85,6 +89,10 @@ async def revoke_session_by_id(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     await revoke_session(db, session)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.SESSION_REVOKED, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True, metadata={"revoked_session_id": str(session_id)},
+    )
     await db.commit()
 
     if refresh_token and hash_token(refresh_token) == session.refresh_token_hash:

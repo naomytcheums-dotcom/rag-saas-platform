@@ -17,12 +17,13 @@ import datetime as dt
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_current_user_any_consent_status, get_db
+from api.models.audit_log import AuditAction
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.oauth import OAuthAccount
 from api.models.restore_token import AccountRestoreToken
@@ -39,6 +40,7 @@ from api.schemas.auth import (
     SetPasswordRequest,
 )
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
+from api.security.audit_log import log_audit_action
 from api.security.hashing import hash_password, hash_token, verify_password
 from api.security.password_history import reject_if_password_reused, record_password_change
 from api.security.password_similarity import is_password_too_similar
@@ -53,6 +55,7 @@ from api.services.email import (
     send_password_changed_email,
     send_password_set_email,
 )
+from api.utils import client_ip
 from api.services.storage import upload_avatar
 from api.utils import as_aware_utc
 
@@ -151,7 +154,7 @@ async def upload_avatar_route(file: UploadFile, current_user: User = Depends(get
 
 
 @router.post("/set-password", response_model=MessageResponse)
-async def set_password(payload: SetPasswordRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def set_password(payload: SetPasswordRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     Lets an OAuth-only account (hashed_password is None -- see
     api/models/user.py's docstring) add a password as a backup login
@@ -198,6 +201,10 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
     new_hashed_password = hash_password(payload.new_password)
     current_user.hashed_password = new_hashed_password
     await record_password_change(db, current_user.id, new_hashed_password)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.PASSWORD_SET, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:
@@ -209,7 +216,7 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
 
 
 @router.post("/change-password", response_model=MessageResponse)
-async def change_password(payload: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def change_password(payload: ChangePasswordRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     1.1-audit finding: before this endpoint existed, a logged-in user who
     knew their current password had no way to change it without going
@@ -260,6 +267,10 @@ async def change_password(payload: ChangePasswordRequest, current_user: User = D
     current_user.hashed_password = new_hashed_password
     await record_password_change(db, current_user.id, new_hashed_password)
     await revoke_all_sessions_for_user(db, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.PASSWORD_CHANGED, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:
@@ -271,7 +282,7 @@ async def change_password(payload: ChangePasswordRequest, current_user: User = D
 
 
 @router.delete("/me", response_model=MessageResponse)
-async def delete_account(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
+async def delete_account(request: Request, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Soft-delete (1.1.10): the account is deactivated and every session
     revoked *immediately*, but the row itself sticks around for
@@ -299,6 +310,10 @@ async def delete_account(current_user: User = Depends(get_current_user_any_conse
     # 1.1.15: blacklists each session's access token too, not just its
     # refresh token.
     await revoke_all_sessions_for_user(db, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.ACCOUNT_DELETED, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:
@@ -381,7 +396,7 @@ async def confirm_account_restore(payload: AccountRestoreConfirmRequest, db: Asy
 
 
 @router.post("/consent/withdraw", response_model=MessageResponse)
-async def withdraw_consent(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
+async def withdraw_consent(request: Request, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     RGPD Art. 7(3): withdrawing consent must be as easy as giving it, and
     Art. 21 gives a separate right to object to processing without also
@@ -404,6 +419,10 @@ async def withdraw_consent(current_user: User = Depends(get_current_user_any_con
     # 1.1.15: blacklists each session's access token too, not just its
     # refresh token.
     await revoke_all_sessions_for_user(db, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.CONSENT_WITHDRAWN, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:

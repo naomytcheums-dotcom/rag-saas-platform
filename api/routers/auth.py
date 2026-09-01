@@ -26,8 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_db
+from api.models.audit_log import AuditAction
 from api.models.user import User
 from api.schemas.auth import LoginRequest, MessageResponse, MFARequiredResponse, RegisterRequest, TokenResponse
+from api.security.audit_log import log_audit_action
 from api.security.csrf import clear_csrf_cookie, verify_csrf
 from api.security.hashing import hash_password, verify_password
 from api.security.sessions import (
@@ -42,6 +44,7 @@ from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.services.email import send_rate_limit_alert_email
+from api.services.security_alerts import check_and_alert_on_failed_login_spike
 from api.services.verification import create_and_send_email_otp
 from api.utils import client_ip
 
@@ -133,6 +136,10 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     # session, so there's no "usual device" yet to compare against --
     # every registration would otherwise look like a suspicious new login.
     tokens = await issue_session(db, response, request, user.id)
+    await log_audit_action(
+        db, user_id=user.id, action=AuditAction.REGISTER, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
     return tokens
 
@@ -194,15 +201,30 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     # above just as effectively as a different error message would.
     real_hash = user.hashed_password if (user is not None and user.hashed_password is not None) else _DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY
     password_matches = verify_password(payload.password, real_hash)
+    ip = client_ip(request)
+    user_agent = request.headers.get("user-agent")
+
     if user is None or user.hashed_password is None or not password_matches:
+        await log_audit_action(
+            db, user_id=(user.id if user is not None else None), action=AuditAction.LOGIN_FAILED, ip=ip,
+            user_agent=user_agent, success=False, failure_reason="invalid_credentials", metadata={"email": payload.email},
+        )
+        await db.commit()
+        await check_and_alert_on_failed_login_spike(db, ip, payload.email)
         raise _GENERIC_LOGIN_ERROR
     if not user.is_active or user.is_deleted:
+        await log_audit_action(
+            db, user_id=user.id, action=AuditAction.LOGIN_FAILED, ip=ip, user_agent=user_agent,
+            success=False, failure_reason="account_inactive", metadata={"email": payload.email},
+        )
+        await db.commit()
         raise _GENERIC_LOGIN_ERROR
 
     if user.totp_enabled:
         return MFARequiredResponse(mfa_token=create_mfa_pending_token(user.id))
 
     tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
+    await log_audit_action(db, user_id=user.id, action=AuditAction.LOGIN_SUCCESS, ip=ip, user_agent=user_agent, success=True)
     await db.commit()
     return tokens
 
@@ -261,7 +283,7 @@ async def refresh(
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(
-    response: Response, refresh_token: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db),
+    request: Request, response: Response, refresh_token: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db),
     _csrf: None = Depends(verify_csrf),
 ):
     """
@@ -279,6 +301,10 @@ async def logout(
         session = await get_active_session_by_raw_token(db, refresh_token)
         if session is not None:
             await revoke_session(db, session)
+            await log_audit_action(
+                db, user_id=session.user_id, action=AuditAction.LOGOUT, ip=client_ip(request),
+                user_agent=request.headers.get("user-agent"), success=True,
+            )
             await db.commit()
     clear_refresh_cookie(response)
     clear_csrf_cookie(response)

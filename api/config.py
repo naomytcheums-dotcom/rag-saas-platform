@@ -176,6 +176,30 @@ class Settings(BaseSettings):
     # rejects a password that only coincidentally shares a few letters.
     PASSWORD_SIMILARITY_MIN_DISTANCE: int = 3
 
+    # -- Audit log (audit Categorie 2, items 18-21) -------------------------
+    # A dedicated key for api/security/audit_log.py's hash-chain checksum
+    # -- deliberately NOT reusing JWT_SECRET_KEY or SESSION_MIDDLEWARE_SECRET
+    # (key separation: rotating either of those for its own reason must
+    # never retroactively change what every past audit row's checksum
+    # was computed with). Required, no default, same reasoning as
+    # JWT_SECRET_KEY -- an audit log without real tamper-evidence isn't
+    # the feature this was asked to build.
+    AUDIT_LOG_HMAC_SECRET_KEY: str = Field(min_length=32)
+
+    # Slack-compatible incoming-webhook URL ({"text": "..."} POST body)
+    # for real-time security alerts (item 21) -- unset disables webhook
+    # alerting entirely, same "optional integration" pattern as
+    # GOOGLE_OAUTH_CLIENT_ID. A dedicated email address alerts go to as
+    # well/instead (api/services/email.py's send_security_alert_email) --
+    # either, both, or neither may be configured.
+    SECURITY_ALERT_WEBHOOK_URL: str | None = None
+    SECURITY_ALERT_EMAIL: str | None = None
+    # A spike of this many failed logins (by IP OR by targeted email)
+    # within SECURITY_ALERT_WINDOW_MINUTES triggers one alert -- see
+    # api/services/security_alerts.py's check_and_alert_on_failed_login_spike.
+    SECURITY_ALERT_FAILED_LOGIN_THRESHOLD: int = 10
+    SECURITY_ALERT_WINDOW_MINUTES: int = 5
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

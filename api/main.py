@@ -5,14 +5,15 @@ here; later parts (multi-tenant, billing, ...) add more routers to this
 same app rather than starting a second one.
 """
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.config import settings
 from api.database import engine
-from api.routers import account, auth, oauth, password, sessions, two_factor, verify
+from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
+from api.routers import account, audit, auth, oauth, password, sessions, two_factor, verify
 from api.security.rate_limit import is_redis_reachable
 
 app = FastAPI(title="RAG SaaS Platform API", version="0.1.0")
@@ -73,6 +74,12 @@ async def _security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
+
+# Audit finding 22 -- registered AFTER _security_headers so it wraps the
+# full request/response cycle including that middleware's own work,
+# giving the most complete picture of "how long did this request take."
+app.middleware("http")(track_request_duration_middleware)
+
 app.include_router(auth.router)
 app.include_router(password.router)
 app.include_router(verify.router)
@@ -80,6 +87,22 @@ app.include_router(oauth.router)
 app.include_router(two_factor.router)
 app.include_router(sessions.router)
 app.include_router(account.router)
+app.include_router(audit.router)
+
+
+@app.get("/metrics", tags=["monitoring"])
+async def metrics():
+    """
+    Audit finding 22 -- Prometheus text exposition format
+    (api/monitoring.py), scrapeable directly by a real Prometheus server.
+    Deliberately public/unauthenticated, same as /health and
+    /health/ready: a metrics scraper generally can't do OAuth, and the
+    real access control for this endpoint is expected to be network-level
+    (firewalled to the scraper's own network/VPC), not application-level
+    -- see api/monitoring.py's docstring for this endpoint's other known
+    limitation (in-process only, not multi-worker-aware).
+    """
+    return Response(content=render_prometheus_metrics(), media_type="text/plain; version=0.0.4")
 
 
 @app.get("/health", tags=["monitoring"])

@@ -524,3 +524,20 @@ def send_rate_limit_alert_email(to_email: str, context: str) -> None:
             f"consider changing your password.</p>"
         ),
     )
+
+
+def send_security_alert_email(to_email: str, message: str) -> None:
+    """
+    Audit finding 21 -- the email half of api/services/security_alerts.py's
+    real-time alerting (the other half is a Slack-compatible webhook).
+    Goes to SECURITY_ALERT_EMAIL (an operator/security-team inbox), never
+    to the affected end user -- this is an operational alert about a
+    possible attack in progress, not an account notification. `message`
+    is plain text (the same string also goes to a Slack-compatible
+    webhook, which doesn't interpret HTML -- see api/services/
+    security_alerts.py) and CAN embed attacker-influenced values (the
+    email address typed into a login attempt, e.g.), so it's HTML-escaped
+    here, as a whole, before being wrapped for this HTML email -- not the
+    caller's job to pre-escape a string other channels consume as-is.
+    """
+    _send(to_email, subject="Security alert: failed-login spike detected", html=f"<p>{html.escape(message)}</p>")

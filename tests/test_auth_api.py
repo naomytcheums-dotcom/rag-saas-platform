@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
-from api.models.user import User
+from api.models.user import User, UserRole
 from api.utils import as_aware_utc
 
 
@@ -2656,3 +2656,62 @@ async def test_change_password_rejects_reusing_the_current_password(client, regi
     )
     assert response.status_code == 400
     assert "used too recently" in response.json()["detail"]
+
+
+# ------------------------------------------------------------ item 22 --
+async def test_metrics_endpoint_exposes_prometheus_format(client):
+    await client.get("/health")  # generate at least one observation first
+
+    response = await client.get("/metrics")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "# TYPE http_request_duration_seconds histogram" in body
+    assert 'method="GET"' in body
+    assert 'path="/health"' in body
+    assert "http_request_duration_seconds_count" in body
+    assert "http_request_duration_seconds_sum" in body
+
+
+async def test_metrics_groups_by_route_template_not_literal_path(client, register_payload):
+    """A real regression this specifically guards against: grouping by
+    request.url.path instead of the matched route's own path template
+    would create a brand new metrics series per session id ever
+    requested (unbounded cardinality growth) -- proven here by hitting
+    the same templated route (/sessions/{session_id}) with two DIFFERENT
+    concrete ids and confirming only the template appears, not either
+    literal id."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    import uuid
+
+    await client.delete(f"/sessions/{uuid.uuid4()}", headers=auth_header)
+    await client.delete(f"/sessions/{uuid.uuid4()}", headers=auth_header)
+
+    body = (await client.get("/metrics")).text
+    assert 'path="/sessions/{session_id}"' in body
+
+
+async def test_metrics_endpoint_requires_no_authentication(client):
+    """Deliberate -- a metrics scraper generally can't do OAuth; access
+    control here is meant to be network-level, not application-level
+    (api/monitoring.py's docstring)."""
+    response = await client.get("/metrics")
+    assert response.status_code == 200
+
+
+# ------------------------------------------------------------ item 19 (require_admin) --
+async def test_require_admin_rejects_a_regular_user(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.get("/admin/audit-logs", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 404
+
+
+async def test_require_admin_allows_an_admin_user(client, register_payload, db_session):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.role = UserRole.admin
+    await db_session.commit()
+
+    response = await client.get("/admin/audit-logs", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200

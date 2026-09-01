@@ -11,15 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.database import get_db
+from api.models.audit_log import AuditAction
 from api.models.revoked_token import RevokedAccessToken
-from api.models.user import User
+from api.models.user import User, UserRole
+from api.security.audit_log import log_audit_action
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 from api.security.sessions import revoke_session, touch_session_and_check_idle_timeout
 from api.services.email import send_idle_session_revoked_email
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status"]
+__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status", "require_admin"]
 
 _bearer_scheme = HTTPBearer(description="Access token from POST /auth/login or /auth/refresh")
 
@@ -94,6 +96,10 @@ async def get_current_user_any_consent_status(
     if idle_session is not None:
         notify_email = await db.scalar(select(User.email).where(User.id == idle_session.user_id))
         await revoke_session(db, idle_session)
+        await log_audit_action(
+            db, user_id=idle_session.user_id, action=AuditAction.SESSION_IDLE_TIMEOUT, ip=None, user_agent=None,
+            success=True, metadata={"session_id": str(idle_session.id)},
+        )
         await db.commit()
         if notify_email:
             try:
@@ -127,4 +133,21 @@ async def get_current_user(user: User = Depends(get_current_user_any_consent_sta
     """
     if user.terms_version != settings.TERMS_VERSION:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=STALE_TERMS_DETAIL)
+    return user
+
+
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    """
+    Audit findings 19/20 -- gates GET /admin/audit-logs and
+    GET /admin/failed-logins. Layered on top of get_current_user (not
+    get_current_user_any_consent_status): an admin still has to be a
+    fully-in-good-standing user first (current terms accepted, etc.) --
+    admin access isn't a bypass of the ordinary account gates, it's an
+    additional check on top of them. 404, not 403, for a non-admin: an
+    admin-only endpoint's mere existence isn't information a regular
+    authenticated user needs, the same reasoning DELETE /sessions/{id}
+    already uses for a session belonging to someone else.
+    """
+    if user.role not in (UserRole.admin, UserRole.superadmin):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return user

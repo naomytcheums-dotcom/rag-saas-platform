@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user_any_consent_status, get_db
+from api.models.audit_log import AuditAction
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.user import User
@@ -48,6 +49,7 @@ from api.schemas.auth import (
     TwoFactorSetupResponse,
     TwoFactorVerifyLoginRequest,
 )
+from api.security.audit_log import log_audit_action
 from api.security.hashing import hash_token, verify_password
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 from api.security.rate_limit import enforce_rate_limit
@@ -134,7 +136,7 @@ async def setup_two_factor(current_user: User = Depends(get_current_user_any_con
 
 
 @router.post("/enable", response_model=TwoFactorRecoveryCodesResponse)
-async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
+async def enable_two_factor(payload: TwoFactorCodeRequest, request: Request, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Step 2: proves the user actually scanned the QR code from /setup by
     submitting the current 6-digit code their authenticator app is now
@@ -175,6 +177,10 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
 
     current_user.totp_enabled = True
     plain_codes = await _replace_recovery_codes(db, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.TWO_FA_ENABLED, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:
@@ -186,7 +192,7 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
 
 
 @router.post("/disable", response_model=MessageResponse)
-async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
+async def disable_two_factor(payload: TwoFactorCodeRequest, request: Request, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Turns 2FA back off -- still requires a valid current code, not just
     the access token, so someone who stole a logged-in session/laptop
@@ -223,6 +229,10 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
     current_user.totp_secret = None
     await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == current_user.id))
     await _cancel_pending_lockout_recovery(db, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.TWO_FA_DISABLED, ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"), success=True,
+    )
     await db.commit()
 
     try:

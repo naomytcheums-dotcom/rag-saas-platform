@@ -18,10 +18,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.audit_log import AuditAction
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import TokenResponse
+from api.security.audit_log import log_audit_action
 from api.security.csrf import generate_csrf_token, set_csrf_cookie
 from api.security.hashing import generate_raw_token, hash_token
 from api.security.jwt import create_access_token
@@ -95,6 +97,10 @@ async def enforce_concurrent_session_limit(db: AsyncSession, user_id: uuid.UUID)
     user = await db.get(User, user_id)
     for session in active_sessions[:to_revoke]:
         await revoke_session(db, session)
+        await log_audit_action(
+            db, user_id=user_id, action=AuditAction.CONCURRENT_SESSION_LIMIT, ip=None, user_agent=None,
+            success=True, metadata={"revoked_session_id": str(session.id), "device_info": session.device_info},
+        )
         if user is not None:
             try:
                 send_concurrent_session_limit_reached_email(user.email, session.device_info)
