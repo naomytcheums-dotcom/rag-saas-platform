@@ -52,6 +52,21 @@ boto3==1.43.83
 celery==5.6.3
 redis==8.1.0
 
+# -- Monitoring (audit finding 22) --------------------------------------------
+# prometheus-client's multiprocess mode (api/monitoring.py) is the
+# actual reason this is a real dependency and not hand-rolled like
+# api/security/rate_limit.py or password_similarity.py -- correctly
+# aggregating histograms across several worker PROCESSES (mmap'd
+# per-worker files, cleaned up as workers come and go) is real,
+# easy-to-get-wrong complexity a battle-tested library exists
+# specifically to solve, not "a few dozen lines to read in a few
+# minutes." gunicorn is Unix-only (uses fcntl -- won't run on Windows,
+# though `pip install` itself succeeds there) and only needed to run
+# gunicorn.conf.py in actual production; local dev keeps using
+# `uvicorn api.main:app --reload` either way.
+prometheus-client==0.26.0
+gunicorn==23.0.0
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

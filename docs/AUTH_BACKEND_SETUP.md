@@ -342,6 +342,42 @@ Two independent limits on top of a session's absolute expiry
   if provided -- rejects a password within that many single-character
   edits of either. Checked at registration and every password change.
 
+### Monitoring: response-time metrics (audit finding 22)
+
+`GET /metrics` exposes real Prometheus text format (`api/monitoring.py`,
+the `prometheus_client` library) -- a `Histogram` of request duration
+labelled by HTTP method and the route's own path *template* (e.g.
+`/sessions/{session_id}`, never a literal id -- avoids unbounded
+cardinality growth from either normal per-resource traffic or an
+attacker probing random 404 paths, bucketed under a fixed `"unmatched"`
+label instead). Public/unauthenticated, same reasoning as `/health`: a
+scraper generally can't do OAuth, and access control here is meant to be
+network-level (firewall the scrape path to Prometheus's own network).
+
+**Single worker (local dev, or a single-instance deployment):** nothing
+to configure -- `uvicorn api.main:app --reload` and `/metrics` just
+works, reading straight from that one process's in-memory registry.
+
+**Multiple workers in production:** run `gunicorn -c gunicorn.conf.py
+api.main:app` (NOT the repo's own Dockerfile -- that image runs the RAG
+pipeline's Streamlit dashboard, a separate deployable) with
+`PROMETHEUS_MULTIPROC_DIR` set to one directory every worker can write
+to. `prometheus_client`'s multiprocess mode then backs each worker's
+histogram with its own mmap'd file in that directory, and `/metrics`
+merges all of them at scrape time (`MultiProcessCollector`) -- verified
+directly with real separate OS processes, not just plausible-by-inspection
+(`tests/test_monitoring.py`). `gunicorn.conf.py`'s `on_starting` hook
+clears stale files from a previous run before any worker writes;
+`child_exit` marks a worker's data dead the moment it actually exits --
+verified this only affects Gauge metrics (this app has none yet;
+Counter/Histogram data like request duration correctly persists forever,
+since a request that really happened must remain part of the cumulative
+total even after the worker that served it is gone).
+
+Plain `uvicorn --workers N` also runs multiple processes, but exposes no
+hook for "a worker just exited," which is why this needs Gunicorn
+specifically rather than bare Uvicorn multi-worker mode.
+
 ### Redis + Celery (1.1.10 account purge, J+30)
 
 Needs a real Redis reachable at `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.

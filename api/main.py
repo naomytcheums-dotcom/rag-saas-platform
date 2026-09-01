@@ -7,6 +7,7 @@ same app rather than starting a second one.
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -95,14 +96,16 @@ async def metrics():
     """
     Audit finding 22 -- Prometheus text exposition format
     (api/monitoring.py), scrapeable directly by a real Prometheus server.
-    Deliberately public/unauthenticated, same as /health and
+    Correctly aggregates across multiple worker processes when
+    PROMETHEUS_MULTIPROC_DIR is set (see gunicorn.conf.py) -- a single
+    process reads its own in-memory metrics either way, so nothing about
+    running this with one worker (e.g. local dev) needs that variable
+    set at all. Deliberately public/unauthenticated, same as /health and
     /health/ready: a metrics scraper generally can't do OAuth, and the
     real access control for this endpoint is expected to be network-level
-    (firewalled to the scraper's own network/VPC), not application-level
-    -- see api/monitoring.py's docstring for this endpoint's other known
-    limitation (in-process only, not multi-worker-aware).
+    (firewalled to the scraper's own network/VPC), not application-level.
     """
-    return Response(content=render_prometheus_metrics(), media_type="text/plain; version=0.0.4")
+    return Response(content=render_prometheus_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health", tags=["monitoring"])
