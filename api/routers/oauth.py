@@ -86,8 +86,25 @@ async def _fetch_google_identity(client, token) -> tuple[str, str]:
     """Returns (provider_account_id, email) for a just-authenticated
     Google user. `sub` is Google's own permanent, unique user id --
     that's what OAuthAccount.provider_account_id stores, not the email,
-    because a Google account's email address can itself change later."""
+    because a Google account's email address can itself change later.
+
+    1.1-audit finding, fixed: the presence of an `email` claim in
+    Google's OIDC userinfo response does NOT by itself mean Google has
+    verified that address -- `email_verified` is the claim that says so
+    (OIDC Core 5.1), and this function previously never checked it. An
+    account-linking flow that trusts an unverified email is exactly the
+    account-takeover vector _find_or_create_user's docstring already
+    warns about: link to an existing password account by email, no
+    further proof required. The GitHub path right below already gets
+    this right (filters on `verified` at line ~110); this brings Google
+    to the same standard.
+    """
     userinfo = token.get("userinfo") or await client.userinfo(token=token)
+    if not userinfo.get("email_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your Google account's email address is not verified",
+        )
     return str(userinfo["sub"]), userinfo["email"]
 
 

@@ -5,7 +5,7 @@ here; later parts (multi-tenant, billing, ...) add more routers to this
 same app rather than starting a second one.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
@@ -28,6 +28,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 1.1-audit finding: no security-header middleware existed at all --
+# HSTS/CSP/X-Frame-Options/X-Content-Type-Options/Referrer-Policy were
+# entirely absent from every response. Applied as a plain @app.middleware
+# rather than a third-party package (same "the logic is short enough to
+# read in a few minutes" reasoning as api/security/rate_limit.py) --
+# these are five static header assignments, not a library's worth of
+# behavior.
+_DOCS_PATHS = {"/docs", "/redoc", "/openapi.json"}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    # This is a JSON API with no first-party scripts/styles/images of its
+    # own -- 'none' is correct everywhere except FastAPI's own built-in
+    # Swagger/ReDoc UI, which loads its JS/CSS from a CDN and would
+    # simply fail to render under a policy this strict.
+    if request.url.path in _DOCS_PATHS:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' cdn.jsdelivr.net 'unsafe-inline'; "
+            "style-src 'self' cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' fastapi.tiangolo.com data:; "
+            "font-src cdn.jsdelivr.net"
+        )
+    else:
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Only meaningful -- and only safe to promise -- once the app is
+    # actually deployed behind HTTPS, same flag that already gates
+    # COOKIE_SECURE and SessionMiddleware's https_only above.
+    if settings.COOKIE_SECURE:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 app.include_router(auth.router)
 app.include_router(password.router)

@@ -253,6 +253,36 @@ async def test_oauth_callback_issues_a_session_directly_when_2fa_is_not_enabled(
         await pg_session.commit()
 
 
+async def test_google_identity_fetch_rejects_an_unverified_email():
+    """1.1-audit finding, fixed: Google's OIDC userinfo response can
+    include an `email` claim without `email_verified` being true --
+    trusting it anyway for account linking (_find_or_create_user links
+    to an EXISTING account by email with no further proof) would be a
+    real account-takeover vector. No DB/network needed -- _fetch_google_identity
+    only reads the token dict it's handed, so this is tested directly
+    without pg_session's real-Postgres fixture."""
+    from fastapi import HTTPException
+
+    from api.routers.oauth import _fetch_google_identity
+
+    fake_token = {"userinfo": {"sub": "12345", "email": "victim@example.com", "email_verified": False}}
+    try:
+        await _fetch_google_identity(client=None, token=fake_token)
+        assert False, "expected HTTPException for an unverified email"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert "not verified" in exc.detail
+
+
+async def test_google_identity_fetch_accepts_a_verified_email():
+    from api.routers.oauth import _fetch_google_identity
+
+    fake_token = {"userinfo": {"sub": "12345", "email": "real-user@example.com", "email_verified": True}}
+    provider_account_id, email = await _fetch_google_identity(client=None, token=fake_token)
+    assert provider_account_id == "12345"
+    assert email == "real-user@example.com"
+
+
 async def test_returning_oauth_user_reuses_the_same_account_no_duplicate_link(pg_session):
     email = _unique_email()
     provider_account_id = uuid.uuid4().hex

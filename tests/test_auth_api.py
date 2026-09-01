@@ -1720,3 +1720,32 @@ async def test_health_ready_reports_database_and_redis_status(client):
     # isn't something this test file can safely simulate.
     assert body["database"] == "ok"
     assert body["rate_limit_redis"] == "ok"
+
+
+async def test_security_headers_are_present_on_a_normal_response(client):
+    """1.1-audit finding, fixed: no security-header middleware existed at
+    all before this. Checked against a real endpoint, not a synthetic
+    request, so this proves the middleware actually runs in the real
+    request pipeline."""
+    response = await client.get("/health")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+
+
+async def test_docs_path_gets_a_relaxed_csp_that_still_allows_swagger_ui(client):
+    response = await client.get("/docs")
+    csp = response.headers["Content-Security-Policy"]
+    assert "cdn.jsdelivr.net" in csp
+    assert csp != "default-src 'none'; frame-ancestors 'none'"
+
+
+async def test_hsts_header_reflects_cookie_secure_setting(client, monkeypatch):
+    monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+    secure_response = await client.get("/health")
+    assert "Strict-Transport-Security" in secure_response.headers
+
+    monkeypatch.setattr(settings, "COOKIE_SECURE", False)
+    insecure_response = await client.get("/health")
+    assert "Strict-Transport-Security" not in insecure_response.headers
