@@ -9,6 +9,7 @@ exactly what a real callback would have extracted from Google/GitHub --
 does the right thing happen in the database.
 """
 
+import datetime as dt
 import uuid
 
 import pytest
@@ -60,6 +61,8 @@ async def test_brand_new_oauth_user_is_created_and_pre_verified(pg_session):
         assert user.email == email
         assert user.hashed_password is None  # OAuth-only account, no password ever set
         assert user.is_email_verified is True  # the provider already proved mailbox ownership
+        assert user.consent_given_at is not None  # no accept_terms checkbox in this flow -- see _find_or_create_user's fix
+        assert user.terms_version == settings.TERMS_VERSION
 
         linked = await pg_session.scalar(select(OAuthAccount).where(OAuthAccount.user_id == user.id))
         assert linked.provider == OAuthProvider.google
@@ -88,6 +91,33 @@ async def test_oauth_links_to_existing_unverified_account_and_verifies_it(pg_ses
         assert linked_user.id == existing_user_id  # linked to the SAME account, not a new one
         assert linked_user.hashed_password is not None  # password login must still work too
         assert linked_user.is_email_verified is True  # the fix: now flipped by the OAuth link
+        assert linked_user.consent_given_at is not None  # backfilled -- this fixture's user had none set
+    finally:
+        await pg_session.execute(delete(User).where(User.email == email))
+        await pg_session.commit()
+
+
+async def test_oauth_linking_does_not_overwrite_an_existing_consent_record(pg_session):
+    """The backfill in _find_or_create_user must never clobber a real
+    registration's consent_given_at -- that timestamp is a compliance
+    record of when the user actually agreed (api/models/user.py's
+    docstring), and OAuth linking happening later must not silently
+    rewrite it to "just now"."""
+    email = _unique_email()
+    original_consent_time = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
+    existing_user = User(
+        email=email, hashed_password=hash_password("some-password"), is_email_verified=True,
+        consent_given_at=original_consent_time, terms_version="2020-01-01",
+    )
+    pg_session.add(existing_user)
+    await pg_session.flush()
+
+    try:
+        linked_user, _ = await _find_or_create_user(pg_session, OAuthProvider.google, uuid.uuid4().hex, email)
+        await pg_session.commit()
+
+        assert linked_user.consent_given_at == original_consent_time
+        assert linked_user.terms_version == "2020-01-01"
     finally:
         await pg_session.execute(delete(User).where(User.email == email))
         await pg_session.commit()

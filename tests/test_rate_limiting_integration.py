@@ -175,6 +175,30 @@ async def test_2fa_verify_recovery_code_is_rate_limited_per_mfa_token(client, re
     assert blocked.status_code == 429
 
 
+async def test_2fa_lockout_recovery_request_is_rate_limited_by_email(client, register_payload):
+    import pyotp
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    for i in range(settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS):
+        response = await client.post(
+            "/auth/2fa/lockout-recovery/request",
+            json={"email": register_payload["email"], "password": "wrong-password"},
+            headers={"X-Forwarded-For": f"198.51.101.{i + 1}"},  # different IP each time -- isolates the email-scoped limit
+        )
+        assert response.status_code == 200  # generic response either way, but still under the limit
+
+    blocked = await client.post(
+        "/auth/2fa/lockout-recovery/request",
+        json={"email": register_payload["email"], "password": "wrong-password"},
+        headers={"X-Forwarded-For": "198.51.101.250"},
+    )
+    assert blocked.status_code == 429
+
+
 async def test_2fa_code_endpoints_share_a_rate_limit_by_user_id(client, register_payload):
     """/enable, /disable, and /recovery-codes/regenerate all gate on a
     6-digit TOTP code behind nothing but a valid access token -- without

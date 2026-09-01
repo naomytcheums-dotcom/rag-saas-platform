@@ -13,6 +13,7 @@ approach src/agent.py's own tests already use for the GitHub/Google calls.
 import pyotp
 from sqlalchemy import select
 
+from api.config import settings
 from api.models.user import User
 
 
@@ -440,6 +441,145 @@ async def test_unknown_recovery_code_is_rejected(client, register_payload):
 
     verify = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": "AAAA-AAAA-AAAA"})
     assert verify.status_code == 401
+
+
+async def test_lockout_recovery_disables_2fa_after_the_delay_elapses(client, register_payload, monkeypatch, db_session):
+    import datetime as dt
+
+    from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
+
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    request = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert request.status_code == 200
+    token = captured["link"].split("token=")[1]
+
+    # Too early -- the mandatory delay hasn't passed yet.
+    too_early = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert too_early.status_code == 400
+
+    # Simulate the delay having elapsed (real time can't be fast-forwarded in a test).
+    row = await db_session.scalar(select(TwoFactorLockoutRecoveryToken))
+    row.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS, minutes=1)
+    await db_session.commit()
+
+    confirm = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert confirm.status_code == 200
+
+    # 2FA is off entirely -- a plain password login now succeeds directly.
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert login.status_code == 200
+    assert login.json().get("access_token")
+
+
+async def test_lockout_recovery_request_is_silent_for_wrong_password(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    response = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": "totally-wrong-password"})
+    assert response.status_code == 200  # same generic message regardless
+    assert "link" not in captured  # ...but nothing was actually sent
+
+
+async def test_lockout_recovery_request_is_silent_when_2fa_is_not_enabled(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+    await client.post("/auth/register", json=register_payload)  # 2FA never enabled
+
+    response = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert response.status_code == 200
+    assert "link" not in captured
+
+
+async def test_a_normal_2fa_login_cancels_a_pending_lockout_recovery_request(client, register_payload, monkeypatch, db_session):
+    """The real owner logging in normally -- proving they still control
+    2FA -- must invalidate a lockout-recovery request an attacker (who'd
+    only have the password) is relying on instead. Without this, a
+    stolen password alone could still wipe 2FA hours later even though
+    the legitimate owner never lost access to anything."""
+    import datetime as dt
+
+    from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
+
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    # Attacker (or anyone) requests lockout recovery with the correct password.
+    await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    token = captured["link"].split("token=")[1]
+
+    # The real owner logs in normally with their authenticator in the meantime.
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+    verify = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": pyotp.TOTP(secret).now()})
+    assert verify.status_code == 200
+
+    # Fast-forward past the delay and try to confirm the (now-cancelled) token.
+    row = await db_session.scalar(select(TwoFactorLockoutRecoveryToken))
+    assert row is None  # the normal login above already deleted it
+
+    confirm = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert confirm.status_code == 400
+
+
+async def test_lockout_recovery_token_cannot_be_reused(client, register_payload, monkeypatch, db_session):
+    import datetime as dt
+
+    from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
+
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    token = captured["link"].split("token=")[1]
+
+    row = await db_session.scalar(select(TwoFactorLockoutRecoveryToken))
+    row.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS, minutes=1)
+    await db_session.commit()
+
+    first = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert first.status_code == 200
+
+    replay = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert replay.status_code == 400
+
+
+async def test_lockout_recovery_garbage_token_is_rejected(client):
+    response = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": "this-was-never-issued"})
+    assert response.status_code == 400
 
 
 # --------------------------------------------------------------- 1.1.10 --

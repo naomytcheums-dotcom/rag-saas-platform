@@ -95,6 +95,25 @@ class PasswordResetRequest(BaseModel):
         return value
 
 
+class TwoFactorLockoutRecoveryRequest(BaseModel):
+    """Body of POST /auth/2fa/lockout-recovery/request -- the last resort
+    for a user who has lost both their authenticator device and every
+    recovery code. Takes the account password (not just the email) since
+    this is a stronger claim than "I can read this mailbox"."""
+
+    email: EmailStr
+    password: str
+
+
+class TwoFactorLockoutRecoveryConfirmRequest(BaseModel):
+    """Body of POST /auth/2fa/lockout-recovery/confirm -- `token` is the
+    raw value from the link emailed by /lockout-recovery/request. Only
+    valid once TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS have passed since the
+    request, see that endpoint's docstring."""
+
+    token: str
+
+
 class AccountRestoreRequest(BaseModel):
     """Body of POST /account/restore/request -- public (no access token:
     the account is deactivated), same shape as PasswordForgotRequest."""

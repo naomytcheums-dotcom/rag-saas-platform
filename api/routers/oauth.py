@@ -14,6 +14,7 @@ password signup. A brand new OAuth-only user gets hashed_password=None
 and is_email_verified=True immediately, for the same reason.
 """
 
+import datetime as dt
 import logging
 
 import httpx
@@ -153,6 +154,18 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
         # signup -- so this is as good as them completing that flow, not
         # a separate, lesser form of verification.
         user.is_email_verified = True
+
+    if user.consent_given_at is None:
+        # register() captures this at the moment of an explicit
+        # accept_terms=True; OAuth sign-up never shows that checkbox, so
+        # without this, an OAuth-only account would have a permanently
+        # empty RGPD consent record even though using the service is
+        # itself an affirmative act. Only fills a gap -- never overwrites
+        # a timestamp an existing password account already has from its
+        # own real registration, so linking OAuth to an already-consented
+        # account doesn't rewrite that history.
+        user.consent_given_at = dt.datetime.now(dt.timezone.utc)
+        user.terms_version = settings.TERMS_VERSION
 
     db.add(OAuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_account_id, provider_email=email))
     await db.flush()

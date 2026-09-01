@@ -72,6 +72,16 @@ deletes any unused codes, and consuming one always emails the account a
 "a recovery code was used" notice. Unlike TOTP itself, this whole flow is
 fully covered by the automated suite -- no physical device involved.
 
+**Lost the device AND all 10 codes:** `POST /auth/2fa/lockout-recovery/request`
+(email + password) starts a last-resort removal of 2FA that only becomes
+confirmable (`POST /auth/2fa/lockout-recovery/confirm`) after
+`TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS` (default 24h) -- the same
+"we'll do this in N hours unless you stop us" pattern GitHub/Google use.
+Logging in normally with the authenticator or a recovery code in the
+meantime cancels any pending request automatically, so a compromised
+mailbox + leaked password alone can't silently wipe 2FA while the real
+owner is still actively using the account.
+
 ### S3-compatible storage (1.1.13 avatar upload)
 
 Any S3-compatible bucket: AWS S3, Cloudflare R2 (needs a payment method
@@ -141,6 +151,7 @@ Enforced on the 5 endpoints an attacker would actually target:
 | `POST /auth/2fa/verify-login` | 5 / 15 min | the mfa_token itself (hashed) |
 | `POST /auth/2fa/verify-recovery-code` | 5 / 15 min | the mfa_token itself (hashed), own counter from verify-login |
 | `POST /auth/2fa/enable`, `/disable`, `/recovery-codes/regenerate` | 5 / 15 min | user id -- shared counter across all three, so a stolen access token can't brute-force the TOTP code by spreading guesses across endpoints |
+| `POST /auth/2fa/lockout-recovery/request` | 5 / 15 min | IP **and** target email (checks a password guess, same thresholds as `/auth/login`) |
 | `POST /account/restore/request` | 3 / 60 min | target email |
 
 If `RATE_LIMIT_REDIS_URL` is unreachable, enforcement fails **open**

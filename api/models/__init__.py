@@ -6,6 +6,7 @@ registers its table).
 """
 
 from api.database import Base
+from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
@@ -15,5 +16,5 @@ from api.models.user import User
 
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
-    "TwoFactorRecoveryCode", "AccountRestoreToken",
+    "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken",
 ]

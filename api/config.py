@@ -101,6 +101,21 @@ class Settings(BaseSettings):
     EMAIL_VERIFY_REQUEST_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
+    # -- 2FA lockout recovery (lost device AND all recovery codes) --------
+    # How long a requested 2FA removal must wait before it can be
+    # confirmed -- the same "we'll do this in N hours unless you stop us"
+    # pattern GitHub/Google use for the identical scenario, so a
+    # compromised mailbox + guessed/leaked password isn't an instant 2FA
+    # bypass. The real owner cancels it just by logging in normally in
+    # the meantime (see api/routers/two_factor.py's
+    # _cancel_pending_lockout_recovery).
+    TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS: int = 24
+    # Total link validity from the moment it's requested -- must be
+    # comfortably longer than the delay above, so there's a real window
+    # to actually click "confirm" once eligible, not just the instant it
+    # becomes valid.
+    TWO_FA_LOCKOUT_RECOVERY_TOKEN_EXPIRE_HOURS: int = 96
     ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     ACCOUNT_RESTORE_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 

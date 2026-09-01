@@ -101,6 +101,59 @@ def send_account_restore_email(to_email: str, restore_link: str) -> None:
     )
 
 
+def send_two_factor_lockout_recovery_requested_email(to_email: str, confirm_link: str, delay_hours: int) -> None:
+    """
+    Called by api/services/two_factor_lockout_recovery.py right after
+    POST /auth/2fa/lockout-recovery/request accepts a correct email +
+    password for an account that still has 2FA enabled. This is a
+    high-stakes email on purpose -- it's sent even to legitimate users,
+    since the whole point of the mandatory delay is giving the real
+    owner a chance to notice and cancel it (by logging in normally) if
+    they didn't request it themselves.
+    """
+    _send(
+        to_email,
+        subject="Two-factor authentication removal requested",
+        html=(
+            f"<p>Someone just requested to remove two-factor authentication "
+            f"from your account, using the correct account password.</p>"
+            f"<p>This will NOT take effect immediately. The link below only "
+            f"becomes active in {delay_hours} hours, and expires a few days "
+            f"after that.</p>"
+            f'<p><a href="{confirm_link}">{confirm_link}</a></p>'
+            f"<p><strong>If this was you</strong> -- for example because you "
+            f"lost your authenticator device and your recovery codes -- no "
+            f"further action is needed until the link becomes active.</p>"
+            f"<p><strong>If this wasn't you</strong>, log in normally right "
+            f"now with your authenticator app or a recovery code: doing so "
+            f"cancels this request immediately. Since whoever made this "
+            f"request knows your password, you should also change it.</p>"
+        ),
+    )
+
+
+def send_two_factor_lockout_recovery_completed_email(to_email: str) -> None:
+    """Called once POST /auth/2fa/lockout-recovery/confirm actually
+    disables 2FA -- the account is now back to password-only login, so
+    this is worth flagging clearly even though the requesting email
+    already warned this was coming."""
+    _send(
+        to_email,
+        subject="Two-factor authentication has been disabled on your account",
+        html=(
+            "<p>Two-factor authentication has just been disabled on your "
+            "account through the lockout recovery process, and every "
+            "device has been logged out.</p>"
+            "<p>If you meant to do this, you can log in with just your "
+            "password now, and set up 2FA again from your account "
+            "settings whenever you're ready.</p>"
+            "<p>If you did NOT mean for this to happen, someone else knows "
+            "your password -- log in immediately, change your password, "
+            "and set up two-factor authentication again.</p>"
+        ),
+    )
+
+
 def send_new_login_notification_email(to_email: str, device_info: str | None, ip_address: str | None, when: str) -> None:
     """
     Called by api/security/sessions.py's issue_session() the first time a

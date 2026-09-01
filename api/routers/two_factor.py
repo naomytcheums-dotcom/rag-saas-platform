@@ -16,32 +16,43 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
+from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.recovery_code import TwoFactorRecoveryCode
+from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import (
     MessageResponse,
     TokenResponse,
     TwoFactorCodeRequest,
+    TwoFactorLockoutRecoveryConfirmRequest,
+    TwoFactorLockoutRecoveryRequest,
     TwoFactorRecoveryCodeLoginRequest,
     TwoFactorRecoveryCodesResponse,
     TwoFactorSetupResponse,
     TwoFactorVerifyLoginRequest,
 )
-from api.security.hashing import hash_token
+from api.security.hashing import hash_token, verify_password
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 from api.security.rate_limit import enforce_rate_limit
 from api.security.recovery_codes import RECOVERY_CODE_COUNT, generate_recovery_code, normalize_recovery_code
 from api.security.sessions import issue_session
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
-from api.services.email import send_recovery_code_used_email
+from api.services.email import send_recovery_code_used_email, send_two_factor_lockout_recovery_completed_email
+from api.services.two_factor_lockout_recovery import create_and_send_two_factor_lockout_recovery
+from api.utils import as_aware_utc, client_ip
 
 router = APIRouter(prefix="/auth/2fa", tags=["auth"])
 logger = logging.getLogger(__name__)
+
+_GENERIC_LOCKOUT_RECOVERY_MESSAGE = (
+    "If that email and password match an account with two-factor authentication enabled, "
+    "a recovery link has been sent."
+)
 
 
 async def _replace_recovery_codes(db: AsyncSession, user_id: uuid.UUID) -> list[str]:
@@ -58,6 +69,21 @@ async def _replace_recovery_codes(db: AsyncSession, user_id: uuid.UUID) -> list[
         db.add(TwoFactorRecoveryCode(user_id=user_id, code_hash=hash_token(normalize_recovery_code(code))))
     await db.flush()
     return plain_codes
+
+
+async def _cancel_pending_lockout_recovery(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """A successful TOTP or recovery-code login is proof the account
+    owner still controls 2FA -- any /2fa/lockout-recovery/request still
+    pending for this account is exactly what an attacker who only has
+    the password would be relying on instead, so it's invalidated here
+    rather than left to silently mature over its delay window. Called
+    from every path that proves 2FA is still under the real owner's
+    control: /verify-login, /verify-recovery-code, and /disable."""
+    await db.execute(
+        delete(TwoFactorLockoutRecoveryToken).where(
+            TwoFactorLockoutRecoveryToken.user_id == user_id, TwoFactorLockoutRecoveryToken.used_at.is_(None)
+        )
+    )
 
 
 @router.post("/setup", response_model=TwoFactorSetupResponse)
@@ -148,6 +174,7 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
     current_user.totp_enabled = False
     current_user.totp_secret = None
     await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == current_user.id))
+    await _cancel_pending_lockout_recovery(db, current_user.id)
     await db.commit()
     return MessageResponse(message="Two-factor authentication disabled")
 
@@ -214,6 +241,11 @@ async def verify_two_factor_login(payload: TwoFactorVerifyLoginRequest, request:
     if not verify_totp_code(user.totp_secret, payload.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid code")
 
+    # Proof the real owner still controls 2FA -- cancel any pending
+    # /lockout-recovery/request an attacker (who'd only have the
+    # password) might be relying on instead. See its docstring below.
+    await _cancel_pending_lockout_recovery(db, user.id)
+
     tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await db.commit()
     return tokens
@@ -275,6 +307,91 @@ async def verify_two_factor_recovery_code(payload: TwoFactorRecoveryCodeLoginReq
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send recovery-code-used alert to %s: %s", user.email, exc)
 
+    await _cancel_pending_lockout_recovery(db, user.id)
+
     tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await db.commit()
     return tokens
+
+
+@router.post("/lockout-recovery/request", response_model=MessageResponse)
+async def request_two_factor_lockout_recovery(payload: TwoFactorLockoutRecoveryRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    True last resort: a user who has lost BOTH their authenticator
+    device AND all 10 recovery codes can satisfy neither /verify-login
+    nor /verify-recovery-code, and would otherwise be permanently locked
+    out. Takes the account password (not just the email) as a stronger
+    claim than a bare "I can read this mailbox" -- and even then does
+    NOT disable 2FA here; see /confirm below for the mandatory delay.
+
+    Rate-limited by IP and by email, same reasoning and same thresholds
+    as /auth/login: this endpoint checks a password guess, so it needs
+    the same brute-force protection login itself has.
+
+    Always returns the same generic message, whether or not the email
+    exists, has a password, or has 2FA enabled -- anti-enumeration, same
+    as /auth/password/forgot.
+    """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-lockout:ip:{client_ip(request)}",
+        settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    await enforce_rate_limit(
+        f"ratelimit:2fa-lockout:email:{payload.email}",
+        settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    user = await db.scalar(select(User).where(User.email == payload.email))
+    if (
+        user is not None
+        and user.hashed_password is not None
+        and verify_password(payload.password, user.hashed_password)
+        and user.is_active
+        and not user.is_deleted
+        and user.totp_enabled
+    ):
+        await create_and_send_two_factor_lockout_recovery(db, user)
+        await db.commit()
+    return MessageResponse(message=_GENERIC_LOCKOUT_RECOVERY_MESSAGE)
+
+
+@router.post("/lockout-recovery/confirm", response_model=MessageResponse)
+async def confirm_two_factor_lockout_recovery(payload: TwoFactorLockoutRecoveryConfirmRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 2, only reachable once TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS have
+    passed since /request -- the delay is what a phisher or device thief
+    can't wait out unnoticed, while the real owner would see the "2FA
+    removal requested" email and log in normally (which cancels every
+    pending token for this account, see _cancel_pending_lockout_recovery
+    and its call sites) to stop it before it ever becomes eligible.
+
+    On success, disables 2FA entirely (not just this one login) and logs
+    every device out -- this is as security-sensitive as a password
+    reset, and treated the same way.
+    """
+    invalid = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid, expired, or not-yet-eligible recovery link")
+
+    row = await db.scalar(select(TwoFactorLockoutRecoveryToken).where(TwoFactorLockoutRecoveryToken.token_hash == hash_token(payload.token)))
+    now = dt.datetime.now(dt.timezone.utc)
+    if row is None or row.used_at is not None or as_aware_utc(row.expires_at) < now:
+        raise invalid
+    if as_aware_utc(row.created_at) + dt.timedelta(hours=settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS) > now:
+        raise invalid
+
+    user = await db.get(User, row.user_id)
+    if user is None or not user.totp_enabled:
+        raise invalid
+
+    user.totp_enabled = False
+    user.totp_secret = None
+    await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == user.id))
+    await db.execute(delete(Session).where(Session.user_id == user.id))
+    row.used_at = now
+    await db.commit()
+
+    try:
+        send_two_factor_lockout_recovery_completed_email(user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send lockout-recovery completion email to %s: %s", user.email, exc)
+
+    return MessageResponse(message="Two-factor authentication has been disabled. Please log in with your password.")
