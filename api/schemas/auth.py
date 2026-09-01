@@ -184,6 +184,24 @@ class SetPasswordRequest(BaseModel):
         return value
 
 
+class ChangePasswordRequest(BaseModel):
+    """Body of POST /account/change-password -- for an already-logged-in
+    user who knows their current password and wants to rotate it,
+    without the forgot/reset email round-trip. `current_password` is
+    what makes this safe to reach with nothing but a valid access token
+    (see the endpoint's own docstring)."""
+
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_within_bcrypt_limit(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > _BCRYPT_MAX_BYTES:
+            raise ValueError(f"password must be at most {_BCRYPT_MAX_BYTES} bytes")
+        return value
+
+
 class EmailVerifyConfirmRequest(BaseModel):
     """Body of POST /auth/verify-email/confirm -- the 6-digit code from
     the verification email."""

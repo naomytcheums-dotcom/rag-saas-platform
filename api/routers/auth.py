@@ -37,6 +37,7 @@ from api.security.sessions import (
     revoke_session,
 )
 from api.security.jwt import create_mfa_pending_token
+from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.services.email import send_rate_limit_alert_email
 from api.services.verification import create_and_send_email_otp
@@ -49,6 +50,24 @@ logger = logging.getLogger(__name__)
 # was wrong (unknown email vs. wrong password) -- see the comment inside
 # login() for the reasoning.
 _GENERIC_LOGIN_ERROR = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+_BREACHED_PASSWORD_ERROR = HTTPException(
+    status_code=status.HTTP_400_BAD_REQUEST,
+    detail="This password has appeared in a known data breach -- please choose a different one.",
+)
+
+# 1.1-audit finding: bcrypt.checkpw costs ~250ms; `user is None or
+# user.hashed_password is None or not verify_password(...)` short-circuits
+# on the first two conditions, so an unknown email or an OAuth-only
+# account returns in ~1ms while a known account with a wrong password
+# takes ~250ms -- a textbook timing side-channel that lets an attacker
+# enumerate registered emails by response time alone, despite every
+# response body being identical. Hashed once at import time and reused
+# below so a request with no real user to check against still pays the
+# same bcrypt cost as one that does, closing the gap. The value itself
+# is never a real account's password and is never compared against
+# anything meaningful -- only its cost matters.
+_DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY = hash_password("timing-safety-dummy-value-never-a-real-password")
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -74,6 +93,9 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
         # Deliberately vague: confirming "this email is already registered"
         # to an anonymous caller is a user-enumeration leak.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not register with these details")
+
+    if await is_password_known_breached(payload.password):
+        raise _BREACHED_PASSWORD_ERROR
 
     user = User(
         email=payload.email,
@@ -146,7 +168,16 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     # the exact same generic error. Returning a different message for
     # "that email doesn't exist" vs "wrong password" would let an
     # attacker enumerate which emails are registered one guess at a time.
-    if user is None or user.hashed_password is None or not verify_password(payload.password, user.hashed_password):
+    #
+    # verify_password is called UNCONDITIONALLY, even when there's no real
+    # hash to check against (falling back to the dummy one above) -- not
+    # short-circuited by `user is None or ...`. bcrypt's ~250ms cost is
+    # otherwise only paid on the "user exists" branch, which is a timing
+    # side-channel that defeats the identical-response-body protection
+    # above just as effectively as a different error message would.
+    real_hash = user.hashed_password if (user is not None and user.hashed_password is not None) else _DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY
+    password_matches = verify_password(payload.password, real_hash)
+    if user is None or user.hashed_password is None or not password_matches:
         raise _GENERIC_LOGIN_ERROR
     if not user.is_active or user.is_deleted:
         raise _GENERIC_LOGIN_ERROR

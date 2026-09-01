@@ -32,13 +32,15 @@ from api.schemas.auth import (
     AcceptUpdatedTermsRequest,
     AccountRestoreConfirmRequest,
     AccountRestoreRequest,
+    ChangePasswordRequest,
     ConsentReactivationConfirmRequest,
     ConsentReactivationRequest,
     MessageResponse,
     SetPasswordRequest,
 )
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
-from api.security.hashing import hash_password, hash_token
+from api.security.hashing import hash_password, hash_token, verify_password
+from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
 from api.services.account_restore import create_and_send_account_restore
@@ -46,6 +48,7 @@ from api.services.consent_reactivation import create_and_send_consent_reactivati
 from api.services.email import (
     send_account_deletion_scheduled_email,
     send_consent_withdrawn_email,
+    send_password_changed_email,
     send_password_set_email,
 )
 from api.services.storage import upload_avatar
@@ -167,7 +170,13 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
     if current_user.hashed_password is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This account already has a password -- use POST /auth/password/forgot to change it",
+            detail="This account already has a password -- use POST /account/change-password to change it",
+        )
+
+    if await is_password_known_breached(payload.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password has appeared in a known data breach -- please choose a different one.",
         )
 
     current_user.hashed_password = hash_password(payload.new_password)
@@ -179,6 +188,58 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
         logger.warning("failed to send password-set confirmation to %s: %s", current_user.email, exc)
 
     return MessageResponse(message="Password set. You can now also log in with your email and password.")
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(payload: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    1.1-audit finding: before this endpoint existed, a logged-in user who
+    knew their current password had no way to change it without going
+    through the email-based forgot/reset flow -- a real completeness gap
+    and an unnecessary friction point (and an unnecessary email round-trip)
+    for the single most common reason to change a password at all:
+    routine rotation by someone who isn't locked out.
+
+    Requires the CURRENT password, not just a valid access token -- same
+    reasoning as every other endpoint here that lets a stolen-but-still-
+    valid access token do something the token alone shouldn't be enough
+    for (api/routers/two_factor.py's /disable, /recovery-codes/regenerate).
+    Refuses outright for an OAuth-only account (hashed_password is None)
+    -- there's no current password to confirm, POST /account/set-password
+    is the correct endpoint for that case.
+
+    Revokes every session (this one included) exactly like
+    POST /auth/password/reset does: a password change is exactly as
+    security-sensitive as a reset, whether the user arrived at it by
+    email link or from an authenticated settings page. The caller's own
+    access token is blacklisted by this same call, so the response is the
+    last thing this session can do -- a fresh login is required
+    afterward, on this device too.
+    """
+    if current_user.hashed_password is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has no password yet -- use POST /account/set-password instead",
+        )
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+
+    if await is_password_known_breached(payload.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password has appeared in a known data breach -- please choose a different one.",
+        )
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    await revoke_all_sessions_for_user(db, current_user.id)
+    await db.commit()
+
+    try:
+        send_password_changed_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send password-changed confirmation to %s: %s", current_user.email, exc)
+
+    return MessageResponse(message="Password changed. Please log in again.")
 
 
 @router.delete("/me", response_model=MessageResponse)

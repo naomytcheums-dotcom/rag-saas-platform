@@ -43,6 +43,32 @@ def _disable_rate_limiting_by_default(monkeypatch):
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_the_hibp_breach_check_by_default(monkeypatch):
+    """
+    api/security/password_strength.py's is_password_known_breached makes
+    a real network call to a third-party API -- every test in tests/
+    that registers/resets/sets/changes a password would otherwise depend
+    on that API being reachable, making the fast SQLite suite no longer
+    fast or network-independent (the exact thing the module docstring
+    above this one warns about). Stubbed to "never breached" by default,
+    same pattern as rate limiting above; tests that specifically verify
+    the rejection path monkeypatch it back to True for themselves.
+
+    Patched on each ROUTER module's own imported name, not on
+    api.security.password_strength itself -- `from ... import
+    is_password_known_breached` binds a local name in auth.py/password.py/
+    account.py at import time, so patching the source module's attribute
+    would silently miss all three call sites.
+    """
+    for module in ("api.routers.auth", "api.routers.password", "api.routers.account"):
+        monkeypatch.setattr(f"{module}.is_password_known_breached", _fake_not_breached)
+
+
+async def _fake_not_breached(password: str) -> bool:
+    return False
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

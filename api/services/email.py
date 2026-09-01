@@ -431,6 +431,32 @@ def send_password_set_email(to_email: str) -> None:
     )
 
 
+def send_password_changed_email(to_email: str) -> None:
+    """
+    Called by api/routers/account.py's change_password() every time an
+    already-logged-in user rotates their password via their current one
+    (not the forgot/reset email flow, which has its own implicit
+    notification -- the reset link itself only reaches the real
+    mailbox). change_password() already revokes every session as part of
+    the same call, so this is a courtesy confirmation, not the primary
+    signal something is wrong -- but if the current password was itself
+    obtained illegitimately (e.g. shoulder-surfed), this is still worth
+    flagging to the real owner.
+    """
+    _send(
+        to_email,
+        subject="Your password was changed",
+        html=(
+            "<p>Your account password was just changed. Every device has "
+            "been logged out, including this one -- log in again with "
+            "your new password.</p>"
+            "<p>If you didn't do this, someone else knows your password. "
+            "Reset it immediately using the \"forgot password\" option, "
+            "which will log out whoever made this change too.</p>"
+        ),
+    )
+
+
 def send_rate_limit_alert_email(to_email: str, context: str) -> None:
     """
     Called when the *email-scoped* login rate limit trips (see

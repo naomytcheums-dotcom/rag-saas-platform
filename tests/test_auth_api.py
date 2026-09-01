@@ -70,6 +70,22 @@ async def test_register_rejects_password_over_bcrypt_limit(client, register_payl
     assert response.status_code == 422
 
 
+async def _always_breached(password):
+    return True
+
+
+async def test_register_rejects_a_known_breached_password(client, register_payload, monkeypatch):
+    """1.1-audit finding: nothing previously checked a new password
+    against known data breaches (only min_length=8). conftest.py's
+    autouse fixture stubs the real HIBP call to always say "not
+    breached" for every other test -- this one flips it to prove the
+    rejection path itself works."""
+    monkeypatch.setattr("api.routers.auth.is_password_known_breached", _always_breached)
+    response = await client.post("/auth/register", json=register_payload)
+    assert response.status_code == 400
+    assert "data breach" in response.json()["detail"]
+
+
 # ---------------------------------------------------------------- 1.1.2 --
 async def test_login_success(client, register_payload):
     await client.post("/auth/register", json=register_payload)
@@ -88,6 +104,39 @@ async def test_login_unknown_email_returns_same_generic_401(client):
     response = await client.post("/auth/login", json={"email": "nobody@example.com", "password": "whatever123"})
     assert response.status_code == 401
     assert response.json()["detail"] == "Incorrect email or password"
+
+
+async def test_login_pays_the_same_bcrypt_cost_whether_or_not_the_account_exists(client, register_payload, monkeypatch):
+    """1.1-audit finding, fixed: `user is None or ... or not verify_password(...)`
+    used to short-circuit past the ~250ms bcrypt call entirely for an
+    unknown email, while a known account with a wrong password paid the
+    full cost -- a timing side-channel that let an attacker enumerate
+    registered emails by response time alone, undermining the identical-
+    response-body protection right next to it. Proven here by spying on
+    verify_password's call count rather than measuring wall-clock time
+    directly (unreliable in CI) -- it must be invoked exactly once per
+    login attempt regardless of whether the account exists."""
+    calls = []
+    import api.routers.auth as auth_module
+
+    real_verify_password = auth_module.verify_password
+
+    def spy(password, hashed):
+        calls.append(hashed)
+        return real_verify_password(password, hashed)
+
+    monkeypatch.setattr(auth_module, "verify_password", spy)
+
+    await client.post("/auth/register", json=register_payload)
+
+    await client.post("/auth/login", json={"email": "nobody-registered@example.com", "password": "whatever123"})
+    await client.post("/auth/login", json={"email": register_payload["email"], "password": "wrong-password"})
+
+    assert len(calls) == 2
+    # The unknown-email call used the module-level dummy hash specifically
+    # -- not skipped, and not coincidentally matching a real user's hash.
+    assert calls[0] == auth_module._DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY
+    assert calls[1] != auth_module._DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY
 
 
 async def test_logout_revokes_session(client, register_payload):
@@ -457,6 +506,20 @@ async def test_password_reset_flow(client, register_payload, monkeypatch):
 
     new_password_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": "a-brand-new-password"})
     assert new_password_login.status_code == 200
+
+
+async def test_password_reset_rejects_a_known_breached_password(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+    monkeypatch.setattr("api.routers.password.is_password_known_breached", _always_breached)
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "whatever-its-breached"})
+    assert response.status_code == 400
+    assert "data breach" in response.json()["detail"]
 
 
 async def test_password_reset_blacklists_the_access_token_issued_before_it(client, register_payload, monkeypatch):
@@ -1542,6 +1605,106 @@ async def test_set_password_is_rejected_for_an_account_that_already_has_one(clie
         "/account/set-password", json={"new_password": "another-password"}, headers={"Authorization": f"Bearer {access_token}"}
     )
     assert response.status_code == 400
+
+
+async def test_set_password_rejects_a_known_breached_password(client, db_session, monkeypatch):
+    monkeypatch.setattr("api.routers.account.is_password_known_breached", _always_breached)
+    oauth_user = User(
+        email="oauth-breach-check@example.com", hashed_password=None, is_email_verified=True,
+        terms_version=settings.TERMS_VERSION, consent_given_at=dt.datetime.now(dt.timezone.utc),
+    )
+    db_session.add(oauth_user)
+    await db_session.commit()
+    from api.security.jwt import create_access_token
+    access_token, _jti = create_access_token(oauth_user.id)
+
+    response = await client.post(
+        "/account/set-password", json={"new_password": "whatever-its-breached"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 400
+    assert "data breach" in response.json()["detail"]
+
+
+# ------------------------------------------------------- change-password --
+async def test_change_password_succeeds_and_forces_relogin_everywhere(client, register_payload, monkeypatch):
+    """1.1-audit finding, fixed: there was previously no way for a
+    logged-in user who knows their current password to change it without
+    the forgot/reset email round-trip. Proves the full lifecycle: old
+    password stops working, new one works, the session that made the
+    change is itself revoked (same as /auth/password/reset), and a
+    notification email goes out."""
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_password_changed_email", lambda to: captured.append(to))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": register_payload["password"], "new_password": "a-brand-new-password"},
+        headers=auth_header,
+    )
+    assert response.status_code == 200
+    assert captured == [register_payload["email"]]
+
+    # The very token used to make this call is now blacklisted -- same
+    # session-revocation guarantee as /auth/password/reset.
+    now_blacklisted = await client.get("/account/me", headers=auth_header)
+    assert now_blacklisted.status_code == 401
+
+    old_password_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert old_password_login.status_code == 401
+
+    new_password_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": "a-brand-new-password"})
+    assert new_password_login.status_code == 200
+
+
+async def test_change_password_rejects_a_wrong_current_password(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": "not-the-real-password", "new_password": "a-brand-new-password"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 400
+
+    # And the real password still works -- a wrong-current-password
+    # attempt must not have changed anything.
+    still_works = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert still_works.status_code == 200
+
+
+async def test_change_password_is_rejected_for_an_oauth_only_account(client, db_session):
+    from api.security.jwt import create_access_token
+
+    oauth_user = User(
+        email="oauth-change-pw@example.com", hashed_password=None, is_email_verified=True,
+        terms_version=settings.TERMS_VERSION, consent_given_at=dt.datetime.now(dt.timezone.utc),
+    )
+    db_session.add(oauth_user)
+    await db_session.commit()
+    access_token, _jti = create_access_token(oauth_user.id)
+
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": "anything", "new_password": "a-brand-new-password"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 400
+    assert "set-password" in response.json()["detail"]
+
+
+async def test_change_password_rejects_a_known_breached_password(client, register_payload, monkeypatch):
+    monkeypatch.setattr("api.routers.account.is_password_known_breached", _always_breached)
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": register_payload["password"], "new_password": "whatever-its-breached"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 400
+    assert "data breach" in response.json()["detail"]
 
 
 # ----------------------------------------------------------- monitoring --

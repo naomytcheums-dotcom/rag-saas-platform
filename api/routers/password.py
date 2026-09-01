@@ -14,6 +14,7 @@ from api.models.token import PasswordResetToken
 from api.models.user import User
 from api.schemas.auth import MessageResponse, PasswordForgotRequest, PasswordResetRequest
 from api.security.hashing import hash_password, hash_token
+from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
 from api.services.password_reset import create_and_send_password_reset
@@ -69,6 +70,12 @@ async def reset_password(payload: PasswordResetRequest, db: AsyncSession = Depen
     user = await db.get(User, reset_row.user_id)
     if user is None:
         raise invalid
+
+    if await is_password_known_breached(payload.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password has appeared in a known data breach -- please choose a different one.",
+        )
 
     user.hashed_password = hash_password(payload.new_password)
     reset_row.used_at = now
