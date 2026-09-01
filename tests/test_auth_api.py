@@ -10,10 +10,12 @@ service-function boundary (api.services.email.send_*) rather than skipped
 approach src/agent.py's own tests already use for the GitHub/Google calls.
 """
 
+import jwt as pyjwt
 import pyotp
 from sqlalchemy import select
 
 from api.config import settings
+from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
 
 
@@ -25,6 +27,17 @@ def _csrf(client):
     X-CSRF-Token header. A real browser's JS does this automatically;
     tests do it explicitly, here."""
     return {"X-CSRF-Token": client.cookies.get("csrf_token") or ""}
+
+
+def _jti_of(access_token):
+    """Pulls the jti claim straight out of a JWT without verifying its
+    signature -- fine for a test that already trusts this token was
+    legitimately issued moments ago by the very server under test, and
+    lets these tests check the 1.1.15 blacklist directly (was a
+    RevokedAccessToken row actually written for THIS jti?) instead of
+    only inferring it indirectly through an HTTP 401 that could just as
+    easily come from is_active being False."""
+    return pyjwt.decode(access_token, options={"verify_signature": False})["jti"]
 
 
 # ---------------------------------------------------------------- 1.1.1 --
@@ -752,6 +765,13 @@ async def test_lockout_recovery_disables_2fa_after_the_delay_elapses(client, reg
     assert login.status_code == 200
     assert login.json().get("access_token")
 
+    # 1.1.15: unlike delete_account/withdraw_consent, this flow never
+    # touches is_active -- the access token issued at registration dying
+    # here is proof the blacklist itself (revoke_all_sessions_for_user)
+    # is what's doing the work, not a side effect of some other check.
+    old_access_token_now_dead = await client.get("/account/me", headers=auth_header)
+    assert old_access_token_now_dead.status_code == 401
+
 
 async def test_lockout_recovery_request_is_silent_for_wrong_password(client, register_payload, monkeypatch):
     captured = {}
@@ -855,12 +875,19 @@ async def test_lockout_recovery_garbage_token_is_rejected(client):
 
 
 # --------------------------------------------------------------- 1.1.10 --
-async def test_delete_account_soft_deletes_and_revokes_sessions(client, register_payload):
+async def test_delete_account_soft_deletes_and_revokes_sessions(client, register_payload, db_session):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}
 
     delete_response = await client.delete("/account/me", headers=auth_header)
     assert delete_response.status_code == 200
+
+    # 1.1.15: the blacklist row itself was written -- checked directly,
+    # not just inferred from the 401 below, since is_active turning False
+    # would produce that same 401 even if revoke_all_sessions_for_user's
+    # blacklist half were silently broken.
+    blacklisted = await db_session.scalar(select(RevokedAccessToken).where(RevokedAccessToken.jti == _jti_of(access_token)))
+    assert blacklisted is not None
 
     refresh_response = await client.post("/auth/refresh", headers=_csrf(client))
     assert refresh_response.status_code == 401
@@ -998,11 +1025,16 @@ async def test_withdraw_consent_deactivates_account_without_scheduling_a_purge(c
     assert user.deletion_scheduled_at is None
 
 
-async def test_withdraw_consent_revokes_existing_sessions(client, register_payload):
+async def test_withdraw_consent_revokes_existing_sessions(client, register_payload, db_session):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}
 
     await client.post("/account/consent/withdraw", headers=auth_header)
+
+    # 1.1.15: the blacklist row itself, checked directly -- same
+    # reasoning as test_delete_account_soft_deletes_and_revokes_sessions.
+    blacklisted = await db_session.scalar(select(RevokedAccessToken).where(RevokedAccessToken.jti == _jti_of(access_token)))
+    assert blacklisted is not None
 
     refresh = await client.post("/auth/refresh", headers=_csrf(client))
     assert refresh.status_code == 401

@@ -38,6 +38,7 @@ from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
+from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session as SessionModel
 from api.models.token import EmailVerificationToken
 from api.models.user import User
@@ -149,6 +150,10 @@ async def test_cascade_delete_removes_related_rows(pg_session):
         user_id=user_id, token_hash=uuid.uuid4().hex,
         expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
     ))
+    pg_session.add(RevokedAccessToken(
+        user_id=user_id, jti=str(uuid.uuid4()),
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=15),
+    ))
     await pg_session.commit()
 
     await pg_session.execute(delete(User).where(User.id == user_id))
@@ -161,6 +166,7 @@ async def test_cascade_delete_removes_related_rows(pg_session):
     remaining_restore_tokens = await pg_session.scalar(select(AccountRestoreToken).where(AccountRestoreToken.user_id == user_id))
     remaining_lockout_tokens = await pg_session.scalar(select(TwoFactorLockoutRecoveryToken).where(TwoFactorLockoutRecoveryToken.user_id == user_id))
     remaining_consent_tokens = await pg_session.scalar(select(ConsentReactivationToken).where(ConsentReactivationToken.user_id == user_id))
+    remaining_revoked_tokens = await pg_session.scalar(select(RevokedAccessToken).where(RevokedAccessToken.user_id == user_id))
 
     assert remaining_sessions is None
     assert remaining_oauth is None
@@ -169,6 +175,7 @@ async def test_cascade_delete_removes_related_rows(pg_session):
     assert remaining_restore_tokens is None
     assert remaining_consent_tokens is None
     assert remaining_lockout_tokens is None
+    assert remaining_revoked_tokens is None
 
 
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):
