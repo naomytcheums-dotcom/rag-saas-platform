@@ -37,9 +37,13 @@ def upload_avatar(user_id: uuid.UUID, content: bytes, content_type: str) -> str:
         raise ValueError(f"avatar exceeds the {MAX_AVATAR_BYTES // (1024 * 1024)}MB limit")
 
     extension = ALLOWED_AVATAR_CONTENT_TYPES[content_type]
+    # No "avatars/" prefix here: S3_BUCKET_NAME is expected to be a bucket
+    # dedicated to avatars (that's what .env.example documents), so the
+    # bucket name already provides that namespacing -- prefixing the key
+    # too would duplicate it in S3_PUBLIC_BASE_URL (.../public/avatars/avatars/...).
     # A fresh random key per upload (not user_id.png) so old CDN/browser
     # caches never serve a stale avatar under the same URL.
-    key = f"avatars/{user_id}/{uuid.uuid4()}.{extension}"
+    key = f"{user_id}/{uuid.uuid4()}.{extension}"
 
     try:
         _client().put_object(
