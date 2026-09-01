@@ -154,6 +154,22 @@ class ConsentReactivationConfirmRequest(BaseModel):
         return value
 
 
+class AcceptUpdatedTermsRequest(BaseModel):
+    """Body of POST /account/consent/accept-updated-terms (4.3) --
+    accept_terms must be True: re-consenting to a changed TERMS_VERSION
+    has to be a freely given, affirmative act, not a default assumed by
+    merely calling this endpoint."""
+
+    accept_terms: bool
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _terms_must_be_accepted(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("you must accept the updated terms of service to continue")
+        return value
+
+
 class SetPasswordRequest(BaseModel):
     """Body of POST /account/set-password -- lets an OAuth-only account
     (hashed_password is None) add a password as a backup login method."""

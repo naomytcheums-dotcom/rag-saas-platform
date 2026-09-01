@@ -1,4 +1,11 @@
-"""1.1.9 -- list/revoke active sessions (device, IP, last_seen)."""
+"""
+1.1.9 -- list/revoke active sessions (device, IP, last_seen). Both
+routes use get_current_user_any_consent_status, not get_current_user
+(4.3): a user must always be able to see or kill their own sessions --
+e.g. to lock out an attacker -- even while stuck behind the "accept
+updated terms" gate; basic account security isn't "using the service"
+in the sense that gate is meant to require fresh consent for.
+"""
 
 import datetime as dt
 import uuid
@@ -7,7 +14,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user, get_db
+from api.dependencies import get_current_user_any_consent_status, get_db
 from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import MessageResponse
@@ -21,7 +28,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 @router.get("", response_model=list[SessionResponse])
 async def list_sessions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_any_consent_status),
     refresh_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -56,7 +63,7 @@ async def list_sessions(
 async def revoke_session_by_id(
     session_id: uuid.UUID,
     response: Response,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_any_consent_status),
     refresh_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):

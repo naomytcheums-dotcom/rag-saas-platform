@@ -30,6 +30,7 @@ from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
 from api.services.storage import upload_avatar
+from api.tasks.account_deletion_reminder import send_pending_deletion_reminders
 from api.tasks.account_purge import purge_deleted_accounts
 from api.tasks.token_blacklist_cleanup import purge_expired_blacklist_entries
 
@@ -143,6 +144,81 @@ async def test_blacklist_cleanup_is_idempotent(pg_engine):
     second_run = purge_expired_blacklist_entries.apply().get()
     assert second_run == 0
     assert first_run >= 0
+
+
+async def test_deletion_reminder_sends_only_for_accounts_due_soon_and_not_already_sent(pg_engine, monkeypatch):
+    """4.6's Celery task: the pre-purge reminder must fire ONLY for
+    accounts (a) actually scheduled for deletion, (b) within the
+    reminder window, AND (c) that haven't already gotten one this
+    deletion cycle -- proven against all four cases at once, including
+    the two easy-to-get-wrong negatives (too far out, already sent)."""
+    now = dt.datetime.now(dt.timezone.utc)
+    captured = []
+    monkeypatch.setattr(
+        "api.tasks.account_deletion_reminder.send_account_deletion_reminder_email",
+        lambda to, days_remaining: captured.append((to, days_remaining)),
+    )
+
+    due_soon_email = await _create_user(
+        pg_engine, is_active=False,
+        deleted_at=now - dt.timedelta(days=27), deletion_scheduled_at=now + dt.timedelta(days=1),
+    )
+    not_due_yet_email = await _create_user(
+        pg_engine, is_active=False,
+        deleted_at=now - dt.timedelta(days=1), deletion_scheduled_at=now + dt.timedelta(days=25),
+    )
+    already_sent_email = await _create_user(
+        pg_engine, is_active=False,
+        deleted_at=now - dt.timedelta(days=28), deletion_scheduled_at=now + dt.timedelta(days=2),
+        deletion_reminder_sent_at=now - dt.timedelta(hours=1),
+    )
+    active_email = await _create_user(pg_engine)  # never soft-deleted at all
+
+    try:
+        sent_count = send_pending_deletion_reminders.apply().get()
+        assert sent_count >= 1  # shared dev DB may have other due rows too, same reasoning as the purge tests
+
+        sent_to = {email for email, _days in captured}
+        assert due_soon_email in sent_to
+        assert not_due_yet_email not in sent_to
+        assert already_sent_email not in sent_to
+        assert active_email not in sent_to
+
+        # Checked directly in the DB, not just inferred from the mock
+        # not being called -- deletion_reminder_sent_at was genuinely
+        # written for the one account that should have gotten it.
+        async with pg_engine.connect() as conn:
+            row = (await conn.execute(select(User.deletion_reminder_sent_at).where(User.email == due_soon_email))).one()
+        assert row.deletion_reminder_sent_at is not None
+    finally:
+        async with pg_engine.begin() as conn:
+            await conn.execute(delete(User).where(User.email.in_(
+                [due_soon_email, not_due_yet_email, already_sent_email, active_email]
+            )))
+
+
+async def test_deletion_reminder_is_not_resent_on_a_second_run(pg_engine, monkeypatch):
+    now = dt.datetime.now(dt.timezone.utc)
+    captured = []
+    monkeypatch.setattr(
+        "api.tasks.account_deletion_reminder.send_account_deletion_reminder_email",
+        lambda to, days_remaining: captured.append(to),
+    )
+    email = await _create_user(
+        pg_engine, is_active=False,
+        deleted_at=now - dt.timedelta(days=27), deletion_scheduled_at=now + dt.timedelta(days=1),
+    )
+
+    try:
+        send_pending_deletion_reminders.apply().get()
+        assert email in captured
+        captured.clear()
+
+        send_pending_deletion_reminders.apply().get()
+        assert email not in captured
+    finally:
+        async with pg_engine.begin() as conn:
+            await conn.execute(delete(User).where(User.email == email))
 
 
 async def test_purge_task_deletes_the_orphaned_avatar_from_storage(pg_engine):

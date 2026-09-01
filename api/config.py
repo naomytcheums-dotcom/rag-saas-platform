@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # ACCOUNT_PURGE_DELAY_DAYS to notice the email at all -- an hour-long
     # window would expire before most people even check their inbox.
     ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES: int = 1440
+    # 4.6: how close to the actual purge the "last chance" reminder email
+    # goes out (api/tasks/account_deletion_reminder.py) -- separate from
+    # the immediate confirmation DELETE /account/me already sends. 3 days
+    # gives a real window to notice and restore without being so early
+    # it reads as the same email as the immediate confirmation.
+    ACCOUNT_DELETION_REMINDER_DAYS_BEFORE: int = 3
 
     # -- Cookies / CORS -----------------------------------------------------
     FRONTEND_URL: str = "http://localhost:3000"

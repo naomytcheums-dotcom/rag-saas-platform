@@ -4,6 +4,13 @@
 are captured once at registration (api/routers/auth.py) and surfaced
 read-only via GET /account/me; withdrawing that consent is the one part
 of 1.1.12 that needs its own endpoint, see withdraw_consent() below.
+
+Routes that use get_current_user_any_consent_status instead of
+get_current_user (see api/dependencies.py) are the deliberate exceptions
+to 4.3's "accept updated terms before doing anything else" gate: the
+RGPD rights themselves (export, delete, withdraw consent), basic session
+security (list/revoke sessions), reading your own profile, and the
+accept-updated-terms endpoint that fixes the gate in the first place.
 """
 
 import datetime as dt
@@ -15,13 +22,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
-from api.dependencies import get_current_user, get_db
+from api.dependencies import get_current_user, get_current_user_any_consent_status, get_db
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.oauth import OAuthAccount
 from api.models.restore_token import AccountRestoreToken
 from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import (
+    AcceptUpdatedTermsRequest,
     AccountRestoreConfirmRequest,
     AccountRestoreRequest,
     ConsentReactivationConfirmRequest,
@@ -35,7 +43,11 @@ from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
 from api.services.account_restore import create_and_send_account_restore
 from api.services.consent_reactivation import create_and_send_consent_reactivation
-from api.services.email import send_consent_withdrawn_email, send_password_set_email
+from api.services.email import (
+    send_account_deletion_scheduled_email,
+    send_consent_withdrawn_email,
+    send_password_set_email,
+)
 from api.services.storage import upload_avatar
 from api.utils import as_aware_utc
 
@@ -47,10 +59,34 @@ _GENERIC_CONSENT_REACTIVATION_MESSAGE = "If a consent-withdrawn account exists f
 
 
 @router.get("/me", response_model=UserProfileResponse)
-async def get_profile(current_user: User = Depends(get_current_user)):
+async def get_profile(current_user: User = Depends(get_current_user_any_consent_status)):
     """The logged-in user's own profile -- whoever the access token
-    belongs to, resolved by the get_current_user dependency."""
+    belongs to, resolved by the get_current_user_any_consent_status
+    dependency (not get_current_user: a frontend must be able to read
+    this even for an account stuck behind 4.3's stale-terms gate, or it
+    has nothing to show the "please accept updated terms" prompt with)."""
     return UserProfileResponse.model_validate(current_user)
+
+
+@router.post("/consent/accept-updated-terms", response_model=MessageResponse)
+async def accept_updated_terms(
+    payload: AcceptUpdatedTermsRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db),
+):
+    """
+    4.3: the fix for get_current_user's stale-terms gate. Uses
+    get_current_user_any_consent_status, not get_current_user -- this
+    endpoint's entire purpose is to be reachable precisely when the
+    normal dependency would refuse the request, so it obviously can't
+    depend on the problem already being solved.
+
+    accept_terms must be True (schema-validated): re-consent has to be a
+    freely given, affirmative act, not a default assumed by merely
+    calling this endpoint.
+    """
+    current_user.terms_version = settings.TERMS_VERSION
+    current_user.consent_given_at = dt.datetime.now(dt.timezone.utc)
+    await db.commit()
+    return MessageResponse(message="Thank you -- you've accepted the current terms of service.")
 
 
 @router.patch("/profile", response_model=UserProfileResponse)
@@ -146,7 +182,7 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
 
 
 @router.delete("/me", response_model=MessageResponse)
-async def delete_account(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_account(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Soft-delete (1.1.10): the account is deactivated and every session
     revoked *immediately*, but the row itself sticks around for
@@ -154,11 +190,20 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Asy
     their mind or it was a mistake). The actual permanent deletion is a
     separate, scheduled step -- see api/tasks/account_purge.py -- not
     something this endpoint does itself.
+
+    Uses get_current_user_any_consent_status, not get_current_user
+    (4.3): the right to erasure (RGPD Art. 17) can't be conditioned on
+    first accepting terms the user is trying to leave over.
     """
     now = dt.datetime.now(dt.timezone.utc)
     current_user.is_active = False
     current_user.deleted_at = now
     current_user.deletion_scheduled_at = now + dt.timedelta(days=settings.ACCOUNT_PURGE_DELAY_DAYS)
+    # A fresh deletion cycle -- if this account was previously deleted,
+    # restored, and is now being deleted again, the pre-purge reminder
+    # (api/tasks/account_deletion_reminder.py) must be eligible to fire
+    # again too, not permanently silenced by the earlier cycle.
+    current_user.deletion_reminder_sent_at = None
 
     # Log every device out immediately -- the account is deactivated now,
     # the hard purge (api/tasks/account_purge.py) just happens later.
@@ -166,6 +211,11 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Asy
     # refresh token.
     await revoke_all_sessions_for_user(db, current_user.id)
     await db.commit()
+
+    try:
+        send_account_deletion_scheduled_email(current_user.email, current_user.deletion_scheduled_at.isoformat())
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send deletion-scheduled confirmation to %s: %s", current_user.email, exc)
 
     return MessageResponse(
         message=f"Account deactivated. It will be permanently deleted in {settings.ACCOUNT_PURGE_DELAY_DAYS} days."
@@ -231,6 +281,10 @@ async def confirm_account_restore(payload: AccountRestoreConfirmRequest, db: Asy
     user.is_active = True
     user.deleted_at = None
     user.deletion_scheduled_at = None
+    # 4.6: so a LATER deletion cycle's pre-purge reminder
+    # (api/tasks/account_deletion_reminder.py) is eligible to fire again,
+    # not permanently silenced by this now-cancelled one.
+    user.deletion_reminder_sent_at = None
     restore_row.used_at = now
 
     await db.commit()
@@ -238,7 +292,7 @@ async def confirm_account_restore(payload: AccountRestoreConfirmRequest, db: Asy
 
 
 @router.post("/consent/withdraw", response_model=MessageResponse)
-async def withdraw_consent(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def withdraw_consent(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     RGPD Art. 7(3): withdrawing consent must be as easy as giving it, and
     Art. 21 gives a separate right to object to processing without also
@@ -248,6 +302,10 @@ async def withdraw_consent(current_user: User = Depends(get_current_user), db: A
     account is itself "processing" that withdrawn consent no longer
     covers; the data itself is simply kept, not erased, until the user
     separately asks for that (DELETE /account/me).
+
+    Uses get_current_user_any_consent_status, not get_current_user
+    (4.3): withdrawing consent, or objecting to processing, cannot
+    itself be gated behind first consenting to something new.
     """
     if current_user.consent_withdrawn_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Consent has already been withdrawn")
@@ -335,7 +393,7 @@ async def confirm_consent_reactivation(payload: ConsentReactivationConfirmReques
 
 
 @router.get("/export")
-async def export_account_data(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def export_account_data(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     RGPD/GDPR data export (1.1.11): everything this app knows about the
     requesting user, as a single downloadable JSON file (the
@@ -347,6 +405,10 @@ async def export_account_data(current_user: User = Depends(get_current_user), db
     own data to know about: no password hash, no refresh-token hashes,
     no other users' OAuth access tokens (which this app doesn't even
     store -- see oauth.py's docstring).
+
+    Uses get_current_user_any_consent_status, not get_current_user
+    (4.3): the right to access/portability (RGPD Art. 15/20) can't be
+    conditioned on accepting new terms first.
     """
     oauth_accounts = await db.scalars(select(OAuthAccount).where(OAuthAccount.user_id == current_user.id))
     sessions = await db.scalars(select(Session).where(Session.user_id == current_user.id))

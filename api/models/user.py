@@ -83,6 +83,13 @@ class User(Base):
     # passes, is done by api/tasks/account_purge.py, not automatically.
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deletion_scheduled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set by api/tasks/account_deletion_reminder.py once the pre-purge
+    # reminder email has actually been sent, so the daily sweep doesn't
+    # re-send it every day for the remaining grace window. Cleared by
+    # DELETE /account/me (a fresh deletion cycle) and by
+    # POST /account/restore/confirm (the cycle was cancelled), so a
+    # LATER deletion is eligible for its own reminder.
+    deletion_reminder_sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(

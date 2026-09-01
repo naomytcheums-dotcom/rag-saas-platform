@@ -24,7 +24,7 @@ celery_app = Celery(
     # silently register zero tasks. `include` is resolved lazily, after
     # `celery_app` below is fully constructed, so account_purge.py's own
     # `from api.tasks.celery_app import celery_app` doesn't circular-import.
-    include=["api.tasks.account_purge", "api.tasks.token_blacklist_cleanup"],
+    include=["api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder"],
 )
 
 celery_app.conf.update(
@@ -43,5 +43,9 @@ celery_app.conf.beat_schedule = {
     "purge-expired-token-blacklist-entries-daily": {
         "task": "api.tasks.token_blacklist_cleanup.purge_expired_blacklist_entries",
         "schedule": crontab(hour=3, minute=15),  # same low-traffic window, offset so the two don't contend
+    },
+    "send-pending-deletion-reminders-daily": {
+        "task": "api.tasks.account_deletion_reminder.send_pending_deletion_reminders",
+        "schedule": crontab(hour=3, minute=30),  # same low-traffic window, offset again
     },
 }

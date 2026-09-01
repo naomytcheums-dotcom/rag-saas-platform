@@ -293,6 +293,59 @@ def send_recovery_code_used_email(to_email: str) -> None:
     )
 
 
+def send_account_deletion_scheduled_email(to_email: str, deletion_scheduled_at_iso: str) -> None:
+    """
+    Called by api/routers/account.py's delete_account() immediately when
+    a user requests deletion (4.6) -- the FIRST of two distinct warnings
+    before permanent deletion, confirming the request landed and giving
+    the exact date restoring is still possible until. The second is
+    send_account_deletion_reminder_email below, sent by a scheduled task
+    closer to the actual purge -- a single email 30 days out is easy to
+    forget by the time it matters.
+    """
+    _send(
+        to_email,
+        subject="Your account is scheduled for deletion",
+        html=(
+            f"<p>We've received your request to delete your account. It "
+            f"has been deactivated immediately, and is scheduled for "
+            f"permanent deletion on <strong>{html.escape(deletion_scheduled_at_iso)}</strong>.</p>"
+            f"<p>Changed your mind? You can restore your account any time "
+            f"before that date -- use the account restore option (POST "
+            f"/account/restore/request with your email) to get a link.</p>"
+            f"<p>If you didn't request this, restore your account "
+            f"immediately using the same option and change your password "
+            f"once you're back in.</p>"
+        ),
+    )
+
+
+def send_account_deletion_reminder_email(to_email: str, days_remaining: int) -> None:
+    """
+    Called by api/tasks/account_deletion_reminder.py's daily sweep (4.6)
+    -- the second, closer-to-the-deadline warning before permanent
+    deletion, for a user who requested deletion and hasn't restored
+    their account since. Sent once per deletion cycle (see
+    User.deletion_reminder_sent_at), not once a day for the whole
+    remaining window.
+    """
+    _send(
+        to_email,
+        subject="Your account will be permanently deleted soon",
+        html=(
+            f"<p>This is a reminder: your account is scheduled for "
+            f"permanent deletion in approximately {days_remaining} day"
+            f"{'s' if days_remaining != 1 else ''}. Once that happens, "
+            f"your data cannot be recovered.</p>"
+            f"<p>If you'd like to keep your account, restore it now -- "
+            f"use the account restore option (POST /account/restore/request "
+            f"with your email) to get a link.</p>"
+            f"<p>If you do want your account deleted, no action is "
+            f"needed -- it will be removed automatically as scheduled.</p>"
+        ),
+    )
+
+
 def send_consent_withdrawn_email(to_email: str) -> None:
     """
     Called by api/routers/account.py's withdraw_consent() -- an RGPD/GDPR

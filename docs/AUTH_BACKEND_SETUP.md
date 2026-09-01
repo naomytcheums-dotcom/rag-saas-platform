@@ -170,6 +170,38 @@ to a consent-withdrawn account, never to one that's also fully deleted
 (`is_deleted`) -- undoing a deletion is `/account/restore/*`'s job, not
 this one's.
 
+**Two warnings before permanent deletion, not one (4.6):**
+`DELETE /account/me` sends an immediate confirmation email the moment
+deletion is requested; a separate Celery task
+(`api/tasks/account_deletion_reminder.py`, same daily-beat pattern as
+account purge) sends a second, closer-to-the-deadline reminder once
+`deletion_scheduled_at` falls within `ACCOUNT_DELETION_REMINDER_DAYS_BEFORE`
+(default 3 days) -- a single email 30 days out is easy to forget by the
+time it actually matters. Sent once per deletion cycle
+(`User.deletion_reminder_sent_at`), cleared by
+`POST /account/restore/confirm` so a later deletion is eligible for its
+own fresh reminder.
+
+### Forced re-consent when TERMS_VERSION changes (4.3)
+
+`get_current_user` (`api/dependencies.py`) blocks a request with 403 if
+`user.terms_version != settings.TERMS_VERSION` -- an account that
+consented under an older version of the terms can't keep using the
+service until it re-consents via `POST /account/consent/accept-updated-terms`
+(`{"accept_terms": true}`).
+
+**Not every route is behind this gate.** A small, deliberate set uses
+`get_current_user_any_consent_status` instead (identity/active/blacklist
+checks only, no terms-freshness check), because these can't be
+conditioned on accepting NEW terms first without violating the very
+rights they exist to serve: `GET /account/export` (RGPD Art. 15/20),
+`DELETE /account/me` (Art. 17), `POST /account/consent/withdraw`
+(Art. 7(3)/21), `GET`/`DELETE /sessions*` (basic account security --
+you must always be able to see or kill your own sessions), `GET /account/me`
+(so a frontend has something to show the "please accept updated terms"
+prompt with), and `POST /account/consent/accept-updated-terms` itself
+(it obviously can't require the problem it fixes to already be fixed).
+
 ### "New sign-in" notifications (1.1.8, 1.1.9)
 
 Every session-issuing endpoint (login, refresh, the OAuth callback,
@@ -269,6 +301,9 @@ testing: `python -c "from api.tasks.account_purge import purge_deleted_accounts;
 
 Same for the token-blacklist cleanup (1.1.15):
 `python -c "from api.tasks.token_blacklist_cleanup import purge_expired_blacklist_entries; print(purge_expired_blacklist_entries.delay().get())"`
+
+And the pre-purge deletion reminder (4.6):
+`python -c "from api.tasks.account_deletion_reminder import send_pending_deletion_reminders; print(send_pending_deletion_reminders.delay().get())"`
 
 ### Rate limiting (brute-force / spam protection)
 

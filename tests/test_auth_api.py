@@ -10,6 +10,8 @@ service-function boundary (api.services.email.send_*) rather than skipped
 approach src/agent.py's own tests already use for the GitHub/Google calls.
 """
 
+import datetime as dt
+
 import jwt as pyjwt
 import pyotp
 from sqlalchemy import select
@@ -1001,13 +1003,39 @@ async def test_delete_account_soft_deletes_and_revokes_sessions(client, register
     assert login_response.status_code == 401  # is_active is now False
 
 
-async def test_account_restore_undoes_a_pending_deletion(client, register_payload, monkeypatch):
+async def test_delete_account_sends_an_immediate_deletion_scheduled_email(client, register_payload, monkeypatch):
+    """4.6, half one of two: the FIRST of two warnings before permanent
+    deletion -- an immediate confirmation the moment deletion is
+    requested, distinct from the closer-to-the-deadline reminder the
+    Celery task (api/tasks/account_deletion_reminder.py) sends later."""
+    captured = []
+    monkeypatch.setattr(
+        "api.routers.account.send_account_deletion_scheduled_email",
+        lambda to, deletion_scheduled_at_iso: captured.append((to, deletion_scheduled_at_iso)),
+    )
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+
+    assert len(captured) == 1
+    assert captured[0][0] == register_payload["email"]
+    assert captured[0][1]  # a real ISO timestamp string was passed, not empty
+
+
+async def test_account_restore_undoes_a_pending_deletion(client, register_payload, monkeypatch, db_session):
     captured = {}
     monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
 
     await client.post("/auth/register", json=register_payload)
     access_token = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
     await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+
+    # Simulate the pre-purge reminder (4.6) having already fired for this
+    # deletion cycle, the way api/tasks/account_deletion_reminder.py
+    # would set it.
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.deletion_reminder_sent_at = dt.datetime.now(dt.timezone.utc)
+    await db_session.commit()
 
     # Still inside the grace period -- login is blocked...
     still_blocked = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
@@ -1024,6 +1052,12 @@ async def test_account_restore_undoes_a_pending_deletion(client, register_payloa
     # issued its own tokens -- the user goes through the real login flow).
     restored_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
     assert restored_login.status_code == 200
+
+    # 4.6: restoring cancels this deletion cycle entirely -- a LATER
+    # deletion must be eligible for its own fresh reminder, not silently
+    # skipped because this now-cancelled cycle already used one up.
+    await db_session.refresh(user)
+    assert user.deletion_reminder_sent_at is None
 
 
 async def test_account_restore_request_is_silent_for_an_account_that_was_never_deleted(client, register_payload, monkeypatch):
@@ -1263,6 +1297,87 @@ async def test_consent_reactivation_garbage_token_is_rejected(client):
     assert response.status_code == 400
 
 
+# ------------------------------------------------------------------ 4.3 --
+async def test_stale_terms_version_blocks_a_substantive_endpoint(client, register_payload, monkeypatch):
+    """4.3: once TERMS_VERSION changes, an account that consented under
+    the OLD version must be blocked from ordinary service usage until it
+    re-consents -- proven against a real substantive endpoint
+    (PATCH /account/profile), not just asserted."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    still_current = await client.patch("/account/profile", json={"full_name": "Still Fine"}, headers=auth_header)
+    assert still_current.status_code == 200
+
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    blocked = await client.patch("/account/profile", json={"full_name": "Should Not Work"}, headers=auth_header)
+    assert blocked.status_code == 403
+    assert "accept-updated-terms" in blocked.json()["detail"]
+
+
+async def test_accepting_updated_terms_unblocks_access_and_updates_the_record(client, register_payload, db_session, monkeypatch):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+    assert (await client.patch("/account/profile", json={"full_name": "x"}, headers=auth_header)).status_code == 403
+
+    accept = await client.post("/account/consent/accept-updated-terms", json={"accept_terms": True}, headers=auth_header)
+    assert accept.status_code == 200
+
+    now_works = await client.patch("/account/profile", json={"full_name": "Works Again"}, headers=auth_header)
+    assert now_works.status_code == 200
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    assert user.terms_version == "2027-06-01-a-brand-new-version"
+    assert user.consent_given_at is not None
+
+
+async def test_accepting_updated_terms_requires_explicit_true(client, register_payload, monkeypatch):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    response = await client.post("/account/consent/accept-updated-terms", json={"accept_terms": False}, headers=auth_header)
+    assert response.status_code == 422
+
+
+async def test_rgpd_rights_and_session_security_stay_reachable_despite_stale_terms(client, register_payload, monkeypatch):
+    """4.3's exemptions, proven directly: an account stuck behind the
+    stale-terms gate must still be able to exercise its actual RGPD
+    rights and manage its own session security -- those can't be held
+    hostage to accepting new terms first."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    assert (await client.get("/account/me", headers=auth_header)).status_code == 200
+    assert (await client.get("/account/export", headers=auth_header)).status_code == 200
+    assert (await client.get("/sessions", headers=auth_header)).status_code == 200
+
+    session_id = (await client.get("/sessions", headers=auth_header)).json()[0]["id"]
+    assert (await client.delete(f"/sessions/{session_id}", headers=auth_header)).status_code == 200
+
+
+async def test_delete_account_stays_reachable_despite_stale_terms(client, register_payload, monkeypatch):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    response = await client.delete("/account/me", headers=auth_header)
+    assert response.status_code == 200
+
+
+async def test_withdraw_consent_stays_reachable_despite_stale_terms(client, register_payload, monkeypatch):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    response = await client.post("/account/consent/withdraw", headers=auth_header)
+    assert response.status_code == 200
+
+
 # --------------------------------------------------------------- 1.1.13 --
 async def test_update_profile_fields(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
@@ -1286,7 +1401,14 @@ async def test_set_password_lets_an_oauth_only_account_add_a_fallback_login(clie
     captured = []
     monkeypatch.setattr("api.routers.account.send_password_set_email", lambda to: captured.append(to))
 
-    oauth_user = User(email="oauth-only@example.com", hashed_password=None, is_email_verified=True)
+    # terms_version/consent_given_at set explicitly -- a REAL OAuth
+    # sign-up backfills these (api/routers/oauth.py's _find_or_create_user,
+    # 4.2), and get_current_user (4.3) now requires a current
+    # terms_version to let a request through at all.
+    oauth_user = User(
+        email="oauth-only@example.com", hashed_password=None, is_email_verified=True,
+        terms_version=settings.TERMS_VERSION, consent_given_at=dt.datetime.now(dt.timezone.utc),
+    )
     db_session.add(oauth_user)
     await db_session.commit()
     access_token, _jti = create_access_token(oauth_user.id)
