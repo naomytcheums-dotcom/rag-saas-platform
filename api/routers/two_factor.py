@@ -10,21 +10,54 @@ user could think 2FA is on when it isn't; requiring /enable's confirmation
 avoids that false sense of security.
 """
 
+import datetime as dt
+import logging
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import ExpiredSignatureError, InvalidTokenError
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
+from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.user import User
-from api.schemas.auth import MessageResponse, TokenResponse, TwoFactorCodeRequest, TwoFactorSetupResponse, TwoFactorVerifyLoginRequest
+from api.schemas.auth import (
+    MessageResponse,
+    TokenResponse,
+    TwoFactorCodeRequest,
+    TwoFactorRecoveryCodeLoginRequest,
+    TwoFactorRecoveryCodesResponse,
+    TwoFactorSetupResponse,
+    TwoFactorVerifyLoginRequest,
+)
 from api.security.hashing import hash_token
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 from api.security.rate_limit import enforce_rate_limit
+from api.security.recovery_codes import RECOVERY_CODE_COUNT, generate_recovery_code, normalize_recovery_code
 from api.security.sessions import issue_session
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
+from api.services.email import send_recovery_code_used_email
 
 router = APIRouter(prefix="/auth/2fa", tags=["auth"])
+logger = logging.getLogger(__name__)
+
+
+async def _replace_recovery_codes(db: AsyncSession, user_id: uuid.UUID) -> list[str]:
+    """Deletes every existing recovery code row for this user and inserts
+    a fresh batch of RECOVERY_CODE_COUNT, returning the plaintext codes
+    for the caller to show exactly once. Deleting first (rather than just
+    adding more) means an old batch can never be combined with a new one
+    to end up with more valid codes floating around than intended, and
+    guarantees a disable/re-enable or a regenerate call fully invalidates
+    whatever came before it."""
+    await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == user_id))
+    plain_codes = [generate_recovery_code() for _ in range(RECOVERY_CODE_COUNT)]
+    for code in plain_codes:
+        db.add(TwoFactorRecoveryCode(user_id=user_id, code_hash=hash_token(normalize_recovery_code(code))))
+    await db.flush()
+    return plain_codes
 
 
 @router.post("/setup", response_model=TwoFactorSetupResponse)
@@ -51,7 +84,7 @@ async def setup_two_factor(current_user: User = Depends(get_current_user), db: A
     )
 
 
-@router.post("/enable", response_model=MessageResponse)
+@router.post("/enable", response_model=TwoFactorRecoveryCodesResponse)
 async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     Step 2: proves the user actually scanned the QR code from /setup by
@@ -59,15 +92,31 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
     showing. Only once that code checks out does totp_enabled flip to
     True -- from this point on, password login alone is not enough (see
     auth.py's login() and /verify-login below).
+
+    Also mints a fresh batch of recovery codes (see
+    api/security/recovery_codes.py) and returns them in plaintext -- the
+    only response that will ever contain them. A lost/reset authenticator
+    device would otherwise permanently lock the user out, since nothing
+    else on this account can produce a valid TOTP code.
+
+    Rate-limited by user id: this endpoint only needs a valid access
+    token, not the TOTP secret itself, so without a limit a stolen token
+    alone would let an attacker brute-force the 6-digit code the same
+    way /verify-login guards against.
     """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-code:user:{current_user.id}",
+        settings.TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS, settings.TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS,
+    )
     if not current_user.totp_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Call /auth/2fa/setup first")
     if not verify_totp_code(current_user.totp_secret, payload.code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
 
     current_user.totp_enabled = True
+    plain_codes = await _replace_recovery_codes(db, current_user.id)
     await db.commit()
-    return MessageResponse(message="Two-factor authentication enabled")
+    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes)
 
 
 @router.post("/disable", response_model=MessageResponse)
@@ -77,7 +126,20 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
     the access token, so someone who stole a logged-in session/laptop
     can't disable the extra protection without also having the physical
     authenticator device.
+
+    Also deletes every remaining recovery code: with 2FA off, they have
+    no purpose, and leaving them valid would let a leaked old code be
+    combined with a future re-enable to reconstruct backdoor access that
+    the user never actually re-issued.
+
+    Rate-limited by user id, same reasoning as /enable above: a stolen
+    access token alone must not be enough to brute-force this account's
+    TOTP code and turn 2FA off.
     """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-code:user:{current_user.id}",
+        settings.TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS, settings.TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS,
+    )
     if not current_user.totp_enabled or not current_user.totp_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two-factor authentication is not enabled")
     if not verify_totp_code(current_user.totp_secret, payload.code):
@@ -85,8 +147,35 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
 
     current_user.totp_enabled = False
     current_user.totp_secret = None
+    await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == current_user.id))
     await db.commit()
     return MessageResponse(message="Two-factor authentication disabled")
+
+
+@router.post("/recovery-codes/regenerate", response_model=TwoFactorRecoveryCodesResponse)
+async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Invalidates every unused code from the previous batch and issues a
+    fresh set of RECOVERY_CODE_COUNT -- for a user who has used some/all
+    of their original codes, or suspects one was seen by someone else.
+
+    Requires a valid current TOTP code, not just a valid access token,
+    for the same reason /disable does: a stolen access token alone must
+    not be enough to mint a fresh, persistent bypass for the account.
+    Rate-limited by user id for that same reason.
+    """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-code:user:{current_user.id}",
+        settings.TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS, settings.TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if not current_user.totp_enabled or not current_user.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two-factor authentication is not enabled")
+    if not verify_totp_code(current_user.totp_secret, payload.code):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+
+    plain_codes = await _replace_recovery_codes(db, current_user.id)
+    await db.commit()
+    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes)
 
 
 @router.post("/verify-login", response_model=TokenResponse)
@@ -125,6 +214,67 @@ async def verify_two_factor_login(payload: TwoFactorVerifyLoginRequest, request:
     if not verify_totp_code(user.totp_secret, payload.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid code")
 
-    tokens = await issue_session(db, response, request, user.id)
+    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
+    await db.commit()
+    return tokens
+
+
+@router.post("/verify-recovery-code", response_model=TokenResponse)
+async def verify_two_factor_recovery_code(payload: TwoFactorRecoveryCodeLoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """
+    Fallback for /verify-login when the user has lost access to their
+    authenticator app (phone lost, reset, or the app uninstalled) --
+    consumes one of the single-use codes from /enable or a later
+    /recovery-codes/regenerate instead of a 6-digit TOTP code. Same
+    mfa_token handoff from /auth/login as /verify-login.
+
+    Rate-limited the same way as /verify-login, but under its own Redis
+    key: guessing recovery codes and guessing TOTP codes are independent
+    attacks and shouldn't share one counter (an attacker exhausting the
+    TOTP attempts shouldn't also burn the user's recovery-code attempts,
+    and vice versa).
+    """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-recovery:token:{hash_token(payload.mfa_token)}",
+        settings.TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS, settings.TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired MFA session, please log in again")
+    try:
+        user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING)
+    except (ExpiredSignatureError, InvalidTokenError, InvalidTokenPurposeError):
+        raise unauthorized
+
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active or user.is_deleted or not user.totp_enabled:
+        raise unauthorized
+
+    # A single conditional UPDATE, not a SELECT followed by a write: the
+    # WHERE clause (including used_at IS NULL) is evaluated atomically by
+    # the database as part of the UPDATE itself, so two concurrent
+    # requests replaying the same still-valid code can't both succeed --
+    # whichever commits first flips used_at, and the second UPDATE's own
+    # WHERE no longer matches that row, matching zero rows instead of
+    # racing a Python-level check-then-write against another request.
+    code_hash = hash_token(normalize_recovery_code(payload.recovery_code))
+    result = await db.execute(
+        update(TwoFactorRecoveryCode)
+        .where(
+            TwoFactorRecoveryCode.user_id == user.id,
+            TwoFactorRecoveryCode.code_hash == code_hash,
+            TwoFactorRecoveryCode.used_at.is_(None),
+        )
+        .values(used_at=dt.datetime.now(dt.timezone.utc))
+        .returning(TwoFactorRecoveryCode.id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or already-used recovery code")
+
+    try:
+        send_recovery_code_used_email(user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send recovery-code-used alert to %s: %s", user.email, exc)
+
+    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await db.commit()
     return tokens

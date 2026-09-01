@@ -95,6 +95,20 @@ class PasswordResetRequest(BaseModel):
         return value
 
 
+class AccountRestoreRequest(BaseModel):
+    """Body of POST /account/restore/request -- public (no access token:
+    the account is deactivated), same shape as PasswordForgotRequest."""
+
+    email: EmailStr
+
+
+class AccountRestoreConfirmRequest(BaseModel):
+    """Body of POST /account/restore/confirm -- `token` is the raw value
+    from the link emailed by /account/restore/request."""
+
+    token: str
+
+
 class EmailVerifyConfirmRequest(BaseModel):
     """Body of POST /auth/verify-email/confirm -- the 6-digit code from
     the verification email."""
@@ -119,6 +133,28 @@ class TwoFactorCodeRequest(BaseModel):
     6-digit code from the user's authenticator app."""
 
     code: str = Field(min_length=6, max_length=6)
+
+
+class TwoFactorRecoveryCodesResponse(BaseModel):
+    """
+    Returned by POST /auth/2fa/enable and POST /auth/2fa/recovery-codes/regenerate --
+    the only two moments these codes are ever shown in plaintext. The
+    frontend must display these once and tell the user to store them
+    somewhere safe (password manager, printed copy): they cannot be
+    retrieved again after this response, only invalidated and replaced.
+    """
+
+    recovery_codes: list[str]
+
+
+class TwoFactorRecoveryCodeLoginRequest(BaseModel):
+    """Body of POST /auth/2fa/verify-recovery-code -- the fallback path
+    for a user who has lost access to their authenticator app, using one
+    of the single-use codes from TwoFactorRecoveryCodesResponse instead
+    of a 6-digit TOTP code."""
+
+    mfa_token: str
+    recovery_code: str
 
 
 class MessageResponse(BaseModel):

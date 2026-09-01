@@ -7,8 +7,13 @@ registers its table).
 
 from api.database import Base
 from api.models.oauth import OAuthAccount
+from api.models.recovery_code import TwoFactorRecoveryCode
+from api.models.restore_token import AccountRestoreToken
 from api.models.session import Session
 from api.models.token import EmailVerificationToken, PasswordResetToken
 from api.models.user import User
 
-__all__ = ["Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken"]
+__all__ = [
+    "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
+    "TwoFactorRecoveryCode", "AccountRestoreToken",
+]

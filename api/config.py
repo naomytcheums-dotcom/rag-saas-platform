@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30
+    # Deliberately longer than PASSWORD_RESET_TOKEN_EXPIRE_MINUTES (60):
+    # "I want my deleted account back" is a lower-urgency, lower-attack-
+    # surface scenario than a password reset, and the user has up to
+    # ACCOUNT_PURGE_DELAY_DAYS to notice the email at all -- an hour-long
+    # window would expire before most people even check their inbox.
+    ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES: int = 1440
 
     # -- Cookies / CORS -----------------------------------------------------
     FRONTEND_URL: str = "http://localhost:3000"
@@ -95,6 +101,8 @@ class Settings(BaseSettings):
     EMAIL_VERIFY_REQUEST_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS: int = 900
+    ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS: int = 3
+    ACCOUNT_RESTORE_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     @field_validator("DATABASE_URL")
     @classmethod

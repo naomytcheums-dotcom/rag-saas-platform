@@ -9,6 +9,7 @@ auth.py's private implementation detail.
 """
 
 import datetime as dt
+import logging
 import uuid
 
 from fastapi import Request, Response
@@ -20,7 +21,10 @@ from api.models.session import Session
 from api.schemas.auth import TokenResponse
 from api.security.hashing import generate_raw_token, hash_token
 from api.security.jwt import create_access_token
+from api.services.email import send_new_login_notification_email
 from api.utils import client_ip
+
+logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE_NAME = "refresh_token"
 # "/" rather than "/auth": GET/DELETE /sessions (1.1.9, a different router)
@@ -56,21 +60,49 @@ def clear_refresh_cookie(response: Response) -> None:
     )
 
 
-async def issue_session(db: AsyncSession, response: Response, request: Request, user_id: uuid.UUID) -> TokenResponse:
-    """Creates a new Session row (a fresh refresh token) and sets it as an
-    httpOnly cookie; returns the access token for the JSON response body."""
-    raw_refresh_token = generate_raw_token()
+async def issue_session(
+    db: AsyncSession, response: Response, request: Request, user_id: uuid.UUID, *, notify_new_device_email: str | None = None,
+) -> TokenResponse:
+    """
+    Creates a new Session row (a fresh refresh token) and sets it as an
+    httpOnly cookie; returns the access token for the JSON response body.
+
+    notify_new_device_email: pass the user's email to get a "new sign-in"
+    notification IF this device (by User-Agent) has never created a
+    session for this user before -- callers that represent an actual
+    login (login(), refresh(), the OAuth callback, 2FA verify-login) pass
+    it; register() does not, since a brand new account has no "usual"
+    device yet to compare against (every login would look "new").
+    Checked before the new Session row is added, so this call's own
+    session never counts as its own history.
+    """
+    device_info = request.headers.get("user-agent")
+    ip = client_ip(request)
     now = dt.datetime.now(dt.timezone.utc)
 
+    is_new_device = False
+    if notify_new_device_email:
+        prior_session_from_this_device = await db.scalar(
+            select(Session.id).where(Session.user_id == user_id, Session.device_info == device_info).limit(1)
+        )
+        is_new_device = prior_session_from_this_device is None
+
+    raw_refresh_token = generate_raw_token()
     session = Session(
         user_id=user_id,
         refresh_token_hash=hash_token(raw_refresh_token),
-        device_info=request.headers.get("user-agent"),
-        ip_address=client_ip(request),
+        device_info=device_info,
+        ip_address=ip,
         expires_at=now + dt.timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(session)
     await db.flush()
+
+    if notify_new_device_email and is_new_device:
+        try:
+            send_new_login_notification_email(notify_new_device_email, device_info, ip, now.isoformat())
+        except (EnvironmentError, RuntimeError) as exc:
+            logger.warning("failed to send new-login notification to %s: %s", notify_new_device_email, exc)
 
     set_refresh_cookie(response, raw_refresh_token)
     return TokenResponse(

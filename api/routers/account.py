@@ -1,12 +1,14 @@
 """
-1.1.10 soft-delete, 1.1.11 RGPD export, 1.1.13 profile/avatar,
-1.1.14 preferences. 1.1.12 (RGPD consent) has no dedicated endpoint --
-consent_given_at/terms_version are captured once at registration
-(api/routers/auth.py) and surfaced read-only via GET /account/me.
+1.1.10 soft-delete, 1.1.11 RGPD export, 1.1.12 consent withdrawal,
+1.1.13 profile/avatar, 1.1.14 preferences. consent_given_at/terms_version
+are captured once at registration (api/routers/auth.py) and surfaced
+read-only via GET /account/me; withdrawing that consent is the one part
+of 1.1.12 that needs its own endpoint, see withdraw_consent() below.
 """
 
 import datetime as dt
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, status
 from sqlalchemy import delete, select
@@ -15,13 +17,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.oauth import OAuthAccount
+from api.models.restore_token import AccountRestoreToken
 from api.models.session import Session
 from api.models.user import User
-from api.schemas.auth import MessageResponse
+from api.schemas.auth import AccountRestoreConfirmRequest, AccountRestoreRequest, MessageResponse
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
+from api.security.hashing import hash_token
+from api.security.rate_limit import enforce_rate_limit
+from api.services.account_restore import create_and_send_account_restore
+from api.services.email import send_consent_withdrawn_email
 from api.services.storage import upload_avatar
+from api.utils import as_aware_utc
 
 router = APIRouter(prefix="/account", tags=["account"])
+logger = logging.getLogger(__name__)
+
+_GENERIC_RESTORE_MESSAGE = "If a deactivated account exists for that email and its grace period hasn't ended, a restore link has been sent."
 
 
 @router.get("/me", response_model=UserProfileResponse)
@@ -112,6 +123,99 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Asy
     )
 
 
+@router.post("/restore/request", response_model=MessageResponse)
+async def request_account_restore(payload: AccountRestoreRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 1 of undoing a self-service DELETE /account/me before the grace
+    period's automatic purge (api/tasks/account_purge.py) runs. Public,
+    not behind get_current_user: the account is deactivated, so there is
+    no access token to authenticate with. Always returns the same generic
+    message regardless of whether the email belongs to a real,
+    still-restorable account -- same anti-enumeration reasoning as
+    POST /auth/password/forgot.
+
+    Rate-limited by email, same reasoning as /auth/password/forgot: stop
+    someone from spamming a specific victim's inbox with restore emails.
+    """
+    await enforce_rate_limit(
+        f"ratelimit:restore:email:{payload.email}",
+        settings.ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS, settings.ACCOUNT_RESTORE_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    user = await db.scalar(select(User).where(User.email == payload.email))
+    now = dt.datetime.now(dt.timezone.utc)
+    if (
+        user is not None
+        and user.is_deleted
+        and user.deletion_scheduled_at is not None
+        and as_aware_utc(user.deletion_scheduled_at) > now
+    ):
+        await create_and_send_account_restore(db, user)
+        await db.commit()
+    return MessageResponse(message=_GENERIC_RESTORE_MESSAGE)
+
+
+@router.post("/restore/confirm", response_model=MessageResponse)
+async def confirm_account_restore(payload: AccountRestoreConfirmRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 2: the user clicked the link from their email. Reactivates the
+    account (clears deleted_at/deletion_scheduled_at, so
+    account_purge.py's query -- which only selects rows where
+    deletion_scheduled_at is set and due -- will no longer touch this
+    row) but deliberately does NOT log them in directly, same reasoning
+    as POST /auth/password/reset not doing so: this token proves control
+    of the mailbox, not the password, so the user still authenticates
+    through the real login flow afterward (which also correctly
+    re-applies 2FA if it was enabled on the account).
+    """
+    invalid = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired restore link")
+
+    restore_row = await db.scalar(select(AccountRestoreToken).where(AccountRestoreToken.token_hash == hash_token(payload.token)))
+    now = dt.datetime.now(dt.timezone.utc)
+    if restore_row is None or restore_row.used_at is not None or as_aware_utc(restore_row.expires_at) < now:
+        raise invalid
+
+    user = await db.get(User, restore_row.user_id)
+    if user is None or not user.is_deleted:
+        raise invalid
+
+    user.is_active = True
+    user.deleted_at = None
+    user.deletion_scheduled_at = None
+    restore_row.used_at = now
+
+    await db.commit()
+    return MessageResponse(message="Account restored. Please log in.")
+
+
+@router.post("/consent/withdraw", response_model=MessageResponse)
+async def withdraw_consent(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    RGPD Art. 7(3): withdrawing consent must be as easy as giving it, and
+    Art. 21 gives a separate right to object to processing without also
+    demanding erasure -- so unlike DELETE /account/me below, this does
+    NOT schedule a purge. The account is still deactivated and every
+    session revoked immediately, since continuing to serve a logged-in
+    account is itself "processing" that withdrawn consent no longer
+    covers; the data itself is simply kept, not erased, until the user
+    separately asks for that (DELETE /account/me).
+    """
+    if current_user.consent_withdrawn_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Consent has already been withdrawn")
+
+    current_user.consent_withdrawn_at = dt.datetime.now(dt.timezone.utc)
+    current_user.is_active = False
+    await db.execute(delete(Session).where(Session.user_id == current_user.id))
+    await db.commit()
+
+    try:
+        send_consent_withdrawn_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send consent-withdrawal confirmation to %s: %s", current_user.email, exc)
+
+    return MessageResponse(message="Consent withdrawn. Your account has been deactivated.")
+
+
 @router.get("/export")
 async def export_account_data(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
@@ -144,6 +248,13 @@ async def export_account_data(current_user: User = Depends(get_current_user), db
         "consent": {
             "consent_given_at": current_user.consent_given_at.isoformat() if current_user.consent_given_at else None,
             "terms_version": current_user.terms_version,
+            # consent_withdrawn_at is deliberately not included here: it's
+            # only ever set together with is_active=False (see
+            # withdraw_consent() above), and get_current_user's is_active
+            # gate means no request could ever reach this endpoint with
+            # that field set to anything but None -- it would be a
+            # permanently-dead key in every export this code path can
+            # actually produce.
         },
         # Linked provider + verified email only -- never provider access
         # tokens, which this app doesn't even persist (see oauth.py).

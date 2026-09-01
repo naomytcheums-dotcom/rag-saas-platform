@@ -11,6 +11,9 @@ approach src/agent.py's own tests already use for the GitHub/Google calls.
 """
 
 import pyotp
+from sqlalchemy import select
+
+from api.models.user import User
 
 
 # ---------------------------------------------------------------- 1.1.1 --
@@ -331,6 +334,114 @@ async def test_two_factor_disable_requires_valid_code(client, register_payload):
     assert good.status_code == 200
 
 
+async def test_two_factor_enable_returns_ten_unique_recovery_codes(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert enable.status_code == 200
+    codes = enable.json()["recovery_codes"]
+    assert len(codes) == 10
+    assert len(set(codes)) == 10  # no duplicates in one batch
+
+
+async def test_recovery_code_logs_in_and_cannot_be_reused(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    recovery_code = enable.json()["recovery_codes"][0]
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    # Works with the dashes exactly as issued...
+    first_use = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": recovery_code})
+    assert first_use.status_code == 200
+    assert first_use.json()["access_token"]
+
+    # ...but the same code is now dead, even against a brand new login attempt.
+    login2 = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token2 = login2.json()["mfa_token"]
+    second_use = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token2, "recovery_code": recovery_code})
+    assert second_use.status_code == 401
+
+
+async def test_recovery_code_is_case_and_dash_insensitive(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    recovery_code = enable.json()["recovery_codes"][0]
+    messy = recovery_code.lower().replace("-", " ")  # e.g. "7k9p qx3m 2vyt"
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    verify = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": messy})
+    assert verify.status_code == 200
+
+
+async def test_disabling_two_factor_invalidates_leftover_recovery_codes(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    recovery_code = enable.json()["recovery_codes"][0]
+
+    await client.post("/auth/2fa/disable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    # Re-enable with a fresh secret/QR -- the old recovery code must not
+    # have survived the disable, even though the account has 2FA again.
+    secret2 = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret2).now()}, headers=auth_header)
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+    verify = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": recovery_code})
+    assert verify.status_code == 401
+
+
+async def test_regenerate_recovery_codes_requires_valid_totp_and_invalidates_old_batch(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    old_code = enable.json()["recovery_codes"][0]
+
+    bad = await client.post("/auth/2fa/recovery-codes/regenerate", json={"code": "000000"}, headers=auth_header)
+    assert bad.status_code == 400
+
+    regenerate = await client.post("/auth/2fa/recovery-codes/regenerate", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert regenerate.status_code == 200
+    new_codes = regenerate.json()["recovery_codes"]
+    assert len(new_codes) == 10
+    assert old_code not in new_codes
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    old_still_dead = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": old_code})
+    assert old_still_dead.status_code == 401
+
+    new_works = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": new_codes[1]})
+    assert new_works.status_code == 200
+
+
+async def test_unknown_recovery_code_is_rejected(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    verify = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": "AAAA-AAAA-AAAA"})
+    assert verify.status_code == 401
+
+
 # --------------------------------------------------------------- 1.1.10 --
 async def test_delete_account_soft_deletes_and_revokes_sessions(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
@@ -344,6 +455,95 @@ async def test_delete_account_soft_deletes_and_revokes_sessions(client, register
 
     login_response = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
     assert login_response.status_code == 401  # is_active is now False
+
+
+async def test_account_restore_undoes_a_pending_deletion(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    access_token = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+
+    # Still inside the grace period -- login is blocked...
+    still_blocked = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert still_blocked.status_code == 401
+
+    request = await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    assert request.status_code == 200
+    restore_token = captured["link"].split("token=")[1]
+
+    confirm = await client.post("/account/restore/confirm", json={"token": restore_token})
+    assert confirm.status_code == 200
+
+    # ...and now works again, with the original password (confirm never
+    # issued its own tokens -- the user goes through the real login flow).
+    restored_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert restored_login.status_code == 200
+
+
+async def test_account_restore_request_is_silent_for_an_account_that_was_never_deleted(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    assert response.status_code == 200  # same generic message either way
+    assert "link" not in captured  # ...but no email was actually sent -- nothing to restore
+
+
+async def test_account_restore_request_is_silent_for_unknown_email(client):
+    response = await client.post("/account/restore/request", json={"email": "nobody@example.com"})
+    assert response.status_code == 200
+
+
+async def test_account_restore_token_cannot_be_reused(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    access_token = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    restore_token = captured["link"].split("token=")[1]
+
+    first = await client.post("/account/restore/confirm", json={"token": restore_token})
+    assert first.status_code == 200
+
+    # Deleting again and replaying the OLD token must not resurrect the
+    # account a second time -- used_at was set on the first confirm.
+    access_token2 = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token2}"})
+
+    replay = await client.post("/account/restore/confirm", json={"token": restore_token})
+    assert replay.status_code == 400
+
+
+async def test_account_restore_garbage_token_is_rejected(client):
+    response = await client.post("/account/restore/confirm", json={"token": "this-was-never-issued"})
+    assert response.status_code == 400
+
+
+async def test_account_restore_expired_token_is_rejected(client, register_payload, monkeypatch, db_session):
+    import datetime as dt
+
+    from api.models.restore_token import AccountRestoreToken
+
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    access_token = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    restore_token = captured["link"].split("token=")[1]
+
+    row = await db_session.scalar(select(AccountRestoreToken))
+    row.expires_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await client.post("/account/restore/confirm", json={"token": restore_token})
+    assert response.status_code == 400
 
 
 # --------------------------------------------------------------- 1.1.11 --
@@ -363,6 +563,51 @@ async def test_registration_records_consent(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     profile = await client.get("/account/export", headers={"Authorization": f"Bearer {access_token}"})
     assert profile.json()["consent"]["consent_given_at"] is not None
+
+
+async def test_withdraw_consent_deactivates_account_without_scheduling_a_purge(client, register_payload, db_session):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    withdraw = await client.post("/account/consent/withdraw", headers=auth_header)
+    assert withdraw.status_code == 200
+
+    # Immediately locked out, same as a full delete would do...
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert login.status_code == 401
+
+    # ...but NOT scheduled for purge -- that's the whole distinction from
+    # DELETE /account/me (1.1.10), checked directly against the DB since
+    # nothing authenticated can read it back once the account is deactivated.
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    assert user.consent_withdrawn_at is not None
+    assert user.is_active is False
+    assert user.deleted_at is None
+    assert user.deletion_scheduled_at is None
+
+
+async def test_withdraw_consent_revokes_existing_sessions(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    await client.post("/account/consent/withdraw", headers=auth_header)
+
+    refresh = await client.post("/auth/refresh")
+    assert refresh.status_code == 401
+
+
+async def test_withdraw_consent_twice_is_rejected(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    first = await client.post("/account/consent/withdraw", headers=auth_header)
+    assert first.status_code == 200
+
+    # The same access token is still cryptographically valid (JWTs aren't
+    # revoked before their natural expiry) but is_active is now False, so
+    # get_current_user itself rejects it before the handler ever runs.
+    second = await client.post("/account/consent/withdraw", headers=auth_header)
+    assert second.status_code == 401
 
 
 # --------------------------------------------------------------- 1.1.13 --

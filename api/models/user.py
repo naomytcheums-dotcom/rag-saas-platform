@@ -67,6 +67,13 @@ class User(Base):
     # real compliance record rather than just a checkbox that was ticked.
     consent_given_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Set by POST /account/consent/withdraw -- distinct from deleted_at/
+    # deletion_scheduled_at below: withdrawing consent deactivates the
+    # account immediately but does NOT schedule a purge, since objecting
+    # to further processing (RGPD Art. 7(3)/21) is a different right from
+    # asking for erasure (Art. 17). A row can end up with both set, if the
+    # user later also requests full deletion.
+    consent_withdrawn_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # -- 1.1.10 soft-delete --------------------------------------------------
     # Both null for a normal, active account. Set together by

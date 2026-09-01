@@ -37,6 +37,7 @@ from api.security.sessions import (
 )
 from api.security.jwt import create_mfa_pending_token
 from api.security.rate_limit import enforce_rate_limit
+from api.services.email import send_rate_limit_alert_email
 from api.services.verification import create_and_send_email_otp
 from api.utils import client_ip
 
@@ -88,6 +89,9 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     await db.flush()  # assigns user.id without committing yet -- needed below before the row is final
 
     await create_and_send_email_otp(db, user)  # 1.1.4 -- fire-and-forget-ish: logs a warning and continues on email failure, never blocks registration
+    # No notify_new_device_email here: this is the account's first-ever
+    # session, so there's no "usual device" yet to compare against --
+    # every registration would otherwise look like a suspicious new login.
     tokens = await issue_session(db, response, request, user.id)
     await db.commit()
     return tokens
@@ -109,18 +113,33 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     first blocks the request): by IP, so one attacker can't brute-force
     many different accounts from one machine, and by the target email,
     so a distributed attack (many IPs, one victim account) is still
-    caught even though no single IP looks suspicious on its own.
+    caught even though no single IP looks suspicious on its own. Hitting
+    the email-scoped limit also emails the account owner (if the email
+    belongs to a real account) that repeated attempts were blocked --
+    the one mitigation for the fact that an *attacker* can trigger this
+    same limit to lock the real owner out for a while too; at least they
+    find out it's happening.
     """
     await enforce_rate_limit(
         f"ratelimit:login:ip:{client_ip(request)}",
         settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     )
-    await enforce_rate_limit(
-        f"ratelimit:login:email:{payload.email}",
-        settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-    )
 
     user = await db.scalar(select(User).where(User.email == payload.email))
+
+    try:
+        await enforce_rate_limit(
+            f"ratelimit:login:email:{payload.email}",
+            settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        )
+    except HTTPException:
+        if user is not None:
+            try:
+                send_rate_limit_alert_email(user.email, "sign-in")
+            except (EnvironmentError, RuntimeError) as exc:
+                logger.warning("failed to send rate-limit alert to %s: %s", user.email, exc)
+        raise
+
     # Every one of these three distinct failure reasons -- unknown email,
     # OAuth-only account with no password set, wrong password -- raises
     # the exact same generic error. Returning a different message for
@@ -134,7 +153,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     if user.totp_enabled:
         return MFARequiredResponse(mfa_token=create_mfa_pending_token(user.id))
 
-    tokens = await issue_session(db, response, request, user.id)
+    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await db.commit()
     return tokens
 
@@ -171,7 +190,13 @@ async def refresh(
     # a stolen-then-replayed old token fails the is_active check on its
     # second use instead of silently working forever.
     await revoke_session(db, session)
-    tokens = await issue_session(db, response, request, user.id)
+    # notify_new_device_email here too: a normal refresh from the same
+    # browser/app matches its own prior session's device_info and stays
+    # silent, but a refresh token used from a genuinely different device
+    # (e.g. a stolen cookie replayed elsewhere) does NOT match any prior
+    # device for this user and triggers the same "new sign-in" email as
+    # a fresh login would.
+    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await db.commit()
     return tokens
 

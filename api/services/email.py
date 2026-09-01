@@ -11,6 +11,7 @@ catch, log, and continue -- never let email delivery be a single point of
 failure for account creation.
 """
 
+import html
 import logging
 
 import httpx
@@ -76,5 +77,128 @@ def send_verification_code_email(to_email: str, code: str) -> None:
             f"<p>Your verification code is:</p>"
             f"<p style='font-size:24px;font-weight:bold;letter-spacing:4px'>{code}</p>"
             f"<p>It expires in {settings.EMAIL_OTP_EXPIRE_MINUTES} minutes.</p>"
+        ),
+    )
+
+
+def send_account_restore_email(to_email: str, restore_link: str) -> None:
+    """Called by api/services/account_restore.py with a link containing
+    the raw (not hashed) restore token -- lets a user undo
+    DELETE /account/me before api/tasks/account_purge.py permanently
+    erases their data at the end of the grace period."""
+    _send(
+        to_email,
+        subject="Restore your account",
+        html=(
+            f"<p>We received a request to restore your deactivated "
+            f"account. Click the link below to reactivate it. It expires "
+            f"in {settings.ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES // 60} hours.</p>"
+            f'<p><a href="{restore_link}">{restore_link}</a></p>'
+            f"<p>If you didn't request this, you can safely ignore this "
+            f"email -- your account will remain deactivated and will be "
+            f"permanently deleted as originally scheduled.</p>"
+        ),
+    )
+
+
+def send_new_login_notification_email(to_email: str, device_info: str | None, ip_address: str | None, when: str) -> None:
+    """
+    Called by api/security/sessions.py's issue_session() the first time a
+    session is created from a device (User-Agent) this account hasn't
+    used before -- login, refresh from an unrecognized device, OAuth, or
+    post-2FA verification, but deliberately not registration (a brand
+    new account has no "usual" device to compare against, so every
+    login would otherwise look "new").
+
+    device_info comes straight from the caller-supplied User-Agent
+    header -- untrusted input -- so it's HTML-escaped before going into
+    the email body, same reasoning as escaping any other
+    attacker-controllable string dropped into HTML.
+    """
+    safe_device = html.escape(device_info) if device_info else "an unknown device"
+    safe_ip = html.escape(ip_address) if ip_address else "an unknown location"
+    _send(
+        to_email,
+        subject="New sign-in to your account",
+        html=(
+            f"<p>Your account was just signed into from a new device.</p>"
+            f"<p><strong>When:</strong> {html.escape(when)}<br>"
+            f"<strong>Device:</strong> {safe_device}<br>"
+            f"<strong>IP address:</strong> {safe_ip}</p>"
+            f"<p>If this was you, no action is needed. If it wasn't, reset your "
+            f"password immediately and review your active sessions.</p>"
+        ),
+    )
+
+
+def send_recovery_code_used_email(to_email: str) -> None:
+    """
+    Called by api/routers/two_factor.py's verify_two_factor_recovery_code()
+    every time a recovery code successfully completes a login. Worth
+    flagging on its own, separate from issue_session()'s new-device
+    check: using a recovery code means the authenticator app itself was
+    NOT used to log in, which is unusual even from an already-recognized
+    device/browser.
+    """
+    _send(
+        to_email,
+        subject="A 2FA recovery code was used on your account",
+        html=(
+            "<p>Someone just signed in to your account using a two-factor "
+            "recovery code instead of your authenticator app.</p>"
+            "<p>If this was you -- for example because you lost access to "
+            "your authenticator device -- consider generating a fresh set "
+            "of recovery codes once you're set up again, since each code "
+            "only works once.</p>"
+            "<p>If this wasn't you, someone may have obtained your "
+            "recovery codes. Reset your password immediately and "
+            "regenerate your 2FA secret and recovery codes.</p>"
+        ),
+    )
+
+
+def send_consent_withdrawn_email(to_email: str) -> None:
+    """
+    Called by api/routers/account.py's withdraw_consent() -- an RGPD/GDPR
+    data-subject-rights acknowledgment confirming the request was
+    received and acted on. Deliberately distinguishes this from a full
+    deletion: withdrawing consent deactivates the account but does not
+    erase any data, and a user who only meant to object to processing
+    (not lose their data) shouldn't be left thinking otherwise.
+    """
+    _send(
+        to_email,
+        subject="Your consent withdrawal has been processed",
+        html=(
+            "<p>We've received your request to withdraw consent to data "
+            "processing and deactivated your account immediately.</p>"
+            "<p>Your account data has not been deleted -- deactivating is "
+            "not the same as erasing your data. If you'd also like your "
+            "data permanently deleted, please contact support.</p>"
+            "<p>If you did not request this, please contact support "
+            "immediately -- your account is currently deactivated and "
+            "inaccessible.</p>"
+        ),
+    )
+
+
+def send_rate_limit_alert_email(to_email: str, context: str) -> None:
+    """
+    Called when the *email-scoped* login rate limit trips (see
+    api/routers/auth.py's login()) -- an IP-scoped trip isn't notified
+    the same way, since it says nothing specific about this particular
+    account being targeted. `context` is a short, fixed, non-user-supplied
+    string describing what was being attempted (e.g. "sign-in") -- never
+    interpolate request-controlled data here without escaping it first.
+    """
+    _send(
+        to_email,
+        subject="Repeated failed attempts on your account",
+        html=(
+            f"<p>We've blocked several failed {context} attempts on your account "
+            f"in the last few minutes.</p>"
+            f"<p>If this wasn't you, no action is needed right now -- the attempts "
+            f"were blocked and your account was not accessed. If you're concerned, "
+            f"consider changing your password.</p>"
         ),
     )

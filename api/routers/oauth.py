@@ -113,7 +113,7 @@ async def _fetch_github_identity(client, token) -> tuple[str, str]:
 _IDENTITY_FETCHERS = {"google": _fetch_google_identity, "github": _fetch_github_identity}
 
 
-async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provider_account_id: str, email: str) -> User:
+async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provider_account_id: str, email: str) -> tuple[User, bool]:
     """
     Three possible outcomes, checked in order:
     1. This exact (provider, provider_account_id) has signed in before
@@ -126,6 +126,11 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
     3. Neither -> brand new user, OAuth-only (no password set).
     Either way, a fresh OAuthAccount row is written before returning so
     case 1 applies on their next login.
+
+    Returns (user, is_new_user) -- the caller uses is_new_user to decide
+    whether a "new sign-in" notification makes sense (never for a
+    brand-new account's very first session, same reasoning as
+    register() in api/routers/auth.py).
     """
     oauth_account = await db.scalar(
         select(OAuthAccount).where(
@@ -133,9 +138,10 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
         )
     )
     if oauth_account is not None:
-        return await db.get(User, oauth_account.user_id)
+        return await db.get(User, oauth_account.user_id), False
 
     user = await db.scalar(select(User).where(User.email == email))
+    is_new_user = user is None
     if user is None:
         user = User(email=email, hashed_password=None, is_email_verified=True)
         db.add(user)
@@ -150,7 +156,7 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
 
     db.add(OAuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_account_id, provider_email=email))
     await db.flush()
-    return user
+    return user, is_new_user
 
 
 @router.get("/{provider}/authorize")
@@ -189,10 +195,13 @@ async def oauth_callback(provider: str, request: Request):
     provider_account_id, email = await _IDENTITY_FETCHERS[provider](client, token)
 
     async with AsyncSessionLocal() as db:
-        user = await _find_or_create_user(db, OAuthProvider(provider), provider_account_id, email)
+        user, is_new_user = await _find_or_create_user(db, OAuthProvider(provider), provider_account_id, email)
 
         response = RedirectResponse(url=f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback", status_code=status.HTTP_302_FOUND)
-        tokens = await issue_session(db, response, request, user.id)
+        tokens = await issue_session(
+            db, response, request, user.id,
+            notify_new_device_email=None if is_new_user else user.email,
+        )
         await db.commit()
 
     # The refresh token is already set as an httpOnly cookie by

@@ -53,9 +53,10 @@ async def test_brand_new_oauth_user_is_created_and_pre_verified(pg_session):
     provider_account_id = uuid.uuid4().hex
 
     try:
-        user = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
+        user, is_new_user = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
         await pg_session.commit()
 
+        assert is_new_user is True
         assert user.email == email
         assert user.hashed_password is None  # OAuth-only account, no password ever set
         assert user.is_email_verified is True  # the provider already proved mailbox ownership
@@ -80,9 +81,10 @@ async def test_oauth_links_to_existing_unverified_account_and_verifies_it(pg_ses
     existing_user_id = existing_user.id
 
     try:
-        linked_user = await _find_or_create_user(pg_session, OAuthProvider.github, uuid.uuid4().hex, email)
+        linked_user, is_new_user = await _find_or_create_user(pg_session, OAuthProvider.github, uuid.uuid4().hex, email)
         await pg_session.commit()
 
+        assert is_new_user is False  # linked to a pre-existing account, not created fresh
         assert linked_user.id == existing_user_id  # linked to the SAME account, not a new one
         assert linked_user.hashed_password is not None  # password login must still work too
         assert linked_user.is_email_verified is True  # the fix: now flipped by the OAuth link
@@ -98,7 +100,7 @@ async def test_oauth_does_not_unverify_an_already_verified_account(pg_session):
     await pg_session.flush()
 
     try:
-        linked_user = await _find_or_create_user(pg_session, OAuthProvider.google, uuid.uuid4().hex, email)
+        linked_user, _ = await _find_or_create_user(pg_session, OAuthProvider.google, uuid.uuid4().hex, email)
         await pg_session.commit()
         assert linked_user.is_email_verified is True
     finally:
@@ -111,12 +113,14 @@ async def test_returning_oauth_user_reuses_the_same_account_no_duplicate_link(pg
     provider_account_id = uuid.uuid4().hex
 
     try:
-        first_login = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
+        first_login, first_is_new = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
         await pg_session.commit()
 
-        second_login = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
+        second_login, second_is_new = await _find_or_create_user(pg_session, OAuthProvider.google, provider_account_id, email)
         await pg_session.commit()
 
+        assert first_is_new is True
+        assert second_is_new is False  # same OAuthAccount matched -- not a new user
         assert first_login.id == second_login.id
 
         link_count = len((await pg_session.scalars(select(OAuthAccount).where(OAuthAccount.user_id == first_login.id))).all())

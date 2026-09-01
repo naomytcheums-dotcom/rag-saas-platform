@@ -60,6 +60,18 @@ a browser, sign in, approve -- you land on `{FRONTEND_URL}/oauth-callback`
 (404 is expected with no frontend yet) with `#access_token=...` in the
 URL fragment if it worked.
 
+### 2FA recovery codes (1.1.7)
+
+`POST /auth/2fa/enable` (and later `POST /auth/2fa/recovery-codes/regenerate`)
+returns 10 single-use codes in plaintext, exactly once -- only their
+SHA-256 hash is stored. They're the fallback for `POST /auth/2fa/verify-login`
+when the authenticator device itself is lost: `POST /auth/2fa/verify-recovery-code`
+takes the same `mfa_token` from `/auth/login` plus one recovery code
+instead of a 6-digit TOTP code. Disabling 2FA (`POST /auth/2fa/disable`)
+deletes any unused codes, and consuming one always emails the account a
+"a recovery code was used" notice. Unlike TOTP itself, this whole flow is
+fully covered by the automated suite -- no physical device involved.
+
 ### S3-compatible storage (1.1.13 avatar upload)
 
 Any S3-compatible bucket: AWS S3, Cloudflare R2 (needs a payment method
@@ -76,6 +88,22 @@ the client declared -- see `_detect_image_content_type()` in
 `api/services/storage.py`. Account purge (1.1.10) also deletes the
 avatar object from the bucket, not just the database row, so a
 hard-deleted account doesn't leave storage orphaned.
+
+### RGPD consent withdrawal and account restore (1.1.10, 1.1.12)
+
+`POST /account/consent/withdraw` (authenticated) deactivates the account
+and revokes every session immediately, but -- unlike `DELETE /account/me`
+-- schedules no purge: withdrawing consent (RGPD Art. 7(3)/21) and asking
+for erasure (Art. 17) are different rights with different consequences
+here.
+
+`DELETE /account/me` itself is undoable during its `ACCOUNT_PURGE_DELAY_DAYS`
+grace window: `POST /account/restore/request` (public, `{"email": "..."}`,
+same silent/generic response either way as `/auth/password/forgot`) emails
+a link if that account is still within its grace period; `POST /account/restore/confirm`
+(`{"token": "..."}`) reactivates it. Restoring does not log the user in --
+it clears `deleted_at`/`deletion_scheduled_at` and they log in normally
+afterward, same as a password reset.
 
 ### Redis + Celery (1.1.10 account purge, J+30)
 
@@ -111,6 +139,9 @@ Enforced on the 5 endpoints an attacker would actually target:
 | `POST /auth/password/forgot` | 3 / 60 min | target email |
 | `POST /auth/verify-email/request` | 3 / 60 min | account email |
 | `POST /auth/2fa/verify-login` | 5 / 15 min | the mfa_token itself (hashed) |
+| `POST /auth/2fa/verify-recovery-code` | 5 / 15 min | the mfa_token itself (hashed), own counter from verify-login |
+| `POST /auth/2fa/enable`, `/disable`, `/recovery-codes/regenerate` | 5 / 15 min | user id -- shared counter across all three, so a stolen access token can't brute-force the TOTP code by spreading guesses across endpoints |
+| `POST /account/restore/request` | 3 / 60 min | target email |
 
 If `RATE_LIMIT_REDIS_URL` is unreachable, enforcement fails **open**
 (logs a warning, lets the request through) rather than blocking all
