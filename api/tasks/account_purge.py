@@ -28,6 +28,17 @@ _sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool
 
 @celery_app.task(name="api.tasks.account_purge.purge_deleted_accounts")
 def purge_deleted_accounts() -> int:
+    """
+    Finds every account whose grace period has elapsed
+    (deletion_scheduled_at <= now) and permanently deletes it. Safe to
+    run repeatedly / on any schedule: it only ever touches rows that
+    are actually due, so running it twice in a row (or by accident
+    outside of Celery Beat's own schedule) just does nothing on the
+    second run instead of double-deleting or erroring -- see
+    tests/test_celery_integration.py's idempotency test. Returns the
+    count of accounts actually purged, mainly so a manual invocation or
+    a test can assert on it.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     purged = 0
 

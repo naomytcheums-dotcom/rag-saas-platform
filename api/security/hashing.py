@@ -26,15 +26,28 @@ _BCRYPT_ROUNDS = 12  # ~250ms/hash on typical hardware; the current OWASP-recomm
 
 
 def hash_password(password: str) -> str:
+    """One-way bcrypt hash for storing a user's password. The salt is
+    generated fresh each call (bcrypt.gensalt()) and embedded in the
+    returned hash itself, so verify_password below needs no separate
+    salt column to look up."""
     salt = bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("ascii")
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
+    """Checks a login attempt's plaintext password against the stored
+    hash. bcrypt.checkpw does this in constant time, so the check itself
+    can't leak how much of the password matched via timing."""
     return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("ascii"))
 
 
 def hash_token(raw_token: str) -> str:
+    """One-way SHA-256 hash for refresh tokens, password-reset tokens,
+    and email OTP codes -- see this module's top docstring for why these
+    use a fast hash instead of bcrypt. Deterministic (same input always
+    produces the same hash), unlike hash_password's salted bcrypt, which
+    is exactly what lets a lookup like `WHERE token_hash = :hash` work at
+    all here."""
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 

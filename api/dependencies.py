@@ -22,6 +22,16 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    """
+    FastAPI dependency used by every protected route (`Depends(get_current_user)`
+    in a route's signature): reads the `Authorization: Bearer <token>`
+    header via the HTTPBearer scheme above, decodes it as an access-purpose
+    JWT, and loads the matching user row. Any failure along the way --
+    missing header, malformed/expired token, or a user that no longer
+    exists/is deactivated/soft-deleted -- collapses to the same generic
+    401, so a caller can't distinguish "your token is fine but your
+    account was deleted" from "your token is garbage."
+    """
     unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token")
 
     try:

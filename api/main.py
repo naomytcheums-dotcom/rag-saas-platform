@@ -37,4 +37,8 @@ app.include_router(account.router)
 
 @app.get("/health", tags=["monitoring"])
 async def health():
+    """Liveness check for load balancers/uptime monitors -- deliberately
+    does not touch the database, so it answers even if Postgres is
+    temporarily unreachable (a real readiness/DB-health check would be a
+    separate endpoint; this repo doesn't have one yet)."""
     return {"status": "ok"}

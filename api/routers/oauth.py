@@ -58,6 +58,11 @@ _SUPPORTED = {"google", "github"}
 
 
 def _require_client(provider: str):
+    """Looks up the Authlib client for "google" or "github", registered
+    above only if that provider's client_id/secret were actually
+    configured. Returns a clean 503 (not a crash) if someone hits
+    /auth/oauth/google/... on a server where Google credentials were
+    never set."""
     if provider not in _SUPPORTED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown OAuth provider '{provider}'")
     client = oauth.create_client(provider)
@@ -70,11 +75,19 @@ def _require_client(provider: str):
 
 
 async def _fetch_google_identity(client, token) -> tuple[str, str]:
+    """Returns (provider_account_id, email) for a just-authenticated
+    Google user. `sub` is Google's own permanent, unique user id --
+    that's what OAuthAccount.provider_account_id stores, not the email,
+    because a Google account's email address can itself change later."""
     userinfo = token.get("userinfo") or await client.userinfo(token=token)
     return str(userinfo["sub"]), userinfo["email"]
 
 
 async def _fetch_github_identity(client, token) -> tuple[str, str]:
+    """Same idea as _fetch_google_identity, for GitHub -- GitHub's own
+    numeric account id is the stable identifier; the email needs an
+    extra API call in the common case where the user's GitHub email is
+    set to private (see the comment below)."""
     profile_resp = await client.get("user", token=token)
     profile_resp.raise_for_status()
     profile = profile_resp.json()
@@ -101,6 +114,19 @@ _IDENTITY_FETCHERS = {"google": _fetch_google_identity, "github": _fetch_github_
 
 
 async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provider_account_id: str, email: str) -> User:
+    """
+    Three possible outcomes, checked in order:
+    1. This exact (provider, provider_account_id) has signed in before
+       -> return that same user (returning OAuth user).
+    2. No OAuthAccount yet, but a user with this email already exists
+       (they signed up with a password originally) -> link this OAuth
+       provider to that existing account, so either login method works
+       from now on (account linking, see this module's top docstring for
+       why trusting the provider's email here is safe).
+    3. Neither -> brand new user, OAuth-only (no password set).
+    Either way, a fresh OAuthAccount row is written before returning so
+    case 1 applies on their next login.
+    """
     oauth_account = await db.scalar(
         select(OAuthAccount).where(
             OAuthAccount.provider == provider, OAuthAccount.provider_account_id == provider_account_id
@@ -122,6 +148,13 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
 
 @router.get("/{provider}/authorize")
 async def oauth_authorize(provider: str, request: Request):
+    """
+    "Sign in with Google/GitHub" button target -- a browser GET, not an
+    API call an SPA would fetch() (it 302-redirects the whole page to
+    Google/GitHub's own consent screen). Authlib builds that redirect
+    URL, including the random `state` value it stashes in the session
+    cookie to verify against on the way back in oauth_callback().
+    """
     client = _require_client(provider)
     redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL.rstrip('/')}/auth/oauth/{provider}/callback"
     return await client.authorize_redirect(request, redirect_uri)
@@ -129,6 +162,16 @@ async def oauth_authorize(provider: str, request: Request):
 
 @router.get("/{provider}/callback")
 async def oauth_callback(provider: str, request: Request):
+    """
+    Where Google/GitHub redirects the browser back to after the user
+    approves (or denies) access. Authlib's authorize_access_token()
+    verifies the `state` matches what /authorize stashed (rejecting a
+    forged callback that skipped the real consent screen) and exchanges
+    the provider's one-time code for an actual access token, which is
+    then used once to fetch the user's identity and immediately
+    discarded -- see this module's top docstring on why nothing from the
+    provider is persisted beyond the account id and email.
+    """
     client = _require_client(provider)
     try:
         token = await client.authorize_access_token(request)

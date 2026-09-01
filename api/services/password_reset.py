@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 async def create_and_send_password_reset(db: AsyncSession, user: User) -> None:
+    """Generates a fresh high-entropy reset token, stores only its hash
+    (with an expiry), and emails a link containing the raw token. Same
+    "caller commits" contract as create_and_send_email_otp above."""
     raw_token = generate_raw_token()
     reset_row = PasswordResetToken(
         user_id=user.id,

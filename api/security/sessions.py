@@ -33,6 +33,10 @@ REFRESH_COOKIE_PATH = "/"
 
 
 def _client_ip(request: Request) -> str | None:
+    """Best-effort caller IP for the sessions list (api/routers/sessions.py)
+    to display -- prefers X-Forwarded-For's first entry (the original
+    client, when running behind a reverse proxy/load balancer) and falls
+    back to the direct connection's address otherwise."""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -40,6 +44,10 @@ def _client_ip(request: Request) -> str | None:
 
 
 def set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
+    """Sets the refresh-token cookie with all its security flags in one
+    place, so every call site (register/login/refresh/OAuth callback)
+    gets the exact same settings -- httpOnly (invisible to JS), Secure
+    (HTTPS only, except in local dev via COOKIE_SECURE=False), SameSite=lax."""
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=raw_refresh_token,
@@ -82,6 +90,11 @@ async def issue_session(db: AsyncSession, response: Response, request: Request, 
 
 
 async def get_active_session_by_raw_token(db: AsyncSession, raw_refresh_token: str) -> Session | None:
+    """Looks up the Session row matching a raw refresh-token cookie value
+    (by its hash -- the raw token itself is never stored, see
+    api/models/session.py). Returns None for a token that doesn't match
+    any row, or matches one that's expired or already revoked -- callers
+    treat all three the same way (a rejected refresh)."""
     session = await db.scalar(select(Session).where(Session.refresh_token_hash == hash_token(raw_refresh_token)))
     if session is None or not session.is_active:
         return None
@@ -89,5 +102,8 @@ async def get_active_session_by_raw_token(db: AsyncSession, raw_refresh_token: s
 
 
 async def revoke_session(db: AsyncSession, session: Session) -> None:
+    """Marks one session dead (sets revoked_at) -- used by logout,
+    refresh-rotation, session-list revocation, and password reset (which
+    revokes every session for the affected user)."""
     session.revoked_at = dt.datetime.now(dt.timezone.utc)
     await db.flush()

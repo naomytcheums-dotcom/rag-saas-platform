@@ -16,6 +16,10 @@ ALLOWED_AVATAR_CONTENT_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/
 
 
 def _client():
+    """Builds a fresh boto3 S3 client from whatever S3_* settings are
+    configured -- a new one per call rather than a cached singleton,
+    since avatar uploads are infrequent enough that the connection-setup
+    cost doesn't matter, and it keeps this module free of global state."""
     if not (settings.S3_BUCKET_NAME and settings.S3_ACCESS_KEY_ID and settings.S3_SECRET_ACCESS_KEY):
         raise EnvironmentError(
             "S3_BUCKET_NAME / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY are not fully set -- "
@@ -31,6 +35,19 @@ def _client():
 
 
 def upload_avatar(user_id: uuid.UUID, content: bytes, content_type: str) -> str:
+    """
+    Validates and uploads one avatar image, returning its public URL.
+    Called by api/routers/account.py's upload_avatar_route(), which
+    handles the HTTP side (reading the uploaded file, catching the
+    exceptions this function raises and turning them into the right
+    status code) -- this function itself has no FastAPI/HTTP awareness.
+
+    content_type is trusted from what the browser/client declared, not
+    verified against the file's actual magic bytes -- a known,
+    documented gap for a future hardening pass (see AUDIT.md's spirit:
+    the RAG pipeline's own audit already flags "validate magic bytes,
+    not just declared MIME type" as a real class of issue).
+    """
     if content_type not in ALLOWED_AVATAR_CONTENT_TYPES:
         raise ValueError(f"unsupported avatar content type '{content_type}' -- allowed: {sorted(ALLOWED_AVATAR_CONTENT_TYPES)}")
     if len(content) > MAX_AVATAR_BYTES:

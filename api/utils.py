@@ -4,6 +4,10 @@ import datetime as dt
 
 
 def utcnow() -> dt.datetime:
+    """The one way this app ever gets the current time -- always
+    timezone-aware UTC, never a naive datetime.now(). A single shared
+    helper means every "now" in the codebase is directly comparable to
+    every timestamp read back from the database."""
     return dt.datetime.now(dt.timezone.utc)
 
 

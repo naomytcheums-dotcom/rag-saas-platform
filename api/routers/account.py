@@ -26,11 +26,19 @@ router = APIRouter(prefix="/account", tags=["account"])
 
 @router.get("/me", response_model=UserProfileResponse)
 async def get_profile(current_user: User = Depends(get_current_user)):
+    """The logged-in user's own profile -- whoever the access token
+    belongs to, resolved by the get_current_user dependency."""
     return UserProfileResponse.model_validate(current_user)
 
 
 @router.patch("/profile", response_model=UserProfileResponse)
 async def update_profile(payload: ProfileUpdateRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Partial update: only the fields actually present in the request body
+    get changed (payload.full_name is None means "leave it alone", not
+    "clear it") -- so a frontend can PATCH just the one field the user
+    edited without having to resend the whole profile.
+    """
     if payload.full_name is not None:
         current_user.full_name = payload.full_name
     if payload.company is not None:
@@ -42,6 +50,10 @@ async def update_profile(payload: ProfileUpdateRequest, current_user: User = Dep
 
 @router.patch("/preferences", response_model=UserProfileResponse)
 async def update_preferences(payload: PreferencesUpdateRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Same partial-update pattern as update_profile above, for locale
+    (UI language) and timezone (validated against the real IANA
+    timezone list in api/schemas/user.py -- garbage in is rejected
+    before it ever reaches here, not silently stored)."""
     if payload.locale is not None:
         current_user.locale = payload.locale
     if payload.timezone is not None:
@@ -53,6 +65,14 @@ async def update_preferences(payload: PreferencesUpdateRequest, current_user: Us
 
 @router.post("/avatar", response_model=UserProfileResponse)
 async def upload_avatar_route(file: UploadFile, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Uploads a new avatar image and replaces the user's avatar_url with
+    it. All the actual validation (allowed image types, size limit) and
+    the S3/R2/Supabase Storage call itself live in
+    api/services/storage.py -- this route is just the HTTP plumbing
+    around it: read the uploaded bytes, call the service, translate its
+    exceptions into the right HTTP status codes, save the resulting URL.
+    """
     content = await file.read()
     try:
         url = upload_avatar(current_user.id, content, file.content_type or "application/octet-stream")
@@ -69,6 +89,14 @@ async def upload_avatar_route(file: UploadFile, current_user: User = Depends(get
 
 @router.delete("/me", response_model=MessageResponse)
 async def delete_account(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Soft-delete (1.1.10): the account is deactivated and every session
+    revoked *immediately*, but the row itself sticks around for
+    ACCOUNT_PURGE_DELAY_DAYS (a grace window, in case the user changes
+    their mind or it was a mistake). The actual permanent deletion is a
+    separate, scheduled step -- see api/tasks/account_purge.py -- not
+    something this endpoint does itself.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     current_user.is_active = False
     current_user.deleted_at = now
@@ -86,6 +114,18 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Asy
 
 @router.get("/export")
 async def export_account_data(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    RGPD/GDPR data export (1.1.11): everything this app knows about the
+    requesting user, as a single downloadable JSON file (the
+    Content-Disposition header below makes a browser save it as a file
+    instead of just displaying the JSON inline). Only ever the caller's
+    own data -- current_user comes from their own access token, there's
+    no user_id parameter an attacker could swap in to read someone
+    else's export. Deliberately excludes anything that isn't the user's
+    own data to know about: no password hash, no refresh-token hashes,
+    no other users' OAuth access tokens (which this app doesn't even
+    store -- see oauth.py's docstring).
+    """
     oauth_accounts = await db.scalars(select(OAuthAccount).where(OAuthAccount.user_id == current_user.id))
     sessions = await db.scalars(select(Session).where(Session.user_id == current_user.id))
 

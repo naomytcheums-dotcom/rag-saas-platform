@@ -24,6 +24,13 @@ async def list_sessions(
     refresh_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    "Where am I logged in?" -- every still-active (not revoked, not
+    expired) session/device for the current user, newest-active first.
+    Each one is flagged is_current by comparing its stored token hash
+    against the caller's own refresh cookie, so the frontend can show
+    "this device" distinctly from the others in the list.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     result = await db.scalars(
         select(Session)
@@ -52,6 +59,15 @@ async def revoke_session_by_id(
     refresh_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    "Log out that other device" -- revokes one specific session by its
+    id. Ownership is checked (a session belonging to a different user
+    returns 404, not 403, so this endpoint doesn't even confirm whether
+    that session id exists at all to someone probing it). If the session
+    being revoked happens to be the caller's own current one, its
+    refresh cookie is cleared too, so the browser doesn't keep sending a
+    now-dead cookie on every request.
+    """
     session = await db.get(Session, session_id)
     if session is None or session.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")

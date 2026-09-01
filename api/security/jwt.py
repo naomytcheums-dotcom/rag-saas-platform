@@ -27,6 +27,10 @@ class InvalidTokenPurposeError(Exception):
 
 
 def _create_token(subject: uuid.UUID, purpose: TokenPurpose, expires_delta: dt.timedelta, extra_claims: dict[str, Any] | None = None) -> str:
+    """Shared builder behind create_access_token/create_mfa_pending_token
+    below -- every token this app issues carries `sub` (the user id),
+    `purpose` (checked by decode_token, see below), `iat`/`exp`, signed
+    with the app's own JWT_SECRET_KEY."""
     now = dt.datetime.now(dt.timezone.utc)
     payload = {
         "sub": str(subject),
@@ -40,12 +44,20 @@ def _create_token(subject: uuid.UUID, purpose: TokenPurpose, expires_delta: dt.t
 
 
 def create_access_token(user_id: uuid.UUID) -> str:
+    """The token a client sends as `Authorization: Bearer <token>` on
+    every authenticated request. Short-lived (ACCESS_TOKEN_EXPIRE_MINUTES,
+    15 by default) on purpose -- it can't be revoked before it expires
+    (it's stateless, nothing to look up in the database), so keeping that
+    window short limits how long a leaked token stays useful."""
     return _create_token(
         user_id, TokenPurpose.ACCESS, dt.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
 
 def create_mfa_pending_token(user_id: uuid.UUID) -> str:
+    """A short-lived ticket proving "this user's password just checked
+    out" without being a real access token -- see this module's top
+    docstring and api/routers/two_factor.py's verify_two_factor_login()."""
     return _create_token(
         user_id, TokenPurpose.MFA_PENDING, dt.timedelta(minutes=settings.MFA_TOKEN_EXPIRE_MINUTES)
     )

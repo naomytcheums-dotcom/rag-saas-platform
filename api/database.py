@@ -22,5 +22,11 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI dependency (`Depends(get_db)`) every route uses to get a
+    database session. Opens a fresh session per request and closes it
+    automatically when the request finishes (the `async with` block) --
+    a route function never has to remember to close anything itself.
+    """
     async with AsyncSessionLocal() as session:
         yield session

@@ -24,31 +24,56 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # 320 = the theoretical max length of an RFC 5321 email address (64
+    # local-part + @ + 255 domain). Unique + indexed since every login
+    # and registration check looks a user up by email.
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
+    # bcrypt hash, never the plaintext password. None for an OAuth-only
+    # account -- see this file's top docstring.
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # False for a soft-deleted account (see deleted_at below) -- checked
+    # on every login and every access-token validation, so a deactivated
+    # account is locked out everywhere immediately, not just from new logins.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # 1.1.4 -- flips to True once the emailed 6-digit code is confirmed.
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Not used by anything in Partie 1.1 yet -- reserved for the RBAC
+    # work in Partie 1.2, so that migration doesn't need a schema change.
     is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # -- 1.1.7 2FA (TOTP) ----------------------------------------------------
+    # The shared secret used to generate/verify 6-digit codes. Set by
+    # /auth/2fa/setup but only *enforced* once totp_enabled is True (see
+    # api/routers/two_factor.py for why those are two separate steps).
     totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # -- 1.1.13 profile ----------------------------------------------------
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     company: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Public URL of the uploaded avatar image (see api/services/storage.py)
+    # -- the file itself lives in S3/R2/Supabase Storage, not the database.
     avatar_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     # -- 1.1.14 preferences --------------------------------------------------
-    locale: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
-    timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    locale: Mapped[str] = mapped_column(String(10), default="en", nullable=False)  # UI language, e.g. "en", "fr"
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)  # IANA name, e.g. "Africa/Douala"
 
     # -- 1.1.12 RGPD consent -------------------------------------------------
+    # Captured once, at registration, and never edited afterwards -- see
+    # api/routers/auth.py's register(). Recording *when* consent was
+    # given and to *which version* of the terms is what makes this a
+    # real compliance record rather than just a checkbox that was ticked.
     consent_given_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # -- 1.1.10 soft-delete --------------------------------------------------
+    # Both null for a normal, active account. Set together by
+    # DELETE /account/me: deleted_at records when the user asked to be
+    # deleted, deletion_scheduled_at is deleted_at + the grace period
+    # (ACCOUNT_PURGE_DELAY_DAYS) -- the actual hard delete, once that date
+    # passes, is done by api/tasks/account_purge.py, not automatically.
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deletion_scheduled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -57,6 +82,11 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # cascade="all, delete-orphan": deleting a User in the ORM also
+    # deletes their oauth_accounts/sessions rows -- belt-and-suspenders
+    # alongside the database's own ON DELETE CASCADE foreign keys (see
+    # the Alembic migration), so it's correct even for code paths that
+    # go through the ORM's session.delete() instead of a raw SQL DELETE.
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -64,4 +94,8 @@ class User(Base):
 
     @property
     def is_deleted(self) -> bool:
+        """True once DELETE /account/me has been called (soft-deleted),
+        even before the grace period ends and the row is actually
+        purged. Checked alongside is_active everywhere login/access is
+        gated, so a soft-deleted account is locked out right away."""
         return self.deleted_at is not None

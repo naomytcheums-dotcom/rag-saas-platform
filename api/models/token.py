@@ -27,6 +27,9 @@ class PasswordResetToken(Base):
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Null until the link is actually used to reset the password; once
+    # set, the token is dead even if it hasn't expired yet -- see
+    # api/routers/password.py's reset_password().
     used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

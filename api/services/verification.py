@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 async def create_and_send_email_otp(db: AsyncSession, user: User) -> None:
+    """
+    Generates a fresh 6-digit code, stores only its hash (with an
+    expiry), and emails the raw code to the user. Does NOT commit the
+    database session itself -- the caller (auth.py's register(), or
+    verify.py's request_verification_code()) commits, so this can be
+    composed into a larger transaction that also does other work.
+    """
     code = generate_otp_code()
     token = EmailVerificationToken(
         user_id=user.id,

@@ -20,6 +20,13 @@ router = APIRouter(prefix="/auth/verify-email", tags=["auth"])
 
 @router.post("/request", response_model=MessageResponse)
 async def request_verification_code(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Sends a fresh 6-digit code by email (a new row every call -- old,
+    unused codes are simply superseded since /confirm below always
+    checks the most recent one). Used both right after registration if
+    the first email never arrived, and any time later if the user wants
+    to (re-)verify.
+    """
     if current_user.is_email_verified:
         return MessageResponse(message="Email is already verified")
     await create_and_send_email_otp(db, current_user)
@@ -33,6 +40,15 @@ async def confirm_verification_code(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Checks the 6-digit code the user typed in against the most recent
+    unused code emailed to them. Three ways this can fail besides a
+    simple wrong guess: the code expired (EMAIL_OTP_EXPIRE_MINUTES),
+    it was already used once before, or the account has racked up too
+    many wrong attempts already (EMAIL_OTP_MAX_ATTEMPTS -- a 429, not a
+    400, so the frontend can tell "wrong code" apart from "locked out,
+    request a new one instead").
+    """
     invalid = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired code")
 
     token = await db.scalar(

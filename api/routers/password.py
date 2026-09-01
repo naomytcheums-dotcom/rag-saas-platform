@@ -24,6 +24,13 @@ _GENERIC_FORGOT_MESSAGE = "If an account exists for that email, a reset link has
 
 @router.post("/forgot", response_model=MessageResponse)
 async def forgot_password(payload: PasswordForgotRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 1 of the "forgot my password" flow: emails a one-time reset link
+    if the address belongs to a real, active account. Always returns the
+    exact same success message either way (see _GENERIC_FORGOT_MESSAGE
+    above) -- an attacker probing random emails can't tell which ones are
+    registered from this endpoint's response alone.
+    """
     user = await db.scalar(select(User).where(User.email == payload.email))
     if user is not None and user.is_active and not user.is_deleted:
         await create_and_send_password_reset(db, user)
@@ -33,6 +40,14 @@ async def forgot_password(payload: PasswordForgotRequest, db: AsyncSession = Dep
 
 @router.post("/reset", response_model=MessageResponse)
 async def reset_password(payload: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 2: the user clicked the link from their email (containing the
+    raw token) and submits a new password here. The token is checked
+    against its stored hash, must not be expired, and must not have been
+    used already (used_at gets set below, so a second attempt with the
+    same link fails cleanly instead of silently resetting the password
+    again for whoever has the link).
+    """
     invalid = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
 
     reset_row = await db.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == hash_token(payload.token)))
