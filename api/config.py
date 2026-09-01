@@ -176,5 +176,27 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _restore_token_must_expire_before_the_purge(self) -> "Settings":
+        """5.7 audit finding: api/routers/account.py's confirm_account_restore
+        checks the restore TOKEN's own expiry, not deletion_scheduled_at,
+        so it relies on this ordering to stay safe -- a restore token that
+        could still be valid AFTER api/tasks/account_purge.py has already
+        hard-deleted the row would just fail harmlessly (cascade delete
+        takes the token row down with the user, see
+        tests/test_postgres_integration.py), but only by accident. Caught
+        here, at startup, so that safety never depends on a coincidence
+        two independently-configured durations happen to preserve."""
+        purge_delay_minutes = self.ACCOUNT_PURGE_DELAY_DAYS * 24 * 60
+        if self.ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES >= purge_delay_minutes:
+            raise ValueError(
+                "ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES "
+                f"({self.ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES}) must be less than "
+                f"ACCOUNT_PURGE_DELAY_DAYS converted to minutes ({purge_delay_minutes}) -- "
+                "a restore link must not still be valid after the account it points to "
+                "could already have been permanently purged."
+            )
+        return self
+
 
 settings = Settings()

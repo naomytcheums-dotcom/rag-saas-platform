@@ -12,12 +12,28 @@ would hit).
 """
 
 import datetime as dt
+import enum
 import uuid
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, Enum, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
+
+
+class UserRole(str, enum.Enum):
+    """5.1 -- prep for Partie 1.2's RBAC work, same pattern as
+    api/models/oauth.py's OAuthProvider (a native Postgres ENUM via
+    SQLAlchemy's Enum type, not a free-text column). Replaces the old
+    is_superadmin boolean, which was reserved for this exact purpose
+    (see its removal in Alembic migration 0010) but could only ever
+    represent two tiers -- this can grow a third (or more) without
+    another schema change, which is the whole point of adding it now
+    rather than waiting for 1.2 to need it."""
+
+    user = "user"
+    admin = "admin"
+    superadmin = "superadmin"
 
 
 class User(Base):
@@ -38,9 +54,11 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # 1.1.4 -- flips to True once the emailed 6-digit code is confirmed.
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # Not used by anything in Partie 1.1 yet -- reserved for the RBAC
-    # work in Partie 1.2, so that migration doesn't need a schema change.
-    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # 5.1 -- not enforced by anything in Partie 1.1 yet (no route checks
+    # it), but a real column with a real constrained type from day one,
+    # so Partie 1.2's RBAC work is a matter of *checking* this field, not
+    # inventing it under production data. See UserRole above.
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user, nullable=False)
 
     # -- 1.1.7 2FA (TOTP) ----------------------------------------------------
     # The shared secret used to generate/verify 6-digit codes. Set by
@@ -71,8 +89,14 @@ class User(Base):
     # deletion_scheduled_at below: withdrawing consent deactivates the
     # account immediately but does NOT schedule a purge, since objecting
     # to further processing (RGPD Art. 7(3)/21) is a different right from
-    # asking for erasure (Art. 17). A row can end up with both set, if the
-    # user later also requests full deletion.
+    # asking for erasure (Art. 17). In practice this field and deleted_at
+    # are never both set at once: both withdraw_consent() and
+    # delete_account() (api/routers/account.py) require is_active=True to
+    # even be reached, and each sets is_active=False as its very first
+    # effect -- so once one fires, the other is unreachable for that
+    # account until its own reactivation path (which clears exactly this
+    # field, or deleted_at/deletion_scheduled_at respectively) restores
+    # is_active=True first.
     consent_withdrawn_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # -- 1.1.10 soft-delete --------------------------------------------------

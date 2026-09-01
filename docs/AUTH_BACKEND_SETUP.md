@@ -158,7 +158,18 @@ same silent/generic response either way as `/auth/password/forgot`) emails
 a link if that account is still within its grace period; `POST /account/restore/confirm`
 (`{"token": "..."}`) reactivates it. Restoring does not log the user in --
 it clears `deleted_at`/`deletion_scheduled_at` and they log in normally
-afterward, same as a password reset.
+afterward, same as a password reset. `ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES`
+must stay below `ACCOUNT_PURGE_DELAY_DAYS` converted to minutes (`api/config.py`
+validates this at startup, 5.7) -- the restore link's own expiry, not
+`deletion_scheduled_at`, is what `/account/restore/confirm` checks, so it
+must never still be valid after `api/tasks/account_purge.py` could
+already have hard-deleted the row.
+
+`consent_withdrawn_at` and `deleted_at` are never both set on the same
+row: both `withdraw_consent()` and `delete_account()` require
+`is_active=True` to be reached at all, and each sets it `False` as its
+first effect, so triggering one locks the other out until its own
+reactivation path restores `is_active=True` first.
 
 **Consent withdrawal is undoable too, on purpose:** `POST /account/consent/reactivate/request`
 (public, same silent/generic shape as the two above) + `POST /account/consent/reactivate/confirm`
@@ -284,6 +295,16 @@ call to these two endpoints. SameSite=lax on the refresh cookie already
 blocks most cross-site cookie-riding in modern browsers -- this is
 defense-in-depth on top of that, not a replacement for it.
 
+### User.role (5.1 -- prep for Partie 1.2's RBAC)
+
+`users.role` is a Postgres `userrole` enum (`user` / `admin` / `superadmin`,
+default `user` -- `api/models/user.py`'s `UserRole`), added by migration
+`0010` in place of the old unused `is_superadmin` boolean it was
+originally reserved for. Nothing in Partie 1.1 reads or enforces this
+field yet -- no route checks it -- it exists now so Partie 1.2's RBAC
+work is a matter of checking an already-real column under production
+data, not inventing one later.
+
 ### Redis + Celery (1.1.10 account purge, J+30)
 
 Needs a real Redis reachable at `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.
@@ -359,7 +380,8 @@ rate limiting wouldn't.
 
 ```bash
 # Fast unit tests -- in-memory SQLite, no external services, always run
-pytest tests/test_auth_security.py tests/test_auth_api.py
+pytest tests/test_auth_security.py tests/test_auth_api.py tests/test_config.py \
+       tests/test_email_service.py tests/test_recovery_codes.py
 
 # Integration tests -- need real services, skip cleanly if unreachable
 pytest tests/test_postgres_integration.py         # needs DATABASE_URL

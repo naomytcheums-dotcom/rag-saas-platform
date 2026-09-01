@@ -1157,6 +1157,32 @@ async def test_account_restore_expired_token_is_rejected(client, register_payloa
     assert response.status_code == 400
 
 
+async def test_account_restore_request_is_silent_once_the_grace_period_has_passed(client, register_payload, monkeypatch, db_session):
+    """5.6 boundary: request_account_restore's guard is
+    `deletion_scheduled_at > now`, not just `is_deleted` -- a row whose
+    grace period has already elapsed but hasn't been hard-purged yet
+    (api/tasks/account_purge.py runs on its own schedule, not
+    instantly) must not get a working restore link either. Distinct
+    from test_account_restore_request_is_silent_for_an_account_that_was_never_deleted
+    above, which never sets deletion_scheduled_at at all -- this
+    exercises the actual `> now` comparison."""
+    from api.models.user import User
+
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.deletion_scheduled_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    assert response.status_code == 200  # same generic message either way
+    assert "link" not in captured  # ...but no email was actually sent -- past its grace period
+
+
 # --------------------------------------------------------------- 1.1.11 --
 async def test_export_account_data_contains_profile_and_consent(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
@@ -1224,6 +1250,29 @@ async def test_withdraw_consent_twice_is_rejected(client, register_payload):
     # get_current_user itself rejects it before the handler ever runs.
     second = await client.post("/account/consent/withdraw", headers=auth_header)
     assert second.status_code == 401
+
+
+async def test_consent_withdrawal_and_full_deletion_are_mutually_exclusive(client, register_payload):
+    """api/models/user.py's comment on consent_withdrawn_at claims the
+    field can never end up set at the same time as deleted_at, because
+    both withdraw_consent() and delete_account() require is_active=True
+    to be reached at all and each flips it False as their first effect.
+    Proven directly, in both orders: whichever one fires first locks the
+    other one out (401) for that account, using the SAME still-valid
+    access token both times (is_active, not token validity, is what's
+    blocking it)."""
+    token_a = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    withdrew = await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {token_a}"})
+    assert withdrew.status_code == 200
+    blocked_delete = await client.delete("/account/me", headers={"Authorization": f"Bearer {token_a}"})
+    assert blocked_delete.status_code == 401
+
+    other_payload = {**register_payload, "email": f"other-{register_payload['email']}"}
+    token_b = (await client.post("/auth/register", json=other_payload)).json()["access_token"]
+    deleted = await client.delete("/account/me", headers={"Authorization": f"Bearer {token_b}"})
+    assert deleted.status_code == 200
+    blocked_withdraw = await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {token_b}"})
+    assert blocked_withdraw.status_code == 401
 
 
 async def test_consent_reactivation_undoes_a_withdrawal(client, register_payload, monkeypatch, db_session):

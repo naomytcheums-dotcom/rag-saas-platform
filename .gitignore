@@ -9,3 +9,5 @@ data/telemetry.jsonl
 .streamlit/secrets.toml
 .claude/
 dump.rdb
+.coverage
+htmlcov/

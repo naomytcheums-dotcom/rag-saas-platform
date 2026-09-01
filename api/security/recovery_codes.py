@@ -18,7 +18,11 @@ RECOVERY_CODE_COUNT = 10
 
 # Crockford-ish alphabet: excludes 0/O and 1/I/L, the characters people
 # most often transcribe wrong when copying a code off a screen by hand.
-_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# 5.3 audit: this string previously still contained 'L' despite the
+# comment above claiming it was excluded -- a code containing L/1/I could
+# genuinely be misread off a printout, and normalize_recovery_code does
+# no fuzzy correction, so a misread character means a real failed login.
+_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
 def generate_recovery_code() -> str:

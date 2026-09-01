@@ -257,6 +257,56 @@ async def test_is_redis_reachable_reflects_actual_connectivity(monkeypatch):
     assert await rate_limit_module.is_redis_reachable() is False
 
 
+async def test_retry_after_header_is_a_sane_value_within_the_window():
+    """5.2: the Retry-After value isn't just present (already checked
+    above) but actually bounded by the window -- a caller retrying after
+    that many seconds should find the limit cleared, not still blocked,
+    and it should never exceed the window itself (see
+    _seconds_until_oldest_entry_expires's docstring)."""
+    key = f"ratelimit:test:retry-after-{uuid.uuid4().hex}"
+    window = 5
+
+    for _ in range(2):
+        await enforce_rate_limit(key, max_attempts=2, window_seconds=window)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await enforce_rate_limit(key, max_attempts=2, window_seconds=window)
+    retry_after = int(exc_info.value.headers["Retry-After"])
+    assert 1 <= retry_after <= window
+
+
+async def test_requests_are_allowed_again_once_the_window_fully_elapses():
+    """The flip side of the sliding-window test above: once every attempt
+    in the window has aged out, the same key must be treated as fresh --
+    a real block that never lifts would just be a permanent lockout, not
+    rate limiting."""
+    key = f"ratelimit:test:window-recovery-{uuid.uuid4().hex}"
+    window = 1
+
+    await enforce_rate_limit(key, max_attempts=1, window_seconds=window)
+    with pytest.raises(HTTPException):
+        await enforce_rate_limit(key, max_attempts=1, window_seconds=window)
+
+    await asyncio.sleep(window + 0.2)
+
+    # Must NOT raise -- the earlier attempt has aged out of the window.
+    await enforce_rate_limit(key, max_attempts=1, window_seconds=window)
+
+
+async def test_rate_limiting_is_a_no_op_when_disabled(monkeypatch):
+    """RATE_LIMIT_ENABLED=False must short-circuit before ever touching
+    Redis -- proven here by pointing at a Redis that would raise if
+    contacted, rather than just trusting the early return. This is the
+    exact setting tests/conftest.py's autouse fixture relies on to keep
+    every OTHER test file in the suite from needing real Redis at all."""
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+    broken_client = redis_asyncio.from_url("redis://127.0.0.1:1/0", decode_responses=True, socket_connect_timeout=1)
+    monkeypatch.setattr(rate_limit_module, "_redis", broken_client)
+
+    # Must NOT raise and must NOT time out trying to reach the broken client.
+    await enforce_rate_limit("ratelimit:test:disabled", max_attempts=0, window_seconds=60)
+
+
 async def test_sliding_window_catches_a_burst_that_a_fixed_window_would_miss():
     """
     The concrete property that makes this a sliding window and not a
