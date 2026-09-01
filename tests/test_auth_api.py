@@ -42,6 +42,17 @@ def _jti_of(access_token):
     return pyjwt.decode(access_token, options={"verify_signature": False})["jti"]
 
 
+def _set_cookie_header_for(response, cookie_name: str) -> str:
+    """Finds the raw Set-Cookie header string for one specific cookie
+    among possibly several on the same response (register/login set BOTH
+    refresh_token and csrf_token) -- response.cookies only exposes
+    values, never the HttpOnly/Secure/SameSite attributes, which live
+    only in the raw header text."""
+    matches = [h for h in response.headers.get_list("set-cookie") if h.startswith(f"{cookie_name}=")]
+    assert matches, f"no Set-Cookie header found for {cookie_name!r}"
+    return matches[0]
+
+
 # ---------------------------------------------------------------- 1.1.1 --
 async def test_register_creates_user_and_returns_tokens(client, register_payload):
     response = await client.post("/auth/register", json=register_payload)
@@ -50,6 +61,61 @@ async def test_register_creates_user_and_returns_tokens(client, register_payload
     assert body["token_type"] == "bearer"
     assert body["access_token"]
     assert "refresh_token" in response.cookies
+
+
+async def test_refresh_token_cookie_has_the_correct_security_flags(client, register_payload, monkeypatch):
+    """CI/CD audit finding: the flags themselves were always correct in
+    api/security/sessions.py's set_refresh_cookie(), but nothing ever
+    inspected the actual Set-Cookie header to prove it -- checked here
+    directly against the raw header text, not just the cookie's value."""
+    monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+    response = await client.post("/auth/register", json=register_payload)
+    raw = _set_cookie_header_for(response, "refresh_token")
+    assert "HttpOnly" in raw  # invisible to JS -- the whole point of an httpOnly refresh cookie
+    assert "Secure" in raw
+    assert "SameSite=lax" in raw
+
+
+async def test_csrf_cookie_is_readable_by_js_but_still_secure_and_samesite(client, register_payload, monkeypatch):
+    """The deliberate exception, not an oversight: api/security/csrf.py's
+    double-submit design requires JS to read this one and echo it back
+    as a header -- see that module's docstring -- so it must NOT be
+    HttpOnly, while still carrying Secure/SameSite like every other
+    cookie this app sets."""
+    monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+    response = await client.post("/auth/register", json=register_payload)
+    raw = _set_cookie_header_for(response, "csrf_token")
+    assert "HttpOnly" not in raw
+    assert "Secure" in raw
+    assert "SameSite=lax" in raw
+
+
+async def test_cookies_drop_the_secure_flag_when_cookie_secure_is_false(client, register_payload, monkeypatch):
+    """COOKIE_SECURE=False is the real .env value for local HTTP dev
+    (see .env's comment) -- proven here rather than assumed, so a
+    regression that hardcoded `secure=True` wouldn't silently break
+    local development without a browser ever refusing the cookie over
+    plain HTTP."""
+    monkeypatch.setattr(settings, "COOKIE_SECURE", False)
+    response = await client.post("/auth/register", json=register_payload)
+    assert "Secure" not in _set_cookie_header_for(response, "refresh_token")
+
+
+async def test_register_succeeds_even_when_the_verification_email_fails_to_send(client, register_payload, monkeypatch):
+    """CI/CD audit finding: every send_*_email call site in this codebase
+    is wrapped in try/except (EnvironmentError, RuntimeError) precisely
+    so account creation is never blocked by Resend being down -- see
+    api/services/email.py's top docstring -- but no test previously
+    proved that end to end. Registration must still return 201 with
+    working tokens even though the email genuinely raised."""
+    def _raise(*args, **kwargs):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", _raise)
+
+    response = await client.post("/auth/register", json=register_payload)
+    assert response.status_code == 201
+    assert response.json()["access_token"]
 
 
 async def test_register_rejects_duplicate_email(client, register_payload):
@@ -1714,12 +1780,41 @@ async def test_health_ready_reports_database_and_redis_status(client):
     body = response.json()
     assert set(body.keys()) == {"database", "rate_limit_redis"}
     # Both real services are reachable in this dev/test environment --
-    # a genuinely down dependency is exercised at the unit level in
-    # tests/test_rate_limiting_integration.py's fail-open test instead of
-    # here, since actually taking Postgres or Redis offline mid-suite
-    # isn't something this test file can safely simulate.
+    # the Redis-down case is exercised at the unit level in
+    # tests/test_rate_limiting_integration.py's fail-open test; the
+    # database-down case is exercised right below, by pointing
+    # api.main's engine at an address nothing is listening on rather
+    # than actually taking the real dev Postgres offline mid-suite.
     assert body["database"] == "ok"
     assert body["rate_limit_redis"] == "ok"
+
+
+async def test_health_ready_survives_a_database_outage(monkeypatch):
+    """CI/CD audit finding: api/main.py's readiness check already wraps
+    its DB probe in try/except (so a real outage degrades gracefully
+    instead of crashing the whole endpoint), but nothing proved it --
+    proven here by pointing api.main's own `engine` reference at a
+    connection nothing will ever answer (a real TCP timeout, not a
+    fabricated exception), same "point at an address that can't be
+    reached" technique test_rate_limiting_integration.py already uses
+    for a broken Redis client."""
+    import api.main as main_module
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    broken_engine = create_async_engine(
+        "postgresql+asyncpg://baduser:badpass@127.0.0.1:1/nonexistent", connect_args={"timeout": 2}
+    )
+    monkeypatch.setattr(main_module, "engine", broken_engine)
+
+    transport = ASGITransport(app=main_module.app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        response = await ac.get("/health/ready")
+
+    assert response.status_code == 200  # readiness always answers 200 -- the body is what's actionable, see main.py's docstring
+    body = response.json()
+    assert body["database"] == "unreachable"
+    await broken_engine.dispose()
 
 
 async def test_security_headers_are_present_on_a_normal_response(client):

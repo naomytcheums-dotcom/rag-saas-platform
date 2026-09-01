@@ -27,3 +27,213 @@ jobs:
 
       - name: Run regression check against results/regression_baseline.json
         run: python tests/test_regression.py
+
+  # api/ (Partie 1.1 -- multi-tenant auth backend) -- previously had NO
+  # automated coverage in CI at all; only the RAG pipeline job above ran
+  # on push. Real Postgres/Redis/MinIO service containers, not mocks or
+  # SQLite-only, so the same Postgres-specific behavior (CASCADE, real
+  # constraint enforcement) the local dev workflow already tests against
+  # is what CI verifies too -- see docs/AUTH_BACKEND_SETUP.md's "Tests"
+  # section for the same fast/integration split run locally.
+  api-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_saas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # S3-compatible object storage for the avatar-upload tests
+      # (1.1.13) -- MinIO instead of real Supabase Storage/AWS S3 so CI
+      # needs no real cloud credentials as a secret; boto3 talks to it
+      # identically (see api/services/storage.py's docstring).
+      minio:
+        image: bitnami/minio:2025
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_DEFAULT_BUCKETS: avatars
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # CI-only values -- never real secrets, this is a throwaway
+      # Postgres/Redis/MinIO stack that only exists for this job's
+      # duration. Real deployments get every one of these from an actual
+      # secret store; see .env.example.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+      SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      SUPPORT_EMAIL: support@ci-test.invalid
+      RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+      EMAIL_FROM_ADDRESS: onboarding@resend.dev
+      COOKIE_SECURE: "False"
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+      RATE_LIMIT_ENABLED: "True"
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_BUCKET_NAME: avatars
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_PUBLIC_BASE_URL: http://localhost:9000/public/avatars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies (RAG pipeline deps + api/ deps -- see requirements-api.txt's own docstring on why they're separate files)
+        run: pip install -r requirements.txt -r requirements-api.txt
+
+      - name: Make the avatars bucket public-read (MinIO starts with private buckets by default)
+        run: |
+          python - <<'PYEOF'
+          import boto3
+          client = boto3.client(
+              "s3", endpoint_url="http://localhost:9000",
+              aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
+              region_name="us-east-1",
+          )
+          client.put_bucket_policy(Bucket="avatars", Policy="""{
+              "Version": "2012-10-17",
+              "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::avatars/*"}]
+          }""")
+          PYEOF
+
+      - name: Run Alembic migrations against the fresh Postgres service container
+        run: python -m alembic upgrade head
+
+      - name: Start a live Celery worker in the background (needed by tests/test_e2e_lifecycle.py's real declencheur -> Redis -> worker -> task chain)
+        run: |
+          nohup python -m celery -A api.tasks.celery_app worker --loglevel=info > celery-worker.log 2>&1 &
+          sleep 5
+
+      - name: Run the full api/ test suite with coverage
+        run: >
+          pytest
+          tests/test_auth_api.py tests/test_auth_security.py tests/test_config.py
+          tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
+          tests/test_postgres_integration.py tests/test_oauth_logic_integration.py
+          tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py
+          tests/test_celery_integration.py tests/test_e2e_lifecycle.py
+          --cov=api --cov-report=term-missing --cov-report=xml
+          --cov-fail-under=75
+          -v
+
+      - name: Show the Celery worker's log if anything failed
+        if: failure()
+        run: cat celery-worker.log || true
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-report
+          path: coverage.xml
+
+  # Static (Snyk) and dynamic (OWASP ZAP baseline) security scanning of
+  # api/. Both are best-effort in CI: Snyk needs a SNYK_TOKEN repo secret
+  # this workflow can't create for you (Settings -> Secrets and
+  # variables -> Actions -> New repository secret, a free snyk.io
+  # account's token) -- without it, that step fails cleanly and
+  # continue-on-error keeps the rest of the job running rather than
+  # blocking every push on a secret nobody's added yet.
+  security-scan:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_saas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+      SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      SUPPORT_EMAIL: support@ci-test.invalid
+      RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+      EMAIL_FROM_ADDRESS: onboarding@resend.dev
+      COOKIE_SECURE: "False"
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+      RATE_LIMIT_ENABLED: "True"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-api.txt
+
+      - name: Snyk -- dependency vulnerability scan of requirements-api.txt
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=requirements-api.txt --severity-threshold=high
+
+      - name: Run Alembic migrations
+        run: python -m alembic upgrade head
+
+      - name: Start the API server for the dynamic scan
+        run: |
+          nohup uvicorn api.main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8000/health && break
+            sleep 1
+          done
+
+      - name: OWASP ZAP baseline scan against the live instance
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: "http://localhost:8000"
+          # /openapi.json seeds ZAP's spider with every real api/ route
+          # (FastAPI's auto-generated schema) instead of it only crawling
+          # what it can find by following links from '/', which would
+          # miss almost every endpoint in a JSON API with no HTML pages.
+          cmd_options: "-O http://localhost:8000/openapi.json"
+          fail_action: false
+
+      - name: Show the API server's log if anything failed
+        if: failure()
+        run: cat uvicorn.log || true
