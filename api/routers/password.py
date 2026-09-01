@@ -8,12 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_db
 from api.models.session import Session
 from api.models.token import PasswordResetToken
 from api.models.user import User
 from api.schemas.auth import MessageResponse, PasswordForgotRequest, PasswordResetRequest
 from api.security.hashing import hash_password, hash_token
+from api.security.rate_limit import enforce_rate_limit
 from api.services.password_reset import create_and_send_password_reset
 from api.utils import as_aware_utc
 
@@ -30,7 +32,16 @@ async def forgot_password(payload: PasswordForgotRequest, db: AsyncSession = Dep
     exact same success message either way (see _GENERIC_FORGOT_MESSAGE
     above) -- an attacker probing random emails can't tell which ones are
     registered from this endpoint's response alone.
+
+    Rate-limited by email (not IP): the point is to stop someone from
+    spamming a specific victim's inbox with reset emails
+    ("email bombing"), regardless of how many different IPs they use.
     """
+    await enforce_rate_limit(
+        f"ratelimit:forgot:email:{payload.email}",
+        settings.PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS, settings.PASSWORD_FORGOT_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
     user = await db.scalar(select(User).where(User.email == payload.email))
     if user is not None and user.is_active and not user.is_deleted:
         await create_and_send_password_reset(db, user)

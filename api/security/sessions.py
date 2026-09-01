@@ -20,6 +20,7 @@ from api.models.session import Session
 from api.schemas.auth import TokenResponse
 from api.security.hashing import generate_raw_token, hash_token
 from api.security.jwt import create_access_token
+from api.utils import client_ip
 
 REFRESH_COOKIE_NAME = "refresh_token"
 # "/" rather than "/auth": GET/DELETE /sessions (1.1.9, a different router)
@@ -30,17 +31,6 @@ REFRESH_COOKIE_NAME = "refresh_token"
 # SameSite=lax are what actually protect this cookie; the path is not a
 # meaningful second layer once more than one router needs it.
 REFRESH_COOKIE_PATH = "/"
-
-
-def _client_ip(request: Request) -> str | None:
-    """Best-effort caller IP for the sessions list (api/routers/sessions.py)
-    to display -- prefers X-Forwarded-For's first entry (the original
-    client, when running behind a reverse proxy/load balancer) and falls
-    back to the direct connection's address otherwise."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
 
 
 def set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
@@ -76,7 +66,7 @@ async def issue_session(db: AsyncSession, response: Response, request: Request, 
         user_id=user_id,
         refresh_token_hash=hash_token(raw_refresh_token),
         device_info=request.headers.get("user-agent"),
-        ip_address=_client_ip(request),
+        ip_address=client_ip(request),
         expires_at=now + dt.timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(session)

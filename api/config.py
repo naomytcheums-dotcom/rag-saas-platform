@@ -75,6 +75,27 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
+    # -- Rate limiting (brute-force / spam protection) --------------------
+    # Uses its own Redis DB number (2) so its keys never collide with
+    # Celery's broker (0) or result backend (1) on the same Redis instance.
+    RATE_LIMIT_REDIS_URL: str = "redis://localhost:6379/2"
+    # False disables enforcement entirely (every check becomes a no-op,
+    # no Redis call at all) -- used by the fast SQLite test suite (see
+    # tests/conftest.py) so those tests don't need Redis and can't be
+    # accidentally rate-limited by their own repeated calls. Never set
+    # this False in a real deployment.
+    RATE_LIMIT_ENABLED: bool = True
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
+    REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
+    REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+    PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3
+    PASSWORD_FORGOT_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+    EMAIL_VERIFY_REQUEST_RATE_LIMIT_MAX_ATTEMPTS: int = 3
+    EMAIL_VERIFY_REQUEST_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+    TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS: int = 5
+    TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

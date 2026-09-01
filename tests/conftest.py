@@ -19,10 +19,28 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from api.config import settings
 from api.database import Base, get_db
 from api.main import app
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limiting_by_default(monkeypatch):
+    """
+    Applies to every test in tests/ (conftest.py fixtures at this level
+    are project-wide, autouse or not) -- rate limiting is OFF by default
+    so the fast SQLite suite (which calls /auth/register, /auth/login,
+    etc. dozens of times across many tests) doesn't need Redis and can't
+    be accidentally rate-limited by its own repeated calls, and so the
+    other integration test files aren't rate-limited against each other
+    either since they share one real Redis instance across a whole
+    `pytest` run. tests/test_rate_limiting_integration.py explicitly
+    re-enables it (monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True))
+    for the handful of tests that actually verify enforcement.
+    """
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
 
 
 @pytest_asyncio.fixture

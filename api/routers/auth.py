@@ -36,7 +36,9 @@ from api.security.sessions import (
     revoke_session,
 )
 from api.security.jwt import create_mfa_pending_token
+from api.security.rate_limit import enforce_rate_limit
 from api.services.verification import create_and_send_email_otp
+from api.utils import client_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -60,6 +62,11 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     and accept_terms which Pydantic itself rejects if False -- see
     api/schemas/auth.py).
     """
+    await enforce_rate_limit(
+        f"ratelimit:register:ip:{client_ip(request)}",
+        settings.REGISTER_RATE_LIMIT_MAX_ATTEMPTS, settings.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
     existing = await db.scalar(select(User).where(User.email == payload.email))
     if existing is not None:
         # Deliberately vague: confirming "this email is already registered"
@@ -97,7 +104,22 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
       then call POST /auth/2fa/verify-login with the returned mfa_token
       and a 6-digit code before it gets real tokens. This second call is
       the only place tokens are actually issued for a 2FA account.
+
+    Rate-limited along two independent dimensions (whichever is hit
+    first blocks the request): by IP, so one attacker can't brute-force
+    many different accounts from one machine, and by the target email,
+    so a distributed attack (many IPs, one victim account) is still
+    caught even though no single IP looks suspicious on its own.
     """
+    await enforce_rate_limit(
+        f"ratelimit:login:ip:{client_ip(request)}",
+        settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    await enforce_rate_limit(
+        f"ratelimit:login:email:{payload.email}",
+        settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
     user = await db.scalar(select(User).where(User.email == payload.email))
     # Every one of these three distinct failure reasons -- unknown email,
     # OAuth-only account with no password set, wrong password -- raises

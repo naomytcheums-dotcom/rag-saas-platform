@@ -14,10 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.user import User
 from api.schemas.auth import MessageResponse, TokenResponse, TwoFactorCodeRequest, TwoFactorSetupResponse, TwoFactorVerifyLoginRequest
+from api.security.hashing import hash_token
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
+from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import issue_session
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
 
@@ -97,7 +100,19 @@ async def verify_two_factor_login(payload: TwoFactorVerifyLoginRequest, request:
     password is never asked for again at this step, the mfa_token itself
     (see api/security/jwt.py's TokenPurpose.MFA_PENDING) is what proves
     the password was already correct a moment ago.
+
+    Rate-limited by the mfa_token itself (hashed -- same reasoning as
+    never storing a raw token elsewhere in this codebase), not by IP:
+    this caps how many codes can be guessed against this ONE pending
+    login "session" before it has to be restarted from /auth/login,
+    which is what actually stops a 6-digit TOTP code from being
+    brute-forced (1,000,000 possibilities is nothing without a limit).
     """
+    await enforce_rate_limit(
+        f"ratelimit:2fa-verify:token:{hash_token(payload.mfa_token)}",
+        settings.TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS, settings.TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
     unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired MFA session, please log in again")
     try:
         user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING)

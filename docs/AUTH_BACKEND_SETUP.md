@@ -98,6 +98,36 @@ Without Beat running, the purge task exists and works (verified,
 see below) but nothing calls it on a schedule -- trigger it manually for
 testing: `python -c "from api.tasks.account_purge import purge_deleted_accounts; print(purge_deleted_accounts.delay().get())"`
 
+### Rate limiting (brute-force / spam protection)
+
+Uses the same Redis as Celery above, on its own DB number
+(`RATE_LIMIT_REDIS_URL`, default DB 2) so the two never share keys.
+Enforced on the 5 endpoints an attacker would actually target:
+
+| Endpoint | Limit | Keyed by |
+|---|---|---|
+| `POST /auth/login` | 5 / 15 min | IP **and** target email (either blocks) |
+| `POST /auth/register` | 3 / 60 min | IP |
+| `POST /auth/password/forgot` | 3 / 60 min | target email |
+| `POST /auth/verify-email/request` | 3 / 60 min | account email |
+| `POST /auth/2fa/verify-login` | 5 / 15 min | the mfa_token itself (hashed) |
+
+If `RATE_LIMIT_REDIS_URL` is unreachable, enforcement fails **open**
+(logs a warning, lets the request through) rather than blocking all
+auth traffic -- see `api/security/rate_limit.py`'s docstring for why
+that's the deliberate choice, not an oversight. `RATE_LIMIT_ENABLED=False`
+disables it outright for local dev without Redis; never set that in a
+real deployment.
+
+**Not implemented: CAPTCHA on registration.** Left out deliberately for
+now -- it needs a third-party account (reCAPTCHA/hCaptcha/Turnstile) and
+was marked optional in the spec this was built against. The rate limit
+on `/auth/register` (3/hour/IP) already blocks the same automated-signup-spam
+threat CAPTCHA targets, just with a coarser IP-based signal instead of a
+bot-detection heuristic. Straightforward to add later if mass registration
+from many distinct IPs becomes a real problem CAPTCHA would catch and
+rate limiting wouldn't.
+
 ## Tests
 
 ```bash
@@ -105,10 +135,12 @@ testing: `python -c "from api.tasks.account_purge import purge_deleted_accounts;
 pytest tests/test_auth_security.py tests/test_auth_api.py
 
 # Integration tests -- need real services, skip cleanly if unreachable
-pytest tests/test_postgres_integration.py       # needs DATABASE_URL
-pytest tests/test_celery_integration.py         # needs DATABASE_URL (runs task logic via .apply(), no worker needed)
-pytest tests/test_avatar_storage_integration.py # needs DATABASE_URL + S3_*
-pytest tests/test_e2e_lifecycle.py              # needs DATABASE_URL + S3_* + a LIVE Celery worker (see above)
+pytest tests/test_postgres_integration.py         # needs DATABASE_URL
+pytest tests/test_celery_integration.py           # needs DATABASE_URL (runs task logic via .apply(), no worker needed)
+pytest tests/test_avatar_storage_integration.py   # needs DATABASE_URL + S3_*
+pytest tests/test_oauth_logic_integration.py      # needs DATABASE_URL
+pytest tests/test_rate_limiting_integration.py    # needs DATABASE_URL + RATE_LIMIT_REDIS_URL
+pytest tests/test_e2e_lifecycle.py                # needs DATABASE_URL + S3_* + a LIVE Celery worker (see above)
 
 # Everything
 pytest tests/
