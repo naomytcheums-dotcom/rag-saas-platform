@@ -50,6 +50,8 @@ from api.security.sessions import issue_session
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
 from api.services.email import (
     send_recovery_code_used_email,
+    send_recovery_codes_regenerated_email,
+    send_two_factor_disabled_email,
     send_two_factor_enabled_email,
     send_two_factor_lockout_recovery_completed_email,
 )
@@ -188,6 +190,14 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
     Rate-limited by user id, same reasoning as /enable above: a stolen
     access token alone must not be enough to brute-force this account's
     TOTP code and turn 2FA off.
+
+    Always emails the account that 2FA was turned off: this already
+    requires a valid current TOTP code, a much stronger bar than /enable's
+    (see that endpoint's docstring), but a stolen unlocked device with
+    the authenticator app already open -- or a session compromised right
+    after setup -- could still pass it. The notification is what lets
+    the real owner notice before someone else logs in with just the
+    password.
     """
     await enforce_rate_limit(
         f"ratelimit:2fa-code:user:{current_user.id}",
@@ -203,6 +213,12 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
     await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == current_user.id))
     await _cancel_pending_lockout_recovery(db, current_user.id)
     await db.commit()
+
+    try:
+        send_two_factor_disabled_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send 2FA-disabled notification to %s: %s", current_user.email, exc)
+
     return MessageResponse(message="Two-factor authentication disabled")
 
 
@@ -217,6 +233,11 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
     for the same reason /disable does: a stolen access token alone must
     not be enough to mint a fresh, persistent bypass for the account.
     Rate-limited by user id for that same reason.
+
+    Always emails the account: regenerating silently invalidates every
+    recovery code the real owner may have saved -- worth flagging for
+    the same reason /disable is, even though it already requires a
+    valid current TOTP code to reach.
     """
     await enforce_rate_limit(
         f"ratelimit:2fa-code:user:{current_user.id}",
@@ -229,6 +250,12 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
 
     plain_codes = await _replace_recovery_codes(db, current_user.id)
     await db.commit()
+
+    try:
+        send_recovery_codes_regenerated_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send recovery-codes-regenerated notification to %s: %s", current_user.email, exc)
+
     return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes, recovery_codes_file=build_recovery_codes_file(plain_codes))
 
 

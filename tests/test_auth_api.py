@@ -365,6 +365,19 @@ async def test_two_factor_disable_requires_valid_code(client, register_payload):
     assert good.status_code == 200
 
 
+async def test_disabling_two_factor_sends_a_notification_email(client, register_payload, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.routers.two_factor.send_two_factor_disabled_email", lambda to: captured.append(to))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    await client.post("/auth/2fa/disable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert captured == [register_payload["email"]]
+
+
 async def test_two_factor_enable_returns_ten_unique_recovery_codes(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}
@@ -496,6 +509,19 @@ async def test_regenerate_recovery_codes_requires_valid_totp_and_invalidates_old
 
     new_works = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": new_codes[1]})
     assert new_works.status_code == 200
+
+
+async def test_regenerating_recovery_codes_sends_a_notification_email(client, register_payload, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.routers.two_factor.send_recovery_codes_regenerated_email", lambda to: captured.append(to))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    await client.post("/auth/2fa/recovery-codes/regenerate", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert captured == [register_payload["email"]]
 
 
 async def test_unknown_recovery_code_is_rejected(client, register_payload):

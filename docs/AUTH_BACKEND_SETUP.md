@@ -90,14 +90,18 @@ deletes any unused codes, and consuming one always emails the account a
 "a recovery code was used" notice. Unlike TOTP itself, this whole flow is
 fully covered by the automated suite -- no physical device involved.
 
-**Enabling 2FA itself is also notified by email**, every time -- not
-just a courtesy. `/setup` hands the TOTP secret back in plaintext (as
-the QR code) to anyone holding a valid access token, and `/enable` only
-needs a code derived from that same secret: an attacker with a stolen
-token could scan it into their OWN authenticator and turn 2FA on under
-a secret only they control, locking the real owner out the next time
-they try to log in, with nothing else about the request looking
-abnormal. The email is what would catch that in time.
+**Every state change here is notified by email**, not just consuming a
+code: enabling 2FA, disabling it, and regenerating recovery codes all
+send one. Enabling is the highest-stakes case -- `/setup` hands the TOTP
+secret back in plaintext (as the QR code) to anyone holding a valid
+access token, and `/enable` only needs a code derived from that same
+secret, so a stolen token alone could let an attacker turn 2FA on under
+a secret only THEY control and lock the real owner out. Disabling and
+regenerating both already require a valid *current* TOTP code to reach
+(a much stronger bar), but get the same treatment anyway: a stolen
+unlocked device with the authenticator app already open could still
+pass that check, and both actions are exactly what someone in that
+position would use to cut off the real owner's own fallback.
 
 **Lost the device AND all 10 codes:** `POST /auth/2fa/lockout-recovery/request`
 (email + password) starts a last-resort removal of 2FA that only becomes

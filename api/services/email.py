@@ -213,6 +213,60 @@ def send_two_factor_enabled_email(to_email: str) -> None:
     )
 
 
+def send_two_factor_disabled_email(to_email: str) -> None:
+    """
+    Called by api/routers/two_factor.py's disable_two_factor() every
+    time 2FA is turned off. Turning off 2FA already requires a valid
+    current TOTP code (not just an access token), so whoever did this
+    already had strong proof of controlling the account -- but that's
+    exactly the scenario worth flagging anyway: a stolen unlocked device
+    with the authenticator app already open, or a compromised session
+    right after 2FA was set up, could do this before the real owner
+    notices anything else is wrong.
+    """
+    _send(
+        to_email,
+        subject="Two-factor authentication was just disabled on your account",
+        html=(
+            "<p>Two-factor authentication was just turned off for your "
+            "account. From now on, your password alone is enough to log "
+            "in.</p>"
+            "<p>If you just did this yourself, no action is needed.</p>"
+            "<p>If you did NOT do this, someone with access to your "
+            "authenticator app or a valid code just removed your "
+            "account's second layer of protection. Change your password "
+            "immediately and set up two-factor authentication again.</p>"
+        ),
+    )
+
+
+def send_recovery_codes_regenerated_email(to_email: str) -> None:
+    """
+    Called by api/routers/two_factor.py's regenerate_recovery_codes()
+    every time a fresh batch of recovery codes is issued. Same
+    reasoning as send_two_factor_disabled_email above: this requires a
+    valid current TOTP code, so it's already a stronger action than a
+    stolen access token alone could take -- but it's also exactly what
+    someone who DOES control the TOTP could use to quietly invalidate
+    every recovery code the real owner saved, cutting off their fallback
+    without touching TOTP itself.
+    """
+    _send(
+        to_email,
+        subject="Your two-factor recovery codes were regenerated",
+        html=(
+            "<p>A new set of two-factor recovery codes was just "
+            "generated for your account. Your previous codes no longer "
+            "work.</p>"
+            "<p>If you just did this yourself, no action is needed -- "
+            "just make sure you saved the new codes somewhere safe.</p>"
+            "<p>If you did NOT do this, someone with access to your "
+            "authenticator app just replaced your recovery codes. "
+            "Change your password immediately.</p>"
+        ),
+    )
+
+
 def send_recovery_code_used_email(to_email: str) -> None:
     """
     Called by api/routers/two_factor.py's verify_two_factor_recovery_code()
