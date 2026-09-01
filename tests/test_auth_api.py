@@ -131,6 +131,43 @@ async def test_logout_blacklists_the_access_token_even_if_it_hasnt_expired(clien
     assert now_blacklisted.status_code == 401
 
 
+async def test_blacklist_still_applies_to_a_token_verified_via_a_previous_jwt_key(client, register_payload, monkeypatch):
+    """1.1.15's two mechanisms (key rotation and the blacklist) are
+    independent by construction -- the blacklist check runs after
+    decode_token() succeeds, regardless of which configured key actually
+    verified the signature. Proven directly rather than assumed: a token
+    signed under an OLD key, now listed in JWT_PREVIOUS_SECRET_KEYS,
+    must still be rejected once its jti is blacklisted -- key rotation
+    is not a way to slip past a revocation.
+    """
+    old_key = "old-signing-key-for-this-test-" + "x" * 20
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", old_key)
+
+    register_response = await client.post("/auth/register", json=register_payload)
+    access_token_signed_with_old_key = register_response.json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token_signed_with_old_key}"}
+
+    # Rotate: a new current key, the old one demoted to "still verifiable."
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "new-signing-key-for-this-test-" + "y" * 20)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET_KEYS", old_key)
+
+    # The old-key token still works post-rotation -- the whole point of
+    # JWT_PREVIOUS_SECRET_KEYS.
+    still_valid_after_rotation = await client.get("/account/me", headers=auth_header)
+    assert still_valid_after_rotation.status_code == 200
+
+    # Now blacklist it (logout doesn't re-decode the JWT at all -- it
+    # reads the jti straight off the Session row -- so this works
+    # regardless of which key originally signed the token).
+    await client.post("/auth/logout", headers=_csrf(client))
+
+    # Still verifies fine under the previous key -- but now correctly
+    # rejected anyway, because the blacklist check is independent of
+    # signature verification.
+    now_blacklisted_despite_valid_old_key_signature = await client.get("/account/me", headers=auth_header)
+    assert now_blacklisted_despite_valid_old_key_signature.status_code == 401
+
+
 # ---------------------------------------------------------------- 1.1.8 --
 async def test_refresh_rotates_the_token(client, register_payload):
     register_response = await client.post("/auth/register", json=register_payload)
@@ -427,23 +464,36 @@ async def test_password_reset_blacklists_the_access_token_issued_before_it(clien
     row is gone; this proves the access token specifically -- a
     self-contained JWT that doesn't even touch the Session table -- is
     also rejected, via the blacklist, not just "would have expired
-    eventually."""
+    eventually."
+
+    Two distinct sessions (registration + a second login from a
+    different "device") on purpose: revoke_all_sessions_for_user() loops
+    over every active session, and that loop must genuinely blacklist
+    ALL of them, not just happen to work for the trivial one-session
+    case."""
     captured = {}
     monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
 
     register = await client.post("/auth/register", json=register_payload)
-    access_token_before_reset = register.json()["access_token"]
-    auth_header = {"Authorization": f"Bearer {access_token_before_reset}"}
+    access_token_a = register.json()["access_token"]
+    auth_header_a = {"Authorization": f"Bearer {access_token_a}"}
 
-    still_valid = await client.get("/account/me", headers=auth_header)
-    assert still_valid.status_code == 200
+    login = await client.post(
+        "/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]},
+        headers={"User-Agent": "a-second-device/1.0"},
+    )
+    access_token_b = login.json()["access_token"]
+    auth_header_b = {"Authorization": f"Bearer {access_token_b}"}
+
+    assert (await client.get("/account/me", headers=auth_header_a)).status_code == 200
+    assert (await client.get("/account/me", headers=auth_header_b)).status_code == 200
 
     await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
     reset_token = captured["link"].split("token=")[1]
     await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "a-brand-new-password"})
 
-    now_blacklisted = await client.get("/account/me", headers=auth_header)
-    assert now_blacklisted.status_code == 401
+    assert (await client.get("/account/me", headers=auth_header_a)).status_code == 401
+    assert (await client.get("/account/me", headers=auth_header_b)).status_code == 401
 
 
 async def test_forgot_password_is_silent_for_unknown_email(client):
@@ -514,6 +564,34 @@ async def test_two_factor_setup_enable_and_login_flow(client, register_payload):
     verify = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": pyotp.TOTP(secret).now()})
     assert verify.status_code == 200
     assert verify.json()["access_token"]
+
+
+async def test_a_session_issued_via_2fa_verify_login_is_genuinely_blacklistable(client, register_payload):
+    """1.1.15, proven directly rather than assumed from 'it's the same
+    issue_session() call every other login path uses': the access token
+    issued by /2fa/verify-login must be revocable through the normal
+    session-revoke path (DELETE /sessions/{id}), exactly like a token
+    from a plain password login."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+    verify = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": pyotp.TOTP(secret).now()})
+    two_fa_access_token = verify.json()["access_token"]
+    two_fa_auth_header = {"Authorization": f"Bearer {two_fa_access_token}"}
+
+    still_valid = await client.get("/account/me", headers=two_fa_auth_header)
+    assert still_valid.status_code == 200
+
+    current_session_id = next(s["id"] for s in (await client.get("/sessions", headers=two_fa_auth_header)).json() if s["is_current"])
+    revoke = await client.delete(f"/sessions/{current_session_id}", headers=two_fa_auth_header)
+    assert revoke.status_code == 200
+
+    now_blacklisted = await client.get("/account/me", headers=two_fa_auth_header)
+    assert now_blacklisted.status_code == 401
 
 
 async def test_two_factor_disable_requires_valid_code(client, register_payload):
@@ -611,6 +689,33 @@ async def test_recovery_code_logs_in_and_cannot_be_reused(client, register_paylo
     mfa_token2 = login2.json()["mfa_token"]
     second_use = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token2, "recovery_code": recovery_code})
     assert second_use.status_code == 401
+
+
+async def test_a_session_issued_via_2fa_verify_recovery_code_is_genuinely_blacklistable(client, register_payload):
+    """1.1.15, same exhaustiveness reasoning as the /verify-login version
+    of this test: every distinct issue_session() call site in this app
+    (register, login, refresh, the OAuth callback, /verify-login,
+    /verify-recovery-code) is proven individually blacklistable, not
+    assumed from the others because they share the same function."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    recovery_code = enable.json()["recovery_codes"][0]
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+    verify = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": recovery_code})
+    recovery_access_token = verify.json()["access_token"]
+    recovery_auth_header = {"Authorization": f"Bearer {recovery_access_token}"}
+
+    still_valid = await client.get("/account/me", headers=recovery_auth_header)
+    assert still_valid.status_code == 200
+
+    await client.post("/auth/logout", headers=_csrf(client))
+
+    now_blacklisted = await client.get("/account/me", headers=recovery_auth_header)
+    assert now_blacklisted.status_code == 401
 
 
 async def test_recovery_code_is_case_and_dash_insensitive(client, register_payload):

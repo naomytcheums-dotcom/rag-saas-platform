@@ -227,10 +227,27 @@ async def test_oauth_callback_issues_a_session_directly_when_2fa_is_not_enabled(
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.get("/auth/oauth/google/callback", follow_redirects=False)
 
-        assert response.status_code == 302
-        location = response.headers["location"]
-        assert "access_token=" in location
-        assert "mfa_required" not in location
+            assert response.status_code == 302
+            location = response.headers["location"]
+            assert "access_token=" in location
+            assert "mfa_required" not in location
+
+            # 1.1.15: NOT assumed just because oauth_callback() calls the
+            # same issue_session() every other login path uses -- proven
+            # directly, against real Postgres. The OAuth-issued access
+            # token must be genuinely blacklistable, not a special case
+            # that silently skipped access_token_jti.
+            oauth_access_token = location.split("access_token=")[1].split("&")[0]
+            auth_header = {"Authorization": f"Bearer {oauth_access_token}"}
+
+            still_valid = await client.get("/account/me", headers=auth_header)
+            assert still_valid.status_code == 200
+
+            logout = await client.post("/auth/logout", headers={"X-CSRF-Token": client.cookies.get("csrf_token") or ""})
+            assert logout.status_code == 200
+
+            now_blacklisted = await client.get("/account/me", headers=auth_header)
+            assert now_blacklisted.status_code == 401
     finally:
         await pg_session.execute(delete(User).where(User.email == email))
         await pg_session.commit()
