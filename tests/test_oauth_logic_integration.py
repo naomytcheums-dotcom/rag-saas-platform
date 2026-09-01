@@ -283,6 +283,150 @@ async def test_google_identity_fetch_accepts_a_verified_email():
     assert email == "real-user@example.com"
 
 
+class _FakeHttpResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+class _FakeGithubClient:
+    """Coverage audit finding: _fetch_github_identity's real body was
+    NEVER exercised by any existing test -- every OAuth-callback test
+    monkeypatches _IDENTITY_FETCHERS itself with a stub, bypassing the
+    real GitHub-calling logic entirely (private-email fallback, the
+    "no verified email at all" rejection). Tested directly here with a
+    fake httpx-shaped client, no real network."""
+
+    def __init__(self, profile, emails=None):
+        self._profile = profile
+        self._emails = emails
+
+    async def get(self, path, token):
+        if path == "user":
+            return _FakeHttpResponse(self._profile)
+        if path == "user/emails":
+            return _FakeHttpResponse(self._emails)
+        raise AssertionError(f"unexpected path {path}")
+
+
+async def test_github_identity_fetch_uses_the_public_email_when_present():
+    from api.routers.oauth import _fetch_github_identity
+
+    client = _FakeGithubClient(profile={"id": 999, "email": "public@example.com"})
+    provider_account_id, email = await _fetch_github_identity(client, token={})
+    assert provider_account_id == "999"
+    assert email == "public@example.com"
+
+
+async def test_github_identity_fetch_falls_back_to_the_verified_primary_email_when_private():
+    """GitHub omits `email` from /user when the user has it set private
+    -- the dedicated /user/emails endpoint is the fallback, filtered to
+    the primary AND verified entry specifically."""
+    from api.routers.oauth import _fetch_github_identity
+
+    client = _FakeGithubClient(
+        profile={"id": 999, "email": None},
+        emails=[
+            {"email": "secondary@example.com", "primary": False, "verified": True},
+            {"email": "unverified-primary@example.com", "primary": True, "verified": False},
+            {"email": "the-real-one@example.com", "primary": True, "verified": True},
+        ],
+    )
+    provider_account_id, email = await _fetch_github_identity(client, token={})
+    assert email == "the-real-one@example.com"
+
+
+async def test_github_identity_fetch_rejects_an_account_with_no_verified_accessible_email():
+    from fastapi import HTTPException
+
+    from api.routers.oauth import _fetch_github_identity
+
+    client = _FakeGithubClient(profile={"id": 999, "email": None}, emails=[{"email": "x@example.com", "primary": True, "verified": False}])
+    try:
+        await _fetch_github_identity(client, token={})
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert "no verified" in exc.detail.lower()
+
+
+async def test_require_client_rejects_an_unsupported_provider():
+    from fastapi import HTTPException
+
+    from api.routers.oauth import _require_client
+
+    try:
+        _require_client("facebook")
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 404
+
+
+async def test_require_client_returns_503_when_the_provider_is_not_configured(monkeypatch):
+    """Coverage audit finding: never exercised -- both providers ARE
+    configured in this project's real .env, so create_client("google")
+    never actually returns None under normal test settings. The
+    registration itself happens once at import time, so this monkeypatches
+    create_client directly rather than trying to un-configure settings
+    after the fact."""
+    import api.routers.oauth as oauth_module
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(oauth_module.oauth, "create_client", lambda provider: None)
+    try:
+        oauth_module._require_client("google")
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 503
+
+
+async def test_oauth_authorize_redirects_to_the_real_provider_consent_screen():
+    """Never previously tested at all -- every other OAuth test targets
+    /callback. Just the redirect construction: no real consent screen
+    is reached, but Authlib should still build a real redirect Location
+    pointing at Google's actual authorization endpoint."""
+    from httpx import ASGITransport, AsyncClient
+
+    from api.main import app
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/auth/oauth/google/authorize", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "accounts.google.com" in response.headers["location"]
+
+
+async def test_oauth_callback_wraps_a_token_exchange_failure_as_a_400(monkeypatch):
+    """Coverage audit finding: oauth_callback's own httpx.HTTPError catch
+    around authorize_access_token -- e.g. the provider's token endpoint
+    being unreachable/erroring during the code-for-token exchange --
+    had never been exercised."""
+    import httpx as httpx_module
+    from httpx import ASGITransport, AsyncClient
+
+    import api.routers.oauth as oauth_module
+    from api.main import app
+
+    class _FailingOAuthClient:
+        async def authorize_access_token(self, request):
+            raise httpx_module.ConnectError("simulated provider outage")
+
+    monkeypatch.setattr(oauth_module, "_require_client", lambda provider: _FailingOAuthClient())
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/auth/oauth/google/callback", follow_redirects=False)
+
+    assert response.status_code == 400
+    assert "sign-in failed" in response.json()["detail"].lower()
+
+
 async def test_returning_oauth_user_reuses_the_same_account_no_duplicate_link(pg_session):
     email = _unique_email()
     provider_account_id = uuid.uuid4().hex

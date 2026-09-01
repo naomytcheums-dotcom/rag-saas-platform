@@ -45,13 +45,22 @@ def test_restore_token_expiry_must_be_less_than_the_purge_delay_in_minutes():
     """5.7 audit finding: confirm_account_restore trusts its token's own
     expiry rather than re-checking deletion_scheduled_at, so a restore
     token must never outlive the account it points to. 2 days = 2880
-    minutes; a 30-day (43200-minute) purge delay must reject a token
-    expiry at or beyond that many minutes."""
+    minutes; a 2-day (2880-minute) purge delay must reject a token
+    expiry at or beyond that many minutes.
+
+    Coverage audit finding: ACCOUNT_DELETION_REMINDER_DAYS_BEFORE is
+    pinned to 1 here explicitly -- left at its class default of 3, it's
+    >= ACCOUNT_PURGE_DELAY_DAYS=2, so _deletion_reminder_must_fire_before_the_purge
+    (the OTHER validator) raised first every time, and this test was
+    passing for the wrong reason: pydantic stops validation at the first
+    failing model_validator, so _restore_token_must_expire_before_the_purge
+    -- the one this test is actually named for -- never even ran.
+    """
     with pytest.raises(ValidationError):
-        _settings(ACCOUNT_PURGE_DELAY_DAYS=2, ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES=2 * 24 * 60)
+        _settings(ACCOUNT_PURGE_DELAY_DAYS=2, ACCOUNT_DELETION_REMINDER_DAYS_BEFORE=1, ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES=2 * 24 * 60)
 
     with pytest.raises(ValidationError):
-        _settings(ACCOUNT_PURGE_DELAY_DAYS=2, ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES=2 * 24 * 60 + 1)
+        _settings(ACCOUNT_PURGE_DELAY_DAYS=2, ACCOUNT_DELETION_REMINDER_DAYS_BEFORE=1, ACCOUNT_RESTORE_TOKEN_EXPIRE_MINUTES=2 * 24 * 60 + 1)
 
 
 def test_restore_token_expiry_less_than_the_purge_delay_in_minutes_is_accepted():

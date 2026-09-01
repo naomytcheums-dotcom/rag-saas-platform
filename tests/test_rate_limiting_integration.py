@@ -307,6 +307,36 @@ async def test_rate_limiting_is_a_no_op_when_disabled(monkeypatch):
     await enforce_rate_limit("ratelimit:test:disabled", max_attempts=0, window_seconds=60)
 
 
+async def test_retry_after_falls_back_to_the_full_window_when_redis_fails_mid_lookup(monkeypatch):
+    """Coverage audit finding: _seconds_until_oldest_entry_expires has
+    its OWN try/except, separate from enforce_rate_limit's -- a Redis
+    failure that happens specifically during the Retry-After lookup
+    (after the main pipeline already succeeded and determined the
+    caller IS over the limit) must still produce a usable 429 with a
+    conservative Retry-After, not crash or hang. Simulated by breaking
+    zrange specifically, on an otherwise-working client."""
+    key = f"ratelimit:test:retry-after-lookup-fails-{uuid.uuid4().hex}"
+    window = 30
+
+    await enforce_rate_limit(key, max_attempts=1, window_seconds=window)
+
+    real_zrange = rate_limit_module._redis.zrange
+
+    async def broken_zrange(*args, **kwargs):
+        raise ConnectionError("simulated Redis failure during the Retry-After lookup")
+
+    monkeypatch.setattr(rate_limit_module._redis, "zrange", broken_zrange)
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await enforce_rate_limit(key, max_attempts=1, window_seconds=window)
+        assert exc_info.value.status_code == 429
+        # Falls back to the full window length -- a slightly-too-generous
+        # Retry-After is harmless, see the function's own docstring.
+        assert int(exc_info.value.headers["Retry-After"]) == window
+    finally:
+        monkeypatch.setattr(rate_limit_module._redis, "zrange", real_zrange)
+
+
 async def test_sliding_window_catches_a_burst_that_a_fixed_window_would_miss():
     """
     The concrete property that makes this a sliding window and not a

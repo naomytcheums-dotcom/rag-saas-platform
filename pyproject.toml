@@ -17,3 +17,18 @@ asyncio_mode = "auto"
 # the integration fixtures were already implicitly assuming.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.coverage.run]
+# Coverage measurement audit finding: SQLAlchemy's async extension uses
+# greenlet internally to bridge asyncpg's sync-style DBAPI calls into
+# async code -- every greenlet context switch is invisible to coverage's
+# default sys.settrace-based tracer, so any line AFTER such a switch in
+# the same function (most commonly right after `await db.commit()` /
+# `await db.execute()`) gets misreported as "not covered" even when a
+# passing test demonstrably executes it. Confirmed directly: isolating
+# test_enabling_two_factor_sends_a_notification_email (which asserts an
+# email was captured, only possible if the code past its `await
+# db.commit()` ran) still showed those exact lines as "Missing" without
+# this setting. coverage.py has supported this via the `greenlet`
+# tracer since 7.x specifically for SQLAlchemy async's use case.
+concurrency = ["greenlet"]

@@ -166,6 +166,38 @@ async def test_login_wrong_password_returns_generic_401(client, register_payload
     assert response.status_code == 401
 
 
+async def test_login_email_scoped_rate_limit_alerts_the_real_account_owner(client, register_payload, monkeypatch):
+    """Coverage audit finding: login()'s email-scoped rate limit has its
+    own except-and-alert branch distinct from the IP-scoped one right
+    above it -- never exercised, since the fast suite runs with
+    RATE_LIMIT_ENABLED=False (conftest.py) and the real-Redis integration
+    suite never pushed a specific ACCOUNT past its own email-scoped
+    limit. enforce_rate_limit itself is monkeypatched (no real Redis
+    needed) to pass on the IP-scoped call and raise on the email-scoped
+    one -- exactly the "distributed attack, one victim account" scenario
+    this limit exists for."""
+    import api.routers.auth as auth_module
+    from fastapi import HTTPException, status
+
+    captured = []
+    monkeypatch.setattr(auth_module, "send_rate_limit_alert_email", lambda to, context: captured.append((to, context)))
+
+    await client.post("/auth/register", json=register_payload)
+
+    calls = []
+
+    async def _fake_enforce(key, max_attempts, window_seconds):
+        calls.append(key)
+        if key.startswith("ratelimit:login:email:"):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts")
+
+    monkeypatch.setattr(auth_module, "enforce_rate_limit", _fake_enforce)
+
+    response = await client.post("/auth/login", json={"email": register_payload["email"], "password": "whatever"})
+    assert response.status_code == 429
+    assert captured == [(register_payload["email"], "sign-in")]
+
+
 async def test_login_unknown_email_returns_same_generic_401(client):
     response = await client.post("/auth/login", json={"email": "nobody@example.com", "password": "whatever123"})
     assert response.status_code == 401
@@ -313,6 +345,22 @@ async def test_refresh_blacklists_the_old_access_token(client, register_payload)
     await client.post("/auth/refresh", headers=_csrf(client))
 
     response = await client.get("/account/me", headers={"Authorization": f"Bearer {old_access_token}"})
+    assert response.status_code == 401
+
+
+async def test_refresh_rejects_a_valid_session_belonging_to_a_deactivated_user(client, register_payload, db_session):
+    """Coverage audit finding: refresh()'s own `not user.is_active or
+    user.is_deleted` re-check, independent of session validity -- built
+    by deactivating the user directly (bypassing delete_account/
+    withdraw_consent, which would themselves revoke the session first)
+    so the session row itself stays genuinely valid, isolating this
+    specific guard from the session-revocation checks tested elsewhere."""
+    await client.post("/auth/register", json=register_payload)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.is_active = False
+    await db_session.commit()
+
+    response = await client.post("/auth/refresh", headers=_csrf(client))
     assert response.status_code == 401
 
 
@@ -502,6 +550,42 @@ async def test_email_verification_flow(client, register_payload, monkeypatch):
     assert profile.json()["is_email_verified"] is True
 
 
+async def test_request_verification_code_sends_a_fresh_code_when_not_yet_verified(client, register_payload, monkeypatch):
+    """Coverage audit finding: every other test in this neighborhood
+    exercises /verify-email/request only via register()'s own automatic
+    first send, or the no-op path right below for an ALREADY-verified
+    account -- the endpoint's own success path (explicitly re-requesting
+    a fresh code while still unverified) had never been called
+    directly."""
+    captured = []
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: captured.append(code))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    captured.clear()  # drop register()'s own automatic first send
+
+    response = await client.post("/auth/verify-email/request", headers=auth_header)
+    assert response.status_code == 200
+    assert response.json()["message"] == "Verification code sent"
+    assert len(captured) == 1
+    assert len(captured[0]) == 6 and captured[0].isdigit()
+
+
+async def test_request_verification_code_is_a_no_op_when_already_verified(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: captured.update(code=code))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    await client.post("/auth/verify-email/confirm", json={"code": captured["code"]}, headers=auth_header)
+
+    captured.clear()
+    response = await client.post("/auth/verify-email/request", headers=auth_header)
+    assert response.status_code == 200
+    assert response.json()["message"] == "Email is already verified"
+    assert captured == {}  # no fresh code sent -- there's nothing left to verify
+
+
 async def test_email_otp_cannot_be_reused_after_success(client, register_payload, monkeypatch):
     captured = {}
     monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda to, code: captured.update(code=code))
@@ -550,6 +634,21 @@ async def test_email_otp_max_attempts_exceeded(client, register_payload, monkeyp
 
 
 # ---------------------------------------------------------------- 1.1.3 --
+async def test_password_reset_rejects_a_password_over_the_bcrypt_limit(client, register_payload, monkeypatch):
+    """Coverage audit finding: RegisterRequest's identical validator is
+    tested (test_register_rejects_password_over_bcrypt_limit), but
+    PasswordResetRequest.new_password's own copy of it -- a separate
+    Pydantic model, so a separate code path -- never was."""
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "x" * 73})
+    assert response.status_code == 422
+
+
 async def test_password_reset_flow(client, register_payload, monkeypatch):
     captured = {}
     monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
@@ -647,6 +746,48 @@ async def test_password_reset_token_cannot_be_reused(client, register_payload, m
     assert replay.status_code == 400  # used_at is set after the first reset
 
 
+async def test_password_reset_rejects_a_token_whose_user_no_longer_exists(client, register_payload, monkeypatch, db_session):
+    """Coverage audit finding: reset_password's `if user is None: raise
+    invalid` guards against a token row that outlived the account it
+    pointed to (e.g. a hard purge racing an in-flight reset link) --
+    never exercised. Deletes the user directly at the DB layer after the
+    token was issued, leaving a genuinely dangling foreign key, same
+    scenario the check exists for."""
+    from sqlalchemy import delete
+
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    await db_session.execute(delete(User).where(User.email == register_payload["email"]))
+    await db_session.commit()
+
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "a-brand-new-password"})
+    assert response.status_code == 400
+
+
+async def test_password_reset_succeeds_even_when_the_confirmation_email_fails_to_send(client, register_payload, monkeypatch):
+    """Coverage audit finding: create_and_send_password_reset's own
+    try/except around send_password_reset_email (api/services/
+    password_reset.py) had never actually raised in any test -- every
+    other test monkeypatches the send function to a no-op success, never
+    a failure. /auth/password/forgot must still return its generic
+    success message either way (anti-enumeration -- see that endpoint's
+    own docstring), not leak that something went wrong internally."""
+    def _raise(to_email, link):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", _raise)
+
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    assert response.status_code == 200
+    assert response.json()["message"] == "If an account exists for that email, a reset link has been sent."
+
+
 async def test_password_reset_expired_token_is_rejected(client, register_payload, monkeypatch, db_session):
     import datetime as dt
     from sqlalchemy import select
@@ -695,6 +836,121 @@ async def test_two_factor_setup_enable_and_login_flow(client, register_payload):
     verify = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": pyotp.TOTP(secret).now()})
     assert verify.status_code == 200
     assert verify.json()["access_token"]
+
+
+async def test_2fa_verify_login_rejects_a_wrong_code(client, register_payload):
+    """Coverage audit finding: verify_two_factor_login's own
+    verify_totp_code check had never been exercised with an actually
+    wrong code -- every other /verify-login test in this file uses a
+    real, correctly-generated TOTP code."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    verify = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": "000000"})
+    assert verify.status_code == 401
+    assert verify.json()["detail"] == "Invalid code"
+
+
+async def test_2fa_setup_is_rejected_when_already_enabled(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    second_setup = await client.post("/auth/2fa/setup", headers=auth_header)
+    assert second_setup.status_code == 400
+
+
+async def test_2fa_enable_without_a_prior_setup_call_is_rejected(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/auth/2fa/enable", json={"code": "000000"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 400
+    assert "setup first" in response.json()["detail"]
+
+
+async def test_2fa_enable_rejects_a_wrong_code(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    await client.post("/auth/2fa/setup", headers=auth_header)
+
+    response = await client.post("/auth/2fa/enable", json={"code": "000000"}, headers=auth_header)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid code"
+
+
+async def test_2fa_disable_is_rejected_when_not_enabled(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/auth/2fa/disable", json={"code": "000000"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 400
+    assert "not enabled" in response.json()["detail"]
+
+
+async def test_2fa_recovery_codes_regenerate_is_rejected_when_not_enabled(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/auth/2fa/recovery-codes/regenerate", json={"code": "000000"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 400
+    assert "not enabled" in response.json()["detail"]
+
+
+async def test_2fa_verify_login_rejects_a_garbage_mfa_token(client):
+    response = await client.post("/auth/2fa/verify-login", json={"mfa_token": "not-a-real-token", "code": "000000"})
+    assert response.status_code == 401
+
+
+async def test_2fa_verify_login_rejects_a_token_for_an_account_where_2fa_got_disabled_meanwhile(client, register_payload, db_session):
+    """A real, if narrow, race: the mfa_token was minted while 2FA was
+    on, but the account's 2FA got turned off (e.g. from another device)
+    before this second step completed. verify-login must re-check
+    current state, not just trust the token was valid when issued."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.totp_enabled = False
+    user.totp_secret = None
+    await db_session.commit()
+
+    response = await client.post("/auth/2fa/verify-login", json={"mfa_token": mfa_token, "code": pyotp.TOTP(secret).now()})
+    assert response.status_code == 401
+
+
+async def test_2fa_verify_recovery_code_rejects_a_garbage_mfa_token(client):
+    response = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": "not-a-real-token", "recovery_code": "AAAA-AAAA-AAAA"})
+    assert response.status_code == 401
+
+
+async def test_2fa_verify_recovery_code_rejects_a_token_for_an_account_where_2fa_got_disabled_meanwhile(client, register_payload, db_session):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    a_recovery_code = enable.json()["recovery_codes"][0]
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.totp_enabled = False
+    await db_session.commit()
+
+    response = await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": a_recovery_code})
+    assert response.status_code == 401
 
 
 async def test_a_session_issued_via_2fa_verify_login_is_genuinely_blacklistable(client, register_payload):
@@ -1009,6 +1265,40 @@ async def test_lockout_recovery_disables_2fa_after_the_delay_elapses(client, reg
     assert old_access_token_now_dead.status_code == 401
 
 
+async def test_lockout_recovery_confirm_rechecks_totp_is_still_enabled(client, register_payload, monkeypatch, db_session):
+    """Coverage audit finding: confirm_two_factor_lockout_recovery
+    re-checks `user.totp_enabled` at confirm time rather than trusting
+    the token alone -- proven by disabling 2FA directly (bypassing the
+    normal /disable endpoint, which would itself cancel this pending
+    token) between an eligible request and its confirm."""
+    import datetime as dt
+
+    from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
+
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email",
+        lambda to, link, delay_hours: captured.update(link=link),
+    )
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    request = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    token = captured["link"].split("token=")[1]
+
+    row = await db_session.scalar(select(TwoFactorLockoutRecoveryToken))
+    row.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS, minutes=1)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.totp_enabled = False  # bypasses /disable's own token-cancellation on purpose
+    await db_session.commit()
+
+    confirm = await client.post("/auth/2fa/lockout-recovery/confirm", json={"token": token})
+    assert confirm.status_code == 400
+
+
 async def test_lockout_recovery_request_is_silent_for_wrong_password(client, register_payload, monkeypatch):
     captured = {}
     monkeypatch.setattr(
@@ -1036,6 +1326,21 @@ async def test_lockout_recovery_request_is_silent_when_2fa_is_not_enabled(client
     response = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
     assert response.status_code == 200
     assert "link" not in captured
+
+
+async def test_lockout_recovery_request_succeeds_even_when_the_notification_email_fails_to_send(client, register_payload, monkeypatch):
+    def _raise(to_email, confirm_link, delay_hours):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.services.two_factor_lockout_recovery.send_two_factor_lockout_recovery_requested_email", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+
+    response = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert response.status_code == 200
 
 
 async def test_a_normal_2fa_login_cancels_a_pending_lockout_recovery_request(client, register_payload, monkeypatch, db_session):
@@ -1286,6 +1591,31 @@ async def test_account_restore_expired_token_is_rejected(client, register_payloa
     assert response.status_code == 400
 
 
+async def test_account_restore_confirm_rechecks_the_account_is_still_deleted(client, register_payload, monkeypatch, db_session):
+    """Coverage audit finding: confirm_account_restore's `not user.is_deleted`
+    guard, built by clearing is_deleted directly (bypassing the normal
+    /account/restore/confirm flow, which is what would ordinarily clear
+    it) between an issued token and its use, proving the endpoint
+    re-checks current state rather than trusting the token alone."""
+    from api.models.restore_token import AccountRestoreToken
+
+    captured = {}
+    monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    restore_token = captured["link"].split("token=")[1]
+
+    row = await db_session.scalar(select(AccountRestoreToken))
+    user = await db_session.get(User, row.user_id)
+    user.deleted_at = None  # bypasses the normal confirm flow on purpose
+    await db_session.commit()
+
+    response = await client.post("/account/restore/confirm", json={"token": restore_token})
+    assert response.status_code == 400
+
+
 async def test_account_restore_request_is_silent_once_the_grace_period_has_passed(client, register_payload, monkeypatch, db_session):
     """5.6 boundary: request_account_restore's guard is
     `deletion_scheduled_at > now`, not just `is_deleted` -- a row whose
@@ -1381,6 +1711,28 @@ async def test_withdraw_consent_twice_is_rejected(client, register_payload):
     assert second.status_code == 401
 
 
+async def test_withdraw_consent_rejects_an_already_withdrawn_account_reached_directly(client, register_payload, db_session):
+    """Coverage audit finding: withdraw_consent's own
+    `consent_withdrawn_at is not None` guard is unreachable through the
+    app's normal flow -- withdrawing ALSO sets is_active=False in the
+    same operation, so get_current_user_any_consent_status blocks any
+    second attempt before the handler body ever runs (proven above).
+    Built directly via db_session -- consent_withdrawn_at set, is_active
+    left True, an inconsistent state the app itself never produces -- to
+    prove the guard still catches it if that invariant is ever broken by
+    a future change, rather than trusting the paired is_active flag alone."""
+    from api.security.jwt import create_access_token
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.consent_withdrawn_at = dt.datetime.now(dt.timezone.utc)  # is_active deliberately left True
+    await db_session.commit()
+
+    response = await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 400
+    assert "already been withdrawn" in response.json()["detail"]
+
+
 async def test_consent_withdrawal_and_full_deletion_are_mutually_exclusive(client, register_payload):
     """api/models/user.py's comment on consent_withdrawn_at claims the
     field can never end up set at the same time as deleted_at, because
@@ -1456,6 +1808,25 @@ async def test_consent_reactivation_request_is_silent_for_unknown_email(client):
     assert response.status_code == 200
 
 
+async def test_consent_reactivation_request_succeeds_even_when_the_email_fails_to_send(client, register_payload, monkeypatch):
+    """Coverage audit finding: create_and_send_consent_reactivation's own
+    try/except around send_consent_reactivation_email (api/services/
+    consent_reactivation.py) had never actually raised in any test.
+    /account/consent/reactivate/request must still return its generic
+    success response either way, matching the same resilience guarantee
+    every other email-sending flow in this app has."""
+    def _raise(to_email, link):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.services.consent_reactivation.send_consent_reactivation_email", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+
+    response = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    assert response.status_code == 200
+
+
 async def test_consent_reactivation_does_not_apply_to_a_fully_deleted_account(client, register_payload, monkeypatch, db_session):
     """A row could in principle have both consent_withdrawn_at and
     deleted_at set (e.g. seeded directly, or a future code path) --
@@ -1505,6 +1876,31 @@ async def test_consent_reactivation_token_cannot_be_reused(client, register_payl
 
 async def test_consent_reactivation_garbage_token_is_rejected(client):
     response = await client.post("/account/consent/reactivate/confirm", json={"token": "this-was-never-issued", "accept_terms": True})
+    assert response.status_code == 400
+
+
+async def test_consent_reactivation_confirm_rechecks_the_account_is_still_withdrawn_and_not_deleted(client, register_payload, monkeypatch, db_session):
+    """Coverage audit finding: confirm_consent_reactivation's
+    `user.consent_withdrawn_at is None or user.is_deleted` guard --
+    built by clearing consent_withdrawn_at directly (bypassing the
+    normal confirm flow) between an issued token and its use, proving
+    the endpoint re-checks current state rather than trusting the token
+    alone."""
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.consent_reactivation.send_consent_reactivation_email",
+        lambda to, link: captured.update(link=link),
+    )
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+    await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    token = captured["link"].split("token=")[1]
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.consent_withdrawn_at = None  # bypasses the normal confirm flow on purpose
+    await db_session.commit()
+
+    response = await client.post("/account/consent/reactivate/confirm", json={"token": token, "accept_terms": True})
     assert response.status_code == 400
 
 
@@ -1631,6 +2027,73 @@ async def test_update_profile_fields(client, register_payload):
     assert response.json()["company"] == "Analytical Engines Ltd"
 
 
+async def test_avatar_upload_translates_a_storage_failure_into_a_502(client, register_payload, monkeypatch):
+    """Coverage audit finding: upload_avatar_route's RuntimeError catch
+    (S3 unreachable, permissions error, etc. -- api/services/storage.py
+    wraps every botocore failure into RuntimeError) had never been
+    exercised -- every real-S3 test in test_avatar_storage_integration.py
+    only exercises the happy path and content-validation failures. No
+    real S3 needed here: the router-level function is monkeypatched
+    directly, same boundary tests/test_auth_api.py's own docstring
+    already uses for email."""
+    def _raise(user_id, content):
+        raise RuntimeError("avatar upload failed: simulated S3 outage")
+
+    monkeypatch.setattr("api.routers.account.upload_avatar", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/avatar",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files={"file": ("avatar.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 20, "image/png")},
+    )
+    assert response.status_code == 502
+
+
+async def test_avatar_upload_translates_a_validation_error_into_a_400(client, register_payload, monkeypatch):
+    """Coverage audit finding: the OTHER branch right next to the 502
+    one above -- upload_avatar's ValueError (bad content, oversized
+    file) and EnvironmentError (S3 misconfigured) both map to 400, not
+    502, since those are the caller's fault or a deploy misconfiguration,
+    not a transient storage outage. test_avatar_storage_integration.py
+    exercises this via real invalid content; this proves the mapping
+    itself with no real S3 needed."""
+    def _raise(user_id, content):
+        raise ValueError("file is not a recognized image")
+
+    monkeypatch.setattr("api.routers.account.upload_avatar", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/avatar",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files={"file": ("avatar.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 20, "image/png")},
+    )
+    assert response.status_code == 400
+
+
+async def test_set_password_succeeds_even_when_the_confirmation_email_fails_to_send(client, register_payload, db_session, monkeypatch):
+    from api.security.jwt import create_access_token
+
+    def _raise(to_email):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.routers.account.send_password_set_email", _raise)
+
+    oauth_user = User(
+        email="oauth-email-fail@example.com", hashed_password=None, is_email_verified=True,
+        terms_version=settings.TERMS_VERSION, consent_given_at=dt.datetime.now(dt.timezone.utc),
+    )
+    db_session.add(oauth_user)
+    await db_session.commit()
+    access_token, _jti = create_access_token(oauth_user.id)
+
+    response = await client.post(
+        "/account/set-password", json={"new_password": "a-brand-new-password"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 200
+
+
 async def test_set_password_lets_an_oauth_only_account_add_a_fallback_login(client, db_session, monkeypatch):
     """An OAuth-only account (hashed_password is None, see api/models/user.py)
     has no fallback if it loses access to its linked provider -- this is
@@ -1671,6 +2134,23 @@ async def test_set_password_is_rejected_for_an_account_that_already_has_one(clie
         "/account/set-password", json={"new_password": "another-password"}, headers={"Authorization": f"Bearer {access_token}"}
     )
     assert response.status_code == 400
+
+
+async def test_set_password_rejects_a_password_over_the_bcrypt_limit(client, db_session):
+    from api.security.jwt import create_access_token
+
+    oauth_user = User(
+        email="oauth-bcrypt-limit@example.com", hashed_password=None, is_email_verified=True,
+        terms_version=settings.TERMS_VERSION, consent_given_at=dt.datetime.now(dt.timezone.utc),
+    )
+    db_session.add(oauth_user)
+    await db_session.commit()
+    access_token, _jti = create_access_token(oauth_user.id)
+
+    response = await client.post(
+        "/account/set-password", json={"new_password": "x" * 73}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 422
 
 
 async def test_set_password_rejects_a_known_breached_password(client, db_session, monkeypatch):
@@ -1725,6 +2205,16 @@ async def test_change_password_succeeds_and_forces_relogin_everywhere(client, re
     assert new_password_login.status_code == 200
 
 
+async def test_change_password_rejects_a_password_over_the_bcrypt_limit(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": register_payload["password"], "new_password": "x" * 73},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 422
+
+
 async def test_change_password_rejects_a_wrong_current_password(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     response = await client.post(
@@ -1771,6 +2261,53 @@ async def test_change_password_rejects_a_known_breached_password(client, registe
     )
     assert response.status_code == 400
     assert "data breach" in response.json()["detail"]
+
+
+async def test_change_password_succeeds_even_when_the_confirmation_email_fails_to_send(client, register_payload, monkeypatch):
+    def _raise(to_email):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.routers.account.send_password_changed_email", _raise)
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": register_payload["password"], "new_password": "a-brand-new-password"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------- auth dependencies --
+async def test_garbage_access_token_is_rejected(client):
+    """Coverage audit finding: no existing test ever sent a genuinely
+    malformed token -- decode_token's own ExpiredSignatureError/
+    InvalidTokenError/InvalidTokenPurposeError catch in
+    get_current_user_any_consent_status (api/dependencies.py) was
+    exercised only indirectly by tests that used an EXPIRED real token,
+    never outright garbage."""
+    response = await client.get("/account/me", headers={"Authorization": "Bearer this-is-not-a-jwt-at-all"})
+    assert response.status_code == 401
+
+
+async def test_deactivated_account_with_a_still_valid_unblacklisted_token_is_rejected(client, register_payload, db_session):
+    """Defense in depth: proves get_current_user_any_consent_status's own
+    is_active/is_deleted check independently of the blacklist -- every
+    normal path that deactivates an account (delete, consent withdrawal)
+    ALSO blacklists every session's access token in the same operation,
+    so this scenario (deactivated, but the specific token never
+    blacklisted) can't arise through the app's own state machine. Built
+    directly via db_session to prove the guard still catches it if that
+    invariant is ever violated by a future change, rather than trusting
+    the blacklist alone."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.is_active = False
+    await db_session.commit()
+
+    response = await client.get("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 401
 
 
 # ----------------------------------------------------------- monitoring --

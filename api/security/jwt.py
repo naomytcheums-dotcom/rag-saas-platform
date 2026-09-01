@@ -26,7 +26,6 @@ import datetime as dt
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 import jwt
 from jwt import ExpiredSignatureError, InvalidSignatureError, InvalidTokenError
@@ -61,9 +60,7 @@ def _verification_keys() -> list[str]:
     return keys
 
 
-def _create_token(
-    subject: uuid.UUID, purpose: TokenPurpose, expires_delta: dt.timedelta, extra_claims: dict[str, Any] | None = None
-) -> tuple[str, str]:
+def _create_token(subject: uuid.UUID, purpose: TokenPurpose, expires_delta: dt.timedelta) -> tuple[str, str]:
     """Shared builder behind create_access_token/create_mfa_pending_token
     below -- every token this app issues carries `sub` (the user id),
     `jti` (this module's top docstring), `purpose` (checked by
@@ -81,8 +78,6 @@ def _create_token(
         "iat": now,
         "exp": now + expires_delta,
     }
-    if extra_claims:
-        payload.update(extra_claims)
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM), jti
 
 

@@ -221,6 +221,35 @@ async def test_deletion_reminder_is_not_resent_on_a_second_run(pg_engine, monkey
             await conn.execute(delete(User).where(User.email == email))
 
 
+async def test_deletion_reminder_leaves_the_account_eligible_for_retry_when_the_email_fails(pg_engine, monkeypatch):
+    """Coverage audit finding, and a genuinely important resilience
+    property (already stated in the task's own docstring, but never
+    proven): deletion_reminder_sent_at is only set on a SUCCESSFUL send
+    -- a transient Resend outage must leave the account eligible to
+    retry on the NEXT daily run, not silently mark the one warning that
+    actually matters as "sent" when it never went out."""
+    now = dt.datetime.now(dt.timezone.utc)
+    monkeypatch.setattr(
+        "api.tasks.account_deletion_reminder.send_account_deletion_reminder_email",
+        lambda to, days_remaining: (_ for _ in ()).throw(RuntimeError("Resend is unreachable (simulated)")),
+    )
+    email = await _create_user(
+        pg_engine, is_active=False,
+        deleted_at=now - dt.timedelta(days=27), deletion_scheduled_at=now + dt.timedelta(days=1),
+    )
+
+    try:
+        sent_count = send_pending_deletion_reminders.apply().get()
+        assert sent_count == 0
+
+        async with pg_engine.connect() as conn:
+            row = (await conn.execute(select(User.deletion_reminder_sent_at).where(User.email == email))).one()
+        assert row.deletion_reminder_sent_at is None  # still eligible for the next run
+    finally:
+        async with pg_engine.begin() as conn:
+            await conn.execute(delete(User).where(User.email == email))
+
+
 async def test_purge_task_deletes_the_orphaned_avatar_from_storage(pg_engine):
     """The fix for the previously-documented gap: purging a soft-deleted
     account must not leave its avatar image sitting in the bucket

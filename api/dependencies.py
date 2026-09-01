@@ -1,7 +1,7 @@
 """Shared FastAPI dependencies: DB session (re-exported for convenience) and
 the current-user resolvers every protected route depends on."""
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy import select
@@ -13,7 +13,7 @@ from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 
-__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status", "get_refresh_token"]
+__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status"]
 
 _bearer_scheme = HTTPBearer(description="Access token from POST /auth/login or /auth/refresh")
 
@@ -103,12 +103,3 @@ async def get_current_user(user: User = Depends(get_current_user_any_consent_sta
     if user.terms_version != settings.TERMS_VERSION:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=STALE_TERMS_DETAIL)
     return user
-
-
-def get_refresh_token(refresh_token: str | None = Cookie(default=None)) -> str:
-    """1.1.8 -- the refresh token travels as an httpOnly cookie, never in a
-    JSON body, so it's unreachable from JS even if an XSS bug slips through
-    elsewhere on the page."""
-    if not refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token cookie present")
-    return refresh_token
