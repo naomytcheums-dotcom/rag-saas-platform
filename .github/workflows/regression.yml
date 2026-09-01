@@ -80,6 +80,20 @@ jobs:
       S3_SECRET_ACCESS_KEY: minioadmin
       S3_REGION: us-east-1
       S3_PUBLIC_BASE_URL: http://localhost:9000/public/avatars
+      # Dummy but non-empty: api/routers/oauth.py only registers a
+      # provider with Authlib when both of its ID/SECRET env vars are
+      # set (see that file's `if settings.GOOGLE_OAUTH_CLIENT_ID and
+      # ...`) -- test_oauth_authorize_redirects_to_the_real_provider_consent_screen
+      # needs that registration to exist so GET /auth/oauth/google/authorize
+      # returns a real 302 instead of 503, even though it never sends
+      # this value to Google (building the redirect URL only needs the
+      # client to be registered, not a client secret Google would
+      # actually accept -- this failed in CI without these set even
+      # though it passed locally, where a real .env already had them).
+      GOOGLE_OAUTH_CLIENT_ID: ci-only-google-client-id-never-real
+      GOOGLE_OAUTH_CLIENT_SECRET: ci-only-google-client-secret-never-real
+      GITHUB_OAUTH_CLIENT_ID: ci-only-github-client-id-never-real
+      GITHUB_OAUTH_CLIENT_SECRET: ci-only-github-client-secret-never-real
     steps:
       - uses: actions/checkout@v4
 
