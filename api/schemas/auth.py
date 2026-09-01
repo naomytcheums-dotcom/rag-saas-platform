@@ -204,6 +204,11 @@ class TwoFactorRecoveryCodesResponse(BaseModel):
     """
 
     recovery_codes: list[str]
+    # A `data:text/plain;base64,...` URI encoding the same codes as a
+    # downloadable .txt file -- see build_recovery_codes_file()'s
+    # docstring (api/security/recovery_codes.py) for why this rides
+    # along in the same response instead of being its own endpoint.
+    recovery_codes_file: str
 
 
 class TwoFactorRecoveryCodesStatusResponse(BaseModel):

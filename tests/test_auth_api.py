@@ -377,6 +377,43 @@ async def test_two_factor_enable_returns_ten_unique_recovery_codes(client, regis
     assert len(set(codes)) == 10  # no duplicates in one batch
 
 
+async def test_recovery_codes_file_is_a_downloadable_text_file_with_the_same_codes(client, register_payload):
+    import base64
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    body = enable.json()
+    codes_file = body["recovery_codes_file"]
+    assert codes_file.startswith("data:text/plain;charset=utf-8;base64,")
+
+    encoded = codes_file.split(",", 1)[1]
+    decoded_text = base64.b64decode(encoded).decode("utf-8")
+    for code in body["recovery_codes"]:
+        assert code in decoded_text  # every code the JSON list has is really in the downloadable file too
+
+
+async def test_enabling_two_factor_sends_a_notification_email(client, register_payload, monkeypatch):
+    """The real risk this closes: /setup hands back the TOTP secret in
+    plaintext to anyone holding a valid access token, and /enable only
+    needs a code derived from it -- an attacker with a stolen token
+    could scan that QR code into their OWN authenticator and enable 2FA
+    under a secret only they control, locking the real owner out before
+    anything else looks wrong. This email is the one signal that would
+    catch it in time."""
+    captured = []
+    monkeypatch.setattr("api.routers.two_factor.send_two_factor_enabled_email", lambda to: captured.append(to))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+
+    await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert captured == [register_payload["email"]]
+
+
 async def test_recovery_code_logs_in_and_cannot_be_reused(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}
@@ -449,6 +486,7 @@ async def test_regenerate_recovery_codes_requires_valid_totp_and_invalidates_old
     new_codes = regenerate.json()["recovery_codes"]
     assert len(new_codes) == 10
     assert old_code not in new_codes
+    assert regenerate.json()["recovery_codes_file"].startswith("data:text/plain;charset=utf-8;base64,")
 
     login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
     mfa_token = login.json()["mfa_token"]

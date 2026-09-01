@@ -40,10 +40,19 @@ from api.schemas.auth import (
 from api.security.hashing import hash_token, verify_password
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
 from api.security.rate_limit import enforce_rate_limit
-from api.security.recovery_codes import RECOVERY_CODE_COUNT, generate_recovery_code, normalize_recovery_code
+from api.security.recovery_codes import (
+    RECOVERY_CODE_COUNT,
+    build_recovery_codes_file,
+    generate_recovery_code,
+    normalize_recovery_code,
+)
 from api.security.sessions import issue_session
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
-from api.services.email import send_recovery_code_used_email, send_two_factor_lockout_recovery_completed_email
+from api.services.email import (
+    send_recovery_code_used_email,
+    send_two_factor_enabled_email,
+    send_two_factor_lockout_recovery_completed_email,
+)
 from api.services.two_factor_lockout_recovery import create_and_send_two_factor_lockout_recovery
 from api.utils import as_aware_utc, client_ip
 
@@ -130,6 +139,17 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
     token, not the TOTP secret itself, so without a limit a stolen token
     alone would let an attacker brute-force the 6-digit code the same
     way /verify-login guards against.
+
+    Always emails the account that 2FA was just turned on. This is not
+    just a courtesy: /setup returns the secret in plaintext (as a
+    otpauth:// QR code) to whoever holds a valid access token, and this
+    endpoint only needs THAT plus a code computed from it -- an attacker
+    with a stolen access token could scan that QR code into their OWN
+    authenticator and enable 2FA under a secret only they control,
+    silently locking the real owner out of their own account the next
+    time they try to log in. The email is the one signal that would
+    catch that in time, since nothing else about the request looks
+    abnormal (a valid token calling an endpoint it's allowed to call).
     """
     await enforce_rate_limit(
         f"ratelimit:2fa-code:user:{current_user.id}",
@@ -143,7 +163,13 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
     current_user.totp_enabled = True
     plain_codes = await _replace_recovery_codes(db, current_user.id)
     await db.commit()
-    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes)
+
+    try:
+        send_two_factor_enabled_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send 2FA-enabled notification to %s: %s", current_user.email, exc)
+
+    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes, recovery_codes_file=build_recovery_codes_file(plain_codes))
 
 
 @router.post("/disable", response_model=MessageResponse)
@@ -203,7 +229,7 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
 
     plain_codes = await _replace_recovery_codes(db, current_user.id)
     await db.commit()
-    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes)
+    return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes, recovery_codes_file=build_recovery_codes_file(plain_codes))
 
 
 @router.get("/recovery-codes/status", response_model=TwoFactorRecoveryCodesStatusResponse)

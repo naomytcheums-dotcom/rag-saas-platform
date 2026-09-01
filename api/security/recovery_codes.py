@@ -11,6 +11,7 @@ stored, only its SHA-256 hash (api/security/hashing.py's hash_token), so a
 stolen database dump can't be used to log in even if every row is read.
 """
 
+import base64
 import secrets
 
 RECOVERY_CODE_COUNT = 10
@@ -33,3 +34,27 @@ def normalize_recovery_code(code: str) -> str:
     "7k9p qx3m 2vyt" and "7K9P-QX3M-2VYT" hash identically -- users will
     type these back in inconsistently, unlike a copy-pasted token."""
     return "".join(code.split()).replace("-", "").upper()
+
+
+def build_recovery_codes_file(codes: list[str]) -> str:
+    """
+    A ready-to-download `data:` URI encoding the codes as a plain-text
+    file, returned alongside the JSON list in
+    TwoFactorRecoveryCodesResponse so a frontend can offer a one-click
+    "Download" button (`<a download="recovery-codes.txt" href="...">`)
+    with zero extra requests -- the exact same technique
+    api/security/totp.py's totp_provisioning_qr_data_uri already uses
+    for the QR code (`<img src="...">`), applied to a downloadable file
+    instead of an image. Embedded in the SAME one-time response as the
+    codes themselves, not a separate endpoint: creating a second way to
+    fetch codes that are only ever supposed to be shown once would
+    quietly undermine that guarantee.
+    """
+    header = (
+        "Two-factor authentication recovery codes\n"
+        "Each code works once. Store this file somewhere safe (a password "
+        "manager, or printed and locked away) -- it will not be shown again.\n\n"
+    )
+    text = header + "\n".join(codes) + "\n"
+    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    return f"data:text/plain;charset=utf-8;base64,{encoded}"

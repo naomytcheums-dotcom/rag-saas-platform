@@ -74,13 +74,30 @@ by faking the token-exchange step, not the browser.
 
 `POST /auth/2fa/enable` (and later `POST /auth/2fa/recovery-codes/regenerate`)
 returns 10 single-use codes in plaintext, exactly once -- only their
-SHA-256 hash is stored. They're the fallback for `POST /auth/2fa/verify-login`
-when the authenticator device itself is lost: `POST /auth/2fa/verify-recovery-code`
+SHA-256 hash is stored. Alongside the JSON `recovery_codes` list, the
+same response also includes `recovery_codes_file`: a ready-to-download
+`data:text/plain;base64,...` URI with the same codes, meant for
+`<a download="recovery-codes.txt" href="{recovery_codes_file}">` --
+same technique `/auth/2fa/setup`'s `qr_code_data_uri` already uses for
+the QR `<img>`, so there's no separate "fetch the codes again" endpoint
+that would undermine "shown exactly once."
+
+They're the fallback for `POST /auth/2fa/verify-login` when the
+authenticator device itself is lost: `POST /auth/2fa/verify-recovery-code`
 takes the same `mfa_token` from `/auth/login` plus one recovery code
 instead of a 6-digit TOTP code. Disabling 2FA (`POST /auth/2fa/disable`)
 deletes any unused codes, and consuming one always emails the account a
 "a recovery code was used" notice. Unlike TOTP itself, this whole flow is
 fully covered by the automated suite -- no physical device involved.
+
+**Enabling 2FA itself is also notified by email**, every time -- not
+just a courtesy. `/setup` hands the TOTP secret back in plaintext (as
+the QR code) to anyone holding a valid access token, and `/enable` only
+needs a code derived from that same secret: an attacker with a stolen
+token could scan it into their OWN authenticator and turn 2FA on under
+a secret only they control, locking the real owner out the next time
+they try to log in, with nothing else about the request looking
+abnormal. The email is what would catch that in time.
 
 **Lost the device AND all 10 codes:** `POST /auth/2fa/lockout-recovery/request`
 (email + password) starts a last-resort removal of 2FA that only becomes

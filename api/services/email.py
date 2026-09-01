@@ -184,6 +184,35 @@ def send_new_login_notification_email(to_email: str, device_info: str | None, ip
     )
 
 
+def send_two_factor_enabled_email(to_email: str) -> None:
+    """
+    Called by api/routers/two_factor.py's enable_two_factor() every time
+    2FA is turned on. Not just a courtesy notification: /setup returns
+    the TOTP secret in plaintext to anyone holding a valid access token,
+    and /enable only needs a code derived from it -- an attacker with a
+    stolen token could scan that QR code into their own authenticator
+    and enable 2FA under a secret only they control, locking the real
+    owner out before anything else looks wrong. This email is what lets
+    the real owner notice and react in time.
+    """
+    _send(
+        to_email,
+        subject="Two-factor authentication was just enabled on your account",
+        html=(
+            "<p>Two-factor authentication was just turned on for your "
+            "account. From now on, logging in requires a code from your "
+            "authenticator app (or one of your recovery codes), in "
+            "addition to your password.</p>"
+            "<p>If you just set this up yourself, no action is needed.</p>"
+            "<p>If you did NOT do this, someone else may have access to "
+            "your account and could be locking you out of it right now. "
+            "Act immediately: use the recovery link to remove 2FA with "
+            "your password (POST /auth/2fa/lockout-recovery/request), "
+            "then change your password as soon as you're back in.</p>"
+        ),
+    )
+
+
 def send_recovery_code_used_email(to_email: str) -> None:
     """
     Called by api/routers/two_factor.py's verify_two_factor_recovery_code()
