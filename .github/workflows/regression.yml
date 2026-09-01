@@ -58,22 +58,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      # S3-compatible object storage for the avatar-upload tests
-      # (1.1.13) -- MinIO instead of real Supabase Storage/AWS S3 so CI
-      # needs no real cloud credentials as a secret; boto3 talks to it
-      # identically (see api/services/storage.py's docstring).
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: avatars
-        ports: ["9000:9000"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
       # CI-only values -- never real secrets, this is a throwaway
       # Postgres/Redis/MinIO stack that only exists for this job's
@@ -106,7 +90,22 @@ jobs:
       - name: Install api/ dependencies (only requirements-api.txt -- api/ has no import dependency on the RAG pipeline's requirements.txt, see api/config.py's docstring, and that file additionally pulls in a private unpublished package this job doesn't need to resolve)
         run: pip install -r requirements-api.txt
 
-      - name: Make the avatars bucket public-read (MinIO starts with private buckets by default)
+      - name: Start MinIO (S3-compatible object storage for the avatar-upload tests, 1.1.13 -- so CI needs no real cloud credentials as a secret; boto3 talks to it identically, see api/services/storage.py's docstring)
+        run: |
+          # A plain `docker run` step, not a services: container -- the
+          # official minio/minio image needs its CMD overridden
+          # (`server /data`) to actually start the server instead of
+          # printing usage and exiting, and GitHub Actions' services:
+          # schema has no field to override a container's command.
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 1
+          done
+
+      - name: Create the avatars bucket and make it public-read
         run: |
           python - <<'PYEOF'
           import boto3
@@ -115,6 +114,7 @@ jobs:
               aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
               region_name="us-east-1",
           )
+          client.create_bucket(Bucket="avatars")
           client.put_bucket_policy(Bucket="avatars", Policy="""{
               "Version": "2012-10-17",
               "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::avatars/*"}]
@@ -223,15 +223,19 @@ jobs:
             sleep 1
           done
 
-      - name: OWASP ZAP baseline scan against the live instance
-        uses: zaproxy/action-baseline@v0.14.0
+      - name: OWASP ZAP API scan against the live instance
+        # zap-api-scan.py (not the baseline/spider scan) is the ZAP mode
+        # actually built for this: it imports an OpenAPI/GraphQL/SOAP
+        # definition and drives every real operation it declares. A
+        # baseline scan spiders for links to follow, which finds almost
+        # nothing on a JSON API with no HTML pages to crawl -- exactly
+        # the mistake an earlier version of this workflow made (an
+        # invalid `-O` flag on zap-baseline.py, since that flag only
+        # exists on zap-api-scan.py).
+        uses: zaproxy/action-api-scan@v0.10.0
         with:
-          target: "http://localhost:8000"
-          # /openapi.json seeds ZAP's spider with every real api/ route
-          # (FastAPI's auto-generated schema) instead of it only crawling
-          # what it can find by following links from '/', which would
-          # miss almost every endpoint in a JSON API with no HTML pages.
-          cmd_options: "-O http://localhost:8000/openapi.json"
+          target: "http://localhost:8000/openapi.json"
+          format: openapi
           fail_action: false
 
       - name: Show the API server's log if anything failed
