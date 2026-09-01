@@ -25,9 +25,7 @@ from api.config import settings
 from api.dependencies import get_current_user, get_current_user_any_consent_status, get_db
 from api.models.audit_log import AuditAction
 from api.models.consent_reactivation_token import ConsentReactivationToken
-from api.models.oauth import OAuthAccount
 from api.models.restore_token import AccountRestoreToken
-from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import (
     AcceptUpdatedTermsRequest,
@@ -49,11 +47,14 @@ from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
 from api.services.account_restore import create_and_send_account_restore
 from api.services.consent_reactivation import create_and_send_consent_reactivation
+from api.services.data_export import build_account_export_data, render_account_export_csv
 from api.services.email import (
     send_account_deletion_scheduled_email,
     send_consent_withdrawn_email,
     send_password_changed_email,
     send_password_set_email,
+    send_preferences_changed_email,
+    send_profile_changed_email,
 )
 from api.utils import client_ip
 from api.services.storage import upload_avatar
@@ -104,13 +105,29 @@ async def update_profile(payload: ProfileUpdateRequest, current_user: User = Dep
     get changed (payload.full_name is None means "leave it alone", not
     "clear it") -- so a frontend can PATCH just the one field the user
     edited without having to resend the whole profile.
+
+    Audit finding 24: emails the account once a PATCH actually changes
+    something (RGPD Art. 12/13 transparency -- the data subject should
+    know when their own stored data changes) -- never for a no-op PATCH
+    with no recognized fields present, which would otherwise send a
+    "your profile was updated" email describing no actual update.
     """
+    changed_fields = []
     if payload.full_name is not None:
         current_user.full_name = payload.full_name
+        changed_fields.append("full_name")
     if payload.company is not None:
         current_user.company = payload.company
+        changed_fields.append("company")
     await db.commit()
     await db.refresh(current_user)
+
+    if changed_fields:
+        try:
+            send_profile_changed_email(current_user.email, changed_fields)
+        except (EnvironmentError, RuntimeError) as exc:
+            logger.warning("failed to send profile-changed notification to %s: %s", current_user.email, exc)
+
     return UserProfileResponse.model_validate(current_user)
 
 
@@ -119,13 +136,27 @@ async def update_preferences(payload: PreferencesUpdateRequest, current_user: Us
     """Same partial-update pattern as update_profile above, for locale
     (UI language) and timezone (validated against the real IANA
     timezone list in api/schemas/user.py -- garbage in is rejected
-    before it ever reaches here, not silently stored)."""
+    before it ever reaches here, not silently stored).
+
+    Audit finding 25: same "email only on an actual change" notification
+    as update_profile above, see that endpoint's docstring for why.
+    """
+    changed_fields = []
     if payload.locale is not None:
         current_user.locale = payload.locale
+        changed_fields.append("locale")
     if payload.timezone is not None:
         current_user.timezone = payload.timezone
+        changed_fields.append("timezone")
     await db.commit()
     await db.refresh(current_user)
+
+    if changed_fields:
+        try:
+            send_preferences_changed_email(current_user.email, changed_fields)
+        except (EnvironmentError, RuntimeError) as exc:
+            logger.warning("failed to send preferences-changed notification to %s: %s", current_user.email, exc)
+
     return UserProfileResponse.model_validate(current_user)
 
 
@@ -517,55 +548,40 @@ async def export_account_data(current_user: User = Depends(get_current_user_any_
     Uses get_current_user_any_consent_status, not get_current_user
     (4.3): the right to access/portability (RGPD Art. 15/20) can't be
     conditioned on accepting new terms first.
-    """
-    oauth_accounts = await db.scalars(select(OAuthAccount).where(OAuthAccount.user_id == current_user.id))
-    sessions = await db.scalars(select(Session).where(Session.user_id == current_user.id))
 
-    export = {
-        "profile": {
-            "id": str(current_user.id),
-            "email": current_user.email,
-            "full_name": current_user.full_name,
-            "company": current_user.company,
-            "locale": current_user.locale,
-            "timezone": current_user.timezone,
-            "is_email_verified": current_user.is_email_verified,
-            "two_factor_enabled": current_user.totp_enabled,
-            "created_at": current_user.created_at.isoformat(),
-        },
-        "consent": {
-            "consent_given_at": current_user.consent_given_at.isoformat() if current_user.consent_given_at else None,
-            "terms_version": current_user.terms_version,
-            # consent_withdrawn_at is deliberately not included here: it's
-            # only ever set together with is_active=False (see
-            # withdraw_consent() above), and get_current_user's is_active
-            # gate means no request could ever reach this endpoint with
-            # that field set to anything but None -- it would be a
-            # permanently-dead key in every export this code path can
-            # actually produce.
-        },
-        # Linked provider + verified email only -- never provider access
-        # tokens, which this app doesn't even persist (see oauth.py).
-        "linked_oauth_accounts": [
-            {"provider": a.provider.value, "provider_email": a.provider_email, "linked_at": a.created_at.isoformat()}
-            for a in oauth_accounts
-        ],
-        # Device/IP/timestamps only -- never the refresh token hash itself.
-        "sessions": [
-            {
-                "device_info": s.device_info,
-                "ip_address": s.ip_address,
-                "created_at": s.created_at.isoformat(),
-                "last_seen_at": s.last_seen_at.isoformat(),
-                "revoked": s.revoked_at is not None,
-            }
-            for s in sessions
-        ],
-        "exported_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-    }
+    consent_withdrawn_at is deliberately not included in the export: it's
+    only ever set together with is_active=False (see withdraw_consent()
+    above), and get_current_user_any_consent_status's is_active gate
+    means no request could ever reach this endpoint with that field set
+    to anything but None -- it would be a permanently-dead key in every
+    export this code path can actually produce.
+    """
+    export = await build_account_export_data(db, current_user)
 
     return Response(
         content=json.dumps(export, indent=2),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=account-data-export.json"},
+    )
+
+
+@router.get("/export-csv")
+async def export_account_data_csv(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
+    """
+    Audit finding 23: the same data as GET /account/export above, as CSV
+    instead of JSON -- RGPD Art. 20's "structured, commonly used,
+    machine-readable format" doesn't mandate JSON specifically, and a
+    non-technical user is far more likely to be able to open a CSV in a
+    spreadsheet than to make sense of nested JSON. Shares
+    build_account_export_data with the JSON endpoint (api/services/
+    data_export.py) so the two formats can never drift apart on WHICH
+    fields are included -- only how they're rendered.
+    """
+    export = await build_account_export_data(db, current_user)
+    csv_content = render_account_export_csv(export)
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=account-data-export.csv"},
     )

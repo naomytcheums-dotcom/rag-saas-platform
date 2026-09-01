@@ -193,6 +193,25 @@ time it actually matters. Sent once per deletion cycle
 `POST /account/restore/confirm` so a later deletion is eligible for its
 own fresh reminder.
 
+### Data export in CSV, and profile/preferences change notifications (audit Categorie 3)
+
+`GET /account/export-csv` returns the same data as `GET /account/export`
+(RGPD Art. 20 portability), rendered as a two-column `field,value` CSV
+instead of JSON -- CSV is inherently flat, so a nested structure (the
+`sessions` list, e.g.) flattens to `sessions[0].device_info`,
+`sessions[1].device_info`, etc. rather than needing a second file or a
+zip archive. Both endpoints share `api/services/data_export.py`'s
+`build_account_export_data()` so the two formats can never quietly drift
+apart on which fields are actually included -- only how they're
+rendered. An empty list (no linked OAuth accounts, e.g.) still gets a
+`(none)` row rather than silently vanishing from the output.
+
+`PATCH /account/profile` and `PATCH /account/preferences` each email the
+account once the request actually changes a recognized field (RGPD Art.
+12/13 transparency: the data subject should know when their own stored
+data changes) -- never for a no-op PATCH with no recognized fields
+present, which would otherwise describe a change that didn't happen.
+
 ### Forced re-consent when TERMS_VERSION changes (4.3)
 
 `get_current_user` (`api/dependencies.py`) blocks a request with 403 if

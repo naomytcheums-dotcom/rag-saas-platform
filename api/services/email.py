@@ -541,3 +541,47 @@ def send_security_alert_email(to_email: str, message: str) -> None:
     caller's job to pre-escape a string other channels consume as-is.
     """
     _send(to_email, subject="Security alert: failed-login spike detected", html=f"<p>{html.escape(message)}</p>")
+
+
+def send_profile_changed_email(to_email: str, changed_fields: list[str]) -> None:
+    """
+    Audit finding 24 -- called by api/routers/account.py's update_profile()
+    whenever a PATCH actually changes something (never on a no-op PATCH
+    with no recognized fields present -- see that endpoint's docstring).
+    changed_fields are always one of a small, fixed set of our own field
+    names ("full_name", "company"), never raw user-supplied VALUES, so
+    there's nothing here that needs HTML-escaping the way a User-Agent
+    or email-typed-into-a-form string would.
+    """
+    fields = ", ".join(changed_fields)
+    _send(
+        to_email,
+        subject="Your profile was updated",
+        html=(
+            f"<p>Your account profile was just updated. Changed: <strong>{fields}</strong>.</p>"
+            f"<p>If this wasn't you, someone else may have access to your account -- "
+            f"change your password immediately and review your active sessions.</p>"
+        ),
+    )
+
+
+def send_preferences_changed_email(to_email: str, changed_fields: list[str]) -> None:
+    """
+    Audit finding 25 -- called by api/routers/account.py's
+    update_preferences() whenever a PATCH actually changes locale and/or
+    timezone. Lower-stakes wording than send_profile_changed_email above
+    -- a changed UI language or timezone is far less likely to indicate
+    a compromised account than a changed name/company, but RGPD
+    transparency (Art. 12/13) still calls for telling the data subject
+    any time their stored data changes, not just the security-sensitive
+    subset of changes.
+    """
+    fields = ", ".join(changed_fields)
+    _send(
+        to_email,
+        subject="Your account preferences were updated",
+        html=(
+            f"<p>Your account preferences were just updated. Changed: <strong>{fields}</strong>.</p>"
+            f"<p>If this wasn't you, review your account and consider changing your password.</p>"
+        ),
+    )

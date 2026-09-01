@@ -2028,6 +2028,134 @@ async def test_update_profile_fields(client, register_payload):
     assert response.json()["company"] == "Analytical Engines Ltd"
 
 
+# ------------------------------------------------------------ item 24 --
+async def test_update_profile_sends_a_notification_email(client, register_payload, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_profile_changed_email", lambda to, fields: captured.append((to, fields)))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.patch(
+        "/account/profile", json={"full_name": "Ada K. Lovelace"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert captured == [(register_payload["email"], ["full_name"])]
+
+
+async def test_update_profile_with_no_recognized_fields_sends_no_notification(client, register_payload, monkeypatch):
+    """A PATCH with no recognized fields present changes nothing -- must
+    not send a "your profile was updated" email describing an update
+    that never happened."""
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_profile_changed_email", lambda to, fields: captured.append((to, fields)))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.patch("/account/profile", json={}, headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    assert captured == []
+
+
+async def test_update_profile_succeeds_even_when_the_notification_email_fails_to_send(client, register_payload, monkeypatch):
+    def _raise(to_email, fields):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.routers.account.send_profile_changed_email", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.patch(
+        "/account/profile", json={"company": "New Co"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 200
+
+
+# ------------------------------------------------------------ item 25 --
+async def test_update_preferences_sends_a_notification_email(client, register_payload, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_preferences_changed_email", lambda to, fields: captured.append((to, fields)))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.patch(
+        "/account/preferences", json={"locale": "fr", "timezone": "Europe/Paris"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert captured == [(register_payload["email"], ["locale", "timezone"])]
+
+
+async def test_update_preferences_with_no_recognized_fields_sends_no_notification(client, register_payload, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_preferences_changed_email", lambda to, fields: captured.append((to, fields)))
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.patch("/account/preferences", json={}, headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    assert captured == []
+
+
+async def test_update_preferences_succeeds_even_when_the_notification_email_fails_to_send(client, register_payload, monkeypatch):
+    def _raise(to_email, fields):
+        raise RuntimeError("Resend is unreachable (simulated)")
+
+    monkeypatch.setattr("api.routers.account.send_preferences_changed_email", _raise)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.patch(
+        "/account/preferences", json={"locale": "de"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 200
+
+
+# ------------------------------------------------------------ item 23 --
+async def test_export_csv_is_downloadable_and_contains_profile_data(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.get("/account/export-csv", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment; filename=account-data-export.csv" in response.headers["content-disposition"]
+
+    body = response.text
+    assert "field,value" in body  # header row
+    assert f"profile.email,{register_payload['email']}" in body
+    assert f"profile.full_name,{register_payload['full_name']}" in body
+
+
+async def test_export_csv_and_export_json_contain_the_same_fields(client, register_payload):
+    """Both formats are built from the same shared data (api/services/
+    data_export.py) -- proven here directly rather than assumed: every
+    top-level key in the JSON export must appear as a `key.` prefix
+    somewhere in the flattened CSV."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    json_export = (await client.get("/account/export", headers=auth_header)).json()
+    csv_body = (await client.get("/account/export-csv", headers=auth_header)).text
+
+    for top_level_key in json_export:
+        assert top_level_key in csv_body
+
+
+async def test_export_csv_includes_linked_oauth_accounts_and_sessions(client, register_payload, db_session):
+    from api.models.oauth import OAuthAccount, OAuthProvider
+    from api.models.user import User as UserModel
+    from sqlalchemy import select as sa_select
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    user = await db_session.scalar(sa_select(UserModel).where(UserModel.email == register_payload["email"]))
+    db_session.add(OAuthAccount(user_id=user.id, provider=OAuthProvider.google, provider_account_id="123", provider_email=register_payload["email"]))
+    await db_session.commit()
+
+    body = (await client.get("/account/export-csv", headers={"Authorization": f"Bearer {access_token}"})).text
+    assert "linked_oauth_accounts[0].provider,google" in body
+    assert "sessions[0].device_info" in body
+
+
+async def test_export_csv_stays_reachable_despite_stale_terms(client, register_payload, monkeypatch):
+    """Same RGPD-rights exemption as GET /account/export (4.3) -- the
+    right to data portability can't be conditioned on accepting new
+    terms first."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    response = await client.get("/account/export-csv", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+
+
 async def test_avatar_upload_translates_a_storage_failure_into_a_502(client, register_payload, monkeypatch):
     """Coverage audit finding: upload_avatar_route's RuntimeError catch
     (S3 unreachable, permissions error, etc. -- api/services/storage.py
