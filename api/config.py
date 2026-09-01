@@ -15,7 +15,7 @@ one, so a misconfigured deployment is caught at process startup.
 
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -150,6 +150,25 @@ class Settings(BaseSettings):
                 "postgresql+asyncpg://... (got a plain postgresql:// URL)"
             )
         return value
+
+    @model_validator(mode="after")
+    def _deletion_reminder_must_fire_before_the_purge(self) -> "Settings":
+        """A misconfiguration where ACCOUNT_DELETION_REMINDER_DAYS_BEFORE
+        >= ACCOUNT_PURGE_DELAY_DAYS would make the pre-purge reminder
+        (api/tasks/account_deletion_reminder.py) eligible the moment
+        deletion is requested -- functionally a duplicate of the
+        immediate confirmation email DELETE /account/me already sends,
+        defeating the entire point of a SECOND, later warning (4.6).
+        Caught here, at startup, rather than discovered as "why did this
+        user get two identical-looking emails the same day.\""""
+        if self.ACCOUNT_DELETION_REMINDER_DAYS_BEFORE >= self.ACCOUNT_PURGE_DELAY_DAYS:
+            raise ValueError(
+                "ACCOUNT_DELETION_REMINDER_DAYS_BEFORE "
+                f"({self.ACCOUNT_DELETION_REMINDER_DAYS_BEFORE}) must be less than "
+                f"ACCOUNT_PURGE_DELAY_DAYS ({self.ACCOUNT_PURGE_DELAY_DAYS}) -- the reminder is "
+                "meant to fire partway through the grace window, not immediately."
+            )
+        return self
 
 
 settings = Settings()
