@@ -27,9 +27,11 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from api.config import settings
+from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
 from api.services.storage import upload_avatar
 from api.tasks.account_purge import purge_deleted_accounts
+from api.tasks.token_blacklist_cleanup import purge_expired_blacklist_entries
 
 # Loop scope is set globally to "session" in pyproject.toml, not pinned
 # per-file here -- see that file's comment for why.
@@ -92,6 +94,54 @@ async def test_purge_task_is_idempotent(pg_engine):
     first_run = purge_deleted_accounts.apply().get()
     second_run = purge_deleted_accounts.apply().get()
     assert second_run == 0  # nothing new became overdue between the two calls
+    assert first_run >= 0
+
+
+async def test_blacklist_cleanup_removes_only_expired_entries(pg_engine):
+    """1.1.15's housekeeping task: a blacklist row is dead weight once
+    its access token would have expired on its own anyway (get_current_user
+    rejects an expired token on claims grounds regardless), but a row
+    for a token that's still within its own lifetime must survive --
+    deleting it early would just be a no-op for get_current_user's
+    blacklist check (nothing to protect against removing early, since
+    the row's absence just means "not blacklisted"), except it WOULD
+    silently un-revoke an access token that was deliberately blacklisted
+    and hasn't naturally expired yet."""
+    now = dt.datetime.now(dt.timezone.utc)
+    email = await _create_user(pg_engine)
+    async with pg_engine.connect() as conn:
+        user_id = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
+
+    expired_jti = str(uuid.uuid4())
+    still_valid_jti = str(uuid.uuid4())
+    async with pg_engine.begin() as conn:
+        await conn.execute(RevokedAccessToken.__table__.insert().values(
+            id=uuid.uuid4(), user_id=user_id, jti=expired_jti, expires_at=now - dt.timedelta(minutes=1),
+        ))
+        await conn.execute(RevokedAccessToken.__table__.insert().values(
+            id=uuid.uuid4(), user_id=user_id, jti=still_valid_jti, expires_at=now + dt.timedelta(minutes=15),
+        ))
+
+    try:
+        removed_count = purge_expired_blacklist_entries.apply().get()
+        assert removed_count >= 1
+
+        async with pg_engine.connect() as conn:
+            remaining_jtis = (await conn.execute(
+                select(RevokedAccessToken.jti).where(RevokedAccessToken.user_id == user_id)
+            )).scalars().all()
+        assert expired_jti not in remaining_jtis
+        assert still_valid_jti in remaining_jtis
+    finally:
+        async with pg_engine.begin() as conn:
+            await conn.execute(delete(RevokedAccessToken).where(RevokedAccessToken.user_id == user_id))
+            await conn.execute(delete(User).where(User.email == email))
+
+
+async def test_blacklist_cleanup_is_idempotent(pg_engine):
+    first_run = purge_expired_blacklist_entries.apply().get()
+    second_run = purge_expired_blacklist_entries.apply().get()
+    assert second_run == 0
     assert first_run >= 0
 
 

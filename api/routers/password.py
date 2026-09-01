@@ -5,17 +5,17 @@ registered accounts."""
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_db
-from api.models.session import Session
 from api.models.token import PasswordResetToken
 from api.models.user import User
 from api.schemas.auth import MessageResponse, PasswordForgotRequest, PasswordResetRequest
 from api.security.hashing import hash_password, hash_token
 from api.security.rate_limit import enforce_rate_limit
+from api.security.sessions import revoke_all_sessions_for_user
 from api.services.password_reset import create_and_send_password_reset
 from api.utils import as_aware_utc
 
@@ -75,7 +75,10 @@ async def reset_password(payload: PasswordResetRequest, db: AsyncSession = Depen
 
     # A password reset is a strong signal of possible compromise -- log
     # every device out, don't just change the password under them.
-    await db.execute(delete(Session).where(Session.user_id == user.id))
+    # revoke_all_sessions_for_user (1.1.15) blacklists each session's
+    # access token too, not just its refresh token -- a stolen access
+    # token must not survive its owner resetting the password.
+    await revoke_all_sessions_for_user(db, user.id)
 
     await db.commit()
     return MessageResponse(message="Password has been reset. Please log in again.")

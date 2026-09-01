@@ -46,8 +46,17 @@ def test_generate_otp_code_is_six_digits():
 
 def test_access_token_roundtrip():
     user_id = uuid.uuid4()
-    token = create_access_token(user_id)
-    assert decode_token(token, TokenPurpose.ACCESS) == user_id
+    token, jti = create_access_token(user_id)
+    decoded = decode_token(token, TokenPurpose.ACCESS)
+    assert decoded.user_id == user_id
+    assert decoded.jti == jti
+
+
+def test_access_token_jti_is_unique_per_token():
+    user_id = uuid.uuid4()
+    _token1, jti1 = create_access_token(user_id)
+    _token2, jti2 = create_access_token(user_id)
+    assert jti1 != jti2
 
 
 def test_access_token_rejected_for_wrong_purpose():
@@ -66,6 +75,63 @@ def test_expired_access_token_is_rejected():
     )
     with pytest.raises(pyjwt.ExpiredSignatureError):
         decode_token(expired, TokenPurpose.ACCESS)
+
+
+# ---------------------------------------------------------------- 1.1.15 --
+def test_decode_token_accepts_a_token_signed_with_a_previous_key(monkeypatch):
+    """Routine key rotation: a token signed with an OLD JWT_SECRET_KEY
+    must still verify once that key has been moved into
+    JWT_PREVIOUS_SECRET_KEYS, even though NEW tokens are signed with the
+    current one."""
+    old_key = "old-signing-key-" + "x" * 32
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", old_key)
+    user_id = uuid.uuid4()
+    token_signed_with_old_key, _jti = create_access_token(user_id)
+
+    new_key = "new-signing-key-" + "y" * 32
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", new_key)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET_KEYS", old_key)
+
+    decoded = decode_token(token_signed_with_old_key, TokenPurpose.ACCESS)
+    assert decoded.user_id == user_id
+
+    # And a BRAND NEW token is signed with the new key, not the old one.
+    new_token, _jti2 = create_access_token(user_id)
+    assert decode_token(new_token, TokenPurpose.ACCESS).user_id == user_id
+    with pytest.raises(pyjwt.InvalidSignatureError):
+        pyjwt.decode(new_token, old_key, algorithms=[settings.JWT_ALGORITHM])
+
+
+def test_decode_token_rejects_a_key_that_was_never_configured(monkeypatch):
+    """The leak-response procedure: a token signed with a key that is
+    NEITHER the current JWT_SECRET_KEY NOR listed in
+    JWT_PREVIOUS_SECRET_KEYS must be rejected outright -- this is what
+    makes "just don't list the leaked key" an effective, immediate
+    response to a compromised signing key."""
+    leaked_key = "leaked-key-" + "z" * 32
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", leaked_key)
+    token_signed_with_leaked_key, _jti = create_access_token(uuid.uuid4())
+
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "brand-new-key-after-the-leak-" + "w" * 20)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET_KEYS", "")  # deliberately NOT including leaked_key
+
+    with pytest.raises(pyjwt.InvalidSignatureError):
+        decode_token(token_signed_with_leaked_key, TokenPurpose.ACCESS)
+
+
+def test_jwt_previous_secret_keys_supports_multiple_comma_separated_keys(monkeypatch):
+    key_a = "key-a-" + "a" * 32
+    key_b = "key-b-" + "b" * 32
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", key_a)
+    token_a, _ = create_access_token(uuid.uuid4())
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", key_b)
+    token_b, _ = create_access_token(uuid.uuid4())
+
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "current-key-" + "c" * 32)
+    monkeypatch.setattr(settings, "JWT_PREVIOUS_SECRET_KEYS", f"{key_a},{key_b}")
+
+    assert decode_token(token_a, TokenPurpose.ACCESS) is not None
+    assert decode_token(token_b, TokenPurpose.ACCESS) is not None
 
 
 def test_totp_enrollment_and_verification():

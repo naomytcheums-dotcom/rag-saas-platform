@@ -28,6 +28,18 @@ class Session(Base):
 
     refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
+    # The `jti` of the access token minted alongside this session in the
+    # same issue_session() call (api/security/sessions.py) -- 1:1 with
+    # this row, since every refresh rotates into a brand new Session
+    # rather than reusing one. Lets revoke_session() blacklist that
+    # exact access token (api/models/revoked_token.py) when this session
+    # is revoked, so killing a session kills BOTH halves of that login
+    # immediately instead of leaving the access token usable for its
+    # remaining ~15 minutes. Nullable only so older rows from before this
+    # column existed don't break -- every session created going forward
+    # always has one.
+    access_token_jti: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
     device_info: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)  # IPv6-safe length
 

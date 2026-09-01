@@ -36,6 +36,22 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     MFA_TOKEN_EXPIRE_MINUTES: int = 5
+    # Comma-separated list of PREVIOUS JWT_SECRET_KEY values, still
+    # accepted when VERIFYING a token but never used to SIGN a new one
+    # (api/security/jwt.py's decode_token tries JWT_SECRET_KEY first,
+    # then each of these in order). Two different procedures, both
+    # covered by the same mechanism -- see docs/AUTH_BACKEND_SETUP.md:
+    #   - Routine rotation: move the old JWT_SECRET_KEY here during a
+    #     grace window (>= ACCESS_TOKEN_EXPIRE_MINUTES) so already-issued
+    #     access tokens keep working until they naturally expire, then
+    #     remove it once that window has passed.
+    #   - Responding to a LEAK: do NOT put the leaked key here -- leave
+    #     this empty. Every access token signed with the leaked key
+    #     immediately fails to verify. Refresh tokens are unaffected
+    #     (they're random opaque values hashed in the database, not
+    #     JWTs), so users get a fresh, correctly-signed access token via
+    #     POST /auth/refresh without needing to log in again.
+    JWT_PREVIOUS_SECRET_KEYS: str = ""
 
     # -- Password / token hashing ---------------------------------------
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60

@@ -17,6 +17,16 @@ from api.config import settings
 from api.models.user import User
 
 
+def _csrf(client):
+    """POST /auth/refresh and /auth/logout are CSRF-protected (1.1.16,
+    api/security/csrf.py's double-submit check) -- the caller must echo
+    back whatever csrf_token cookie the client currently holds (set
+    alongside the refresh cookie by every issue_session() call) as an
+    X-CSRF-Token header. A real browser's JS does this automatically;
+    tests do it explicitly, here."""
+    return {"X-CSRF-Token": client.cookies.get("csrf_token") or ""}
+
+
 # ---------------------------------------------------------------- 1.1.1 --
 async def test_register_creates_user_and_returns_tokens(client, register_payload):
     response = await client.post("/auth/register", json=register_payload)
@@ -67,11 +77,45 @@ async def test_login_unknown_email_returns_same_generic_401(client):
 
 async def test_logout_revokes_session(client, register_payload):
     await client.post("/auth/register", json=register_payload)
-    logout_response = await client.post("/auth/logout")
+    refresh_cookie_before_logout = client.cookies.get("refresh_token")
+    csrf_cookie_before_logout = client.cookies.get("csrf_token")
+
+    logout_response = await client.post("/auth/logout", headers=_csrf(client))
     assert logout_response.status_code == 200
 
-    refresh_response = await client.post("/auth/refresh")
-    assert refresh_response.status_code == 401
+    # logout() clears both cookies for the current client, so a plain
+    # refresh call now hits the CSRF gate first, not the session check --
+    # a real browser in this state has neither cookie left to send either.
+    refresh_response = await client.post("/auth/refresh", headers=_csrf(client))
+    assert refresh_response.status_code == 403
+    assert client.cookies.get("refresh_token") is None
+    assert client.cookies.get("csrf_token") is None
+
+    # The session itself was genuinely revoked server-side, not just
+    # unreachable through the now-cleared cookies: replaying the exact
+    # (still self-consistent) cookie pair captured before logout passes
+    # CSRF but correctly fails on the actual, revoked session.
+    client.cookies.set("refresh_token", refresh_cookie_before_logout)
+    client.cookies.set("csrf_token", csrf_cookie_before_logout)
+    replay_response = await client.post("/auth/refresh", headers={"X-CSRF-Token": csrf_cookie_before_logout})
+    assert replay_response.status_code == 401
+
+
+async def test_logout_blacklists_the_access_token_even_if_it_hasnt_expired(client, register_payload):
+    """1.1.15: logout must kill BOTH halves of the session, not just the
+    refresh cookie -- the access token issued at login/register must stop
+    working immediately too, not linger for its remaining ~15 minutes."""
+    register_response = await client.post("/auth/register", json=register_payload)
+    access_token = register_response.json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    still_valid = await client.get("/account/me", headers=auth_header)
+    assert still_valid.status_code == 200
+
+    await client.post("/auth/logout", headers=_csrf(client))
+
+    now_blacklisted = await client.get("/account/me", headers=auth_header)
+    assert now_blacklisted.status_code == 401
 
 
 # ---------------------------------------------------------------- 1.1.8 --
@@ -80,30 +124,84 @@ async def test_refresh_rotates_the_token(client, register_payload):
     first_access_token = register_response.json()["access_token"]
     first_refresh_cookie = client.cookies.get("refresh_token")
 
-    refresh_response = await client.post("/auth/refresh")
+    refresh_response = await client.post("/auth/refresh", headers=_csrf(client))
     assert refresh_response.status_code == 200
-    # Not asserting the access token itself differs: two JWTs issued for
-    # the same user within the same wall-clock second are byte-identical
-    # (second-precision iat/exp, no jti) -- expected and harmless for a
-    # short-lived, stateless access token. The refresh token is where
-    # rotation is a real security property, and that one is checked below.
+    # Every token now carries a unique jti (1.1.15), so two tokens for
+    # the same user are never byte-identical even issued in the same
+    # wall-clock second -- a real, meaningful difference now, not just
+    # "different enough not to assert on."
+    assert refresh_response.json()["access_token"] != first_access_token
     assert client.cookies.get("refresh_token") != first_refresh_cookie
+
+
+async def test_refresh_blacklists_the_old_access_token(client, register_payload):
+    """A bonus consequence of 1.1.15's design, not just tested for its
+    own sake: since revoke_session() (called on the OLD session as part
+    of refresh rotation) now blacklists that session's access token too,
+    the pre-refresh access token dies immediately instead of surviving
+    for its own remaining ~15 minutes after a refresh."""
+    register_response = await client.post("/auth/register", json=register_payload)
+    old_access_token = register_response.json()["access_token"]
+
+    await client.post("/auth/refresh", headers=_csrf(client))
+
+    response = await client.get("/account/me", headers={"Authorization": f"Bearer {old_access_token}"})
+    assert response.status_code == 401
 
 
 async def test_reused_refresh_token_is_rejected_after_rotation(client, register_payload):
     await client.post("/auth/register", json=register_payload)
     old_refresh_token = client.cookies.get("refresh_token")
 
-    await client.post("/auth/refresh")  # rotates it
+    await client.post("/auth/refresh", headers=_csrf(client))  # rotates it
 
     client.cookies.set("refresh_token", old_refresh_token)
-    replay_response = await client.post("/auth/refresh")
+    replay_response = await client.post("/auth/refresh", headers=_csrf(client))
     assert replay_response.status_code == 401
 
 
-async def test_refresh_without_cookie_is_unauthorized(client):
+async def test_refresh_without_any_cookies_is_rejected_by_csrf_first(client):
+    """No prior session at all (never logged in) means no csrf_token
+    cookie either -- the CSRF gate (1.1.16) rejects this before the
+    route body ever runs, which is correct: there is nothing for
+    /auth/refresh to do for a caller that was never issued a session."""
     response = await client.post("/auth/refresh")
+    assert response.status_code == 403
+
+
+async def test_refresh_with_valid_csrf_but_no_refresh_cookie_is_unauthorized(client, register_payload):
+    """Isolates the scenario the CSRF-less version of this test used to
+    check: a caller that HAS a valid session (so CSRF passes) but whose
+    refresh_token cookie is missing/was cleared must still be rejected,
+    just for the actual reason (no refresh token), not a CSRF failure."""
+    await client.post("/auth/register", json=register_payload)
+    headers = _csrf(client)
+    client.cookies.delete("refresh_token")
+
+    response = await client.post("/auth/refresh", headers=headers)
     assert response.status_code == 401
+
+
+async def test_refresh_rejects_a_csrf_header_that_does_not_match_the_cookie(client, register_payload):
+    """The core double-submit property (1.1.16): having A valid-looking
+    csrf_token cookie is not enough -- the header must match THAT exact
+    cookie. A cross-site attacker's page can make the cookie get sent
+    automatically but can't read its value to forge a matching header."""
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/refresh", headers={"X-CSRF-Token": "attacker-guessed-wrong-value"})
+    assert response.status_code == 403
+
+
+async def test_logout_rejects_a_missing_csrf_header(client, register_payload):
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/logout")  # no X-CSRF-Token header at all
+    assert response.status_code == 403
+
+
+async def test_logout_rejects_a_csrf_header_that_does_not_match_the_cookie(client, register_payload):
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/logout", headers={"X-CSRF-Token": "attacker-guessed-wrong-value"})
+    assert response.status_code == 403
 
 
 async def test_new_login_notification_fires_on_ip_change_even_with_the_same_device(client, register_payload, monkeypatch):
@@ -153,6 +251,33 @@ async def test_revoking_another_sessions_id_requires_ownership(client, register_
     access_token = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
     response = await client.delete("/sessions/00000000-0000-0000-0000-000000000000", headers={"Authorization": f"Bearer {access_token}"})
     assert response.status_code == 404
+
+
+async def test_revoking_a_specific_session_blacklists_only_its_own_access_token(client, register_payload):
+    """1.1.15's "suspicious session" scenario: revoking one device by id
+    (e.g. one the user doesn't recognize in their session list) must
+    kill THAT session's access token immediately, without touching any
+    OTHER session's still-legitimate access token -- registering, then
+    logging in again, gives two distinct sessions/access tokens for the
+    same account to tell apart."""
+    register = await client.post("/auth/register", json=register_payload)
+    access_token_a = register.json()["access_token"]
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    access_token_b = login.json()["access_token"]
+    auth_header_b = {"Authorization": f"Bearer {access_token_b}"}
+
+    sessions = (await client.get("/sessions", headers=auth_header_b)).json()
+    session_a_id = next(s["id"] for s in sessions if not s["is_current"])
+
+    revoke = await client.delete(f"/sessions/{session_a_id}", headers=auth_header_b)
+    assert revoke.status_code == 200
+
+    session_a_now_dead = await client.get("/account/me", headers={"Authorization": f"Bearer {access_token_a}"})
+    assert session_a_now_dead.status_code == 401
+
+    session_b_still_alive = await client.get("/account/me", headers=auth_header_b)
+    assert session_b_still_alive.status_code == 200
 
 
 # ---------------------------------------------------------- profile / prefs --
@@ -272,7 +397,7 @@ async def test_password_reset_flow(client, register_payload, monkeypatch):
 
     # The old session was revoked by the reset -- the cookie set at
     # registration must no longer work.
-    stale_refresh = await client.post("/auth/refresh")
+    stale_refresh = await client.post("/auth/refresh", headers=_csrf(client))
     assert stale_refresh.status_code == 401
 
     old_password_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
@@ -280,6 +405,32 @@ async def test_password_reset_flow(client, register_payload, monkeypatch):
 
     new_password_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": "a-brand-new-password"})
     assert new_password_login.status_code == 200
+
+
+async def test_password_reset_blacklists_the_access_token_issued_before_it(client, register_payload, monkeypatch):
+    """1.1.15's actual validation criterion: a token stolen BEFORE a
+    password reset must not still work AFTER it, for its own remaining
+    ~15 minutes. The stale-refresh-token check above proves the session
+    row is gone; this proves the access token specifically -- a
+    self-contained JWT that doesn't even touch the Session table -- is
+    also rejected, via the blacklist, not just "would have expired
+    eventually."""
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    register = await client.post("/auth/register", json=register_payload)
+    access_token_before_reset = register.json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token_before_reset}"}
+
+    still_valid = await client.get("/account/me", headers=auth_header)
+    assert still_valid.status_code == 200
+
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+    await client.post("/auth/password/reset", json={"token": reset_token, "new_password": "a-brand-new-password"})
+
+    now_blacklisted = await client.get("/account/me", headers=auth_header)
+    assert now_blacklisted.status_code == 401
 
 
 async def test_forgot_password_is_silent_for_unknown_email(client):
@@ -711,7 +862,7 @@ async def test_delete_account_soft_deletes_and_revokes_sessions(client, register
     delete_response = await client.delete("/account/me", headers=auth_header)
     assert delete_response.status_code == 200
 
-    refresh_response = await client.post("/auth/refresh")
+    refresh_response = await client.post("/auth/refresh", headers=_csrf(client))
     assert refresh_response.status_code == 401
 
     login_response = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
@@ -853,7 +1004,7 @@ async def test_withdraw_consent_revokes_existing_sessions(client, register_paylo
 
     await client.post("/account/consent/withdraw", headers=auth_header)
 
-    refresh = await client.post("/auth/refresh")
+    refresh = await client.post("/auth/refresh", headers=_csrf(client))
     assert refresh.status_code == 401
 
 
@@ -1001,7 +1152,7 @@ async def test_set_password_lets_an_oauth_only_account_add_a_fallback_login(clie
     oauth_user = User(email="oauth-only@example.com", hashed_password=None, is_email_verified=True)
     db_session.add(oauth_user)
     await db_session.commit()
-    access_token = create_access_token(oauth_user.id)
+    access_token, _jti = create_access_token(oauth_user.id)
     auth_header = {"Authorization": f"Bearer {access_token}"}
 
     set_password = await client.post("/account/set-password", json={"new_password": "a-brand-new-password"}, headers=auth_header)

@@ -186,10 +186,16 @@ async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):
         login = await pg_client.post("/auth/login", json={"email": email, "password": "correct-horse-battery-staple"})
         assert login.status_code == 200
 
-        refresh = await pg_client.post("/auth/refresh")
+        # /auth/refresh and /auth/logout are CSRF-protected (1.1.16) --
+        # echo back the csrf_token cookie set alongside the refresh
+        # cookie at login, same as a real browser's JS would.
+        csrf_headers = {"X-CSRF-Token": pg_client.cookies.get("csrf_token") or ""}
+
+        refresh = await pg_client.post("/auth/refresh", headers=csrf_headers)
         assert refresh.status_code == 200
 
-        logout = await pg_client.post("/auth/logout")
+        csrf_headers = {"X-CSRF-Token": pg_client.cookies.get("csrf_token") or ""}  # refresh rotated it
+        logout = await pg_client.post("/auth/logout", headers=csrf_headers)
         assert logout.status_code == 200
     finally:
         async with pg_engine.connect() as conn:

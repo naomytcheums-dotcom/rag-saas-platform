@@ -11,7 +11,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -32,6 +32,7 @@ from api.schemas.auth import (
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
 from api.security.hashing import hash_password, hash_token
 from api.security.rate_limit import enforce_rate_limit
+from api.security.sessions import revoke_all_sessions_for_user
 from api.services.account_restore import create_and_send_account_restore
 from api.services.consent_reactivation import create_and_send_consent_reactivation
 from api.services.email import send_consent_withdrawn_email, send_password_set_email
@@ -161,7 +162,9 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Asy
 
     # Log every device out immediately -- the account is deactivated now,
     # the hard purge (api/tasks/account_purge.py) just happens later.
-    await db.execute(delete(Session).where(Session.user_id == current_user.id))
+    # 1.1.15: blacklists each session's access token too, not just its
+    # refresh token.
+    await revoke_all_sessions_for_user(db, current_user.id)
     await db.commit()
 
     return MessageResponse(
@@ -251,7 +254,9 @@ async def withdraw_consent(current_user: User = Depends(get_current_user), db: A
 
     current_user.consent_withdrawn_at = dt.datetime.now(dt.timezone.utc)
     current_user.is_active = False
-    await db.execute(delete(Session).where(Session.user_id == current_user.id))
+    # 1.1.15: blacklists each session's access token too, not just its
+    # refresh token.
+    await revoke_all_sessions_for_user(db, current_user.id)
     await db.commit()
 
     try:

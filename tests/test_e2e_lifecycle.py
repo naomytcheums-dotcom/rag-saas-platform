@@ -135,8 +135,10 @@ async def test_full_user_lifecycle(pg_engine, s3_client, monkeypatch):
             enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(totp_secret).now()}, headers=auth_header)
             assert enable.status_code == 200, enable.text
 
-            # 7. logout
-            logout = await client.post("/auth/logout")
+            # 7. logout (CSRF-protected, 1.1.16 -- echo back the csrf_token
+            # cookie set alongside the refresh cookie at login, same as a
+            # real browser's JS would)
+            logout = await client.post("/auth/logout", headers={"X-CSRF-Token": client.cookies.get("csrf_token") or ""})
             assert logout.status_code == 200, logout.text
 
             # 8. login again -- must now stop at the MFA challenge, not tokens directly
@@ -172,11 +174,17 @@ async def test_full_user_lifecycle(pg_engine, s3_client, monkeypatch):
             current_session_id = next(s["id"] for s in session_list if s["is_current"])
 
             # 13. revoke that session -- the very cookie used to make this
-            # call must stop working immediately afterwards
+            # call must stop working immediately afterwards. It's the
+            # caller's own current session, so revoke_session_by_id also
+            # clears both cookies on this response (1.1.9 + 1.1.16) --
+            # a plain refresh call now hits the CSRF gate first, same
+            # reasoning as tests/test_auth_api.py's
+            # test_logout_revokes_session.
             revoke = await client.delete(f"/sessions/{current_session_id}", headers=auth_header)
             assert revoke.status_code == 200, revoke.text
-            refresh_after_revoke = await client.post("/auth/refresh")
-            assert refresh_after_revoke.status_code == 401
+            assert client.cookies.get("refresh_token") is None
+            refresh_after_revoke = await client.post("/auth/refresh", headers={"X-CSRF-Token": ""})
+            assert refresh_after_revoke.status_code == 403
 
             # 14-15. password reset (access_token from step 8 is still
             # valid -- it's a stateless JWT, independent of the session

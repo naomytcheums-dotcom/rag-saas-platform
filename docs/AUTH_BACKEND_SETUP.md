@@ -185,6 +185,67 @@ intentional trade favoring not missing a real hijack over minimizing
 false positives. See `api/security/sessions.py`'s `issue_session()`
 docstring.
 
+### Access token revocation (1.1.15)
+
+An access token is normally a stateless JWT -- valid until it expires,
+nothing the server can do about it before then. `revoked_access_tokens`
+(a real table, not Redis -- these rows need to survive as reliably as
+the rest of this app's security-relevant data) is what makes it
+revocable: every access token carries a `jti`, stored on the `Session`
+row it's paired with, and `GET/POST` `Depends(get_current_user)` checks
+that `jti` against this table on every request.
+
+**Every place that already revoked a session now blacklists its access
+token too** -- logout, refresh rotation (the pre-rotation token), a
+specific "log out that device" call, and every "kill every session"
+action: password reset, account deletion, consent withdrawal, 2FA
+disable, 2FA lockout-recovery. This is `revoke_session()` /
+`revoke_all_sessions_for_user()` (`api/security/sessions.py`), not
+something each caller does separately -- a stolen access token dies
+the moment ANY of those happen, not just at its own natural ~15-minute
+expiry.
+
+Cost: one extra indexed DB read on every authenticated request (see
+`get_current_user`'s docstring in `api/dependencies.py`). Housekeeping:
+`api/tasks/token_blacklist_cleanup.py` (same Celery Beat schedule as
+account purge, offset by 15 minutes) deletes blacklist rows once their
+underlying token would have expired anyway, so the table doesn't grow
+forever.
+
+### JWT key rotation (1.1.15)
+
+`JWT_PREVIOUS_SECRET_KEYS` (comma-separated) holds keys still accepted
+when *verifying* a token, never used to *sign* a new one. Two different
+procedures, same mechanism:
+
+- **Routine rotation**: generate a new `JWT_SECRET_KEY`, move the OLD
+  value into `JWT_PREVIOUS_SECRET_KEYS`, redeploy. Already-issued access
+  tokens keep working (verified against the previous key) until they
+  naturally expire; remove the old key from the list once
+  `ACCESS_TOKEN_EXPIRE_MINUTES` has comfortably passed.
+- **Responding to a leak**: generate a new `JWT_SECRET_KEY` and leave
+  `JWT_PREVIOUS_SECRET_KEYS` empty (do NOT list the leaked key). Every
+  access token signed with the leaked key fails to verify immediately --
+  correct, since a leaked signing key means an attacker could have
+  forged arbitrary tokens for any user, so nothing signed with it can be
+  trusted anymore. Refresh tokens are unaffected (random opaque values,
+  hashed in the database, not JWTs), so real users get a fresh,
+  correctly-signed access token via `POST /auth/refresh` without needing
+  to log in again -- only actually-forged/stolen tokens die.
+
+### CSRF protection on /auth/refresh and /auth/logout (1.1.16)
+
+These are the only two endpoints that authenticate purely off a cookie,
+no `Authorization` header required -- every other protected route needs
+a Bearer token a cross-site attacker's forged request can't produce.
+Double-submit: `issue_session()` sets a second, JS-readable `csrf_token`
+cookie alongside the httpOnly refresh cookie; both routes require an
+`X-CSRF-Token` header matching it (`api/security/csrf.py`). A frontend
+reads `document.cookie` for `csrf_token` and echoes it back on every
+call to these two endpoints. SameSite=lax on the refresh cookie already
+blocks most cross-site cookie-riding in modern browsers -- this is
+defense-in-depth on top of that, not a replacement for it.
+
 ### Redis + Celery (1.1.10 account purge, J+30)
 
 Needs a real Redis reachable at `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.
@@ -205,6 +266,9 @@ production): `python -m celery -A api.tasks.celery_app beat --loglevel=info`
 Without Beat running, the purge task exists and works (verified,
 see below) but nothing calls it on a schedule -- trigger it manually for
 testing: `python -c "from api.tasks.account_purge import purge_deleted_accounts; print(purge_deleted_accounts.delay().get())"`
+
+Same for the token-blacklist cleanup (1.1.15):
+`python -c "from api.tasks.token_blacklist_cleanup import purge_expired_blacklist_entries; print(purge_expired_blacklist_entries.delay().get())"`
 
 ### Rate limiting (brute-force / spam protection)
 

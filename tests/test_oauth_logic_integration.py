@@ -194,7 +194,7 @@ async def test_oauth_callback_requires_2fa_when_the_account_has_it_enabled(pg_se
         assert "mfa_token=" in location
 
         mfa_token = location.split("mfa_token=")[1]
-        assert decode_token(mfa_token, TokenPurpose.MFA_PENDING) == user_id  # a real, usable MFA-pending token for THIS user
+        assert decode_token(mfa_token, TokenPurpose.MFA_PENDING).user_id == user_id  # a real, usable MFA-pending token for THIS user
     finally:
         await pg_session.execute(delete(User).where(User.email == email))
         await pg_session.commit()

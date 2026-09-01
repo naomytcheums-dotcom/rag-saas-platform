@@ -28,6 +28,7 @@ from api.config import settings
 from api.dependencies import get_db
 from api.models.user import User
 from api.schemas.auth import LoginRequest, MessageResponse, MFARequiredResponse, RegisterRequest, TokenResponse
+from api.security.csrf import clear_csrf_cookie, verify_csrf
 from api.security.hashing import hash_password, verify_password
 from api.security.sessions import (
     clear_refresh_cookie,
@@ -164,6 +165,7 @@ async def refresh(
     response: Response,
     refresh_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
 ):
     """
     Exchange the httpOnly refresh cookie for a brand new access token
@@ -171,6 +173,12 @@ async def refresh(
     calls this whenever an access token expires (every
     ACCESS_TOKEN_EXPIRE_MINUTES) rather than asking the user to log in
     again every 15 minutes.
+
+    CSRF-protected (api/security/csrf.py): this is one of only two
+    endpoints (the other is /auth/logout) that authenticate purely off a
+    cookie, with no Authorization header to prove the caller is who they
+    claim -- exactly the shape a cross-site forged request could
+    otherwise ride on.
     """
     unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token, please log in again")
     if not refresh_token:
@@ -179,11 +187,13 @@ async def refresh(
     session = await get_active_session_by_raw_token(db, refresh_token)
     if session is None:
         clear_refresh_cookie(response)
+        clear_csrf_cookie(response)
         raise unauthorized
 
     user = await db.get(User, session.user_id)
     if user is None or not user.is_active or user.is_deleted:
         clear_refresh_cookie(response)
+        clear_csrf_cookie(response)
         raise unauthorized
 
     # Rotation (1.1.8): the consumed refresh token is revoked, not reused --
@@ -202,13 +212,20 @@ async def refresh(
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(response: Response, refresh_token: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db)):
+async def logout(
+    response: Response, refresh_token: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db),
+    _csrf: None = Depends(verify_csrf),
+):
     """
     Ends the current session: revokes the refresh token server-side (so
     it can never be used again, even if someone captured a copy of the
-    cookie before this call) and clears the cookie in the browser.
-    Tolerant of being called with no cookie at all -- logging out twice,
-    or logging out after the session already expired, is not an error.
+    cookie before this call), blacklists the paired access token too
+    (revoke_session() -- api/security/sessions.py, 1.1.15), and clears
+    both cookies in the browser. Tolerant of being called with no cookie
+    at all -- logging out twice, or logging out after the session
+    already expired, is not an error.
+
+    CSRF-protected, see /auth/refresh's docstring above for why.
     """
     if refresh_token:
         session = await get_active_session_by_raw_token(db, refresh_token)
@@ -216,4 +233,5 @@ async def logout(response: Response, refresh_token: str | None = Cookie(default=
             await revoke_session(db, session)
             await db.commit()
     clear_refresh_cookie(response)
+    clear_csrf_cookie(response)
     return MessageResponse(message="Logged out")

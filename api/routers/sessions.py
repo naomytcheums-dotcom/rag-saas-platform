@@ -12,6 +12,7 @@ from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import MessageResponse
 from api.schemas.user import SessionResponse
+from api.security.csrf import clear_csrf_cookie
 from api.security.hashing import hash_token
 from api.security.sessions import clear_refresh_cookie, revoke_session
 
@@ -60,13 +61,17 @@ async def revoke_session_by_id(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    "Log out that other device" -- revokes one specific session by its
-    id. Ownership is checked (a session belonging to a different user
-    returns 404, not 403, so this endpoint doesn't even confirm whether
-    that session id exists at all to someone probing it). If the session
-    being revoked happens to be the caller's own current one, its
-    refresh cookie is cleared too, so the browser doesn't keep sending a
-    now-dead cookie on every request.
+    "Log out that other device" (1.1.9) -- e.g. a device you don't
+    recognize in the session list, 1.1.15's "suspicious activity"
+    scenario. Ownership is checked (a session belonging to a different
+    user returns 404, not 403, so this endpoint doesn't even confirm
+    whether that session id exists at all to someone probing it).
+    revoke_session() (api/security/sessions.py) revokes the refresh token
+    AND blacklists the access token minted alongside it, so the
+    unrecognized device is locked out immediately -- not just once its
+    access token would have expired on its own. If the session being
+    revoked happens to be the caller's own current one, its cookies are
+    cleared too, so the browser doesn't keep sending now-dead ones.
     """
     session = await db.get(Session, session_id)
     if session is None or session.user_id != current_user.id:
@@ -77,5 +82,6 @@ async def revoke_session_by_id(
 
     if refresh_token and hash_token(refresh_token) == session.refresh_token_hash:
         clear_refresh_cookie(response)
+        clear_csrf_cookie(response)
 
     return MessageResponse(message="Session revoked")

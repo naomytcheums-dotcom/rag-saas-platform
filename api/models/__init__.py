@@ -11,6 +11,7 @@ from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
+from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
 from api.models.token import EmailVerificationToken, PasswordResetToken
 from api.models.user import User
@@ -18,4 +19,5 @@ from api.models.user import User
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
+    "RevokedAccessToken",
 ]

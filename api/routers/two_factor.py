@@ -23,7 +23,6 @@ from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.recovery_code import TwoFactorRecoveryCode
-from api.models.session import Session
 from api.models.user import User
 from api.schemas.auth import (
     MessageResponse,
@@ -46,7 +45,7 @@ from api.security.recovery_codes import (
     generate_recovery_code,
     normalize_recovery_code,
 )
-from api.security.sessions import issue_session
+from api.security.sessions import issue_session, revoke_all_sessions_for_user
 from api.security.totp import generate_totp_secret, totp_provisioning_qr_data_uri, verify_totp_code
 from api.services.email import (
     send_recovery_code_used_email,
@@ -311,7 +310,7 @@ async def verify_two_factor_login(payload: TwoFactorVerifyLoginRequest, request:
 
     unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired MFA session, please log in again")
     try:
-        user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING)
+        user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING).user_id
     except (ExpiredSignatureError, InvalidTokenError, InvalidTokenPurposeError):
         raise unauthorized
 
@@ -353,7 +352,7 @@ async def verify_two_factor_recovery_code(payload: TwoFactorRecoveryCodeLoginReq
 
     unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired MFA session, please log in again")
     try:
-        user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING)
+        user_id = decode_token(payload.mfa_token, TokenPurpose.MFA_PENDING).user_id
     except (ExpiredSignatureError, InvalidTokenError, InvalidTokenPurposeError):
         raise unauthorized
 
@@ -465,7 +464,9 @@ async def confirm_two_factor_lockout_recovery(payload: TwoFactorLockoutRecoveryC
     user.totp_enabled = False
     user.totp_secret = None
     await db.execute(delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == user.id))
-    await db.execute(delete(Session).where(Session.user_id == user.id))
+    # 1.1.15: blacklists each session's access token too, not just its
+    # refresh token -- a stolen access token must not outlive this.
+    await revoke_all_sessions_for_user(db, user.id)
     row.used_at = now
     await db.commit()
 

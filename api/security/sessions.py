@@ -1,7 +1,8 @@
 """
-Shared session issuance/rotation/revocation logic (1.1.8, 1.1.9), used by
-every router that can end with a logged-in user: auth.py (register/login),
-oauth.py (OAuth callbacks), two_factor.py (the post-MFA login step).
+Shared session issuance/rotation/revocation logic (1.1.8, 1.1.9, 1.1.15),
+used by every router that can end with a logged-in user: auth.py
+(register/login), oauth.py (OAuth callbacks), two_factor.py (the
+post-MFA login step).
 
 Kept out of auth.py itself so oauth.py and two_factor.py don't have to
 import "auth" to get it -- this is genuinely shared infrastructure, not
@@ -17,8 +18,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
 from api.schemas.auth import TokenResponse
+from api.security.csrf import generate_csrf_token, set_csrf_cookie
 from api.security.hashing import generate_raw_token, hash_token
 from api.security.jwt import create_access_token
 from api.services.email import send_new_login_notification_email
@@ -65,7 +68,12 @@ async def issue_session(
 ) -> TokenResponse:
     """
     Creates a new Session row (a fresh refresh token) and sets it as an
-    httpOnly cookie; returns the access token for the JSON response body.
+    httpOnly cookie, alongside a matching CSRF cookie (api/security/csrf.py);
+    returns the access token for the JSON response body. The access
+    token's own `jti` (api/security/jwt.py) is stored on the Session row
+    it's paired with -- 1:1, since every refresh mints a brand new
+    Session rather than reusing one -- so revoke_session() below can
+    blacklist that exact access token when this session is revoked.
 
     notify_new_device_email: pass the user's email to get a "new sign-in"
     notification IF neither this device (User-Agent) NOR this network
@@ -102,10 +110,13 @@ async def issue_session(
         )
         is_new_device = prior_session_from_this_device_and_network is None
 
+    access_token, access_token_jti = create_access_token(user_id)
+
     raw_refresh_token = generate_raw_token()
     session = Session(
         user_id=user_id,
         refresh_token_hash=hash_token(raw_refresh_token),
+        access_token_jti=access_token_jti,
         device_info=device_info,
         ip_address=ip,
         expires_at=now + dt.timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
@@ -120,8 +131,9 @@ async def issue_session(
             logger.warning("failed to send new-login notification to %s: %s", notify_new_device_email, exc)
 
     set_refresh_cookie(response, raw_refresh_token)
+    set_csrf_cookie(response, generate_csrf_token())
     return TokenResponse(
-        access_token=create_access_token(user_id),
+        access_token=access_token,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
@@ -139,8 +151,47 @@ async def get_active_session_by_raw_token(db: AsyncSession, raw_refresh_token: s
 
 
 async def revoke_session(db: AsyncSession, session: Session) -> None:
-    """Marks one session dead (sets revoked_at) -- used by logout,
-    refresh-rotation, session-list revocation, and password reset (which
-    revokes every session for the affected user)."""
+    """
+    Marks one session dead (sets revoked_at) AND blacklists the access
+    token minted alongside it (1.1.15, api/models/revoked_token.py), so
+    revoking a session kills BOTH halves of that login immediately --
+    not just the refresh token, which previously left any already-issued
+    access token usable for up to its remaining ACCESS_TOKEN_EXPIRE_MINUTES.
+    Used directly by logout, refresh-rotation (the OLD session, right
+    before a new one is issued), and single-session revocation
+    (DELETE /sessions/{id}); see revoke_all_sessions_for_user() below for
+    the "every session this user has" case.
+
+    access_token_jti can be None for a session row that predates this
+    column (a real possibility during the migration window, never for a
+    session created after it) -- nothing to blacklist for those, the
+    refresh-token revocation above is still real and still happens.
+    """
     session.revoked_at = dt.datetime.now(dt.timezone.utc)
+    if session.access_token_jti:
+        db.add(RevokedAccessToken(
+            jti=session.access_token_jti,
+            user_id=session.user_id,
+            expires_at=session.created_at + dt.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        ))
     await db.flush()
+
+
+async def revoke_all_sessions_for_user(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """
+    The bulk version of revoke_session() above, for every "something
+    security-sensitive just happened, kill everything" call site:
+    password reset, account deletion, consent withdrawal, 2FA disable,
+    2FA lockout-recovery. Deliberately loops revoke_session() per row
+    rather than a raw bulk DELETE -- a bulk DELETE would silently skip
+    the access-token blacklist half of this, leaving every currently-
+    outstanding access token for this user valid for up to its remaining
+    ~15 minutes despite every session being gone. A user's active-session
+    count is small (a handful of devices at most), so the extra
+    round-trips this costs over a single DELETE are not a real concern.
+    """
+    sessions = (await db.scalars(
+        select(Session).where(Session.user_id == user_id, Session.revoked_at.is_(None))
+    )).all()
+    for session in sessions:
+        await revoke_session(db, session)
