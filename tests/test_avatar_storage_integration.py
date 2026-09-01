@@ -23,7 +23,8 @@ from api.models.user import User
 # are bound to the event loop they were opened on, and pytest-asyncio's
 # per-test loops make reusing a module-level singleton across fixtures
 # fail unpredictably.
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# Loop scope is set globally to "session" in pyproject.toml, not pinned
+# per-file here -- see that file's comment for why.
 
 
 @pytest.fixture(scope="module")
@@ -63,7 +64,7 @@ def s3_client():
     return client
 
 
-@pytest_asyncio.fixture(loop_scope="module")
+@pytest_asyncio.fixture
 async def registered_user_token(pg_engine):
     """A real user via the real Postgres DB (app's own get_db, no
     dependency override) -- avatar upload needs a persisted user row to

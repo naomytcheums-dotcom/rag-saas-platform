@@ -38,7 +38,11 @@ from api.models.session import Session as SessionModel
 from api.models.token import EmailVerificationToken
 from api.models.user import User
 
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# Loop scope is set globally to "session" in pyproject.toml, not pinned
+# per-file here -- a per-file "module" scope was closing this file's loop
+# before other integration test files ran in the same `pytest` invocation,
+# handing them a dead loop (asyncpg connections are loop-bound). See
+# pyproject.toml's comment for the full explanation.
 
 
 def _unique_email() -> str:
@@ -58,14 +62,14 @@ async def pg_engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(loop_scope="module")
+@pytest_asyncio.fixture
 async def pg_session(pg_engine):
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
         yield session
 
 
-@pytest_asyncio.fixture(loop_scope="module")
+@pytest_asyncio.fixture
 async def pg_client(pg_engine):
     """ASGI client whose get_db resolves to THIS module's Postgres engine
     -- same real database as the app would use, but isolated from the

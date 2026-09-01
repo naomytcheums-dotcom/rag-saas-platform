@@ -5,3 +5,15 @@
 # standard, non-hacky way to make it importable under test.
 pythonpath = ["."]
 asyncio_mode = "auto"
+# One shared event loop for the whole test session, not one per test
+# function. The integration test files (test_postgres_integration.py and
+# friends) each open real asyncpg/S3/Celery connections from module-scoped
+# fixtures; asyncpg connections are bound to the loop they were opened on,
+# and pytest-asyncio's per-function default loop was tearing loops down
+# between test files, leaving later files handed a closed loop (visible
+# only when running multiple integration files in one `pytest` invocation
+# -- each passed individually). A session-wide loop is a no-op for the
+# fast SQLite unit tests (they don't hold cross-test state) and is what
+# the integration fixtures were already implicitly assuming.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

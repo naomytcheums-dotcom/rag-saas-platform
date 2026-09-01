@@ -41,7 +41,8 @@ from api.main import app
 from api.models.user import User
 from api.tasks.celery_app import celery_app
 
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# Loop scope is set globally to "session" in pyproject.toml, not pinned
+# per-file here -- see that file's comment for why.
 
 
 @pytest.fixture(scope="module")

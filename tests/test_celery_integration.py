@@ -28,7 +28,8 @@ from api.config import settings
 from api.models.user import User
 from api.tasks.account_purge import purge_deleted_accounts
 
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+# Loop scope is set globally to "session" in pyproject.toml, not pinned
+# per-file here -- see that file's comment for why.
 
 
 @pytest.fixture(scope="module")
