@@ -63,7 +63,7 @@ jobs:
       # needs no real cloud credentials as a secret; boto3 talks to it
       # identically (see api/services/storage.py's docstring).
       minio:
-        image: bitnami/minio:2025
+        image: bitnami/minio:latest
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
@@ -103,8 +103,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies (RAG pipeline deps + api/ deps -- see requirements-api.txt's own docstring on why they're separate files)
-        run: pip install -r requirements.txt -r requirements-api.txt
+      - name: Install api/ dependencies (only requirements-api.txt -- api/ has no import dependency on the RAG pipeline's requirements.txt, see api/config.py's docstring, and that file additionally pulls in a private unpublished package this job doesn't need to resolve)
+        run: pip install -r requirements-api.txt
 
       - name: Make the avatars bucket public-read (MinIO starts with private buckets by default)
         run: |
@@ -201,8 +201,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-api.txt
+      - name: Install api/ dependencies
+        run: pip install -r requirements-api.txt
 
       - name: Snyk -- dependency vulnerability scan of requirements-api.txt
         uses: snyk/actions/python@master

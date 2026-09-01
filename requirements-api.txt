@@ -17,6 +17,16 @@ fastapi==0.141.1
 uvicorn[standard]==0.52.4
 python-multipart==0.0.32
 itsdangerous==2.2.0
+# CI/CD audit finding: api/services/email.py, api/security/password_strength.py,
+# and api/routers/oauth.py all `import httpx` directly, but this file
+# previously relied on requirements.txt (the RAG pipeline's own deps) to
+# provide it as a side effect of "install both files together" -- true
+# for local dev, but requirements-api.txt must be self-sufficient for a
+# CI job that only needs api/ and correctly has no reason to install the
+# RAG pipeline's dependencies (including one, agentfixture, that isn't
+# resolvable from a fresh environment at all -- see its own comment in
+# requirements.txt). Same pinned version requirements.txt already uses.
+httpx==0.28.1
 
 # -- Database (PostgreSQL, async) --------------------------------------------
 sqlalchemy[asyncio]==2.0.52
