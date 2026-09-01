@@ -265,3 +265,47 @@ jobs:
       - name: Show the API server's log if anything failed
         if: failure()
         run: cat uvicorn.log || true
+
+  # Snyk audit finding: the Dockerfile went multi-stage + non-root to
+  # fix its High/Medium findings (see the Dockerfile's own top comment).
+  # No local Docker was available to prove that change didn't break the
+  # image, so this actually builds it for real and smoke-tests the
+  # running container -- the only meaningful "test" a Dockerfile has.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t rag-saas-platform:ci .
+
+      - name: Confirm the container runs as a non-root user
+        run: |
+          user=$(docker run --rm rag-saas-platform:ci id -un)
+          echo "Container runs as: $user"
+          if [ "$user" = "root" ]; then
+            echo "::error::Container is running as root -- the whole point of the Dockerfile's USER directive"
+            exit 1
+          fi
+
+      - name: Start the container and wait for Streamlit's health endpoint
+        run: |
+          docker run -d --name app -p 8501:8501 rag-saas-platform:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8501/_stcore/health; then
+              echo "Streamlit is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Streamlit never became healthy"
+          docker logs app
+          exit 1
+
+      - name: Show container logs if anything failed
+        if: failure()
+        run: docker logs app || true
+
+      - name: Stop the container
+        if: always()
+        run: docker stop app || true

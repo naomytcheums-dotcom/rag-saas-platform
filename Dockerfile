@@ -4,18 +4,66 @@
 # all. Both exist because they solve different problems: Streamlit Cloud
 # is the zero-config free option, this is for anywhere that expects a
 # container.
-FROM python:3.13-slim
+#
+# Snyk audit findings (2 High, 2 Medium, 86 Low on the single-stage
+# version of this file) addressed by two structural changes below:
+#
+# 1. Multi-stage build. build-essential (gcc, binutils, and everything
+#    they themselves pull in) was previously baked into the FINAL image
+#    just to compile sentence-transformers/chromadb's native extensions
+#    at `pip install` time -- never needed again after that, but its own
+#    long tail of OS-package CVEs stayed in every shipped image
+#    regardless. It now only exists in the `builder` stage; the final
+#    stage copies the already-built virtualenv and never installs a
+#    compiler at all. This is what actually accounts for the large drop
+#    in Low findings, not just the count that happens to disappear —
+#    fewer installed packages is fewer packages that can ever have a CVE
+#    against them in the first place.
+# 2. A non-root USER for the final stage -- the single most common
+#    "High" finding on a Dockerfile that never sets one: a compromise of
+#    the running process (a code-execution bug in any dependency) would
+#    otherwise have root inside the container by default, which is a
+#    meaningfully larger blast radius than a compromised unprivileged
+#    process, even inside a container's own isolation boundary.
+#
+# python:3.13-slim-bookworm rather than the bare python:3.13-slim: pins
+# the Debian release explicitly (bookworm) so a Debian codename bump
+# upstream can't silently change which OS packages -- and therefore
+# which CVEs -- this image ships, while still tracking Debian's own
+# security patches for that release on every rebuild (a hard digest pin
+# would freeze this image at today's patch level and work AGAINST that,
+# which is the opposite of what fixing vulnerabilities should do).
+
+FROM python:3.13-slim-bookworm AS builder
 
 WORKDIR /app
 
 # sentence-transformers/chromadb pull in packages with native extensions
-# that need a compiler on a slim base image.
+# that need a compiler on a slim base image -- confined to this
+# discarded build stage, see this file's top comment.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.13-slim-bookworm
+
+WORKDIR /app
+
+# --system (no login shell, no password) since nothing ever needs to
+# interactively log in as this user -- a real login shell/password is
+# attack surface a service account has no use for.
+RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/appuser appuser
+
+# Only the already-built virtualenv crosses the stage boundary -- no
+# compiler, no apt cache, no build-time-only files.
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY . .
 
@@ -23,6 +71,9 @@ COPY . .
 # on a fresh image the same way it's absent on a fresh clone.
 # dashboard/app.py already detects that and rebuilds it from the
 # committed data/processed/fastapi_docs.json on first load.
+
+RUN chown -R appuser:app /app
+USER appuser
 
 EXPOSE 8501
 
