@@ -140,6 +140,13 @@ async def _find_or_create_user(db: AsyncSession, provider: OAuthProvider, provid
         user = User(email=email, hashed_password=None, is_email_verified=True)
         db.add(user)
         await db.flush()
+    elif not user.is_email_verified:
+        # Linking to a pre-existing, not-yet-verified account: the
+        # provider just proved this person controls the mailbox, which is
+        # exactly what 1.1.4's emailed OTP exists to prove for a password
+        # signup -- so this is as good as them completing that flow, not
+        # a separate, lesser form of verification.
+        user.is_email_verified = True
 
     db.add(OAuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_account_id, provider_email=email))
     await db.flush()
