@@ -138,6 +138,104 @@ async def test_oauth_does_not_unverify_an_already_verified_account(pg_session):
         await pg_session.commit()
 
 
+async def test_oauth_callback_requires_2fa_when_the_account_has_it_enabled(pg_session, monkeypatch):
+    """
+    The real bug found while auditing this module: oauth_callback() used
+    to call issue_session() unconditionally, so an account with 2FA
+    enabled through the password flow (api/routers/auth.py's login())
+    could bypass it entirely by signing in through a linked Google/GitHub
+    account instead -- the provider proves WHO the user is, not that they
+    hold this app's own second factor.
+
+    A real browser consent screen can't be automated (see this file's top
+    docstring), but the token EXCHANGE step can be faked at its two
+    integration points (_require_client, _IDENTITY_FETCHERS) -- same
+    "fake the external call, keep everything else real" approach this
+    suite already uses for Resend emails -- which lets this drive the
+    actual GET /auth/oauth/google/callback route, against real Postgres,
+    instead of only testing _find_or_create_user() in isolation like the
+    tests above.
+    """
+    import api.routers.oauth as oauth_module
+    from api.main import app
+    from api.security.hashing import hash_password
+    from api.security.jwt import TokenPurpose, decode_token
+    from httpx import ASGITransport, AsyncClient
+
+    email = _unique_email()
+    user = User(
+        email=email, hashed_password=hash_password("some-password"), is_email_verified=True,
+        totp_enabled=True, totp_secret="JBSWY3DPEHPK3PXP",
+    )
+    pg_session.add(user)
+    await pg_session.commit()
+    user_id = user.id
+
+    class _FakeOAuthClient:
+        async def authorize_access_token(self, request):
+            return {}
+
+    monkeypatch.setattr(oauth_module, "_require_client", lambda provider: _FakeOAuthClient())
+
+    async def _fake_identity(client, token):
+        return "fake-provider-account-id-for-this-test", email
+
+    monkeypatch.setattr(oauth_module, "_IDENTITY_FETCHERS", {"google": _fake_identity, "github": _fake_identity})
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/auth/oauth/google/callback", follow_redirects=False)
+
+        assert response.status_code == 302
+        location = response.headers["location"]
+        assert "mfa_required=true" in location  # sent to the MFA step, not logged straight in
+        assert "access_token=" not in location  # the critical assertion: no session was issued
+        assert "mfa_token=" in location
+
+        mfa_token = location.split("mfa_token=")[1]
+        assert decode_token(mfa_token, TokenPurpose.MFA_PENDING) == user_id  # a real, usable MFA-pending token for THIS user
+    finally:
+        await pg_session.execute(delete(User).where(User.email == email))
+        await pg_session.commit()
+
+
+async def test_oauth_callback_issues_a_session_directly_when_2fa_is_not_enabled(pg_session, monkeypatch):
+    """Companion to the test above -- guards against a regression in the
+    other direction: the vast majority of accounts don't have 2FA
+    enabled, and those must keep getting a real access token straight
+    from the callback, not an unnecessary MFA detour."""
+    import api.routers.oauth as oauth_module
+    from api.main import app
+    from httpx import ASGITransport, AsyncClient
+
+    email = _unique_email()
+
+    class _FakeOAuthClient:
+        async def authorize_access_token(self, request):
+            return {}
+
+    monkeypatch.setattr(oauth_module, "_require_client", lambda provider: _FakeOAuthClient())
+
+    async def _fake_identity(client, token):
+        return "fake-provider-account-id-for-this-test-2", email
+
+    monkeypatch.setattr(oauth_module, "_IDENTITY_FETCHERS", {"google": _fake_identity, "github": _fake_identity})
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/auth/oauth/google/callback", follow_redirects=False)
+
+        assert response.status_code == 302
+        location = response.headers["location"]
+        assert "access_token=" in location
+        assert "mfa_required" not in location
+    finally:
+        await pg_session.execute(delete(User).where(User.email == email))
+        await pg_session.commit()
+
+
 async def test_returning_oauth_user_reuses_the_same_account_no_duplicate_link(pg_session):
     email = _unique_email()
     provider_account_id = uuid.uuid4().hex

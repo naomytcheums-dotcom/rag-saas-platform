@@ -60,6 +60,16 @@ a browser, sign in, approve -- you land on `{FRONTEND_URL}/oauth-callback`
 (404 is expected with no frontend yet) with `#access_token=...` in the
 URL fragment if it worked.
 
+**2FA-enabled accounts get `#mfa_required=true&mfa_token=...` instead** --
+Google/GitHub proving who the user is does not satisfy this app's own
+2FA requirement (it's a separate credential the provider knows nothing
+about), so the callback routes through the same MFA hand-off as a
+password login: the frontend must follow up with `POST /auth/2fa/verify-login`
+using that `mfa_token`, exactly as it would after `/auth/login` returns
+`MFARequiredResponse`. Unlike the consent screen itself, this branch
+*is* covered by the automated suite (`test_oauth_callback_requires_2fa_when_the_account_has_it_enabled`)
+by faking the token-exchange step, not the browser.
+
 ### 2FA recovery codes (1.1.7)
 
 `POST /auth/2fa/enable` (and later `POST /auth/2fa/recovery-codes/regenerate`)

@@ -12,6 +12,12 @@ provider already proved the user controls that mailbox, which is exactly
 what our own email-verification OTP (1.1.4) exists to prove for a
 password signup. A brand new OAuth-only user gets hashed_password=None
 and is_email_verified=True immediately, for the same reason.
+
+2FA: proving identity to Google/GitHub is not the same as proving
+possession of THIS account's second factor -- oauth_callback() checks
+totp_enabled exactly like api/routers/auth.py's login() does, and routes
+through the same MFA-pending hand-off to /2fa/verify-login instead of
+issuing a session directly when it's enabled.
 """
 
 import datetime as dt
@@ -28,6 +34,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.user import User
+from api.security.jwt import create_mfa_pending_token
 from api.security.sessions import issue_session
 
 router = APIRouter(prefix="/auth/oauth", tags=["auth"])
@@ -210,6 +217,21 @@ async def oauth_callback(provider: str, request: Request):
     async with AsyncSessionLocal() as db:
         user, is_new_user = await _find_or_create_user(db, OAuthProvider(provider), provider_account_id, email)
 
+        if user.totp_enabled:
+            # The provider proved WHO this person is, not that they hold
+            # this account's second factor -- an account that enabled 2FA
+            # through the password flow (api/routers/auth.py's login())
+            # must not have that requirement quietly skipped just because
+            # it also has a linked Google/GitHub sign-in. Same mfa_token
+            # hand-off as a password login: no session is issued here,
+            # the frontend must follow up with POST /auth/2fa/verify-login
+            # (or /verify-recovery-code) exactly as it would after a
+            # password login that returned MFARequiredResponse.
+            await db.commit()  # persists _find_or_create_user's writes (new/updated OAuthAccount link, consent backfill, etc.) even though no session is issued this request
+            mfa_token = create_mfa_pending_token(user.id)
+            redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback#mfa_required=true&mfa_token={mfa_token}"
+            return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
         response = RedirectResponse(url=f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback", status_code=status.HTTP_302_FOUND)
         tokens = await issue_session(
             db, response, request, user.id,
@@ -222,5 +244,7 @@ async def oauth_callback(provider: str, request: Request):
     # read it into memory -- a URL fragment (never sent to the server,
     # never logged) is the standard way to hand a token to a redirect
     # target without putting it in server logs or the Referer header.
+    # Same reasoning applies to mfa_token above -- it's short-lived and
+    # single-purpose, but still worth keeping out of server logs.
     response.headers["location"] += f"#access_token={tokens.access_token}&expires_in={tokens.expires_in}"
     return response
