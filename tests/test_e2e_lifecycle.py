@@ -214,17 +214,8 @@ async def test_full_user_lifecycle(pg_engine, s3_client, monkeypatch):
             # Login must be refused post-soft-delete, before the purge even runs
             login_after_delete = await client.post("/auth/login", json={"email": email, "password": new_password})
             assert login_after_delete.status_code == 401
-
         finally:
-            # Best-effort avatar cleanup -- see README's "Known gaps"
-            # section: account purge does not currently delete the S3
-            # object, only the DB row (CASCADE only reaches FK-linked
-            # tables, not external storage).
-            try:
-                key = avatar_url.split(f"/public/{settings.S3_BUCKET_NAME}/", 1)[1]
-                s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
-            except Exception:
-                pass
+            pass  # nothing to clean up here anymore -- step 18's real purge deletes the S3 avatar itself, see below
 
     # 18. run the real purge task -- but deletion_scheduled_at is 30 days
     # out, so it would not be picked up today. Backdate it directly (the
@@ -238,7 +229,14 @@ async def test_full_user_lifecycle(pg_engine, s3_client, monkeypatch):
     purged_count = result.get(timeout=30)
     assert purged_count >= 1
 
-    # 19. confirm the account is actually gone
+    # 19a. confirm the avatar's S3 object was cleaned up by the purge
+    # itself, not orphaned -- exercises the fix for the "purge leaves an
+    # orphaned avatar" gap.
+    avatar_key = avatar_url.split(f"/public/{settings.S3_BUCKET_NAME}/", 1)[1]
+    with pytest.raises(ClientError):
+        s3_client.head_object(Bucket=settings.S3_BUCKET_NAME, Key=avatar_key)
+
+    # 19b. confirm the account itself is actually gone
     async with pg_engine.connect() as conn:
         remaining = (await conn.execute(select(User.id).where(User.email == email))).first()
     assert remaining is None, "step 19 failed: account still exists after the purge task ran"

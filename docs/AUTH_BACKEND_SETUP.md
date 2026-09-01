@@ -70,10 +70,12 @@ New access key). `S3_BUCKET_NAME` must be a bucket dedicated to avatars:
 the object key has no extra prefix of its own, so a shared bucket would
 collide with other uploads.
 
-**Known gap:** account deletion (1.1.10) removes the DB row via CASCADE
-but does not delete the user's avatar object from the bucket -- it's
-orphaned, not a security issue (unreachable without the exact random
-URL) but a storage-cost one at scale. Not yet fixed.
+Uploaded files are validated against their actual magic bytes (the real
+leading signature of a PNG/JPEG/WEBP file), not the Content-Type header
+the client declared -- see `_detect_image_content_type()` in
+`api/services/storage.py`. Account purge (1.1.10) also deletes the
+avatar object from the bucket, not just the database row, so a
+hard-deleted account doesn't leave storage orphaned.
 
 ### Redis + Celery (1.1.10 account purge, J+30)
 

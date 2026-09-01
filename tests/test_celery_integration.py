@@ -20,12 +20,15 @@
 import datetime as dt
 import uuid
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from api.config import settings
 from api.models.user import User
+from api.services.storage import upload_avatar
 from api.tasks.account_purge import purge_deleted_accounts
 
 # Loop scope is set globally to "session" in pyproject.toml, not pinned
@@ -90,3 +93,53 @@ async def test_purge_task_is_idempotent(pg_engine):
     second_run = purge_deleted_accounts.apply().get()
     assert second_run == 0  # nothing new became overdue between the two calls
     assert first_run >= 0
+
+
+async def test_purge_task_deletes_the_orphaned_avatar_from_storage(pg_engine):
+    """The fix for the previously-documented gap: purging a soft-deleted
+    account must not leave its avatar image sitting in the bucket
+    forever. Uploads a real avatar, backdates the account past its grace
+    window, runs the real purge task, then confirms the S3 object is
+    genuinely gone (not just that the DB row was deleted)."""
+    if not (settings.S3_BUCKET_NAME and settings.S3_ACCESS_KEY_ID and settings.S3_SECRET_ACCESS_KEY):
+        pytest.skip("S3_* env vars are not configured -- skipping the orphaned-avatar purge test")
+
+    s3_client = boto3.client(
+        "s3", endpoint_url=settings.S3_ENDPOINT_URL,
+        aws_access_key_id=settings.S3_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
+        region_name=settings.S3_REGION,
+    )
+
+    now = dt.datetime.now(dt.timezone.utc)
+    user_id = uuid.uuid4()
+    png_bytes = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000a49444154789c626001000000050001a5f645400000000049454e44ae426082"
+    )
+    avatar_url = upload_avatar(user_id, png_bytes)
+    avatar_key = avatar_url.split(f"/public/{settings.S3_BUCKET_NAME}/", 1)[1]
+
+    email = f"celery-purge-avatar-{uuid.uuid4().hex[:10]}@example.com"
+    async with pg_engine.begin() as conn:
+        await conn.execute(User.__table__.insert().values(
+            id=user_id, email=email, hashed_password="irrelevant", is_active=False,
+            avatar_url=avatar_url, deleted_at=now - dt.timedelta(days=31), deletion_scheduled_at=now - dt.timedelta(days=1),
+        ))
+
+    try:
+        # The object exists before the purge runs -- otherwise the
+        # "it's gone afterwards" assertion below would be meaningless.
+        s3_client.head_object(Bucket=settings.S3_BUCKET_NAME, Key=avatar_key)
+
+        purge_deleted_accounts.apply().get()
+
+        with pytest.raises(ClientError):
+            s3_client.head_object(Bucket=settings.S3_BUCKET_NAME, Key=avatar_key)
+    finally:
+        async with pg_engine.begin() as conn:
+            await conn.execute(delete(User).where(User.email == email))
+        try:
+            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=avatar_key)  # no-op if the purge already removed it
+        except ClientError:
+            pass

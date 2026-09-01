@@ -45,6 +45,12 @@ PNG_BYTES = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
     "890000000a49444154789c626001000000050001a5f645400000000049454e44ae426082"
 )
+# Only the leading signature bytes matter for _detect_image_content_type --
+# the rest of a real JPEG/WEBP file is irrelevant to what's being tested
+# here (magic-byte detection, not image decoding), so these are padded
+# with arbitrary bytes rather than being fully valid, renderable images.
+JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + b"\x00" * 32
+WEBP_BYTES = b"RIFF" + (24).to_bytes(4, "little") + b"WEBPVP8 " + b"\x00" * 16
 
 
 @pytest.fixture(scope="module")
@@ -95,6 +101,42 @@ async def test_avatar_upload_rejects_disallowed_content_type(registered_user_tok
         files={"file": ("payload.txt", b"not an image", "text/plain")},
     )
     assert response.status_code == 400
+
+
+async def test_avatar_upload_rejects_spoofed_content_type(registered_user_token, s3_client):
+    """The declared Content-Type header claims image/png, but the actual
+    bytes aren't a PNG (no valid magic-byte signature at all) -- proves
+    upload_avatar() checks the real file content, not the label a client
+    can set to anything."""
+    client, token = registered_user_token
+    response = await client.post(
+        "/account/avatar", headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("fake.png", b"this is not actually a png file", "image/png")},
+    )
+    assert response.status_code == 400
+    assert "not a recognized image" in response.json()["detail"]
+
+
+async def test_avatar_upload_accepts_jpeg_and_webp_by_real_content(registered_user_token, s3_client):
+    """Same as the PNG-focused tests elsewhere in this file, but for the
+    other two allowed formats -- confirms magic-byte detection (not just
+    a hardcoded PNG check) correctly recognizes JPEG and WEBP too."""
+    client, token = registered_user_token
+    keys_to_clean = []
+
+    try:
+        for filename, content in [("photo.jpg", JPEG_BYTES), ("photo.webp", WEBP_BYTES)]:
+            # Content-Type deliberately NOT set to match -- proves detection
+            # comes from the bytes, not from this (here, wrong) header.
+            response = await client.post(
+                "/account/avatar", headers={"Authorization": f"Bearer {token}"},
+                files={"file": (filename, content, "application/octet-stream")},
+            )
+            assert response.status_code == 200, response.text
+            keys_to_clean.append(_key_from_url(response.json()["avatar_url"]))
+    finally:
+        for key in keys_to_clean:
+            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
 
 
 async def test_avatar_upload_rejects_oversized_file(registered_user_token, s3_client):

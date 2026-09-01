@@ -75,7 +75,7 @@ async def upload_avatar_route(file: UploadFile, current_user: User = Depends(get
     """
     content = await file.read()
     try:
-        url = upload_avatar(current_user.id, content, file.content_type or "application/octet-stream")
+        url = upload_avatar(current_user.id, content)
     except (ValueError, EnvironmentError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except RuntimeError as exc:

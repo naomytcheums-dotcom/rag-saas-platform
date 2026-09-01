@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.user import User
+from api.services.storage import delete_avatar
 from api.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,13 @@ def purge_deleted_accounts() -> int:
             select(User).where(User.deletion_scheduled_at.is_not(None), User.deletion_scheduled_at <= now)
         ).all()
         for user in due:
-            # ON DELETE CASCADE (see api/models/*.py's ForeignKey definitions)
-            # takes oauth_accounts, sessions, and tokens with it.
+            # The avatar object lives in S3/R2/Supabase Storage, outside
+            # this database entirely -- ON DELETE CASCADE below only
+            # reaches FK-linked *tables* (oauth_accounts, sessions,
+            # tokens), never external storage, so it has to be cleaned up
+            # explicitly here or it's orphaned forever.
+            if user.avatar_url:
+                delete_avatar(user.avatar_url)
             db.execute(delete(User).where(User.id == user.id))
             purged += 1
         db.commit()
