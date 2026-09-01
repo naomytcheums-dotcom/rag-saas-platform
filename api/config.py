@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     # -- Transactional email (Resend) --------------------------------------
     RESEND_API_KEY: str | None = None
     EMAIL_FROM_ADDRESS: str = "no-reply@example.com"
+    # RGPD Art. 12: a data subject must be able to easily reach the
+    # controller to exercise their rights or ask questions. Required (no
+    # default) rather than silently omitting the footer or shipping a
+    # fake address nobody reads -- api/services/email.py's _send()
+    # appends it to every single email this app sends, unconditionally.
+    SUPPORT_EMAIL: str
 
     # -- Object storage (S3 or Cloudflare R2, both S3-compatible) -------
     S3_ENDPOINT_URL: str | None = None  # leave unset for real AWS S3

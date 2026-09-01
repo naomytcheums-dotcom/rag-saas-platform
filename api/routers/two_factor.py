@@ -8,6 +8,18 @@ authenticator app produces matching codes. Skipping that proof would let a
 setup call that's never followed through lock nothing, but also means a
 user could think 2FA is on when it isn't; requiring /enable's confirmation
 avoids that false sense of security.
+
+4.3: the account-security endpoints here (/setup, /enable, /disable,
+/recovery-codes/regenerate, /recovery-codes/status) use
+get_current_user_any_consent_status rather than get_current_user, so they
+stay reachable even for an account that hasn't accepted updated terms
+yet -- same exemption reasoning as api/routers/sessions.py. Each of these
+already requires either no prior 2FA state or a valid current TOTP code
+(see each endpoint's own docstring), so they're a basic account-security
+action, not "ordinary use of the service" -- a user locked out of the app
+by a stale-terms 403 must still be able to turn 2FA on/off or rotate
+their recovery codes, the same way they must still be able to see or
+revoke their own sessions.
 """
 
 import datetime as dt
@@ -20,7 +32,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
-from api.dependencies import get_current_user, get_db
+from api.dependencies import get_current_user_any_consent_status, get_db
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.user import User
@@ -98,7 +110,7 @@ async def _cancel_pending_lockout_recovery(db: AsyncSession, user_id: uuid.UUID)
 
 
 @router.post("/setup", response_model=TwoFactorSetupResponse)
-async def setup_two_factor(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def setup_two_factor(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Step 1 of turning 2FA on: generates a new TOTP secret and returns it
     two ways -- as plain text (for apps that want manual entry) and as a
@@ -122,7 +134,7 @@ async def setup_two_factor(current_user: User = Depends(get_current_user), db: A
 
 
 @router.post("/enable", response_model=TwoFactorRecoveryCodesResponse)
-async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Step 2: proves the user actually scanned the QR code from /setup by
     submitting the current 6-digit code their authenticator app is now
@@ -174,7 +186,7 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, current_user: User = 
 
 
 @router.post("/disable", response_model=MessageResponse)
-async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Turns 2FA back off -- still requires a valid current code, not just
     the access token, so someone who stole a logged-in session/laptop
@@ -222,7 +234,7 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, current_user: User =
 
 
 @router.post("/recovery-codes/regenerate", response_model=TwoFactorRecoveryCodesResponse)
-async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Invalidates every unused code from the previous batch and issues a
     fresh set of RECOVERY_CODE_COUNT -- for a user who has used some/all
@@ -259,7 +271,7 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
 
 
 @router.get("/recovery-codes/status", response_model=TwoFactorRecoveryCodesStatusResponse)
-async def recovery_codes_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def recovery_codes_status(current_user: User = Depends(get_current_user_any_consent_status), db: AsyncSession = Depends(get_db)):
     """
     Lets the frontend show "3 of 10 recovery codes remaining" so a user
     finds out they're running low BEFORE they're locked out of both

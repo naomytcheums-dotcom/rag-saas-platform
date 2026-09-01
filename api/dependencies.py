@@ -55,7 +55,12 @@ async def get_current_user_any_consent_status(
     POST /account/consent/withdraw -- you can't hold someone's own
     rights hostage to them accepting NEW terms first), basic session
     security (GET/DELETE /sessions -- a user must always be able to see
-    or kill their own sessions), GET /account/me (so a frontend can at
+    or kill their own sessions), 2FA account security (POST /auth/2fa/setup,
+    /enable, /disable, /recovery-codes/regenerate, and
+    GET /recovery-codes/status -- same reasoning as sessions: each already
+    requires either no prior 2FA state or a valid current TOTP code, so
+    turning 2FA on/off or rotating recovery codes can't be held hostage to
+    accepting new terms either), GET /account/me (so a frontend can at
     least read enough to show the "please accept updated terms" prompt),
     and POST /account/consent/accept-updated-terms itself (the one
     endpoint that fixes the problem -- it obviously can't require the

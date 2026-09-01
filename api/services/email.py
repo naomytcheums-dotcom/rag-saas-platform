@@ -25,22 +25,38 @@ logger = logging.getLogger(__name__)
 
 
 def _send(to_email: str, subject: str, html: str) -> None:
-    """Low-level Resend API call shared by send_password_reset_email and
-    send_verification_code_email below -- both just build the HTML body
-    and delegate here. Raises on any failure (missing key, timeout, bad
-    response, unreachable) rather than swallowing it -- see this
-    module's top docstring for why the *callers* are the ones who decide
-    to catch and log instead of propagating further."""
+    """Low-level Resend API call shared by every send_*_email function in
+    this module -- each just builds the HTML body and delegates here.
+    Raises on any failure (missing key, timeout, bad response,
+    unreachable) rather than swallowing it -- see this module's top
+    docstring for why the *callers* are the ones who decide to catch and
+    log instead of propagating further.
+
+    Appends a support-contact footer to every single email this app
+    sends, unconditionally -- RGPD Art. 12 requires that a data subject
+    can easily reach the controller to exercise their rights or ask
+    questions, and that requirement doesn't stop at the handful of
+    emails someone remembered to add a contact line to by hand. One
+    change here covers every email this module has ever sent AND every
+    one a future call site adds, rather than relying on each new
+    send_*_email function to remember it individually.
+    """
     if not settings.RESEND_API_KEY:
         raise EnvironmentError(
             "RESEND_API_KEY is not set -- get one from https://resend.com/api-keys "
             "and set it in .env as RESEND_API_KEY=re_..."
         )
+    body_with_footer = (
+        f"{html}"
+        f"<p style='color:#666;font-size:12px;margin-top:24px;border-top:1px solid #eee;padding-top:12px'>"
+        f"Questions about this email or your account? Contact us at "
+        f"<a href='mailto:{settings.SUPPORT_EMAIL}'>{settings.SUPPORT_EMAIL}</a>.</p>"
+    )
     try:
         response = httpx.post(
             RESEND_API_URL,
             headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
-            json={"from": settings.EMAIL_FROM_ADDRESS, "to": [to_email], "subject": subject, "html": html},
+            json={"from": settings.EMAIL_FROM_ADDRESS, "to": [to_email], "subject": subject, "html": body_with_footer},
             timeout=EMAIL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()

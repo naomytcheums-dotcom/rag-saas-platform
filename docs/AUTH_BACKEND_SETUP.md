@@ -197,10 +197,16 @@ conditioned on accepting NEW terms first without violating the very
 rights they exist to serve: `GET /account/export` (RGPD Art. 15/20),
 `DELETE /account/me` (Art. 17), `POST /account/consent/withdraw`
 (Art. 7(3)/21), `GET`/`DELETE /sessions*` (basic account security --
-you must always be able to see or kill your own sessions), `GET /account/me`
-(so a frontend has something to show the "please accept updated terms"
-prompt with), and `POST /account/consent/accept-updated-terms` itself
-(it obviously can't require the problem it fixes to already be fixed).
+you must always be able to see or kill your own sessions),
+`POST /auth/2fa/setup`, `/enable`, `/disable`, `/recovery-codes/regenerate`,
+and `GET /recovery-codes/status` (same reasoning as sessions -- each
+already requires either no prior 2FA state or a valid current TOTP code,
+so turning 2FA on/off or rotating recovery codes is basic account
+security, not "ordinary use" that can wait on a new-terms prompt),
+`GET /account/me` (so a frontend has something to show the "please
+accept updated terms" prompt with), and
+`POST /account/consent/accept-updated-terms` itself (it obviously can't
+require the problem it fixes to already be fixed).
 
 ### "New sign-in" notifications (1.1.8, 1.1.9)
 

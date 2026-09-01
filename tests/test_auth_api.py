@@ -1393,6 +1393,37 @@ async def test_rgpd_rights_and_session_security_stay_reachable_despite_stale_ter
     assert (await client.delete(f"/sessions/{session_id}", headers=auth_header)).status_code == 200
 
 
+async def test_2fa_management_endpoints_stay_reachable_despite_stale_terms(client, register_payload, monkeypatch):
+    """4.3's exemption extended to 2FA account security: each of these
+    already requires either no prior 2FA state or a valid current TOTP
+    code, so turning 2FA on/off or rotating recovery codes can't be held
+    hostage to accepting new terms first, same reasoning as sessions
+    above. Proven against all five endpoints -- /setup, /enable,
+    /recovery-codes/status, /recovery-codes/regenerate, /disable, in the
+    order a real client would actually call them -- while TERMS_VERSION
+    is stale for the whole sequence."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setattr(settings, "TERMS_VERSION", "2027-06-01-a-brand-new-version")
+
+    setup = await client.post("/auth/2fa/setup", headers=auth_header)
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert enable.status_code == 200
+
+    status_check = await client.get("/auth/2fa/recovery-codes/status", headers=auth_header)
+    assert status_check.status_code == 200
+    assert status_check.json() == {"total": 10, "remaining": 10}
+
+    regenerate = await client.post("/auth/2fa/recovery-codes/regenerate", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert regenerate.status_code == 200
+
+    disable = await client.post("/auth/2fa/disable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    assert disable.status_code == 200
+
+
 async def test_delete_account_stays_reachable_despite_stale_terms(client, register_payload, monkeypatch):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}

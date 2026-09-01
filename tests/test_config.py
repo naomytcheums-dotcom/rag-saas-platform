@@ -16,6 +16,7 @@ def _settings(**overrides):
         "DATABASE_URL": settings.DATABASE_URL,
         "JWT_SECRET_KEY": settings.JWT_SECRET_KEY,
         "SESSION_MIDDLEWARE_SECRET": settings.SESSION_MIDDLEWARE_SECRET,
+        "SUPPORT_EMAIL": settings.SUPPORT_EMAIL,
     }
     defaults.update(overrides)
     return Settings(**defaults)
@@ -38,6 +39,18 @@ def test_deletion_reminder_days_must_be_less_than_purge_delay_days():
 def test_deletion_reminder_days_less_than_purge_delay_days_is_accepted():
     valid = _settings(ACCOUNT_PURGE_DELAY_DAYS=30, ACCOUNT_DELETION_REMINDER_DAYS_BEFORE=3)
     assert valid.ACCOUNT_DELETION_REMINDER_DAYS_BEFORE == 3
+
+
+def test_support_email_is_required():
+    """RGPD Art. 12: every email api/services/email.py sends must carry a
+    real contact address (see its _send() footer). Asserted directly on
+    the field's own pydantic metadata (rather than by constructing a
+    Settings() and hoping SUPPORT_EMAIL is absent) because this project's
+    .env always defines it via pydantic-settings' env_file loading --
+    Settings(**overrides) can never actually be missing it in this
+    environment, so the only real proof "no default" holds is that the
+    field itself declares none."""
+    assert Settings.model_fields["SUPPORT_EMAIL"].is_required()
 
 
 def test_database_url_rejects_the_plain_postgresql_driver():
