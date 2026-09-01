@@ -92,6 +92,20 @@ meantime cancels any pending request automatically, so a compromised
 mailbox + leaked password alone can't silently wipe 2FA while the real
 owner is still actively using the account.
 
+**Running low on codes:** `GET /auth/2fa/recovery-codes/status` returns
+`{"total": 10, "remaining": N}` (counts only, never the codes themselves)
+so the frontend can prompt "regenerate your codes" before the user is
+down to zero, instead of them finding out only when `/verify-recovery-code`
+starts failing.
+
+**Adding a password as a fallback (OAuth-only accounts):** `POST /account/set-password`
+(authenticated) lets a Google/GitHub-only account (`hashed_password` is
+`None`) set one. Without this, losing access to the linked provider --
+disabled account, revoked access, provider outage -- would mean losing
+access to this app too, with no way back in at all. Rejected with 400 if
+the account already has a password (use `/auth/password/forgot` to
+change an existing one instead).
+
 ### S3-compatible storage (1.1.13 avatar upload)
 
 Any S3-compatible bucket: AWS S3, Cloudflare R2 (needs a payment method
@@ -124,6 +138,31 @@ a link if that account is still within its grace period; `POST /account/restore/
 (`{"token": "..."}`) reactivates it. Restoring does not log the user in --
 it clears `deleted_at`/`deletion_scheduled_at` and they log in normally
 afterward, same as a password reset.
+
+**Consent withdrawal is undoable too, on purpose:** `POST /account/consent/reactivate/request`
+(public, same silent/generic shape as the two above) + `POST /account/consent/reactivate/confirm`
+(`{"token": "...", "accept_terms": true}`) reverses `/account/consent/withdraw`
+-- `accept_terms` must be `true`, since consent has to be freely given
+again, not silently restored to whatever it was before. This is
+deliberately a separate flow from `/account/restore/*`: it only applies
+to a consent-withdrawn account, never to one that's also fully deleted
+(`is_deleted`) -- undoing a deletion is `/account/restore/*`'s job, not
+this one's.
+
+### "New sign-in" notifications (1.1.8, 1.1.9)
+
+Every session-issuing endpoint (login, refresh, the OAuth callback,
+2FA verify-login/verify-recovery-code) emails the account when a login
+looks new. "New" requires BOTH the User-Agent AND the IP address to be
+unrecognized together, not the User-Agent alone -- a stolen refresh
+token replayed from a different network still triggers the email even
+if the attacker sends a matching User-Agent string. Known, accepted
+limitation: both signals are still just headers (attacker-influenceable
+in principle), and a legitimate user roaming between networks will see
+more of these emails than a User-Agent-only check would produce -- an
+intentional trade favoring not missing a real hijack over minimizing
+false positives. See `api/security/sessions.py`'s `issue_session()`
+docstring.
 
 ### Redis + Celery (1.1.10 account purge, J+30)
 
@@ -163,6 +202,7 @@ Enforced on the 5 endpoints an attacker would actually target:
 | `POST /auth/2fa/enable`, `/disable`, `/recovery-codes/regenerate` | 5 / 15 min | user id -- shared counter across all three, so a stolen access token can't brute-force the TOTP code by spreading guesses across endpoints |
 | `POST /auth/2fa/lockout-recovery/request` | 5 / 15 min | IP **and** target email (checks a password guess, same thresholds as `/auth/login`) |
 | `POST /account/restore/request` | 3 / 60 min | target email |
+| `POST /account/consent/reactivate/request` | 3 / 60 min | target email |
 
 If `RATE_LIMIT_REDIS_URL` is unreachable, enforcement fails **open**
 (logs a warning, lets the request through) rather than blocking all
@@ -170,6 +210,15 @@ auth traffic -- see `api/security/rate_limit.py`'s docstring for why
 that's the deliberate choice, not an oversight. `RATE_LIMIT_ENABLED=False`
 disables it outright for local dev without Redis; never set that in a
 real deployment.
+
+**This trade-off is only "deliberate," not "silent," if it's visible:**
+`GET /health/ready` actually reaches Postgres and the rate-limiting Redis
+and reports `{"database": "ok"|"unreachable", "rate_limit_redis": "ok"|"unreachable -- rate limiting is NOT currently enforced"}`
+(always HTTP 200 -- the body is what's actionable, not the status code,
+so a degraded rate limiter doesn't get treated as "take this instance
+down" by infrastructure that only reads status codes). Point an uptime
+monitor or dashboard at it, not just at `/health` (the plain liveness
+check, which deliberately touches nothing).
 
 **Not implemented: CAPTCHA on registration.** Left out deliberately for
 now -- it needs a third-party account (reCAPTCHA/hCaptcha/Turnstile) and

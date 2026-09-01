@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from api.config import settings
 from api.database import get_db
 from api.main import app
+from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.recovery_code import TwoFactorRecoveryCode
@@ -100,7 +101,7 @@ async def test_migrations_created_expected_tables(pg_engine):
     assert {
         "users", "oauth_accounts", "sessions", "password_reset_tokens", "email_verification_tokens",
         "two_factor_recovery_codes", "account_restore_tokens", "two_factor_lockout_recovery_tokens",
-        "alembic_version",
+        "consent_reactivation_tokens", "alembic_version",
     } <= tables
 
 
@@ -144,6 +145,10 @@ async def test_cascade_delete_removes_related_rows(pg_session):
         user_id=user_id, token_hash=uuid.uuid4().hex,
         expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
     ))
+    pg_session.add(ConsentReactivationToken(
+        user_id=user_id, token_hash=uuid.uuid4().hex,
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+    ))
     await pg_session.commit()
 
     await pg_session.execute(delete(User).where(User.id == user_id))
@@ -155,12 +160,14 @@ async def test_cascade_delete_removes_related_rows(pg_session):
     remaining_recovery_codes = await pg_session.scalar(select(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == user_id))
     remaining_restore_tokens = await pg_session.scalar(select(AccountRestoreToken).where(AccountRestoreToken.user_id == user_id))
     remaining_lockout_tokens = await pg_session.scalar(select(TwoFactorLockoutRecoveryToken).where(TwoFactorLockoutRecoveryToken.user_id == user_id))
+    remaining_consent_tokens = await pg_session.scalar(select(ConsentReactivationToken).where(ConsentReactivationToken.user_id == user_id))
 
     assert remaining_sessions is None
     assert remaining_oauth is None
     assert remaining_tokens is None
     assert remaining_recovery_codes is None
     assert remaining_restore_tokens is None
+    assert remaining_consent_tokens is None
     assert remaining_lockout_tokens is None
 
 

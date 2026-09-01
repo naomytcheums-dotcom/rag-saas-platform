@@ -16,7 +16,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -33,6 +33,7 @@ from api.schemas.auth import (
     TwoFactorLockoutRecoveryRequest,
     TwoFactorRecoveryCodeLoginRequest,
     TwoFactorRecoveryCodesResponse,
+    TwoFactorRecoveryCodesStatusResponse,
     TwoFactorSetupResponse,
     TwoFactorVerifyLoginRequest,
 )
@@ -203,6 +204,32 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
     plain_codes = await _replace_recovery_codes(db, current_user.id)
     await db.commit()
     return TwoFactorRecoveryCodesResponse(recovery_codes=plain_codes)
+
+
+@router.get("/recovery-codes/status", response_model=TwoFactorRecoveryCodesStatusResponse)
+async def recovery_codes_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Lets the frontend show "3 of 10 recovery codes remaining" so a user
+    finds out they're running low BEFORE they're locked out of both
+    their authenticator and every code, rather than discovering it only
+    when /verify-recovery-code starts failing. Counts only -- never
+    returns the codes themselves, which is impossible anyway since only
+    their hashes are ever stored (see TwoFactorRecoveryCode).
+
+    total is 0 (not RECOVERY_CODE_COUNT) when 2FA isn't enabled at all --
+    "0 of 10 remaining" would misleadingly imply a recovery system that
+    doesn't currently exist for this account rather than one that's just
+    never been set up.
+    """
+    if not current_user.totp_enabled:
+        return TwoFactorRecoveryCodesStatusResponse(total=0, remaining=0)
+
+    remaining = await db.scalar(
+        select(func.count()).select_from(TwoFactorRecoveryCode).where(
+            TwoFactorRecoveryCode.user_id == current_user.id, TwoFactorRecoveryCode.used_at.is_(None)
+        )
+    )
+    return TwoFactorRecoveryCodesStatusResponse(total=RECOVERY_CODE_COUNT, remaining=remaining or 0)
 
 
 @router.post("/verify-login", response_model=TokenResponse)

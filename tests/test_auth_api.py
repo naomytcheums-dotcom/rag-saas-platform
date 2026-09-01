@@ -106,6 +106,36 @@ async def test_refresh_without_cookie_is_unauthorized(client):
     assert response.status_code == 401
 
 
+async def test_new_login_notification_fires_on_ip_change_even_with_the_same_device(client, register_payload, monkeypatch):
+    """issue_session()'s "new device" check requires BOTH the User-Agent
+    AND the IP to match a prior session, not just the User-Agent -- a
+    stolen refresh token replayed from a different network must still
+    look "new" even if the attacker's client sends the exact same
+    User-Agent string. Register (no notification -- see auth.py's
+    register()) then log in twice: once from the registration's own
+    default IP (recognized, no email), once from a different IP with the
+    identical User-Agent (must still count as new)."""
+    sent = []
+    monkeypatch.setattr(
+        "api.security.sessions.send_new_login_notification_email",
+        lambda to, device, ip, when: sent.append(ip),
+    )
+
+    await client.post("/auth/register", json=register_payload)
+
+    same_ip_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert same_ip_login.status_code == 200
+    assert sent == []  # same device_info AND same (default) IP as registration -- recognized
+
+    new_ip_login = await client.post(
+        "/auth/login",
+        json={"email": register_payload["email"], "password": register_payload["password"]},
+        headers={"X-Forwarded-For": "203.0.113.77"},  # same User-Agent, different IP
+    )
+    assert new_ip_login.status_code == 200
+    assert sent == ["203.0.113.77"]  # flagged as new despite the matching User-Agent
+
+
 # ------------------------------------------------------------ Partie 1.1.9 --
 async def test_sessions_list_marks_current_session(client, register_payload):
     await client.post("/auth/register", json=register_payload)
@@ -443,6 +473,33 @@ async def test_unknown_recovery_code_is_rejected(client, register_payload):
     assert verify.status_code == 401
 
 
+async def test_recovery_codes_status_is_zero_when_2fa_is_not_enabled(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    status_response = await client.get("/auth/2fa/recovery-codes/status", headers=auth_header)
+    assert status_response.status_code == 200
+    assert status_response.json() == {"total": 0, "remaining": 0}
+
+
+async def test_recovery_codes_status_decrements_as_codes_are_used(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
+    enable = await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
+    codes = enable.json()["recovery_codes"]
+
+    fresh = await client.get("/auth/2fa/recovery-codes/status", headers=auth_header)
+    assert fresh.json() == {"total": 10, "remaining": 10}
+
+    login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    mfa_token = login.json()["mfa_token"]
+    await client.post("/auth/2fa/verify-recovery-code", json={"mfa_token": mfa_token, "recovery_code": codes[0]})
+
+    after_use = await client.get("/auth/2fa/recovery-codes/status", headers=auth_header)
+    assert after_use.json() == {"total": 10, "remaining": 9}
+
+
 async def test_lockout_recovery_disables_2fa_after_the_delay_elapses(client, register_payload, monkeypatch, db_session):
     import datetime as dt
 
@@ -750,6 +807,110 @@ async def test_withdraw_consent_twice_is_rejected(client, register_payload):
     assert second.status_code == 401
 
 
+async def test_consent_reactivation_undoes_a_withdrawal(client, register_payload, monkeypatch, db_session):
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.consent_reactivation.send_consent_reactivation_email",
+        lambda to, link: captured.update(link=link),
+    )
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+
+    # Still deactivated -- consent withdrawal is not undone by itself.
+    still_blocked = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert still_blocked.status_code == 401
+
+    request = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    assert request.status_code == 200
+    token = captured["link"].split("token=")[1]
+
+    # accept_terms is required -- withdrawn consent can't come back silently.
+    missing_consent = await client.post("/account/consent/reactivate/confirm", json={"token": token, "accept_terms": False})
+    assert missing_consent.status_code == 422
+
+    confirm = await client.post("/account/consent/reactivate/confirm", json={"token": token, "accept_terms": True})
+    assert confirm.status_code == 200
+
+    restored_login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
+    assert restored_login.status_code == 200
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    assert user.consent_withdrawn_at is None
+    assert user.is_active is True
+    assert user.consent_given_at is not None
+
+
+async def test_consent_reactivation_request_is_silent_for_an_account_that_never_withdrew(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.consent_reactivation.send_consent_reactivation_email",
+        lambda to, link: captured.update(link=link),
+    )
+    await client.post("/auth/register", json=register_payload)
+
+    response = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    assert response.status_code == 200
+    assert "link" not in captured
+
+
+async def test_consent_reactivation_request_is_silent_for_unknown_email(client):
+    response = await client.post("/account/consent/reactivate/request", json={"email": "nobody@example.com"})
+    assert response.status_code == 200
+
+
+async def test_consent_reactivation_does_not_apply_to_a_fully_deleted_account(client, register_payload, monkeypatch, db_session):
+    """A row could in principle have both consent_withdrawn_at and
+    deleted_at set (e.g. seeded directly, or a future code path) --
+    reactivating consent must never be the thing that undoes a full
+    account deletion. That's /account/restore/*'s job, not this one's."""
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.consent_reactivation.send_consent_reactivation_email",
+        lambda to, link: captured.update(link=link),
+    )
+    import datetime as dt
+
+    await client.post("/auth/register", json=register_payload)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.consent_withdrawn_at = dt.datetime.now(dt.timezone.utc)
+    user.is_active = False
+    user.deleted_at = dt.datetime.now(dt.timezone.utc)
+    user.deletion_scheduled_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)
+    await db_session.commit()
+
+    response = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    assert response.status_code == 200
+    assert "link" not in captured
+
+
+async def test_consent_reactivation_token_cannot_be_reused(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "api.services.consent_reactivation.send_consent_reactivation_email",
+        lambda to, link: captured.update(link=link),
+    )
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+    await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    token = captured["link"].split("token=")[1]
+
+    first = await client.post("/account/consent/reactivate/confirm", json={"token": token, "accept_terms": True})
+    assert first.status_code == 200
+
+    # Withdraw again, then try to replay the OLD token.
+    access_token2 = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token2}"})
+
+    replay = await client.post("/account/consent/reactivate/confirm", json={"token": token, "accept_terms": True})
+    assert replay.status_code == 400
+
+
+async def test_consent_reactivation_garbage_token_is_rejected(client):
+    response = await client.post("/account/consent/reactivate/confirm", json={"token": "this-was-never-issued", "accept_terms": True})
+    assert response.status_code == 400
+
+
 # --------------------------------------------------------------- 1.1.13 --
 async def test_update_profile_fields(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
@@ -759,3 +920,53 @@ async def test_update_profile_fields(client, register_payload):
     assert response.status_code == 200
     assert response.json()["full_name"] == "Ada K. Lovelace"
     assert response.json()["company"] == "Analytical Engines Ltd"
+
+
+async def test_set_password_lets_an_oauth_only_account_add_a_fallback_login(client, db_session, monkeypatch):
+    """An OAuth-only account (hashed_password is None, see api/models/user.py)
+    has no fallback if it loses access to its linked provider -- this is
+    the fix for that. There's no real browser OAuth flow to drive here
+    (see test_oauth_logic_integration.py's docstring), so the account and
+    its "already logged in" access token are constructed directly, the
+    same way that file tests _find_or_create_user() without a browser."""
+    from api.security.jwt import create_access_token
+
+    captured = []
+    monkeypatch.setattr("api.routers.account.send_password_set_email", lambda to: captured.append(to))
+
+    oauth_user = User(email="oauth-only@example.com", hashed_password=None, is_email_verified=True)
+    db_session.add(oauth_user)
+    await db_session.commit()
+    access_token = create_access_token(oauth_user.id)
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    set_password = await client.post("/account/set-password", json={"new_password": "a-brand-new-password"}, headers=auth_header)
+    assert set_password.status_code == 200
+    assert captured == ["oauth-only@example.com"]
+
+    # Now works as a genuine fallback: a normal password login succeeds.
+    login = await client.post("/auth/login", json={"email": "oauth-only@example.com", "password": "a-brand-new-password"})
+    assert login.status_code == 200
+
+
+async def test_set_password_is_rejected_for_an_account_that_already_has_one(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/set-password", json={"new_password": "another-password"}, headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 400
+
+
+# ----------------------------------------------------------- monitoring --
+async def test_health_ready_reports_database_and_redis_status(client):
+    response = await client.get("/health/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {"database", "rate_limit_redis"}
+    # Both real services are reachable in this dev/test environment --
+    # a genuinely down dependency is exercised at the unit level in
+    # tests/test_rate_limiting_integration.py's fail-open test instead of
+    # here, since actually taking Postgres or Redis offline mid-suite
+    # isn't something this test file can safely simulate.
+    assert body["database"] == "ok"
+    assert body["rate_limit_redis"] == "ok"

@@ -24,6 +24,12 @@ mode than temporarily losing brute-force protection. This matches every
 other optional-infra dependency in this codebase (Resend, S3): a backing
 service being down degrades one specific protection, it doesn't take the
 whole app down.
+
+That trade-off only stays a *deliberate* one, not a silent one, if
+someone operating this app can actually see it happening -- a warning
+log nobody's watching is not the same as visibility. is_redis_reachable()
+below backs GET /health/ready (api/main.py), so a degraded rate limiter
+shows up as a readiness signal, not just a line in a log file.
 """
 
 import logging
@@ -81,6 +87,20 @@ async def enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -
             detail=f"Too many attempts, try again in {retry_after} seconds",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+async def is_redis_reachable() -> bool:
+    """Used only by GET /health/ready (api/main.py) to surface, rather
+    than silently tolerate, the exact condition enforce_rate_limit()
+    above already handles gracefully: Redis being unreachable. Never
+    called from enforce_rate_limit() itself -- that path already has its
+    own try/except and must not pay for an extra round-trip just to
+    decide whether to log."""
+    try:
+        await _redis.ping()
+        return True
+    except Exception:  # noqa: BLE001 -- any failure means "not reachable," full stop
+        return False
 
 
 async def _seconds_until_oldest_entry_expires(key: str, window_seconds: int, now: float) -> int:

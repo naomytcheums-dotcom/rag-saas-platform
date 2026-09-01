@@ -16,16 +16,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
+from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.oauth import OAuthAccount
 from api.models.restore_token import AccountRestoreToken
 from api.models.session import Session
 from api.models.user import User
-from api.schemas.auth import AccountRestoreConfirmRequest, AccountRestoreRequest, MessageResponse
+from api.schemas.auth import (
+    AccountRestoreConfirmRequest,
+    AccountRestoreRequest,
+    ConsentReactivationConfirmRequest,
+    ConsentReactivationRequest,
+    MessageResponse,
+    SetPasswordRequest,
+)
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
-from api.security.hashing import hash_token
+from api.security.hashing import hash_password, hash_token
 from api.security.rate_limit import enforce_rate_limit
 from api.services.account_restore import create_and_send_account_restore
-from api.services.email import send_consent_withdrawn_email
+from api.services.consent_reactivation import create_and_send_consent_reactivation
+from api.services.email import send_consent_withdrawn_email, send_password_set_email
 from api.services.storage import upload_avatar
 from api.utils import as_aware_utc
 
@@ -33,6 +42,7 @@ router = APIRouter(prefix="/account", tags=["account"])
 logger = logging.getLogger(__name__)
 
 _GENERIC_RESTORE_MESSAGE = "If a deactivated account exists for that email and its grace period hasn't ended, a restore link has been sent."
+_GENERIC_CONSENT_REACTIVATION_MESSAGE = "If a consent-withdrawn account exists for that email, a reactivation link has been sent."
 
 
 @router.get("/me", response_model=UserProfileResponse)
@@ -96,6 +106,42 @@ async def upload_avatar_route(file: UploadFile, current_user: User = Depends(get
     await db.commit()
     await db.refresh(current_user)
     return UserProfileResponse.model_validate(current_user)
+
+
+@router.post("/set-password", response_model=MessageResponse)
+async def set_password(payload: SetPasswordRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Lets an OAuth-only account (hashed_password is None -- see
+    api/models/user.py's docstring) add a password as a backup login
+    method. Without this, a user who only ever signed in via Google/
+    GitHub has no fallback at all if they lose access to that provider
+    account (it's disabled, they're locked out of it, the provider has
+    an outage) -- this app would have no way for them to prove who they
+    are, ever again.
+
+    Requires only a valid access token, not the current password --
+    there IS no current password for this account, that's the whole
+    reason this endpoint exists. Already-authenticated is the bar every
+    other profile change in this router uses too (update_profile,
+    update_preferences, upload_avatar_route); a fresh confirmation email
+    is what covers the fact that this specific change adds a whole new
+    way to authenticate into the account.
+    """
+    if current_user.hashed_password is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account already has a password -- use POST /auth/password/forgot to change it",
+        )
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    await db.commit()
+
+    try:
+        send_password_set_email(current_user.email)
+    except (EnvironmentError, RuntimeError) as exc:
+        logger.warning("failed to send password-set confirmation to %s: %s", current_user.email, exc)
+
+    return MessageResponse(message="Password set. You can now also log in with your email and password.")
 
 
 @router.delete("/me", response_model=MessageResponse)
@@ -214,6 +260,73 @@ async def withdraw_consent(current_user: User = Depends(get_current_user), db: A
         logger.warning("failed to send consent-withdrawal confirmation to %s: %s", current_user.email, exc)
 
     return MessageResponse(message="Consent withdrawn. Your account has been deactivated.")
+
+
+@router.post("/consent/reactivate/request", response_model=MessageResponse)
+async def request_consent_reactivation(payload: ConsentReactivationRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 1 of undoing POST /account/consent/withdraw -- withdrawing
+    consent must not be a silent one-way door (contrast with a full
+    DELETE /account/me, which already has its own /restore/* pair below;
+    this is that same idea applied to the consent-withdrawal path).
+    Public, not behind get_current_user: the account is deactivated, so
+    there's no access token to authenticate with. Always returns the
+    same generic message regardless of whether the email belongs to a
+    real, consent-withdrawn account -- same anti-enumeration reasoning as
+    POST /auth/password/forgot and /account/restore/request.
+
+    Deliberately does NOT fire for an account that's also soft-deleted
+    (is_deleted) -- that account needs /account/restore/*, a full
+    DELETE is a stronger, separate state that a mere consent reactivation
+    must not silently undo.
+    """
+    await enforce_rate_limit(
+        f"ratelimit:consent-reactivate:email:{payload.email}",
+        settings.ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS, settings.ACCOUNT_RESTORE_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    user = await db.scalar(select(User).where(User.email == payload.email))
+    if user is not None and user.consent_withdrawn_at is not None and not user.is_deleted:
+        await create_and_send_consent_reactivation(db, user)
+        await db.commit()
+    return MessageResponse(message=_GENERIC_CONSENT_REACTIVATION_MESSAGE)
+
+
+@router.post("/consent/reactivate/confirm", response_model=MessageResponse)
+async def confirm_consent_reactivation(payload: ConsentReactivationConfirmRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Step 2: the user clicked the link from their email and accepted the
+    current terms again -- accept_terms is validated True by the schema,
+    since consent has to be freely given again, not silently restored to
+    whatever it was before withdrawal. Reactivates the account
+    (is_active=True, consent_withdrawn_at cleared) but, same reasoning as
+    /account/restore/confirm and /auth/password/reset, does NOT log the
+    user in directly: this token proves control of the mailbox, not the
+    password, so they still authenticate through the real login flow
+    afterward.
+    """
+    invalid = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reactivation link")
+
+    row = await db.scalar(select(ConsentReactivationToken).where(ConsentReactivationToken.token_hash == hash_token(payload.token)))
+    now = dt.datetime.now(dt.timezone.utc)
+    if row is None or row.used_at is not None or as_aware_utc(row.expires_at) < now:
+        raise invalid
+
+    user = await db.get(User, row.user_id)
+    if user is None or user.consent_withdrawn_at is None or user.is_deleted:
+        raise invalid
+
+    user.is_active = True
+    user.consent_withdrawn_at = None
+    # A fresh consent record, not the old one resurrected -- this moment
+    # is when they actually agreed again, same reasoning as register()'s
+    # consent_given_at capturing the real moment of agreement.
+    user.consent_given_at = now
+    user.terms_version = settings.TERMS_VERSION
+    row.used_at = now
+
+    await db.commit()
+    return MessageResponse(message="Your account has been reactivated. Please log in.")
 
 
 @router.get("/export")

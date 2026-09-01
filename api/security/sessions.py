@@ -68,13 +68,26 @@ async def issue_session(
     httpOnly cookie; returns the access token for the JSON response body.
 
     notify_new_device_email: pass the user's email to get a "new sign-in"
-    notification IF this device (by User-Agent) has never created a
-    session for this user before -- callers that represent an actual
-    login (login(), refresh(), the OAuth callback, 2FA verify-login) pass
-    it; register() does not, since a brand new account has no "usual"
-    device yet to compare against (every login would look "new").
-    Checked before the new Session row is added, so this call's own
-    session never counts as its own history.
+    notification IF neither this device (User-Agent) NOR this network
+    (IP address) has been seen together on a prior session for this user
+    -- callers that represent an actual login (login(), refresh(), the
+    OAuth callback, 2FA verify-login) pass it; register() does not,
+    since a brand new account has no "usual" device yet to compare
+    against (every login would look "new"). Checked before the new
+    Session row is added, so this call's own session never counts as its
+    own history.
+
+    Requiring BOTH to match a single prior session (not User-Agent
+    alone) is a deliberately stronger signal: a stolen refresh token
+    replayed from a different network now still triggers the email even
+    if the attacker also fakes a matching User-Agent string, since
+    matching one signal alone is no longer enough to look "known." It's
+    still not proof of identity -- both a User-Agent header and a source
+    IP are attacker-influenceable in principle, and a legitimate user
+    roaming between networks (home wifi to mobile data) will see more of
+    these emails than before. That's an accepted trade -- a false
+    positive here is an extra email; a false negative is a session
+    hijack going unnoticed.
     """
     device_info = request.headers.get("user-agent")
     ip = client_ip(request)
@@ -82,10 +95,12 @@ async def issue_session(
 
     is_new_device = False
     if notify_new_device_email:
-        prior_session_from_this_device = await db.scalar(
-            select(Session.id).where(Session.user_id == user_id, Session.device_info == device_info).limit(1)
+        prior_session_from_this_device_and_network = await db.scalar(
+            select(Session.id).where(
+                Session.user_id == user_id, Session.device_info == device_info, Session.ip_address == ip,
+            ).limit(1)
         )
-        is_new_device = prior_session_from_this_device is None
+        is_new_device = prior_session_from_this_device_and_network is None
 
     raw_refresh_token = generate_raw_token()
     session = Session(

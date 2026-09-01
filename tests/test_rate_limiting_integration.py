@@ -120,6 +120,18 @@ async def test_account_restore_request_is_rate_limited_by_email(client, register
     assert blocked.status_code == 429
 
 
+async def test_consent_reactivation_request_is_rate_limited_by_email(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await client.post("/account/consent/withdraw", headers={"Authorization": f"Bearer {access_token}"})
+
+    for _ in range(settings.ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS):
+        response = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+        assert response.status_code == 200
+
+    blocked = await client.post("/account/consent/reactivate/request", json={"email": register_payload["email"]})
+    assert blocked.status_code == 429
+
+
 async def test_verify_email_request_is_rate_limited_by_email(client, register_payload):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     auth_header = {"Authorization": f"Bearer {access_token}"}
@@ -231,6 +243,18 @@ async def test_rate_limiting_fails_open_when_redis_is_unreachable(monkeypatch):
 
     # Must NOT raise, despite Redis being unreachable.
     await rate_limit_module.enforce_rate_limit("ratelimit:test:unreachable", max_attempts=1, window_seconds=60)
+
+
+async def test_is_redis_reachable_reflects_actual_connectivity(monkeypatch):
+    """Backs GET /health/ready (api/main.py) -- the whole point is that
+    the degraded-rate-limiting state above is OBSERVABLE, not just
+    silently tolerated. Checks both directions: a real Redis reports
+    reachable, a broken one reports not."""
+    assert await rate_limit_module.is_redis_reachable() is True
+
+    broken_client = redis_asyncio.from_url("redis://127.0.0.1:1/0", decode_responses=True, socket_connect_timeout=1)
+    monkeypatch.setattr(rate_limit_module, "_redis", broken_client)
+    assert await rate_limit_module.is_redis_reachable() is False
 
 
 async def test_sliding_window_catches_a_burst_that_a_fixed_window_would_miss():

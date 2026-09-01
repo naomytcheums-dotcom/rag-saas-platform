@@ -128,6 +128,46 @@ class AccountRestoreConfirmRequest(BaseModel):
     token: str
 
 
+class ConsentReactivationRequest(BaseModel):
+    """Body of POST /account/consent/reactivate/request -- public (no
+    access token: the account is deactivated), same shape as
+    AccountRestoreRequest but for the consent-withdrawal path instead of
+    the deletion path."""
+
+    email: EmailStr
+
+
+class ConsentReactivationConfirmRequest(BaseModel):
+    """Body of POST /account/consent/reactivate/confirm -- `token` is the
+    raw value from the link emailed by /consent/reactivate/request.
+    accept_terms must be True: consent has to be freely given again, not
+    silently restored to whatever it was before withdrawal."""
+
+    token: str
+    accept_terms: bool
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _terms_must_be_accepted(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("you must accept the terms of service to reactivate your account")
+        return value
+
+
+class SetPasswordRequest(BaseModel):
+    """Body of POST /account/set-password -- lets an OAuth-only account
+    (hashed_password is None) add a password as a backup login method."""
+
+    new_password: str = Field(min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_within_bcrypt_limit(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > _BCRYPT_MAX_BYTES:
+            raise ValueError(f"password must be at most {_BCRYPT_MAX_BYTES} bytes")
+        return value
+
+
 class EmailVerifyConfirmRequest(BaseModel):
     """Body of POST /auth/verify-email/confirm -- the 6-digit code from
     the verification email."""
@@ -164,6 +204,19 @@ class TwoFactorRecoveryCodesResponse(BaseModel):
     """
 
     recovery_codes: list[str]
+
+
+class TwoFactorRecoveryCodesStatusResponse(BaseModel):
+    """
+    Returned by GET /auth/2fa/recovery-codes/status -- lets the frontend
+    show "3 of 10 codes remaining, consider regenerating" WITHOUT ever
+    exposing the codes themselves again (impossible anyway, only their
+    hashes are stored). Just counts, never anything that could be used
+    to guess or narrow down a real code.
+    """
+
+    total: int
+    remaining: int
 
 
 class TwoFactorRecoveryCodeLoginRequest(BaseModel):

@@ -235,6 +235,50 @@ def send_consent_withdrawn_email(to_email: str) -> None:
     )
 
 
+def send_consent_reactivation_email(to_email: str, reactivation_link: str) -> None:
+    """Called by api/services/consent_reactivation.py with a link
+    containing the raw (not hashed) token -- lets a user who withdrew
+    consent (POST /account/consent/withdraw) come back, without that
+    being a silent one-way door."""
+    _send(
+        to_email,
+        subject="Reactivate your account",
+        html=(
+            f"<p>We received a request to reactivate your account, which "
+            f"was deactivated after you withdrew consent to data processing.</p>"
+            f"<p>Click the link below to accept the current terms of "
+            f"service again and reactivate your account.</p>"
+            f'<p><a href="{reactivation_link}">{reactivation_link}</a></p>'
+            f"<p>If you didn't request this, you can safely ignore this "
+            f"email -- your account will remain deactivated.</p>"
+        ),
+    )
+
+
+def send_password_set_email(to_email: str) -> None:
+    """
+    Called by api/routers/account.py's set_password() -- adding a
+    password to what was previously an OAuth-only account is a real
+    change to the account's attack surface (a whole new login method
+    now exists), so it's worth a confirmation email the same way a
+    password reset or 2FA change gets one, even though the account owner
+    is the one who just did this from an authenticated session.
+    """
+    _send(
+        to_email,
+        subject="A password was added to your account",
+        html=(
+            "<p>A password was just added to your account. You can now "
+            "log in with your email and this password, in addition to "
+            "however you signed in before (Google/GitHub).</p>"
+            "<p>If you didn't do this, someone with access to your "
+            "account just gave themselves a second way back in -- "
+            "review your account's active sessions immediately and "
+            "revoke anything you don't recognize.</p>"
+        ),
+    )
+
+
 def send_rate_limit_alert_email(to_email: str, context: str) -> None:
     """
     Called when the *email-scoped* login rate limit trips (see
