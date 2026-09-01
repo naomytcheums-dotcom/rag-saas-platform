@@ -57,6 +57,15 @@ async def _security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # CI/CD audit finding: OWASP ZAP's real API scan against a live
+    # instance flagged this as missing on every response. "same-site"
+    # rather than the stricter "same-origin" -- FRONTEND_URL is commonly
+    # a different subdomain of the same site (app.example.com calling
+    # api.example.com), and CORSMiddleware already governs which origins
+    # can actually read a cross-origin response; this only blocks
+    # cross-SITE embedding (a different registrable domain), matching
+    # the SameSite=lax policy already used on every cookie this app sets.
+    response.headers["Cross-Origin-Resource-Policy"] = "same-site"
     # Only meaningful -- and only safe to promise -- once the app is
     # actually deployed behind HTTPS, same flag that already gates
     # COOKIE_SECURE and SessionMiddleware's https_only above.

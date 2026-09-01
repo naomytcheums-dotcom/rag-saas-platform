@@ -1827,6 +1827,7 @@ async def test_security_headers_are_present_on_a_normal_response(client):
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert response.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert response.headers["Cross-Origin-Resource-Policy"] == "same-site"
 
 
 async def test_docs_path_gets_a_relaxed_csp_that_still_allows_swagger_ui(client):

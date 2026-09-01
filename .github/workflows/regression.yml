@@ -237,6 +237,16 @@ jobs:
           target: "http://localhost:8000/openapi.json"
           format: openapi
           fail_action: false
+          # Otherwise the action tries to file a GitHub issue for any
+          # alert found (real finding this run: Cross-Origin-Resource-
+          # Policy header missing -- api/main.py's security-headers
+          # middleware doesn't set it) and that POST 403s: this
+          # workflow's default GITHUB_TOKEN has no issues:write
+          # permission, and granting it just for this would be a bigger
+          # change than a security-scan job should make on its own.
+          # The findings are still visible in the job's own log output
+          # and the uploaded artifact_name report below either way.
+          allow_issue_writing: false
 
       - name: Show the API server's log if anything failed
         if: failure()
