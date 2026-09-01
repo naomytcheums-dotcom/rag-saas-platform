@@ -81,6 +81,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
       JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
       SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
       SUPPORT_EMAIL: support@ci-test.invalid
       RESEND_API_KEY: re_ci_placeholder_never_a_real_key
       EMAIL_FROM_ADDRESS: onboarding@resend.dev
@@ -163,6 +164,7 @@ jobs:
           pytest
           tests/test_auth_api.py tests/test_auth_security.py tests/test_config.py
           tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
+          tests/test_password_similarity.py tests/test_storage.py tests/test_audit_log.py tests/test_security_alerts.py
           tests/test_postgres_integration.py tests/test_oauth_logic_integration.py
           tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py
           tests/test_celery_integration.py tests/test_e2e_lifecycle.py
@@ -215,6 +217,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
       JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
       SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
       SUPPORT_EMAIL: support@ci-test.invalid
       RESEND_API_KEY: re_ci_placeholder_never_a_real_key
       EMAIL_FROM_ADDRESS: onboarding@resend.dev
