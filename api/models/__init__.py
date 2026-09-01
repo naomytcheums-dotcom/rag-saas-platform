@@ -9,6 +9,7 @@ from api.database import Base
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount
+from api.models.password_history import PasswordHistory
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
@@ -19,5 +20,5 @@ from api.models.user import User
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
-    "RevokedAccessToken",
+    "RevokedAccessToken", "PasswordHistory",
 ]

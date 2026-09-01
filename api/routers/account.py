@@ -40,6 +40,8 @@ from api.schemas.auth import (
 )
 from api.schemas.user import PreferencesUpdateRequest, ProfileUpdateRequest, UserProfileResponse
 from api.security.hashing import hash_password, hash_token, verify_password
+from api.security.password_history import reject_if_password_reused, record_password_change
+from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
@@ -179,7 +181,23 @@ async def set_password(payload: SetPasswordRequest, current_user: User = Depends
             detail="This password has appeared in a known data breach -- please choose a different one.",
         )
 
-    current_user.hashed_password = hash_password(payload.new_password)
+    if is_password_too_similar(payload.new_password, current_user.email, current_user.full_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password is too similar to your email or name -- please choose a more distinct one.",
+        )
+
+    # No reuse check against hashed_password itself (it's None -- there
+    # is no current password), but still checked against PasswordHistory:
+    # an account can reach this endpoint after previously having HAD a
+    # password (set here, then somehow cleared -- not a flow this app
+    # exposes today, but the check costs one query either way and closes
+    # the gap if that ever changes).
+    await reject_if_password_reused(db, current_user.id, payload.new_password, None)
+
+    new_hashed_password = hash_password(payload.new_password)
+    current_user.hashed_password = new_hashed_password
+    await record_password_change(db, current_user.id, new_hashed_password)
     await db.commit()
 
     try:
@@ -230,7 +248,17 @@ async def change_password(payload: ChangePasswordRequest, current_user: User = D
             detail="This password has appeared in a known data breach -- please choose a different one.",
         )
 
-    current_user.hashed_password = hash_password(payload.new_password)
+    if is_password_too_similar(payload.new_password, current_user.email, current_user.full_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password is too similar to your email or name -- please choose a more distinct one.",
+        )
+
+    await reject_if_password_reused(db, current_user.id, payload.new_password, current_user.hashed_password)
+
+    new_hashed_password = hash_password(payload.new_password)
+    current_user.hashed_password = new_hashed_password
+    await record_password_change(db, current_user.id, new_hashed_password)
     await revoke_all_sessions_for_user(db, current_user.id)
     await db.commit()
 

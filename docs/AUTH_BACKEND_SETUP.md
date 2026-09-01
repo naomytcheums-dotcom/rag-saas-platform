@@ -305,6 +305,43 @@ field yet -- no route checks it -- it exists now so Partie 1.2's RBAC
 work is a matter of checking an already-real column under production
 data, not inventing one later.
 
+### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
+
+Two independent limits on top of a session's absolute expiry
+(`REFRESH_TOKEN_EXPIRE_DAYS`):
+
+- **Idle timeout** (`SESSION_IDLE_TIMEOUT_MINUTES`, default 30):
+  `api/dependencies.py`'s `get_current_user_any_consent_status` calls
+  `api/security/sessions.py`'s `touch_session_and_check_idle_timeout` on
+  every authenticated request -- one atomic `UPDATE ... WHERE
+  last_seen_at > cutoff ... RETURNING` refreshes `last_seen_at` and
+  enforces the timeout in the same round trip. A session found idle too
+  long is revoked (its access token blacklisted, 1.1.15) and the
+  account emailed (`send_idle_session_revoked_email`).
+- **Concurrent-session limit** (`MAX_CONCURRENT_SESSIONS`, default 5):
+  enforced at issuance (`issue_session`'s `enforce_concurrent_session_limit`)
+  -- a sign-in that would push the account over the limit revokes its
+  OLDEST active session first, rather than rejecting the new sign-in,
+  and emails the account (`send_concurrent_session_limit_reached_email`).
+
+### Password history and similarity checks (audit Categorie 1, items 15/16)
+
+- **Reuse protection** (`PASSWORD_HISTORY_SIZE`, default 5):
+  `api/models/password_history.py`'s `password_history` table (migration
+  `0011`) keeps a user's most recent password hashes. Every password
+  change (`POST /auth/password/reset`, `/account/change-password`,
+  `/account/set-password`) calls `api/security/password_history.py`'s
+  `reject_if_password_reused` (checked against the CURRENT password too,
+  not just history) before accepting a new one, then
+  `record_password_change` to store it and prune anything beyond the
+  configured window.
+- **Similarity check** (`PASSWORD_SIMILARITY_MIN_DISTANCE`, default 3):
+  `api/security/password_similarity.py`'s `is_password_too_similar` uses
+  a hand-rolled Levenshtein distance (no new dependency) against the
+  account's email (both the full address and its local-part), and name
+  if provided -- rejects a password within that many single-character
+  edits of either. Checked at registration and every password change.
+
 ### Redis + Celery (1.1.10 account purge, J+30)
 
 Needs a real Redis reachable at `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.

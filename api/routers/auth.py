@@ -37,6 +37,8 @@ from api.security.sessions import (
     revoke_session,
 )
 from api.security.jwt import create_mfa_pending_token
+from api.security.password_history import record_password_change
+from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.services.email import send_rate_limit_alert_email
@@ -54,6 +56,12 @@ _GENERIC_LOGIN_ERROR = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, d
 _BREACHED_PASSWORD_ERROR = HTTPException(
     status_code=status.HTTP_400_BAD_REQUEST,
     detail="This password has appeared in a known data breach -- please choose a different one.",
+)
+
+# Audit finding 16.
+_SIMILAR_PASSWORD_ERROR = HTTPException(
+    status_code=status.HTTP_400_BAD_REQUEST,
+    detail="This password is too similar to your email or name -- please choose a more distinct one.",
 )
 
 # 1.1-audit finding: bcrypt.checkpw costs ~250ms; `user is None or
@@ -97,9 +105,13 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     if await is_password_known_breached(payload.password):
         raise _BREACHED_PASSWORD_ERROR
 
+    if is_password_too_similar(payload.password, payload.email, payload.full_name):
+        raise _SIMILAR_PASSWORD_ERROR
+
+    hashed_password = hash_password(payload.password)
     user = User(
         email=payload.email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=hashed_password,
         full_name=payload.full_name,
         company=payload.company,
         # 1.1.12 RGPD consent: recorded once, here, at the moment the user
@@ -110,6 +122,11 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     )
     db.add(user)
     await db.flush()  # assigns user.id without committing yet -- needed below before the row is final
+    # Audit finding 15: seeds the reuse-check history from a user's very
+    # first password, not just from the first CHANGE -- otherwise
+    # reusing this exact password again immediately after resetting it
+    # would have nothing to catch it against.
+    await record_password_change(db, user.id, hashed_password)
 
     await create_and_send_email_otp(db, user)  # 1.1.4 -- fire-and-forget-ish: logs a warning and continues on email failure, never blocks registration
     # No notify_new_device_email here: this is the account's first-ever

@@ -14,17 +14,18 @@ import logging
 import uuid
 
 from fastapi import Request, Response
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
+from api.models.user import User
 from api.schemas.auth import TokenResponse
 from api.security.csrf import generate_csrf_token, set_csrf_cookie
 from api.security.hashing import generate_raw_token, hash_token
 from api.security.jwt import create_access_token
-from api.services.email import send_new_login_notification_email
+from api.services.email import send_concurrent_session_limit_reached_email, send_new_login_notification_email
 from api.utils import client_ip
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,44 @@ def clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         key=REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH, domain=settings.COOKIE_DOMAIN
     )
+
+
+async def enforce_concurrent_session_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """
+    Audit finding 14: caps how many sessions (devices/browsers) a single
+    account may have active at once, at MAX_CONCURRENT_SESSIONS. Called
+    from issue_session() below BEFORE the new session is created, so a
+    user already AT the limit ends up back at the limit (oldest revoked,
+    newest added) rather than one over it.
+
+    Revokes the OLDEST active sessions to make room -- not rejecting the
+    new login -- since the new login is always the one thing the real
+    account owner is doing right now; an old session is the more likely
+    one to be stale, forgotten, or (in the worst case) someone else's.
+    Each revocation blacklists its access token too (revoke_session()),
+    same as any other revocation, and the account is notified once per
+    revoked session so a real owner would notice if this ever happened
+    from an unexpected sign-in.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    active_sessions = (await db.scalars(
+        select(Session)
+        .where(Session.user_id == user_id, Session.revoked_at.is_(None), Session.expires_at > now)
+        .order_by(Session.created_at.asc())
+    )).all()
+
+    to_revoke = len(active_sessions) - (settings.MAX_CONCURRENT_SESSIONS - 1)
+    if to_revoke <= 0:
+        return
+
+    user = await db.get(User, user_id)
+    for session in active_sessions[:to_revoke]:
+        await revoke_session(db, session)
+        if user is not None:
+            try:
+                send_concurrent_session_limit_reached_email(user.email, session.device_info)
+            except (EnvironmentError, RuntimeError) as exc:
+                logger.warning("failed to send session-limit notification to %s: %s", user.email, exc)
 
 
 async def issue_session(
@@ -100,6 +139,8 @@ async def issue_session(
     device_info = request.headers.get("user-agent")
     ip = client_ip(request)
     now = dt.datetime.now(dt.timezone.utc)
+
+    await enforce_concurrent_session_limit(db, user_id)
 
     is_new_device = False
     if notify_new_device_email:
@@ -148,6 +189,73 @@ async def get_active_session_by_raw_token(db: AsyncSession, raw_refresh_token: s
     if session is None or not session.is_active:
         return None
     return session
+
+
+async def touch_session_and_check_idle_timeout(db: AsyncSession, access_token_jti: str) -> Session | None:
+    """
+    Audit findings 13/17: called on every authenticated request
+    (api/dependencies.py's get_current_user_any_consent_status) for the
+    Session paired 1:1 with the access token just used. Does BOTH of
+    these in one round trip, not two, in the common case:
+
+    - Refreshes last_seen_at to now -- previously written once at
+      creation and never touched again, so it never actually reflected
+      recent activity (this exact gap is what the audit caught).
+    - Enforces SESSION_IDLE_TIMEOUT_MINUTES: the UPDATE's WHERE clause
+      requires the row's PRE-update last_seen_at to already be within
+      the idle window, so a session idle too long simply fails to match
+      and last_seen_at is left untouched (not refreshed to now(), which
+      would let a request arriving exactly at the timeout boundary
+      silently reset the clock instead of expiring it).
+
+    Returns None in the common case (touched successfully, or no
+    matching row -- e.g. a pre-migration session with no
+    access_token_jti at all, which this can't act on either way).
+    Returns the Session if it WAS active but is now idle-timed-out, so
+    the caller can revoke it (blacklisting its access token) and notify
+    the account -- a mutation this function deliberately leaves to the
+    caller rather than doing itself, so a read-only caller (there isn't
+    one today, but this keeps the function honest about what "touch"
+    means) is never surprised by it silently revoking anything.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    idle_cutoff = now - dt.timedelta(minutes=settings.SESSION_IDLE_TIMEOUT_MINUTES)
+
+    result = await db.execute(
+        update(Session)
+        .where(
+            Session.access_token_jti == access_token_jti,
+            Session.revoked_at.is_(None),
+            Session.expires_at > now,
+            Session.last_seen_at > idle_cutoff,
+        )
+        .values(last_seen_at=now)
+        .returning(Session.id)
+        # Without this, the ORM also tries to re-evaluate this WHERE
+        # clause in plain Python against any matching Session already
+        # loaded in this AsyncSession's identity map, to keep it in
+        # sync -- and SQLite (tests/conftest.py) round-trips a naive
+        # datetime for last_seen_at while idle_cutoff above is
+        # tz-aware, which raises "can't compare offset-naive and
+        # offset-aware datetimes" the moment any test happens to have
+        # this exact Session row already loaded. Not needed here: the
+        # only two things done with the result are "did a row match"
+        # and, on the caller's next request, a fresh SELECT -- nothing
+        # depends on an in-memory ORM object being kept in sync inside
+        # THIS request.
+        .execution_options(synchronize_session=False)
+    )
+    if result.first() is not None:
+        return None  # touched -- common case, nothing else to do
+
+    # Either idle too long, or nothing matched for another reason
+    # (already revoked/expired/no such session) -- the blacklist check
+    # right before this call already ruled out "explicitly revoked," so
+    # a still-active row found here specifically means idle timeout.
+    session = await db.scalar(select(Session).where(Session.access_token_jti == access_token_jti))
+    if session is not None and session.is_active:
+        return session
+    return None
 
 
 async def revoke_session(db: AsyncSession, session: Session) -> None:

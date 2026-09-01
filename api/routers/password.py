@@ -14,6 +14,8 @@ from api.models.token import PasswordResetToken
 from api.models.user import User
 from api.schemas.auth import MessageResponse, PasswordForgotRequest, PasswordResetRequest
 from api.security.hashing import hash_password, hash_token
+from api.security.password_history import reject_if_password_reused, record_password_change
+from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import revoke_all_sessions_for_user
@@ -77,8 +79,18 @@ async def reset_password(payload: PasswordResetRequest, db: AsyncSession = Depen
             detail="This password has appeared in a known data breach -- please choose a different one.",
         )
 
-    user.hashed_password = hash_password(payload.new_password)
+    if is_password_too_similar(payload.new_password, user.email, user.full_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password is too similar to your email or name -- please choose a more distinct one.",
+        )
+
+    await reject_if_password_reused(db, user.id, payload.new_password, user.hashed_password)
+
+    new_hashed_password = hash_password(payload.new_password)
+    user.hashed_password = new_hashed_password
     reset_row.used_at = now
+    await record_password_change(db, user.id, new_hashed_password)
 
     # A password reset is a strong signal of possible compromise -- log
     # every device out, don't just change the password under them.

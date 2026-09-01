@@ -1,6 +1,8 @@
 """Shared FastAPI dependencies: DB session (re-exported for convenience) and
 the current-user resolvers every protected route depends on."""
 
+import logging
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
@@ -12,6 +14,10 @@ from api.database import get_db
 from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
 from api.security.jwt import InvalidTokenPurposeError, TokenPurpose, decode_token
+from api.security.sessions import revoke_session, touch_session_and_check_idle_timeout
+from api.services.email import send_idle_session_revoked_email
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status"]
 
@@ -75,6 +81,25 @@ async def get_current_user_any_consent_status(
 
     is_revoked = await db.scalar(select(RevokedAccessToken.id).where(RevokedAccessToken.jti == decoded.jti).limit(1))
     if is_revoked is not None:
+        raise unauthorized
+
+    # Audit findings 13/17: refreshes the paired Session's last_seen_at,
+    # and enforces SESSION_IDLE_TIMEOUT_MINUTES in the same round trip
+    # (see touch_session_and_check_idle_timeout's own docstring). A
+    # non-None return means the session WAS active but has been idle too
+    # long -- revoked here (blacklisting its access token, same as any
+    # other revocation) and the request rejected, rather than silently
+    # let it through this one last time.
+    idle_session = await touch_session_and_check_idle_timeout(db, decoded.jti)
+    if idle_session is not None:
+        notify_email = await db.scalar(select(User.email).where(User.id == idle_session.user_id))
+        await revoke_session(db, idle_session)
+        await db.commit()
+        if notify_email:
+            try:
+                send_idle_session_revoked_email(notify_email)
+            except (EnvironmentError, RuntimeError) as exc:
+                logger.warning("failed to send idle-timeout notification to %s: %s", notify_email, exc)
         raise unauthorized
 
     user = await db.scalar(select(User).where(User.id == decoded.user_id))

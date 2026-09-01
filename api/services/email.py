@@ -200,6 +200,53 @@ def send_new_login_notification_email(to_email: str, device_info: str | None, ip
     )
 
 
+def send_idle_session_revoked_email(to_email: str) -> None:
+    """
+    Audit finding 13 -- called by api/dependencies.py when a request
+    arrives on a session that's been idle longer than
+    SESSION_IDLE_TIMEOUT_MINUTES, right before that session is revoked.
+    A courtesy notice, not a security alert on its own (unlike a new-
+    device sign-in, an idle timeout is the EXPECTED outcome of walking
+    away from a device) -- but still worth surfacing so "why was I
+    logged out" has an answer instead of looking like a bug.
+    """
+    _send(
+        to_email,
+        subject="You were signed out due to inactivity",
+        html=(
+            "<p>One of your sessions was automatically signed out after "
+            "a period of inactivity, as a security precaution.</p>"
+            "<p>If you're still using that device, just log in again to "
+            "continue. If you don't recognize this activity at all, "
+            "review your active sessions and change your password.</p>"
+        ),
+    )
+
+
+def send_concurrent_session_limit_reached_email(to_email: str, revoked_device_info: str | None) -> None:
+    """
+    Audit finding 14 -- called by api/security/sessions.py's
+    enforce_concurrent_session_limit() every time a new sign-in pushes
+    the account over MAX_CONCURRENT_SESSIONS and an older session gets
+    revoked to make room. revoked_device_info is the same untrusted
+    User-Agent string as send_new_login_notification_email's
+    device_info -- HTML-escaped for the same reason.
+    """
+    safe_device = html.escape(revoked_device_info) if revoked_device_info else "an unknown device"
+    _send(
+        to_email,
+        subject="One of your sessions was signed out (device limit reached)",
+        html=(
+            f"<p>You just signed in on a new device, and your account "
+            f"reached its limit of simultaneous sessions. Your oldest "
+            f"session was signed out to make room:</p>"
+            f"<p><strong>Device signed out:</strong> {safe_device}</p>"
+            f"<p>If that wasn't expected, review your active sessions "
+            f"and change your password.</p>"
+        ),
+    )
+
+
 def send_two_factor_enabled_email(to_email: str) -> None:
     """
     Called by api/routers/two_factor.py's enable_two_factor() every time

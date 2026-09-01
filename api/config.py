@@ -147,6 +147,35 @@ class Settings(BaseSettings):
     ACCOUNT_RESTORE_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     ACCOUNT_RESTORE_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
+    # -- Session lifecycle (audit Categorie 1, items 13/14/17) -------------
+    # An access token's paired Session row (api/models/session.py) is
+    # revoked -- and its access token blacklisted, same as any other
+    # revocation -- if this many minutes pass with no authenticated
+    # request touching it. Independent of the session's own absolute
+    # expiry (REFRESH_TOKEN_EXPIRE_DAYS above): idle timeout catches a
+    # forgotten-but-not-stolen session; absolute expiry is the hard
+    # ceiling regardless of activity.
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 30
+    # How many sessions (devices/browsers) a single account may have
+    # active at once. Enforced at issuance (api/security/sessions.py's
+    # issue_session()): the OLDEST active session is revoked to make
+    # room for a new one, rather than rejecting the new login outright
+    # -- a new login is always the one thing a real owner is doing right
+    # now; an old, possibly-forgotten session is the more likely one to
+    # be stale or someone else's.
+    MAX_CONCURRENT_SESSIONS: int = 5
+
+    # -- Password policy (audit Categorie 1, items 15/16) ------------------
+    # How many of a user's most recent passwords (api/models/password_history.py)
+    # a new password is checked against, in addition to the CURRENT one.
+    PASSWORD_HISTORY_SIZE: int = 5
+    # api/security/password_similarity.py's Levenshtein-distance check
+    # against the user's own email/name -- a password within this many
+    # single-character edits of either is rejected. 3 catches trivial
+    # cases ("janedoe" vs "janedoe1") without being so aggressive it
+    # rejects a password that only coincidentally shares a few letters.
+    PASSWORD_SIMILARITY_MIN_DISTANCE: int = 3
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

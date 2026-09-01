@@ -19,6 +19,7 @@ from sqlalchemy import select
 from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
 from api.models.user import User
+from api.utils import as_aware_utc
 
 
 def _csrf(client):
@@ -2382,3 +2383,276 @@ async def test_hsts_header_reflects_cookie_secure_setting(client, monkeypatch):
     monkeypatch.setattr(settings, "COOKIE_SECURE", False)
     insecure_response = await client.get("/health")
     assert "Strict-Transport-Security" not in insecure_response.headers
+
+
+# --------------------------------------------------- session lifecycle --
+# Audit Categorie 1, items 13/17: last_seen_at update + idle timeout.
+
+async def _session_row_for(db_session, access_token):
+    from api.models.session import Session
+
+    jti = _jti_of(access_token)
+    return await db_session.scalar(select(Session).where(Session.access_token_jti == jti))
+
+
+async def test_last_seen_at_is_updated_on_each_authenticated_request(client, register_payload, db_session):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    session_row = await _session_row_for(db_session, access_token)
+    original_last_seen_at = session_row.last_seen_at
+    # Force it visibly stale (but still within the idle window) so a
+    # real update is unambiguous, not just "already close to now anyway."
+    session_row.last_seen_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=10)
+    await db_session.commit()
+
+    response = await client.get("/account/me", headers=auth_header)
+    assert response.status_code == 200
+
+    db_session.expire_all()
+    refreshed = await _session_row_for(db_session, access_token)
+    # Bumped forward past the deliberately-forced-stale value (10
+    # minutes ago) -- well past the original creation-time value too.
+    assert refreshed.last_seen_at > original_last_seen_at - dt.timedelta(minutes=11)
+    assert as_aware_utc(refreshed.last_seen_at) > dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+
+
+async def test_session_within_the_idle_window_is_not_revoked(client, register_payload, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "SESSION_IDLE_TIMEOUT_MINUTES", 30)
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    session_row = await _session_row_for(db_session, access_token)
+    session_row.last_seen_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=20)  # within a 30-minute window
+    await db_session.commit()
+
+    response = await client.get("/account/me", headers=auth_header)
+    assert response.status_code == 200
+
+
+async def test_idle_session_is_revoked_and_the_access_token_blacklisted(client, register_payload, db_session, monkeypatch):
+    """Audit finding 13's core validation criterion: a session idle
+    longer than SESSION_IDLE_TIMEOUT_MINUTES is rejected on its next use
+    -- and, same as any other revocation (1.1.15), its access token is
+    blacklisted, not just its Session row marked dead."""
+    monkeypatch.setattr(settings, "SESSION_IDLE_TIMEOUT_MINUTES", 30)
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+
+    session_row = await _session_row_for(db_session, access_token)
+    session_row.last_seen_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=31)
+    await db_session.commit()
+
+    response = await client.get("/account/me", headers=auth_header)
+    assert response.status_code == 401
+
+    db_session.expire_all()
+    refreshed = await _session_row_for(db_session, access_token)
+    assert refreshed.revoked_at is not None
+
+    blacklisted = await db_session.scalar(select(RevokedAccessToken).where(RevokedAccessToken.jti == _jti_of(access_token)))
+    assert blacklisted is not None
+
+    # And it stays rejected -- not just a one-time 401 for that specific request.
+    replay = await client.get("/account/me", headers=auth_header)
+    assert replay.status_code == 401
+
+
+async def test_idle_timeout_sends_a_notification_email(client, register_payload, db_session, monkeypatch):
+    captured = []
+    monkeypatch.setattr("api.dependencies.send_idle_session_revoked_email", lambda to: captured.append(to))
+    monkeypatch.setattr(settings, "SESSION_IDLE_TIMEOUT_MINUTES", 30)
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    session_row = await _session_row_for(db_session, access_token)
+    session_row.last_seen_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=31)
+    await db_session.commit()
+
+    await client.get("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    assert captured == [register_payload["email"]]
+
+
+async def test_idle_timeout_is_configurable(client, register_payload, db_session, monkeypatch):
+    """Proves SESSION_IDLE_TIMEOUT_MINUTES is actually read from settings
+    at request time, not hardcoded -- a 5-minute window rejects a
+    session that a 30-minute default would still accept."""
+    monkeypatch.setattr(settings, "SESSION_IDLE_TIMEOUT_MINUTES", 5)
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    session_row = await _session_row_for(db_session, access_token)
+    session_row.last_seen_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=6)
+    await db_session.commit()
+
+    response = await client.get("/account/me", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 401
+
+
+# Audit Categorie 1, item 14: max concurrent sessions.
+
+async def test_concurrent_session_limit_revokes_the_oldest_session(client, register_payload, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_CONCURRENT_SESSIONS", 3)
+    register_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+
+    login_tokens = []
+    for i in range(3):  # register's own session + 3 logins = 4 issued against a limit of 3
+        login = await client.post(
+            "/auth/login",
+            json={"email": register_payload["email"], "password": register_payload["password"]},
+            headers={"User-Agent": f"device-{i}"},
+        )
+        login_tokens.append(login.json()["access_token"])
+
+    list_response = await client.get("/sessions", headers={"Authorization": f"Bearer {login_tokens[-1]}"})
+    assert len(list_response.json()) == 3  # capped, not 4
+
+    # register()'s own session was the oldest -- it's the one the limit revoked.
+    register_session_dead = await client.get("/account/me", headers={"Authorization": f"Bearer {register_token}"})
+    assert register_session_dead.status_code == 401
+
+    for token in login_tokens:  # all 3 logins are newer -- none of them touched
+        still_works = await client.get("/account/me", headers={"Authorization": f"Bearer {token}"})
+        assert still_works.status_code == 200
+
+
+async def test_sessions_within_the_limit_are_all_kept(client, register_payload, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_CONCURRENT_SESSIONS", 5)
+    await client.post("/auth/register", json=register_payload)
+
+    tokens = []
+    for i in range(3):  # 1 (register) + 3 logins = 4 total, under a limit of 5
+        login = await client.post(
+            "/auth/login",
+            json={"email": register_payload["email"], "password": register_payload["password"]},
+            headers={"User-Agent": f"device-{i}"},
+        )
+        tokens.append(login.json()["access_token"])
+
+    for token in tokens:
+        response = await client.get("/account/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+
+
+async def test_concurrent_session_limit_sends_a_notification_email(client, register_payload, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_CONCURRENT_SESSIONS", 1)
+    captured = []
+    monkeypatch.setattr("api.security.sessions.send_concurrent_session_limit_reached_email", lambda to, device: captured.append((to, device)))
+
+    await client.post("/auth/register", json=register_payload, headers={"User-Agent": "first-device"})
+    await client.post(
+        "/auth/login",
+        json={"email": register_payload["email"], "password": register_payload["password"]},
+        headers={"User-Agent": "second-device"},
+    )
+
+    assert captured == [(register_payload["email"], "first-device")]
+
+
+# Audit Categorie 1, item 16: password/name-email similarity.
+
+async def test_register_rejects_a_password_matching_the_email_local_part(client, register_payload):
+    register_payload["email"] = "janedoette@example.com"  # 10-char local-part, clears min_length=8 on its own
+    register_payload["password"] = "janedoette"
+    response = await client.post("/auth/register", json=register_payload)
+    assert response.status_code == 400
+    assert "too similar" in response.json()["detail"]
+
+
+async def test_register_rejects_a_password_matching_the_full_name(client, register_payload):
+    register_payload["full_name"] = "Jane Doe"
+    register_payload["password"] = "jane doe"
+    response = await client.post("/auth/register", json=register_payload)
+    assert response.status_code == 400
+    assert "too similar" in response.json()["detail"]
+
+
+async def test_password_reset_rejects_a_password_too_similar_to_the_email(client, register_payload, monkeypatch):
+    register_payload["email"] = "adalovelace@example.com"  # local-part long enough to clear the 8-char min_length on its own
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    local_part = register_payload["email"].split("@")[0]
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": local_part})
+    assert response.status_code == 400
+    assert "too similar" in response.json()["detail"]
+
+
+# Audit Categorie 1, item 15: password reuse / history.
+
+async def test_password_reset_rejects_reusing_the_current_password(client, register_payload, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+    await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+    reset_token = captured["link"].split("token=")[1]
+
+    response = await client.post("/auth/password/reset", json={"token": reset_token, "new_password": register_payload["password"]})
+    assert response.status_code == 400
+    assert "used too recently" in response.json()["detail"]
+
+
+async def test_password_reset_rejects_a_recently_used_historical_password(client, register_payload, monkeypatch):
+    """Registers with password P0, then resets through P1, P2 -- each via
+    a fresh forgot/reset round-trip -- and confirms trying to go BACK to
+    P0 or P1 (both still within the default history window of 5) is
+    rejected, not just the immediately-previous one."""
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+
+    async def _reset_to(new_password):
+        captured.clear()
+        await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+        token = captured["link"].split("token=")[1]
+        return await client.post("/auth/password/reset", json={"token": token, "new_password": new_password})
+
+    assert (await _reset_to("second-password-abc")).status_code == 200
+    assert (await _reset_to("third-password-xyz")).status_code == 200
+
+    reuse_p0 = await _reset_to(register_payload["password"])
+    assert reuse_p0.status_code == 400
+    assert "used too recently" in reuse_p0.json()["detail"]
+
+    reuse_p1 = await _reset_to("second-password-abc")
+    assert reuse_p1.status_code == 400
+
+
+async def test_password_history_allows_reuse_once_it_ages_out_of_the_window(client, register_payload, monkeypatch):
+    """Proves the history window is actually bounded (record_password_change
+    prunes beyond PASSWORD_HISTORY_SIZE), not an ever-growing log: with
+    the window set to 2, a password from 3 changes ago is no longer
+    tracked and can legitimately be reused."""
+    monkeypatch.setattr(settings, "PASSWORD_HISTORY_SIZE", 2)
+    captured = {}
+    monkeypatch.setattr("api.services.password_reset.send_password_reset_email", lambda to, link: captured.update(link=link))
+
+    await client.post("/auth/register", json=register_payload)
+
+    async def _reset_to(new_password):
+        captured.clear()
+        await client.post("/auth/password/forgot", json={"email": register_payload["email"]})
+        token = captured["link"].split("token=")[1]
+        return await client.post("/auth/password/reset", json={"token": token, "new_password": new_password})
+
+    original_password = register_payload["password"]
+    assert (await _reset_to("second-password-abc")).status_code == 200
+    assert (await _reset_to("third-password-xyz")).status_code == 200
+    # History window is 2: only "second-password-abc" and "third-password-xyz"
+    # are tracked now -- the original registration password aged out.
+    reuse_original = await _reset_to(original_password)
+    assert reuse_original.status_code == 200
+
+
+async def test_change_password_rejects_reusing_the_current_password(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.post(
+        "/account/change-password",
+        json={"current_password": register_payload["password"], "new_password": register_payload["password"]},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 400
+    assert "used too recently" in response.json()["detail"]
