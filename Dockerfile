@@ -49,7 +49,18 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Pre-existing build failure, surfaced by this file's own new
+# docker-build CI job actually building it for the first time:
+# requirements.txt's own "Tests" section lists `agentfixture`, a
+# private package not published anywhere (see that line's comment --
+# "install from a local clone until it's published") -- pip cannot ever
+# resolve it in a fresh environment, Docker or otherwise. It's a
+# test-only dependency the runtime image (`streamlit run
+# dashboard/app.py`) never imports, so it's excluded here rather than
+# left broken; requirements.txt itself is untouched since local/CI test
+# runs still need it exactly as documented there.
+RUN grep -v '^agentfixture$' requirements.txt > requirements-runtime.txt \
+    && pip install --no-cache-dir -r requirements-runtime.txt
 
 FROM python:3.13-slim-bookworm
 
