@@ -1060,6 +1060,39 @@ async def test_account_restore_undoes_a_pending_deletion(client, register_payloa
     assert user.deletion_reminder_sent_at is None
 
 
+async def test_a_second_deletion_cycle_after_restore_resets_the_reminder_flag(client, register_payload, db_session):
+    """4.6, the other half of the previous test's guarantee: restoring
+    clears deletion_reminder_sent_at (proven above), but that alone
+    isn't enough -- delete_account() itself must ALSO reset it on a
+    fresh delete, for the case where a user deletes, restores, then
+    deletes again WITHOUT the reminder ever having fired in between (so
+    restore's own clearing never even ran on a non-None value). Without
+    this, a stale non-None value from some other path could silently
+    suppress the reminder for a deletion cycle that never got one."""
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    await client.delete("/account/me", headers=auth_header)
+
+    # Simulate the reminder having already fired for THIS cycle.
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    user.deletion_reminder_sent_at = dt.datetime.now(dt.timezone.utc)
+    await db_session.commit()
+
+    await client.post("/account/restore/request", json={"email": register_payload["email"]})
+    # (restore/confirm isn't needed here -- delete_account() itself is
+    # what's under test; simulate the restored, active state directly.)
+    user.is_active = True
+    user.deleted_at = None
+    user.deletion_scheduled_at = None
+    await db_session.commit()
+
+    access_token2 = (await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})).json()["access_token"]
+    await client.delete("/account/me", headers={"Authorization": f"Bearer {access_token2}"})
+
+    await db_session.refresh(user)
+    assert user.deletion_reminder_sent_at is None
+
+
 async def test_account_restore_request_is_silent_for_an_account_that_was_never_deleted(client, register_payload, monkeypatch):
     captured = {}
     monkeypatch.setattr("api.services.account_restore.send_account_restore_email", lambda to, link: captured.update(link=link))
