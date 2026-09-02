@@ -39,6 +39,7 @@ from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
 from api.models.organization_quota import OrganizationQuota
+from api.models.organization_settings import OrganizationSettings
 from api.models.organization_usage import OrganizationUsage, OrganizationUsageDetail
 from api.models.resource_permission import ResourcePermission
 from api.models.team import Team, TeamMember, TeamRole
@@ -599,6 +600,68 @@ async def test_organization_usage_detail_metadata_round_trips_as_json_on_real_po
         await pg_session.execute(delete(Organization).where(Organization.id == org_id))
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_settings(pg_session):
+    """Partie 1.3.9: same reasoning as the other cascade tests in this
+    file -- delete_organization is a Core bulk DELETE, so only the
+    database's own ON DELETE CASCADE
+    (api/alembic/versions/0024_organization_settings.py) removes an
+    organization's settings row, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Settings Cascade Test Org", slug=f"settings-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(OrganizationSettings(organization_id=org_id, settings={"chunk_size": 1024}))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_settings = await pg_session.scalar(select(OrganizationSettings).where(OrganizationSettings.organization_id == org_id))
+        assert remaining_settings is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_creating_an_organization_creates_its_settings_row_in_the_same_transaction(pg_client, pg_engine):
+    """Real end-to-end proof against Postgres (not SQLite) that
+    create_organization_with_owner's inserts -- organization, founding
+    Owner membership, default quota, default settings -- all land
+    together, via the real HTTP endpoint."""
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    email = _unique_email()
+    org_id = None
+
+    try:
+        register_response = await pg_client.post(
+            "/auth/register", json={"email": email, "password": "correct-horse-battery-staple", "accept_terms": True},
+        )
+        assert register_response.status_code == 201
+
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+            membership = await session.scalar(select(OrganizationMember).where(OrganizationMember.user_id == user.id))
+            org_id = membership.organization_id
+            settings_row = await session.scalar(select(OrganizationSettings).where(OrganizationSettings.organization_id == org_id))
+            assert settings_row is not None
+            assert settings_row.settings == {}
+    finally:
+        async with session_factory() as session:
+            if org_id is not None:
+                await session.execute(delete(Organization).where(Organization.id == org_id))
+            user = await session.scalar(select(User).where(User.email == email))
+            if user is not None:
+                await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
 
 
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):

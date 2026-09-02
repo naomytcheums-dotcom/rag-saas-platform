@@ -1506,6 +1506,105 @@ daily-aggregate table, never the detail log, for the same reason --
 "download everything" against an unbounded table would be the one
 endpoint in this step most likely to hurt its own performance goal.
 
+### Configuration par organisation (Partie 1.3.9)
+
+One table (migration `0024`), `organization_settings`: `id`,
+`organization_id` (FK → `organizations`, `UNIQUE`), `settings` (a
+generic `sa.JSON` column, not `postgresql.JSONB` -- same SQLite
+fast-suite-compatibility reasoning as `organization_usage_details.metadata_json`,
+Partie 1.3.8), `created_at`/`updated_at`.
+
+**A row stores ONLY overrides, never a full snapshot**. The 14 settings
+this step names, with their defaults, live in exactly one place --
+`api/security/organization_settings.py`'s `DEFAULT_SETTINGS` dict:
+
+| Setting | Type | Default |
+|---|---|---|
+| `chunk_size` | int | `512` |
+| `chunk_overlap` | int | `50` |
+| `embedding_model` | str | `sentence-transformers/all-MiniLM-L6-v2` |
+| `llm_provider` | `"anthropic" \| "openai" \| "gemini"` | `anthropic` |
+| `llm_model` | str | `claude-3-sonnet-20240229` |
+| `temperature` | float (`0.0`-`2.0`) | `0.7` |
+| `top_k` | int | `5` |
+| `reranker_model` | str | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| `system_prompt` | str (≤10,000 chars) | `You are a helpful assistant.` |
+| `retrieval_strategy` | `"hybrid" \| "vector_only" \| "bm25_only"` | `hybrid` |
+| `max_tokens` | int | `4096` |
+| `citation_required` | bool | `true` |
+| `language` | str (`xx` or `xx-XX`) | `en` |
+| `timezone` | IANA name | `UTC` |
+
+`get_org_settings(db, organization_id)` merges `DEFAULT_SETTINGS` with
+this organization's row (`{**DEFAULT_SETTINGS, **row.settings}`) --
+a fresh organization's row is a bare `{}`, and stays that way until an
+Owner changes something. This is why a new default, or a changed
+default, applies retroactively to every organization that never
+overrode it -- there is no 14-key snapshot anywhere to go stale.
+
+**Cohérence -- exactly where each setting is (and isn't) actually
+used today**, verified by reading the real code, not assumed: every one
+of these 14 values is independently hardcoded in `src/` (the RAG
+pipeline), which has ZERO import dependency on `api/` and zero concept
+of "organization" at all --
+
+| Setting | Where it's hardcoded today |
+|---|---|
+| `chunk_size` / `chunk_overlap` | `CHUNK_SIZE_TOKENS = 512` / `CHUNK_OVERLAP_TOKENS` in `src/indexing.py` |
+| `embedding_model` | `EMBEDDING_MODEL_NAME` in `src/indexing.py` AND `src/retrieval.py` (two independent copies of the same literal) |
+| `reranker_model` | `CROSS_ENCODER_MODEL_NAME` in `src/retrieval.py` |
+| `top_k` | `FINAL_TOP_K = 5` in `src/retrieval.py` |
+| `llm_provider` | implicit -- `src/generation.py` imports `anthropic.Anthropic` directly, no provider abstraction exists |
+| `llm_model` | `MODEL_NAME` in `src/generation.py`, currently `claude-sonnet-5` (read from a `RAG_GENERATION_MODEL` env var) -- **differs from this table's own default** of `claude-3-sonnet-20240229` |
+| `max_tokens` | `MAX_TOKENS = 1024` (`src/generation.py`) and `AGENT_MAX_TOKENS = 1024` (`src/agent.py`) -- two independent constants, both different from this table's default of `4096` |
+| `system_prompt` | `SYSTEM_PROMPT` / `AGENT_SYSTEM_PROMPT` -- long, FastAPI-documentation-specific prompts, nothing like the generic default here |
+| `temperature` / `retrieval_strategy` / `citation_required` / `language` | no corresponding toggle exists in `src/` at all |
+
+Wiring any of this for real means making `src/` organization-aware for
+the first time -- real work for Parties 3/4/9 once those pipelines are
+actually exposed through `api/`, not a side effect of adding a settings
+table to the multi-tenant SaaS backend. This is the same honest-scope
+posture as Partie 1.3.6/1.3.7/1.3.8, just inverted: there, some
+dimensions had no table to enforce against; here, every dimension IS
+fully stored and served, but nothing downstream reads it yet.
+
+**Sécurité**: `GET /organizations/{org_id}/settings` is Admin+
+(`require_org_admin`); `PATCH` is Owner-only (`require_org_owner`),
+same split as `GET`/`PATCH /organizations/{org_id}/quotas`.
+`OrganizationSettingsUpdateRequest` validates every field for real, not
+just its type: `llm_provider`/`retrieval_strategy` are closed enums
+(`Literal[...]`, not a free string a future integration could
+mis-branch on), `temperature` is bounded `[0.0, 2.0]`, `timezone` is
+checked against Python's own `zoneinfo.available_timezones()` (the
+same database `ZoneInfo` resolves against at runtime, not a
+hand-maintained list), `language` must match `xx` or `xx-XX`, and a
+cross-field check in the router rejects `chunk_overlap >= chunk_size`
+regardless of which of the two the PATCH actually touched (computed
+against the RESULTING effective pair, since a partial update might
+change only one side).
+
+**Performance**: settings are read fresh from Postgres on every `GET`
+-- no Redis cache. Deliberate for now: nothing in `api/` calls
+`get_org_settings` from a hot path (the only two call sites are the GET
+endpoint itself and the PATCH endpoint's own cross-field check), so
+there is no per-request cost to amortize yet. Once Parties 3/4/9
+actually consult these settings on every RAG query, revisit -- at that
+point a short-TTL cache keyed by `organization_id`, invalidated on
+`PATCH`, would be the natural next step (same shape as `api/security/jwt.py`'s
+signing-key cache, refreshed on a timer rather than trusted forever).
+
+**Migration**: every NEW organization gets a settings row atomically
+with its Owner membership and quota
+(`api/security/organizations.py`'s `create_organization_with_owner`,
+Partie 1.3.6's `create_default_quota` call site, extended). No backfill
+migration was written for organizations that predate this step --
+`get_org_settings`/`update_org_settings` both degrade gracefully when
+no row exists (pure defaults on read; a fresh `{}` row created on first
+write, same "create it now rather than 404ing an Owner who's allowed to
+be here" reasoning as `api/routers/quotas.py`'s `update_organization_quotas`),
+so a pre-existing organization is never broken, only briefly rowless
+until it reads or writes its settings for the first time.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

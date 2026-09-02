@@ -22,6 +22,7 @@ from api.models.audit_log import AuditAction
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.security.audit_log import log_audit_action
+from api.security.organization_settings import create_default_settings
 from api.security.quotas import create_default_quota
 
 logger = logging.getLogger(__name__)
@@ -53,10 +54,11 @@ async def create_organization_with_owner(
     Shared by POST /organizations (api/routers/organizations.py) and
     the auto-created default organization at registration
     (api/routers/auth.py's register()) -- one place that creates the
-    Organization row, its founding Owner membership, AND its default
-    resource quotas (Partie 1.3.6) atomically, so none of the three can
-    ever exist without the others. `invited_by` is left NULL on the
-    owner's own membership -- nobody invited them, they created it.
+    Organization row, its founding Owner membership, its default
+    resource quotas (Partie 1.3.6), AND its default configuration
+    (Partie 1.3.9) atomically, so none of the four can ever exist
+    without the others. `invited_by` is left NULL on the owner's own
+    membership -- nobody invited them, they created it.
 
     Does not commit -- the caller decides the transaction boundary (at
     registration, this must be part of the SAME commit as the user row
@@ -75,6 +77,9 @@ async def create_organization_with_owner(
     # quotas the moment it exists, same "never without each other"
     # reasoning as the Owner membership above.
     await create_default_quota(db, organization_id=organization.id)
+    # Partie 1.3.9 -- same reasoning, for configuration (empty overrides,
+    # every setting resolves to DEFAULT_SETTINGS until an Owner changes one).
+    await create_default_settings(db, organization_id=organization.id)
     await log_audit_action(
         db, user_id=owner_user_id, action=AuditAction.ORGANIZATION_CREATED, ip=ip, user_agent=user_agent,
         success=True, metadata={"organization_id": str(organization.id), "name": name, "slug": slug},
