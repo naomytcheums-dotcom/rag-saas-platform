@@ -76,7 +76,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 **Score 1.2 : 8-9/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager ✅, Member ✅, Viewer ✅, RBAC complet 🟡, permissions granulaires 🟡 -- réelles et branchées en direct sur workspaces, pas encore sur organizations).
 
-### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (7/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4, 1.3.5, 1.3.6, 1.3.7, 1.3.8, 1.3.9)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (8/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4, 1.3.5, 1.3.6, 1.3.7, 1.3.8, 1.3.9, 1.3.10 -- les 10 items sont désormais tous touchés, 8✅/2🟡/0⬜)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
@@ -89,12 +89,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 1.3.7 | Limites par utilisateur | Colonne daily_request_limit sur organization_members | ✅ (6 colonnes ajoutées à `organization_members` [pas une table séparée], migration 0022 -- `daily_request_limit`/`max_documents`/`max_conversations` (mêmes 3 non-appliqués que 1.3.6, aucune table/endpoint réel derrière) et 3 booléens **délibérément asymétriques** : `can_create_workspaces`/`can_create_teams` (défaut `True`) sont des portes ET RESTRICTIVES par-dessus `require_org_manager` (n'accordent rien à un rôle inférieur, permettent seulement de RETIRER la capacité à un Manager précis) ; `can_invite_members` (défaut `False`) est une porte OU ADDITIVE (accorde la capacité d'inviter à un Member/Viewer précis sans le promouvoir). Choisir la même direction pour les trois aurait cassé des tests déjà livrés dans un sens ou dans l'autre -- démontré et vérifié explicitement. Garde-fou anti-escalade d'invitation élargi de `role == manager` à `role not in (owner, admin)` pour couvrir le nouveau chemin additif. `GET /users/me/limits` renvoie une LISTE (un utilisateur appartient à plusieurs organisations, chacune avec ses propres limites sur cette même ligne d'appartenance). `GET/PATCH /organizations/{id}/members/{user_id}/limits` (Admin+, Owner protégé). 15 tests SQLite + 1 test contre le vrai Postgres, voir `tests/test_user_limits.py`) |
 | 1.3.8 | Usage par organisation | Agrégation telemetry filtrée par org_id | ✅ (deux tables -- `api/models/organization_usage.py`, migration 0023, `ON DELETE CASCADE` depuis `organizations` : `organization_usage` [agrégat journalier, une ligne par (org, jour, métrique), contrainte unique] et `organization_usage_details` [un événement par ligne, jamais agrégé, traçabilité -- qui a fait quoi, quand, contexte JSON libre]. **Même honnêteté de périmètre que 1.3.6/1.3.7** : les métriques nommées par le spec (`requetes`, `tokens_input`, `tokens_output`, `documents_processed`, `storage_mb`) appartiennent à `/v1/chat`, `/v1/agents/run` et `POST /documents` -- recherche exhaustive confirmée, zéro référence à ces routes nulle part dans ce code (Partie 9 et 2.2.1, toutes deux à 0%). `record_usage`/`get_usage`/`get_usage_summary` (`api/security/usage.py`) sont génériques -- n'importe quel appelant peut enregistrer n'importe quelle métrique. Branché en réel sur 4 points d'intégration existants : création de workspace (`workspaces_created`), création d'équipe (`teams_created`), invitation directe ET acceptation par email (`members_invited` sur les deux chemins), et **un dépassement de quota (1.3.6) enregistre désormais un événement `quota_exceeded`** -- répond avec du code réel, pas seulement une note de design, à la question de la vision critique sur le lien quotas/usage. Agrégation en temps réel (lecture-puis-écriture sur la ligne du jour à chaque appel, pas de job batch), portable SQLite/Postgres comme le reste du projet (pas d'`ON CONFLICT` propre à un dialecte). Pas de dispatch Celery -- décision explicite, pas un oubli : tous les points d'intégration actuels sont des écritures peu fréquentes déclenchées par un admin, très loin d'un volume justifiant une file d'attente ; la signature de `record_usage` permettrait de le faire plus tard sans toucher un seul appelant. Pas de politique de rétention implémentée -- non demandée par ce spec, recommandation documentée dans `docs/AUTH_BACKEND_SETUP.md` pour quand ce sera nécessaire. 3 endpoints (`GET .../usage`, `GET .../usage/details` paginé, `GET .../usage/export` en CSV/JSON), tous Admin+. `GET .../usage/details` indexée sur `(organization_id, metric, timestamp)` -- seul pattern de lecture utilisé ; l'export lit l'agrégat journalier, jamais le journal détaillé non borné. 14 tests SQLite + 2 tests contre le vrai Postgres, voir `tests/test_usage.py`) |
 | 1.3.9 | Configuration par organisation | Table organization_settings (JSON) | ✅ (`api/models/organization_settings.py`, migration 0024, `ON DELETE CASCADE` depuis `organizations`, créée automatiquement avec chaque organisation dans la même transaction que le propriétaire fondateur et les quotas par défaut. Une ligne ne stocke QUE les overrides explicites (`settings` JSON, `{}` au départ) -- jamais une copie complète des 14 valeurs par défaut, qui sont définies une seule fois dans `DEFAULT_SETTINGS` (`api/security/organization_settings.py`) et fusionnées à la lecture (`get_org_settings`). **Contrairement à 1.3.6/1.3.7/1.3.8, les 14 dimensions sont ici toutes réellement stockées ET servies** -- rien à mesurer, une config n'a pas de "pas encore trackable". Ce qui reste non branché : **chaque valeur est vérifiée être encore en dur dans `src/`** (le pipeline RAG, qui n'importe rien de `api/` et n'a aucune notion d'organisation) -- `CHUNK_SIZE_TOKENS=512`/`CHUNK_OVERLAP_TOKENS` (`src/indexing.py`), `EMBEDDING_MODEL_NAME` (dupliqué dans `src/indexing.py` ET `src/retrieval.py`), `CROSS_ENCODER_MODEL_NAME`/`FINAL_TOP_K=5` (`src/retrieval.py`), `MODEL_NAME=claude-sonnet-5` (`src/generation.py`, **différent** du défaut de cette table `claude-3-sonnet-20240229`), `MAX_TOKENS=1024`/`AGENT_MAX_TOKENS=1024` (`src/generation.py`/`src/agent.py`, différents du défaut `4096`), `SYSTEM_PROMPT`/`AGENT_SYSTEM_PROMPT` (prompts FastAPI-spécifiques, rien à voir avec le défaut générique) -- `temperature`/`retrieval_strategy`/`citation_required`/`language` n'ont aucun équivalent dans `src/` du tout. Brancher pour de vrai demanderait de rendre `src/` conscient des organisations pour la première fois -- travail réel des Parties 3/4/9, pas un effet de bord de l'ajout d'une table de config au backend SaaS multi-tenant. Validation réelle sur PATCH (pas des types en façade) : `llm_provider`/`retrieval_strategy` en enums fermés, `temperature` bornée `[0, 2]`, `timezone` vérifiée contre `zoneinfo.available_timezones()`, `language` par regex, et une validation croisée `chunk_overlap < chunk_size` calculée sur la PAIRE EFFECTIVE résultante (pas seulement les champs envoyés, puisqu'un PATCH partiel peut ne toucher qu'un des deux). `GET` (Admin+) / `PATCH` (Owner uniquement, mise à jour partielle). Pas de cache Redis -- aucun appelant à chaud n'existe encore pour justifier un cache. Pas de migration de backfill pour les organisations pré-existantes -- `get_org_settings`/`update_org_settings` dégradent proprement vers les defaults purs (lecture) ou créent la ligne à la volée (écriture) si elle n'existe pas. 20 tests SQLite + 2 tests contre le vrai Postgres, voir `tests/test_organization_settings.py`) |
-
-Reste de la table originale, pour référence :
-
-| # | Fonctionnalité | Implémentation prévue |
-|---|---|---|
-| 1.3.10 | Branding par organisation | Table organization_branding |
+| 1.3.10 | Branding par organisation | Table organization_branding | ✅ (`api/models/organization_branding.py`, migration 0025, `ON DELETE CASCADE` depuis `organizations`, créée automatiquement avec la même transaction que le quota et la configuration par défaut. **Contrairement à 1.3.9, table de colonnes typées avec vraies valeurs par défaut sur la ligne elle-même** (même forme que `OrganizationQuota`, pas un blob JSON) -- 8 champs fixes, pas un ensemble ouvert. **`GET` est délibérément PUBLIC** -- la seule exception dans tout ce code à la règle "toute route `/organizations/{org_id}/...` exige au moins `require_org_member`" : le branding existe pour être affiché à un VISITEUR avant même qu'il soit authentifié (écran de connexion, widget embarqué) ; seul un `organization_id` réellement inexistant renvoie 404, le 404 anti-énumération des autres routes ne s'applique pas ici par conception. `PATCH` et les 4 endpoints d'upload/suppression restent Owner uniquement. **Sécurité upload réelle** (`api/services/storage.py`) : taille (2MB logo/512KB favicon), format réel par octets magiques (jamais le Content-Type déclaré, comme les avatars), ET un vrai décodage Pillow + vérification des dimensions en pixels (2000×2000/512×512) -- `Pillow` passe de dépendance transitive (`qrcode[pil]`) à directe. **Stockage** : réutilise le MÊME bucket S3 que les avatars sous un préfixe `branding/{org_id}/` -- aucun second bucket, aucun nouveau réglage `S3_*`, aucun changement CI ; clé aléatoire à chaque upload, ancien objet explicitement supprimé du stockage au remplacement ou à la suppression (jamais orphelin). **`custom_css` -- mitigation réelle et testée** contre l'injection CSS (`expression()`, `-moz-binding`, `behavior:`, `@import`, `<script`) puisque c'est du contenu contrôlé par l'Owner mais servi à tout visiteur anonyme de la page publique de l'organisation. Pas de cache Redis -- même raisonnement que 1.3.9. **Intégration frontend : n'existe pas à intégrer** -- aucun projet Next.js/React nulle part dans ce dépôt (vérifié : zéro `package.json`, zéro fichier `.tsx`/`.jsx`), seule UI existante `dashboard/app.py` (Streamlit mono-utilisateur, sans rapport avec les organisations, Partie 8 à 0%) ; l'API construite ici (`GET .../branding` public) est précisément ce qu'un futur frontend consommerait, pas quelque chose à brancher dans du code qui n'existe pas. 22 tests SQLite (permissions/branchement) + 10 tests SQLite (validation réelle, `tests/test_storage.py`) + 2 tests contre le vrai Postgres (cascade + defaults) + 6 tests contre le vrai S3/MinIO (upload/remplacement/suppression bout-en-bout), voir `tests/test_organization_branding.py` et `tests/test_branding_storage_integration.py`) |
 
 ### 1.4 Domaine & White-label — ⬜ NON COMMENCÉ (0/10)
 
@@ -373,17 +368,17 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 52 | 10.4% |
+| ✅ Fait | 53 | 10.6% |
 | 🟡 Partiel | 60 | 12.0% |
-| ⬜ Non commencé | 388 | 77.6% |
+| ⬜ Non commencé | 387 | 77.4% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **52/515 (~10.1%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **112/515 (~21.7%)**
-- Pondéré (✅=1, 🟡=0.5) : **~82/515 (~15.9%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **53/515 (~10.3%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **113/515 (~21.9%)**
+- Pondéré (✅=1, 🟡=0.5) : **~83/515 (~16.1%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 1.3.9 (Configuration par organisation, 2026-09-02) :
-Partie 1.3 passe de 6✅/2🟡/2⬜ à 7✅/2🟡/1⬜ sur 10.
+Mis à jour après Partie 1.3.10 (Branding par organisation, 2026-09-02) :
+Partie 1.3 passe de 7✅/2🟡/1⬜ à 8✅/2🟡/0⬜ sur 10 -- **les 10 items de la Partie 1.3 sont désormais tous touchés** (aucun ⬜ restant ; 1.3.2 Workspaces et 1.3.5 Isolation des données restent 🟡, volontairement incomplets par rapport à la portée complète du spec, voir leurs lignes ci-dessus pour le détail exact de ce qui manque).
 
 Voir le rapport détaillé livré en conversation (état des lieux du
 2026-09-02) pour le détail exact par Partie -- tableau récapitulatif,
@@ -422,49 +417,55 @@ reste ouvertement non fait dans cette Partie, pour mémoire :
 - Aucun endpoint `documents`/`conversations`/`agents`/`knowledge_base` --
   attendu, ces ressources n'existent pas avant la Partie 2/3/5.
 
+### ✅ Étape B — Partie 1.3 (Multi-tenant) — TERMINÉE au sens "tous les items touchés" (8✅/2🟡/0⬜ sur 10)
+
+1.3.1, 1.3.3, 1.3.4, 1.3.6, 1.3.7, 1.3.8, 1.3.9, 1.3.10 tous livrés et
+vérifiés en CI réelle. Ce qui reste ouvertement partiel dans cette
+Partie, pour mémoire :
+- **1.3.2 (Workspaces)** : CRUD complet mais délibérément minimal --
+  pas encore de lien vers une KB ou des agents, puisqu'aucun des deux
+  n'existe encore (Parties 2/5).
+- **1.3.5 (Isolation des données)** : isolation applicative réelle et
+  testée, mais RLS activée sur toutes les tables reste délibérément non
+  fonctionnelle (`postgres` a `BYPASSRLS`) -- décision explicite de ne
+  pas construire de RLS réellement appliquée tant qu'aucun accès direct
+  non-fiable à Postgres n'existe.
+- Les quotas (1.3.6), les limites par membre (1.3.7) et l'usage (1.3.8)
+  ne couvrent réellement que les dimensions avec une vraie table
+  (users/workspaces/teams pour les quotas ; can_create_workspaces/
+  can_create_teams/can_invite_members pour les limites ;
+  workspaces_created/teams_created/members_invited/quota_exceeded pour
+  l'usage), le reste attendant les Parties 2/3/5/8/9.
+- La configuration (1.3.9) et le branding (1.3.10) sont, eux,
+  entièrement stockés et servis pour toutes leurs dimensions -- ce qui
+  manque n'est pas le stockage mais la consommation : `src/` (le
+  pipeline RAG) et le frontend (inexistant, Partie 8 à 0%) restent tous
+  les deux indépendants de `api/` (voir `docs/AUTH_BACKEND_SETUP.md`).
+
 ### Prochaines étapes, par ordre de priorité recommandé
 
-1. **Partie 1.3 (Multi-tenant), le reste** -- fondation bloquante pour
-   beaucoup d'autres Parties (1.4, 2, 3.3, 9, 12). `organizations`/
-   `workspaces`/`teams`/`invitations`/`quotas`/`limites par membre`/
-   `usage`/`configuration` existent déjà (1.3.1 ✅, 1.3.2 🟡, 1.3.3 ✅,
-   1.3.4 ✅, 1.3.6 ✅, 1.3.7 ✅, 1.3.8 ✅, 1.3.9 ✅), et l'isolation des
-   données est réelle et testée au niveau applicatif (1.3.5 🟡 -- RLS
-   activée sur toutes les tables mais délibérément non fonctionnelle
-   pour cette appli, `postgres` étant BYPASSRLS ; décision explicite de
-   ne pas construire de RLS réellement appliquée tant qu'aucun accès
-   direct non-fiable à Postgres n'existe). Les quotas (1.3.6), les
-   limites par membre (1.3.7) et l'usage (1.3.8) ne couvrent réellement
-   que les dimensions avec une vraie table (users/workspaces/teams pour
-   les quotas ; can_create_workspaces/can_create_teams/can_invite_members
-   pour les limites ; workspaces_created/teams_created/members_invited/
-   quota_exceeded pour l'usage), le reste attendant les Parties 2/3/5/8/9.
-   La configuration (1.3.9) est, elle, entièrement stockée et servie
-   pour les 14 dimensions -- ce qui manque n'est pas le stockage mais la
-   consommation : `src/` (le pipeline RAG) reste indépendant de `api/`
-   et garde ses propres valeurs en dur, vérifiées une par une (voir
-   `docs/AUTH_BACKEND_SETUP.md`). Il ne manque plus que le branding
-   (1.3.10, 1 item).
-2. **Partie 10 (Sécurité & Governance), le reste** : SSRF protection,
+1. **Partie 10 (Sécurité & Governance), le reste** : SSRF protection,
    guardrails IA (PII/toxicity/jailbreak), secret management (Vault),
    request/trace IDs, Sentry -- projet piloté par un audit sécurité, ces
    items ont un poids disproportionné par rapport à leur effort.
-3. **Partie 13 (Developer Experience)** : ruff/mypy/pre-commit/
+2. **Partie 13 (Developer Experience)** : ruff/mypy/pre-commit/
    dependabot/bandit, lint+type-check en CI -- gains rapides et peu
    coûteux, réduisent la dette avant que le projet grossisse encore.
-4. **Partie 2 (Knowledge Base multi-format)** -- le cœur produit d'un
-   "RAG SaaS platform" ; dépend de 1.3 pour le scoping par organisation/
-   workspace. Gros chantier (35 items, plusieurs parsers + jobs Celery),
-   à découper en sous-étapes (import, gestion documents, sync).
-5. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
+3. **Partie 2 (Knowledge Base multi-format)** -- le cœur produit d'un
+   "RAG SaaS platform" ; dépend de 1.3 (désormais tous les items
+   touchés) pour le scoping par organisation/workspace. Gros chantier
+   (35 items, plusieurs parsers + jobs Celery), à découper en
+   sous-étapes (import, gestion documents, sync).
+4. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
    le code existe déjà (`hallucination_detection.py`, `llm_judge.py`),
    juste jamais validé en conditions réelles faute de crédit API
    Anthropic -- rapport effort/valeur excellent dès que le crédit est
    disponible.
 
-### Reste du non-commencé (après les 5 priorités ci-dessus)
+### Reste du non-commencé (après les priorités ci-dessus)
 
-- Partie 1.4 (White-label) -- dépend de 1.3.10 (branding par org, seul item restant de 1.3.9/1.3.10)
+- Partie 1.4 (White-label) -- 1.3.9 (configuration) et 1.3.10 (branding)
+  sont maintenant tous les deux faits, plus aucun blocage côté stockage/API
 - Partie 3 (Pipeline RAG), le reste -- chunking avancé, query expansion/HyDE, MMR
 - Partie 4 (Multi-LLM) -- abstraction LiteLLM, actuellement un seul provider en dur
 - Partie 5.3/5.4 (Agent Builder / Workflow Builder) -- aucune table `agents`, aucune UI

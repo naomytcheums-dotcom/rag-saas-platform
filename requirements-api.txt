@@ -44,6 +44,11 @@ pyjwt[crypto]==2.13.0
 authlib==1.8.0
 pyotp==2.10.0
 qrcode[pil]==8.2
+# Pillow was already present transitively (qrcode[pil]) -- pinned directly
+# now that api/services/storage.py's branding logo/favicon validation
+# (Partie 1.3.10) imports it itself (real pixel-dimension checks), rather
+# than relying on another package's dependency tree to keep providing it.
+Pillow==12.3.0
 # cryptography was already present transitively (pyjwt[crypto]) -- pinned
 # directly now that api/security/secret_encryption.py (audit Categorie 4,
 # items 27/28) imports it itself, rather than relying on another

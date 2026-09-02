@@ -38,6 +38,7 @@ from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
+from api.models.organization_branding import OrganizationBranding
 from api.models.organization_quota import OrganizationQuota
 from api.models.organization_settings import OrganizationSettings
 from api.models.organization_usage import OrganizationUsage, OrganizationUsageDetail
@@ -654,6 +655,75 @@ async def test_creating_an_organization_creates_its_settings_row_in_the_same_tra
             settings_row = await session.scalar(select(OrganizationSettings).where(OrganizationSettings.organization_id == org_id))
             assert settings_row is not None
             assert settings_row.settings == {}
+    finally:
+        async with session_factory() as session:
+            if org_id is not None:
+                await session.execute(delete(Organization).where(Organization.id == org_id))
+            user = await session.scalar(select(User).where(User.email == email))
+            if user is not None:
+                await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_branding(pg_session):
+    """Partie 1.3.10: same reasoning as the other cascade tests in this
+    file -- delete_organization is a Core bulk DELETE, so only the
+    database's own ON DELETE CASCADE
+    (api/alembic/versions/0025_organization_branding.py) removes an
+    organization's branding row, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Branding Cascade Test Org", slug=f"branding-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(OrganizationBranding(organization_id=org_id, brand_name="Cascade Co"))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_branding = await pg_session.scalar(select(OrganizationBranding).where(OrganizationBranding.organization_id == org_id))
+        assert remaining_branding is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_creating_an_organization_creates_its_branding_row_with_documented_defaults(pg_client, pg_engine):
+    """Real end-to-end proof against Postgres (not SQLite) that
+    create_organization_with_owner's inserts -- organization, founding
+    Owner membership, default quota, default settings, default branding
+    -- all land together, via the real HTTP endpoint, and that the
+    server_default color values (migration 0025) actually match the
+    Python-level defaults (api/models/organization_branding.py)."""
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    email = _unique_email()
+    org_id = None
+
+    try:
+        register_response = await pg_client.post(
+            "/auth/register", json={"email": email, "password": "correct-horse-battery-staple", "accept_terms": True},
+        )
+        assert register_response.status_code == 201
+
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+            membership = await session.scalar(select(OrganizationMember).where(OrganizationMember.user_id == user.id))
+            org_id = membership.organization_id
+            branding = await session.scalar(select(OrganizationBranding).where(OrganizationBranding.organization_id == org_id))
+            assert branding is not None
+            assert branding.primary_color == "#2563eb"
+            assert branding.secondary_color == "#1e293b"
+            assert branding.accent_color == "#f59e0b"
+            assert branding.font_family == "Inter"
+            assert branding.logo_url is None
+            assert branding.brand_name is None
     finally:
         async with session_factory() as session:
             if org_id is not None:

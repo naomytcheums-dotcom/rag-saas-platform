@@ -1605,6 +1605,99 @@ be here" reasoning as `api/routers/quotas.py`'s `update_organization_quotas`),
 so a pre-existing organization is never broken, only briefly rowless
 until it reads or writes its settings for the first time.
 
+### Branding par organisation (Partie 1.3.10)
+
+One table (migration `0025`), `organization_branding`: `id`,
+`organization_id` (FK → `organizations`, `UNIQUE`), `logo_url`/
+`favicon_url` (nullable `TEXT`), `primary_color`/`secondary_color`/
+`accent_color` (hex, defaulted `#2563eb`/`#1e293b`/`#f59e0b`),
+`font_family` (defaulted `Inter`), `brand_name` (nullable), `custom_css`
+(nullable `TEXT`), `created_at`/`updated_at`. Unlike Partie 1.3.9's
+`organization_settings` (an open-ended JSON blob of overrides merged
+with defaults at read time), this is a small, fixed set of real, typed
+columns with real defaults on the row itself -- the same shape as
+`OrganizationQuota`, since branding is a closed set of 8 fields this
+step names explicitly, not something expected to grow the way
+configuration keys might.
+
+**`GET` is deliberately PUBLIC** -- the one exception in this entire
+codebase to every other `/organizations/{org_id}/...` route requiring
+at least `require_org_member`. Branding exists to be shown on a page a
+VISITOR reaches before they're a member of anything, or even
+authenticated at all (a login screen, an embeddable widget) -- gating
+it behind membership would defeat its own purpose. This accepts a
+narrow tradeoff every other endpoint in this codebase avoids: `GET
+.../branding` for ANY valid `organization_id` returns 200, revealing
+that the id exists (weak enumeration) -- the anti-enumeration 404
+`require_org_member`-gated routes use does not apply to something
+meant to be public by design. Only a genuinely non-existent
+`organization_id` gets a 404. `PATCH` and the upload/delete endpoints
+stay Owner-only, same boundary as quotas'/settings' `PATCH`.
+
+**Upload security -- real validation, not a placeholder** (`api/services/storage.py`):
+size limit (2MB logo / 512KB favicon, independently smaller than
+avatars' 5MB -- these are displayed small), real image-format detection
+from the file's own magic bytes (never the client-declared
+Content-Type, same as avatar upload), AND a real Pillow decode +
+pixel-dimension check (2000×2000px logo / 512×512px favicon) --
+`Pillow` is now a direct dependency (`requirements-api.txt`; it was
+already present transitively via `qrcode[pil]`). A file that matches an
+image's magic-byte signature but Pillow itself can't decode (truncated,
+corrupted, or a signature-spoofing attempt) is rejected too, not just
+one with the wrong signature outright.
+
+**Storage**: reuses the SAME S3-compatible bucket as avatars
+(`S3_BUCKET_NAME`) under a `branding/{organization_id}/` key prefix --
+no second bucket, no new `S3_*` setting, no CI service-container
+change. A fresh random key per upload (never a fixed name) so old
+CDN/browser caches never serve a stale asset under a reused URL, same
+reasoning as avatar upload; the previous logo/favicon object is
+explicitly deleted from storage (best-effort, never blocks the
+response) whenever a new one replaces it or `DELETE` removes it, so
+replacing/removing a logo doesn't leave the old object orphaned in the
+bucket forever. URLs are plain public (`ACL="public-read"`, same as
+avatars) -- not signed, since this is public-facing branding content by
+design, not a private file.
+
+**`custom_css` -- a real, tested mitigation, not "it's just CSS"**:
+Owner-controlled but served to every anonymous visitor of that
+organization's public branded page. CSS can't run arbitrary JS in a
+modern browser, but historically-exploitable constructs
+(`expression()` on old IE, `-moz-binding`/`behavior:` binding a
+stylesheet to script, `@import` silently fetching a third-party
+stylesheet that could fingerprint or track a visitor) are rejected
+outright by `api/security/organization_branding.py`'s
+`validate_custom_css`, plus a length cap (20,000 chars).
+
+**Performance**: no Redis cache, same reasoning as Partie 1.3.9's
+settings -- nothing calls `get_org_branding` from a hot path yet (the
+GET endpoint itself is the only real caller). Once a real frontend
+actually renders a branded page on every request, a short-TTL cache
+keyed by `organization_id`, invalidated on `PATCH`/upload/delete, is
+the natural next step.
+
+**Intégration frontend**: **does not exist to integrate into** -- this
+codebase has NO Next.js/React project at all (verified: no
+`package.json`, no `.tsx`/`.jsx` file anywhere in the repository); the
+only UI is `dashboard/app.py`, a single-user Streamlit dashboard for
+the RAG pipeline, unrelated to organizations or multi-tenancy (Partie
+8 -- Interface Utilisateur -- is 0% built, see
+`docs/CAHIER_DES_CHARGES.md`). Injecting `--primary-color`/etc. CSS
+variables into a layout, using `brand_name` in a header/`<title>`, and
+`favicon_url` in a `<head>` are real frontend work that has nowhere to
+go in this repository yet -- the API this step builds (`GET
+.../branding`, public, exactly so a frontend CAN fetch it before
+authenticating) is what a real frontend would consume once Partie 8
+exists, not something this step can wire into code that isn't there.
+
+**Migration**: every NEW organization gets a branding row atomically
+with its Owner membership, quota, and settings
+(`api/security/organizations.py`'s `create_organization_with_owner`).
+No backfill for organizations that predate this step --
+`get_org_branding`/`update_org_branding` both degrade gracefully when
+no row exists (pure defaults on read; a fresh default row created on
+first write), same pattern as quotas/settings.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
