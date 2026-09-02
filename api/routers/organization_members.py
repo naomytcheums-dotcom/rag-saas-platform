@@ -65,6 +65,7 @@ from api.security.organizations import (
     require_org_admin,
 )
 from api.security.quotas import require_quota_available
+from api.security.usage import record_usage
 from api.security.user_limits import require_can_invite_members
 from api.services.email import (
     send_organization_member_added_email,
@@ -154,6 +155,11 @@ async def invite_organization_member(
         user_agent=request.headers.get("user-agent"), success=True,
         metadata={"organization_id": str(org_id), "target_user_id": str(target_user.id), "role": payload.role.value},
     )
+    # Partie 1.3.8 -- see api/routers/workspaces.py's create_workspace for
+    # the same reasoning; this is the immediate-add path (the email-link
+    # path, api/routers/invitations.py's accept_invitation, records the
+    # same metric independently since it's a separate creation site).
+    await record_usage(db, org_id, "members_invited", 1, user_id=caller.user_id, metadata={"target_user_id": str(target_user.id)})
     await db.commit()
 
     try:

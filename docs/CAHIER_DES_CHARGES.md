@@ -76,7 +76,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 **Score 1.2 : 8-9/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager ✅, Member ✅, Viewer ✅, RBAC complet 🟡, permissions granulaires 🟡 -- réelles et branchées en direct sur workspaces, pas encore sur organizations).
 
-### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (5/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4, 1.3.5, 1.3.6, 1.3.7)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (6/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4, 1.3.5, 1.3.6, 1.3.7, 1.3.8)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
@@ -87,13 +87,12 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 1.3.5 | Isolation des données | org_id obligatoire sur chaque requête + collection Chroma dédiée | 🟡 (isolation réelle et testée depuis 1.2.2-1.3.4 : chaque requête org-scopée filtre explicitement par `organization_id` en Python (`require_org_member` et toute sa famille) -- vérifié par des dizaines de tests d'isolation cross-org tout au long de cette session. **Row Level Security activée sur les 24/24 tables réelles** (vérifié directement contre le vrai Postgres, voir `tests/test_postgres_integration.py`), mais **délibérément non fonctionnelle pour cette appli** : le rôle de connexion (`postgres`) a `BYPASSRLS`, confirmé en interrogeant `pg_roles` -- RLS y est activée depuis la toute première migration (0002) exactement comme défense en profondeur contre une future exposition accidentelle via PostgREST/SDK Supabase, pas comme isolation fonctionnelle pour cette appli. Décision explicite (validée avec l'utilisateur) de NE PAS construire de RLS réellement appliquée -- un rôle Postgres restreint + injection de session par requête + politiques SQL dupliquant la logique Python déjà testée serait un chantier à fort risque pour un gain nul tant qu'aucun accès direct non-fiable à Postgres n'existe. Aucune collection Chroma dédiée par org -- n'existe pas encore, dépend de la Partie 2/3. Voir `docs/AUTH_BACKEND_SETUP.md` pour l'état des lieux complet et le raisonnement) |
 | 1.3.6 | Quotas par organisation | Table organization_limits, vérifiées en middleware | ✅ (`api/models/organization_quota.py`, migration 0021, `ON DELETE CASCADE` depuis `organizations`, créée automatiquement avec chaque organisation dans la même transaction que le propriétaire fondateur. 10 dimensions demandées, mais **seules 3 sont réellement appliquées** aujourd'hui : `users`/`workspaces`/`teams`, les seules avec une vraie table à compter -- les 7 autres (documents, stockage, requêtes/jour/mois, appels API, agents, taille KB) n'ont ni table ni endpoint (Parties 2/5/9, inexistantes), donc stockées comme configuration mais non appliquées, `check_quota` renvoyant `True` et `get_quota_usage` renvoyant `None` (pas `0`, qui mentirait sur "rien utilisé"). L'usage des 3 dimensions réelles est un **COMPTAGE EN DIRECT** (`SELECT COUNT(*)`) contre la vraie table, jamais un compteur maintenu séparément -- élimine toute dérive possible, et rend `increment_usage` (4e fonction demandée) un no-op honnête et documenté. Branché sur 3 endpoints réels (`invite`, `create_workspace`, `create_team`) **plus, au-delà de la liste littérale du spec, les deux branches d'acceptation d'invitation (1.3.4)** -- sans quoi `max_users` aurait eu une faille béante via le chemin d'invitation par email construit à l'étape précédente. Erreur `402 Payment Required` (pas 403/429) en cas de dépassement. `GET` (Admin+) / `PATCH` (Owner uniquement, mise à jour partielle, `0` autorisé pour bloquer totalement une ressource). Valeurs par défaut configurables via `.env` (10 réglages `QUOTA_DEFAULT_MAX_*`). 11 tests SQLite + 2 tests contre le vrai Postgres, voir `tests/test_quotas.py`) |
 | 1.3.7 | Limites par utilisateur | Colonne daily_request_limit sur organization_members | ✅ (6 colonnes ajoutées à `organization_members` [pas une table séparée], migration 0022 -- `daily_request_limit`/`max_documents`/`max_conversations` (mêmes 3 non-appliqués que 1.3.6, aucune table/endpoint réel derrière) et 3 booléens **délibérément asymétriques** : `can_create_workspaces`/`can_create_teams` (défaut `True`) sont des portes ET RESTRICTIVES par-dessus `require_org_manager` (n'accordent rien à un rôle inférieur, permettent seulement de RETIRER la capacité à un Manager précis) ; `can_invite_members` (défaut `False`) est une porte OU ADDITIVE (accorde la capacité d'inviter à un Member/Viewer précis sans le promouvoir). Choisir la même direction pour les trois aurait cassé des tests déjà livrés dans un sens ou dans l'autre -- démontré et vérifié explicitement. Garde-fou anti-escalade d'invitation élargi de `role == manager` à `role not in (owner, admin)` pour couvrir le nouveau chemin additif. `GET /users/me/limits` renvoie une LISTE (un utilisateur appartient à plusieurs organisations, chacune avec ses propres limites sur cette même ligne d'appartenance). `GET/PATCH /organizations/{id}/members/{user_id}/limits` (Admin+, Owner protégé). 15 tests SQLite + 1 test contre le vrai Postgres, voir `tests/test_user_limits.py`) |
-| 1.3.8-1.3.10 | Usage, config, branding | — | ⬜ (3 items, voir la table de référence ci-dessous) |
+| 1.3.8 | Usage par organisation | Agrégation telemetry filtrée par org_id | ✅ (deux tables -- `api/models/organization_usage.py`, migration 0023, `ON DELETE CASCADE` depuis `organizations` : `organization_usage` [agrégat journalier, une ligne par (org, jour, métrique), contrainte unique] et `organization_usage_details` [un événement par ligne, jamais agrégé, traçabilité -- qui a fait quoi, quand, contexte JSON libre]. **Même honnêteté de périmètre que 1.3.6/1.3.7** : les métriques nommées par le spec (`requetes`, `tokens_input`, `tokens_output`, `documents_processed`, `storage_mb`) appartiennent à `/v1/chat`, `/v1/agents/run` et `POST /documents` -- recherche exhaustive confirmée, zéro référence à ces routes nulle part dans ce code (Partie 9 et 2.2.1, toutes deux à 0%). `record_usage`/`get_usage`/`get_usage_summary` (`api/security/usage.py`) sont génériques -- n'importe quel appelant peut enregistrer n'importe quelle métrique. Branché en réel sur 4 points d'intégration existants : création de workspace (`workspaces_created`), création d'équipe (`teams_created`), invitation directe ET acceptation par email (`members_invited` sur les deux chemins), et **un dépassement de quota (1.3.6) enregistre désormais un événement `quota_exceeded`** -- répond avec du code réel, pas seulement une note de design, à la question de la vision critique sur le lien quotas/usage. Agrégation en temps réel (lecture-puis-écriture sur la ligne du jour à chaque appel, pas de job batch), portable SQLite/Postgres comme le reste du projet (pas d'`ON CONFLICT` propre à un dialecte). Pas de dispatch Celery -- décision explicite, pas un oubli : tous les points d'intégration actuels sont des écritures peu fréquentes déclenchées par un admin, très loin d'un volume justifiant une file d'attente ; la signature de `record_usage` permettrait de le faire plus tard sans toucher un seul appelant. Pas de politique de rétention implémentée -- non demandée par ce spec, recommandation documentée dans `docs/AUTH_BACKEND_SETUP.md` pour quand ce sera nécessaire. 3 endpoints (`GET .../usage`, `GET .../usage/details` paginé, `GET .../usage/export` en CSV/JSON), tous Admin+. `GET .../usage/details` indexée sur `(organization_id, metric, timestamp)` -- seul pattern de lecture utilisé ; l'export lit l'agrégat journalier, jamais le journal détaillé non borné. 14 tests SQLite + 2 tests contre le vrai Postgres, voir `tests/test_usage.py`) |
 
 Reste de la table originale, pour référence :
 
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|
-| 1.3.8 | Usage par organisation | Agrégation telemetry filtrée par org_id |
 | 1.3.9 | Configuration par organisation | Table organization_settings (JSON) |
 | 1.3.10 | Branding par organisation | Table organization_branding |
 
@@ -374,17 +373,17 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 50 | 10.0% |
+| ✅ Fait | 51 | 10.2% |
 | 🟡 Partiel | 60 | 12.0% |
-| ⬜ Non commencé | 390 | 78.0% |
+| ⬜ Non commencé | 389 | 77.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **50/515 (~9.7%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **110/515 (~21.4%)**
-- Pondéré (✅=1, 🟡=0.5) : **~80/515 (~15.5%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **51/515 (~9.9%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **111/515 (~21.6%)**
+- Pondéré (✅=1, 🟡=0.5) : **~81/515 (~15.7%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 1.3.7 (Limites par utilisateur, 2026-09-02) :
-Partie 1.3 passe de 4✅/2🟡/4⬜ à 5✅/2🟡/3⬜ sur 10.
+Mis à jour après Partie 1.3.8 (Usage par organisation, 2026-09-02) :
+Partie 1.3 passe de 5✅/2🟡/3⬜ à 6✅/2🟡/2⬜ sur 10.
 
 Voir le rapport détaillé livré en conversation (état des lieux du
 2026-09-02) pour le détail exact par Partie -- tableau récapitulatif,
@@ -427,18 +426,20 @@ reste ouvertement non fait dans cette Partie, pour mémoire :
 
 1. **Partie 1.3 (Multi-tenant), le reste** -- fondation bloquante pour
    beaucoup d'autres Parties (1.4, 2, 3.3, 9, 12). `organizations`/
-   `workspaces`/`teams`/`invitations`/`quotas`/`limites par membre`
-   existent déjà (1.3.1 ✅, 1.3.2 🟡, 1.3.3 ✅, 1.3.4 ✅, 1.3.6 ✅, 1.3.7 ✅),
-   et l'isolation des données est réelle et testée au niveau applicatif
-   (1.3.5 🟡 -- RLS activée sur toutes les tables mais délibérément non
-   fonctionnelle pour cette appli, `postgres` étant BYPASSRLS ; décision
-   explicite de ne pas construire de RLS réellement appliquée tant
-   qu'aucun accès direct non-fiable à Postgres n'existe). Les quotas
-   (1.3.6) et les limites par membre (1.3.7) ne couvrent réellement que
-   les dimensions avec une vraie table (users/workspaces/teams pour les
-   quotas ; can_create_workspaces/can_create_teams/can_invite_members
-   pour les limites), le reste attendant les Parties 2/3/5/8/9 ; il
-   manque usage, configuration, branding (1.3.8 à 1.3.10, 3 items).
+   `workspaces`/`teams`/`invitations`/`quotas`/`limites par membre`/`usage`
+   existent déjà (1.3.1 ✅, 1.3.2 🟡, 1.3.3 ✅, 1.3.4 ✅, 1.3.6 ✅, 1.3.7 ✅,
+   1.3.8 ✅), et l'isolation des données est réelle et testée au niveau
+   applicatif (1.3.5 🟡 -- RLS activée sur toutes les tables mais
+   délibérément non fonctionnelle pour cette appli, `postgres` étant
+   BYPASSRLS ; décision explicite de ne pas construire de RLS réellement
+   appliquée tant qu'aucun accès direct non-fiable à Postgres n'existe).
+   Les quotas (1.3.6), les limites par membre (1.3.7) et l'usage (1.3.8)
+   ne couvrent réellement que les dimensions avec une vraie table
+   (users/workspaces/teams pour les quotas ; can_create_workspaces/
+   can_create_teams/can_invite_members pour les limites ;
+   workspaces_created/teams_created/members_invited/quota_exceeded pour
+   l'usage), le reste attendant les Parties 2/3/5/8/9 ; il manque
+   configuration et branding (1.3.9 à 1.3.10, 2 items).
 2. **Partie 10 (Sécurité & Governance), le reste** : SSRF protection,
    guardrails IA (PII/toxicity/jailbreak), secret management (Vault),
    request/trace IDs, Sentry -- projet piloté par un audit sécurité, ces

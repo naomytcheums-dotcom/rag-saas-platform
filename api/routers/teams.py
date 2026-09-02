@@ -53,6 +53,7 @@ from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_manager
 from api.security.quotas import require_quota_available
 from api.security.teams import require_team_admin, require_team_member, require_team_org_manager
+from api.security.usage import record_usage
 from api.security.user_limits import require_team_creation_allowed
 from api.utils import client_ip
 
@@ -95,6 +96,9 @@ async def create_team(
         user_agent=request.headers.get("user-agent"), success=True,
         metadata={"organization_id": str(org_id), "team_id": str(team.id), "name": payload.name},
     )
+    # Partie 1.3.8 -- see api/routers/workspaces.py's create_workspace for
+    # the same reasoning.
+    await record_usage(db, org_id, "teams_created", 1, user_id=caller.user_id, metadata={"team_id": str(team.id)})
     await db.commit()
     await db.refresh(team)
     return _to_entry(team)

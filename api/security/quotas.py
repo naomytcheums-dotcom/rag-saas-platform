@@ -44,6 +44,7 @@ from api.models.organization import OrganizationMember
 from api.models.organization_quota import OrganizationQuota
 from api.models.team import Team
 from api.models.workspace import Workspace
+from api.security.usage import record_usage
 
 # resource_type -> (limit column name, live-count query builder). Only
 # the three resources with a real table to count get an entry here --
@@ -170,8 +171,26 @@ async def require_quota_available(db: AsyncSession, organization_id: uuid.UUID, 
     require_team_member). 402 Payment Required, not 403/429: this is
     neither a permissions failure nor a request-rate throttle, it is
     "your plan's limit for this resource has been reached" -- the HTTP
-    status code that already carries that exact meaning by convention."""
+    status code that already carries that exact meaning by convention.
+
+    Partie 1.3.8: also records a "quota_exceeded" usage event before
+    raising -- answers that step's own vision-critique question on
+    quota/usage integration with real code rather than only a design
+    note: an organization repeatedly hitting its ceiling is now visible
+    in GET /organizations/{org_id}/usage/details, not just as a stream
+    of 402 responses no one is necessarily looking at. Committed
+    explicitly, right here -- mirrors api/routers/auth.py's login()
+    committing a failed-login audit row before raising its own error:
+    without an explicit commit, this row would be silently rolled back
+    along with everything else once the exception unwinds the request
+    (see api/database.py's get_db, whose `async with` closes -- and so
+    rolls back -- an uncommitted session on the way out). Safe to commit
+    here specifically because every current caller invokes this
+    function before creating the row it's gating (no other pending
+    writes are in-flight on the session at this point)."""
     if not await check_quota(db, organization_id, resource_type, delta):
         limits = await get_quota_limits(db, organization_id)
         limit_column, _query_builder = _LIVE_COUNTERS[resource_type]
+        await record_usage(db, organization_id, "quota_exceeded", 1, metadata={"resource_type": resource_type, "limit": limits[limit_column]})
+        await db.commit()
         raise _quota_exceeded_error(resource_type, limits[limit_column])

@@ -1417,6 +1417,95 @@ it (personal limit, org quota) gates a real resource yet for the three
 numeric dimensions -- this is the intended design once one does, not a
 claim about current behavior.
 
+### Usage tracking (Partie 1.3.8)
+
+Two tables (migration `0023`):
+
+- `organization_usage`: one row per (organization, calendar day,
+  metric), a running daily total -- what
+  `GET /organizations/{org_id}/usage` reads.
+- `organization_usage_details`: one row PER EVENT, never aggregated --
+  who did what, when, with what free-form JSON context. What
+  `GET /organizations/{org_id}/usage/details` reads.
+
+**Same honest-scope pattern as Etape 1.3.6/1.3.7, verified before
+writing a line of code**: this step's own spec names metrics
+(`requetes`, `tokens_input`, `tokens_output`) that belong to `/v1/chat`
+and `/v1/agents/run`, plus `documents_processed`/`storage_mb` from
+`POST /documents` -- a repo-wide search confirms zero references to any
+`/v1/*` route, an agent-run endpoint, or a documents router anywhere in
+this codebase (Partie 9 -- API publique -- and Partie 2.2.1 are both 0%
+built). `record_usage`/`get_usage`/`get_usage_summary`
+(`api/security/usage.py`) are fully generic and metric-agnostic -- any
+caller can record any string metric under any name; nothing here
+validates metric names against a fixed list. What's real TODAY is which
+call sites actually invoke `record_usage`:
+
+| Call site | Metric |
+|---|---|
+| `create_workspace` (`api/routers/workspaces.py`) | `workspaces_created` |
+| `create_team` (`api/routers/teams.py`) | `teams_created` |
+| `invite_organization_member` (`api/routers/organization_members.py`) | `members_invited` |
+| `accept_invitation`, both branches (`api/routers/invitations.py`) | `members_invited` |
+| `require_quota_available` denying a request (`api/security/quotas.py`) | `quota_exceeded` (metadata: `resource_type`, `limit`) |
+
+The last row is this step's concrete answer to "should usage be linked
+to quotas" -- an organization repeatedly hitting its ceiling is now a
+queryable usage event, not just a stream of 402 responses nobody is
+necessarily watching.
+
+**No Celery/async dispatch** -- considered and deliberately rejected for
+now, not overlooked: every call site above is an infrequent,
+org-admin-triggered write (workspace/team creation, an invite), nowhere
+near a request volume where one extra indexed read + upsert-shaped write
+is a bottleneck. `record_usage`'s signature is already decoupled enough
+that swapping its body for "enqueue a Celery task doing the same two
+writes" would touch only `api/security/usage.py`, zero call sites --
+worth doing the day a genuinely high-QPS caller exists (a real
+`/v1/chat`, charged per message), not before.
+
+**Aggregation is real-time, not batch**: `record_usage` reads then
+writes today's `(organization_id, date, metric)` row on every call --
+`GET /organizations/{org_id}/usage` never has to scan or sum the
+detail log to answer. This is a read-then-write, not a
+dialect-specific `ON CONFLICT` upsert, to stay portable across the
+SQLite fast suite and real Postgres -- same accepted-race tradeoff as
+`api/security/quotas.py`'s check-then-insert (see that module's
+docstring): a narrow race under heavy concurrent writes to the exact
+same key losing at most one increment is acceptable for a daily total
+meant for human/billing review, not a hard limit enforced in real time.
+
+**No retention policy is implemented** -- this step's spec doesn't ask
+for one, so none was built (the same restraint as not inventing a purge
+job Partie 1.3.6 never asked for either). Recommendation for when one is
+needed: keep `organization_usage` (small, one row per org/day/metric)
+indefinitely; purge `organization_usage_details` (unbounded, one row per
+event) after some window, mirroring `api/tasks/account_purge.py`'s
+existing daily-Celery-beat shape once the detail table's real size in
+production justifies it.
+
+**Security**: all three GET endpoints are Admin+ (`require_org_admin`,
+same tier as `GET /organizations/{org_id}/quotas`) -- cross-organization
+access is blocked the same way as every other `/organizations/{org_id}/...`
+route, via `require_org_member`'s 404-for-non-members underneath
+`require_org_admin` (anti-enumeration: a non-member can't distinguish
+"no such organization" from "not your organization"). `metadata_json`
+can carry arbitrary caller-supplied context (e.g. a `workspace_id`,
+`team_id`, or `resource_type`) -- never a password, token, or other
+secret at any current call site, but the column itself is a generic
+`dict`, so a future call site adding one would be a code-review
+concern, not something this schema prevents by itself.
+
+**Scalability**: `organization_usage_details` has no natural upper
+bound, unlike every other table this project has added so far --
+`GET .../usage/details` is paginated (`limit`/`offset`, same convention
+as `GET /admin/audit-logs`, capped at 200/page) and indexed on
+`(organization_id, metric, timestamp)`, the only access pattern this
+table serves. `GET .../usage/export` deliberately exports the
+daily-aggregate table, never the detail log, for the same reason --
+"download everything" against an unbounded table would be the one
+endpoint in this step most likely to hurt its own performance goal.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

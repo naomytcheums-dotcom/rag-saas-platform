@@ -44,6 +44,7 @@ from api.schemas.workspaces import WorkspaceCreateRequest, WorkspaceEntry, Works
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_member
 from api.security.quotas import require_quota_available
+from api.security.usage import record_usage
 from api.security.user_limits import require_workspace_creation_allowed
 from api.security.workspaces import require_workspace_permission
 from api.utils import client_ip
@@ -84,6 +85,12 @@ async def create_workspace(
         db, user_id=caller.user_id, action=AuditAction.WORKSPACE_CREATED, ip=client_ip(request),
         user_agent=request.headers.get("user-agent"), success=True,
         metadata={"organization_id": str(org_id), "workspace_id": str(workspace.id), "name": payload.name},
+    )
+    # Partie 1.3.8 -- one of the few real usage integration points this
+    # step's spec can actually reach (see api/models/organization_usage.py's
+    # module docstring): a real, existing, org-scoped creation action.
+    await record_usage(
+        db, org_id, "workspaces_created", 1, user_id=caller.user_id, metadata={"workspace_id": str(workspace.id)},
     )
     await db.commit()
     await db.refresh(workspace)

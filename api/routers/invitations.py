@@ -41,6 +41,7 @@ from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import issue_session
+from api.security.usage import record_usage
 from api.services.email import send_organization_invitation_email, send_organization_member_added_email
 from api.services.verification import create_and_send_email_otp
 from api.utils import client_ip
@@ -172,6 +173,12 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
             user_agent=request.headers.get("user-agent"), success=True,
             metadata={"organization_id": str(invitation.organization_id), "invitation_id": str(invitation.id)},
         )
+        # Partie 1.3.8 -- see api/routers/organization_members.py's
+        # invite_organization_member for the same "members_invited" metric.
+        await record_usage(
+            db, invitation.organization_id, "members_invited", 1, user_id=existing_user.id,
+            metadata={"invitation_id": str(invitation.id)},
+        )
         await db.commit()
 
         try:
@@ -222,6 +229,10 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
         db, user_id=new_user.id, action=AuditAction.INVITATION_ACCEPTED, ip=client_ip(request),
         user_agent=request.headers.get("user-agent"), success=True,
         metadata={"organization_id": str(invitation.organization_id), "invitation_id": str(invitation.id), "created_account": True},
+    )
+    await record_usage(
+        db, invitation.organization_id, "members_invited", 1, user_id=new_user.id,
+        metadata={"invitation_id": str(invitation.id)},
     )
     await db.commit()
 

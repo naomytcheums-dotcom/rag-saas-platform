@@ -39,6 +39,7 @@ from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
 from api.models.organization_quota import OrganizationQuota
+from api.models.organization_usage import OrganizationUsage, OrganizationUsageDetail
 from api.models.resource_permission import ResourcePermission
 from api.models.team import Team, TeamMember, TeamRole
 from api.models.workspace import Workspace
@@ -525,6 +526,79 @@ async def test_new_membership_columns_get_the_documented_defaults_on_real_postgr
             if user is not None:
                 await session.execute(delete(User).where(User.id == user.id))
             await session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_usage_rows(pg_session):
+    """Partie 1.3.8: same reasoning as the other cascade tests in this
+    file -- delete_organization is a Core bulk DELETE, so only the
+    database's own ON DELETE CASCADE
+    (api/alembic/versions/0023_organization_usage.py) removes an
+    organization's usage rows, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Usage Cascade Test Org", slug=f"usage-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(OrganizationUsage(organization_id=org_id, date=dt.date.today(), metric="workspaces_created", value=1))
+    pg_session.add(OrganizationUsageDetail(organization_id=org_id, user_id=owner.id, metric="workspaces_created", value=1))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_usage = await pg_session.scalar(select(OrganizationUsage).where(OrganizationUsage.organization_id == org_id))
+        remaining_detail = await pg_session.scalar(select(OrganizationUsageDetail).where(OrganizationUsageDetail.organization_id == org_id))
+        assert remaining_usage is None
+        assert remaining_detail is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_organization_usage_detail_metadata_round_trips_as_json_on_real_postgres(pg_session):
+    """Partie 1.3.8: api/models/organization_usage.py's own docstring
+    explains why metadata_json uses the generic, cross-dialect sa.JSON
+    type rather than postgresql.JSONB -- this proves that choice still
+    gets a REAL JSON column on real Postgres (not silently falling back
+    to TEXT the way SQLite's fast suite represents it), round-tripping a
+    nested dict intact through an actual INSERT/SELECT."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Usage JSON Test Org", slug=f"usage-json-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    detail = OrganizationUsageDetail(
+        organization_id=org_id, user_id=owner.id, metric="quota_exceeded", value=1,
+        metadata_json={"resource_type": "workspaces", "limit": 0},
+    )
+    pg_session.add(detail)
+    await pg_session.commit()
+    detail_id = detail.id
+
+    try:
+        column_type = await pg_session.scalar(text(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name = 'organization_usage_details' AND column_name = 'metadata_json'"
+        ))
+        assert column_type == "json"
+
+        reloaded = await pg_session.scalar(select(OrganizationUsageDetail).where(OrganizationUsageDetail.id == detail_id))
+        assert reloaded.metadata_json == {"resource_type": "workspaces", "limit": 0}
+    finally:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
 
 
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):
