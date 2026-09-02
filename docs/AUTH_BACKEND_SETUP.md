@@ -1000,6 +1000,82 @@ gone. Every grant/revoke is journalled to the audit log
 `api/security/audit_log.py`'s own reasoning for why only state CHANGES
 get audited, not every read-check).
 
+### Teams (Partie 1.3.3)
+
+A logical grouping of users WITHIN an organization (e.g. "Support",
+"Engineering") -- orthogonal to the organization role hierarchy (Etape
+1.2.2-1.2.6), not a replacement for it. A user's org role (Member,
+Manager, ...) governs what they can do across the whole organization;
+team membership is a separate axis (who they work with day to day), and
+a user can belong to several teams at once. Tables: `teams`,
+`team_members` (migration `0018`); `TeamMember.role` is its own small
+`admin`/`member` axis, scoped to ONE team.
+
+**How the two axes combine** (`api/security/teams.py`): org
+Owner/Admin/Manager can always view or manage ANY team in their
+organization, even one they were never personally added to -- an
+administrative override, the same "higher org tiers can always reach
+into org-scoped resources" pattern `require_org_admin`/`owner` already
+establish; without it, a team whose only team-admin left the company
+would become permanently unmanageable. A team's own `admin` role, in
+the other direction, only grants membership-management power WITHIN
+that one team -- it never surpasses org-level roles, and a plain org
+Member made a team's admin gains nothing outside that team.
+
+| Endpoint | Access |
+|---|---|
+| `GET /organizations/{org_id}/teams` | Manager+ (org-level) |
+| `POST /organizations/{org_id}/teams` | Manager+ (org-level); creator becomes the team's own admin |
+| `GET /teams/{team_id}` | Team member, OR org Manager+ |
+| `PATCH /teams/{team_id}` | Manager+ (org-level) -- NOT the team's own admin, see below |
+| `DELETE /teams/{team_id}` | Manager+ (org-level) |
+| `GET /teams/{team_id}/members` | Team member, OR org Manager+ |
+| `POST /teams/{team_id}/members` | Team admin, OR org Manager+ |
+| `PATCH /teams/{team_id}/members/{user_id}` | Team admin, OR org Manager+ |
+| `DELETE /teams/{team_id}/members/{user_id}` | Team admin, OR org Manager+ |
+
+**Why renaming/deleting a team is Manager+ (org-level) and not
+`require_team_admin`**: a team's own admin manages who's ON the team;
+whether the team exists at all is judged an organization-level
+administrative concern, the same boundary `api/security/workspaces.py`
+draws between workspace membership (implicit, anyone in the org can
+read) and workspace CRUD (Manager+). Confirmed by
+`tests/test_teams.py::test_team_admin_who_is_a_plain_org_member_cannot_rename_the_team`.
+
+**No "last team admin" protection** -- unlike the org-level "last
+superadmin" rule (`api/routers/admin_users.py`) or the Owner-untouchable
+rule (`api/security/organizations.py`'s `reject_if_target_is_owner`): a
+team with zero admins is not a lockout, since org Manager+ can always
+still reach and fix it (the override above). Those other two rules
+exist specifically because no equivalent escape hatch exists at the
+organization or superadmin level.
+
+**Adding a member requires an existing account that's already a member
+of the team's organization** (400 otherwise) -- same "no email-invite
+flow yet" and "target must already belong here" reasoning as
+`api/routers/organization_members.py`'s `invite_organization_member` and
+`api/routers/resource_permissions.py`'s grant endpoint.
+
+**Removing a user from the organization also removes them from its
+teams** -- `api/routers/organization_members.py`'s
+`remove_organization_member` now deletes any `team_members` rows for
+that user across the organization's teams, so `GET /teams/{id}/members`
+never shows a phantom member who left. This is hygiene, not the only
+line of defense: `require_team_member`/`require_team_admin` independently
+re-verify the caller is still a member of the team's organization at
+every request, so a missed cleanup elsewhere would never grant access
+on its own.
+
+**Not yet wired in**: Teams do not (yet) carry `resource_permissions`
+(Etape 1.2.8) of their own -- that table is per-USER only today
+(`resource_permissions.user_id`, not nullable). Extending it to grant a
+permission to an entire team (every member inheriting it) would need a
+nullable `team_id` column (mutually exclusive with `user_id` via a CHECK
+constraint) and a `check_resource_permission` that also checks "is this
+user on any team granted this permission" -- a real, well-scoped follow-up,
+deliberately not bundled into this step since it wasn't asked for and
+doubles the surface area of an already-shipped, tested table.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

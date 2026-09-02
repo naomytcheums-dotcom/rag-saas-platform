@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.audit_log import AuditAction
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
+from api.models.team import Team, TeamMember
 from api.models.user import User
 from api.schemas.organizations import (
     OrganizationMemberEntry,
@@ -194,6 +195,17 @@ async def remove_organization_member(
         db, user_id=caller.user_id, action=AuditAction.ORGANIZATION_MEMBER_REMOVED, ip=client_ip(request),
         user_agent=request.headers.get("user-agent"), success=True,
         metadata={"organization_id": str(org_id), "target_user_id": str(user_id)},
+    )
+    # Partie 1.3.3: a team_members row for this user on one of this
+    # org's teams would otherwise survive their org removal -- harmless
+    # in practice (api/security/teams.py's checks independently
+    # re-verify org membership at every request), but left in place it
+    # would show a phantom member on GET /teams/{id}/members forever.
+    # Cleaned up here rather than relying solely on that runtime check.
+    await db.execute(
+        delete(TeamMember).where(
+            TeamMember.user_id == user_id, TeamMember.team_id.in_(select(Team.id).where(Team.organization_id == org_id)),
+        )
     )
     await db.execute(delete(OrganizationMember).where(OrganizationMember.id == target_membership.id))
     await db.commit()

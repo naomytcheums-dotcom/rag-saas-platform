@@ -38,6 +38,7 @@ from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.resource_permission import ResourcePermission
+from api.models.team import Team, TeamMember, TeamRole
 from api.models.workspace import Workspace
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
@@ -283,6 +284,42 @@ async def test_deleting_an_organization_cascades_to_its_resource_permissions(pg_
         assert remaining_permission is None
     finally:
         await pg_session.execute(delete(User).where(User.id.in_([owner.id, grantee.id])))
+        await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_teams_and_team_members(pg_session):
+    """Partie 1.3.3: same reasoning as the cascade tests above --
+    delete_organization is a Core bulk DELETE, so only the database's
+    own ON DELETE CASCADE (api/alembic/versions/0018_teams.py) removes
+    the organization's teams AND, transitively, their team_members rows,
+    which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Team Cascade Test Org", slug=f"team-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    team = Team(organization_id=org_id, name="Cascade Test Team", created_by=owner.id)
+    pg_session.add(team)
+    await pg_session.flush()
+    team_id = team.id
+    pg_session.add(TeamMember(team_id=team_id, user_id=owner.id, role=TeamRole.admin))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_team = await pg_session.scalar(select(Team).where(Team.id == team_id))
+        remaining_team_member = await pg_session.scalar(select(TeamMember).where(TeamMember.team_id == team_id))
+        assert remaining_team is None
+        assert remaining_team_member is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
 
 

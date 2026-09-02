@@ -61,7 +61,7 @@ l'audit sécurité) : WebAuthn/FIDO2, SSO entreprise (OIDC générique),
 rotation automatique de clé JWT, rate limiting géo-adaptatif, exemption
 IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
-### 1.2 Rôles & Permissions — 🟡 PARTIEL (~3-4/8)
+### 1.2 Rôles & Permissions — 🟡 QUASI-COMPLET (6/8 ✅, 2/8 🟡)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
@@ -76,21 +76,19 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 **Score 1.2 : 8-9/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager ✅, Member ✅, Viewer ✅, RBAC complet 🟡, permissions granulaires 🟡 -- réelles et branchées en direct sur workspaces, pas encore sur organizations).
 
-### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (2-3/10, via les Étapes 1.2.2 et 1.2.4)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (3-4/10, via les Étapes 1.2.2, 1.2.4, 1.3.3)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
 | 1.3.1 | Organizations | Table organizations, FK sur toutes les tables métier | ✅ (`api/models/organization.py`, aucune AUTRE table métier n'a encore de FK vers elle -- c'est la prochaine étape logique une fois que du contenu org-scopé existe) |
 | 1.3.2 | Workspaces | Table workspaces (FK org), regroupe KB + agents | 🟡 (table `workspaces` créée à l'Étape 1.2.4 avec CRUD complet -- `id`, `organization_id`, `name`, `created_by`, timestamps -- mais délibérément minimale : pas encore de lien vers une KB ou des agents, puisqu'aucun des deux n'existe encore. Le "regroupe KB + agents" de la portée complète reste à faire une fois que ces briques existeront) |
-| 1.3.3-1.3.10 | Teams, Invitations, isolation, quotas, config, branding | — | ⬜ |
+| 1.3.3 | Teams | Table teams (FK org), M2M avec users | ✅ (`api/models/team.py` : `Team` -- FK `organizations` [pas `workspace`, voir note ci-dessous] -- et `TeamMember` [rôle propre `admin`/`member`, scopé à l'équipe]. Migration 0018, `ON DELETE CASCADE` en cascade double : org→teams et teams→team_members. 9 endpoints dans `api/routers/teams.py`. Deux axes de permission combinés dans `api/security/teams.py` : le rôle d'équipe (admin/member) gère QUI est dans l'équipe ; renommer/supprimer l'équipe elle-même reste Manager+ au niveau organisation (jamais délégué au simple admin d'équipe). Un Owner/Admin/Manager de l'org peut toujours accéder à n'importe quelle équipe même sans en être membre (garde-fou anti-verrouillage). Nettoyage ajouté dans `remove_organization_member` : retirer un utilisateur de l'organisation le retire aussi de toutes ses équipes. **Note** : le cahier des charges original disait "FK workspace" pour `teams` ; la spec réellement fournie pour cette étape demandait explicitement "FK → organizations", suivie telle quelle. 19 tests SQLite + 1 test de cascade double contre le vrai Postgres, voir `tests/test_teams.py`) |
+| 1.3.4-1.3.10 | Invitations, isolation, quotas, config, branding | — | ⬜ (7 items, voir la table de référence ci-dessous) |
 
 Reste de la table originale, pour référence :
 
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|
-| 1.3.1 | Organizations | Table organizations, FK sur toutes les tables métier |
-| 1.3.2 | Workspaces | Table workspaces (FK org), regroupe KB + agents |
-| 1.3.3 | Teams | Table teams (FK workspace), M2M avec users |
 | 1.3.4 | Invitations (email+lien) | Table invitations (token, email, rôle, expiry) |
 | 1.3.5 | Isolation des données | org_id obligatoire sur chaque requête + collection Chroma dédiée |
 | 1.3.6 | Quotas par organisation | Table organization_limits, vérifiées en middleware |
@@ -367,57 +365,101 @@ côté agent (voir 5.2.9). **À compléter si tu retrouves la suite.**
 
 ---
 
-## Total recompté
+## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
-| | Items | Confiance |
+Compté précisément item par item sur les Parties 1.1 à 14 (500 items
+identifiés) ; la Partie 15 (~15 items pour atteindre les 515 annoncés)
+reste de taille inconnue, son texte original n'ayant jamais été retrouvé
+au-delà de "15.1.1 Ticke...".
+
+| | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | ~29 | Haute (vérifié ce fil-ci) |
-| 🟡 Partiel | ~35-40 | Moyenne (RAG hérité non revérifié) |
-| ⬜ Non commencé | ~450 | Haute |
-| **Total** | **~515** (Partie 15 incomplète) | |
+| ✅ Fait | 47 | 9.4% |
+| 🟡 Partiel | 59 | 11.8% |
+| ⬜ Non commencé | 394 | 78.8% |
+
+**Complétion globale (/515, Partie 15 incluse en approximation)** :
+- Strictement ✅ : **47/515 (~9.1%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **106/515 (~20.6%)**
+- Pondéré (✅=1, 🟡=0.5) : **~76.5/515 (~14.9%)** -- le chiffre le plus représentatif de l'avancement réel.
+
+Mis à jour après Partie 1.3.3 (Teams, 2026-09-02) : Partie 1.3 passe de
+1✅/1🟡/8⬜ à 2✅/1🟡/7⬜ sur 10.
+
+Voir le rapport détaillé livré en conversation (état des lieux du
+2026-09-02) pour le détail exact par Partie -- tableau récapitulatif,
+statut de chaque item des Parties 1.1/1.2/1.3/1.4/2, et résumé par
+Partie pour 3 à 15.
 
 ---
 
-## Feuille de route — Étapes de travail
+## Feuille de route — Étapes de travail (mise à jour 2026-09-02)
 
-Principe : **finir ce qui est partiel avant d'ouvrir un nouveau chantier**,
-une Étape = une Partie (ou un regroupement cohérent), jamais deux en même
-temps.
+Principe inchangé : **finir ce qui est partiel avant d'ouvrir un nouveau
+chantier**, une Étape = une Partie (ou un regroupement cohérent), jamais
+deux en même temps.
 
-### Étapes sur le PARTIEL (à faire en premier, tel que demandé)
+### ✅ Étape A — Partie 1.2 (Rôles & Permissions) — TERMINÉE (8/10)
 
-- **Étape A — Partie 1.2 (Rôles & Permissions)** : RBAC granulaire réel.
-  ⚠️ Dépendance à trancher avant de commencer : 1.2.2-1.2.6 (rôles par
-  organisation) ne peuvent pas être complétés sans que la Partie 1.3
-  (Multi-tenant) existe. Deux options : (a) faire un RBAC générique sans
-  organisation pour l'instant, (b) basculer sur la Partie 1.3 d'abord.
-  À décider ensemble avant de lancer cette étape.
-- **Étape B — Partie 10 (Sécurité & Governance), le reste** : SSRF
-  protection, guardrails IA (PII/toxicity), secret management (Vault),
-  request/trace IDs, Sentry.
-- **Étape C — Partie 11.3 (Monitoring), le reste** : health check
-  vecteurs, Flower, alerting Grafana.
-- **Étape D — Partie 13 (Developer Experience)** : ruff/mypy/pre-commit/
-  dependabot/bandit, lint+type-check en CI.
-- **Étape E — Partie 14 (Documentation), le reste** : guide admin, guide
-  utilisateur, FAQ.
-- **Étape F — Partie 3 (Pipeline RAG), le reste** : chunking avancé,
-  query expansion/HyDE, MMR, paramètres configurables.
-- **Étape G — Partie 6 (Citations & Anti-hallucination)** : validation
-  réelle du code déjà écrit (nécessite du crédit API Anthropic).
+1.2.1 à 1.2.8 tous livrés et vérifiés en CI réelle (Étapes 1.2.1 à
+1.2.8, voir le tableau détaillé de la section 1.2 ci-dessus). Ce qui
+reste ouvertement non fait dans cette Partie, pour mémoire :
+- **1.2.7 (RBAC Casbin)** : moteur réel construit et vérifié contre le
+  vrai Postgres, mais PAS branché sur `require_org_manager`/`admin`/`owner`
+  -- bloqué sur un problème réel trouvé en testant : la fixture `client`
+  de `tests/conftest.py` ne déclenche jamais le `lifespan` de l'app, donc
+  brancher Casbin ferait planter (500) la quasi-totalité des tests
+  existants. **Prochaine étape concrète si on reprend ce chantier** :
+  corriger `tests/conftest.py` pour déclencher réellement le lifespan
+  (`asgi-lifespan`'s `LifespanManager`), PUIS basculer
+  `require_org_manager`/`admin`/`owner` un par un vers Casbin, chacun
+  re-vérifié contre sa propre suite de tests avant de passer au suivant.
+- **1.2.8 (permissions granulaires)** : branché en direct sur
+  `PATCH/DELETE /workspaces/{id}` uniquement. Pas branché sur
+  `organizations.py` (rename/delete, Owner-only) -- décision délibérée
+  de risque, pas un oubli. À étendre une fois qu'un vrai besoin business
+  le justifie (ex: un Owner veut déléguer la suppression d'organisation
+  à un Admin de confiance sans lui donner le rôle Owner).
+- Aucun endpoint `documents`/`conversations`/`agents`/`knowledge_base` --
+  attendu, ces ressources n'existent pas avant la Partie 2/3/5.
 
-### Étapes sur le NON-COMMENCÉ (après le partiel)
+### Prochaines étapes, par ordre de priorité recommandé
 
-- **Étape H — Partie 1.3 (Multi-tenant)** — fondation pour beaucoup
-  d'autres parties (1.2, 1.4, 3.3, 9, 12).
-- **Étape I — Partie 1.4 (White-label)**
-- **Étape J — Partie 2 (Knowledge Base multi-format)**
-- **Étape K — Partie 4 (Multi-LLM)**
-- **Étape L — Partie 5.3/5.4 (Agent Builder / Workflow Builder)**
-- **Étape M — Partie 7 (Evaluation Lab)**
-- **Étape N — Partie 8 (Interface Utilisateur)**
-- **Étape O — Partie 9 (API publique)**
-- **Étape P — Partie 12 (Facturation)**
-- **Étape Q — Partie 15 (Human-in-the-loop)** — dès que le contenu complet est retrouvé.
+1. **Partie 1.3 (Multi-tenant), le reste** -- fondation bloquante pour
+   beaucoup d'autres Parties (1.4, 2, 3.3, 9, 12). `organizations`/
+   `workspaces`/`teams` existent déjà (1.3.1 ✅, 1.3.2 🟡, 1.3.3 ✅) ; il
+   manque Invitations par email, isolation des données par org_id sur le
+   contenu métier, quotas, limites, usage, configuration, branding
+   (1.3.4 à 1.3.10, 7 items).
+2. **Partie 10 (Sécurité & Governance), le reste** : SSRF protection,
+   guardrails IA (PII/toxicity/jailbreak), secret management (Vault),
+   request/trace IDs, Sentry -- projet piloté par un audit sécurité, ces
+   items ont un poids disproportionné par rapport à leur effort.
+3. **Partie 13 (Developer Experience)** : ruff/mypy/pre-commit/
+   dependabot/bandit, lint+type-check en CI -- gains rapides et peu
+   coûteux, réduisent la dette avant que le projet grossisse encore.
+4. **Partie 2 (Knowledge Base multi-format)** -- le cœur produit d'un
+   "RAG SaaS platform" ; dépend de 1.3 pour le scoping par organisation/
+   workspace. Gros chantier (35 items, plusieurs parsers + jobs Celery),
+   à découper en sous-étapes (import, gestion documents, sync).
+5. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
+   le code existe déjà (`hallucination_detection.py`, `llm_judge.py`),
+   juste jamais validé en conditions réelles faute de crédit API
+   Anthropic -- rapport effort/valeur excellent dès que le crédit est
+   disponible.
+
+### Reste du non-commencé (après les 5 priorités ci-dessus)
+
+- Partie 1.4 (White-label) -- dépend de 1.3.9/1.3.10 (config/branding par org)
+- Partie 3 (Pipeline RAG), le reste -- chunking avancé, query expansion/HyDE, MMR
+- Partie 4 (Multi-LLM) -- abstraction LiteLLM, actuellement un seul provider en dur
+- Partie 5.3/5.4 (Agent Builder / Workflow Builder) -- aucune table `agents`, aucune UI
+- Partie 7 (Evaluation Lab), le reste -- attention au data-leakage déjà documenté dans AUDIT.md
+- Partie 8 (Interface Utilisateur) -- Streamlit actuel n'est PAS le Next.js/React prévu
+- Partie 9 (API publique) -- aucun endpoint `/v1/*` au-delà de l'auth
+- Partie 11 (Admin Dashboard & Analytics), le reste -- health/ready/metrics existent, le reste non
+- Partie 12 (Facturation) -- aucune intégration paiement
+- Partie 14 (Documentation), le reste -- guide admin, guide utilisateur, FAQ
+- Partie 15 (Human-in-the-loop) -- dès que le contenu complet du cahier des charges original est retrouvé
 
 **On commence par laquelle ?**

@@ -19,6 +19,7 @@ from api.models.resource_permission import ResourcePermission
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
+from api.models.team import Team, TeamMember
 from api.models.token import EmailVerificationToken, PasswordResetToken
 from api.models.user import User
 from api.models.webauthn_credential import WebAuthnCredential
@@ -29,5 +30,5 @@ __all__ = [
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
     "RevokedAccessToken", "PasswordHistory", "AuditLog", "JWTSigningKey", "WebAuthnCredential",
     "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember", "Workspace",
-    "ResourcePermission",
+    "ResourcePermission", "Team", "TeamMember",
 ]
