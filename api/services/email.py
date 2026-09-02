@@ -675,3 +675,47 @@ def send_enterprise_sso_connection_created_email(to_admin_email: str, email_doma
             f"<p>If you didn't just do this, review Admin > SSO Connections immediately.</p>"
         ),
     )
+
+
+def send_organization_member_added_email(to_email: str, organization_name: str, role: str) -> None:
+    """Etape 1.2.3 -- called by api/routers/organization_members.py's
+    invite_organization_member() every time an Admin or Owner adds an
+    existing account to their organization. This app has no
+    email-based invitation LINK yet (item 1.3.4) -- this is the
+    notification for an immediate add, not an invitation someone has to
+    accept."""
+    _send(
+        to_email,
+        subject=f"You've been added to {organization_name}",
+        html=(
+            f"<p>You were just added to the organization <strong>{html.escape(organization_name)}</strong> "
+            f"as <strong>{html.escape(role)}</strong>.</p>"
+            f"<p>If you don't recognize this organization, contact its administrator or reply to this email.</p>"
+        ),
+    )
+
+
+def send_organization_member_role_changed_email(to_email: str, organization_name: str, new_role: str) -> None:
+    """The flip side of a role change -- lets the affected member notice
+    if it wasn't something they expected (a stolen admin session
+    quietly demoting or promoting someone would otherwise be silent)."""
+    _send(
+        to_email,
+        subject=f"Your role in {organization_name} was changed",
+        html=(
+            f"<p>Your role in <strong>{html.escape(organization_name)}</strong> was just changed to "
+            f"<strong>{html.escape(new_role)}</strong>.</p>"
+            f"<p>If you didn't expect this, contact your organization's administrator.</p>"
+        ),
+    )
+
+
+def send_organization_member_removed_email(to_email: str, organization_name: str) -> None:
+    _send(
+        to_email,
+        subject=f"You were removed from {organization_name}",
+        html=(
+            f"<p>You were just removed from the organization <strong>{html.escape(organization_name)}</strong>.</p>"
+            f"<p>If you believe this was a mistake, contact your organization's administrator.</p>"
+        ),
+    )

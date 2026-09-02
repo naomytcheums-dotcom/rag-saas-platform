@@ -618,6 +618,50 @@ directly or eager-loads first (`selectinload(User.organization_memberships)
 .selectinload(OrganizationMember.organization)`) before touching these
 properties.
 
+### Organization Admin (Etape 1.2.3)
+
+Member management, gated by `require_org_admin` (Owner **or** Admin) --
+distinct from `require_org_owner`, which stays reserved for
+renaming/deleting the organization itself:
+
+| Endpoint | Access |
+|---|---|
+| `GET /organizations/{org_id}/members` | Admin+ |
+| `POST /organizations/{org_id}/members/invite` | Admin+ |
+| `PATCH /organizations/{org_id}/members/{user_id}/role` | Admin+ |
+| `DELETE /organizations/{org_id}/members/{user_id}` | Admin+ |
+
+`require_org_admin_or_owner` also exists (`api/security/organizations.py`)
+as a literal alias of `require_org_admin` -- there has never been an
+"Admin excluding Owner" tier in this permission model, so the two names
+check exactly the same thing.
+
+**"Invite" is an immediate add, not an email link someone has to
+accept** -- this app has no invitation-token flow yet (item 1.3.4).
+`POST .../members/invite` looks up an EXISTING account by email and
+adds them directly; an email with no matching account gets a clean 404
+("they must register first"), not an invitation to sign up. When 1.3.4
+is built, it's a separate, additive flow (a pending-invite table +
+email link), not a replacement for this endpoint.
+
+**An Owner can't be touched through these endpoints, by anyone** --
+stricter than the spec's literal "an Admin can't do this" (which would
+still let the Owner demote/remove themselves): `reject_if_target_is_owner`
+(`api/security/organizations.py`) blocks the role-update and remove
+endpoints regardless of the caller's own role, since an organization
+has exactly one Owner (enforced at creation) and there is no ownership-transfer
+endpoint yet for anyone to fix an accidental self-demotion with -- a
+deliberately stronger rule than asked for, not a narrower one. Trying
+to grant the Owner role through `invite` or the role-update endpoint is
+rejected at the Pydantic validation layer (422), before either handler
+even runs.
+
+Workspace management and organization-settings management (this step's
+other two named Admin capabilities) have no endpoints yet -- neither
+`workspaces` (1.3.2) nor `organization_settings` (1.3.9) exist. When
+they do, they should reuse `require_org_admin` the same way the
+endpoints above do, not invent a parallel permission check.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

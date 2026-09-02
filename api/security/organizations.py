@@ -134,3 +134,47 @@ async def require_org_owner(membership: OrganizationMember = Depends(require_org
     if membership.role != OrganizationRole.owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization owner access required")
     return membership
+
+
+# Etape 1.2.3 -- literally the same check as require_org_admin (Admin has
+# always meant "Admin or Owner" in this permission model; there is no
+# "Admin excluding Owner" tier anywhere). Kept as its own name only
+# because the spec for this step asked for it explicitly -- not a
+# separate implementation to maintain in parallel.
+require_org_admin_or_owner = require_org_admin
+
+
+async def get_organization_member_or_404(db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID) -> OrganizationMember:
+    """Shared by every /organizations/{org_id}/members/{user_id}/...
+    endpoint (api/routers/organization_members.py) that acts on a
+    SPECIFIC target member, distinct from require_org_member (which
+    checks the CALLER's own membership) -- this looks up someone else's."""
+    membership = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == org_id, OrganizationMember.user_id == user_id
+        )
+    )
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return membership
+
+
+def reject_if_target_is_owner(target_membership: OrganizationMember, *, action: str) -> None:
+    """
+    Etape 1.2.3, item 5: an Owner's role/membership can't be touched
+    through the generic member-management endpoints, by ANYONE --
+    stricter than the spec's literal "an Admin can't do this" (which
+    would still let the Owner act on themselves): since an organization
+    has exactly one Owner (enforced at creation, api/security/organizations.py's
+    create_organization_with_owner), demoting or removing them here
+    would leave the organization with none at all, and unlike
+    api/routers/admin_users.py's "last remaining superadmin" check
+    (where OTHER superadmins can exist to fix it), there is no
+    "transfer ownership" endpoint yet for anyone to undo this with. A
+    deliberately stronger rule than asked for, not a narrower one.
+    """
+    if target_membership.role == OrganizationRole.owner:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot {action} the organization's Owner",
+        )

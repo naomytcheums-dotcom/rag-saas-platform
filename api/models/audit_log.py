@@ -51,6 +51,9 @@ class AuditAction(StrEnum):
     USER_ROLE_CHANGED = "user_role_changed"
     ORGANIZATION_CREATED = "organization_created"
     ORGANIZATION_DELETED = "organization_deleted"
+    ORGANIZATION_MEMBER_ADDED = "organization_member_added"
+    ORGANIZATION_MEMBER_ROLE_CHANGED = "organization_member_role_changed"
+    ORGANIZATION_MEMBER_REMOVED = "organization_member_removed"
 
 
 class AuditLog(Base):
