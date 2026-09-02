@@ -4,12 +4,20 @@ any of the user's last PASSWORD_HISTORY_SIZE passwords
 (api/models/password_history.py). Password hashes are salted bcrypt, so
 "matches" can't be a string/hash comparison -- each candidate is checked
 with verify_password (bcrypt.checkpw), same as an ordinary login.
+
+Both queries below order by `sequence`, not `created_at` -- see
+api/models/password_history.py's own docstring for why: two rows
+written in fast succession can share the same microsecond-truncated
+timestamp, which made "most recent N rows" genuinely non-deterministic
+under real Postgres (confirmed via a flake in real CI). `sequence` is a
+monotonic-per-user counter that can never tie, so the reuse-check and
+the prune below always agree on exactly which rows count as "recent."
 """
 
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -40,7 +48,7 @@ async def reject_if_password_reused(db: AsyncSession, user_id: UUID, new_passwor
     history = (await db.scalars(
         select(PasswordHistory)
         .where(PasswordHistory.user_id == user_id)
-        .order_by(PasswordHistory.created_at.desc())
+        .order_by(PasswordHistory.sequence.desc())
         .limit(settings.PASSWORD_HISTORY_SIZE)
     )).all()
     for row in history:
@@ -52,14 +60,23 @@ async def record_password_change(db: AsyncSession, user_id: UUID, new_hashed_pas
     """Called AFTER a password change actually succeeds -- stores the new
     hash and prunes anything beyond the most recent PASSWORD_HISTORY_SIZE
     rows for this user, so the table never grows without bound and stays
-    a reuse-check window rather than a permanent log. Caller commits."""
-    db.add(PasswordHistory(user_id=user_id, password_hash=new_hashed_password))
+    a reuse-check window rather than a permanent log. Caller commits.
+
+    `sequence` is computed here, not DB-assigned (see
+    api/models/password_history.py's docstring for why) -- next integer
+    per user_id, same "compute in code, let the unique constraint catch
+    a genuine collision" shape as generate_unique_slug
+    (api/security/organizations.py)."""
+    next_sequence = 1 + (await db.scalar(
+        select(func.max(PasswordHistory.sequence)).where(PasswordHistory.user_id == user_id)
+    ) or 0)
+    db.add(PasswordHistory(user_id=user_id, password_hash=new_hashed_password, sequence=next_sequence))
     await db.flush()
 
     stale_ids = (await db.scalars(
         select(PasswordHistory.id)
         .where(PasswordHistory.user_id == user_id)
-        .order_by(PasswordHistory.created_at.desc())
+        .order_by(PasswordHistory.sequence.desc())
         .offset(settings.PASSWORD_HISTORY_SIZE)
     )).all()
     if stale_ids:

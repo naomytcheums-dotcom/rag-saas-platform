@@ -14,7 +14,9 @@ import datetime as dt
 
 import jwt as pyjwt
 import pyotp
-from sqlalchemy import select
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import delete, select
 
 from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
@@ -2773,6 +2775,69 @@ async def test_password_history_allows_reuse_once_it_ages_out_of_the_window(clie
     # are tracked now -- the original registration password aged out.
     reuse_original = await _reset_to(original_password)
     assert reuse_original.status_code == 200
+
+
+async def test_password_history_ordering_is_deterministic_even_when_timestamps_tie(client, db_session, register_payload, monkeypatch):
+    """
+    Regression test for a real flake seen in CI (run 33625474443): two
+    password_history rows written in fast succession can share the same
+    microsecond-truncated `created_at`, and `id` (a random UUID v4)
+    can't break that tie meaningfully -- Postgres's order for tied rows
+    is genuinely undefined, so pruning could non-deterministically keep
+    the wrong row. `sequence` (migration 0019) fixes this: it's computed
+    explicitly, once, per user, by record_password_change -- it can
+    never tie, whatever created_at ends up being.
+
+    This test forces the exact failure condition directly (three history
+    rows sharing ONE identical `created_at`) rather than hoping to
+    reproduce the race by timing -- a test that only "usually" catches a
+    race is worse than no test at all.
+    """
+    from api.models.password_history import PasswordHistory
+    from api.security.hashing import hash_password, verify_password
+    from api.security.password_history import record_password_change, reject_if_password_reused
+
+    monkeypatch.setattr(settings, "PASSWORD_HISTORY_SIZE", 2)
+
+    await client.post("/auth/register", json=register_payload)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+
+    # Replace whatever record_password_change already inserted at
+    # registration with three controlled rows -- "original", "second",
+    # "third" -- all sharing ONE identical created_at, with `sequence`
+    # set explicitly in that same order (this is exactly what
+    # record_password_change itself computes -- set by hand here only
+    # so the timestamp tie can be forced).
+    await db_session.execute(delete(PasswordHistory).where(PasswordHistory.user_id == user.id))
+    tied_timestamp = dt.datetime.now(dt.timezone.utc)
+    for seq, plaintext in enumerate(("original-password-tie", "second-password-tie", "third-password-tie"), start=1):
+        db_session.add(PasswordHistory(
+            user_id=user.id, password_hash=hash_password(plaintext), created_at=tied_timestamp, sequence=seq,
+        ))
+    await db_session.commit()
+
+    # With PASSWORD_HISTORY_SIZE=2, the window is the top 2 BY SEQUENCE
+    # -- "third" (3) and "second" (2) -- despite all three rows sharing
+    # one identical timestamp. "original" (1) must be reusable;
+    # "second" and "third" must still be blocked.
+    await reject_if_password_reused(db_session, user.id, "original-password-tie", current_hashed_password=None)
+    for blocked_plaintext in ("second-password-tie", "third-password-tie"):
+        with pytest.raises(HTTPException) as exc_info:
+            await reject_if_password_reused(db_session, user.id, blocked_plaintext, current_hashed_password=None)
+        assert exc_info.value.status_code == 400
+
+    # A 4th change: prunes down to the top 2 BY SEQUENCE again -- now
+    # "fourth" (4) and "third" (3) -- deterministically dropping BOTH
+    # "second" and "original", despite the tie among all of them.
+    await record_password_change(db_session, user.id, hash_password("fourth-password-tie"))
+    await db_session.commit()
+
+    remaining = (await db_session.scalars(
+        select(PasswordHistory).where(PasswordHistory.user_id == user.id).order_by(PasswordHistory.sequence.asc())
+    )).all()
+    assert len(remaining) == 2
+    assert verify_password("third-password-tie", remaining[0].password_hash)
+    assert verify_password("fourth-password-tie", remaining[1].password_hash)
 
 
 async def test_change_password_rejects_reusing_the_current_password(client, register_payload):
