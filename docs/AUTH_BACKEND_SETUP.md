@@ -760,6 +760,122 @@ cross-org isolation check standing in for "a Member can't reach another
 Member's resources" until a personal resource exists to test that
 against directly.
 
+### RBAC policy engine -- Casbin (Etape 1.2.7)
+
+A data-driven `(role, resource, action)` policy table (`casbin_rule`,
+migration `0016`), loaded once into memory at startup
+(`api/security/rbac.py`'s `init_rbac()`, called from `api/main.py`'s
+`lifespan`). **This is additive, not a replacement** -- see the sections
+below for exactly what it does and does not touch, and why.
+
+**Domain-scoped, not the spec's literal flat model.** Casbin requests
+here are `(sub, dom, obj, act)` with `dom` = organization id --
+`api/casbin_model.conf` uses Casbin's documented "RBAC with domains"
+pattern, plus an explicit
+`enforcer.add_named_domain_matching_func("g", casbin.util.key_match)`
+call (undocumented as a *requirement* in most Casbin RBAC-with-domains
+examples, but empirically necessary here: role-to-role inheritance edges
+are seeded with a wildcard domain, `"*"`, so a real per-org role
+assignment like `("dana", "manager", "org-A")` can chain through them --
+verified against real Postgres in
+`tests/test_rbac_integration.py::test_the_same_user_can_hold_different_roles_in_different_organizations`).
+The step's literal model (`p, role, resource, action` + `g, user, role`,
+no domain) was rejected: it stores one role per user, globally, which
+cannot represent "Dana is Manager in org A but only Member in org B" --
+exactly how `OrganizationMember.role` has worked since Etape 1.2.2. That
+would have been a real cross-tenant correctness regression, caught
+before writing any of the seeding code, not after.
+
+**What Casbin does NOT touch, and why -- read this before wiring it into
+anything else.** `api/security/organizations.py`'s
+`require_org_manager`/`require_org_admin`/`require_org_owner` are
+**unchanged**, still the hardcoded role-tuple checks they always were.
+Rewiring them onto Casbin was implemented and verified to produce an
+identical truth table for every role (`tests/test_rbac_integration.py`'s
+`org_tier` policies exist for exactly this reason) -- then reverted,
+after finding that `tests/conftest.py`'s `client` fixture
+(`ASGITransport` + `AsyncClient`, no `LifespanManager`) never actually
+runs `api/main.py`'s `lifespan`. Confirmed empirically: a minimal
+FastAPI app with a lifespan that appends to a list, driven through the
+exact same `ASGITransport` pattern this codebase's fixtures use,
+recorded zero startup/shutdown events. `init_rbac()` would therefore
+never run during the ~450-test fast suite, so any function hard-depending
+on `get_enforcer()` would 500 on every test that reaches it -- a
+regression across effectively the whole permission test suite, in
+service of a step whose own validation criterion is "existing tests
+still pass." A silent fallback to the old hardcoded check when
+uninitialized was considered and rejected too: that would make "verified
+against 447 tests" actually mean "the fallback got exercised, Casbin
+never did" -- worse than not claiming the migration at all.
+
+Also unchanged, for a different reason: `invite_organization_member`'s
+Manager-cannot-invite-as-admin/manager guard
+(`api/routers/organization_members.py`) and
+`reject_if_target_is_owner` (`api/security/organizations.py`). Both are
+payload- or target-dependent -- a static `(role, resource, action)`
+triple has no way to see request body content or compare against a
+specific target row, and a bespoke Casbin matcher function per such rule
+would defeat the point of one shared policy table. These stay exactly
+where they are; Casbin is not the right tool for them.
+
+**What it's actually for, today**: `require_permission(resource,
+action)` is a new, additive FastAPI dependency for resource types that
+have no `require_*` of their own -- concretely, `documents` and
+`conversations` (Parties 2/3), deliberately not built yet (see Etape
+1.2.5's own reasoning above). It is not used by any route right now.
+When those resources exist, a route can do
+`Depends(require_permission("documents", "create"))` -- it layers on
+top of `require_org_member` for the exact same membership lookup and
+404 anti-enumeration behavior every other org-scoped dependency already
+has; the Casbin check is the only new logic.
+
+**Default policies** (`api/security/rbac.py`'s `TIER_POLICIES` +
+`RESOURCE_POLICIES` + `ROLE_HIERARCHY`) mirror this step's own spec
+table, restated with inheritance instead of repetition: viewer's grants
+(`workspaces:read`, `documents:read`, `conversations:read`,
+`organization:read`) are the floor; member/manager/admin/owner each add
+only what THEY newly grant, and inherit everything below via
+`ROLE_HIERARCHY`'s chain (`admin -> manager -> member -> viewer`,
+`owner -> admin`). `superadmin: * / *` is seeded exactly as the spec's
+table names it, but is **inert** -- nothing calls `enforce()` with a
+superadmin-domain check today, so this is stored default data, not a
+live bypass of org-membership checks. Wiring it up is a separate,
+deliberate decision: today a superadmin's real power
+(`api/dependencies.py`'s `require_superadmin`) is a completely separate,
+global axis from organization membership -- a superadmin is NOT
+automatically a member of every organization, and silently making this
+policy live would grant that for the first time.
+
+**Performance**: `enforce()` is synchronous and never touches the
+database -- only `load_policy()`/`add_policy()` (async) do, and both
+run exactly once, at startup. Editing `casbin_rule` by hand takes effect
+only on the next restart; there is no runtime-reload endpoint, since
+every real policy is seeded in code, not hand-edited, today.
+
+**Debugging**: `api/security/rbac.py`'s `init_rbac()` logs
+`"RBAC (Casbin) initialized: %d policies, %d role edges"` at startup --
+a count of 0 policies means the migration hasn't been applied or
+`casbin_rule` is empty for a reason worth investigating, not "nothing to
+worry about." To inspect policies directly:
+`SELECT ptype, v0, v1, v2, v3 FROM casbin_rule ORDER BY ptype, v0;` --
+`ptype='g'` rows are role-to-role edges (`v0` inherits `v1`, in domain
+`v2`), `ptype='p'` rows are grants (`v0` role, `v1` domain, `v2`
+resource, `v3` action). To add a new default policy, edit
+`RESOURCE_POLICIES` in `api/security/rbac.py` and restart -- `init_rbac()`
+adds only what's missing (`has_policy` checked first), so this is safe
+to do repeatedly without duplicating rows.
+
+**Migrating the existing org hierarchy onto Casbin is real future
+work**, gated on first fixing `tests/conftest.py`'s `client` fixture to
+actually run the app's lifespan (e.g. via `asgi-lifespan`'s
+`LifespanManager`) -- a change to a fixture roughly 450 tests share,
+deliberately not bundled into this step. Once that's fixed, the
+`org_tier` policies already seeded and verified above
+(`tests/test_rbac_integration.py`) are ready to be the actual
+implementation behind `require_org_manager`/`admin`/`owner`, one
+function at a time, each re-verified against its own existing test file
+before moving to the next.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

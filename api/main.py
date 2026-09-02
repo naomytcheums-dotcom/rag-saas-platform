@@ -24,6 +24,7 @@ from api.routers import (
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
+from api.security.rbac import init_rbac
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,13 @@ async def lifespan(app: FastAPI):
     """
     async with AsyncSessionLocal() as db:
         await refresh_jwt_key_cache(db)
+
+    # Etape 1.2.7: loads/seeds the RBAC policy table once, into memory --
+    # see api/security/rbac.py's module docstring for why this is a
+    # single startup call, not a polling loop like the JWT cache above
+    # (policies are static/seeded, not expected to change without a
+    # deploy that reseeds them).
+    await init_rbac()
 
     async def _poll_jwt_key_cache() -> None:
         while True:

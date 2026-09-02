@@ -74,6 +74,23 @@ redis==8.1.0
 prometheus-client==0.26.0
 gunicorn==23.0.0
 
+# -- RBAC / policy engine (Etape 1.2.7) ---------------------------------------
+# PyPI publishes this project under TWO distribution names -- "casbin"
+# (legacy, frozen at an old 1.x version line) and "pycasbin" (current,
+# what casbin-async-sqlalchemy-adapter itself actually depends on) --
+# both install into the same importable `casbin` package, so installing
+# both is fragile (whichever installs last silently wins). pycasbin is
+# the one actually maintained; api/security/rbac.py's AsyncEnforcer usage
+# requires it (pycasbin>=2.x), not the legacy "casbin" line.
+pycasbin==2.8.0
+# Async, not the sync casbin-sqlalchemy-adapter the original ask named --
+# this codebase's entire DB layer (api/database.py) is async SQLAlchemy;
+# the sync adapter would need its own separate sync engine talking to the
+# same Postgres instance outside SQLAlchemy's async session management,
+# the same category of footgun documented elsewhere in this codebase
+# (MissingGreenlet, sync lazy-loads under an async session).
+casbin-async-sqlalchemy-adapter==1.17.0
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0
