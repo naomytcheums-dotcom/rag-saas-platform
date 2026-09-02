@@ -94,6 +94,28 @@ class Settings(BaseSettings):
     # non-blocking network call, see api/security/custom_domains.py).
     CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS: int = 5
 
+    # -- Partie 1.4.3: SSL auto (Let's Encrypt) ----------------------------
+    # Defaults to Let's Encrypt's STAGING directory, deliberately -- NOT
+    # production. Staging issues certificates untrusted by real browsers
+    # but shares production's exact protocol and rate-limit-free
+    # sandbox, which is what every real client (certbot included)
+    # develops and tests against. A real deployment overrides this to
+    # "https://acme-v02.api.letsencrypt.org/directory" explicitly, once
+    # the manual-DNS-01 workflow this step documents (see
+    # docs/AUTH_BACKEND_SETUP.md) has been exercised for real. Getting
+    # this wrong in the other direction (defaulting to production) risks
+    # a misconfigured dev/CI environment burning through Let's Encrypt's
+    # real, hard-to-recover-from rate limits for nothing.
+    ACME_DIRECTORY_URL: str = "https://acme-staging-v02.api.letsencrypt.org/directory"
+    # Required by Let's Encrypt for account registration (expiry/revocation
+    # notices) -- generate_ssl_certificate raises a clear error if this
+    # is unset, same "fail loudly, not with a confusing exception three
+    # calls deep" reasoning as api/services/storage.py's S3 settings.
+    ACME_ACCOUNT_EMAIL: str | None = None
+    # Partie 1.4.3, item 5's "30 jours avant expiration" -- how far
+    # ahead of expires_at the renewal Celery task starts trying.
+    SSL_RENEWAL_WINDOW_DAYS: int = 30
+
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30

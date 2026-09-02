@@ -26,7 +26,7 @@ celery_app = Celery(
     # `from api.tasks.celery_app import celery_app` doesn't circular-import.
     include=[
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
-        "api.tasks.jwt_key_rotation",
+        "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal",
     ],
 )
 
@@ -61,5 +61,16 @@ celery_app.conf.beat_schedule = {
     "rotate-jwt-signing-key-daily-check": {
         "task": "api.tasks.jwt_key_rotation.rotate_jwt_signing_key",
         "schedule": crontab(hour=3, minute=45),
+    },
+    # Partie 1.4.3, item 5 -- same low-traffic window, offset again.
+    # Idempotent: only acts on certificates actually due (see
+    # api/tasks/ssl_certificate_renewal.py's own docstring).
+    "check-ssl-renewals-daily": {
+        "task": "api.tasks.ssl_certificate_renewal.check_ssl_renewals",
+        "schedule": crontab(hour=4, minute=0),
+    },
+    "check-ssl-expirations-daily": {
+        "task": "api.tasks.ssl_certificate_renewal.check_ssl_expirations",
+        "schedule": crontab(hour=4, minute=15),
     },
 }

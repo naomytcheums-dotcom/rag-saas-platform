@@ -1824,6 +1824,129 @@ serait faux. Ce qui reste vrai indépendamment de cette limite --
 l'enregistrement DNS prouve le contrôle du domaine, pointe le hostname
 vers la plateforme -- est ce qui est dit, ni plus ni moins.
 
+### SSL auto -- Let's Encrypt (Partie 1.4.3)
+
+Two tables (migration `0027`): `acme_accounts` (one row per
+`ACME_DIRECTORY_URL`, the deployment's own persisted ACME account key
+and account URL) and `ssl_certificates` (one row per custom domain,
+`UNIQUE(domain)`, FK to `custom_domains.domain`). A real ACME v2 (RFC
+8555) client -- the same `acme`/`josepy` libraries certbot itself uses,
+not a hand-rolled reimplementation of JWS signing/nonce handling.
+
+**Verdict: 🟡, not ✅ -- and why, precisely.** Every piece of this
+implementation that this application actually controls is real:
+account registration, order creation, DNS-01 challenge computation,
+completion polling, certificate storage, encryption, and revocation are
+all genuine ACME protocol operations, verified against Let's Encrypt's
+real STAGING server (see "Real verification" below) -- nothing here is
+mocked, faked, or self-signed. What keeps this short of ✅ is the word
+"auto" in this step's own title: **DNS-01 challenge completion needs a
+human to publish a DNS TXT record, every single time -- for the first
+issuance AND for every renewal**, since this deployment has no
+DNS-provider API integration to publish that record on the Owner's
+behalf. That is not a corner cut carelessly; it's the honest
+consequence of choosing DNS-01 (the only challenge type this deployment
+can support at all -- see below) without also building a DNS-provider
+integration, which this step's spec never asked for.
+
+**Why DNS-01 and not HTTP-01** (vision critique): HTTP-01 requires a
+live web server answering `http://<domain>/.well-known/acme-challenge/<token>`
+on the domain's own IP, port 80. This deployment has no reverse-proxy
+that routes custom-domain traffic anywhere at all (verified in Partie
+1.4.1: `render.yaml` deploys a single Streamlit container, no
+Traefik/Caddy config exists anywhere in this repo) -- HTTP-01 could
+never work here regardless of any manual step. DNS-01 is the only
+challenge type where a human CAN complete the missing piece manually,
+using the exact same "the Owner adds a DNS record, this app verifies
+it" shape Partie 1.4.1's own domain verification already established.
+
+**The real, two-phase flow** (api/security/ssl_certificates.py):
+
+1. `POST .../ssl/generate` (first call): verifies the custom domain is
+   `active`, opens a real ACME order, computes the real DNS-01
+   challenge (`_acme-challenge.<domain>` TXT record + a value Let's
+   Encrypt itself will check), and returns bilingual instructions
+   (same shape as Partie 1.4.2's `dns_records_for`). Deliberately does
+   **not** call `answer_challenge` yet -- doing so before the record is
+   actually published would make Let's Encrypt check immediately, fail,
+   and permanently invalidate that challenge (ACME challenges are
+   effectively single-shot once answered).
+2. The Owner publishes the TXT record with their DNS provider.
+3. `POST .../ssl/generate` again (same endpoint, safe to call
+   repeatedly): answers the challenge for real, polls briefly (10s) for
+   Let's Encrypt's real validation, and on success downloads and stores
+   the real issued certificate. A still-pending validation (DNS not
+   propagated yet) leaves the row untouched and returns the same
+   instructions again -- exactly like Partie 1.4.1's domain
+   verification retry story. A validation Let's Encrypt genuinely
+   rejects (checked for real against staging, see below) is stored as
+   `status=failed`; calling `generate` again after a failure starts a
+   **brand new** order (a failed/invalid order cannot be resurrected by
+   polling it again).
+
+**Key security** (vision critique): the certificate's own private key
+is Fernet-encrypted via `api/security/secret_encryption.py` -- the same
+module already protecting `JWTSigningKey`/`EnterpriseSSOConnection`
+secrets (audit Categorie 4, items 27/28), not a new, unreviewed
+mechanism. It is generated fresh per order (never reused across
+issuance attempts) and is **never** returned by any API response, at
+any role, encrypted or not -- `SSLCertificateResponse` has no field for
+it at all. The ACME account key (which can request/revoke every
+certificate this deployment has ever issued) is encrypted the same way.
+`cert_pem`/`chain_pem` ARE returned once issued -- a certificate is
+public information by definition (visible to any TLS client during a
+real handshake), unlike its key.
+
+**Renewal** (vision critique): Let's Encrypt certificates are never
+renewed in place -- "renewal" is a fresh order for the same domain.
+Two Celery Beat tasks (`api/tasks/ssl_certificate_renewal.py`, item 5):
+`check_ssl_renewals` (daily) starts a real renewal order for every
+`issued` certificate within `SSL_RENEWAL_WINDOW_DAYS` (default 30) of
+`expires_at`, and `check_ssl_expirations` (daily, offset) is a safety
+net that only logs any `issued` certificate whose `expires_at` has
+already passed (meaning a renewal silently failed, or the Owner never
+completed a prior renewal's new DNS-01 step). **Renewal is not silent
+or unattended** -- same "Owner must publish a new TXT record" real
+limitation as first issuance, since renewal challenges are just as
+single-use as the original.
+
+**Why these tasks bridge into async code via `asyncio.run()`**,
+unlike every other Celery task in this codebase (`account_purge.py`,
+`jwt_key_rotation.py`, `token_blacklist_cleanup.py`, all plain sync
+SQLAlchemy): those tasks are simple enough that a sync-engine
+duplicate of their tiny query logic costs nothing. The certificate
+logic is substantial, real ACME-protocol code that must stay async
+anyway for the FastAPI routes that also call it (so a real,
+possibly-multi-second Let's Encrypt round trip never blocks the event
+loop) -- maintaining a second, parallel sync implementation of that
+logic just for two Celery tasks would be significant, error-prone
+duplication of cryptographic protocol code for no real benefit.
+`asyncio.run()` from a plain synchronous Celery task body is the
+standard, correct way to bridge into it.
+
+**Error handling** (vision critique -- "que se passe-t-il si Let's
+Encrypt est injoignable, ou si la validation échoue"): every ACME call
+is wrapped to translate `acme.errors.Error` (a real protocol-level
+rejection) and any other exception (real connectivity failure) into a
+`RuntimeError` the router turns into `502` -- never a raw stack trace.
+A validation failure (`errors.ValidationError`, confirmed for real
+against Let's Encrypt staging -- see below) is stored as
+`status=failed`, a normal, expected outcome, not a crash. A still-
+pending check (`errors.TimeoutError`, Let's Encrypt hasn't finished
+checking, or DNS hasn't propagated) leaves the certificate `pending_dns01`
+and is always safe to retry.
+
+**Real verification, not just code review**: `tests/test_acme_integration.py`
+runs real account registration, real order creation, and real DNS-01
+challenge computation against Let's Encrypt's actual staging server
+(`ACME_DIRECTORY_URL`'s default) -- including proving that answering a
+challenge WITHOUT ever publishing the real DNS record is reported by
+the real server as a validation failure, exactly matching this
+module's own `_resume_order` error handling. `ACME_DIRECTORY_URL`
+defaults to staging, never production, specifically so this kind of
+real-network testing (and any misconfigured dev/CI environment) can
+never burn through Let's Encrypt's production rate limits.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

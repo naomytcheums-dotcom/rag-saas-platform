@@ -62,6 +62,16 @@ cryptography==50.0.1
 # -- WebAuthn / FIDO2 (audit Categorie 4, item 26) ----------------------------
 webauthn==3.0.0
 
+# -- ACME / Let's Encrypt (Partie 1.4.3) --------------------------------------
+# The same acme/josepy libraries certbot itself uses -- a real ACME v2
+# (RFC 8555) client, not a hand-rolled reimplementation of the protocol's
+# JWS signing/nonce handling. Pulls in `requests` (sync) -- see
+# api/security/ssl_certificates.py's docstring for why its blocking
+# calls are wrapped in asyncio.to_thread rather than given an async
+# HTTP client of their own.
+acme==5.8.0
+josepy==2.2.0
+
 # -- Object storage (avatar uploads, 1.1.13) ----------------------------------
 boto3==1.43.83
 

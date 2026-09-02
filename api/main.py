@@ -21,7 +21,7 @@ from api.monitoring import render_prometheus_metrics, track_request_duration_mid
 from api.routers import (
     account, admin_users, audit, auth, custom_domains, enterprise_sso, invitations, oauth, organization_branding,
     organization_members, organization_settings, organizations, password, quotas, resource_permissions, sessions,
-    teams, two_factor, usage, user_limits, verify, webauthn, workspaces,
+    ssl_certificates, teams, two_factor, usage, user_limits, verify, webauthn, workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
@@ -163,6 +163,7 @@ app.include_router(usage.router)
 app.include_router(organization_settings.router)
 app.include_router(organization_branding.router)
 app.include_router(custom_domains.router)
+app.include_router(ssl_certificates.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

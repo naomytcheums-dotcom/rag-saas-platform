@@ -39,6 +39,8 @@ from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
 from api.models.custom_domain import CustomDomain
+from api.models.ssl_certificate import SSLCertificate
+from api.security.secret_encryption import encrypt_secret
 from api.models.organization_branding import OrganizationBranding
 from api.models.organization_quota import OrganizationQuota
 from api.models.organization_settings import OrganizationSettings
@@ -762,6 +764,40 @@ async def test_deleting_an_organization_cascades_to_its_custom_domains(pg_sessio
 
         remaining_domain = await pg_session.scalar(select(CustomDomain).where(CustomDomain.organization_id == org_id))
         assert remaining_domain is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_through_custom_domains_to_ssl_certificates(pg_session):
+    """Partie 1.4.3: a TWO-LEVEL cascade -- organizations -> custom_domains
+    (Partie 1.4.1's FK) -> ssl_certificates (this step's own FK, to
+    custom_domains.domain rather than .id). Deleting the organization
+    must remove both, which SQLite's fast suite won't enforce either way."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="SSL Cascade Test Org", slug=f"ssl-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    domain_str = f"app.ssl-cascade-test-{uuid.uuid4().hex[:8]}.example"
+    pg_session.add(CustomDomain(organization_id=org_id, domain=domain_str, verification_token="irrelevant-token"))
+    await pg_session.flush()
+    pg_session.add(SSLCertificate(domain=domain_str, key_pem_encrypted=encrypt_secret("fake-key-placeholder")))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_domain = await pg_session.scalar(select(CustomDomain).where(CustomDomain.organization_id == org_id))
+        remaining_cert = await pg_session.scalar(select(SSLCertificate).where(SSLCertificate.domain == domain_str))
+        assert remaining_domain is None
+        assert remaining_cert is None
     finally:
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
