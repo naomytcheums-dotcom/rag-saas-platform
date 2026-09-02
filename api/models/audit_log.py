@@ -54,6 +54,8 @@ class AuditAction(StrEnum):
     ORGANIZATION_MEMBER_ADDED = "organization_member_added"
     ORGANIZATION_MEMBER_ROLE_CHANGED = "organization_member_role_changed"
     ORGANIZATION_MEMBER_REMOVED = "organization_member_removed"
+    WORKSPACE_CREATED = "workspace_created"
+    WORKSPACE_DELETED = "workspace_deleted"
 
 
 class AuditLog(Base):

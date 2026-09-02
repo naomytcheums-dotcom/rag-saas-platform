@@ -37,6 +37,7 @@ from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
+from api.models.workspace import Workspace
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
@@ -206,6 +207,38 @@ async def test_deleting_an_organization_cascades_to_its_memberships(pg_session):
             select(OrganizationMember).where(OrganizationMember.organization_id == org_id)
         )
         assert remaining_membership is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_workspaces(pg_session):
+    """Etape 1.2.4: same reasoning as
+    test_deleting_an_organization_cascades_to_its_memberships above --
+    delete_organization is a Core bulk DELETE, so only the database's own
+    ON DELETE CASCADE (api/alembic/versions/0015_workspaces.py) removes
+    the organization's workspaces, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Workspace Cascade Test Org", slug=f"ws-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(Workspace(organization_id=org_id, name="Cascade Test Workspace", created_by=owner.id))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_workspace = await pg_session.scalar(
+            select(Workspace).where(Workspace.organization_id == org_id)
+        )
+        assert remaining_workspace is None
     finally:
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()

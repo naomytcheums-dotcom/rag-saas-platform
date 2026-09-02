@@ -171,7 +171,7 @@ jobs:
           tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
           tests/test_password_similarity.py tests/test_storage.py tests/test_audit_log.py tests/test_security_alerts.py
           tests/test_monitoring.py tests/test_trusted_ips_and_geoip.py tests/test_roles_and_permissions.py
-          tests/test_organizations.py tests/test_organization_members.py
+          tests/test_organizations.py tests/test_organization_members.py tests/test_workspaces.py
           tests/test_postgres_integration.py tests/test_oauth_logic_integration.py
           tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py
           tests/test_geo_adaptive_rate_limit_integration.py tests/test_webauthn_integration.py

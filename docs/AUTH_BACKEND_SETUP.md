@@ -626,10 +626,10 @@ renaming/deleting the organization itself:
 
 | Endpoint | Access |
 |---|---|
-| `GET /organizations/{org_id}/members` | Admin+ |
-| `POST /organizations/{org_id}/members/invite` | Admin+ |
-| `PATCH /organizations/{org_id}/members/{user_id}/role` | Admin+ |
-| `DELETE /organizations/{org_id}/members/{user_id}` | Admin+ |
+| `GET /organizations/{org_id}/members` | Manager+ (widened by Etape 1.2.4, see below) |
+| `POST /organizations/{org_id}/members/invite` | Manager+, with restrictions (widened by Etape 1.2.4, see below) |
+| `PATCH /organizations/{org_id}/members/{user_id}/role` | Admin+ (unchanged) |
+| `DELETE /organizations/{org_id}/members/{user_id}` | Admin+ (unchanged) |
 
 `require_org_admin_or_owner` also exists (`api/security/organizations.py`)
 as a literal alias of `require_org_admin` -- there has never been an
@@ -655,6 +655,61 @@ deliberately stronger rule than asked for, not a narrower one. Trying
 to grant the Owner role through `invite` or the role-update endpoint is
 rejected at the Pydantic validation layer (422), before either handler
 even runs.
+
+### Organization Manager / Workspaces (Etape 1.2.4)
+
+The Manager tier sits strictly **between** Member and Admin
+(`require_org_manager`, `api/security/organizations.py`: Owner, Admin,
+or Manager) and gets two capabilities, both scoped so it never widens
+what an Admin-gated endpoint already accepted:
+
+**1. Inviting members** -- `GET /organizations/{org_id}/members` and
+`POST /organizations/{org_id}/members/invite` (`api/routers/organization_members.py`)
+were widened from `require_org_admin` to `require_org_manager`.
+Role-update and remove **stayed Admin-only, unchanged** -- "Manager
+cannot manage roles" is this step's spec, applied literally.
+
+Opening `invite` to Manager creates a privilege-escalation path if left
+unchecked: a Manager could otherwise invite a brand-new account
+directly as `admin` or `manager`, handing out a role tier they
+themselves have no way to grant through role-update. `invite_organization_member`
+now rejects that in-handler (403) whenever the caller's own role is
+`manager` and the requested role is `admin` or `manager` -- Managers
+may only invite people in as `member` or `viewer`. This restriction
+does not apply to Admin/Owner-issued invites.
+
+**2. Managing workspaces** -- a new, deliberately minimal `workspaces`
+table (`api/models/workspace.py`: `id`, `organization_id`, `name`,
+`created_by`, timestamps; no knowledge-base or agent linkage yet --
+that's Partie 1.3.2's fuller scope once those things exist) and four
+endpoints (`api/routers/workspaces.py`):
+
+| Endpoint | Access |
+|---|---|
+| `GET /organizations/{org_id}/workspaces` | Any member (Owner/Admin/Manager/Member/Viewer) |
+| `POST /organizations/{org_id}/workspaces` | Manager+ |
+| `PATCH /workspaces/{workspace_id}` | Manager+ |
+| `DELETE /workspaces/{workspace_id}` | Manager+ |
+
+Listing is deliberately open to every member, not just Manager+ -- the
+spec named permissions for the mutating verbs only; a Member or Viewer
+has no reason to be hidden from what workspaces exist in their own
+organization, they just can't create, rename, or delete one.
+
+The two endpoints addressed by workspace id rather than org id
+(`PATCH`/`DELETE /workspaces/{workspace_id}`) have no `org_id` path
+parameter for `require_org_manager` to resolve automatically, so a
+dedicated dependency, `require_workspace_manager` (`api/security/workspaces.py`),
+looks the organization up **from** the workspace first, then applies
+the same Owner/Admin/Manager check -- 404 (not 403) for both "no such
+workspace" and "you're not a member of its organization," the same
+anti-enumeration reasoning as `require_org_member`.
+
+Deleting an organization cascades to its workspaces the same way it
+cascades to memberships -- database-level `ON DELETE CASCADE`
+(`api/alembic/versions/0015_workspaces.py`), verified against real
+Postgres (`tests/test_postgres_integration.py`), since SQLite doesn't
+enforce foreign keys by default.
 
 Workspace management and organization-settings management (this step's
 other two named Admin capabilities) have no endpoints yet -- neither

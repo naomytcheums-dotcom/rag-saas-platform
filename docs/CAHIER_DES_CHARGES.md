@@ -68,20 +68,21 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 1.2.1 | Super Admin | Rôle global hors-org, flag is_superadmin sur users | ✅ (implémenté via l'enum `role` existant plutôt qu'une colonne `is_superadmin` séparée -- migration 0010 avait déjà supprimé ce booléen au profit de l'enum, le réintroduire aurait recréé deux sources de vérité. `require_superadmin()` dans `api/dependencies.py` + `PATCH /admin/users/{id}/role` dans `api/routers/admin_users.py`, protégé contre la démotion du dernier superadmin, journalisé dans l'audit log. 8 tests, voir `tests/test_roles_and_permissions.py`) |
 | 1.2.2 | Organization Owner | Rôle le plus élevé dans organization_members.role | ✅ (tables `organizations`/`organization_members` créées -- première tranche de la Partie 1.3. `create_organization_with_owner()` partagé entre `POST /organizations` et l'organisation par défaut auto-créée à l'inscription. `require_org_member/admin/owner()` dans `api/security/organizations.py`. 13 tests SQLite + 1 test de cascade contre le vrai Postgres, voir `tests/test_organizations.py` et `tests/test_postgres_integration.py`) |
 | 1.2.3 | Admin | Idem, niveau juste sous Owner | ✅ (`OrganizationRole.admin` + `require_org_admin()`. Endpoints de gestion des membres : `GET/POST/PATCH/DELETE /organizations/{id}/members/...`. Un Admin ne peut ni toucher au rôle d'un Owner ni le retirer -- règle appliquée à TOUT appelant, pas seulement aux Admins, puisqu'aucun flux de transfert de propriété n'existe encore pour réparer une auto-démotion accidentelle. 15 tests, voir `tests/test_organization_members.py`) |
-| 1.2.4 | Manager | Idem | 🟡 (la valeur d'enum `OrganizationRole.manager` existe, mais rien ne s'y comporte différemment de Member pour l'instant -- aucune permission propre au Manager) |
+| 1.2.4 | Manager | Idem | ✅ (`require_org_manager()` -- Owner/Admin/Manager, strictement entre Member et Admin. Deux capacités propres : (1) inviter des membres (`GET/POST /organizations/{id}/members[/invite]` élargis d'Admin à Manager+ -- rôle mis à jour et retrait restent Admin-only, inchangés), avec un garde-fou anti-escalade de privilèges ajouté dans `invite_organization_member` : un Manager ne peut inviter qu'en `member`/`viewer`, jamais en `admin`/`manager` (403 sinon) ; (2) gérer des workspaces -- nouvelle table `workspaces` (`api/models/workspace.py`, migration 0015, `ON DELETE CASCADE` depuis `organizations`) et 4 endpoints (`GET/POST /organizations/{id}/workspaces`, `PATCH/DELETE /workspaces/{id}`) dans `api/routers/workspaces.py`, la liste étant ouverte à tout membre (Owner à Viewer) et la création/renommage/suppression réservés à Manager+. 15 nouveaux tests Manager dans `tests/test_organization_members.py` + 15 tests dans `tests/test_workspaces.py` + 1 test de cascade contre le vrai Postgres) |
 | 1.2.5 | Member | Idem (rôle par défaut à l'invitation) | 🟡 (valeur d'enum existe, `require_org_member` l'accepte ; pas encore de flux d'invitation qui l'attribue par défaut) |
 | 1.2.6 | Viewer | Idem, lecture seule | 🟡 (valeur d'enum existe ; aucune restriction lecture-seule appliquée encore) |
 | 1.2.7 | RBAC complet | casbin ou décorateur @require_role() sur chaque route | 🟡 (`require_admin`/`require_org_admin` = contrôle binaire par palier, pas un vrai RBAC par ressource) |
 | 1.2.8 | Permissions granulaires par ressource | Table permissions (resource_type, action, role) | ⬜ |
 
-**Score 1.2 : 5-6/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager/Member/Viewer 🟡, RBAC complet 🟡, permissions granulaires ⬜).
+**Score 1.2 : 6-7/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager ✅, Member/Viewer 🟡, RBAC complet 🟡, permissions granulaires ⬜).
 
-### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (1-2/10, via l'Étape 1.2.2)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (2-3/10, via les Étapes 1.2.2 et 1.2.4)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
 | 1.3.1 | Organizations | Table organizations, FK sur toutes les tables métier | ✅ (`api/models/organization.py`, aucune AUTRE table métier n'a encore de FK vers elle -- c'est la prochaine étape logique une fois que du contenu org-scopé existe) |
-| 1.3.2-1.3.10 | Workspaces, Teams, Invitations, isolation, quotas, config, branding | — | ⬜ |
+| 1.3.2 | Workspaces | Table workspaces (FK org), regroupe KB + agents | 🟡 (table `workspaces` créée à l'Étape 1.2.4 avec CRUD complet -- `id`, `organization_id`, `name`, `created_by`, timestamps -- mais délibérément minimale : pas encore de lien vers une KB ou des agents, puisqu'aucun des deux n'existe encore. Le "regroupe KB + agents" de la portée complète reste à faire une fois que ces briques existeront) |
+| 1.3.3-1.3.10 | Teams, Invitations, isolation, quotas, config, branding | — | ⬜ |
 
 Reste de la table originale, pour référence :
 

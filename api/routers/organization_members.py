@@ -12,12 +12,23 @@ an Owner (api/security/organizations.py's reject_if_target_is_owner --
 applied regardless of caller, not just for Admins, see that function's
 own docstring for why it's stricter than the letter of the spec).
 
-Workspace management and organization-settings management (the other
-two Admin capabilities named in this step's spec) have no endpoints
-here because neither `workspaces` (Partie 1.3.2) nor
-`organization_settings` (Partie 1.3.9) exist yet -- once they do, they
-should reuse require_org_admin the same way these do, not invent a
-separate permission check.
+Etape 1.2.4 -- Manager: list_organization_members and
+invite_organization_member below were widened from require_org_admin to
+require_org_manager (Owner, Admin, or Manager), matching that step's
+"Manager can invite members" capability -- see
+invite_organization_member's own docstring for the privilege-escalation
+guard this required. update_organization_member_role and
+remove_organization_member deliberately stayed on require_org_admin,
+unchanged: "Manager cannot manage roles" is that step's spec, word for
+word.
+
+Workspace management (api/routers/workspaces.py, api/security/workspaces.py)
+and organization-settings management (Partie 1.3.9, not yet built) are
+the other Manager/Admin capabilities named across these steps' specs --
+organization-settings has no endpoints here yet because
+`organization_settings` doesn't exist yet; once it does, it should reuse
+require_org_admin the same way these do, not invent a separate
+permission check.
 """
 
 import logging
@@ -29,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
 from api.models.audit_log import AuditAction
-from api.models.organization import Organization, OrganizationMember
+from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.schemas.organizations import (
     OrganizationMemberEntry,
@@ -38,7 +49,12 @@ from api.schemas.organizations import (
     OrganizationMemberRoleUpdateRequest,
 )
 from api.security.audit_log import log_audit_action
-from api.security.organizations import get_organization_member_or_404, reject_if_target_is_owner, require_org_admin
+from api.security.organizations import (
+    get_organization_member_or_404,
+    reject_if_target_is_owner,
+    require_org_admin,
+    require_org_manager,
+)
 from api.services.email import (
     send_organization_member_added_email,
     send_organization_member_removed_email,
@@ -52,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("", response_model=OrganizationMemberListResponse)
 async def list_organization_members(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.execute(
         select(OrganizationMember, User.email)
@@ -69,13 +85,27 @@ async def list_organization_members(
 @router.post("/invite", response_model=OrganizationMemberEntry, status_code=status.HTTP_201_CREATED)
 async def invite_organization_member(
     org_id: uuid.UUID, payload: OrganizationMemberInviteRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     """
     "Invite" here means immediately adding an EXISTING account -- see
     OrganizationMemberInviteRequest's own docstring for why (no
     email-based invitation link exists yet, item 1.3.4).
+
+    Etape 1.2.4: opening this endpoint to Manager (previously Admin-only)
+    creates a privilege-escalation path if left unchecked -- a Manager
+    could otherwise invite someone directly as admin or manager,
+    handing out a role tier they themselves aren't allowed to grant or
+    change (that stays require_org_admin, on the role-update and
+    remove-member endpoints below, both unchanged by this step). A
+    Manager may only invite people in as member or viewer.
     """
+    if caller.role == OrganizationRole.manager and payload.role in (OrganizationRole.admin, OrganizationRole.manager):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Managers can only invite members as 'member' or 'viewer'",
+        )
+
     target_user = await db.scalar(select(User).where(User.email == payload.email))
     if target_user is None:
         raise HTTPException(

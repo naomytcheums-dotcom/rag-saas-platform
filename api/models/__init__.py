@@ -21,10 +21,11 @@ from api.models.session import Session
 from api.models.token import EmailVerificationToken, PasswordResetToken
 from api.models.user import User
 from api.models.webauthn_credential import WebAuthnCredential
+from api.models.workspace import Workspace
 
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
     "RevokedAccessToken", "PasswordHistory", "AuditLog", "JWTSigningKey", "WebAuthnCredential",
-    "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember",
+    "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember", "Workspace",
 ]

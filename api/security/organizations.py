@@ -115,6 +115,20 @@ async def require_org_member(
     return membership
 
 
+async def require_org_manager(membership: OrganizationMember = Depends(require_org_member)) -> OrganizationMember:
+    """
+    Etape 1.2.4: Owner, Admin, or Manager -- the tier that can invite
+    members (with restrictions, see api/routers/organization_members.py)
+    and manage workspaces (api/routers/workspaces.py), but NOT change
+    member roles or remove members (that stays require_org_admin,
+    unchanged by this step -- Manager sits strictly BETWEEN Member and
+    Admin, never widening what Admin-gated endpoints already accept).
+    """
+    if membership.role not in (OrganizationRole.owner, OrganizationRole.admin, OrganizationRole.manager):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization manager access required")
+    return membership
+
+
 async def require_org_admin(membership: OrganizationMember = Depends(require_org_member)) -> OrganizationMember:
     """Owner or Admin. 403, not 404 -- unlike require_org_member above,
     reaching this dependency at all already proves the caller IS a

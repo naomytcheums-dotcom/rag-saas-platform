@@ -296,3 +296,145 @@ async def test_admin_still_cannot_delete_the_organization(client, db_session, re
     assert response.status_code == 403
 
     assert await db_session.get(Organization, uuid.UUID(org["id"])) is not None
+
+
+# ----------------------------------------------- Etape 1.2.4 -- Manager
+
+async def test_manager_can_list_members(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager1@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    response = await client.get(f"/organizations/{org['id']}/members", headers=_auth_header(manager_token))
+    assert response.status_code == 200
+
+
+async def test_manager_can_invite_a_member(monkeypatch, client, db_session, register_payload):
+    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager2@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    await _register(client, db_session, "invitedbymanager@example.com")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/members/invite", json={"email": "invitedbymanager@example.com", "role": "member"},
+        headers=_auth_header(manager_token),
+    )
+    assert response.status_code == 201
+    assert response.json()["role"] == "member"
+
+
+async def test_manager_can_invite_a_viewer(monkeypatch, client, db_session, register_payload):
+    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager3@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    await _register(client, db_session, "invitedasviewer@example.com")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/members/invite", json={"email": "invitedasviewer@example.com", "role": "viewer"},
+        headers=_auth_header(manager_token),
+    )
+    assert response.status_code == 201
+    assert response.json()["role"] == "viewer"
+
+
+async def test_manager_cannot_invite_as_admin(client, db_session, register_payload):
+    """The privilege-escalation guard: a Manager could otherwise invite
+    someone directly as Admin, handing out a role tier the Manager isn't
+    themselves allowed to grant via role-update."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager4@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    _, target = await _register(client, db_session, "wouldbeadmin@example.com")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/members/invite", json={"email": "wouldbeadmin@example.com", "role": "admin"},
+        headers=_auth_header(manager_token),
+    )
+    assert response.status_code == 403
+
+    membership = await db_session.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == uuid.UUID(org["id"]), OrganizationMember.user_id == target.id,
+        )
+    )
+    assert membership is None  # never added at all, not added as a lower role
+
+
+async def test_manager_cannot_invite_as_manager(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager5@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    await _register(client, db_session, "wouldbemanager@example.com")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/members/invite", json={"email": "wouldbemanager@example.com", "role": "manager"},
+        headers=_auth_header(manager_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_admin_can_still_invite_as_admin(monkeypatch, client, db_session, register_payload):
+    """The Manager guard must not accidentally tighten what Admin/Owner
+    can already do -- only Manager-issued invites are restricted."""
+    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    await _register(client, db_session, "wouldbeadminforreal@example.com")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/members/invite", json={"email": "wouldbeadminforreal@example.com", "role": "admin"},
+        headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 201
+    assert response.json()["role"] == "admin"
+
+
+async def test_manager_cannot_change_a_members_role(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager6@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    _, target = await _register(client, db_session, "targetformanager@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), target.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.patch(
+        f"/organizations/{org['id']}/members/{target.id}/role", json={"role": "admin"},
+        headers=_auth_header(manager_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_manager_cannot_remove_a_member(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    manager_token, manager_user = await _register(client, db_session, "manager7@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), manager_user.id, OrganizationRole.manager, invited_by=owner.id)
+
+    _, target = await _register(client, db_session, "targetformanager2@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), target.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.delete(f"/organizations/{org['id']}/members/{target.id}", headers=_auth_header(manager_token))
+    assert response.status_code == 403
