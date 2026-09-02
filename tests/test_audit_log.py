@@ -195,3 +195,27 @@ async def test_failed_login_dashboard_respects_the_time_window(client, register_
     response = await client.get("/admin/failed-logins?window_minutes=60", headers=_admin_auth_header(access_token))
     body = response.json()
     assert not any(e["key"] == "old@example.com" for e in body["by_email"])
+
+
+# --------------------------------------------------------- item 28 -----
+
+async def test_non_admin_gets_404_from_jwt_keys_endpoint(client, register_payload):
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    response = await client.get("/admin/jwt-keys", headers=_admin_auth_header(access_token))
+    assert response.status_code == 404
+
+
+async def test_admin_can_list_jwt_signing_keys_without_ever_seeing_the_secret(client, register_payload, db_session):
+    from api.models.jwt_signing_key import JWTSigningKey
+
+    access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    await _promote_to_admin(db_session, register_payload["email"])
+
+    db_session.add(JWTSigningKey(secret="fernet-ciphertext-not-a-real-secret", is_active=True))
+    await db_session.commit()
+
+    response = await client.get("/admin/jwt-keys", headers=_admin_auth_header(access_token))
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert any(item["is_active"] for item in items)
+    assert not any("secret" in item for item in items)  # never exposed, see JWTSigningKeyEntry's docstring

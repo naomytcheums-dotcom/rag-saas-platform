@@ -57,13 +57,21 @@ class TokenResponse(BaseModel):
 class MFARequiredResponse(BaseModel):
     """
     Returned by POST /auth/login instead of TokenResponse when the
-    account has 2FA enabled -- no tokens yet. The frontend must follow up
-    with POST /auth/2fa/verify-login, passing mfa_token back along with
-    the 6-digit code from the user's authenticator app.
+    account has a second factor enabled -- no tokens yet. The frontend
+    must follow up with POST /auth/2fa/verify-login (a TOTP code or
+    recovery code) or, per audit finding 26, the WebAuthn ceremony
+    (POST /auth/webauthn/authenticate/options then /verify) -- both
+    consume the SAME mfa_token, so which one the frontend calls is purely
+    a UI choice, not something this response gates.
+
+    available_methods lists which of "totp"/"webauthn" this specific
+    account actually has configured, so the frontend can offer only the
+    options that will work rather than guessing or trying both blindly.
     """
 
     mfa_required: Literal[True] = True
     mfa_token: str
+    available_methods: list[str] = []
 
 
 class TwoFactorVerifyLoginRequest(BaseModel):

@@ -193,7 +193,12 @@ async def test_oauth_callback_requires_2fa_when_the_account_has_it_enabled(pg_se
         assert "access_token=" not in location  # the critical assertion: no session was issued
         assert "mfa_token=" in location
 
-        mfa_token = location.split("mfa_token=")[1]
+        # .split("&")[0]: audit finding 26 (WebAuthn) added a trailing
+        # &methods=... after mfa_token= in this exact redirect fragment
+        # (api/routers/oauth.py) -- mfa_token is no longer guaranteed to
+        # be the last parameter, same reasoning the access_token
+        # extraction below already accounts for.
+        mfa_token = location.split("mfa_token=")[1].split("&")[0]
         assert decode_token(mfa_token, TokenPurpose.MFA_PENDING).user_id == user_id  # a real, usable MFA-pending token for THIS user
     finally:
         await pg_session.execute(delete(User).where(User.email == email))

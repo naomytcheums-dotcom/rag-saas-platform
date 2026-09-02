@@ -39,9 +39,11 @@ from api.security.sessions import (
     revoke_session,
 )
 from api.security.jwt import create_mfa_pending_token
+from api.security.webauthn import get_user_credentials
 from api.security.password_history import record_password_change
 from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
+from api.security.adaptive_rate_limit import enforce_adaptive_rate_limit
 from api.security.rate_limit import enforce_rate_limit
 from api.services.email import send_rate_limit_alert_email
 from api.services.security_alerts import check_and_alert_on_failed_login_spike
@@ -94,8 +96,12 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     and accept_terms which Pydantic itself rejects if False -- see
     api/schemas/auth.py).
     """
-    await enforce_rate_limit(
-        f"ratelimit:register:ip:{client_ip(request)}",
+    # Audit findings 29/30: geo-adaptive (country tier) and allowlist
+    # (TRUSTED_IPS) aware -- see api/security/adaptive_rate_limit.py.
+    # Behaviorally identical to a flat enforce_rate_limit() call until
+    # those settings are actually configured.
+    await enforce_adaptive_rate_limit(
+        request, f"ratelimit:register:ip:{client_ip(request)}",
         settings.REGISTER_RATE_LIMIT_MAX_ATTEMPTS, settings.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
     )
 
@@ -167,8 +173,9 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     same limit to lock the real owner out for a while too; at least they
     find out it's happening.
     """
-    await enforce_rate_limit(
-        f"ratelimit:login:ip:{client_ip(request)}",
+    # Audit findings 29/30 -- see the matching comment in register() above.
+    await enforce_adaptive_rate_limit(
+        request, f"ratelimit:login:ip:{client_ip(request)}",
         settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     )
 
@@ -220,8 +227,19 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         await db.commit()
         raise _GENERIC_LOGIN_ERROR
 
-    if user.totp_enabled:
-        return MFARequiredResponse(mfa_token=create_mfa_pending_token(user.id))
+    # Audit finding 26: WebAuthn is an ADDITIONAL available second factor,
+    # never a replacement for TOTP -- an account can have either, both,
+    # or neither. available_methods tells the frontend which ceremony(s)
+    # this specific account can actually complete; both ultimately
+    # consume the same mfa_token (see MFARequiredResponse's docstring).
+    webauthn_credentials = await get_user_credentials(db, user.id)
+    if user.totp_enabled or webauthn_credentials:
+        available_methods = []
+        if user.totp_enabled:
+            available_methods.append("totp")
+        if webauthn_credentials:
+            available_methods.append("webauthn")
+        return MFARequiredResponse(mfa_token=create_mfa_pending_token(user.id), available_methods=available_methods)
 
     tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
     await log_audit_action(db, user_id=user.id, action=AuditAction.LOGIN_SUCCESS, ip=ip, user_agent=user_agent, success=True)

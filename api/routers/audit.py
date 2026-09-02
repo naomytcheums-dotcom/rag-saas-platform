@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_admin
 from api.models.audit_log import AuditAction, AuditLog
+from api.models.jwt_signing_key import JWTSigningKey
 from api.models.user import User
 from api.schemas.audit import (
     AuditLogEntry,
@@ -23,6 +24,8 @@ from api.schemas.audit import (
     AuditLogListResponse,
     FailedLoginCount,
     FailedLoginStatsResponse,
+    JWTSigningKeyEntry,
+    JWTSigningKeyListResponse,
 )
 from api.security.audit_log import verify_audit_log_integrity
 
@@ -153,3 +156,17 @@ async def verify_audit_logs_integrity(_admin: User = Depends(require_admin), db:
     """
     intact, first_tampered_id = await verify_audit_log_integrity(db)
     return AuditLogIntegrityResponse(intact=intact, first_tampered_entry_id=first_tampered_id)
+
+
+@router.get("/admin/jwt-keys", response_model=JWTSigningKeyListResponse)
+async def list_jwt_signing_keys(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """
+    Audit finding 28's "notification administrateur" requirement, made
+    checkable on demand rather than relying solely on the one-shot email
+    api/tasks/jwt_key_rotation.py sends at the moment of a rotation --
+    lets an operator confirm rotation is actually happening on schedule
+    (or debug why it isn't) at any time. The secret itself is never
+    returned, only rotation metadata (see JWTSigningKeyEntry's docstring).
+    """
+    rows = (await db.scalars(select(JWTSigningKey).order_by(JWTSigningKey.created_at.desc()))).all()
+    return JWTSigningKeyListResponse(items=[JWTSigningKeyEntry.model_validate(row) for row in rows])

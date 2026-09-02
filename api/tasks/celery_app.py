@@ -24,7 +24,10 @@ celery_app = Celery(
     # silently register zero tasks. `include` is resolved lazily, after
     # `celery_app` below is fully constructed, so account_purge.py's own
     # `from api.tasks.celery_app import celery_app` doesn't circular-import.
-    include=["api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder"],
+    include=[
+        "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
+        "api.tasks.jwt_key_rotation",
+    ],
 )
 
 celery_app.conf.update(
@@ -47,5 +50,16 @@ celery_app.conf.beat_schedule = {
     "send-pending-deletion-reminders-daily": {
         "task": "api.tasks.account_deletion_reminder.send_pending_deletion_reminders",
         "schedule": crontab(hour=3, minute=30),  # same low-traffic window, offset again
+    },
+    # Audit finding 28 -- checked daily, same low-traffic window, but
+    # only ever ACTS once every JWT_AUTO_ROTATION_INTERVAL_DAYS: the task
+    # itself is the one that decides whether the current key is actually
+    # due (see api/tasks/jwt_key_rotation.py's own docstring), same
+    # "safe to run on any schedule" idempotency as every task above.
+    # JWT_AUTO_ROTATION_INTERVAL_DAYS=0 (the default) makes every run a
+    # guaranteed no-op -- this entry can stay registered unconditionally.
+    "rotate-jwt-signing-key-daily-check": {
+        "task": "api.tasks.jwt_key_rotation.rotate_jwt_signing_key",
+        "schedule": crontab(hour=3, minute=45),
     },
 }

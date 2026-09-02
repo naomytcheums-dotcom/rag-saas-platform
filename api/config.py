@@ -200,6 +200,88 @@ class Settings(BaseSettings):
     SECURITY_ALERT_FAILED_LOGIN_THRESHOLD: int = 10
     SECURITY_ALERT_WINDOW_MINUTES: int = 5
 
+    # -- Geo-adaptive rate limiting (audit Categorie 4, item 29) -----------
+    # api/security/geoip.py resolves a caller's IP to an ISO 3166-1
+    # alpha-2 country code (ipapi.co, no API key needed), cached in Redis
+    # so a brute-force burst from one IP doesn't turn into one outbound
+    # HTTP call per attempt. api/security/adaptive_rate_limit.py then
+    # scales LOGIN_RATE_LIMIT_MAX_ATTEMPTS / REGISTER_RATE_LIMIT_MAX_ATTEMPTS
+    # by GEO_RATE_LIMIT_TRUSTED_MULTIPLIER or _SUSPICIOUS_MULTIPLIER when
+    # that country appears in TRUSTED_COUNTRIES / SUSPICIOUS_COUNTRIES.
+    # Both lists empty (the default) means every caller gets the flat,
+    # unadjusted limit -- identical behavior to before this feature existed.
+    GEO_IP_LOOKUP_ENABLED: bool = True
+    GEO_IP_API_URL: str = "https://ipapi.co/{ip}/country/"
+    GEO_IP_LOOKUP_TIMEOUT_SECONDS: float = 2.0
+    GEO_IP_CACHE_TTL_SECONDS: int = 3600
+    TRUSTED_COUNTRIES: str = ""
+    SUSPICIOUS_COUNTRIES: str = ""
+    GEO_RATE_LIMIT_TRUSTED_MULTIPLIER: float = 2.0
+    GEO_RATE_LIMIT_SUSPICIOUS_MULTIPLIER: float = 0.5
+
+    # -- Trusted IP / VPN exemption (audit Categorie 4, item 30) -----------
+    # Comma-separated individual IPs and/or CIDR ranges (e.g.
+    # "203.0.113.5,10.8.0.0/24") fully exempted from rate limiting by
+    # api/security/adaptive_rate_limit.py -- for known-safe sources
+    # (internal tooling, a company VPN egress IP, a monitoring/synthetic
+    # check) that would otherwise share the same brute-force limits as an
+    # anonymous public caller. Empty (the default) exempts nothing.
+    TRUSTED_IPS: str = ""
+
+    # -- Shared encryption-at-rest for DB-stored secrets --------------------
+    # A Fernet key (symmetric, authenticated encryption) protecting the
+    # two Categorie-4 secrets that must live in Postgres rather than a
+    # .env file, because their whole point is to change WITHOUT a
+    # redeploy: JWT signing keys (item 28) and enterprise SSO client
+    # secrets (item 27) -- see api/security/secret_encryption.py. Only
+    # required once one of those features is actually used (creating the
+    # first JWTSigningKey row, or the first EnterpriseSSOConnection);
+    # unset otherwise. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    SECRET_ENCRYPTION_KEY: str | None = None
+
+    # -- Automatic JWT key rotation (audit Categorie 4, item 28) -----------
+    # Complements the manual JWT_PREVIOUS_SECRET_KEYS mechanism above with
+    # a DB-backed key (api/models/jwt_signing_key.py) that a Celery Beat
+    # task (api/tasks/jwt_key_rotation.py) rotates on its own schedule --
+    # see that task's docstring for exactly how "automatic" is achieved
+    # without a redeploy. 0 (the default) disables automatic rotation
+    # entirely; the existing manual env-var mechanism keeps working
+    # unchanged either way.
+    JWT_AUTO_ROTATION_INTERVAL_DAYS: int = 0
+    # How long a retired DB-backed key remains valid for VERIFYING an
+    # already-issued token after a rotation -- must comfortably exceed
+    # REFRESH_TOKEN_EXPIRE_DAYS's effective access-token lifetime window
+    # (a session can go REFRESH_TOKEN_EXPIRE_DAYS between refreshes, and
+    # each refresh mints an access token good for ACCESS_TOKEN_EXPIRE_MINUTES
+    # more) so a token signed just before a rotation never outlives the
+    # key that can still verify it.
+    JWT_KEY_RETENTION_DAYS: int = 7
+    # How often a running API process re-reads the DB-backed signing key
+    # table (api/security/jwt.py's in-memory cache) -- this, not a
+    # restart, is what makes a Celery-driven rotation "automatic" for
+    # every already-running worker process, single or multi.
+    JWT_KEY_CACHE_REFRESH_SECONDS: int = 60
+    JWT_KEY_ROTATION_ADMIN_EMAIL: str | None = None
+
+    # -- WebAuthn / FIDO2 (audit Categorie 4, item 26) ---------------------
+    # rp_id must be the exact domain (no scheme/port) the frontend is
+    # served from -- a WebAuthn credential is cryptographically bound to
+    # it and simply won't work if this doesn't match. rp_origin is the
+    # full origin (with scheme) the browser's navigator.credentials calls
+    # actually run from; the two are independently configurable since a
+    # dev setup commonly runs the frontend on a different port than "the
+    # domain" (e.g. rp_id=localhost, rp_origin=http://localhost:3000).
+    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_NAME: str = "RAG SaaS Platform"
+    WEBAUTHN_RP_ORIGIN: str = "http://localhost:3000"
+    WEBAUTHN_MAX_CREDENTIALS_PER_USER: int = 10
+
+    # -- Enterprise SSO / OIDC (audit Categorie 4, item 27) -----------------
+    # Each EnterpriseSSOConnection.client_secret (a third-party IdP's
+    # secret, admin-configured via POST /admin/sso/connections) is
+    # encrypted at rest using SECRET_ENCRYPTION_KEY above.
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

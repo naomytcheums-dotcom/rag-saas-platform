@@ -5,6 +5,10 @@ here; later parts (multi-tenant, billing, ...) add more routers to this
 same app rather than starting a second one.
 """
 
+import asyncio
+import contextlib
+import logging
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST
@@ -12,12 +16,55 @@ from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.config import settings
-from api.database import engine
+from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
-from api.routers import account, audit, auth, oauth, password, sessions, two_factor, verify
+from api.routers import account, audit, auth, enterprise_sso, oauth, password, sessions, two_factor, verify, webauthn
+from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 
-app = FastAPI(title="RAG SaaS Platform API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Audit finding 28: populates api/security/jwt.py's in-memory
+    DB-backed-key cache once at startup, then keeps it fresh on a
+    JWT_KEY_CACHE_REFRESH_SECONDS timer for the process's whole
+    lifetime -- see that module's top docstring for why this timer,
+    not a restart, is what makes a Celery-driven rotation "automatic"
+    for an already-running process. Cancelled cleanly on shutdown.
+
+    A deployment that never enables JWT_AUTO_ROTATION_INTERVAL_DAYS (the
+    default, 0) still runs this loop -- refresh_jwt_key_cache() just
+    finds zero rows in jwt_signing_keys forever, leaving the cache empty
+    and api/security/jwt.py falling back to JWT_SECRET_KEY exactly as it
+    did before this feature existed. The cost is one cheap, indexed
+    Postgres query per JWT_KEY_CACHE_REFRESH_SECONDS (60s by default),
+    not per request.
+    """
+    async with AsyncSessionLocal() as db:
+        await refresh_jwt_key_cache(db)
+
+    async def _poll_jwt_key_cache() -> None:
+        while True:
+            await asyncio.sleep(settings.JWT_KEY_CACHE_REFRESH_SECONDS)
+            try:
+                async with AsyncSessionLocal() as db:
+                    await refresh_jwt_key_cache(db)
+            except Exception:  # noqa: BLE001 -- a single failed refresh must never kill the polling loop itself
+                logger.exception("unexpected error while polling the JWT signing-key cache")
+
+    poll_task = asyncio.create_task(_poll_jwt_key_cache())
+    try:
+        yield
+    finally:
+        poll_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await poll_task
+
+
+app = FastAPI(title="RAG SaaS Platform API", version="0.1.0", lifespan=lifespan)
 
 # Required by Authlib's Starlette OAuth client (api/routers/oauth.py) to
 # hold the `state`/`nonce` between the /authorize redirect and /callback.
@@ -89,6 +136,8 @@ app.include_router(two_factor.router)
 app.include_router(sessions.router)
 app.include_router(account.router)
 app.include_router(audit.router)
+app.include_router(webauthn.router)
+app.include_router(enterprise_sso.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

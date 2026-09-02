@@ -44,6 +44,13 @@ pyjwt[crypto]==2.13.0
 authlib==1.8.0
 pyotp==2.10.0
 qrcode[pil]==8.2
+# cryptography was already present transitively (pyjwt[crypto]) -- pinned
+# directly now that api/security/secret_encryption.py (audit Categorie 4,
+# items 27/28) imports it itself, rather than relying on another
+# package's dependency tree to keep providing it.
+cryptography==50.0.1
+# -- WebAuthn / FIDO2 (audit Categorie 4, item 26) ----------------------------
+webauthn==3.0.0
 
 # -- Object storage (avatar uploads, 1.1.13) ----------------------------------
 boto3==1.43.83

@@ -54,3 +54,22 @@ class AuditLogIntegrityResponse(BaseModel):
 
     intact: bool
     first_tampered_entry_id: uuid.UUID | None
+
+
+class JWTSigningKeyEntry(BaseModel):
+    """One row of GET /admin/jwt-keys (audit finding 28) -- the secret
+    itself is never included, deliberately (see api/routers/audit.py's
+    docstring on this endpoint): this exists purely so an operator can
+    SEE that rotation is actually happening and when, not to expose any
+    key material."""
+
+    id: uuid.UUID
+    is_active: bool
+    created_at: dt.datetime
+    retired_at: dt.datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class JWTSigningKeyListResponse(BaseModel):
+    items: list[JWTSigningKeyEntry]

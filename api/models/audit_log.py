@@ -43,6 +43,11 @@ class AuditAction(StrEnum):
     CONCURRENT_SESSION_LIMIT = "concurrent_session_limit"
     ACCOUNT_DELETED = "account_deleted"
     CONSENT_WITHDRAWN = "consent_withdrawn"
+    WEBAUTHN_CREDENTIAL_ADDED = "webauthn_credential_added"
+    WEBAUTHN_CREDENTIAL_REMOVED = "webauthn_credential_removed"
+    WEBAUTHN_LOGIN_SUCCESS = "webauthn_login_success"
+    ENTERPRISE_SSO_LOGIN_SUCCESS = "enterprise_sso_login_success"
+    ENTERPRISE_SSO_CONNECTION_CREATED = "enterprise_sso_connection_created"
 
 
 class AuditLog(Base):

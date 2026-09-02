@@ -468,6 +468,169 @@ bot-detection heuristic. Straightforward to add later if mass registration
 from many distinct IPs becomes a real problem CAPTCHA would catch and
 rate limiting wouldn't.
 
+## Audit Categorie 4 -- Sécurité avancée
+
+### WebAuthn / FIDO2 (item 26)
+
+A physical security key (YubiKey, etc.) or a platform authenticator
+(Touch ID, Windows Hello) as a second factor, **alongside** TOTP, never
+replacing it -- an account can have TOTP, WebAuthn credentials, both, or
+neither. Backed by the `webauthn` PyPI package (pure Python + `cryptography`,
+no native/system library) -- see `api/security/webauthn.py`.
+
+- `POST /auth/webauthn/register/options` / `/register/verify` -- register
+  a new key (up to `WEBAUTHN_MAX_CREDENTIALS_PER_USER`, default 10).
+- `GET /auth/webauthn/credentials`, `DELETE /auth/webauthn/credentials/{id}`
+  -- manage registered keys; deleting one emails the account (a stolen
+  access token alone can remove a key with no further proof, same
+  disclosed trade-off `/auth/2fa/enable` already documents for itself --
+  the email is the actual mitigation, not a stronger check at this step).
+- `POST /auth/webauthn/authenticate/options` / `/authenticate/verify` --
+  the login-time second factor, parallel to `/auth/2fa/verify-login`:
+  same `mfa_token` bridge from `POST /auth/login`, same rate limit
+  (`TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS`), keyed the same way (hashed
+  `mfa_token`).
+
+`WEBAUTHN_RP_ID` must be the exact domain the frontend is served from (no
+scheme/port); `WEBAUTHN_RP_ORIGIN` is the full origin the browser's
+`navigator.credentials` calls actually run from -- independently
+configurable since dev commonly runs the frontend on a different port
+than "the domain" (defaults: `localhost` / `http://localhost:3000`).
+
+A challenge (one per registration/authentication ceremony) lives in Redis
+for up to 5 minutes and is deleted the instant it's consumed (`GETDEL`),
+so it can never be replayed even if a request is retried.
+
+### Enterprise SSO via generic OIDC (item 27)
+
+**Chose generic OIDC over SAML 2.0** (the spec allowed either) -- Azure AD
+and Okta both expose full OIDC discovery, and this codebase already has a
+working OIDC-shaped account-linking flow to extend (`api/routers/oauth.py`).
+SAML would have meant a new XML-signing dependency (`python3-saml` needs
+the system `xmlsec1` library, not a pure-Python wheel) for a protocol
+nothing else here has any reason to speak. See
+`api/models/enterprise_sso.py`'s module docstring for the full reasoning.
+
+- `POST /admin/sso/connections` (admin only) -- register a customer's IdP:
+  `email_domain`, `display_name`, `issuer` (the OIDC discovery issuer,
+  e.g. `https://login.microsoftonline.com/{tenant-id}/v2.0` for Azure AD),
+  `client_id`, `client_secret` (encrypted at rest, see below). One
+  connection per domain. `GET`/`DELETE /admin/sso/connections/{id}` list/
+  remove.
+- `POST /auth/sso/discover` (public) -- given an email, tells the
+  frontend whether that domain has SSO configured, so a login screen can
+  show "Continue with `<Company>` SSO" before any password field appears.
+- `GET /auth/sso/{id}/authorize` / `/callback` -- the actual OIDC
+  Authorization Code flow, built fresh per connection
+  (`api/security/enterprise_oidc.py`) rather than `api/routers/oauth.py`'s
+  static, app-wide Authlib registry (that registry is for a small, fixed
+  provider set registered once at import time; an admin-configured,
+  potentially-many-tenants connection needs a client built from the DB
+  row at request time instead). Metadata is fetched fresh from
+  `{issuer}/.well-known/openid-configuration` on every authorize/callback
+  -- no cache to invalidate if an IdP rotates its own endpoints/keys.
+  The `id_token`'s signature is verified against the IdP's own published
+  JWKS (PyJWT's `PyJWKClient`, run via `asyncio.to_thread` since that
+  fetch is a blocking call) -- never accepted unverified.
+
+**Security boundary unique to this feature** (vs. Google/GitHub's fixed
+providers): the asserted email must actually belong to the connection's
+own `email_domain`, checked in `_find_or_create_user`. Without this, a
+misconfigured IdP tenant could link or create an account for a
+completely unrelated address -- the entire point of scoping a connection
+to one domain.
+
+**Self-critique, stated rather than silently assumed away**: unlike
+`api/routers/oauth.py`'s Google/GitHub checks, this does NOT require an
+`email_verified` claim -- Azure AD's v2.0 endpoint does not reliably emit
+that claim for work/school accounts, so requiring it would break real
+Azure AD tenants outright. The `email_domain` scoping check above is this
+connection's actual trust boundary instead: the admin who configured
+`issuer` + `client_id` for THIS SPECIFIC domain already vouches that the
+IdP is authoritative for it.
+
+**Not tested against a real Azure AD/Okta tenant** -- none was available
+in this environment. `tests/test_enterprise_sso_integration.py` runs the
+FULL authorize -> callback -> token-exchange -> JWKS-verified-id_token
+flow against a real local OIDC server (`tests/oidc_test_idp.py`: a
+genuine RSA keypair, a real discovery/JWKS endpoint over an actual
+socket, RS256-signed tokens) -- every line of `api/routers/enterprise_sso.py`
+and `api/security/enterprise_oidc.py` that talks to an IdP is exercised
+for real, just not against Microsoft's/Okta's own servers. Verify against
+a real tenant before onboarding the first actual customer.
+
+### Automatic JWT key rotation (item 28)
+
+Complements, doesn't replace, the manual `JWT_PREVIOUS_SECRET_KEYS`
+mechanism documented above -- that keeps working completely unchanged.
+
+**Why this needed a different mechanism than the spec's literal wording**
+("stocker les clés précédentes dans `JWT_PREVIOUS_SECRET_KEYS`"): that
+setting is a static environment variable, and a *genuinely automatic*
+rotation -- no admin, no redeploy -- needs somewhere runtime-mutable to
+write a new key to. `api/models/jwt_signing_key.py` adds a DB table for
+exactly that; the env-based mechanism remains available for manual
+rotation or a leak response and is tried in every verification too, so
+either mechanism (or both, mid-migration) works at once.
+
+- `JWT_AUTO_ROTATION_INTERVAL_DAYS` (default `0`, disabled) -- a Celery
+  Beat task (`api/tasks/jwt_key_rotation.py`, checked daily, safe to run
+  on any schedule) rotates once this many days have passed since the
+  active key was created: the old key is marked retired (kept valid for
+  *verifying* already-issued tokens for `JWT_KEY_RETENTION_DAYS` more
+  days, default 7), a fresh one becomes active.
+- **How a running API process finds out** without a restart:
+  `api/security/jwt.py` keeps an in-memory cache, refreshed once at
+  startup and then every `JWT_KEY_CACHE_REFRESH_SECONDS` (default 60) for
+  the process's whole lifetime (`api/main.py`'s lifespan). Every worker
+  process (single or multi-process/gunicorn) polls independently -- no
+  coordination between them needed, same "each process reads the shared
+  source of truth on its own timer" shape as the Prometheus multiprocess
+  metrics (audit finding 22).
+- `JWT_KEY_ROTATION_ADMIN_EMAIL` (optional) -- gets a notification every
+  time a rotation actually happens. `GET /admin/jwt-keys` (admin only)
+  lists rotation history (id/active/created_at/retired_at) on demand --
+  the secret itself is never returned.
+- Signing keys are stored **encrypted at rest** (`SECRET_ENCRYPTION_KEY`,
+  a Fernet key, shared with item 27's SSO client secrets -- see
+  `api/security/secret_encryption.py`) -- a real, low-cost hardening the
+  env-var form of this same secret (`JWT_SECRET_KEY`) doesn't get for
+  free, since a database row is realistically exposed by a broader class
+  of incidents (a backup, a read replica) than a `.env` file.
+
+### Geo-adaptive rate limiting and trusted-IP exemption (items 29/30)
+
+`api/security/adaptive_rate_limit.py` wraps the plain rate limiter for
+the two purely IP-scoped checks (`/auth/login`'s IP dimension,
+`/auth/register`) -- the email-scoped checks (`/auth/login`'s second
+dimension, `/auth/password/forgot`, 2FA) are untouched, since an email
+address has no geography.
+
+- **Trusted IPs** (`TRUSTED_IPS`, comma-separated IPs/CIDR ranges, empty
+  by default) skip rate limiting entirely for that call. Checked against
+  the real TCP peer address (`api/security/trusted_ips.py`'s
+  `direct_peer_ip`), **never** `api/utils.py`'s `client_ip()` (which
+  prefers the client-supplied `X-Forwarded-For`) -- using the spoofable
+  header here would let any anonymous caller bypass brute-force
+  protection entirely just by claiming to be a trusted IP.
+  `tests/test_geo_adaptive_rate_limit_integration.py` proves both
+  directions: a real trusted IP bypasses the limit, and spoofing
+  `X-Forwarded-For` to that same value does NOT.
+- **Geo-adaptive tiers** (`TRUSTED_COUNTRIES` / `SUSPICIOUS_COUNTRIES`,
+  ISO 3166-1 alpha-2, comma-separated, both empty by default) multiply
+  the base limit by `GEO_RATE_LIMIT_TRUSTED_MULTIPLIER` (default 2.0,
+  looser) or `GEO_RATE_LIMIT_SUSPICIOUS_MULTIPLIER` (default 0.5,
+  stricter). Country lookup (`api/security/geoip.py`) uses ipapi.co (free,
+  keyless), cached in Redis for `GEO_IP_CACHE_TTL_SECONDS` (default 1h)
+  so a brute-force burst doesn't turn into one outbound HTTP call per
+  attempt. This one DOES use `client_ip()` -- it only ever adjusts a
+  limit up or down, the same trust level every other per-IP rate-limit
+  key in this codebase already operates at, not an outright bypass.
+- Both empty lists (the default) and `GEO_IP_LOOKUP_ENABLED=True` with no
+  countries configured are no-ops -- identical behavior to before this
+  feature existed. A geoip lookup failure fails open (flat, unadjusted
+  limit), same philosophy as the rate limiter itself.
+
 ## Tests
 
 ```bash
@@ -481,6 +644,10 @@ pytest tests/test_celery_integration.py           # needs DATABASE_URL (runs tas
 pytest tests/test_avatar_storage_integration.py   # needs DATABASE_URL + S3_*
 pytest tests/test_oauth_logic_integration.py      # needs DATABASE_URL
 pytest tests/test_rate_limiting_integration.py    # needs DATABASE_URL + RATE_LIMIT_REDIS_URL
+pytest tests/test_geo_adaptive_rate_limit_integration.py  # needs RATE_LIMIT_REDIS_URL (audit Categorie 4, items 29/30)
+pytest tests/test_webauthn_integration.py         # needs RATE_LIMIT_REDIS_URL -- real crypto via a software authenticator (item 26)
+pytest tests/test_jwt_key_rotation_integration.py # needs DATABASE_URL (item 28)
+pytest tests/test_enterprise_sso_integration.py   # needs DATABASE_URL -- spins up a real local OIDC server (item 27)
 pytest tests/test_e2e_lifecycle.py                # needs DATABASE_URL + S3_* + a LIVE Celery worker (see above)
 
 # Everything
@@ -507,3 +674,21 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   matching codes. Verify manually once: `POST /auth/2fa/setup`, decode
   the returned `qr_code_data_uri`, scan it with Google Authenticator (or
   any TOTP app), confirm `POST /auth/2fa/enable` accepts the phone's code.
+- **A real physical WebAuthn key (YubiKey, etc.) or platform authenticator**
+  -- `tests/test_webauthn_integration.py` uses a real software
+  authenticator (`tests/webauthn_test_authenticator.py`: a genuine ES256
+  keypair, real CBOR attestation objects, real ECDSA signatures --
+  `api/security/webauthn.py`'s calls into the `webauthn` library do
+  actual cryptographic verification against them, nothing mocked at the
+  crypto layer) precisely because a real USB device can't be automated in
+  CI. What that can't prove is a specific real key's own firmware/driver
+  quirks. Verify manually once with an actual key:
+  `POST /auth/webauthn/register/options`, complete the ceremony in a real
+  browser, confirm `POST /auth/webauthn/register/verify` accepts it, then
+  repeat for `/authenticate/options` + `/verify` at login.
+- **A real Azure AD/Okta tenant for enterprise SSO** -- none was available
+  in this environment; `tests/test_enterprise_sso_integration.py` runs
+  the full flow against a real local OIDC server instead (genuine RSA
+  keys, real JWKS/discovery endpoints, RS256-signed tokens -- see that
+  file's own docstring). Verify against a real tenant before onboarding
+  the first actual enterprise customer.

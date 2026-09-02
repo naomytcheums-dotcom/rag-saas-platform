@@ -36,6 +36,7 @@ from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.user import User
 from api.security.jwt import create_mfa_pending_token
 from api.security.sessions import issue_session
+from api.security.webauthn import get_user_credentials
 
 router = APIRouter(prefix="/auth/oauth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -234,7 +235,8 @@ async def oauth_callback(provider: str, request: Request):
     async with AsyncSessionLocal() as db:
         user, is_new_user = await _find_or_create_user(db, OAuthProvider(provider), provider_account_id, email)
 
-        if user.totp_enabled:
+        webauthn_credentials = await get_user_credentials(db, user.id)
+        if user.totp_enabled or webauthn_credentials:
             # The provider proved WHO this person is, not that they hold
             # this account's second factor -- an account that enabled 2FA
             # through the password flow (api/routers/auth.py's login())
@@ -242,11 +244,20 @@ async def oauth_callback(provider: str, request: Request):
             # it also has a linked Google/GitHub sign-in. Same mfa_token
             # hand-off as a password login: no session is issued here,
             # the frontend must follow up with POST /auth/2fa/verify-login
-            # (or /verify-recovery-code) exactly as it would after a
-            # password login that returned MFARequiredResponse.
+            # (or /verify-recovery-code), or POST /auth/webauthn/authenticate/*
+            # (audit finding 26), exactly as it would after a password
+            # login that returned MFARequiredResponse.
             await db.commit()  # persists _find_or_create_user's writes (new/updated OAuthAccount link, consent backfill, etc.) even though no session is issued this request
             mfa_token = create_mfa_pending_token(user.id)
-            redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback#mfa_required=true&mfa_token={mfa_token}"
+            methods = []
+            if user.totp_enabled:
+                methods.append("totp")
+            if webauthn_credentials:
+                methods.append("webauthn")
+            redirect_url = (
+                f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback#mfa_required=true&mfa_token={mfa_token}"
+                f"&methods={','.join(methods)}"
+            )
             return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
         response = RedirectResponse(url=f"{settings.FRONTEND_URL.rstrip('/')}/oauth-callback", status_code=status.HTTP_302_FOUND)

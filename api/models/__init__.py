@@ -8,6 +8,8 @@ registers its table).
 from api.database import Base
 from api.models.audit_log import AuditLog
 from api.models.consent_reactivation_token import ConsentReactivationToken
+from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection
+from api.models.jwt_signing_key import JWTSigningKey
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount
 from api.models.password_history import PasswordHistory
@@ -17,9 +19,11 @@ from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
 from api.models.token import EmailVerificationToken, PasswordResetToken
 from api.models.user import User
+from api.models.webauthn_credential import WebAuthnCredential
 
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
-    "RevokedAccessToken", "PasswordHistory", "AuditLog",
+    "RevokedAccessToken", "PasswordHistory", "AuditLog", "JWTSigningKey", "WebAuthnCredential",
+    "EnterpriseSSOConnection", "EnterpriseSSOAccount",
 ]

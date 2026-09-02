@@ -110,6 +110,11 @@ jobs:
       GOOGLE_OAUTH_CLIENT_SECRET: ci-only-google-client-secret-never-real
       GITHUB_OAUTH_CLIENT_ID: ci-only-github-client-id-never-real
       GITHUB_OAUTH_CLIENT_SECRET: ci-only-github-client-secret-never-real
+      # Audit Categorie 4, items 27/28 -- encrypts JWTSigningKey/
+      # EnterpriseSSOConnection secrets at rest (api/security/secret_encryption.py).
+      # A real, freshly-generated Fernet key, thrown away with the rest of
+      # this job's ephemeral state.
+      SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
     steps:
       - uses: actions/checkout@v4
 
@@ -165,9 +170,11 @@ jobs:
           tests/test_auth_api.py tests/test_auth_security.py tests/test_config.py
           tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
           tests/test_password_similarity.py tests/test_storage.py tests/test_audit_log.py tests/test_security_alerts.py
-          tests/test_monitoring.py
+          tests/test_monitoring.py tests/test_trusted_ips_and_geoip.py
           tests/test_postgres_integration.py tests/test_oauth_logic_integration.py
           tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py
+          tests/test_geo_adaptive_rate_limit_integration.py tests/test_webauthn_integration.py
+          tests/test_jwt_key_rotation_integration.py tests/test_enterprise_sso_integration.py
           tests/test_celery_integration.py tests/test_e2e_lifecycle.py
           --cov=api --cov-report=term-missing --cov-report=xml
           --cov-fail-under=75
@@ -227,6 +234,7 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/1
       RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
       RATE_LIMIT_ENABLED: "True"
+      SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
     steps:
       - uses: actions/checkout@v4
 

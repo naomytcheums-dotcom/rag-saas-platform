@@ -585,3 +585,93 @@ def send_preferences_changed_email(to_email: str, changed_fields: list[str]) -> 
             f"<p>If this wasn't you, review your account and consider changing your password.</p>"
         ),
     )
+
+
+def send_jwt_key_rotated_email(to_admin_email: str, rotated_at_iso: str, retention_days: int) -> None:
+    """
+    Audit finding 28 -- called by api/tasks/jwt_key_rotation.py every
+    time it actually performs a rotation (never on a no-op run where the
+    current key isn't due yet). Goes to JWT_KEY_ROTATION_ADMIN_EMAIL (an
+    operator inbox, opt-in via that setting), never to end users -- this
+    is infrastructure housekeeping, not an account-security event any
+    individual user needs to see. Names the retention window explicitly
+    so whoever reads this knows exactly when the PREVIOUS key stops being
+    honored for already-issued tokens, not just that a rotation happened.
+    """
+    _send(
+        to_admin_email,
+        subject="JWT signing key rotated automatically",
+        html=(
+            f"<p>The application's JWT signing key was automatically rotated at "
+            f"<strong>{html.escape(rotated_at_iso)}</strong>.</p>"
+            f"<p>The previous key remains valid for verifying already-issued access "
+            f"tokens for {retention_days} more day(s), then is discarded.</p>"
+            f"<p>No action is required -- this is a routine, scheduled rotation "
+            f"(see JWT_AUTO_ROTATION_INTERVAL_DAYS).</p>"
+        ),
+    )
+
+
+def send_webauthn_credential_added_email(to_email: str, nickname: str) -> None:
+    """
+    Audit finding 26 -- called whenever a new physical key/authenticator
+    is registered (api/routers/webauthn.py). Same reasoning as
+    send_two_factor_enabled_email above: registration only needs a valid
+    access token plus completing a browser ceremony, so this is the
+    signal that would catch an attacker registering THEIR OWN key against
+    a stolen session before the real owner notices anything else wrong.
+    """
+    _send(
+        to_email,
+        subject="A new security key was added to your account",
+        html=(
+            f"<p>A new WebAuthn security key (\"{html.escape(nickname)}\") was just "
+            f"registered on your account as a second factor.</p>"
+            f"<p>If you just did this yourself, no action is needed.</p>"
+            f"<p>If you did NOT do this, someone else may have access to your "
+            f"account. Remove the key you don't recognize from your account "
+            f"security settings, then change your password immediately.</p>"
+        ),
+    )
+
+
+def send_webauthn_credential_removed_email(to_email: str, nickname: str) -> None:
+    """The flip side of send_webauthn_credential_added_email above --
+    called by api/routers/webauthn.py whenever a registered key is
+    removed, so the real owner notices if it wasn't them (e.g. an
+    attacker clearing out a key they can't use, to force a fallback to a
+    factor they DO control)."""
+    _send(
+        to_email,
+        subject="A security key was removed from your account",
+        html=(
+            f"<p>The WebAuthn security key \"{html.escape(nickname)}\" was just "
+            f"removed from your account.</p>"
+            f"<p>If you just did this yourself, no action is needed.</p>"
+            f"<p>If you did NOT do this, review your account's remaining "
+            f"security keys and consider changing your password.</p>"
+        ),
+    )
+
+
+def send_enterprise_sso_connection_created_email(to_admin_email: str, email_domain: str, display_name: str) -> None:
+    """
+    Audit finding 27 -- called by api/routers/enterprise_sso.py whenever
+    an admin configures a new enterprise IdP connection. Every future
+    user whose email matches email_domain will be able to sign in through
+    that IdP without a password on this app at all -- a real access-control
+    change, worth a notification even though the action itself already
+    required an authenticated admin, the same way audit finding 19/20's
+    security-alert emails exist despite already gating on require_admin.
+    """
+    _send(
+        to_admin_email,
+        subject=f"Enterprise SSO connection configured for {email_domain}",
+        html=(
+            f"<p>A new enterprise SSO connection (\"{html.escape(display_name)}\") was just "
+            f"configured for the email domain <strong>{html.escape(email_domain)}</strong>.</p>"
+            f"<p>From now on, accounts with an email address at that domain can sign in "
+            f"through this identity provider.</p>"
+            f"<p>If you didn't just do this, review Admin > SSO Connections immediately.</p>"
+        ),
+    )
