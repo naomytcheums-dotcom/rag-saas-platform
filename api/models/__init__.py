@@ -15,6 +15,7 @@ from api.models.oauth import OAuthAccount
 from api.models.organization import Organization, OrganizationMember
 from api.models.password_history import PasswordHistory
 from api.models.recovery_code import TwoFactorRecoveryCode
+from api.models.resource_permission import ResourcePermission
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
@@ -28,4 +29,5 @@ __all__ = [
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
     "RevokedAccessToken", "PasswordHistory", "AuditLog", "JWTSigningKey", "WebAuthnCredential",
     "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember", "Workspace",
+    "ResourcePermission",
 ]

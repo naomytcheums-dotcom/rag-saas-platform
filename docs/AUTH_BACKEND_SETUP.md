@@ -699,11 +699,14 @@ organization, they just can't create, rename, or delete one.
 The two endpoints addressed by workspace id rather than org id
 (`PATCH`/`DELETE /workspaces/{workspace_id}`) have no `org_id` path
 parameter for `require_org_manager` to resolve automatically, so a
-dedicated dependency, `require_workspace_manager` (`api/security/workspaces.py`),
-looks the organization up **from** the workspace first, then applies
-the same Owner/Admin/Manager check -- 404 (not 403) for both "no such
-workspace" and "you're not a member of its organization," the same
-anti-enumeration reasoning as `require_org_member`.
+dedicated dependency, `require_workspace_permission(action)`
+(`api/security/workspaces.py`), looks the organization up **from** the
+workspace first, then applies the same Owner/Admin/Manager check -- 404
+(not 403) for both "no such workspace" and "you're not a member of its
+organization," the same anti-enumeration reasoning as
+`require_org_member`. (Etape 1.2.8 renamed this from the original
+`require_workspace_manager` and added a granular-permission check in
+front of the same role logic -- see that step's own section below.)
 
 Deleting an organization cascades to its workspaces the same way it
 cascades to memberships -- database-level `ON DELETE CASCADE`
@@ -875,6 +878,127 @@ deliberately not bundled into this step. Once that's fixed, the
 implementation behind `require_org_manager`/`admin`/`owner`, one
 function at a time, each re-verified against its own existing test file
 before moving to the next.
+
+### Granular per-resource permissions (Etape 1.2.8)
+
+**What this adds on top of roles, in one sentence**: "this one Viewer
+can also `update` this one workspace" -- a per-(organization, resource,
+user, action) override, without changing that user's role or anyone
+else's access. Table: `resource_permissions` (migration `0017`),
+functions: `api/security/resource_permissions.py`'s
+`grant_resource_permission`/`revoke_resource_permission`/
+`check_resource_permission`/`get_user_resource_permissions`.
+
+**Priority order, exactly**: a matching, non-expired
+`resource_permissions` row **beats** the caller's organization role,
+which beats an outright deny. Checked in that order everywhere this
+step wires it in -- the granular layer is consulted FIRST; its absence
+is not itself a decision, it just falls through to the unchanged role
+check. This is purely additive: an Owner/Admin/Manager who already
+passes the role check is never blocked by the absence of a granular
+row, and Etape 1.2.2/1.2.3's stricter-than-asked Owner-protection rules
+are completely unaffected (see below for exactly what is, and isn't,
+wired up).
+
+**Not built on Casbin.** Etape 1.2.7's engine works entirely off an
+in-memory policy set loaded once at startup -- fine for role-tier
+policies that rarely change, wrong for a grant that an Admin can create
+and REVOKE in real time: a production deployment realistically runs
+several worker processes, each with its own separate in-memory Casbin
+enforcer, so a revoked grant could stay silently active on other workers
+until each happens to restart. `check_resource_permission` instead reads
+straight from Postgres on every call -- one indexed lookup (the unique
+constraint's own composite index), always consistent across every
+process, nothing to cache or go stale. Same performance category as
+every other `require_*` dependency in this codebase (`require_org_member`,
+`get_user_org_role`, ...), all of which already do one query per
+request; no caching layer was added, on purpose.
+
+**What's actually enforced today, live, on a real endpoint**:
+`PATCH`/`DELETE /workspaces/{id}` now use
+`require_workspace_permission("update"/"delete")`
+(`api/security/workspaces.py`) instead of the original
+`require_workspace_manager` -- a granted, non-expired permission for
+THAT specific workspace + action passes immediately; its absence falls
+through to the exact same Owner/Admin/Manager check as before (every
+pre-existing test in `tests/test_workspaces.py`, none of which ever
+grant a `resource_permissions` row, exercises that unchanged fallback
+path -- 62/62 still pass unchanged). `create_workspace` is untouched: a
+workspace has no id to grant a permission against before it exists.
+
+**What's stored but NOT wired into a live endpoint, and why**:
+`organization` (`read`/`update`/`delete`/`manage_members`) grants are
+fully functional through the management endpoints below (grantable,
+listable, revocable, checkable), but `api/routers/organizations.py`'s
+`require_org_owner`-gated `PATCH`/`DELETE /organizations/{id}` were
+deliberately left untouched. Renaming/deleting an entire organization is
+this system's highest blast-radius action, and Etape 1.2.2/1.2.3 already
+chose a stricter-than-asked stance there (Owner-only, no exceptions --
+not even for Admin). Punching a granular-override hole into that in this
+same step was judged not worth the risk; workspace update/delete (one
+workspace, not the whole organization) is the lower-risk live wiring
+this step ships instead.
+
+**Which (resource_type, action) pairs can even be granted**:
+`api/security/resource_permissions.py`'s `SUPPORTED_RESOURCE_ACTIONS` --
+`workspace: {read, update, delete}`, `organization: {read, update,
+delete, manage_members}`. The spec's fuller resource table (document,
+conversation, agent, workspace, knowledge_base, organization x create,
+read, update, delete, share, export, execute, configure) names several
+resource types with no real table yet (Parties 2/3, same reasoning as
+Etape 1.2.5) and several actions (`configure`/`share`/`export`/`execute`)
+with no enforcement point on ANY existing endpoint. `grant_resource_permission`
+rejects both (400) rather than silently accepting a grant nothing would
+ever check -- the columns themselves are plain strings, not DB enums
+(same "a new value should never need a migration" reasoning as
+`api/models/audit_log.py`'s `AuditAction`), so widening this set as real
+endpoints get built needs no schema change, just adding an entry here.
+
+**Management endpoints** (`api/routers/resource_permissions.py`), all
+Admin+ of the organization that owns the resource except the last:
+
+| Endpoint | Access |
+|---|---|
+| `GET /resources/{type}/{id}/permissions` | Admin+ of the resource's organization |
+| `POST /resources/{type}/{id}/permissions` | Admin+, AND the caller must already have the action themselves (see below) |
+| `DELETE /resources/{type}/{id}/permissions/{user_id}/{action}` | Admin+ of the resource's organization |
+| `GET /users/me/permissions` | Any authenticated user -- their own grants only |
+
+An unsupported `resource_type` gets 400 (the type itself has no
+supported context to resolve an organization from, true regardless of
+the id); a resource id that doesn't exist (for a supported type) gets
+404; an Admin+ member who doesn't own this specific resource's
+organization also gets 404, not 403 -- same anti-enumeration shape as
+`require_org_member` everywhere else.
+
+**"A user cannot grant a permission they don't have themselves"** --
+checked at grant time (`api/routers/resource_permissions.py`'s
+`_caller_can_perform`), restating the SAME role semantics already live
+elsewhere (`require_org_manager`/`admin`/`owner`,
+`require_workspace_permission`) for whichever action is being granted.
+Concretely: an Admin passes this endpoint's own Admin+ gate, but
+`organization:delete` is Owner-only (unchanged since Etape 1.2.2) -- an
+Admin who doesn't ALSO hold a granular `organization:delete` grant of
+their own gets a 403 trying to grant it to someone else, even though
+they cleared the endpoint's outer gate.
+
+**Two more grant-time rules**: the target user must already be a member
+of the resource's organization (400 otherwise -- granting access to a
+total outsider is a different, bigger hole than this step opens), and a
+user cannot grant a permission to themselves (400) -- both checked
+before the row is ever written, not just documented as expected
+behavior.
+
+**Debugging**: `GET /resources/{type}/{id}/permissions` and
+`GET /users/me/permissions` both return an `is_expired` flag per row
+rather than silently hiding expired grants -- a revoked-by-expiry
+permission stays visible (for audit purposes) instead of disappearing,
+distinct from an explicitly revoked one (`DELETE`), which really is
+gone. Every grant/revoke is journalled to the audit log
+(`RESOURCE_PERMISSION_GRANTED`/`_REVOKED`, `api/models/audit_log.py`) --
+`check_resource_permission` itself is not (it runs on every request; see
+`api/security/audit_log.py`'s own reasoning for why only state CHANGES
+get audited, not every read-check).
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

@@ -56,6 +56,8 @@ class AuditAction(StrEnum):
     ORGANIZATION_MEMBER_REMOVED = "organization_member_removed"
     WORKSPACE_CREATED = "workspace_created"
     WORKSPACE_DELETED = "workspace_deleted"
+    RESOURCE_PERMISSION_GRANTED = "resource_permission_granted"
+    RESOURCE_PERMISSION_REVOKED = "resource_permission_revoked"
 
 
 class AuditLog(Base):

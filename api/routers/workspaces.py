@@ -8,6 +8,16 @@ to be hidden from what workspaces exist in their own organization (they
 just can't create, rename, or delete one) -- the spec named permissions
 for the CRUD-mutating verbs only, this is the one judgment call filled
 in rather than left unstated.
+
+Etape 1.2.8: update/delete now use require_workspace_permission(action)
+instead of require_workspace_manager directly -- a Viewer or Member
+holding a specific, granted, non-expired resource_permissions row for
+THIS workspace passes immediately; absence of one falls through to the
+exact same Owner/Admin/Manager check as before. Purely additive -- every
+existing test in tests/test_workspaces.py (none of which ever grant a
+resource_permissions row) exercises the unchanged fallback path.
+create_workspace stays on require_org_manager: a workspace has no id to
+grant a permission against before it exists.
 """
 
 import logging
@@ -24,7 +34,7 @@ from api.models.workspace import Workspace
 from api.schemas.workspaces import WorkspaceCreateRequest, WorkspaceEntry, WorkspaceListResponse, WorkspaceUpdateRequest
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_manager, require_org_member
-from api.security.workspaces import require_workspace_manager
+from api.security.workspaces import require_workspace_permission
 from api.utils import client_ip
 
 router = APIRouter(tags=["workspaces"])
@@ -69,7 +79,8 @@ async def create_workspace(
 
 @router.patch("/workspaces/{workspace_id}", response_model=WorkspaceEntry)
 async def update_workspace(
-    payload: WorkspaceUpdateRequest, caller_ctx: tuple[Workspace, OrganizationMember] = Depends(require_workspace_manager),
+    payload: WorkspaceUpdateRequest,
+    caller_ctx: tuple[Workspace, OrganizationMember] = Depends(require_workspace_permission("update")),
     db: AsyncSession = Depends(get_db),
 ):
     workspace, _caller = caller_ctx
@@ -85,7 +96,8 @@ async def update_workspace(
 
 @router.delete("/workspaces/{workspace_id}")
 async def delete_workspace(
-    request: Request, caller_ctx: tuple[Workspace, OrganizationMember] = Depends(require_workspace_manager),
+    request: Request,
+    caller_ctx: tuple[Workspace, OrganizationMember] = Depends(require_workspace_permission("delete")),
     db: AsyncSession = Depends(get_db),
 ):
     workspace, caller = caller_ctx
