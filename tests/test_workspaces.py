@@ -222,3 +222,74 @@ async def test_member_cannot_delete_a_workspace(client, db_session, register_pay
     response = await client.delete(f"/workspaces/{workspace['id']}", headers=_auth_header(member_token))
     assert response.status_code == 403
     assert await db_session.get(Workspace, uuid.UUID(workspace["id"])) is not None
+
+
+# ----------------------------------------------- Etape 1.2.5 -- Viewer --
+
+async def test_viewer_cannot_create_a_workspace(client, db_session, register_payload):
+    """Explicit validation criterion for Etape 1.2.5: read-only means
+    read-only -- Viewer is BELOW Member in the hierarchy, so anything
+    Member can't do, Viewer can't either."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    viewer_token, viewer_user = await _register(client, db_session, "wsviewer2@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer_user.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.post(
+        f"/organizations/{org['id']}/workspaces", json={"name": "Nope"}, headers=_auth_header(viewer_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_viewer_cannot_rename_a_workspace(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    workspace = (await client.post(
+        f"/organizations/{org['id']}/workspaces", json={"name": "Old Name"}, headers=_auth_header(owner_token),
+    )).json()
+
+    viewer_token, viewer_user = await _register(client, db_session, "wsviewer3@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer_user.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.patch(
+        f"/workspaces/{workspace['id']}", json={"name": "New Name"}, headers=_auth_header(viewer_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_viewer_cannot_delete_a_workspace(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    workspace = (await client.post(
+        f"/organizations/{org['id']}/workspaces", json={"name": "Stays"}, headers=_auth_header(owner_token),
+    )).json()
+
+    viewer_token, viewer_user = await _register(client, db_session, "wsviewer4@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer_user.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.delete(f"/workspaces/{workspace['id']}", headers=_auth_header(viewer_token))
+    assert response.status_code == 403
+    assert await db_session.get(Workspace, uuid.UUID(workspace["id"])) is not None
+
+
+# ------------------------------------- Etape 1.2.5 -- cross-org isolation
+
+async def test_a_member_of_one_org_cannot_see_another_orgs_workspaces(client, db_session, register_payload):
+    """Stands in for the spec's "a Member can't reach another Member's
+    resources" criterion: there is no documents/conversations resource
+    yet for that to apply to directly (see docs/CAHIER_DES_CHARGES.md's
+    Etape 1.2.5 entry), so this proves the underlying isolation
+    boundary -- org membership, not just role -- on the one org-scoped
+    resource that exists today."""
+    owner_a_token, owner_a = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org_a = await _create_org(client, owner_a_token, "Org A")
+    await client.post(f"/organizations/{org_a['id']}/workspaces", json={"name": "Org A Secret"}, headers=_auth_header(owner_a_token))
+
+    member_b_token, member_b = await _register(client, db_session, "memberorgb@example.com")
+    owner_b_token, owner_b = await _register(client, db_session, "ownerorgb@example.com")
+    org_b = await _create_org(client, owner_b_token, "Org B")
+    await _add_member(db_session, uuid.UUID(org_b["id"]), member_b.id, OrganizationRole.member, invited_by=owner_b.id)
+
+    response = await client.get(f"/organizations/{org_a['id']}/workspaces", headers=_auth_header(member_b_token))
+    assert response.status_code == 404

@@ -711,11 +711,54 @@ cascades to memberships -- database-level `ON DELETE CASCADE`
 Postgres (`tests/test_postgres_integration.py`), since SQLite doesn't
 enforce foreign keys by default.
 
-Workspace management and organization-settings management (this step's
-other two named Admin capabilities) have no endpoints yet -- neither
-`workspaces` (1.3.2) nor `organization_settings` (1.3.9) exist. When
-they do, they should reuse `require_org_admin` the same way the
-endpoints above do, not invent a parallel permission check.
+Organization-settings management (`organization_settings`, 1.3.9) has no
+endpoints yet -- it doesn't exist. When it does, it should reuse
+`require_org_admin` the same way the endpoints above do, not invent a
+parallel permission check.
+
+### Member (Etape 1.2.5)
+
+Member has no dedicated permission function of its own -- it's the
+absence of Manager/Admin/Owner on checks that already exist. What it
+CAN do is exactly what `require_org_member` already grants (any
+membership at all, the same tier Viewer also sits at): view organization
+details (`GET /organizations/{id}`) and list workspaces
+(`GET /organizations/{id}/workspaces`). What it CANNOT do is everything
+gated by `require_org_manager`/`require_org_admin`/`require_org_owner`
+above -- invite or manage members, create/rename/delete workspaces,
+rename/delete the organization.
+
+`require_org_member_or_higher` (`api/security/organizations.py`) exists
+as a literal alias of `require_org_member` -- this step's spec asks for
+it by that name explicitly, the same reasoning as
+`require_org_admin_or_owner` above. **Despite the name, it is not
+"Member-tier or above, excluding Viewer"** -- it is the exact same
+membership check, since Viewer legitimately needs the same read access
+(nothing in this codebase has ever needed a check that admits Member but
+rejects Viewer; if one is needed later, e.g. for a write endpoint Viewer
+specifically shouldn't reach that isn't already covered by
+`require_org_manager`, it should be its own function, not silently
+folded into this alias).
+
+**No `documents` or `conversations` endpoints were added.** The spec for
+this step asked for basic CRUD on both as a way to exercise Member's
+"can create/edit own resources" capability, but neither table exists,
+and building one now would be throwaway: both belong to later Parties
+of the cahier des charges (2 -- Knowledge Base, 3 -- RAG pipeline /
+conversations) where their real shape depends on decisions not made yet
+(embeddings, workspace linkage, LLM provider, citation tracking). A
+`documents` table built today to satisfy this permission test would
+either be abandoned when the real one is designed, or -- worse --
+quietly become the real one by default, missing everything Partie 2
+actually specifies. `Workspace` (Etape 1.2.4) took the same stance
+explicitly (deliberately minimal, no KB/agent linkage yet) -- this is
+that same boundary, held one step further. Member/Viewer's read vs.
+write distinction is proven instead on the two org-scoped resources that
+DO exist today (organizations, workspaces) -- see
+`tests/test_workspaces.py`'s Etape 1.2.5 tests, including an explicit
+cross-org isolation check standing in for "a Member can't reach another
+Member's resources" until a personal resource exists to test that
+against directly.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

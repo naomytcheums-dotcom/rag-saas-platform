@@ -115,6 +115,18 @@ async def require_org_member(
     return membership
 
 
+# Etape 1.2.5 -- literal alias, same reasoning as require_org_admin_or_owner
+# below: this step's spec asks for this name explicitly. Despite the name,
+# it is NOT "Member or above, excluding Viewer" -- it is the exact same
+# check as require_org_member (any membership at all). Viewer legitimately
+# needs this same access for read-only endpoints (GET /organizations/{id},
+# GET .../workspaces) -- see docs/AUTH_BACKEND_SETUP.md's Member section
+# for why this codebase has never needed a distinct "member-tier or
+# higher, excluding viewer" check, and why one shouldn't be silently
+# folded into this alias if it's ever needed.
+require_org_member_or_higher = require_org_member
+
+
 async def require_org_manager(membership: OrganizationMember = Depends(require_org_member)) -> OrganizationMember:
     """
     Etape 1.2.4: Owner, Admin, or Manager -- the tier that can invite
