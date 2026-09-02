@@ -16,8 +16,17 @@ THIS workspace passes immediately; absence of one falls through to the
 exact same Owner/Admin/Manager check as before. Purely additive -- every
 existing test in tests/test_workspaces.py (none of which ever grant a
 resource_permissions row) exercises the unchanged fallback path.
-create_workspace stays on require_org_manager: a workspace has no id to
-grant a permission against before it exists.
+create_workspace stays on the Owner/Admin/Manager tier, not
+require_workspace_permission: a workspace has no id to grant a
+permission against before it exists.
+
+Partie 1.3.7: create_workspace now uses require_workspace_creation_allowed()
+(api/security/user_limits.py) instead of require_org_manager directly --
+Owner/Admin/Manager pass exactly as before, UNLESS an Owner/Admin has
+specifically disabled workspace creation for that one member
+(can_create_workspaces=False on their own membership row) -- a
+restrictive layer on top of the role check, never a way for a Member or
+Viewer to gain access they didn't already have.
 """
 
 import logging
@@ -33,8 +42,9 @@ from api.models.organization import OrganizationMember
 from api.models.workspace import Workspace
 from api.schemas.workspaces import WorkspaceCreateRequest, WorkspaceEntry, WorkspaceListResponse, WorkspaceUpdateRequest
 from api.security.audit_log import log_audit_action
-from api.security.organizations import require_org_manager, require_org_member
+from api.security.organizations import require_org_member
 from api.security.quotas import require_quota_available
+from api.security.user_limits import require_workspace_creation_allowed
 from api.security.workspaces import require_workspace_permission
 from api.utils import client_ip
 
@@ -62,7 +72,7 @@ async def list_workspaces(
 @router.post("/organizations/{org_id}/workspaces", response_model=WorkspaceEntry, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     org_id: uuid.UUID, payload: WorkspaceCreateRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_workspace_creation_allowed()), db: AsyncSession = Depends(get_db),
 ):
     await require_quota_available(db, org_id, "workspaces")  # Partie 1.3.6 -- checked against max_workspaces
 

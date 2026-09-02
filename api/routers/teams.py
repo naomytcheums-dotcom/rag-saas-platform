@@ -19,6 +19,12 @@ reach and fix it (the escape hatch require_team_admin already builds
 in) -- there is no equivalent escape hatch at the organization or
 superadmin level, which is why those two rules exist and this one
 doesn't.
+
+Partie 1.3.7: create_team now uses require_team_creation_allowed()
+(api/security/user_limits.py) instead of require_org_manager directly
+-- same restrictive-layer reasoning as api/routers/workspaces.py's
+create_workspace. list_teams stays on require_org_manager, unaffected:
+this step names no per-member "can list teams" override.
 """
 
 import logging
@@ -47,6 +53,7 @@ from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_manager
 from api.security.quotas import require_quota_available
 from api.security.teams import require_team_admin, require_team_member, require_team_org_manager
+from api.security.user_limits import require_team_creation_allowed
 from api.utils import client_ip
 
 router = APIRouter(tags=["teams"])
@@ -73,7 +80,7 @@ async def list_teams(
 @router.post("/organizations/{org_id}/teams", response_model=TeamEntry, status_code=status.HTTP_201_CREATED)
 async def create_team(
     org_id: uuid.UUID, payload: TeamCreateRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_team_creation_allowed()), db: AsyncSession = Depends(get_db),
 ):
     await require_quota_available(db, org_id, "teams")  # Partie 1.3.6 -- checked against max_teams
 

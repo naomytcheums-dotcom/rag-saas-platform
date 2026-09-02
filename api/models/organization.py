@@ -16,7 +16,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -81,6 +81,27 @@ class OrganizationMember(Base):
     # added by a process other than an explicit invitation.
     invited_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     joined_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Partie 1.3.7 -- per-member overrides on top of the role hierarchy
+    # above. NULL on the three numeric limits means "no personal limit
+    # set" -- see api/security/user_limits.py's own docstring for why
+    # that's a THIRD state, distinct from both 0 and "inherits the org
+    # quota" being a number: those two resources (documents,
+    # conversations) don't exist yet, so there is nothing to inherit
+    # FROM today, only a value stored for later. can_create_workspaces/
+    # can_create_teams default True (unrestricted, matching today's
+    # unchanged role-based behavior for whoever already has the role);
+    # can_invite_members defaults False for the opposite reason -- see
+    # that same module's docstring for why these three booleans are NOT
+    # symmetric (two are restrictive AND-gates on top of the role check,
+    # one is an additive OR-gate granting a capability role alone
+    # wouldn't).
+    daily_request_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_documents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_conversations: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    can_create_workspaces: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    can_create_teams: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    can_invite_members: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="members")
     user: Mapped["User"] = relationship(foreign_keys=[user_id], back_populates="organization_memberships")

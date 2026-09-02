@@ -1326,6 +1326,97 @@ resetting is real, well-scoped future work bundled with whatever builds
 the actual request-metering infrastructure (Partie 9), not something to
 build in isolation now with nothing to reset.
 
+### Per-member limits (Partie 1.3.7)
+
+Six columns directly on `organization_members` (migration `0022`), not
+a separate table -- every one of them is inherently scoped to a single
+(user, organization) membership, exactly like `role` already is.
+
+**The three numeric limits** (`daily_request_limit`, `max_documents`,
+`max_conversations`) mirror Etape 1.3.6's quotas exactly: no real table
+or endpoint exists yet for requests, documents, or conversations
+(Parties 2/3/8/9), so `check_user_limit` (`api/security/user_limits.py`)
+returns `True` unconditionally and `get_user_usage` reports `None` (not
+`0`) for all three. Stored as configuration, ready the moment the
+resource they'd gate exists.
+
+**The three booleans are NOT symmetric -- this is the part worth reading
+carefully before touching any of them.** Two are RESTRICTIVE AND-gates
+layered on top of an EXISTING role check; one is an ADDITIVE OR-gate
+granting a capability role alone wouldn't:
+
+- `can_create_workspaces` / `can_create_teams` (default `True`): checked
+  ONLY for a caller who already passes `require_org_manager`
+  (Owner/Admin/Manager). An Owner/Admin can flip one to `False` to strip
+  workspace- or team-creation from ONE specific Manager without
+  demoting them. For a Member or Viewer, the column is never even
+  consulted -- `require_org_manager` already blocks them first, exactly
+  as before this step (proven by
+  `tests/test_user_limits.py::test_a_plain_member_still_cannot_create_workspaces_regardless_of_the_flag`,
+  which sets the flag to its default `True` on a plain Member and
+  confirms they're still blocked).
+- `can_invite_members` (default `False`): checked ONLY for a caller who
+  does NOT already pass `require_org_manager`. An Owner/Admin can flip
+  it to `True` for a specific, trusted Member or Viewer, letting them
+  invite without promoting them to Manager. For Owner/Admin/Manager,
+  the column is never consulted -- their role already grants it
+  unconditionally, exactly as before this step.
+
+Picking the SAME direction for all three would have silently broken
+already-shipped, already-tested behavior one way or the other: an
+all-restrictive `can_invite_members` defaulting `False` would fail
+every existing "Manager can invite" test from Etape 1.2.4/1.3.4; an
+all-additive `can_create_workspaces` defaulting `True` would let every
+plain Member create workspaces, failing Etape 1.2.4's tests the other
+way. The direction chosen per column is whichever one is consistent
+with what already ships.
+
+**The invite privilege-escalation guard was widened, not just
+reused**: `invite_organization_member`
+(`api/routers/organization_members.py`) used to check
+`caller.role == manager`; a Member now reaching that endpoint via the
+additive `can_invite_members` grant has `caller.role == member`, which
+that check would have missed entirely, letting them invite someone in
+as `admin`. The condition is now `caller.role not in (owner, admin)` --
+covers Manager (role-based) and Member/Viewer (grant-based) with one
+check, while leaving Owner/Admin (who reach the endpoint via role alone)
+unrestricted, exactly as before.
+
+**Listing and inviting share one gate** (`require_can_invite_members`,
+covering both `GET` and `POST /invite`) -- unchanged from Etape 1.2.4,
+where they were already tied to the same tier: someone allowed to
+invite but not to see who's already a member would be invite-blind,
+unable to check for an existing member before sending a duplicate
+invite.
+
+**Endpoints**:
+
+| Endpoint | Access |
+|---|---|
+| `GET /users/me/limits` | Any authenticated user -- own data only, across EVERY organization they belong to (a list, not a single object -- see below) |
+| `GET /organizations/{org_id}/members/{user_id}/limits` | Admin+ |
+| `PATCH /organizations/{org_id}/members/{user_id}/limits` | Admin+, and rejects targeting the Owner (`reject_if_target_is_owner`) -- same boundary as role-update/removal in `api/routers/organization_members.py` |
+
+`GET /users/me/limits` returns a LIST because a bare per-user response
+doesn't fit this system: the caller may belong to several organizations
+(the normal case, since every account gets a default one at
+registration), each with its own independent limits on this same user's
+membership row -- there is no single "the" limits object for a user in
+isolation. `PATCH` is a partial update; sending a numeric field as JSON
+`null` explicitly clears it back to "no personal limit set," distinct
+from omitting the field (leaves it untouched).
+
+**Design intent for how a personal limit relates to the org-level quota
+(Etape 1.3.6), once either is ever enforced against a real resource**:
+a member's personal limit is a ceiling on THEIR OWN share, never a way
+to grant the organization MORE capacity collectively than its own
+quota allows -- the org-level quota remains the hard, collective
+ceiling regardless of what any individual member's personal limit says.
+Nothing enforces this relationship in code today, since neither side of
+it (personal limit, org quota) gates a real resource yet for the three
+numeric dimensions -- this is the intended design once one does, not a
+claim about current behavior.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

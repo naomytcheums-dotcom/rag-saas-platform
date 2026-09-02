@@ -490,6 +490,43 @@ async def test_creating_an_organization_creates_its_quota_row_in_the_same_transa
             await session.commit()
 
 
+async def test_new_membership_columns_get_the_documented_defaults_on_real_postgres(pg_client, pg_engine):
+    """Partie 1.3.7: proves migration 0022's `server_default` values
+    (used for backfilling pre-existing rows) and
+    api/models/organization.py's Python-level `default=` (used for new
+    rows the ORM inserts, which never go through server_default at all)
+    actually agree -- against a REAL row, created through the real
+    registration endpoint, not asserted from the model definition alone."""
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    email = _unique_email()
+    org_id = None
+
+    try:
+        register_response = await pg_client.post(
+            "/auth/register", json={"email": email, "password": "correct-horse-battery-staple", "accept_terms": True},
+        )
+        assert register_response.status_code == 201
+
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+            membership = await session.scalar(select(OrganizationMember).where(OrganizationMember.user_id == user.id))
+            org_id = membership.organization_id
+            assert membership.daily_request_limit is None
+            assert membership.max_documents is None
+            assert membership.max_conversations is None
+            assert membership.can_create_workspaces is True
+            assert membership.can_create_teams is True
+            assert membership.can_invite_members is False
+    finally:
+        async with session_factory() as session:
+            if org_id is not None:
+                await session.execute(delete(Organization).where(Organization.id == org_id))
+            user = await session.scalar(select(User).where(User.email == email))
+            if user is not None:
+                await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
+
+
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):
     """register -> login -> refresh -> logout, through the real ASGI app,
     against real Postgres (via pg_client's get_db override, not SQLite)."""

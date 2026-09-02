@@ -29,6 +29,15 @@ organization-settings has no endpoints here yet because
 `organization_settings` doesn't exist yet; once it does, it should reuse
 require_org_admin the same way these do, not invent a separate
 permission check.
+
+Partie 1.3.7: list/invite now use require_can_invite_members
+(api/security/user_limits.py) instead of require_org_manager directly
+-- Owner/Admin/Manager pass exactly as before; a Member or Viewer ALSO
+passes now if their own can_invite_members override is set. Deliberately
+the SAME gate for both listing and inviting (as it already was for
+Owner/Admin/Manager since Etape 1.2.4) -- someone allowed to invite but
+not to see who's already a member would be invite-blind, unable to
+check for an existing member before inviting a duplicate.
 """
 
 import logging
@@ -54,9 +63,9 @@ from api.security.organizations import (
     get_organization_member_or_404,
     reject_if_target_is_owner,
     require_org_admin,
-    require_org_manager,
 )
 from api.security.quotas import require_quota_available
+from api.security.user_limits import require_can_invite_members
 from api.services.email import (
     send_organization_member_added_email,
     send_organization_member_removed_email,
@@ -70,7 +79,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("", response_model=OrganizationMemberListResponse)
 async def list_organization_members(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_can_invite_members), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.execute(
         select(OrganizationMember, User.email)
@@ -87,7 +96,7 @@ async def list_organization_members(
 @router.post("/invite", response_model=OrganizationMemberEntry, status_code=status.HTTP_201_CREATED)
 async def invite_organization_member(
     org_id: uuid.UUID, payload: OrganizationMemberInviteRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_can_invite_members), db: AsyncSession = Depends(get_db),
 ):
     """
     "Invite" here means immediately adding an EXISTING account -- see
@@ -99,19 +108,22 @@ async def invite_organization_member(
     could otherwise invite someone directly as admin or manager,
     handing out a role tier they themselves aren't allowed to grant or
     change (that stays require_org_admin, on the role-update and
-    remove-member endpoints below, both unchanged by this step). A
-    Manager may only invite people in as member or viewer.
+    remove-member endpoints below, both unchanged by this step).
 
-    Partie 1.3.6: checked against `max_users` (require_quota_available)
-    -- immediately BEFORE the membership is created, after every other
-    validation, so a quota-exceeded response never leaks whether an
-    email exists/is already a member ahead of a check that has nothing
-    to do with either.
+    Partie 1.3.7: require_can_invite_members also lets a Member or
+    Viewer through here now, via their own per-member can_invite_members
+    override (api/security/user_limits.py) -- the guard below is
+    widened from "caller.role == manager" to "caller is not Owner/Admin"
+    so it covers that new path too: anyone relying on Manager's role OR
+    the additive override may only invite people in as member or
+    viewer, never admin or manager. Only Owner/Admin (who reach this
+    endpoint via role alone, require_can_invite_members never even
+    consults their can_invite_members column) may grant those tiers.
     """
-    if caller.role == OrganizationRole.manager and payload.role in (OrganizationRole.admin, OrganizationRole.manager):
+    if caller.role not in (OrganizationRole.owner, OrganizationRole.admin) and payload.role in (OrganizationRole.admin, OrganizationRole.manager):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Managers can only invite members as 'member' or 'viewer'",
+            detail="You can only invite members as 'member' or 'viewer'",
         )
 
     target_user = await db.scalar(select(User).where(User.email == payload.email))
