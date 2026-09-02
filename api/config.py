@@ -81,6 +81,19 @@ class Settings(BaseSettings):
     QUOTA_DEFAULT_MAX_AGENTS: int = 10
     QUOTA_DEFAULT_MAX_KB_SIZE_MB: int = 512
 
+    # -- Partie 1.4.1: custom domains --------------------------------------
+    # The hostname a custom domain's CNAME record must point at -- this
+    # deployment's own real routable hostname. A placeholder default:
+    # no reverse-proxy actually routes traffic by Host header yet (see
+    # docs/AUTH_BACKEND_SETUP.md's Custom Domains section for the full
+    # honest-scope story), so this only matters for what instructions
+    # GET/POST .../domains hand back today.
+    CUSTOM_DOMAIN_CNAME_TARGET: str = "app.rag-saas-platform.com"
+    # How long a single DNS TXT lookup waits before giving up -- bounds
+    # the worst case for GET .../domains/verify/{token} (a real,
+    # non-blocking network call, see api/security/custom_domains.py).
+    CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS: int = 5
+
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30

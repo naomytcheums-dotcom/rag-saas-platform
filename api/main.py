@@ -19,7 +19,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
-    account, admin_users, audit, auth, enterprise_sso, invitations, oauth, organization_branding,
+    account, admin_users, audit, auth, custom_domains, enterprise_sso, invitations, oauth, organization_branding,
     organization_members, organization_settings, organizations, password, quotas, resource_permissions, sessions,
     teams, two_factor, usage, user_limits, verify, webauthn, workspaces,
 )
@@ -162,6 +162,7 @@ app.include_router(user_limits.router)
 app.include_router(usage.router)
 app.include_router(organization_settings.router)
 app.include_router(organization_branding.router)
+app.include_router(custom_domains.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

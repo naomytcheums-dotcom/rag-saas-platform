@@ -1698,6 +1698,95 @@ No backfill for organizations that predate this step --
 no row exists (pure defaults on read; a fresh default row created on
 first write), same pattern as quotas/settings.
 
+### Custom domains (Partie 1.4.1)
+
+One table (migration `0026`), `custom_domains`: `id`, `organization_id`
+(FK → `organizations`), `domain` (`UNIQUE` across the whole platform,
+not just per-org -- two organizations can never claim the same
+hostname), `status` (`pending`/`verified`/`active`/`failed`, a plain
+`String`, not a native Postgres enum -- same reasoning as
+`AuditLog.action`: a new status never needs a migration), `verification_token`,
+`ssl_cert`/`ssl_key` (nullable, unused placeholders -- see below),
+`created_at`/`updated_at`. **NOT auto-created at organization creation**,
+unlike quotas/settings/branding -- a domain is an explicit action an
+Owner takes when they actually have one.
+
+**Honest scope, verified before writing a line of code**: this
+deployment has NO reverse-proxy that routes traffic by Host header --
+`render.yaml` deploys a single Streamlit container (`healthCheckPath:
+/_stcore/health`), `docker-compose.yml` is local-dev only, no
+Traefik/Caddy config exists anywhere in this repository. So a domain
+reaching `status="active"` does **not** make `app.ma-boite.com` actually
+serve this application -- that requires real infrastructure (a reverse
+proxy dynamically routing by Host header, Partie 1.4.3's SSL
+automation), not something an API-layer table can do by itself. What
+IS real: a genuine database record of intent, a cryptographically
+random verification token, and a real DNS TXT lookup that proves the
+caller controls the domain's DNS zone before anything is marked verified.
+
+**`ssl_cert`/`ssl_key` are schema placeholders for Partie 1.4.3, not
+used by anything in this step** -- no code path here ever writes to
+them. Flagged deliberately: storing a real private key in plaintext
+`TEXT` would be a genuine vulnerability the moment something DOES
+populate them. When Partie 1.4.3 is built, these values MUST go
+through `api/security/secret_encryption.py` (the same module already
+protecting `JWTSigningKey`/`EnterpriseSSOConnection` secrets, audit
+Categorie 4 items 27/28) before ever being written -- never stored raw.
+
+**DNS verification, real and asynchronous** (`api/security/custom_domains.py`):
+a dedicated verification subdomain (`_rag-saas-verify.<domain>`, same
+shape as Vercel's `_vercel.<domain>` / Netlify's
+`netlify-challenge.<domain>`) carries the TXT challenge, rather than
+the bare domain -- so it never collides with a domain's own existing
+TXT records (SPF/DKIM/etc. commonly live there). The lookup uses
+`dnspython`'s **async** resolver (`dns.asyncresolver`, promoted from a
+transitive dependency of `email-validator` to a direct one) so a real
+network round-trip (bounded by `CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS`,
+default 5s) never blocks the event loop. A verification token is
+`secrets.token_urlsafe(32)` -- same generator as password-reset and
+invitation tokens -- but stored in **plaintext**, unlike invitation
+tokens: an invitation token is a bearer credential mailed out and never
+re-displayed, while this token must be shown again on every `GET` so
+the Owner can (re-)copy it into their DNS provider; its security comes
+from controlling the domain's DNS zone, not from the token being secret.
+
+**What happens when verification fails** (vision critique): a normal
+`200` response with `status="failed"` and the same DNS instructions --
+not a server error, since "DNS hasn't propagated yet" or "a typo in the
+TXT record" are the expected common cases, not exceptions. The Owner
+fixes their DNS and requests the exact same verification link again;
+`verify_domain`/the verify endpoint are safe to call repeatedly and
+have no side effect on a failed attempt beyond recording `status="failed"`.
+
+**Endpoints**: `POST`/`GET`/`DELETE /organizations/{org_id}/domains[/{domain_id}]`
+are Owner-only. `GET /organizations/{org_id}/domains/verify/{token}` is
+**deliberately public** (same posture as Partie 1.3.10's `GET
+.../branding` and `POST /auth/password/reset`) -- the 32-byte token
+itself is the proof of authorization, looked up by `(org_id, token)`
+together (never `token` alone) so a wrong/guessed token can't be used
+as an arbitrary DNS-lookup probe against a domain of the caller's
+choosing; a non-matching pair 404s before any DNS lookup happens. On a
+successful match, the domain is immediately activated too (nothing
+else currently gates that second step -- see
+`api/security/custom_domains.py`'s `activate_domain` docstring).
+
+**Scalability** (vision critique): `domain` is `UNIQUE` and indexed;
+`organization_id` is indexed for `list`/`get_org_domain`'s access
+pattern. Nothing here would need to change shape at "thousands of
+domains" -- the real scalability question for custom domains at that
+scale is entirely on the infrastructure side this step deliberately
+doesn't build (a reverse proxy holding thousands of routes, ACME rate
+limits for automated certificate issuance), not the database layer.
+
+**Performance**: no Celery dispatch for the DNS check itself -- it's a
+bounded, real async network call already off the blocking path, and
+this step's own spec has no periodic re-verification requirement (that
+belongs to the master cahier's Partie 1.4.4, a separate, not-yet-built
+item: "Job Celery de polling"). If/when that's built, it would be a
+periodic beat task re-running `verify_domain` on `pending`/`failed`
+rows, the same shape as `api/tasks/account_purge.py`'s daily sweep --
+not attempted here since it wasn't asked for by this step.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

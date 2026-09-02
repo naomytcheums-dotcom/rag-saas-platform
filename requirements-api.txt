@@ -37,6 +37,11 @@ alembic==1.19.1
 # -- Settings / validation ---------------------------------------------------
 pydantic-settings==2.15.0
 email-validator==2.3.0
+# dnspython was already present transitively (email-validator) -- pinned
+# directly now that api/security/custom_domains.py (Partie 1.4.1) imports
+# it itself (real, async DNS TXT lookups for domain verification), rather
+# than relying on another package's dependency tree to keep providing it.
+dnspython==2.8.0
 
 # -- Auth: passwords, JWT, OAuth, 2FA -----------------------------------------
 bcrypt==5.0.0

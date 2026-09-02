@@ -91,20 +91,20 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 1.3.9 | Configuration par organisation | Table organization_settings (JSON) | ✅ (`api/models/organization_settings.py`, migration 0024, `ON DELETE CASCADE` depuis `organizations`, créée automatiquement avec chaque organisation dans la même transaction que le propriétaire fondateur et les quotas par défaut. Une ligne ne stocke QUE les overrides explicites (`settings` JSON, `{}` au départ) -- jamais une copie complète des 14 valeurs par défaut, qui sont définies une seule fois dans `DEFAULT_SETTINGS` (`api/security/organization_settings.py`) et fusionnées à la lecture (`get_org_settings`). **Contrairement à 1.3.6/1.3.7/1.3.8, les 14 dimensions sont ici toutes réellement stockées ET servies** -- rien à mesurer, une config n'a pas de "pas encore trackable". Ce qui reste non branché : **chaque valeur est vérifiée être encore en dur dans `src/`** (le pipeline RAG, qui n'importe rien de `api/` et n'a aucune notion d'organisation) -- `CHUNK_SIZE_TOKENS=512`/`CHUNK_OVERLAP_TOKENS` (`src/indexing.py`), `EMBEDDING_MODEL_NAME` (dupliqué dans `src/indexing.py` ET `src/retrieval.py`), `CROSS_ENCODER_MODEL_NAME`/`FINAL_TOP_K=5` (`src/retrieval.py`), `MODEL_NAME=claude-sonnet-5` (`src/generation.py`, **différent** du défaut de cette table `claude-3-sonnet-20240229`), `MAX_TOKENS=1024`/`AGENT_MAX_TOKENS=1024` (`src/generation.py`/`src/agent.py`, différents du défaut `4096`), `SYSTEM_PROMPT`/`AGENT_SYSTEM_PROMPT` (prompts FastAPI-spécifiques, rien à voir avec le défaut générique) -- `temperature`/`retrieval_strategy`/`citation_required`/`language` n'ont aucun équivalent dans `src/` du tout. Brancher pour de vrai demanderait de rendre `src/` conscient des organisations pour la première fois -- travail réel des Parties 3/4/9, pas un effet de bord de l'ajout d'une table de config au backend SaaS multi-tenant. Validation réelle sur PATCH (pas des types en façade) : `llm_provider`/`retrieval_strategy` en enums fermés, `temperature` bornée `[0, 2]`, `timezone` vérifiée contre `zoneinfo.available_timezones()`, `language` par regex, et une validation croisée `chunk_overlap < chunk_size` calculée sur la PAIRE EFFECTIVE résultante (pas seulement les champs envoyés, puisqu'un PATCH partiel peut ne toucher qu'un des deux). `GET` (Admin+) / `PATCH` (Owner uniquement, mise à jour partielle). Pas de cache Redis -- aucun appelant à chaud n'existe encore pour justifier un cache. Pas de migration de backfill pour les organisations pré-existantes -- `get_org_settings`/`update_org_settings` dégradent proprement vers les defaults purs (lecture) ou créent la ligne à la volée (écriture) si elle n'existe pas. 20 tests SQLite + 2 tests contre le vrai Postgres, voir `tests/test_organization_settings.py`) |
 | 1.3.10 | Branding par organisation | Table organization_branding | ✅ (`api/models/organization_branding.py`, migration 0025, `ON DELETE CASCADE` depuis `organizations`, créée automatiquement avec la même transaction que le quota et la configuration par défaut. **Contrairement à 1.3.9, table de colonnes typées avec vraies valeurs par défaut sur la ligne elle-même** (même forme que `OrganizationQuota`, pas un blob JSON) -- 8 champs fixes, pas un ensemble ouvert. **`GET` est délibérément PUBLIC** -- la seule exception dans tout ce code à la règle "toute route `/organizations/{org_id}/...` exige au moins `require_org_member`" : le branding existe pour être affiché à un VISITEUR avant même qu'il soit authentifié (écran de connexion, widget embarqué) ; seul un `organization_id` réellement inexistant renvoie 404, le 404 anti-énumération des autres routes ne s'applique pas ici par conception. `PATCH` et les 4 endpoints d'upload/suppression restent Owner uniquement. **Sécurité upload réelle** (`api/services/storage.py`) : taille (2MB logo/512KB favicon), format réel par octets magiques (jamais le Content-Type déclaré, comme les avatars), ET un vrai décodage Pillow + vérification des dimensions en pixels (2000×2000/512×512) -- `Pillow` passe de dépendance transitive (`qrcode[pil]`) à directe. **Stockage** : réutilise le MÊME bucket S3 que les avatars sous un préfixe `branding/{org_id}/` -- aucun second bucket, aucun nouveau réglage `S3_*`, aucun changement CI ; clé aléatoire à chaque upload, ancien objet explicitement supprimé du stockage au remplacement ou à la suppression (jamais orphelin). **`custom_css` -- mitigation réelle et testée** contre l'injection CSS (`expression()`, `-moz-binding`, `behavior:`, `@import`, `<script`) puisque c'est du contenu contrôlé par l'Owner mais servi à tout visiteur anonyme de la page publique de l'organisation. Pas de cache Redis -- même raisonnement que 1.3.9. **Intégration frontend : n'existe pas à intégrer** -- aucun projet Next.js/React nulle part dans ce dépôt (vérifié : zéro `package.json`, zéro fichier `.tsx`/`.jsx`), seule UI existante `dashboard/app.py` (Streamlit mono-utilisateur, sans rapport avec les organisations, Partie 8 à 0%) ; l'API construite ici (`GET .../branding` public) est précisément ce qu'un futur frontend consommerait, pas quelque chose à brancher dans du code qui n'existe pas. 22 tests SQLite (permissions/branchement) + 10 tests SQLite (validation réelle, `tests/test_storage.py`) + 2 tests contre le vrai Postgres (cascade + defaults) + 6 tests contre le vrai S3/MinIO (upload/remplacement/suppression bout-en-bout), voir `tests/test_organization_branding.py` et `tests/test_branding_storage_integration.py`) |
 
-### 1.4 Domaine & White-label — ⬜ NON COMMENCÉ (0/10)
+### 1.4 Domaine & White-label — 🟡 DÉMARRÉ (3✅/3🟡/4⬜ sur 10, via l'Étape 1.4.1 + réutilisation honnête de 1.3.9/1.3.10)
 
-| # | Fonctionnalité | Implémentation prévue |
-|---|---|---|
-| 1.4.1 | Custom domains | Table custom_domains, reverse-proxy dynamique (Caddy/Traefik) |
-| 1.4.2 | Instructions DNS | Page générée avec les enregistrements CNAME/TXT attendus |
-| 1.4.3 | SSL auto (Let's Encrypt) | Traefik + resolver ACME, ou Caddy |
-| 1.4.4 | Vérification domaine | Challenge TXT DNS, job Celery de polling |
-| 1.4.5 | Custom email domain | Resend/SES avec domaine vérifié (DKIM/SPF) par org |
-| 1.4.6 | White-label complet | Flag hide_platform_branding + templates conditionnels |
-| 1.4.7 | Logo/favicon/brand name | Champs dans organization_branding |
-| 1.4.8 | Couleurs/polices/thème | CSS custom properties depuis organization_branding.theme_json |
-| 1.4.9 | Email sender custom | En-tête From: dynamique selon domaine vérifié |
-| 1.4.10 | System prompt/persona IA | Colonne organization_settings.system_prompt |
+| # | Fonctionnalité | Implémentation prévue | Statut |
+|---|---|---|---|
+| 1.4.1 | Custom domains | Table custom_domains, reverse-proxy dynamique (Caddy/Traefik) | ✅ (`api/models/custom_domain.py`, migration 0026, `ON DELETE CASCADE` depuis `organizations`, `UNIQUE(domain)` global -- deux organisations ne peuvent jamais revendiquer le même hostname. **Honnêteté de périmètre vérifiée avant d'écrire une ligne de code** : ce déploiement n'a AUCUN reverse-proxy routant par Host header (`render.yaml` déploie un unique conteneur Streamlit, `docker-compose.yml` est local-only, zéro config Traefik/Caddy nulle part dans ce dépôt) -- un domaine passant à `active` ne fait donc PAS réellement servir l'application sur `app.ma-boite.com`, ça demande une vraie infrastructure (1.4.3, non construite). Ce qui EST réel : un vrai enregistrement d'intention en base, un token de vérification vraiment aléatoire (`secrets.token_urlsafe(32)`, même générateur que reset de mot de passe/invitations), et une vraie recherche DNS TXT asynchrone (`dns.asyncresolver`, `dnspython` passé de dépendance transitive à directe) qui prouve le contrôle de la zone DNS avant toute vérification. Sous-domaine dédié `_rag-saas-verify.<domaine>` pour le challenge TXT (jamais le domaine nu, pour ne jamais entrer en collision avec des enregistrements SPF/DKIM existants). Une vérification échouée renvoie `200` avec `status="failed"`, jamais une erreur -- "DNS pas encore propagé" est le cas normal attendu, pas une exception ; l'Owner peut redemander la vérification autant de fois que nécessaire. `GET .../verify/{token}` délibérément public (le token est la preuve d'autorisation), recherché par (org_id, token) ensemble pour empêcher un token erroné de servir de sonde DNS arbitraire. `ssl_cert`/`ssl_key` sont des colonnes prévues pour 1.4.3, non utilisées ici -- documentées explicitement comme un risque si jamais remplies sans passer par `api/security/secret_encryption.py`. 23 tests SQLite (DNS mocké) + 4 tests contre le vrai DNS public (`tests/test_dns_verification_integration.py`, jamais de contenu externe précis vérifié, seulement le mécanisme) + 1 test contre le vrai Postgres, voir `tests/test_custom_domains.py`) |
+| 1.4.2 | Instructions DNS | Page générée avec les enregistrements CNAME/TXT attendus | 🟡 (l'API le fait -- `dns_records_for()` calcule CNAME + TXT à la volée dans chaque réponse de 1.4.1 -- mais "page générée" est un artefact frontend, et Partie 8 est à 0%, voir 1.3.10) |
+| 1.4.3 | SSL auto (Let's Encrypt) | Traefik + resolver ACME, ou Caddy | ⬜ |
+| 1.4.4 | Vérification domaine | Challenge TXT DNS, job Celery de polling | 🟡 (le challenge TXT DNS est réel et fonctionnel, livré avec 1.4.1 ; le job Celery de polling périodique -- reverifier automatiquement les domaines `pending`/`failed` -- n'existe pas, non demandé par le spec de 1.4.1, resterait à construire sur le modèle de `api/tasks/account_purge.py`) |
+| 1.4.5 | Custom email domain | Resend/SES avec domaine vérifié (DKIM/SPF) par org | ⬜ |
+| 1.4.6 | White-label complet | Flag hide_platform_branding + templates conditionnels | ⬜ |
+| 1.4.7 | Logo/favicon/brand name | Champs dans organization_branding | ✅ (déjà livré par 1.3.10 -- `organization_branding.logo_url`/`favicon_url`/`brand_name` sont exactement ces champs ; aucun travail supplémentaire nécessaire) |
+| 1.4.8 | Couleurs/polices/thème | CSS custom properties depuis organization_branding.theme_json | 🟡 (couleurs et police déjà livrés par 1.3.10 -- mais comme des colonnes typées et validées individuellement, pas un blob `theme_json` générique comme le spec original l'envisageait ; `custom_css` couvre l'extension libre. Aucune page pour injecter ces variables CSS -- même limite que 1.3.10, Partie 8 à 0%) |
+| 1.4.9 | Email sender custom | En-tête From: dynamique selon domaine vérifié | ⬜ |
+| 1.4.10 | System prompt/persona IA | Colonne organization_settings.system_prompt | ✅ (déjà livré par 1.3.9 -- `system_prompt` fait partie des 14 réglages de `DEFAULT_SETTINGS`, lisible/modifiable via `GET`/`PATCH /organizations/{id}/settings` ; même réserve que 1.3.9 : rien dans `src/` ne le consomme encore, `AGENT_SYSTEM_PROMPT`/`SYSTEM_PROMPT` y restent en dur) |
 
 ---
 
@@ -368,16 +368,26 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 53 | 10.6% |
-| 🟡 Partiel | 60 | 12.0% |
-| ⬜ Non commencé | 387 | 77.4% |
+| ✅ Fait | 56 | 11.2% |
+| 🟡 Partiel | 63 | 12.6% |
+| ⬜ Non commencé | 381 | 76.2% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **53/515 (~10.3%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **113/515 (~21.9%)**
-- Pondéré (✅=1, 🟡=0.5) : **~83/515 (~16.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **56/515 (~10.9%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **119/515 (~23.1%)**
+- Pondéré (✅=1, 🟡=0.5) : **~87.5/515 (~17.0%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 1.3.10 (Branding par organisation, 2026-09-02) :
+Mis à jour après Partie 1.4.1 (Custom domains, 2026-09-02) :
+Partie 1.4 démarre : 0✅/0🟡/10⬜ → 3✅/3🟡/4⬜ sur 10. Les items
+supplémentaires en ✅ (1.4.7, 1.4.10) et en 🟡 (1.4.2, 1.4.4, 1.4.8) ne
+sont PAS du travail livré aujourd'hui -- ce sont des items du cahier
+original déjà satisfaits, en totalité ou en partie, par 1.3.9
+(system_prompt), 1.3.10 (logo/favicon/brand_name, couleurs/police) et
+1.4.1 lui-même (instructions DNS, challenge TXT), corrigés ici pour que
+le tableau reflète la réalité du code plutôt que de compter deux fois
+le même travail sous deux numéros différents.
+
+Précédemment, après Partie 1.3.10 (Branding par organisation) :
 Partie 1.3 passe de 7✅/2🟡/1⬜ à 8✅/2🟡/0⬜ sur 10 -- **les 10 items de la Partie 1.3 sont désormais tous touchés** (aucun ⬜ restant ; 1.3.2 Workspaces et 1.3.5 Isolation des données restent 🟡, volontairement incomplets par rapport à la portée complète du spec, voir leurs lignes ci-dessus pour le détail exact de ce qui manque).
 
 Voir le rapport détaillé livré en conversation (état des lieux du
@@ -464,8 +474,13 @@ Partie, pour mémoire :
 
 ### Reste du non-commencé (après les priorités ci-dessus)
 
-- Partie 1.4 (White-label) -- 1.3.9 (configuration) et 1.3.10 (branding)
-  sont maintenant tous les deux faits, plus aucun blocage côté stockage/API
+- Partie 1.4 (White-label), le reste -- démarrée (3✅/3🟡/4⬜ sur 10,
+  voir le tableau détaillé ci-dessus) : 1.4.1 (custom domains) livré ;
+  1.4.7/1.4.8/1.4.10 déjà satisfaits en tout ou partie par 1.3.9/1.3.10.
+  Ce qui manque reste réel infrastructure (1.4.3 SSL auto/reverse-proxy
+  dynamique, dont 1.4.1 dépend pour qu'un domaine "actif" serve
+  vraiment quelque chose), 1.4.5/1.4.9 (email par domaine custom), et
+  1.4.6 (flag white-label + templates conditionnels)
 - Partie 3 (Pipeline RAG), le reste -- chunking avancé, query expansion/HyDE, MMR
 - Partie 4 (Multi-LLM) -- abstraction LiteLLM, actuellement un seul provider en dur
 - Partie 5.3/5.4 (Agent Builder / Workflow Builder) -- aucune table `agents`, aucune UI
