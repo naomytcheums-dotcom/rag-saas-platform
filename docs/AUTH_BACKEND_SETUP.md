@@ -6,6 +6,207 @@ to run each layer -- see `.env.example` for the full variable list with
 inline comments; nothing here duplicates the actual values (never commit
 real secrets, including into this file).
 
+**Deploying to production?** See `docs/DEPLOYMENT_GUIDE.md` instead --
+reverse proxy/HTTPS setup, the `X-Forwarded-For` trusted-proxy
+requirement, and a pre-deployment security checklist. This document
+covers local development and the API's own architecture.
+
+## Architecture (audit Categorie 5, item 31)
+
+### Vue d'ensemble des composants
+
+```mermaid
+graph TB
+    Browser["Navigateur / SPA"]
+
+    subgraph api["api/ -- FastAPI (uvicorn en dev, gunicorn multi-worker en prod)"]
+        MW["Middleware: CORS, en-tetes de securite,\nsession (state OAuth/OIDC), metriques"]
+        Routers["Routers: auth, oauth, sso, webauthn,\n2fa, sessions, account, audit, password, verify"]
+    end
+
+    PG[("PostgreSQL / Supabase")]
+    Redis[("Redis\n(rate limit, cache geoip,\nchallenges WebAuthn, broker Celery)")]
+
+    subgraph bg["Taches planifiees"]
+        Worker["Worker Celery"]
+        Beat["Celery Beat\n(purge comptes, purge tokens,\nrotation cle JWT)"]
+    end
+
+    subgraph ext["Services externes"]
+        Google["Google OAuth"]
+        GitHub["GitHub OAuth"]
+        OIDC["IdP entreprise\n(Azure AD / Okta / generique OIDC)"]
+        Resend["Resend (email transactionnel)"]
+        S3["S3 / R2 / Supabase Storage\n(avatars)"]
+        GeoIP["ipapi.co (geolocalisation IP)"]
+    end
+
+    Prom["Prometheus (scrape /metrics)"]
+
+    Browser -->|"HTTPS"| MW --> Routers
+    Routers --> PG
+    Routers --> Redis
+    Routers -.->|"OAuth"| Google
+    Routers -.->|"OAuth"| GitHub
+    Routers -.->|"OIDC"| OIDC
+    Routers -.->|"email"| Resend
+    Routers -.->|"upload avatar"| S3
+    Routers -.->|"lookup pays"| GeoIP
+    Worker --> PG
+    Worker --> S3
+    Beat -->|"planifie"| Worker
+    Worker -.-> Redis
+    Prom -.->|"GET /metrics"| api
+```
+
+### Flux d'authentification (inscription -> connexion -> 2FA)
+
+```mermaid
+flowchart TD
+    U(["Utilisateur"])
+
+    U --> Reg["POST /auth/register"]
+    Reg --> Sess1["Session immediate\naccess_token + cookie refresh httpOnly"]
+
+    U --> Login["POST /auth/login"]
+    Login --> CheckPw{"Mot de passe correct ?"}
+    CheckPw -- non --> Err401["401 Unauthorized\n(meme erreur generique dans tous les cas)"]
+    CheckPw -- oui --> Check2FA{"2FA actif ?\n(TOTP et/ou WebAuthn)"}
+    Check2FA -- non --> Sess2["TokenResponse\naccess_token + cookie refresh"]
+    Check2FA -- oui --> MFA["MFARequiredResponse\nmfa_token + available_methods"]
+
+    MFA --> TOTP["POST /auth/2fa/verify-login\n(code TOTP ou code de recuperation)"]
+    MFA --> WAOpt["POST /auth/webauthn/authenticate/options"]
+    WAOpt --> WAVerify["POST /auth/webauthn/authenticate/verify"]
+    TOTP --> Sess3["TokenResponse"]
+    WAVerify --> Sess3
+
+    U --> OAuthStart["GET /auth/oauth/{provider}/authorize"]
+    OAuthStart --> Provider["Google / GitHub"]
+    Provider --> OAuthCb["GET /auth/oauth/{provider}/callback"]
+    OAuthCb --> Check2FA
+
+    U --> Discover["POST /auth/sso/discover"]
+    Discover --> SSOStart["GET /auth/sso/{connection_id}/authorize"]
+    SSOStart --> IdP["IdP entreprise (OIDC)"]
+    IdP --> SSOCb["GET /auth/sso/{connection_id}/callback"]
+    SSOCb --> Check2FA
+
+    Sess3 --> Refresh["POST /auth/refresh\n(rotation du refresh token)"]
+```
+
+### Schéma de la base de données
+
+Les tables `*_tokens`/`*_codes` (réinitialisation mot de passe, vérification
+email, restauration de compte, réactivation du consentement) partagent
+toutes la même forme -- `id`, `user_id` FK, un hash du token, `expires_at`,
+`used_at` -- et sont regroupées ci-dessous sous une seule entité pour la
+lisibilité; le détail exact de chacune est dans `api/models/`.
+
+```mermaid
+erDiagram
+    USERS ||--o{ OAUTH_ACCOUNTS : "lie"
+    USERS ||--o{ SESSIONS : "possede"
+    USERS ||--o{ ENTERPRISE_SSO_ACCOUNTS : "lie"
+    USERS ||--o{ WEBAUTHN_CREDENTIALS : "enregistre"
+    USERS ||--o{ PASSWORD_HISTORY : "historise"
+    USERS ||--o{ TWO_FACTOR_RECOVERY_CODES : "possede"
+    USERS ||--o{ REVOKED_ACCESS_TOKENS : "revoque"
+    USERS ||--o{ AUDIT_LOGS : "genere (nullable)"
+    USERS ||--o{ TOKENS_EPHEMERES : "demande"
+    ENTERPRISE_SSO_CONNECTIONS ||--o{ ENTERPRISE_SSO_ACCOUNTS : "scope"
+
+    USERS {
+        uuid id PK
+        string email
+        string hashed_password "nullable -- compte OAuth/SSO seul"
+        enum role "user / admin / superadmin"
+        bool is_active
+        bool is_email_verified
+        string totp_secret
+        bool totp_enabled
+        datetime deleted_at "soft-delete"
+        datetime deletion_scheduled_at
+    }
+    OAUTH_ACCOUNTS {
+        uuid id PK
+        uuid user_id FK
+        enum provider "google / github"
+        string provider_account_id
+    }
+    ENTERPRISE_SSO_CONNECTIONS {
+        uuid id PK
+        string email_domain UK
+        string issuer
+        string client_id
+        string client_secret_encrypted "chiffre (Fernet)"
+        bool is_enabled
+    }
+    ENTERPRISE_SSO_ACCOUNTS {
+        uuid id PK
+        uuid user_id FK
+        uuid connection_id FK
+        string provider_subject
+    }
+    SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        string refresh_token_hash
+        string access_token_jti
+        string device_info
+        string ip_address
+        datetime expires_at
+        datetime last_seen_at
+        datetime revoked_at
+    }
+    WEBAUTHN_CREDENTIALS {
+        uuid id PK
+        uuid user_id FK
+        bytes credential_id UK
+        bytes public_key
+        int sign_count
+        string nickname
+    }
+    JWT_SIGNING_KEYS {
+        uuid id PK
+        string secret "chiffre (Fernet)"
+        bool is_active
+        datetime retired_at
+    }
+    AUDIT_LOGS {
+        uuid id PK
+        uuid user_id FK "nullable"
+        string action
+        string ip
+        string checksum "chaine HMAC anti-alteration"
+    }
+    PASSWORD_HISTORY {
+        uuid id PK
+        uuid user_id FK
+        string password_hash
+    }
+    TWO_FACTOR_RECOVERY_CODES {
+        uuid id PK
+        uuid user_id FK
+        string code_hash
+        datetime used_at
+    }
+    REVOKED_ACCESS_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        string jti UK
+        datetime expires_at
+    }
+    TOKENS_EPHEMERES {
+        uuid id PK
+        uuid user_id FK
+        string token_hash
+        datetime expires_at
+        datetime used_at
+        string _note "regroupe: reset password, verif email,\nrestauration compte, verrouillage 2FA,\nreactivation consentement"
+    }
+```
+
 ## Required for the API to start at all
 
 - **PostgreSQL** (`DATABASE_URL`, `postgresql+asyncpg://...`) -- any
@@ -630,6 +831,129 @@ address has no geography.
   countries configured are no-ops -- identical behavior to before this
   feature existed. A geoip lookup failure fails open (flat, unadjusted
   limit), same philosophy as the rate limiter itself.
+
+## Exemples d'utilisation de l'API (curl) (audit Categorie 5, item 32)
+
+Swagger (`/docs`) donne les schémas exacts de chaque requête/réponse;
+cette section montre le déroulé réel d'un appel, y compris les cas
+d'erreur les plus fréquents. `$API` = `http://localhost:8000` en local.
+
+### Inscription
+
+```bash
+curl -i -X POST "$API/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "ada@example.com",
+    "password": "correct-horse-battery-staple",
+    "full_name": "Ada Lovelace",
+    "accept_terms": true
+  }'
+
+# 201 Created -- une session est immédiatement active, aucune vérification
+# d'email n'est requise pour commencer à utiliser le compte :
+# {"access_token": "eyJ...", "token_type": "bearer", "expires_in": 900}
+# Le refresh token est posé en cookie httpOnly (invisible ici, voir -c ci-dessous).
+
+# Erreur -- email déjà utilisé (409) :
+# curl -i -X POST "$API/auth/register" -H "Content-Type: application/json" \
+#   -d '{"email": "ada@example.com", "password": "...", "accept_terms": true}'
+# HTTP/1.1 409 Conflict
+# {"detail": "Could not register with these details"}
+```
+
+### Connexion (sans puis avec 2FA)
+
+```bash
+# -c cookies.txt sauvegarde le cookie refresh_token pour /auth/refresh plus bas.
+curl -i -X POST "$API/auth/login" -c cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ada@example.com", "password": "correct-horse-battery-staple"}'
+
+# Compte SANS 2FA -- 200 OK, session directe :
+# {"access_token": "eyJ...", "token_type": "bearer", "expires_in": 900}
+
+# Compte AVEC 2FA (TOTP et/ou WebAuthn) -- 200 OK, mais PAS de session
+# encore : {"mfa_required": true, "mfa_token": "eyJ...", "available_methods": ["totp"]}
+curl -i -X POST "$API/auth/2fa/verify-login" \
+  -H "Content-Type: application/json" \
+  -d '{"mfa_token": "<mfa_token ci-dessus>", "code": "123456"}'
+# 200 OK -- {"access_token": "eyJ...", "token_type": "bearer", "expires_in": 900}
+
+# Erreur -- mauvais mot de passe (401), message générique pour ne pas
+# révéler si l'email existe :
+# HTTP/1.1 401 Unauthorized
+# {"detail": "Incorrect email or password"}
+
+# Erreur -- trop de tentatives (429), après LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+# essais en LOGIN_RATE_LIMIT_WINDOW_SECONDS :
+# HTTP/1.1 429 Too Many Requests
+# Retry-After: 843
+# {"detail": "Too many attempts, try again in 843 seconds"}
+```
+
+### Rafraîchir le token puis se déconnecter
+
+```bash
+# -b relit le cookie refresh_token posé par /auth/login ; le CSRF token
+# (autre cookie posé au même moment) doit être répercuté dans l'en-tête.
+CSRF=$(grep csrf_token cookies.txt | awk '{print $NF}')
+curl -i -X POST "$API/auth/refresh" -b cookies.txt -c cookies.txt \
+  -H "X-CSRF-Token: $CSRF"
+# 200 OK -- nouveau access_token, l'ancien refresh token est révoqué (rotation)
+
+curl -i -X POST "$API/auth/logout" -b cookies.txt \
+  -H "X-CSRF-Token: $CSRF"
+# 200 OK -- {"message": "Logged out"} ; le refresh token est révoqué immédiatement
+```
+
+### Mot de passe oublié / réinitialisation
+
+```bash
+curl -i -X POST "$API/auth/password/forgot" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ada@example.com"}'
+# 200 OK dans tous les cas (message générique, anti-énumération) :
+# {"message": "If an account exists for that email, a reset link has been sent."}
+# -> un email est envoyé avec un lien contenant le vrai token en clair.
+
+curl -i -X POST "$API/auth/password/reset" \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<token reçu par email>", "new_password": "un-autre-mot-de-passe-solide"}'
+# 200 OK -- {"message": "Your password has been reset."}
+# Toutes les sessions existantes sont révoquées : reconnexion nécessaire partout.
+```
+
+### Changer le mot de passe (déjà connecté)
+
+```bash
+curl -i -X POST "$API/account/change-password" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password": "correct-horse-battery-staple", "new_password": "encore-un-autre-mot-de-passe"}'
+# 200 OK -- {"message": "Password changed"}
+
+# Erreur -- token d'accès absent ou invalide (401) :
+# curl -i -X POST "$API/account/change-password" -H "Content-Type: application/json" \
+#   -d '{"current_password": "x", "new_password": "y"}'
+# HTTP/1.1 401 Unauthorized
+# {"detail": "Not authenticated"}
+```
+
+### Activer la 2FA (TOTP)
+
+```bash
+curl -s -X POST "$API/auth/2fa/setup" -H "Authorization: Bearer $ACCESS_TOKEN" | jq
+# {"secret": "JBSWY3DPEHPK3PXP", "qr_code_data_uri": "data:image/png;base64,..."}
+# -> scanner qr_code_data_uri (ou entrer `secret` manuellement) dans une
+# app d'authentification (Google Authenticator, 1Password, etc.)
+
+curl -i -X POST "$API/auth/2fa/enable" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json" \
+  -d '{"code": "123456"}'
+# 200 OK -- {"recovery_codes": ["AAAA-BBBB-CCCC", ...], "recovery_codes_file": "data:text/plain;base64,..."}
+# -> à afficher UNE SEULE fois ; à partir d'ici /auth/login exige la 2FA.
+```
 
 ## Tests
 
