@@ -1076,6 +1076,93 @@ user on any team granted this permission" -- a real, well-scoped follow-up,
 deliberately not bundled into this step since it wasn't asked for and
 doubles the surface area of an already-shipped, tested table.
 
+### Invitations (Partie 1.3.4)
+
+Email-based invitations: an org Manager+ invites an email address (not
+necessarily an existing account) to join with a proposed role; the
+recipient accepts via a link containing a one-time token. Table:
+`invitations` (migration `0020`). This is a SEPARATE, additive path
+alongside `api/routers/organization_members.py`'s
+`invite_organization_member` (Etape 1.2.3/1.2.4, unchanged) -- that one
+adds an EXISTING account immediately, no acceptance step; this one
+creates a pending invitation an email address accepts on its own time,
+existing account or not. `send_organization_member_added_email`'s own
+docstring already named this exact gap before it was closed.
+
+| Endpoint | Access |
+|---|---|
+| `POST /organizations/{org_id}/invitations` | Manager+ |
+| `GET /organizations/{org_id}/invitations` | Manager+ |
+| `DELETE /organizations/{org_id}/invitations/{id}` | Manager+ |
+| `POST /invitations/accept` | Public -- the token itself is the proof of authorization |
+
+**Token security**: `token_hash`, not the raw token, is what's stored --
+same convention as `PasswordResetToken`/`EmailVerificationToken`
+(`api/models/token.py`): a DB leak or backup must not directly hand out
+usable invitation links. The raw token is `generate_raw_token()`
+(`secrets.token_urlsafe(48)`, ~384 bits of entropy) -- the exact same
+generator password-reset links already use, hashed with the same
+SHA-256 `hash_token()`. Expiry defaults to `INVITATION_EXPIRE_DAYS`
+(7) -- deliberately longer than a password-reset link's window, since
+an org invitation is lower-urgency and the recipient may not check
+their inbox for days.
+
+**One row per (organization, email)**: re-inviting an address that
+already has a row (pending, expired, or previously accepted and since
+removed from the org) reissues that SAME row in place -- fresh token,
+fresh expiry, `accepted_at` cleared -- via
+`api/security/invitations.py`'s `create_or_reissue_invitation`, rather
+than erroring on the unique constraint or leaving stale rows to
+accumulate.
+
+**The Etape 1.2.4 privilege-escalation guard carries over**: this
+endpoint is Manager+, the same tier as the immediate-add path, so a
+Manager inviting via email is restricted the exact same way --
+`reject_if_manager_exceeds_own_role` rejects (403) a Manager trying to
+invite someone in as `admin` or `manager`. Inviting someone already a
+member of the organization is rejected too (409), checked before a row
+is ever written.
+
+**Accepting an invitation, the two branches**
+(`api/routers/invitations.py`'s `accept_invitation`):
+- **The invited email already has an account**: added to the
+  organization immediately with the invitation's role. **Not** logged
+  in automatically -- same posture as `POST /auth/password/reset` not
+  auto-logging in either (it explicitly revokes every session and tells
+  the user to log in again): an emailed token isn't treated as strong
+  enough proof to hand out a session for an EXISTING, potentially
+  higher-value account. The confirmation email reuses
+  `send_organization_member_added_email` -- from the recipient's point
+  of view the outcome is identical to being added directly.
+- **No account exists for that email yet**: one is created --
+  `password`/`accept_terms` become required in the body, and the SAME
+  validation `POST /auth/register` runs (breach check, similarity
+  check, password-history seeding) applies here too. Logged in
+  immediately afterward (`issue_session`), same as `/auth/register`
+  itself -- there is no prior session to protect. Does **not** get the
+  auto-created default organization every fresh registration gets
+  (Etape 1.2.2) -- they're joining the INVITING organization instead; a
+  redundant personal one would be surprising here, not helpful (the
+  same disclosed-gap reasoning `register()`'s own comment already gives
+  for why OAuth/SSO sign-up don't get one either).
+
+**Rate limiting**: `POST /invitations/accept` is public and unauthenticated,
+so it's IP-rate-limited (`INVITATION_ACCEPT_RATE_LIMIT_MAX_ATTEMPTS`/
+`_WINDOW_SECONDS`) against token brute-forcing -- by IP, not email
+(there is no email in this request, only a token), the same shape
+`REGISTER_RATE_LIMIT` already uses. Creating an invitation is NOT
+rate-limited -- it already requires authentication and Manager+
+authorization, matching every other authenticated org-management
+endpoint in this codebase.
+
+**A used token never works twice**: `accepted_at` is set the moment an
+invitation is accepted; `resolve_valid_invitation` treats an
+already-accepted invitation exactly like an unknown one (one generic
+400, no distinction) -- covers the spec's "accepted by someone else"
+case, since a second attempt with the same link fails identically
+whether it's the original recipient double-clicking or someone else
+who obtained the link afterward.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
@@ -1105,7 +1192,23 @@ Two independent limits on top of a session's absolute expiry
   `reject_if_password_reused` (checked against the CURRENT password too,
   not just history) before accepting a new one, then
   `record_password_change` to store it and prune anything beyond the
-  configured window.
+  configured window. **"Most recent N rows" orders by `sequence`
+  (migration `0019`), not `created_at`** -- a real bug, found via a
+  flake in real CI: two rows written in fast succession can share the
+  same microsecond-truncated timestamp, and `id` (a random UUID v4)
+  can't break that tie meaningfully, so which row got pruned as "stale"
+  was genuinely non-deterministic under real Postgres. `sequence` is
+  computed explicitly in `record_password_change` (next integer per
+  `user_id`, the same "compute in code, let a unique constraint catch a
+  genuine collision" shape as `generate_unique_slug` in
+  `api/security/organizations.py`) rather than a Postgres `IDENTITY`
+  column -- a first attempt used one, and it broke the entire fast test
+  suite (that suite builds its schema straight from these model
+  definitions via `Base.metadata.create_all()`, no Alembic, and SQLite
+  has no equivalent for an identity column on a non-primary-key).
+  Regression test: `tests/test_auth_api.py::test_password_history_ordering_is_deterministic_even_when_timestamps_tie`
+  forces three rows to share ONE identical timestamp directly, rather
+  than hoping to reproduce the race by actual timing.
 - **Similarity check** (`PASSWORD_SIMILARITY_MIN_DISTANCE`, default 3):
   `api/security/password_similarity.py`'s `is_password_too_similar` uses
   a hand-rolled Levenshtein distance (no new dependency) against the

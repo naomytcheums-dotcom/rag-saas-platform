@@ -63,6 +63,9 @@ class AuditAction(StrEnum):
     TEAM_MEMBER_ADDED = "team_member_added"
     TEAM_MEMBER_ROLE_CHANGED = "team_member_role_changed"
     TEAM_MEMBER_REMOVED = "team_member_removed"
+    INVITATION_CREATED = "invitation_created"
+    INVITATION_CANCELLED = "invitation_cancelled"
+    INVITATION_ACCEPTED = "invitation_accepted"
 
 
 class AuditLog(Base):

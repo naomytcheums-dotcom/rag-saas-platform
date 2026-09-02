@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
     EMAIL_OTP_EXPIRE_MINUTES: int = 10
     EMAIL_OTP_MAX_ATTEMPTS: int = 5
+    # Partie 1.3.4 -- deliberately longer than PASSWORD_RESET_TOKEN_EXPIRE_MINUTES:
+    # an org invitation is a much lower-urgency, lower-attack-surface
+    # link than a password reset, and the recipient may not check their
+    # inbox for days.
+    INVITATION_EXPIRE_DAYS: int = 7
 
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
@@ -129,6 +134,13 @@ class Settings(BaseSettings):
     EMAIL_VERIFY_REQUEST_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     TWO_FA_VERIFY_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     TWO_FA_VERIFY_RATE_LIMIT_WINDOW_SECONDS: int = 900
+    # Partie 1.3.4 -- POST /invitations/accept is public (no auth), by
+    # IP not email: unlike PASSWORD_FORGOT's per-email limiting (aimed
+    # at stopping inbox-bombing a victim), the risk here is brute-forcing
+    # the token itself, which an IP-based limit is the right defense
+    # against -- same shape as REGISTER's own IP-based limit.
+    INVITATION_ACCEPT_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    INVITATION_ACCEPT_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     # -- 2FA lockout recovery (lost device AND all recovery codes) --------
     # How long a requested 2FA removal must wait before it can be

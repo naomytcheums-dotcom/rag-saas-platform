@@ -680,10 +680,12 @@ def send_enterprise_sso_connection_created_email(to_admin_email: str, email_doma
 def send_organization_member_added_email(to_email: str, organization_name: str, role: str) -> None:
     """Etape 1.2.3 -- called by api/routers/organization_members.py's
     invite_organization_member() every time an Admin or Owner adds an
-    existing account to their organization. This app has no
-    email-based invitation LINK yet (item 1.3.4) -- this is the
-    notification for an immediate add, not an invitation someone has to
-    accept."""
+    EXISTING account to their organization immediately, no acceptance
+    step. Partie 1.3.4's api/routers/invitations.py reuses this SAME
+    function as its own "invitation accepted" confirmation -- from the
+    recipient's point of view the outcome is identical ("you're now a
+    member of X, with role Y"), whether they were added directly or
+    accepted an emailed invitation link."""
     _send(
         to_email,
         subject=f"You've been added to {organization_name}",
@@ -691,6 +693,26 @@ def send_organization_member_added_email(to_email: str, organization_name: str, 
             f"<p>You were just added to the organization <strong>{html.escape(organization_name)}</strong> "
             f"as <strong>{html.escape(role)}</strong>.</p>"
             f"<p>If you don't recognize this organization, contact its administrator or reply to this email.</p>"
+        ),
+    )
+
+
+def send_organization_invitation_email(to_email: str, organization_name: str, role: str, invite_link: str) -> None:
+    """Partie 1.3.4 -- called by api/routers/invitations.py whenever an
+    invitation is created (or re-issued, see create_or_reissue_invitation).
+    Unlike send_organization_member_added_email above, the recipient is
+    NOT a member yet -- `invite_link` embeds the raw (not hashed) token,
+    same "email the raw value, store only its hash" convention as
+    api/services/password_reset.py's reset link."""
+    _send(
+        to_email,
+        subject=f"You've been invited to join {organization_name}",
+        html=(
+            f"<p>You've been invited to join <strong>{html.escape(organization_name)}</strong> "
+            f"as <strong>{html.escape(role)}</strong>.</p>"
+            f"<p>Click the link below to accept. It expires in {settings.INVITATION_EXPIRE_DAYS} days.</p>"
+            f'<p><a href="{invite_link}">{invite_link}</a></p>'
+            f"<p>If you don't recognize this organization, you can safely ignore this email.</p>"
         ),
     )
 

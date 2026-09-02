@@ -37,6 +37,7 @@ from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
+from api.models.invitation import Invitation
 from api.models.resource_permission import ResourcePermission
 from api.models.team import Team, TeamMember, TeamRole
 from api.models.workspace import Workspace
@@ -318,6 +319,42 @@ async def test_deleting_an_organization_cascades_to_its_teams_and_team_members(p
         remaining_team_member = await pg_session.scalar(select(TeamMember).where(TeamMember.team_id == team_id))
         assert remaining_team is None
         assert remaining_team_member is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_invitations(pg_session):
+    """Partie 1.3.4: same reasoning as the cascade tests above --
+    delete_organization is a Core bulk DELETE, so only the database's
+    own ON DELETE CASCADE (api/alembic/versions/0020_invitations.py)
+    removes the organization's pending invitations, which SQLite won't
+    enforce."""
+    from api.security.hashing import hash_token
+
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Invitation Cascade Test Org", slug=f"invite-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(Invitation(
+        organization_id=org_id, email=_unique_email(), role=OrganizationRole.member, invited_by=owner.id,
+        token_hash=hash_token(f"cascade-test-token-{uuid.uuid4().hex}"),
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=7),
+    ))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_invitation = await pg_session.scalar(select(Invitation).where(Invitation.organization_id == org_id))
+        assert remaining_invitation is None
     finally:
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
