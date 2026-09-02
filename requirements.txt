@@ -10,6 +10,17 @@
 # Uses only the Python standard library -- no external packages required.
 
 # Stage 2: indexing (src/indexing.py)
+# torch is a transitive dep of sentence-transformers, otherwise left
+# unpinned -- on Linux that resolves pip's default CUDA-enabled build,
+# pulling several GB of nvidia-*-cu12 packages this CPU-only app (no GPU
+# in local dev, CI, or deploy) never uses. That bloat was landing inside
+# the Dockerfile's builder-stage venv and then getting copied whole into
+# the final image, which is what was blowing past the GitHub Actions
+# runner's disk budget in the docker-build job ("No space left on
+# device"). Pinned here to the CPU-only wheel from PyTorch's own index
+# instead, matching what local dev already runs.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0+cpu
 sentence-transformers==5.7.0
 chromadb==1.5.9
 
