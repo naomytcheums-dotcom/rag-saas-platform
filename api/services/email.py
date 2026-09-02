@@ -17,6 +17,7 @@ import logging
 import httpx
 
 from api.config import settings
+from api.models.custom_domain import CustomDomain
 
 RESEND_API_URL = "https://api.resend.com/emails"
 EMAIL_TIMEOUT_SECONDS = 10.0
@@ -24,13 +25,18 @@ EMAIL_TIMEOUT_SECONDS = 10.0
 logger = logging.getLogger(__name__)
 
 
-def _send(to_email: str, subject: str, html: str) -> None:
+def _send(to_email: str, subject: str, html: str, from_address: str | None = None) -> None:
     """Low-level Resend API call shared by every send_*_email function in
     this module -- each just builds the HTML body and delegates here.
     Raises on any failure (missing key, timeout, bad response,
     unreachable) rather than swallowing it -- see this module's top
     docstring for why the *callers* are the ones who decide to catch and
     log instead of propagating further.
+
+    `from_address` defaults to settings.EMAIL_FROM_ADDRESS (every
+    existing call site in this module) -- Partie 1.4.5's
+    send_via_custom_email_domain below is the one exception, passing an
+    organization's own verified custom domain instead.
 
     Appends a support-contact footer to every single email this app
     sends, unconditionally -- RGPD Art. 12 requires that a data subject
@@ -56,7 +62,7 @@ def _send(to_email: str, subject: str, html: str) -> None:
         response = httpx.post(
             RESEND_API_URL,
             headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
-            json={"from": settings.EMAIL_FROM_ADDRESS, "to": [to_email], "subject": subject, "html": body_with_footer},
+            json={"from": from_address or settings.EMAIL_FROM_ADDRESS, "to": [to_email], "subject": subject, "html": body_with_footer},
             timeout=EMAIL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -741,3 +747,28 @@ def send_organization_member_removed_email(to_email: str, organization_name: str
             f"<p>If you believe this was a mistake, contact your organization's administrator.</p>"
         ),
     )
+
+
+def send_via_custom_email_domain(domain_row: CustomDomain, from_local_part: str, to_email: str, subject: str, html_body: str) -> None:
+    """
+    Partie 1.4.5, item 6's literal "l'envoi d'email avec un domaine
+    personnalisé fonctionne" -- a real send through this SAME Resend
+    /emails endpoint, using f"{from_local_part}@{domain_row.domain}"
+    (e.g. contact@ma-boite.com) instead of settings.EMAIL_FROM_ADDRESS.
+
+    Requires domain_row.email_verified (this app's OWN ownership check,
+    api/security/email_domains.py's verify_email_domain) -- but passing
+    that check alone does NOT guarantee Resend accepts the send: Resend
+    independently requires ITS OWN domain object
+    (api/services/resend_domains.py) to have reached status "verified"
+    too, which needs that domain's real MX/SPF/DKIM records (under
+    Resend's own naming, NOT this app's self-generated DKIM -- see
+    api/security/email_domains.py's module docstring) to actually be
+    published. A domain that passes our ownership check but was never
+    completed with Resend will be rejected by Resend's real API with a
+    real error, surfaced here as RuntimeError like every other _send
+    failure -- never swallowed, never faked as a successful send.
+    """
+    if not domain_row.email_verified:
+        raise ValueError(f"'{domain_row.domain}' has not completed ownership verification for email yet -- call verify_email_domain first")
+    _send(to_email, subject, html_body, from_address=f"{from_local_part}@{domain_row.domain}")

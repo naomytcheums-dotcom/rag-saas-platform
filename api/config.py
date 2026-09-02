@@ -137,6 +137,24 @@ class Settings(BaseSettings):
     # than expected (a worker outage, a missed beat tick).
     DOMAIN_VERIFICATION_TIMEOUT_MINUTES: int = 60
 
+    # -- Partie 1.4.5: custom email-sending domain --------------------------
+    # Named EMAIL_DOMAIN_VERIFICATION_TIMEOUT in this step's literal spec --
+    # suffixed with _HOURS (its own stated default is "24h"), same
+    # explicit-units convention as every other duration setting in this file.
+    # Measured from CustomDomain.email_verification_started_at (see that
+    # column's own comment for why it's a dedicated column, unlike 1.4.4's
+    # reuse of created_at).
+    EMAIL_DOMAIN_VERIFICATION_TIMEOUT_HOURS: int = 24
+    # This app's OWN DKIM selector for the self-generated keypair
+    # (api/security/email_domains.py's generate_dkim_keys) -- NOT Resend's
+    # own selector (Resend always uses the fixed "resend" selector for the
+    # DKIM key it generates and manages itself; see that module's docstring
+    # for why the two are unrelated).
+    DKIM_SELECTOR: str = "rag-saas"
+    # RESEND_API_KEY already exists above ("Transactional email (Resend)")
+    # -- reused as-is by api/services/resend_domains.py's real Domains API
+    # calls, not redefined here.
+
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30

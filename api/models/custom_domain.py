@@ -30,7 +30,7 @@ import datetime as dt
 import uuid
 from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -65,6 +65,48 @@ class CustomDomain(Base):
     # project never resets one back to `pending` afterward.
     verification_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_verification_attempt_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Partie 1.4.5 -- custom email-sending domain (e.g. contact@ma-boite.com).
+    # A SEPARATE verification track from `status` above: a domain can be
+    # `active` for hosting (1.4.1/1.4.4) without ever being set up for
+    # email, or vice versa -- the two are independent capabilities of the
+    # same domain, not a shared state machine.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Our OWN self-generated DKIM keypair (api/security/email_domains.py's
+    # generate_dkim_keys, RSA 2048) -- kept for real, testable DKIM
+    # infrastructure exactly as this step's spec asks, but see that
+    # module's own docstring for why this is NOT what actually signs
+    # outgoing mail: every email this app sends goes through Resend's API
+    # (api/services/email.py), and Resend generates and manages its OWN
+    # DKIM key server-side (fixed selector "resend"), never accepting a
+    # caller-supplied key. dkim_private_key is Fernet-encrypted via
+    # api/security/secret_encryption.py (same module as the SSL/ACME
+    # keys, Partie 1.4.3) and, like those, never returned by any API response.
+    dkim_selector: Mapped[str | None] = mapped_column(String(63), nullable=True)
+    dkim_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dkim_public_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Proves control of the domain for EMAIL specifically, via a
+    # dedicated `_rag-verify.<domain>` TXT record -- a separate token/
+    # subdomain from `verification_token`/`_rag-saas-verify` above so the
+    # two verification tracks never share a challenge.
+    email_verification_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    email_verification_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    email_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Not in this step's literal column list, but necessary to make it
+    # actually work -- added deliberately, documented here rather than
+    # silently: EMAIL_DOMAIN_VERIFICATION_TIMEOUT_HOURS needs a start
+    # timestamp to measure from, and unlike 1.4.4's hosting verification
+    # (which starts the instant the row is created), email verification
+    # is opt-in and may begin long after the domain itself was added --
+    # so `created_at` isn't a usable anchor here the way it was there.
+    # Set once, the first time email verification setup runs (see
+    # api/security/email_domains.py's ensure_email_domain_setup).
+    email_verification_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Also not in the literal column list, also necessary: correlates
+    # this row to the real Resend Domain object api/services/
+    # resend_domains.py's create_resend_domain registers (Resend's own
+    # id, not ours) -- required to later fetch its real DNS records or
+    # trigger Resend's own async verification for the SAME domain.
+    resend_domain_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

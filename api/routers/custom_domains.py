@@ -15,6 +15,7 @@ polls it) after configuring DNS, before necessarily being logged back in.
 """
 
 import datetime as dt
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,6 +42,9 @@ from api.security.custom_domains import (
     verify_domain,
 )
 from api.security.organizations import require_org_owner
+from api.services.resend_domains import delete_resend_domain
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["custom-domains"])
 
@@ -96,6 +100,16 @@ async def delete_custom_domain(
     domain = await db.scalar(select(CustomDomain).where(CustomDomain.id == domain_id, CustomDomain.organization_id == org_id))
     if domain is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    # Partie 1.4.5 -- best-effort cleanup so deleting a CustomDomain
+    # never leaves an orphaned Resend Domain object behind. Never blocks
+    # the deletion itself: Resend being unreachable is not a reason to
+    # refuse removing a row the Owner explicitly asked to delete.
+    if domain.resend_domain_id is not None:
+        try:
+            delete_resend_domain(domain.resend_domain_id)
+        except RuntimeError as exc:
+            logger.warning("delete_custom_domain: could not delete Resend domain '%s': %s", domain.resend_domain_id, exc)
 
     await db.execute(delete(CustomDomain).where(CustomDomain.id == domain.id))
     await db.commit()

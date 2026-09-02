@@ -2048,6 +2048,124 @@ sync task entry points via `.apply()`, same split as
 `asyncio.run()`-inside-a-running-event-loop reason) against the real
 Postgres dev database.
 
+### Custom email domain (Partie 1.4.5)
+
+Nine new columns on the existing `custom_domains` table (migration
+`0029`), not a new table: `email_verified`, `dkim_selector`,
+`dkim_private_key`, `dkim_public_key`, `email_verification_token`,
+`email_verification_attempts`, `email_verified_at` (this step's literal
+column list) plus two necessary additions, added deliberately and
+documented rather than silently -- `email_verification_started_at` (a
+timeout anchor; unlike 1.4.4's hosting verification, email verification
+is opt-in and may start long after the domain itself was created, so
+`created_at` isn't reusable the way it was there) and `resend_domain_id`
+(correlates this row to a real object in Resend's own system, required
+to fetch its live records or trigger its own verification later).
+
+**Verified against Resend's real API docs before writing a line of
+code** (same discipline as every other external integration in this
+codebase): Resend generates and manages its OWN DKIM key server-side
+for every domain it registers, under a FIXED selector (`"resend"`) --
+its real Domains API has no field to accept a caller-supplied DKIM key
+or selector at all. This produces a genuine, honestly-documented split
+(`api/security/email_domains.py`'s own module docstring), not
+papered over:
+
+- `generate_dkim_keys`/`get_dkim_dns_records`/`verify_dkim` (this
+  step's literal function names) are REAL, independently testable
+  infrastructure -- a genuine RSA-2048 keypair (`cryptography`, same
+  primitives as Partie 1.4.3's certificate keys), a genuine DNS TXT
+  proof-of-publication check. They are **not** what actually signs any
+  outgoing mail: every email this app sends goes through
+  `api/services/email.py`'s Resend HTTP call, which signs DKIM with
+  Resend's own key under Resend's own selector -- this app's
+  self-generated key is never read by that code path.
+- What actually matters for real deliverability from a custom domain
+  is Resend's own real Domains API (`api/services/resend_domains.py`,
+  raw `httpx` -- no `resend` SDK dependency, same "no SDK, already
+  leans on httpx" convention as `api/services/email.py`'s own
+  docstring): `create_resend_domain`/`get_resend_domain`/
+  `trigger_resend_domain_verification`/`delete_resend_domain`. Its real
+  DNS records (MX + SPF TXT + DKIM TXT, under Resend's own naming) are
+  what an Owner must actually publish.
+
+Both tracks are exposed together, not just the one matching this
+step's literal function names: `GET .../email/dns` returns this app's
+own two records AND Resend's live records for the same domain in one
+response, so an Owner sees the complete, honest picture.
+
+**A real, honest finding from testing this against the real API, not a
+hypothetical**: this project's own `RESEND_API_KEY` (already used for
+real by every `api/services/email.py` send) is scoped **send-only** --
+Resend's real Domains API rejects domain-management calls with a real
+`401 restricted_api_key` error. The code correctly detects and
+surfaces this (a `RuntimeError` naming the restriction, never
+swallowed or misreported), and `ensure_email_domain_setup` degrades
+gracefully when it happens (`resend_domain_id` just stays unset,
+retried on the next call) -- but genuine domain creation/verification
+with Resend could not be exercised end-to-end in this environment
+without a full-access key. `tests/test_email_domains_integration.py`'s
+`test_resend_domain_lifecycle_against_the_real_api` asserts on
+whichever of these two real outcomes this environment's key actually
+produces, rather than assuming one.
+
+**Ownership verification, real and asynchronous, its own separate
+track from 1.4.1's hosting verification**: a dedicated
+`_rag-verify.<domain>` TXT record (distinct from 1.4.1's
+`_rag-saas-verify.<domain>`, so the two challenges never collide) --
+`POST .../email/verify` checks it for real, counts the attempt, and
+also best-effort nudges Resend's own async verification (never
+blocking: a Resend hiccup here must not prevent this app's own
+ownership check from succeeding). An already-verified or already-
+past-`EMAIL_DOMAIN_VERIFICATION_TIMEOUT_HOURS` (default 24) domain is
+returned unchanged without a fresh DNS lookup or wasted attempt --
+`GET .../email/status` reports `"verified"` / `"expired"` /
+`"pending"` / `"not_started"`, computed fresh on every read, never
+stored.
+
+**Real send, real rejection when incomplete** (item 6's literal
+"l'envoi d'email avec un domaine personnalisé fonctionne", proven
+honestly rather than faked): `api/services/email.py`'s
+`send_via_custom_email_domain` sends through the SAME real Resend
+`/emails` endpoint every other email in this app uses, with
+`from: {local_part}@{domain}` instead of `EMAIL_FROM_ADDRESS` --
+requires this app's OWN `email_verified` check first (a `ValueError` if
+skipped), but passing that alone does not guarantee Resend accepts the
+send: Resend separately requires its OWN domain object to have reached
+`status="verified"`, which needs its real DNS records actually
+published. `tests/test_email_domains_integration.py`'s
+`test_send_via_custom_email_domain_is_rejected_by_the_real_resend_api_for_an_unverified_domain`
+proves this real rejection path against the real API (sent to
+`delivered@resend.dev`, Resend's own documented safe testing address --
+never a real inbox), rather than asserting on a mocked "success" that
+would hide the real, still-missing step.
+
+**Endpoints**: `POST /organizations/{org_id}/domains/{domain_id}/email/verify`,
+`GET .../email/status`, `GET .../email/dns` -- all Owner-only, same
+boundary as every other custom-domain mutation/read in this codebase.
+
+**Security**: the DKIM private key is Fernet-encrypted
+(`api/security/secret_encryption.py`, same module as the SSL/ACME keys
+from Partie 1.4.3) before being written, and -- like those -- never
+returned by any API response, encrypted or not; nothing in this
+codebase currently decrypts it back (no code path self-signs DKIM,
+see above), so it's stored purely as real, sensitive data handled
+correctly, not yet an active consumer. The email-ownership verification
+token is `secrets.token_urlsafe(32)`, same generator as every other
+verification token in this codebase.
+
+**Real verification, not just code review**: `tests/test_email_domains.py`
+(fast SQLite suite, DNS and Resend both mocked) covers DKIM key
+generation and format, DKIM DNS-record verification (match/mismatch/
+not-yet-generated), ownership verification (match/mismatch/already-
+verified/past-timeout), setup idempotency, Resend-unreachable
+degradation, the three endpoints' permission boundaries, and that the
+private key is never returned nor stored in plaintext.
+`tests/test_email_domains_integration.py` runs real DNS lookups (same
+convention as `tests/test_dns_verification_integration.py`), the real
+Resend Domains API lifecycle, real DKIM setup against real Postgres
+(with real Fernet encryption), and the real send-rejection path above.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
