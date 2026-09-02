@@ -76,7 +76,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 **Score 1.2 : 8-9/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager ✅, Member ✅, Viewer ✅, RBAC complet 🟡, permissions granulaires 🟡 -- réelles et branchées en direct sur workspaces, pas encore sur organizations).
 
-### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (4-5/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (4-5/10, via les Étapes 1.2.2, 1.2.4, 1.3.3, 1.3.4, 1.3.5)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
@@ -84,13 +84,13 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 1.3.2 | Workspaces | Table workspaces (FK org), regroupe KB + agents | 🟡 (table `workspaces` créée à l'Étape 1.2.4 avec CRUD complet -- `id`, `organization_id`, `name`, `created_by`, timestamps -- mais délibérément minimale : pas encore de lien vers une KB ou des agents, puisqu'aucun des deux n'existe encore. Le "regroupe KB + agents" de la portée complète reste à faire une fois que ces briques existeront) |
 | 1.3.3 | Teams | Table teams (FK org), M2M avec users | ✅ (`api/models/team.py` : `Team` -- FK `organizations` [pas `workspace`, voir note ci-dessous] -- et `TeamMember` [rôle propre `admin`/`member`, scopé à l'équipe]. Migration 0018, `ON DELETE CASCADE` en cascade double : org→teams et teams→team_members. 9 endpoints dans `api/routers/teams.py`. Deux axes de permission combinés dans `api/security/teams.py` : le rôle d'équipe (admin/member) gère QUI est dans l'équipe ; renommer/supprimer l'équipe elle-même reste Manager+ au niveau organisation (jamais délégué au simple admin d'équipe). Un Owner/Admin/Manager de l'org peut toujours accéder à n'importe quelle équipe même sans en être membre (garde-fou anti-verrouillage). Nettoyage ajouté dans `remove_organization_member` : retirer un utilisateur de l'organisation le retire aussi de toutes ses équipes. **Note** : le cahier des charges original disait "FK workspace" pour `teams` ; la spec réellement fournie pour cette étape demandait explicitement "FK → organizations", suivie telle quelle. 19 tests SQLite + 1 test de cascade double contre le vrai Postgres, voir `tests/test_teams.py`) |
 | 1.3.4 | Invitations (email+lien) | Table invitations (token, email, rôle, expiry) | ✅ (`api/models/invitation.py`, migration 0020, `ON DELETE CASCADE` depuis `organizations`. Chemin ADDITIF à côté de l'ajout immédiat existant (1.2.3/1.2.4, inchangé) -- celui-ci crée une invitation en attente qu'une adresse email accepte à son rythme, compte existant ou non. Token stocké HASHÉ (`token_hash`, jamais le token brut), `secrets.token_urlsafe(48)` (même générateur que le reset de mot de passe), expire après `INVITATION_EXPIRE_DAYS` (7j). Une seule ligne par (org, email) -- réinviter réémet la même ligne (nouveau token, nouvelle expiration) plutôt que d'échouer sur la contrainte unique. Le garde-fou anti-escalade de 1.2.4 (Manager ne peut inviter qu'en member/viewer) est repris à l'identique pour ce nouveau chemin. Acceptation en deux branches : compte existant → ajouté à l'org SANS connexion automatique (même posture que le reset de mot de passe, qui révoque plutôt qu'il n'auto-connecte) ; compte inexistant → créé avec la même validation que `/auth/register` (breach check, similarité, historique de mots de passe) puis connecté automatiquement, mais SANS l'organisation par défaut auto-créée à l'inscription (rejoint l'organisation invitante à la place). 16 tests SQLite + 1 test de cascade contre le vrai Postgres, voir `tests/test_invitations.py`) |
-| 1.3.5-1.3.10 | Isolation, quotas, config, branding | — | ⬜ (6 items, voir la table de référence ci-dessous) |
+| 1.3.5 | Isolation des données | org_id obligatoire sur chaque requête + collection Chroma dédiée | 🟡 (isolation réelle et testée depuis 1.2.2-1.3.4 : chaque requête org-scopée filtre explicitement par `organization_id` en Python (`require_org_member` et toute sa famille) -- vérifié par des dizaines de tests d'isolation cross-org tout au long de cette session. **Row Level Security activée sur les 24/24 tables réelles** (vérifié directement contre le vrai Postgres, voir `tests/test_postgres_integration.py`), mais **délibérément non fonctionnelle pour cette appli** : le rôle de connexion (`postgres`) a `BYPASSRLS`, confirmé en interrogeant `pg_roles` -- RLS y est activée depuis la toute première migration (0002) exactement comme défense en profondeur contre une future exposition accidentelle via PostgREST/SDK Supabase, pas comme isolation fonctionnelle pour cette appli. Décision explicite (validée avec l'utilisateur) de NE PAS construire de RLS réellement appliquée -- un rôle Postgres restreint + injection de session par requête + politiques SQL dupliquant la logique Python déjà testée serait un chantier à fort risque pour un gain nul tant qu'aucun accès direct non-fiable à Postgres n'existe. Aucune collection Chroma dédiée par org -- n'existe pas encore, dépend de la Partie 2/3. Voir `docs/AUTH_BACKEND_SETUP.md` pour l'état des lieux complet et le raisonnement) |
+| 1.3.6-1.3.10 | Quotas, config, branding | — | ⬜ (5 items, voir la table de référence ci-dessous) |
 
 Reste de la table originale, pour référence :
 
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|
-| 1.3.5 | Isolation des données | org_id obligatoire sur chaque requête + collection Chroma dédiée |
 | 1.3.6 | Quotas par organisation | Table organization_limits, vérifiées en middleware |
 | 1.3.7 | Limites par utilisateur | Colonne daily_request_limit sur organization_members |
 | 1.3.8 | Usage par organisation | Agrégation telemetry filtrée par org_id |
@@ -375,16 +375,16 @@ au-delà de "15.1.1 Ticke...".
 | | Items (/500 connus) | % |
 |---|---|---|
 | ✅ Fait | 48 | 9.6% |
-| 🟡 Partiel | 59 | 11.8% |
-| ⬜ Non commencé | 393 | 78.6% |
+| 🟡 Partiel | 60 | 12.0% |
+| ⬜ Non commencé | 392 | 78.4% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
 - Strictement ✅ : **48/515 (~9.3%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **107/515 (~20.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~77.5/515 (~15.0%)** -- le chiffre le plus représentatif de l'avancement réel.
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **108/515 (~21.0%)**
+- Pondéré (✅=1, 🟡=0.5) : **~78/515 (~15.1%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 1.3.4 (Invitations, 2026-09-02) : Partie 1.3
-passe de 2✅/1🟡/7⬜ à 3✅/1🟡/6⬜ sur 10.
+Mis à jour après Partie 1.3.5 (Isolation des données / RLS, 2026-09-02) :
+Partie 1.3 passe de 3✅/1🟡/6⬜ à 3✅/2🟡/5⬜ sur 10.
 
 Voir le rapport détaillé livré en conversation (état des lieux du
 2026-09-02) pour le détail exact par Partie -- tableau récapitulatif,
@@ -428,9 +428,13 @@ reste ouvertement non fait dans cette Partie, pour mémoire :
 1. **Partie 1.3 (Multi-tenant), le reste** -- fondation bloquante pour
    beaucoup d'autres Parties (1.4, 2, 3.3, 9, 12). `organizations`/
    `workspaces`/`teams`/`invitations` existent déjà (1.3.1 ✅, 1.3.2 🟡,
-   1.3.3 ✅, 1.3.4 ✅) ; il manque l'isolation des données par org_id sur
-   le contenu métier, quotas, limites, usage, configuration, branding
-   (1.3.5 à 1.3.10, 6 items).
+   1.3.3 ✅, 1.3.4 ✅), et l'isolation des données est réelle et testée au
+   niveau applicatif (1.3.5 🟡 -- RLS activée sur toutes les tables mais
+   délibérément non fonctionnelle pour cette appli, `postgres` étant
+   BYPASSRLS ; décision explicite de ne pas construire de RLS
+   réellement appliquée tant qu'aucun accès direct non-fiable à
+   Postgres n'existe) ; il manque quotas, limites, usage, configuration,
+   branding (1.3.6 à 1.3.10, 5 items).
 2. **Partie 10 (Sécurité & Governance), le reste** : SSRF protection,
    guardrails IA (PII/toxicity/jailbreak), secret management (Vault),
    request/trace IDs, Sentry -- projet piloté par un audit sécurité, ces

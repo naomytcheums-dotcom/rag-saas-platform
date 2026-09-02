@@ -111,6 +111,66 @@ async def test_migrations_created_expected_tables(pg_engine):
     } <= tables
 
 
+async def test_every_application_table_has_row_level_security_enabled(pg_engine):
+    """
+    Partie 1.3.5 -- a regression guard, not a functional isolation test:
+    see docs/AUTH_BACKEND_SETUP.md's Row Level Security section for why.
+    Every table this app creates has had RLS enabled since migration
+    0002 (the earliest tables) and inline in every migration since 0014
+    -- this fails loudly if a future migration ever forgets that line,
+    rather than the gap going unnoticed because it changes nothing
+    observable in this app's own behavior (see the test below for why).
+    """
+    async with pg_engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT c.relname, c.relrowsecurity
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname != 'alembic_version'
+        """))
+        rls_enabled_by_table = dict(result.fetchall())
+
+    assert rls_enabled_by_table, "expected at least one application table"
+    tables_missing_rls = {table for table, enabled in rls_enabled_by_table.items() if not enabled}
+    assert not tables_missing_rls, f"tables with RLS NOT enabled: {sorted(tables_missing_rls)}"
+
+
+async def test_no_rls_policies_exist_because_none_are_needed_yet(pg_engine):
+    """Companion to the test above: RLS enabled with ZERO policies means
+    Postgres's default-deny applies to every non-bypassing role (see
+    migration 0002's own docstring) -- confirms that's still literally
+    true, not just assumed. Adding real per-organization policies here
+    would only matter once something other than this app's own
+    BYPASSRLS connection queries these tables directly (a future
+    Supabase PostgREST/client-SDK exposure) -- see the next test."""
+    async with pg_engine.connect() as conn:
+        result = await conn.execute(text("SELECT count(*) FROM pg_policies WHERE schemaname = 'public'"))
+        policy_count = result.scalar()
+
+    assert policy_count == 0
+
+
+async def test_the_apps_own_role_bypasses_rls(pg_engine):
+    """
+    Documents, and would catch a silent change to, the exact fact that
+    makes the two tests above "defense-in-depth for OTHER roles" rather
+    than "real isolation for this app": the app's own connection
+    (`postgres`) has BYPASSRLS, so RLS enabled with zero policies is
+    currently a complete no-op for every query this application makes.
+    Real, functional per-organization isolation today is 100%
+    application-layer (`require_org_member` and its whole family,
+    `api/security/organizations.py` onward, extensively tested
+    elsewhere in this suite) -- if this test ever starts failing because
+    the connection role changed, that is exactly the moment real RLS
+    policies would need to exist for the app to keep working at all
+    (Postgres denies everything by default to a non-bypassing role
+    against a table with RLS enabled and no matching policy)."""
+    async with pg_engine.connect() as conn:
+        result = await conn.execute(text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user"))
+        bypasses_rls = result.scalar()
+
+    assert bypasses_rls is True
+
+
 async def test_unique_email_constraint_enforced_by_postgres(pg_session):
     email = _unique_email()
     pg_session.add(User(email=email, hashed_password="irrelevant-for-this-test"))

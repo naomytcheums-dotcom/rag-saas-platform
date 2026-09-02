@@ -1163,6 +1163,71 @@ case, since a second attempt with the same link fails identically
 whether it's the original recipient double-clicking or someone else
 who obtained the link afterward.
 
+### Row Level Security (Partie 1.3.5)
+
+**The honest headline first**: Postgres Row Level Security is enabled
+on every table this app has (24/24, verified against the real database
+below), but it currently changes **nothing** about how this application
+isolates data between organizations. Real, functional isolation is
+**100% application-layer** -- `require_org_member` and the whole family
+built on it (`api/security/organizations.py` onward), enforced by
+explicit `WHERE organization_id = ...` clauses in every query, verified
+by the extensive per-role test suites built across Etape 1.2.2 through
+Partie 1.3.4. This section exists to make that fact explicit and
+permanent, not to claim RLS provides isolation it doesn't.
+
+**Why RLS is a no-op for this app specifically**: this backend connects
+to Postgres as the `postgres` role, confirmed to have `rolbypassrls =
+true`. Postgres skips row-security checks entirely for a role with that
+attribute, regardless of how many policies exist. Verified directly:
+
+```sql
+SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user;
+-- postgres | t
+```
+
+**What RLS being enabled DOES still do**: this project's very first
+migration to touch it, `0002_enable_row_level_security.py`, already
+stated the real reason plainly: "Supabase's own Advisor flags every
+table with RLS disabled as a critical finding, because its
+PostgREST/Data API layer -- if ever turned on, even by accident later
+-- respects RLS and would otherwise expose these tables to anyone
+holding an anon/authenticated key." With RLS enabled and zero policies,
+Postgres denies ALL rows to any role that does NOT bypass RLS --
+turning "wide open" into "deny by default" for a threat that doesn't
+exist today (this app never uses PostgREST or a client-side Supabase
+SDK) but costs nothing to guard against now, before it might.
+
+**État des lieux, verified against the real database**
+(`tests/test_postgres_integration.py`'s
+`test_every_application_table_has_row_level_security_enabled`,
+`test_no_rls_policies_exist_because_none_are_needed_yet`, and
+`test_the_apps_own_role_bypasses_rls` -- run these directly for the
+current, authoritative answer, not this table if enough time has
+passed):
+
+| Table | RLS enabled? | Policies? |
+|---|---|---|
+| users, organizations, organization_members, workspaces, teams, team_members, invitations, resource_permissions, casbin_rule, audit_logs, sessions, oauth_accounts, password_reset_tokens, email_verification_tokens, two_factor_recovery_codes, account_restore_tokens, two_factor_lockout_recovery_tokens, consent_reactivation_tokens, revoked_access_tokens, password_history, jwt_signing_keys, webauthn_credentials, enterprise_sso_connections, enterprise_sso_accounts | ✅ all 24/24 | ⬜ 0 (none, anywhere) |
+
+**What "real RLS" would actually require, if ever wanted**: a
+restricted Postgres role for the app's own connection (dropping
+BYPASSRLS -- a global, blast-radius-everything change, not a contained
+feature), a mechanism to set the current user/organization on every
+request's database session (Postgres RLS policies read session-local
+state, e.g. `current_setting('app.current_org_id')`, which has to be
+set inside the SAME transaction as every query -- non-trivial with a
+pooled async engine and FastAPI's per-request session pattern), and a
+full set of SQL policies mirroring the authorization rules already
+living in Python -- maintained twice, in two languages, forever in
+sync. Considered and deliberately not built: the risk (a wrong or
+missing policy silently changes what a legitimate query returns,
+compared to today's exceptions being loud 403/404s) outweighs the
+benefit given this app has no untrusted direct-to-Postgres access path
+today. If that ever changes (a client-side Supabase SDK, a BI tool with
+its own restricted role, PostgREST turned on), this is the point where
+real policies would stop being optional.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
