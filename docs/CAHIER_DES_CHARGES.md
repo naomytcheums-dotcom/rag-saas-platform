@@ -61,11 +61,11 @@ l'audit sécurité) : WebAuthn/FIDO2, SSO entreprise (OIDC générique),
 rotation automatique de clé JWT, rate limiting géo-adaptatif, exemption
 IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
-### 1.2 Rôles & Permissions — 🟡 PARTIEL (~2-3/8)
+### 1.2 Rôles & Permissions — 🟡 PARTIEL (~3-4/8)
 
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
-| 1.2.1 | Super Admin | Rôle global hors-org, flag is_superadmin sur users | 🟡 (le rôle `superadmin` existe dans l'enum `UserRole`, mais aucune notion "hors-org" puisqu'il n'y a pas d'org) |
+| 1.2.1 | Super Admin | Rôle global hors-org, flag is_superadmin sur users | ✅ (implémenté via l'enum `role` existant plutôt qu'une colonne `is_superadmin` séparée -- migration 0010 avait déjà supprimé ce booléen au profit de l'enum, le réintroduire aurait recréé deux sources de vérité. `require_superadmin()` dans `api/dependencies.py` + `PATCH /admin/users/{id}/role` dans `api/routers/admin_users.py`, protégé contre la démotion du dernier superadmin, journalisé dans l'audit log. 8 tests, voir `tests/test_roles_and_permissions.py`) |
 | 1.2.2 | Organization Owner | Rôle le plus élevé dans organization_members.role | ⬜ (aucune table organization_members) |
 | 1.2.3 | Admin | Idem, niveau juste sous Owner | 🟡 (le rôle `admin` existe dans l'enum, `require_admin` en dépendance FastAPI) |
 | 1.2.4 | Manager | Idem | ⬜ |

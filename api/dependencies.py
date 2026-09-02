@@ -21,7 +21,7 @@ from api.services.email import send_idle_session_revoked_email
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status", "require_admin"]
+__all__ = ["get_db", "get_current_user", "get_current_user_any_consent_status", "require_admin", "require_superadmin"]
 
 _bearer_scheme = HTTPBearer(description="Access token from POST /auth/login or /auth/refresh")
 
@@ -150,4 +150,38 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
     """
     if user.role not in (UserRole.admin, UserRole.superadmin):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return user
+
+
+async def require_superadmin(user: User = Depends(get_current_user)) -> User:
+    """
+    Etape 1.2.1 -- Super Admin: the single highest privilege tier,
+    strictly narrower than require_admin above (which also accepts a
+    plain admin). Gates the first genuinely superadmin-exclusive
+    capability, PATCH /admin/users/{id}/role (api/routers/admin_users.py) --
+    granting or revoking admin/superadmin access is more consequential
+    than anything require_admin gates today (reading audit logs,
+    configuring SSO), so it gets a stricter check of its own rather than
+    reusing require_admin.
+
+    Deliberately checks User.role == UserRole.superadmin -- the EXISTING
+    enum column (added by migration 0010) -- rather than a separate
+    is_superadmin boolean. Migration 0010 already removed exactly that
+    boolean column in favor of this enum, specifically because a boolean
+    can only ever represent two tiers; reintroducing it now would
+    recreate two sources of truth for the same fact (role == "superadmin"
+    vs is_superadmin == True) that could silently drift apart from each
+    other with no constraint stopping it.
+
+    403, not 404 (unlike require_admin): the reasoning that justifies
+    404 there -- a regular end user has no reason to even learn
+    admin-only routes exist -- doesn't carry over the same way here.
+    Anyone who can reach this dependency at all is already an
+    authenticated admin or superadmin; an admin discovering that a
+    stricter tier exists above them is a far smaller information leak
+    than an ordinary user discovering admin routes exist in the first
+    place.
+    """
+    if user.role != UserRole.superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
     return user

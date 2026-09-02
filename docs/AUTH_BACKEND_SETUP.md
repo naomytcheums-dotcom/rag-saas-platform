@@ -515,15 +515,46 @@ call to these two endpoints. SameSite=lax on the refresh cookie already
 blocks most cross-site cookie-riding in modern browsers -- this is
 defense-in-depth on top of that, not a replacement for it.
 
-### User.role (5.1 -- prep for Partie 1.2's RBAC)
+### User.role (5.1 -- Partie 1.2's RBAC, item 1.2.1 Super Admin)
 
 `users.role` is a Postgres `userrole` enum (`user` / `admin` / `superadmin`,
 default `user` -- `api/models/user.py`'s `UserRole`), added by migration
-`0010` in place of the old unused `is_superadmin` boolean it was
-originally reserved for. Nothing in Partie 1.1 reads or enforces this
-field yet -- no route checks it -- it exists now so Partie 1.2's RBAC
-work is a matter of checking an already-real column under production
-data, not inventing one later.
+`0010` in place of an old, unused `is_superadmin` boolean it was
+originally reserved for.
+
+Two dependencies gate on it (`api/dependencies.py`), stacked by strictness:
+
+- `require_admin` -- `role` is `admin` **or** `superadmin`. Gates every
+  existing `/admin/*` route (audit logs, failed-login dashboard, JWT key
+  rotation history, SSO connection management). 404 on failure -- an
+  admin-only route's existence isn't information a regular user needs.
+- `require_superadmin` -- `role` must be exactly `superadmin`. Gates
+  `PATCH /admin/users/{id}/role` (`api/routers/admin_users.py`), the
+  first genuinely superadmin-exclusive capability: changing another
+  account's role. Before this, a role change was only possible via
+  direct database access. 403 on failure, not 404 -- unlike
+  `require_admin`, everyone who can reach this dependency is already an
+  admin or better, so a stricter tier existing above them isn't a
+  meaningful information leak.
+
+`PATCH /admin/users/{id}/role` refuses to demote the last remaining
+superadmin (a hard lockout safety net -- otherwise a lone superadmin
+could accidentally remove the only account able to undo the mistake),
+and records every change in the tamper-evident audit log (audit finding
+18) under `AuditAction.USER_ROLE_CHANGED`.
+
+**Deliberately reuses this existing enum rather than adding a separate
+`is_superadmin` boolean column** even though an early draft of this
+step's spec asked for one -- migration 0010 already removed exactly that
+boolean in favor of this enum, specifically because a boolean can only
+ever represent two tiers. Reintroducing it would recreate two sources of
+truth for the same fact (`role == "superadmin"` vs `is_superadmin ==
+True`) with nothing stopping them from silently drifting apart.
+
+1.2.2 through 1.2.8 (organization-scoped roles: Owner/Admin/Manager/
+Member/Viewer, granular per-resource permissions) remain open -- they
+need Partie 1.3's `organizations` table to exist first, since there is
+no "organization" for a role to be scoped to yet.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
