@@ -66,19 +66,24 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | # | Fonctionnalité | Implémentation prévue | Statut |
 |---|---|---|---|
 | 1.2.1 | Super Admin | Rôle global hors-org, flag is_superadmin sur users | ✅ (implémenté via l'enum `role` existant plutôt qu'une colonne `is_superadmin` séparée -- migration 0010 avait déjà supprimé ce booléen au profit de l'enum, le réintroduire aurait recréé deux sources de vérité. `require_superadmin()` dans `api/dependencies.py` + `PATCH /admin/users/{id}/role` dans `api/routers/admin_users.py`, protégé contre la démotion du dernier superadmin, journalisé dans l'audit log. 8 tests, voir `tests/test_roles_and_permissions.py`) |
-| 1.2.2 | Organization Owner | Rôle le plus élevé dans organization_members.role | ⬜ (aucune table organization_members) |
-| 1.2.3 | Admin | Idem, niveau juste sous Owner | 🟡 (le rôle `admin` existe dans l'enum, `require_admin` en dépendance FastAPI) |
-| 1.2.4 | Manager | Idem | ⬜ |
-| 1.2.5 | Member | Idem (rôle par défaut à l'invitation) | ⬜ |
-| 1.2.6 | Viewer | Idem, lecture seule | ⬜ |
-| 1.2.7 | RBAC complet | casbin ou décorateur @require_role() sur chaque route | 🟡 (seulement `require_admin`, un contrôle binaire admin/non-admin, pas un vrai RBAC par ressource) |
+| 1.2.2 | Organization Owner | Rôle le plus élevé dans organization_members.role | ✅ (tables `organizations`/`organization_members` créées -- première tranche de la Partie 1.3. `create_organization_with_owner()` partagé entre `POST /organizations` et l'organisation par défaut auto-créée à l'inscription. `require_org_member/admin/owner()` dans `api/security/organizations.py`. 13 tests SQLite + 1 test de cascade contre le vrai Postgres, voir `tests/test_organizations.py` et `tests/test_postgres_integration.py`) |
+| 1.2.3 | Admin | Idem, niveau juste sous Owner | ✅ (`OrganizationRole.admin` + `require_org_admin()` -- Owner ou Admin, 403 sinon) |
+| 1.2.4 | Manager | Idem | 🟡 (la valeur d'enum `OrganizationRole.manager` existe, mais rien ne s'y comporte différemment de Member pour l'instant -- aucune permission propre au Manager) |
+| 1.2.5 | Member | Idem (rôle par défaut à l'invitation) | 🟡 (valeur d'enum existe, `require_org_member` l'accepte ; pas encore de flux d'invitation qui l'attribue par défaut) |
+| 1.2.6 | Viewer | Idem, lecture seule | 🟡 (valeur d'enum existe ; aucune restriction lecture-seule appliquée encore) |
+| 1.2.7 | RBAC complet | casbin ou décorateur @require_role() sur chaque route | 🟡 (`require_admin`/`require_org_admin` = contrôle binaire par palier, pas un vrai RBAC par ressource) |
 | 1.2.8 | Permissions granulaires par ressource | Table permissions (resource_type, action, role) | ⬜ |
 
-**Dépendance à noter** : 1.2.2 à 1.2.6 (rôles par organisation) ne peuvent
-pas être finis sans que la Partie 1.3 (Multi-tenant, `organizations`)
-existe d'abord — il n'y a rien à quoi rattacher ces rôles aujourd'hui.
+**Score 1.2 : 5-6/10** (Owner ✅, Admin ✅, Super Admin ✅, Manager/Member/Viewer 🟡, RBAC complet 🟡, permissions granulaires ⬜).
 
-### 1.3 Architecture Multi-tenant — ⬜ NON COMMENCÉ (0/10)
+### 1.3 Architecture Multi-tenant — 🟡 DÉMARRÉ (1-2/10, via l'Étape 1.2.2)
+
+| # | Fonctionnalité | Implémentation prévue | Statut |
+|---|---|---|---|
+| 1.3.1 | Organizations | Table organizations, FK sur toutes les tables métier | ✅ (`api/models/organization.py`, aucune AUTRE table métier n'a encore de FK vers elle -- c'est la prochaine étape logique une fois que du contenu org-scopé existe) |
+| 1.3.2-1.3.10 | Workspaces, Teams, Invitations, isolation, quotas, config, branding | — | ⬜ |
+
+Reste de la table originale, pour référence :
 
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|

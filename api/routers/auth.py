@@ -39,6 +39,7 @@ from api.security.sessions import (
     revoke_session,
 )
 from api.security.jwt import create_mfa_pending_token
+from api.security.organizations import create_organization_with_owner
 from api.security.webauthn import get_user_credentials
 from api.security.password_history import record_password_change
 from api.security.password_similarity import is_password_too_similar
@@ -136,6 +137,18 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     # reusing this exact password again immediately after resetting it
     # would have nothing to catch it against.
     await record_password_change(db, user.id, hashed_password)
+
+    # Etape 1.2.2 -- every new account gets a default organization, with
+    # itself as Owner. Part of the SAME transaction as the user row
+    # itself (no commit in between): if this fails, the whole
+    # registration rolls back rather than leaving a real account with no
+    # organization at all. OAuth/SSO sign-up (api/routers/oauth.py,
+    # api/routers/enterprise_sso.py) do not yet get this -- out of scope
+    # for this step, a disclosed gap, not an oversight.
+    await create_organization_with_owner(
+        db, name=f"Organisation de {user.email}", owner_user_id=user.id,
+        ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+    )
 
     await create_and_send_email_otp(db, user)  # 1.1.4 -- fire-and-forget-ish: logs a warning and continues on email failure, never blocks registration
     # No notify_new_device_email here: this is the account's first-ever

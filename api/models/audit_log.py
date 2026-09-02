@@ -49,6 +49,8 @@ class AuditAction(StrEnum):
     ENTERPRISE_SSO_LOGIN_SUCCESS = "enterprise_sso_login_success"
     ENTERPRISE_SSO_CONNECTION_CREATED = "enterprise_sso_connection_created"
     USER_ROLE_CHANGED = "user_role_changed"
+    ORGANIZATION_CREATED = "organization_created"
+    ORGANIZATION_DELETED = "organization_deleted"
 
 
 class AuditLog(Base):

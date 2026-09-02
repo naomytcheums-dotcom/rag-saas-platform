@@ -19,7 +19,8 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
-    account, admin_users, audit, auth, enterprise_sso, oauth, password, sessions, two_factor, verify, webauthn,
+    account, admin_users, audit, auth, enterprise_sso, oauth, organizations, password, sessions, two_factor, verify,
+    webauthn,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
@@ -141,6 +142,7 @@ app.include_router(audit.router)
 app.include_router(webauthn.router)
 app.include_router(enterprise_sso.router)
 app.include_router(admin_users.router)
+app.include_router(organizations.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

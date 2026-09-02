@@ -19,6 +19,7 @@ from sqlalchemy import Boolean, DateTime, Enum, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
+from api.models.organization import OrganizationRole
 
 
 class UserRole(str, enum.Enum):
@@ -129,6 +130,18 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    # Etape 1.2.2 -- one row per organization this user belongs to,
+    # carrying their role in it (api/models/organization.py's
+    # OrganizationMember). Like oauth_accounts/sessions above, this
+    # codebase never lazy-accesses ORM relationships from an async
+    # request handler -- every route that needs this data loads it
+    # explicitly (selectinload) or queries OrganizationMember directly;
+    # this relationship exists for cascade-delete (removing a user also
+    # removes their memberships) and for the two properties below, which
+    # assume it's already loaded.
+    organization_memberships: Mapped[list["OrganizationMember"]] = relationship(
+        back_populates="user", foreign_keys="OrganizationMember.user_id", cascade="all, delete-orphan"
+    )
 
     @property
     def is_deleted(self) -> bool:
@@ -137,3 +150,18 @@ class User(Base):
         purged. Checked alongside is_active everywhere login/access is
         gated, so a soft-deleted account is locked out right away."""
         return self.deleted_at is not None
+
+    @property
+    def organizations(self) -> list["Organization"]:
+        """Every organization this user is a member of, any role.
+        Requires organization_memberships (and each membership's own
+        .organization) to already be eager-loaded -- see that
+        relationship's own comment above for why."""
+        return [m.organization for m in self.organization_memberships]
+
+    @property
+    def owned_organizations(self) -> list["Organization"]:
+        """The subset of `organizations` where this user holds the
+        Owner role specifically. Same eager-loading requirement as
+        `organizations` above."""
+        return [m.organization for m in self.organization_memberships if m.role == OrganizationRole.owner]

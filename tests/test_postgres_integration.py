@@ -36,6 +36,7 @@ from api.main import app
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
+from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
@@ -176,6 +177,38 @@ async def test_cascade_delete_removes_related_rows(pg_session):
     assert remaining_consent_tokens is None
     assert remaining_lockout_tokens is None
     assert remaining_revoked_tokens is None
+
+
+async def test_deleting_an_organization_cascades_to_its_memberships(pg_session):
+    """Etape 1.2.2: api/routers/organizations.py's delete_organization
+    uses a Core bulk DELETE (delete(Organization).where(...)), not
+    session.delete() -- so no ORM-level cascade applies, only the
+    database's own ON DELETE CASCADE (the Alembic migration) does. SQLite
+    doesn't enforce foreign keys by default, so this can only be proven
+    against real Postgres -- see this file's own module docstring."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Cascade Test Org", slug=f"cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_membership = await pg_session.scalar(
+            select(OrganizationMember).where(OrganizationMember.organization_id == org_id)
+        )
+        assert remaining_membership is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
 
 
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):

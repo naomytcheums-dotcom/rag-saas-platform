@@ -551,10 +551,72 @@ ever represent two tiers. Reintroducing it would recreate two sources of
 truth for the same fact (`role == "superadmin"` vs `is_superadmin ==
 True`) with nothing stopping them from silently drifting apart.
 
-1.2.2 through 1.2.8 (organization-scoped roles: Owner/Admin/Manager/
-Member/Viewer, granular per-resource permissions) remain open -- they
-need Partie 1.3's `organizations` table to exist first, since there is
-no "organization" for a role to be scoped to yet.
+1.2.3 through 1.2.6 (Admin/Manager/Member/Viewer as *organization-scoped*
+roles, distinct from the global `User.role` above) and 1.2.8 (granular
+per-resource permissions) remain open. 1.2.2 (Organization Owner) is
+covered next.
+
+### Organizations (Etape 1.2.2 -- first slice of Partie 1.3 multi-tenant)
+
+The minimum structure needed for org-scoped roles to mean anything:
+`organizations` (`api/models/organization.py`'s `Organization`) and
+`organization_members` (`OrganizationMember`, an association object --
+not a bare many-to-many table, since it carries its own data: `role`,
+`invited_by`, `joined_at`). Workspaces, invitations, quotas, and
+branding (the rest of Partie 1.3/1.4) are separate, later steps.
+
+**Every new account gets a default organization automatically** --
+`POST /auth/register` creates one named `"Organisation de {email}"` and
+makes the new user its Owner, in the SAME database transaction as the
+account itself (`api/security/organizations.py`'s
+`create_organization_with_owner`, shared with `POST /organizations`
+below) -- if organization creation fails, the whole registration rolls
+back rather than leaving a real account with no organization at all.
+**Not yet wired into OAuth or enterprise-SSO sign-up** (`api/routers/oauth.py`,
+`api/routers/enterprise_sso.py`) -- a disclosed gap, not an oversight.
+
+Endpoints (`api/routers/organizations.py`):
+
+| Endpoint | Access |
+|---|---|
+| `POST /organizations` | Any authenticated user; creator becomes Owner |
+| `GET /organizations` | Any authenticated user -- their own memberships only |
+| `GET /organizations/{id}` | Any member (Owner/Admin/Manager/Member/Viewer) |
+| `PATCH /organizations/{id}` | Owner only |
+| `DELETE /organizations/{id}` | Owner only |
+
+Three stacked dependencies (`api/security/organizations.py`, mirroring
+`api/dependencies.py`'s `require_admin`/`require_superadmin` layering):
+`require_org_member` (base layer -- resolves `org_id` from the URL path
+automatically, same FastAPI mechanism a route handler's own path
+parameters use; 404s a non-member so they can't probe which
+organization IDs exist), `require_org_admin` (Owner or Admin, 403 for
+anyone below that), `require_org_owner` (Owner only). A get-only helper,
+`get_user_org_role(db, user_id, org_id)`, returns `None` for "not a
+member" rather than raising, for call sites that want to branch on role
+without a hard failure.
+
+`DELETE /organizations/{id}` is a plain Core `DELETE`, not
+`session.delete()` -- cleanup of `organization_members` rows relies
+entirely on the database's own `ON DELETE CASCADE` (the Alembic
+migration), same "trust the FK, not an ORM cascade walk" pattern as
+`api/tasks/account_purge.py` and `api/routers/enterprise_sso.py`'s
+connection deletion. **This is exactly why that specific behavior is
+tested against real Postgres** (`tests/test_postgres_integration.py`),
+not the fast SQLite suite -- SQLite does not enforce foreign keys by
+default, so a cascade test against it would pass or fail by accident,
+proving nothing about the real database.
+
+`User.organizations` / `User.owned_organizations` (properties) and
+`Organization.owner` (property) exist as the model asks for, but --
+like `User.oauth_accounts`/`User.sessions` before them -- this codebase
+never lazy-loads an ORM relationship from an async request handler (SQLAlchemy's
+async lazy-loading needs a greenlet bridge that isn't always available
+where you'd expect, and fails loudly rather than silently when it
+isn't). Every real call site either queries `OrganizationMember`
+directly or eager-loads first (`selectinload(User.organization_memberships)
+.selectinload(OrganizationMember.organization)`) before touching these
+properties.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

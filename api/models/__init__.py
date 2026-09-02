@@ -12,6 +12,7 @@ from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnect
 from api.models.jwt_signing_key import JWTSigningKey
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount
+from api.models.organization import Organization, OrganizationMember
 from api.models.password_history import PasswordHistory
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.restore_token import AccountRestoreToken
@@ -25,5 +26,5 @@ __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
     "TwoFactorRecoveryCode", "AccountRestoreToken", "TwoFactorLockoutRecoveryToken", "ConsentReactivationToken",
     "RevokedAccessToken", "PasswordHistory", "AuditLog", "JWTSigningKey", "WebAuthnCredential",
-    "EnterpriseSSOConnection", "EnterpriseSSOAccount",
+    "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember",
 ]
