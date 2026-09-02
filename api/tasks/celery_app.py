@@ -9,6 +9,8 @@ default -- see api/config.py); a Postgres-backed broker also works if
 Redis isn't part of the deployment, just change the URL scheme.
 """
 
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -26,7 +28,7 @@ celery_app = Celery(
     # `from api.tasks.celery_app import celery_app` doesn't circular-import.
     include=[
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
-        "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal",
+        "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
     ],
 )
 
@@ -72,5 +74,16 @@ celery_app.conf.beat_schedule = {
     "check-ssl-expirations-daily": {
         "task": "api.tasks.ssl_certificate_renewal.check_ssl_expirations",
         "schedule": crontab(hour=4, minute=15),
+    },
+    # Partie 1.4.4 -- a genuine fixed-interval poll (every
+    # DOMAIN_VERIFICATION_INTERVAL_SECONDS, default 5 minutes), so a
+    # plain timedelta rather than crontab's minute-matching, which is
+    # built for "at these specific times of day" schedules like every
+    # other entry above. Idempotent: only acts on domains genuinely
+    # still `pending` (see api/tasks/domain_verification.py's own
+    # docstring).
+    "check-pending-domain-verifications": {
+        "task": "api.tasks.domain_verification.check_pending_domain_verifications",
+        "schedule": timedelta(seconds=settings.DOMAIN_VERIFICATION_INTERVAL_SECONDS),
     },
 }

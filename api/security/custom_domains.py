@@ -21,6 +21,9 @@ in the worst case), and this way it never blocks the event loop the
 way a sync `dns.resolver.resolve()` call would.
 """
 
+import asyncio
+import datetime as dt
+import logging
 import re
 import secrets
 import uuid
@@ -33,6 +36,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.custom_domain import CustomDomain, CustomDomainStatus
+from api.utils import as_aware_utc
+
+logger = logging.getLogger(__name__)
 
 # A dedicated verification subdomain, not the bare domain -- so the TXT
 # challenge never collides with a domain's own existing TXT records
@@ -191,6 +197,12 @@ async def add_custom_domain(db: AsyncSession, organization_id: uuid.UUID, domain
     )
     db.add(record)
     await db.flush()
+    # Partie 1.4.4 -- a head start ahead of the next periodic sweep,
+    # not a substitute for it (see schedule_domain_verification's own
+    # docstring). The scheduled delay is comfortably longer than any
+    # realistic time this function's caller takes to commit, so the
+    # task never races the transaction that creates this row.
+    schedule_domain_verification(normalized)
     return record
 
 
@@ -241,6 +253,152 @@ async def activate_domain(db: AsyncSession, domain: str) -> CustomDomain:
     record.status = CustomDomainStatus.active.value
     await db.flush()
     return record
+
+
+async def trigger_manual_verification(db: AsyncSession, domain_row: CustomDomain) -> CustomDomain:
+    """
+    Partie 1.4.4's Owner-authenticated `POST .../verify` endpoint --
+    the same immediate, honest, single-shot check as verify_domain
+    above (a human explicitly asking "check now" gets a real answer
+    right now, not a "come back later"), just authorized by ownership
+    instead of the public token. Deliberately does NOT go through
+    apply_verification_check below -- that function's attempt-counting/
+    eventual-failure logic exists to protect AUTOMATIC background
+    polling from retrying forever, not to punish a human for clicking a
+    button more than once. A domain already resolved (active/failed) is
+    returned unchanged rather than re-checked -- nothing meaningful to
+    re-verify once its own status has already been decided.
+    """
+    if domain_row.status != CustomDomainStatus.pending.value:
+        return domain_row
+
+    dns_verified = await check_domain_dns_txt_record(domain_row.domain, domain_row.verification_token)
+    domain_row.status = CustomDomainStatus.verified.value if dns_verified else CustomDomainStatus.failed.value
+    await db.flush()
+    if domain_row.status == CustomDomainStatus.verified.value:
+        return await activate_domain(db, domain_row.domain)
+    return domain_row
+
+
+async def apply_verification_check(db: AsyncSession, domain_row: CustomDomain, dns_verified: bool) -> CustomDomain:
+    """
+    Partie 1.4.4 -- the AUTOMATIC-polling counterpart to
+    trigger_manual_verification above, shared by poll_domain_verification
+    and check_all_pending_domains below. Every automatic attempt (never
+    a manual one -- see trigger_manual_verification's own docstring for
+    why those are kept separate) increments `verification_attempts` and
+    `last_verification_attempt_at` regardless of outcome, then:
+
+    - DNS matches: verified, then immediately activated (same
+      composition Partie 1.4.1 already established).
+    - DNS doesn't match, but neither DOMAIN_VERIFICATION_MAX_ATTEMPTS
+      nor DOMAIN_VERIFICATION_TIMEOUT_MINUTES has been reached yet:
+      stays `pending` -- the next sweep will try again.
+    - DNS doesn't match AND one of those two limits has now been
+      reached: `failed`. Both limits are checked (not just attempt
+      count) so a domain is still protected even if the periodic sweep
+      runs less often than DOMAIN_VERIFICATION_INTERVAL_SECONDS
+      (a worker outage, a missed beat tick) -- see api/config.py's own
+      comment on why the two defaults (12 x 5 minutes = 60 minutes)
+      are deliberately equivalent under normal operation.
+    """
+    domain_row.verification_attempts += 1
+    domain_row.last_verification_attempt_at = dt.datetime.now(dt.timezone.utc)
+
+    if dns_verified:
+        domain_row.status = CustomDomainStatus.verified.value
+        await db.flush()
+        return await activate_domain(db, domain_row.domain)
+
+    created_at = as_aware_utc(domain_row.created_at)
+    exhausted = (
+        domain_row.verification_attempts >= settings.DOMAIN_VERIFICATION_MAX_ATTEMPTS
+        or dt.datetime.now(dt.timezone.utc) - created_at >= dt.timedelta(minutes=settings.DOMAIN_VERIFICATION_TIMEOUT_MINUTES)
+    )
+    domain_row.status = CustomDomainStatus.failed.value if exhausted else CustomDomainStatus.pending.value
+    await db.flush()
+    return domain_row
+
+
+async def poll_domain_verification(db: AsyncSession, domain: str) -> CustomDomain:
+    """
+    Item 1's literal function -- one AUTOMATIC polling attempt for one
+    domain, by domain string (used by schedule_domain_verification's
+    one-off follow-up check, and reusable standalone). A domain that
+    isn't currently `pending` is returned untouched -- nothing to poll,
+    its status was already decided by something else (a manual check,
+    a previous sweep reaching exhaustion).
+    """
+    domain_row = await db.scalar(select(CustomDomain).where(CustomDomain.domain == domain))
+    if domain_row is None:
+        raise ValueError(f"'{domain}' is not a registered custom domain")
+    if domain_row.status != CustomDomainStatus.pending.value:
+        return domain_row
+
+    dns_verified = await check_domain_dns_txt_record(domain_row.domain, domain_row.verification_token)
+    return await apply_verification_check(db, domain_row, dns_verified)
+
+
+# Bounds how many DNS lookups check_all_pending_domains runs at once --
+# see that function's own docstring for why serial polling doesn't
+# scale to "thousands of domains" (vision critique).
+_MAX_CONCURRENT_DNS_CHECKS = 50
+
+
+async def check_all_pending_domains(db: AsyncSession) -> dict[str, int]:
+    """
+    Item 1's literal function -- the periodic sweep's entry point
+    (api/tasks/domain_verification.py). Runs every pending domain's DNS
+    lookup CONCURRENTLY (bounded by _MAX_CONCURRENT_DNS_CHECKS), not one
+    at a time: at "thousands of domains" (vision critique), a serial
+    loop -- each lookup taking up to CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS
+    in the worst case -- could take far longer than
+    DOMAIN_VERIFICATION_INTERVAL_SECONDS itself to even finish one
+    sweep. The lookups themselves are pure network I/O with no
+    database involved, so they're safe to run concurrently; applying
+    each RESULT to the database is done afterward, one at a time -- a
+    single AsyncSession is not safe for concurrent use, so the actual
+    writes never run in parallel, only the slow part that matters does.
+    """
+    pending = (await db.scalars(select(CustomDomain).where(CustomDomain.status == CustomDomainStatus.pending.value))).all()
+    semaphore = asyncio.Semaphore(_MAX_CONCURRENT_DNS_CHECKS)
+
+    async def _check_dns(domain_row: CustomDomain) -> tuple[CustomDomain, bool]:
+        async with semaphore:
+            return domain_row, await check_domain_dns_txt_record(domain_row.domain, domain_row.verification_token)
+
+    checked = await asyncio.gather(*(_check_dns(row) for row in pending))
+
+    results = {"activated": 0, "failed": 0, "still_pending": 0}
+    for domain_row, dns_verified in checked:
+        updated = await apply_verification_check(db, domain_row, dns_verified)
+        key = {CustomDomainStatus.active.value: "activated", CustomDomainStatus.failed.value: "failed"}.get(updated.status, "still_pending")
+        results[key] += 1
+    return results
+
+
+def schedule_domain_verification(domain: str, countdown_seconds: int | None = None) -> None:
+    """
+    Item 1's literal function. Real, not a no-op: dispatches a one-off
+    Celery task (api/tasks/domain_verification.py's poll_one_domain) to
+    poll THIS domain after a short delay (default:
+    DOMAIN_VERIFICATION_INTERVAL_SECONDS) rather than making a
+    newly-added domain wait for the next periodic sweep to happen to
+    land on it. The periodic sweep (check_all_pending_domains, run by
+    Celery Beat) is still what guarantees every pending domain
+    eventually gets checked -- this is a one-time, best-effort head
+    start for a single domain, not a replacement for that guarantee, so
+    its own failure (e.g. the broker being briefly unreachable) must
+    never break whatever called it (api/security/custom_domains.py's
+    own add_custom_domain).
+    """
+    from api.tasks.domain_verification import poll_one_domain
+
+    delay = countdown_seconds if countdown_seconds is not None else settings.DOMAIN_VERIFICATION_INTERVAL_SECONDS
+    try:
+        poll_one_domain.apply_async(args=[domain], countdown=delay)
+    except Exception as exc:  # noqa: BLE001 -- a broker hiccup must never break domain creation itself
+        logger.warning("schedule_domain_verification: could not schedule a follow-up check for '%s': %s", domain, exc)
 
 
 async def get_org_domain(db: AsyncSession, organization_id: uuid.UUID) -> CustomDomain | None:

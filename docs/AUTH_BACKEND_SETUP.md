@@ -1778,14 +1778,11 @@ scale is entirely on the infrastructure side this step deliberately
 doesn't build (a reverse proxy holding thousands of routes, ACME rate
 limits for automated certificate issuance), not the database layer.
 
-**Performance**: no Celery dispatch for the DNS check itself -- it's a
-bounded, real async network call already off the blocking path, and
-this step's own spec has no periodic re-verification requirement (that
-belongs to the master cahier's Partie 1.4.4, a separate, not-yet-built
-item: "Job Celery de polling"). If/when that's built, it would be a
-periodic beat task re-running `verify_domain` on `pending`/`failed`
-rows, the same shape as `api/tasks/account_purge.py`'s daily sweep --
-not attempted here since it wasn't asked for by this step.
+**Performance**: no Celery dispatch for the DNS check itself in THIS
+step -- it's a bounded, real async network call already off the
+blocking path, and this step's own spec has no periodic
+re-verification requirement (that belongs to the master cahier's
+Partie 1.4.4, built separately -- see below).
 
 ### Instructions DNS (Partie 1.4.2)
 
@@ -1946,6 +1943,110 @@ module's own `_resume_order` error handling. `ACME_DIRECTORY_URL`
 defaults to staging, never production, specifically so this kind of
 real-network testing (and any misconfigured dev/CI environment) can
 never burn through Let's Encrypt's production rate limits.
+
+### Vérification domaine périodique (Partie 1.4.4)
+
+Two new columns on the existing `custom_domains` table (migration
+`0028`), not a new table: `verification_attempts` (`Integer`, default
+`0`) and `last_verification_attempt_at` (nullable). `created_at`
+(already on the row) is reused as the wall-clock timeout anchor -- no
+separate "first pending at" column needed, since a domain is created
+directly into `pending` and this project never resets one back to
+`pending` afterward.
+
+**Three verification paths, deliberately kept separate, not unified
+under one attempt-counting scheme** (a design decision, not an
+oversight): Partie 1.4.1's public token link (`verify_domain`) and this
+step's new Owner-authenticated "verify now" endpoint
+(`trigger_manual_verification`) both check immediately and fail on the
+very first DNS mismatch, exactly as 1.4.1 already shipped and tested --
+unifying them with attempt-counting would have changed that endpoint's
+existing, tested behavior into "tolerates several failures before
+failing," a real regression risk against an already-shipped contract.
+Only the genuinely new AUTOMATIC paths --
+`poll_domain_verification`/`check_all_pending_domains`, and by
+extension the two Celery tasks below -- go through the counted
+`apply_verification_check`, which increments `verification_attempts`/
+`last_verification_attempt_at` on every automatic attempt and decides
+`active`/`pending`/`failed` from there. A human clicking "verify now"
+is not punished by a limit meant to bound unattended background
+retrying.
+
+**The periodic sweep** (`api/tasks/domain_verification.py`'s
+`check_pending_domain_verifications`, Celery Beat, every
+`DOMAIN_VERIFICATION_INTERVAL_SECONDS`, default 5 minutes): calls
+`check_all_pending_domains`, which activates matches, leaves
+still-unmatched-but-not-exhausted domains `pending` for the next sweep,
+and marks `failed` any domain that has hit either limit below.
+Idempotent and safe on any schedule -- a domain already
+`active`/`failed` is never selected by its own query.
+
+**A one-off head start** (`schedule_domain_verification`, wired into
+`add_custom_domain` right after the row is created): dispatches a real,
+one-off Celery task (`poll_one_domain`) with a short countdown (default:
+the same `DOMAIN_VERIFICATION_INTERVAL_SECONDS`) so a newly-added
+domain gets an early check instead of waiting for the next periodic
+sweep to happen to land on it. This is a best-effort convenience, never
+a substitute for the periodic sweep's own guarantee -- its dispatch is
+wrapped in a broad `try/except`, so a broker hiccup at domain-creation
+time never breaks `add_custom_domain` itself.
+
+**Two independent exhaustion limits** (vision critique -- "que se
+passe-t-il si le DNS est injoignable"), either one triggers `failed`:
+`DOMAIN_VERIFICATION_MAX_ATTEMPTS` (default 12) counts real automatic
+attempts; `DOMAIN_VERIFICATION_TIMEOUT_MINUTES` (default 60) is a
+wall-clock limit from `created_at`. At the defaults the two are
+numerically equivalent under normal operation (12 x 5 minutes = 60
+minutes), but the timeout alone still protects a domain if the periodic
+sweep runs less often than expected -- a worker outage, a missed beat
+tick -- something a pure attempt-counter could never catch on its own.
+An unreachable/non-propagated DNS record is not distinguished from "not
+there yet" (same as 1.4.1's own `check_domain_dns_txt_record`) -- both
+just count as one more non-matching attempt against these two limits,
+never a special error path.
+
+**Scalability at "thousands of domains"** (vision critique):
+`check_all_pending_domains` runs every pending domain's DNS lookup
+CONCURRENTLY, bounded by a semaphore (`_MAX_CONCURRENT_DNS_CHECKS = 50`)
+-- a serial loop, each lookup taking up to
+`CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS` in the worst case, could
+otherwise make a single sweep take far longer than
+`DOMAIN_VERIFICATION_INTERVAL_SECONDS` itself to even finish. The
+lookups are pure network I/O with no database involved, so running them
+concurrently is safe; applying each RESULT to the database is done
+afterward, one at a time -- a single `AsyncSession` is not safe for
+concurrent use, so only the slow part that actually needs concurrency
+gets it.
+
+**Endpoints**: `POST /organizations/{org_id}/domains/{domain_id}/verify`
+(Owner, immediate manual check, does not count against the attempt
+limit) and `GET /organizations/{org_id}/domains/{domain_id}/status`
+(Owner, a focused progress view -- attempt count, last attempt time, and
+a `timeout_at` computed fresh on every read as `created_at +
+DOMAIN_VERIFICATION_TIMEOUT_MINUTES`, never stored). Both Owner-only,
+same boundary as every other custom-domain mutation/read in this file --
+unlike the original public token-verify link, there is no reason to
+expose either of these without authentication.
+
+**Why `asyncio.run()`** (same pattern, same reasoning, as Partie 1.4.3's
+`ssl_certificate_renewal.py`): the real DNS-check logic
+(`check_domain_dns_txt_record`) must stay async for the FastAPI routes
+that also call it, so a parallel sync duplicate just for these two
+Celery tasks would be needless, error-prone duplication.
+
+**Real verification, not just code review**: `tests/test_domain_verification.py`
+(fast SQLite suite, DNS mocked) covers activation on a DNS match,
+staying `pending` on a mismatch, failure after
+`DOMAIN_VERIFICATION_MAX_ATTEMPTS`, failure after
+`DOMAIN_VERIFICATION_TIMEOUT_MINUTES` even on a domain's very first
+attempt, batch behavior (activate/still-pending/already-active all in
+one sweep), the broker-failure best-effort path, and both new
+endpoints' permission boundaries. `tests/test_domain_verification_integration.py`
+runs the two real Celery tasks (their async helpers directly, and the
+sync task entry points via `.apply()`, same split as
+`test_ssl_certificate_renewal_integration.py` and for the identical
+`asyncio.run()`-inside-a-running-event-loop reason) against the real
+Postgres dev database.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

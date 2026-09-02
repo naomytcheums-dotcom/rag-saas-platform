@@ -30,7 +30,7 @@ import datetime as dt
 import uuid
 from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -54,6 +54,17 @@ class CustomDomain(Base):
     # See this module's own docstring -- unused placeholders in this step.
     ssl_cert: Mapped[str | None] = mapped_column(Text, nullable=True)
     ssl_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 1.4.4 -- how many automatic polling attempts this domain
+    # has had (the periodic sweep only, via
+    # api/security/custom_domains.py's apply_verification_check -- the
+    # Owner's manual "verify now" endpoint and the original public
+    # token link check immediately and don't touch this counter).
+    # created_at (already on this row) is reused as the wall-clock
+    # timeout anchor -- no separate "first pending at" column needed,
+    # since a domain is created directly into `pending` and this
+    # project never resets one back to `pending` afterward.
+    verification_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_verification_attempt_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

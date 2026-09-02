@@ -69,6 +69,27 @@ async def _fake_not_breached(password: str) -> bool:
     return False
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_domain_verification_scheduling_by_default(monkeypatch):
+    """
+    Partie 1.4.4's api/security/custom_domains.py's add_custom_domain
+    calls schedule_domain_verification, which dispatches a real Celery
+    task via apply_async -- a real network round-trip to
+    CELERY_BROKER_URL (Redis). Every test in tests/ that adds a custom
+    domain (most of tests/test_custom_domains.py and
+    tests/test_domain_verification.py) would otherwise depend on Redis
+    being reachable, and even when it isn't, apply_async's own
+    connection-timeout/retry behavior is far too slow for the fast
+    SQLite suite -- same "no real network call belongs in the fast
+    suite" reasoning as _stub_out_the_hibp_breach_check_by_default
+    above. schedule_domain_verification's own real behavior (including
+    its broker-failure best-effort handling) is verified directly in
+    tests/test_domain_verification.py, which monkeypatches it back for
+    itself where it actually matters to the test.
+    """
+    monkeypatch.setattr("api.security.custom_domains.schedule_domain_verification", lambda domain, countdown_seconds=None: None)
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

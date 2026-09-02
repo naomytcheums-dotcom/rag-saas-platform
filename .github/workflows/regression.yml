@@ -171,10 +171,10 @@ jobs:
           tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
           tests/test_password_similarity.py tests/test_storage.py tests/test_audit_log.py tests/test_security_alerts.py
           tests/test_monitoring.py tests/test_trusted_ips_and_geoip.py tests/test_roles_and_permissions.py
-          tests/test_organizations.py tests/test_organization_members.py tests/test_workspaces.py tests/test_resource_permissions.py tests/test_teams.py tests/test_invitations.py tests/test_quotas.py tests/test_user_limits.py tests/test_usage.py tests/test_organization_settings.py tests/test_organization_branding.py tests/test_custom_domains.py tests/test_ssl_certificates.py
+          tests/test_organizations.py tests/test_organization_members.py tests/test_workspaces.py tests/test_resource_permissions.py tests/test_teams.py tests/test_invitations.py tests/test_quotas.py tests/test_user_limits.py tests/test_usage.py tests/test_organization_settings.py tests/test_organization_branding.py tests/test_custom_domains.py tests/test_ssl_certificates.py tests/test_domain_verification.py
           tests/test_postgres_integration.py tests/test_rbac_integration.py tests/test_oauth_logic_integration.py
           tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py tests/test_branding_storage_integration.py
-          tests/test_dns_verification_integration.py tests/test_acme_integration.py tests/test_ssl_certificate_renewal_integration.py
+          tests/test_dns_verification_integration.py tests/test_acme_integration.py tests/test_ssl_certificate_renewal_integration.py tests/test_domain_verification_integration.py
           tests/test_geo_adaptive_rate_limit_integration.py tests/test_webauthn_integration.py
           tests/test_jwt_key_rotation_integration.py tests/test_enterprise_sso_integration.py
           tests/test_celery_integration.py tests/test_e2e_lifecycle.py

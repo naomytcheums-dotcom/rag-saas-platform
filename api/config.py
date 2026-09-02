@@ -116,6 +116,27 @@ class Settings(BaseSettings):
     # ahead of expires_at the renewal Celery task starts trying.
     SSL_RENEWAL_WINDOW_DAYS: int = 30
 
+    # -- Partie 1.4.4: periodic domain-verification polling ----------------
+    # Named DOMAIN_VERIFICATION_INTERVAL/_MAX_ATTEMPTS/_TIMEOUT in this
+    # step's literal spec -- suffixed here with explicit units
+    # (_SECONDS/_MINUTES), same convention as every other duration
+    # setting in this file (e.g. CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS).
+    # How often api/tasks/domain_verification.py's periodic sweep runs.
+    DOMAIN_VERIFICATION_INTERVAL_SECONDS: int = 300
+    # A domain still `pending` after this many automatic polling
+    # attempts (the periodic sweep only -- the Owner's manual "verify
+    # now" endpoint and the original public token link check
+    # immediately and don't count against this limit, see
+    # api/security/custom_domains.py's apply_verification_check vs.
+    # trigger_manual_verification/verify_domain) is marked `failed`.
+    DOMAIN_VERIFICATION_MAX_ATTEMPTS: int = 12
+    # A second, wall-clock-based limit alongside MAX_ATTEMPTS -- at the
+    # defaults above (12 attempts x 5 minutes) the two normally expire
+    # together, but this one alone still protects a domain that's been
+    # pending for an hour despite the periodic sweep running less often
+    # than expected (a worker outage, a missed beat tick).
+    DOMAIN_VERIFICATION_TIMEOUT_MINUTES: int = 60
+
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30
