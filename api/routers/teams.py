@@ -45,6 +45,7 @@ from api.schemas.teams import (
 )
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_manager
+from api.security.quotas import require_quota_available
 from api.security.teams import require_team_admin, require_team_member, require_team_org_manager
 from api.utils import client_ip
 
@@ -74,6 +75,8 @@ async def create_team(
     org_id: uuid.UUID, payload: TeamCreateRequest, request: Request,
     caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
+    await require_quota_available(db, org_id, "teams")  # Partie 1.3.6 -- checked against max_teams
+
     team = Team(organization_id=org_id, name=payload.name, description=payload.description, created_by=caller.user_id)
     db.add(team)
     await db.flush()

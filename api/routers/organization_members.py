@@ -56,6 +56,7 @@ from api.security.organizations import (
     require_org_admin,
     require_org_manager,
 )
+from api.security.quotas import require_quota_available
 from api.services.email import (
     send_organization_member_added_email,
     send_organization_member_removed_email,
@@ -100,6 +101,12 @@ async def invite_organization_member(
     change (that stays require_org_admin, on the role-update and
     remove-member endpoints below, both unchanged by this step). A
     Manager may only invite people in as member or viewer.
+
+    Partie 1.3.6: checked against `max_users` (require_quota_available)
+    -- immediately BEFORE the membership is created, after every other
+    validation, so a quota-exceeded response never leaks whether an
+    email exists/is already a member ahead of a check that has nothing
+    to do with either.
     """
     if caller.role == OrganizationRole.manager and payload.role in (OrganizationRole.admin, OrganizationRole.manager):
         raise HTTPException(
@@ -120,6 +127,8 @@ async def invite_organization_member(
     )
     if already_a_member is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This user is already a member of the organization")
+
+    await require_quota_available(db, org_id, "users")
 
     membership = OrganizationMember(
         organization_id=org_id, user_id=target_user.id, role=payload.role, invited_by=caller.user_id,

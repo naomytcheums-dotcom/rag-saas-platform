@@ -38,6 +38,7 @@ from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
 from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
+from api.models.organization_quota import OrganizationQuota
 from api.models.resource_permission import ResourcePermission
 from api.models.team import Team, TeamMember, TeamRole
 from api.models.workspace import Workspace
@@ -418,6 +419,75 @@ async def test_deleting_an_organization_cascades_to_its_invitations(pg_session):
     finally:
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
+
+
+async def test_deleting_an_organization_cascades_to_its_quota(pg_session):
+    """Partie 1.3.6: same reasoning as the cascade tests above --
+    delete_organization is a Core bulk DELETE, so only the database's
+    own ON DELETE CASCADE (api/alembic/versions/0021_organization_quotas.py)
+    removes the organization's quota row, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Quota Cascade Test Org", slug=f"quota-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    pg_session.add(OrganizationQuota(
+        organization_id=org_id, max_users=10, max_workspaces=5, max_teams=10, max_documents=1000,
+        max_storage_mb=1024, max_requests_per_month=10000, max_requests_per_day=500, max_api_calls=5000,
+        max_agents=10, max_kb_size_mb=512,
+    ))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
+        await pg_session.commit()
+
+        remaining_quota = await pg_session.scalar(select(OrganizationQuota).where(OrganizationQuota.organization_id == org_id))
+        assert remaining_quota is None
+    finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_creating_an_organization_creates_its_quota_row_in_the_same_transaction(pg_client, pg_engine):
+    """Real end-to-end proof against Postgres (not SQLite) that
+    create_organization_with_owner's three inserts -- organization,
+    founding Owner membership, default quota -- all land together, via
+    the real HTTP endpoint."""
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    email = _unique_email()
+    org_id = None
+
+    try:
+        register_response = await pg_client.post(
+            "/auth/register", json={"email": email, "password": "correct-horse-battery-staple", "accept_terms": True},
+        )
+        assert register_response.status_code == 201
+
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+            membership = await session.scalar(select(OrganizationMember).where(OrganizationMember.user_id == user.id))
+            org_id = membership.organization_id
+            quota = await session.scalar(select(OrganizationQuota).where(OrganizationQuota.organization_id == org_id))
+            assert quota is not None
+            assert quota.max_users == settings.QUOTA_DEFAULT_MAX_USERS
+    finally:
+        async with session_factory() as session:
+            # Delete the auto-created default organization FIRST -- it
+            # cascades to the membership and quota rows; the user alone
+            # has no FK to the organization, so deleting just the user
+            # would leave both orphaned.
+            if org_id is not None:
+                await session.execute(delete(Organization).where(Organization.id == org_id))
+            user = await session.scalar(select(User).where(User.email == email))
+            if user is not None:
+                await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
 
 
 async def test_full_auth_cycle_against_real_postgres(pg_client, pg_engine):

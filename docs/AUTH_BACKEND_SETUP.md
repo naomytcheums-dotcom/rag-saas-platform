@@ -1228,6 +1228,104 @@ today. If that ever changes (a client-side Supabase SDK, a BI tool with
 its own restricted role, PostgREST turned on), this is the point where
 real policies would stop being optional.
 
+### Organization quotas (Partie 1.3.6)
+
+Per-organization resource limits, ten dimensions, one row per
+organization (`organization_quotas`, migration `0021`) -- created
+alongside the organization itself
+(`api/security/organizations.py`'s `create_organization_with_owner`,
+the same "never without each other" transaction as the founding Owner
+membership). Default limits come from ten `QUOTA_DEFAULT_MAX_*` settings
+(`api/config.py`), each independently overridable via `.env` -- changing
+one only affects organizations created AFTERWARD, never retroactively
+rewriting an existing org's own row.
+
+**Only three of the ten dimensions are enforced today**: `users`
+(`organization_members`), `workspaces` (`workspaces`), `teams` (`teams`)
+-- the only three with a real, countable table. The other seven --
+documents, storage, requests per day/month, API calls, agents, KB size
+-- have no corresponding table or endpoint yet (documents/KB: Partie 2,
+agents: Partie 5, requests/API calls: Partie 9's public API, none
+built). `check_quota` returns `True` (not enforced) and
+`get_quota_usage` reports `None` (not measured -- deliberately not `0`,
+which would falsely claim "nothing used") for those seven. They are
+stored as configuration only, ready the moment the resource they gate
+actually exists.
+
+**Usage is a LIVE COUNT, never a maintained counter**, for the three
+enforced dimensions: `check_quota`/`get_quota_usage`
+(`api/security/quotas.py`) run `SELECT COUNT(*)` against the real table
+every time, rather than incrementing/decrementing a stored number. A
+live count can't drift from reality the way an increment/decrement pair
+can (a missed decrement on delete, a bug at one of several increment
+call sites) -- this is why `increment_usage` (the fourth function this
+step's spec names) is a genuine no-op for all ten dimensions: for the
+three live-counted ones, the INSERT that creates the row already IS the
+increment, reflected the next time usage is counted; for the other
+seven, there is no counter storage to increment into yet.
+
+**Wired into three real endpoints**, checked via `require_quota_available`
+(raises `402 Payment Required` -- not 403/429: this is neither a
+permissions failure nor a rate throttle, it's "your plan's limit for
+this resource has been reached," the status code already carrying that
+exact meaning by convention):
+
+| Endpoint | Checked against |
+|---|---|
+| `POST /organizations/{org_id}/members/invite` | `max_users` |
+| `POST /invitations/accept` (both branches -- existing account AND new account) | `max_users` |
+| `POST /organizations/{org_id}/workspaces` | `max_workspaces` |
+| `POST /organizations/{org_id}/teams` | `max_teams` |
+
+The invitation-ACCEPTANCE path (Partie 1.3.4) was added beyond this
+step's own literal endpoint list -- both its branches create an
+`OrganizationMember` row exactly like the immediate-add path does, so
+checking `max_users` only on the immediate-add endpoint would have left
+a real loophole: an org at its limit could still let a pending
+invitation be accepted past it. `POST /organizations/{org_id}/invitations`
+(creating the pending invitation itself) is deliberately NOT
+quota-checked -- only acceptance actually creates a membership row, so
+an org can queue more invitations than it has remaining slots (a minor,
+accepted UX quirk, not a correctness gap: none can ever be accepted past
+the limit). `POST /documents`, `POST /v1/chat`, `POST /v1/agents/run`
+named in this step's spec don't exist yet (Parties 2, 5, 9) -- nothing
+to wire quota checks into.
+
+**Endpoints**:
+
+| Endpoint | Access |
+|---|---|
+| `GET /organizations/{org_id}/quotas` | Admin+ -- real visibility into how close an org is to its limits |
+| `PATCH /organizations/{org_id}/quotas` | Owner only -- a plan-level decision, same boundary as renaming/deleting the organization itself |
+
+`PATCH` is a partial update (only fields actually sent are changed) and
+allows `0` as a valid limit -- a deliberate way to hard-block a resource
+type entirely (e.g. suspending an organization), not rejected as
+invalid.
+
+**Known, accepted race**: check-then-insert (the quota check, then the
+caller's own `INSERT`) is not wrapped in one atomic operation --
+two requests racing to fill the LAST available slot could both pass the
+check and both succeed, one over the limit by one. This mirrors every
+other check-then-act authorization pattern already in this codebase
+(permission checks aren't serialized against concurrent writes either)
+and is the accepted tradeoff for a SOFT usage limit, not a hard
+financial/security invariant like a unique email -- closing it
+completely would need a `SELECT ... FOR UPDATE` or a DB-level
+constraint per dimension, not attempted here.
+
+**No cache**: each check is one indexed `COUNT(*)` query, same
+performance category as every other per-request check in this codebase
+(`require_org_member`, `get_user_org_role`, ...) -- a cache would risk
+serving a stale "quota available" answer past the real limit, which
+matters more here than the cost of one more indexed count per
+request. **No automatic monthly/daily reset either**: the two
+time-windowed dimensions this step names (`max_requests_per_month`/
+`_per_day`) have no counter to reset in the first place (see above) --
+resetting is real, well-scoped future work bundled with whatever builds
+the actual request-metering infrastructure (Partie 9), not something to
+build in isolation now with nothing to reset.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

@@ -63,6 +63,24 @@ class Settings(BaseSettings):
     # inbox for days.
     INVITATION_EXPIRE_DAYS: int = 7
 
+    # -- Partie 1.3.6: default per-organization resource quotas ----------
+    # Seeded onto every new OrganizationQuota row at org creation
+    # (api/security/organizations.py's create_organization_with_owner);
+    # changing these settings only affects organizations created
+    # AFTERWARD -- an existing org's quotas are its own row, editable via
+    # PATCH /organizations/{id}/quotas (Owner only), not re-derived from
+    # these defaults on every read.
+    QUOTA_DEFAULT_MAX_USERS: int = 10
+    QUOTA_DEFAULT_MAX_WORKSPACES: int = 5
+    QUOTA_DEFAULT_MAX_TEAMS: int = 10
+    QUOTA_DEFAULT_MAX_DOCUMENTS: int = 1000
+    QUOTA_DEFAULT_MAX_STORAGE_MB: int = 1024
+    QUOTA_DEFAULT_MAX_REQUESTS_PER_MONTH: int = 10000
+    QUOTA_DEFAULT_MAX_REQUESTS_PER_DAY: int = 500
+    QUOTA_DEFAULT_MAX_API_CALLS: int = 5000
+    QUOTA_DEFAULT_MAX_AGENTS: int = 10
+    QUOTA_DEFAULT_MAX_KB_SIZE_MB: int = 512
+
     # -- RGPD -------------------------------------------------------------
     TERMS_VERSION: str = "2026-01-01"
     ACCOUNT_PURGE_DELAY_DAYS: int = 30

@@ -36,6 +36,7 @@ from api.security.invitations import (
 )
 from api.security.organizations import require_org_manager
 from api.security.password_history import record_password_change
+from api.security.quotas import require_quota_available
 from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
@@ -153,6 +154,13 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
     if await is_already_a_member(db, organization_id=invitation.organization_id, email=invitation.email):
         # Defensive: added some other way between invite and accept.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already a member of this organization")
+
+    # Partie 1.3.6 -- checked here, before either branch below, since
+    # BOTH create an OrganizationMember row: an org whose invitations
+    # were sent before it hit max_users must not let acceptance be the
+    # loophole that bypasses the same check invite_organization_member
+    # already enforces for the immediate-add path.
+    await require_quota_available(db, invitation.organization_id, "users")
 
     existing_user = await db.scalar(select(User).where(User.email == invitation.email))
 

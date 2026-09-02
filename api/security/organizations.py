@@ -22,6 +22,7 @@ from api.models.audit_log import AuditAction
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.security.audit_log import log_audit_action
+from api.security.quotas import create_default_quota
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +52,11 @@ async def create_organization_with_owner(
     """
     Shared by POST /organizations (api/routers/organizations.py) and
     the auto-created default organization at registration
-    (api/routers/auth.py's register()) -- one place that creates BOTH
-    the Organization row and its founding Owner membership atomically,
-    so the two can never exist without each other. `invited_by` is left
-    NULL on the owner's own membership -- nobody invited them, they
-    created it.
+    (api/routers/auth.py's register()) -- one place that creates the
+    Organization row, its founding Owner membership, AND its default
+    resource quotas (Partie 1.3.6) atomically, so none of the three can
+    ever exist without the others. `invited_by` is left NULL on the
+    owner's own membership -- nobody invited them, they created it.
 
     Does not commit -- the caller decides the transaction boundary (at
     registration, this must be part of the SAME commit as the user row
@@ -70,6 +71,10 @@ async def create_organization_with_owner(
     db.add(OrganizationMember(
         organization_id=organization.id, user_id=owner_user_id, role=OrganizationRole.owner, invited_by=None,
     ))
+    # Partie 1.3.6 -- every organization gets its default resource
+    # quotas the moment it exists, same "never without each other"
+    # reasoning as the Owner membership above.
+    await create_default_quota(db, organization_id=organization.id)
     await log_audit_action(
         db, user_id=owner_user_id, action=AuditAction.ORGANIZATION_CREATED, ip=ip, user_agent=user_agent,
         success=True, metadata={"organization_id": str(organization.id), "name": name, "slug": slug},

@@ -34,6 +34,7 @@ from api.models.workspace import Workspace
 from api.schemas.workspaces import WorkspaceCreateRequest, WorkspaceEntry, WorkspaceListResponse, WorkspaceUpdateRequest
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_manager, require_org_member
+from api.security.quotas import require_quota_available
 from api.security.workspaces import require_workspace_permission
 from api.utils import client_ip
 
@@ -63,6 +64,8 @@ async def create_workspace(
     org_id: uuid.UUID, payload: WorkspaceCreateRequest, request: Request,
     caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
+    await require_quota_available(db, org_id, "workspaces")  # Partie 1.3.6 -- checked against max_workspaces
+
     workspace = Workspace(organization_id=org_id, name=payload.name, created_by=caller.user_id)
     db.add(workspace)
     await db.flush()
