@@ -59,13 +59,75 @@ def is_valid_hostname(domain: str) -> bool:
     return len(domain) <= _MAX_DOMAIN_LENGTH and bool(_HOSTNAME_PATTERN.match(domain))
 
 
-def dns_records_for(domain: str, verification_token: str) -> list[dict[str, str]]:
-    """Item 4's literal requirement -- the DNS records an Owner must add,
-    computed on the fly (never stored) from the domain + its own token
-    and this deployment's CUSTOM_DOMAIN_CNAME_TARGET setting."""
+def dns_records_for(domain: str, verification_token: str) -> list[dict[str, object]]:
+    """
+    Partie 1.4.1's original literal requirement (CNAME + TXT), extended
+    for Partie 1.4.2 with per-record `instructions` in both languages
+    this step asks for -- computed on the fly (never stored) from the
+    domain + its own token and this deployment's CUSTOM_DOMAIN_CNAME_TARGET
+    setting, so a config change instantly applies to every domain's
+    instructions rather than only newly-created ones.
+
+    The instruction TEXT itself only ever describes the DNS action
+    (add this record, with this value) -- never a claim like "your site
+    is now live at this domain." That's a deliberate wording choice
+    tied to this step's own vision critique question on coherence with
+    the real reverse-proxy: no such proxy exists yet (see this module's
+    top docstring), so promising working traffic routing in
+    user-facing copy would be false. What IS true regardless of that
+    gap -- "adding this record proves you control the domain" /
+    "points this hostname at our platform" -- is what's said here.
+    """
+    cname_name, cname_value = domain, settings.CUSTOM_DOMAIN_CNAME_TARGET
+    txt_name, txt_value = f"{_VERIFICATION_SUBDOMAIN_PREFIX}.{domain}", verification_token
     return [
-        {"type": "CNAME", "name": domain, "value": settings.CUSTOM_DOMAIN_CNAME_TARGET},
-        {"type": "TXT", "name": f"{_VERIFICATION_SUBDOMAIN_PREFIX}.{domain}", "value": verification_token},
+        {
+            "type": "CNAME", "name": cname_name, "value": cname_value,
+            "instructions": {
+                "fr": f"Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME nommé '{cname_name}' pointant vers '{cname_value}'. C'est ce qui relie votre domaine à notre plateforme.",
+                "en": f"With your domain provider, add a CNAME record named '{cname_name}' pointing to '{cname_value}'. This is what connects your domain to our platform.",
+            },
+        },
+        {
+            "type": "TXT", "name": txt_name, "value": txt_value,
+            "instructions": {
+                "fr": f"Ajoutez aussi un enregistrement TXT nommé '{txt_name}' avec la valeur '{txt_value}'. Cet enregistrement prouve que vous contrôlez ce domaine -- c'est ce que la vérification vérifie.",
+                "en": f"Also add a TXT record named '{txt_name}' with the value '{txt_value}'. This record proves you control the domain -- it's what verification checks.",
+            },
+        },
+    ]
+
+
+def setup_steps() -> list[dict[str, str]]:
+    """
+    Partie 1.4.2's literal requirement -- an ordered, non-technical
+    walkthrough, in both languages, that a domain's response embeds
+    alongside its DNS records. Generic (not domain-specific) on
+    purpose: the domain-specific values live in dns_records_for()'s own
+    per-record instructions above, so this stays a fixed constant, not
+    something computed from a live token that would need re-generating.
+    """
+    return [
+        {
+            "fr": "Connectez-vous à l'interface d'administration de votre fournisseur de domaine (ex : OVH, Gandi, Cloudflare, GoDaddy, Namecheap).",
+            "en": "Log in to your domain provider's admin panel (e.g. OVH, Gandi, Cloudflare, GoDaddy, Namecheap).",
+        },
+        {
+            "fr": "Trouvez la section de gestion des enregistrements DNS (souvent appelée \"Zone DNS\" ou \"DNS Management\").",
+            "en": "Find the DNS records management section (often called \"DNS Zone\" or \"DNS Management\").",
+        },
+        {
+            "fr": "Ajoutez les deux enregistrements listés ci-dessous (un CNAME et un TXT), avec exactement les noms et valeurs indiqués.",
+            "en": "Add the two records listed below (one CNAME and one TXT), using exactly the names and values shown.",
+        },
+        {
+            "fr": "Patientez -- la propagation DNS prend généralement de quelques minutes à quelques heures selon votre fournisseur.",
+            "en": "Wait -- DNS propagation typically takes anywhere from a few minutes to a few hours depending on your provider.",
+        },
+        {
+            "fr": "Une fois les enregistrements en place, appelez le lien de vérification fourni pour confirmer -- vous pouvez le redemander autant de fois que nécessaire tant que ce n'est pas encore propagé.",
+            "en": "Once the records are in place, call the provided verification link to confirm -- you can request it again as many times as needed while propagation is still pending.",
+        },
     ]
 
 

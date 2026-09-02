@@ -24,7 +24,7 @@ from api.dependencies import get_db
 from api.models.custom_domain import CustomDomain, CustomDomainStatus
 from api.models.organization import OrganizationMember
 from api.schemas.custom_domains import CustomDomainCreateRequest, CustomDomainListResponse, CustomDomainResponse, DnsRecordEntry
-from api.security.custom_domains import activate_domain, add_custom_domain, dns_records_for, verify_domain
+from api.security.custom_domains import activate_domain, add_custom_domain, dns_records_for, setup_steps, verify_domain
 from api.security.organizations import require_org_owner
 
 router = APIRouter(tags=["custom-domains"])
@@ -35,6 +35,7 @@ def _to_response(row: CustomDomain) -> CustomDomainResponse:
         id=row.id, organization_id=row.organization_id, domain=row.domain, status=row.status,
         verification_token=row.verification_token,
         dns_records=[DnsRecordEntry(**record) for record in dns_records_for(row.domain, row.verification_token)],
+        setup_steps=setup_steps(),
         created_at=row.created_at, updated_at=row.updated_at,
     )
 

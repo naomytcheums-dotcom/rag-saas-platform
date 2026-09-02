@@ -94,6 +94,78 @@ async def test_response_includes_cname_and_txt_dns_instructions(client, db_sessi
     assert records["TXT"]["value"] == body["verification_token"]
 
 
+# ------------------------------------------------------ 1.4.2 -- instructions --
+
+async def test_instructions_are_returned_for_an_existing_domain(client, db_session, register_payload):
+    """Validation criterion: instructions are returned for an existing
+    domain -- both per-record (dns_records[*].instructions) and the
+    overall walkthrough (setup_steps)."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    created = await client.post(
+        f"/organizations/{org['id']}/domains", json={"domain": "app.acme-corp.example"}, headers=_auth_header(owner_token),
+    )
+    body = created.json()
+    assert len(body["setup_steps"]) > 0
+    for record in body["dns_records"]:
+        assert record["instructions"]
+
+    # And on a fresh read, not just the creation response.
+    listed = await client.get(f"/organizations/{org['id']}/domains", headers=_auth_header(owner_token))
+    listed_domain = listed.json()["items"][0]
+    assert len(listed_domain["setup_steps"]) > 0
+    assert all(record["instructions"] for record in listed_domain["dns_records"])
+
+
+async def test_instructions_contain_the_correct_values(client, db_session, register_payload):
+    """Validation criterion: the instructions contain the right values --
+    not generic boilerplate, the ACTUAL domain/CNAME target/token this
+    domain was issued."""
+    from api.config import settings
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    created = await client.post(
+        f"/organizations/{org['id']}/domains", json={"domain": "app.acme-corp.example"}, headers=_auth_header(owner_token),
+    )
+    body = created.json()
+    records = {record["type"]: record for record in body["dns_records"]}
+
+    cname_text = records["CNAME"]["instructions"]["fr"] + records["CNAME"]["instructions"]["en"]
+    assert "app.acme-corp.example" in cname_text
+    assert settings.CUSTOM_DOMAIN_CNAME_TARGET in cname_text
+
+    txt_text = records["TXT"]["instructions"]["fr"] + records["TXT"]["instructions"]["en"]
+    assert "_rag-saas-verify.app.acme-corp.example" in txt_text
+    assert body["verification_token"] in txt_text
+
+
+async def test_instructions_are_available_in_french_and_english(client, db_session, register_payload):
+    """Validation criterion: instructions are available in French and
+    English."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    created = await client.post(
+        f"/organizations/{org['id']}/domains", json={"domain": "app.acme-corp.example"}, headers=_auth_header(owner_token),
+    )
+    body = created.json()
+
+    for record in body["dns_records"]:
+        assert set(record["instructions"].keys()) == {"fr", "en"}
+        assert record["instructions"]["fr"].strip()
+        assert record["instructions"]["en"].strip()
+        assert record["instructions"]["fr"] != record["instructions"]["en"]  # genuinely two different languages, not one copied
+
+    for step in body["setup_steps"]:
+        assert set(step.keys()) == {"fr", "en"}
+        assert step["fr"].strip()
+        assert step["en"].strip()
+        assert step["fr"] != step["en"]
+
+
 async def test_admin_cannot_add_a_domain(client, db_session, register_payload):
     """Validation criterion: a non-Owner cannot add a domain."""
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])

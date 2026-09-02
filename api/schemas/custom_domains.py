@@ -1,5 +1,5 @@
 """Request/response bodies for api/routers/custom_domains.py
-(Partie 1.4.1)."""
+(Partie 1.4.1/1.4.2)."""
 
 import datetime as dt
 import uuid
@@ -15,6 +15,8 @@ class DnsRecordEntry(BaseModel):
     type: str
     name: str
     value: str
+    # Partie 1.4.2 -- {"fr": "...", "en": "..."}, always both present.
+    instructions: dict[str, str]
 
 
 class CustomDomainResponse(BaseModel):
@@ -28,6 +30,10 @@ class CustomDomainResponse(BaseModel):
     # never stored, so a CUSTOM_DOMAIN_CNAME_TARGET change instantly
     # applies to every domain's instructions, not just newly-created ones.
     dns_records: list[DnsRecordEntry]
+    # Partie 1.4.2 -- ordered, non-technical walkthrough, both languages
+    # (api/security/custom_domains.py's setup_steps -- a fixed constant,
+    # not domain-specific).
+    setup_steps: list[dict[str, str]]
     created_at: dt.datetime
     updated_at: dt.datetime
 

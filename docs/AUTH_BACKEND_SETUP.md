@@ -1787,6 +1787,43 @@ periodic beat task re-running `verify_domain` on `pending`/`failed`
 rows, the same shape as `api/tasks/account_purge.py`'s daily sweep --
 not attempted here since it wasn't asked for by this step.
 
+### Instructions DNS (Partie 1.4.2)
+
+Extension de Partie 1.4.1 : chaque `DnsRecordEntry` (`type`/`name`/`value`)
+porte désormais un champ `instructions` (`{"fr": "...", "en": "..."}`),
+et chaque réponse de domaine porte un `setup_steps` -- une liste
+ordonnée d'étapes, elle aussi bilingue -- pensée pour un non-technicien
+(`api/security/custom_domains.py`'s `dns_records_for`/`setup_steps`).
+Rien n'est stocké : tout est recalculé à la volée à chaque réponse à
+partir du domaine, de son token, et de `CUSTOM_DOMAIN_CNAME_TARGET`.
+
+**Clarté pour un non-technicien** (vision critique) : `setup_steps` ne
+se contente pas de lister les enregistrements -- il explique, dans
+l'ordre, où aller ("connectez-vous à l'interface de votre fournisseur
+de domaine"), quoi chercher ("la section Zone DNS"), quoi faire
+("ajoutez les deux enregistrements ci-dessous"), et quoi attendre
+("la propagation prend de quelques minutes à quelques heures"), avant
+de renvoyer vers la vérification. Chaque enregistrement porte en plus
+sa propre explication contextuelle (pourquoi ce CNAME, pourquoi ce TXT),
+pas seulement des valeurs brutes à copier-coller sans contexte.
+
+**Bilingue, réellement testé, pas juste déclaré** : `fr` et `en` sont
+toujours les deux présents (jamais l'un sans l'autre), et les tests
+vérifient explicitement qu'ils diffèrent (`fr != en`) -- pas une simple
+copie d'une langue vers l'autre qui passerait un test moins strict.
+
+**Cohérence avec la configuration réelle du reverse-proxy** (vision
+critique) : le texte des instructions décrit uniquement l'action DNS
+elle-même ("ce CNAME relie votre domaine à notre plateforme", "ce TXT
+prouve que vous contrôlez ce domaine") -- jamais une affirmation comme
+"votre site est maintenant en ligne sur ce domaine". C'est un choix de
+formulation délibéré : aucun reverse-proxy ne route encore le trafic
+par Host header (voir la section Custom domains ci-dessus), donc
+promettre un routage fonctionnel dans un texte visible par l'Owner
+serait faux. Ce qui reste vrai indépendamment de cette limite --
+l'enregistrement DNS prouve le contrôle du domaine, pointe le hostname
+vers la plateforme -- est ce qui est dit, ni plus ni moins.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
