@@ -49,6 +49,8 @@ from api.schemas.documents import (
     GoogleDocImportResponse,
     GoogleDriveImportRequest,
     GoogleDriveImportResponse,
+    NotionImportRequest,
+    NotionImportResponse,
     SitemapImportRequest,
     SitemapImportResponse,
 )
@@ -58,6 +60,7 @@ from api.security.documents import (
     start_github_repo_import,
     start_google_doc_import,
     start_google_drive_import,
+    start_notion_import,
     start_sitemap_import,
     upload_document,
 )
@@ -259,6 +262,29 @@ async def create_documents_from_google_docs(
 
     await db.commit()
     return GoogleDocImportResponse(document_ids=document_ids, mode=mode, status="scheduled")
+
+
+@router.post("/organizations/{org_id}/documents/notion", response_model=NotionImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_notion(
+    org_id: uuid.UUID, payload: NotionImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.16, item 1's own literal route. 202 Accepted, same
+    reasoning as every prior async import route above -- nothing is
+    fetched synchronously; `kind`'s own guess isn't even confirmed
+    against the real API yet. Only real, non-network validation (URL/id
+    format, workspace ownership) happens here; no Notion token is ever
+    accepted in this request body."""
+    try:
+        notion_id, kind = await start_notion_import(
+            db, org_id, workspace_id, current_user.id, payload.url_or_id, payload.kind, payload.max_pages,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return NotionImportResponse(notion_id=notion_id, kind=kind, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)

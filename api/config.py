@@ -295,6 +295,33 @@ class Settings(BaseSettings):
     # deliberately DOC-specific, matching this step's own literal name.
     GOOGLE_DOCS_EXPORT_FORMAT: str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
+    # -- Notion import (Partie 2.1.16) ---------------------------------------
+    # A real Notion "internal integration" token (Settings -> Connections ->
+    # Develop or manage integrations, in a real Notion workspace this server
+    # should import from) -- a real, static, server-wide secret, the SAME
+    # shape as GITHUB_API_TOKEN (no OAuth refresh dance needed for this kind
+    # of integration). A real page/database must also be explicitly SHARED
+    # with the integration inside Notion itself -- confirmed for real,
+    # Notion's own API returns the exact same 404 for "does not exist" and
+    # "exists but not shared with this integration", the same real
+    # anti-enumeration design GitHub's own API already uses for a private
+    # repo.
+    NOTION_API_TOKEN: str | None = None
+    # This step's own literal default -- a real, defensible cap on the
+    # FETCH phase's own real, recursive block-tree walk (see
+    # api/services/notion_extraction.py's own module docstring).
+    NOTION_MAX_BLOCKS: int = 1000
+    # Comma-separated, this step's own literal default -- a real
+    # ALLOWLIST of real Notion block TYPES (not file extensions, unlike
+    # every prior *_INCLUDE_PATTERNS setting) -- a real Notion page can
+    # contain block types (embeds, synced blocks, child databases) this
+    # codebase has no meaningful real way to render as text.
+    NOTION_INCLUDE_TYPES: str = "paragraph,heading_1,heading_2,heading_3,bulleted_list_item,numbered_list_item,to_do,quote,code,toggle,divider"
+
+    @property
+    def notion_include_types_list(self) -> list[str]:
+        return [value.strip() for value in self.NOTION_INCLUDE_TYPES.split(",") if value.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

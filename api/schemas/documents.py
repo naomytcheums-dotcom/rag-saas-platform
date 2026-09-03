@@ -195,3 +195,26 @@ class GoogleDocImportResponse(BaseModel):
     document_ids: list[str]
     mode: Literal["single", "batch"]
     status: str
+
+
+class NotionImportRequest(BaseModel):
+    """Partie 2.1.16, item 1's own request body. `kind` tells a real
+    page apart from a real database -- Notion's own URL scheme cannot
+    reliably do this itself (see api/services/notion_extraction.py's
+    own validate_notion_url docstring), so this defaults to the more
+    common real case (`"page"`) rather than guessing via a real,
+    synchronous network call the route itself must never make. Same
+    reasoning as every prior import step for the lack of a token field."""
+
+    url_or_id: str = Field(min_length=1)
+    kind: Literal["page", "database"] = "page"
+    max_pages: int = Field(default=100, ge=1, le=1000)
+
+
+class NotionImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as every prior async
+    import step's own response, and for the identical reason."""
+
+    notion_id: str
+    kind: Literal["page", "database"]
+    status: str

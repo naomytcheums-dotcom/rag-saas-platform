@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15/2.1.16)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -3711,6 +3711,63 @@ Partie 2.1.14, no real Google OAuth credentials available) proves
 Doc (exported as DOCX), a real Sheet (exported as CSV), a real
 ordinary Drive file correctly rejected, a real export failure, and a
 missing-refresh-token failure.
+
+**Notion import (Partie 2.1.16) -- a genuinely simpler real auth shape
+than Google's.** A single, real, static `NOTION_API_TOKEN` (a real
+Notion "internal integration" token, the SAME shape as `GITHUB_API_TOKEN`
+-- no OAuth refresh dance needed). Confirmed live, no valid token
+needed: a missing or invalid token both get a real 401 under Notion's
+own real, FLAT error envelope (`{"object": "error", "status", "code", "message"}`)
+-- genuinely simpler than both GitHub's and Google's own shapes. A real
+page/database must ALSO be explicitly shared with the integration
+inside Notion itself -- confirmed real, Notion returns the exact same
+404 for "does not exist" and "exists but not shared", the same
+anti-enumeration design as a private GitHub repo.
+
+**A real, important structural finding**: a Notion page's content is a
+real TREE of blocks, not a flat list -- a block with `has_children: true`
+needs a SEPARATE real call to fetch its own children, recursively.
+`fetch_notion_blocks` walks this real tree, capped at `NOTION_MAX_BLOCKS`
+total real blocks (vision critique Q4's own "trop de blocs" answer,
+confirmed via a real test that a reached cap stops further real
+recursion). Notion's own API exposes NO `X-RateLimit-*` headers at all
+(confirmed live) -- its real mechanism is a `429` with `Retry-After`
+once exceeded, mapped here to a distinguishable `NotionRateLimitError`
+(vision critique Q4's own rate-limit answer), never independently
+triggered on purpose against a real, shared third-party service.
+
+**Cohérence (vision critique Q1)**: `extract_notion_content` converts
+the real block tree to real Markdown (headings, lists, to-dos, quotes,
+fenced code, nested indentation) then reuses the exact same upload/
+`process_document` pipeline -- a Notion page becomes a real `.md`
+Document, no new format. A real, honest simplification stated plainly:
+real `numbered_list_item` blocks carry no real ordinal number of their
+own in Notion's API, so a real, sequential counter is rendered across
+consecutive same-type siblings instead. `NOTION_INCLUDE_TYPES` is a
+real ALLOWLIST (embeds/synced blocks/child databases have no
+meaningful real text rendering) -- the real title, wherever the
+property is actually named, is found by its real `type == "title"`,
+never assumed by key name (a real page's title property is commonly
+`"Name"` for a database row, not `"title"`).
+
+**Real verification for Notion import specifically**:
+`tests/test_notion_extraction.py` (fast tier, `httpx.MockTransport`)
+covers real URL/id parsing (plain and dashed-UUID forms), every real
+distinguishable failure (401/429/404), real cursor-based pagination for
+both database queries and block children, the real recursive
+block-tree walk (including the real `NOTION_MAX_BLOCKS` cap stopping
+further recursion), real title-by-type extraction, and real Markdown
+conversion (headings, bold/italic/code runs, nested lists, to-dos,
+fenced code, and allowlist filtering). `tests/test_notion_extraction_integration.py`
+(real network, no valid token needed) confirms the real 401 live.
+`tests/test_documents.py` covers the real route end to end (page
+import, database import, invalid URL rejected, cross-tenant workspace
+guard, `max_pages` bounds, passed through to scheduling, permissions)
+with network stubbed, plus unit tests for `process_notion_pages` (real
+stagger/cap/broker tolerance). `tests/test_notion_integration.py`
+(realistic simulation, no real token available) proves
+`import_and_process_notion_page`/`process_notion_database`'s own real
+orchestration.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

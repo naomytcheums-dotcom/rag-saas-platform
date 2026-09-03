@@ -1991,3 +1991,181 @@ def test_process_google_docs_batch_tolerates_a_broker_failure_for_one_document(m
 
     assert scheduled == 2
     assert len(calls) == 2
+
+
+# ------------------------------------------------------------- Notion import --
+
+_REAL_NOTION_ID = "1234567890abcdef1234567890abcdef"
+
+
+async def _import_notion(client, org_id: str, token: str, url_or_id: str, workspace_id=None, kind=None, max_pages=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    body = {"url_or_id": url_or_id}
+    if kind is not None:
+        body["kind"] = kind
+    if max_pages is not None:
+        body["max_pages"] = max_pages
+    return await client.post(
+        f"/organizations/{org_id}/documents/notion", params=params,
+        json=body, headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_start_a_notion_page_import(client, db_session, register_payload):
+    """Validation criterion (2.1.16): l'import d'une page Notion
+    fonctionne, through its own real route. Real network activity is
+    deliberately NOT triggered -- schedule_notion_page_import is
+    stubbed by tests/conftest.py's own autouse fixture."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID)
+    assert response.status_code == 202
+    body = response.json()
+    assert body == {"notion_id": _REAL_NOTION_ID, "kind": "page", "status": "scheduled"}
+
+
+async def test_owner_can_start_a_notion_database_import(client, db_session, register_payload):
+    """Validation criterion: l'import d'une base de données fonctionne."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID, kind="database")
+    assert response.status_code == 202
+    assert response.json()["kind"] == "database"
+
+
+async def test_notion_import_rejects_an_invalid_url(client, db_session, register_payload):
+    """Validation criterion: une page invalide est rejetée."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_notion(client, org["id"], owner_token, "https://example.com/not-notion")
+    assert response.status_code == 400
+
+
+async def test_notion_import_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "notionotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID, workspace_id=other_workspace["id"])
+    assert response.status_code == 400
+
+
+async def test_notion_import_rejects_max_pages_out_of_bounds(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID, max_pages=0)
+    assert response.status_code == 422
+
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID, max_pages=1001)
+    assert response.status_code == 422
+
+
+async def test_notion_database_import_passes_max_pages_through_to_scheduling(client, db_session, register_payload, monkeypatch):
+    captured = {}
+
+    def _capture(notion_id, organization_id, workspace_id, max_pages, created_by):
+        captured["max_pages"] = max_pages
+
+    monkeypatch.setattr("api.security.documents.schedule_notion_database_import", _capture)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    response = await _import_notion(client, org["id"], owner_token, _REAL_NOTION_ID, kind="database", max_pages=42)
+
+    assert response.status_code == 202
+    assert captured["max_pages"] == 42
+
+
+async def test_schedule_notion_page_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_notion_page_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.notion_import.process_notion_page_task.delay", _boom)
+    schedule_notion_page_import(_REAL_NOTION_ID, uuid.uuid4(), None, uuid.uuid4())  # must not raise
+
+
+async def test_schedule_notion_database_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_notion_database_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.notion_import.process_notion_database_task.delay", _boom)
+    schedule_notion_database_import(_REAL_NOTION_ID, uuid.uuid4(), None, 100, uuid.uuid4())  # must not raise
+
+
+async def test_viewer_cannot_start_a_notion_import(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "notionviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _import_notion(client, org["id"], viewer_token, _REAL_NOTION_ID)
+    assert response.status_code == 403
+
+
+# --------------------------------------------------------- process_notion_pages --
+
+def test_process_notion_pages_schedules_one_task_per_page_with_a_real_stagger(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append((args, countdown))
+
+    monkeypatch.setattr("api.tasks.notion_import.process_notion_page_task", _FakeTask())
+
+    org_id, created_by = uuid.uuid4(), uuid.uuid4()
+    scheduled = documents_module.process_notion_pages(org_id, None, ["p1", "p2"], created_by)
+
+    assert scheduled == 2
+    assert calls[0][1] == 0
+    assert calls[1][1] == documents_module._NOTION_PAGE_STAGGER_SECONDS
+
+
+def test_process_notion_pages_caps_the_real_stagger_for_a_very_long_list(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append(countdown)
+
+    monkeypatch.setattr("api.tasks.notion_import.process_notion_page_task", _FakeTask())
+
+    many_ids = [f"p{i}" for i in range(500)]
+    documents_module.process_notion_pages(uuid.uuid4(), None, many_ids, created_by=None)
+
+    assert max(calls) == documents_module._NOTION_MAX_STAGGER_SECONDS
+
+
+def test_process_notion_pages_tolerates_a_broker_failure_for_one_page(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FlakyTask:
+        def apply_async(self, args, countdown):
+            if args[0] == "bad":
+                raise ConnectionError("broker unreachable")
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.notion_import.process_notion_page_task", _FlakyTask())
+
+    scheduled = documents_module.process_notion_pages(uuid.uuid4(), None, ["good-1", "bad", "good-2"], created_by=None)
+
+    assert scheduled == 2
+    assert len(calls) == 2
