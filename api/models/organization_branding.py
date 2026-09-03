@@ -15,7 +15,7 @@ expected to grow arbitrarily the way configuration keys might.
 import datetime as dt
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -37,6 +37,15 @@ class OrganizationBranding(Base):
     font_family: Mapped[str] = mapped_column(String(100), nullable=False, default="Inter")
     brand_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     custom_css: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 1.4.6 -- when true, a consuming frontend should hide this
+    # platform's own name/logo/legal mentions and show ONLY this
+    # organization's own brand_name/logo_url/favicon_url instead. Lives
+    # here, not on organization_settings (Partie 1.3.9's JSON overrides
+    # blob) -- see api/security/white_label.py's own docstring for why
+    # duplicating the same boolean as an independent key in a second
+    # table was deliberately rejected rather than silently done because
+    # the original spec asked for both.
+    hide_platform_branding: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

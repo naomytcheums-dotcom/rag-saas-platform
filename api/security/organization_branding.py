@@ -29,6 +29,9 @@ DEFAULT_BRANDING: dict[str, Any] = {
     "font_family": "Inter",
     "brand_name": None,
     "custom_css": None,
+    # Partie 1.4.6 -- see api/models/organization_branding.py's own
+    # comment on this column.
+    "hide_platform_branding": False,
 }
 
 # Real, substantive checks against a stored-CSS-injection class of
@@ -62,6 +65,7 @@ def _to_dict(row: OrganizationBranding) -> dict[str, Any]:
         "logo_url": row.logo_url, "favicon_url": row.favicon_url, "primary_color": row.primary_color,
         "secondary_color": row.secondary_color, "accent_color": row.accent_color, "font_family": row.font_family,
         "brand_name": row.brand_name, "custom_css": row.custom_css,
+        "hide_platform_branding": row.hide_platform_branding,
     }
 
 

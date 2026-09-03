@@ -2169,6 +2169,74 @@ convention as `tests/test_dns_verification_integration.py`), the real
 Resend Domains API lifecycle, real DKIM setup against real Postgres
 (with real Fernet encryption), and the real send-rejection path above.
 
+### White-label (Partie 1.4.6)
+
+One new column, `hide_platform_branding` (`BOOLEAN`, default `False`),
+on the EXISTING `organization_branding` table (migration `0030`) --
+not a new table, and not a second copy on `organization_settings`.
+
+**A deliberate deviation from this step's own literal spec, reasoned
+through and documented, not silently skipped**: item 2 asked for the
+same flag to also live on `organization_settings`, "pour garder la
+cohérence". `organization_settings` (Partie 1.3.9) has no per-setting
+database column at all, though -- it's a single generic JSON `settings`
+blob, keys merged with `DEFAULT_SETTINGS` at read time. Adding
+`hide_platform_branding` there as a 15th override key would create a
+SECOND, independent source of truth for the exact same boolean already
+on `organization_branding`, with no mechanism keeping the two in sync
+-- two flags that could silently disagree. Since this setting is
+fundamentally about branding (it toggles the visibility of the exact
+fields -- `brand_name`/`logo_url`/`favicon_url` -- that already live on
+that table), `organization_branding` is the one coherent home for it.
+
+**White-label config IS branding config, not a parallel system**
+(`api/security/white_label.py`): `get_white_label_config` returns the
+exact same dict `GET .../branding` already returns --
+`hide_platform_branding` is just one more key in it. `PATCH
+.../white-label` deliberately accepts ONLY `hide_platform_branding` --
+colors/font/`brand_name`/`custom_css` already have their own endpoint
+(`PATCH .../branding`); duplicating that validation logic here would
+be two ways to edit the same fields.
+
+**Endpoints, Owner-only, unlike branding's own public `GET`**: `GET`/
+`PATCH /organizations/{org_id}/white-label`. This is an admin-facing
+configuration view (an Owner checking/toggling the flag), not something
+a visitor needs -- the existing `GET .../branding` stays public and
+unchanged, still the one a login screen/embeddable widget calls before
+authentication. `hide_platform_branding` is ALSO exposed through that
+existing public endpoint (it's the same row) -- a frontend rendering a
+public page gets the flag from the SAME call it already makes for
+`logo_url`/colors, without needing a second, authenticated request.
+
+**Frontend integration (Partie 8, still at 0% -- same limitation as
+every branding-adjacent step in this codebase, 1.3.10/1.4.2)**: nothing
+to wire this INTO exists yet, so this section documents the intended
+contract rather than shipping actual CSS/components:
+- CSS custom properties a future frontend would set conditionally:
+  `--platform-name` = `hide_platform_branding ? brand_name : "rag-saas"`,
+  `--platform-logo` = `hide_platform_branding ? logo_url : <this
+  platform's own default logo>` (falling back to `brand_name`/no logo
+  at all if the organization never set one, even with the flag on --
+  hiding the platform's own branding must never mean showing nothing).
+- Conditional components: a header/footer/legal-mentions block would
+  render this platform's own name and links when `hide_platform_branding`
+  is `false`, and the organization's own `brand_name` (and nothing
+  platform-identifying) when `true`.
+- Favicon: already real since Partie 1.3.10 (`favicon_url`, uploaded via
+  `POST .../branding/favicon`) -- nothing new needed here, `hide_platform_branding`
+  just decides whether a frontend also serves this platform's OWN
+  favicon as a fallback when the organization hasn't uploaded one.
+
+**Real verification, not just code review**: `tests/test_white_label.py`
+(fast SQLite suite -- no real network dependency, this is a boolean on
+an already-existing row) covers the default (`false`), enabling and
+disabling, that a `PATCH` with no fields leaves it unchanged, that
+toggling it does not touch any other branding field, both endpoints'
+Owner-only permission boundary (including that GET, unlike branding's
+own, is NOT public), 404 handling, and that the flag is visible through
+BOTH the new white-label endpoint and the pre-existing public branding
+endpoint (the coherence question above, proven, not just claimed).
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

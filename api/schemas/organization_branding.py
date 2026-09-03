@@ -20,6 +20,7 @@ class OrganizationBrandingResponse(BaseModel):
     font_family: str
     brand_name: str | None
     custom_css: str | None
+    hide_platform_branding: bool
 
 
 class OrganizationBrandingUpdateRequest(BaseModel):

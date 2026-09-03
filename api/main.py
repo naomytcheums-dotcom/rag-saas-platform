@@ -22,7 +22,7 @@ from api.routers import (
     account, admin_users, audit, auth, custom_domains, email_domains, enterprise_sso, invitations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, quotas,
     resource_permissions, sessions, ssl_certificates, teams, two_factor, usage, user_limits, verify, webauthn,
-    workspaces,
+    white_label, workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
@@ -166,6 +166,7 @@ app.include_router(organization_branding.router)
 app.include_router(custom_domains.router)
 app.include_router(ssl_certificates.router)
 app.include_router(email_domains.router)
+app.include_router(white_label.router)
 
 
 @app.get("/metrics", tags=["monitoring"])
