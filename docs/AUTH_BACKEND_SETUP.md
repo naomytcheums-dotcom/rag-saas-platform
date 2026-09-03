@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -3529,6 +3529,118 @@ real 404 failure. `tests/test_documents_integration.py` runs the REAL
 end-to-end per-issue pipeline (real GitHub fetch, real S3, real
 Postgres, real embeddings) against a real issue, landing as a real
 `text/markdown` Document.
+
+**Google Drive import (Partie 2.1.14) -- the same reuse story again, at
+a genuinely different real auth shape.** A new route (`POST
+/organizations/{org_id}/documents/google-drive`, accepting a real Drive
+FOLDER or a single FILE id), a new service module
+(`api/services/google_drive_extraction.py`), and a new Celery task
+file (`api/tasks/google_drive_import.py`). Every real file imported
+goes through the exact same upload/`process_document` pipeline every
+other format uses -- no new file_type or dispatcher branch, `Document.source_url`
+reused unchanged for Drive's own real `webViewLink`.
+
+**A genuinely different, real OAuth 2.0 auth shape from every prior
+import step (vision critique Q2)**: unlike `GITHUB_API_TOKEN` (a single
+static credential used directly), Google's model has no server-to-
+server static credential -- `GOOGLE_DRIVE_REFRESH_TOKEN` (a real,
+long-lived credential an operator obtains ONCE, out of band, via
+Google's own OAuth consent flow -- see `.env.example`'s own step-by-
+step) must be exchanged for a real, short-lived (~1 hour) ACCESS token
+before every real Drive API call. `authenticate_drive` does this
+exchange PROACTIVELY, caching the real access token and refreshing it
+BEFORE its own real expiry (a real 60-second safety margin) rather
+than only reacting to a real 401 after the fact -- vision critique
+Q4's own "que se passe-t-il si le token expire" answer, confirmed
+correct via a real, live test of the cache-then-expire-then-refresh
+sequence. Same security reasoning as `GITHUB_API_TOKEN`:
+`GOOGLE_DRIVE_REFRESH_TOKEN`/`CLIENT_ID`/`CLIENT_SECRET` are NEVER
+threaded through Celery task arguments -- and this step's own literal
+task signatures already omitted a token parameter entirely from the
+start (unlike Partie 2.1.12's own literal `process_github_repo`
+signature, which DID list one and had to be corrected) -- every real
+Drive call instead reads `settings.GOOGLE_DRIVE_REFRESH_TOKEN` fresh
+and calls `authenticate_drive` itself.
+
+**Honest, stated limitation on how much of this could be verified for
+real, not glossed over**: unlike Partie 2.1.12/2.1.13 (where `gh auth
+token` provided a real, usable GitHub credential in-session), NO real
+Google OAuth credentials were available here -- there is no
+`gh`-equivalent ambient credential for Google, and obtaining one needs
+a real, interactive browser consent flow outside this session's safe,
+automated scope (the same restraint Partie 2.1.1 already took with
+`S3_DOCUMENTS_BUCKET_NAME`). What COULD be verified live, with no
+valid credential at all, and was: a real, unregistered OAuth
+`client_id` gets a real 401 (`invalid_client`) from
+`oauth2.googleapis.com`, and OMITTING `client_id` entirely gets a real,
+DIFFERENT 400 (`invalid_request`) -- a genuine additional finding; the
+Drive API itself returns a real 403 (`PERMISSION_DENIED`) for no
+`Authorization` header at all, and a real 401 (`UNAUTHENTICATED`) for
+a real, present-but-invalid access token -- both under Google's own
+real, NESTED error envelope (`{"error": {"code", "message", "status"}}`),
+genuinely different in shape from every prior GitHub-flat error this
+codebase has handled. An invalid/expired/revoked refresh token against
+a REAL, registered client (`invalid_grant`) is mapped on the strength
+of Google's own stable, published contract, not independently
+triggered (no real registered client was available).
+
+**A real, important Drive-specific finding**: a real native Google
+Workspace file (a real Google Doc/Sheet/Slide) has NO downloadable
+binary content at all -- Google's own documented behavior requires the
+separate `files.export` endpoint instead of a plain download.
+`should_include_drive_file` always excludes these (and real folders),
+regardless of `patterns` -- Partie 2.1.15's own explicit, separate
+scope ("Google Docs API export -> Markdown"), not re-implemented here.
+Real file `size` (a real Drive API detail: returned as a JSON STRING,
+not a number, Google's own int64-precision convention) is enforced
+BEFORE downloading (`GOOGLE_DRIVE_MAX_FILE_SIZE`, vision critique Q4's
+own "si le fichier est trop gros" answer) -- Drive's own `size` field
+is trustworthy first-party metadata, unlike an arbitrary external
+URL's `Content-Length` (see `url_fetching.py`'s own docstring for why
+THAT one can't be trusted), so no separate streamed-byte-count safety
+net was needed here.
+
+**A real, honestly-stated scope limitation**: recursion into real
+SUBFOLDERS is NOT implemented -- this step's own literal action items
+describe importing the given folder's own real files (`list_drive_files(folder_id, ...)`),
+matching Drive's own real `files.list` scope (direct children of one
+real parent), not a Git-Trees-API-style full recursive walk (Drive's
+real API has no single call equivalent to that; a true recursive walk
+would cost one real API call PER real subfolder). A real subfolder
+encountered in a real listing is simply excluded, the same way a real
+native Google Doc is.
+
+**Real verification for Google Drive import specifically**:
+`tests/test_google_drive_extraction.py` (fast tier, `httpx.MockTransport`,
+real response shapes baked into the mocks -- see that module's own
+docstring for exactly which ones were confirmed live) covers real
+token exchange/caching/proactive-refresh-before-expiry, every real,
+distinguishable failure mode (`invalid_client`/`invalid_grant`/401/403/
+rate-limit/404), real pagination, real folder/native-Google-Workspace-
+file/size/pattern filtering, real metadata extraction (including the
+real string-to-int size conversion), and real binary download.
+`tests/test_google_drive_extraction_integration.py` (real network, no
+valid credential needed) confirms the real, live OAuth/Drive auth
+rejections above are genuine, not invented -- plus real,
+account-gated tests that skip when `GOOGLE_DRIVE_REFRESH_TOKEN`/
+`CLIENT_ID`/`CLIENT_SECRET` aren't configured (never auto-provisioned).
+`tests/test_documents.py` covers the real route end to end (start an
+import, empty `drive_id` rejected, cross-tenant workspace guard,
+`max_files` bounds, patterns passed through to scheduling, permissions)
+with network calls stubbed, plus focused unit tests for
+`process_google_drive_files` (real stagger, its real cap, real
+per-task broker-failure tolerance). `tests/test_google_drive_integration.py`
+-- deliberately NOT a real-network file, unlike its GitHub-named
+counterparts, see that file's own module docstring for why -- proves
+`process_google_drive`'s own real orchestration (folder vs. single-file
+resolution, filtering, capping, auth-failure/404 handling) against a
+realistic, hand-built simulation of Drive's own confirmed-live response
+shapes. `tests/test_documents_integration.py` adds a real, credential-
+gated end-to-end per-file pipeline test that discovers a real,
+importable file from the configured account's own real Drive root
+(no real, public, well-known Drive file exists the way `octocat/Hello-World`
+does for GitHub) and a real 404 failure test -- both skip, not fail,
+when real credentials aren't configured.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

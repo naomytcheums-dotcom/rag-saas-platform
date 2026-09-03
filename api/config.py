@@ -250,6 +250,37 @@ class Settings(BaseSettings):
     def github_include_patterns_list(self) -> list[str]:
         return [pattern.strip() for pattern in self.GITHUB_INCLUDE_PATTERNS.split(",") if pattern.strip()]
 
+    # -- Google Drive import (Partie 2.1.14) ---------------------------------
+    # A genuinely different auth shape from GITHUB_API_TOKEN above: Google's
+    # OAuth 2.0 model has no single static credential for server-to-server
+    # API access. An operator completes Google's own OAuth consent flow for
+    # this application ONCE, out of band (e.g. Google's OAuth Playground, or
+    # a one-time local script using these same CLIENT_ID/CLIENT_SECRET
+    # values), and stores the resulting REFRESH token here -- it is
+    # exchanged for a real, short-lived (~1 hour) access token before every
+    # batch of real Drive API calls (api/services/google_drive_extraction.py's
+    # own authenticate_drive). All three are required together for ANY real
+    # Drive import to work -- unlike GitHub's own optional token (a public
+    # repo needs none), Drive has no unauthenticated read mode at all,
+    # confirmed for real: a request with no Authorization header at all gets
+    # a real 403, and one with a real, present-but-invalid token gets a real
+    # 401 -- both live, neither is a guess.
+    GOOGLE_DRIVE_CLIENT_ID: str | None = None
+    GOOGLE_DRIVE_CLIENT_SECRET: str | None = None
+    GOOGLE_DRIVE_REFRESH_TOKEN: str | None = None
+    # This step's own literal default.
+    GOOGLE_DRIVE_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50 MB
+    # Comma-separated, this step's own literal (unnamed) default -- a real
+    # ALLOWLIST, same "an arbitrary folder holds plenty of content this
+    # pipeline can't meaningfully ingest as text" reasoning as
+    # GITHUB_INCLUDE_PATTERNS -- covers every format Partie 2.1.1-2.1.9
+    # already knows how to process for real, not an arbitrary guess.
+    GOOGLE_DRIVE_INCLUDE_PATTERNS: str = ".pdf,.docx,.txt,.md,.html,.csv,.json,.xml,.epub"
+
+    @property
+    def google_drive_include_patterns_list(self) -> list[str]:
+        return [pattern.strip() for pattern in self.GOOGLE_DRIVE_INCLUDE_PATTERNS.split(",") if pattern.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

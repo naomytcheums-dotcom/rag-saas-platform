@@ -154,6 +154,19 @@ def _stub_out_github_issues_import_scheduling_by_default(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_google_drive_import_scheduling_by_default(monkeypatch):
+    """Partie 2.1.14's own equivalent of the fixture above --
+    start_google_drive_import calls schedule_google_drive_import, the
+    SAME real Celery-dispatch problem for the SAME reason. Verified
+    directly in tests/test_documents.py, which monkeypatches it back
+    for itself."""
+    monkeypatch.setattr(
+        "api.security.documents.schedule_google_drive_import",
+        lambda drive_id, organization_id, workspace_id, patterns, max_files, created_by: None,
+    )
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

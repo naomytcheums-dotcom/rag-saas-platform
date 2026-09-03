@@ -137,3 +137,31 @@ class GitHubIssuesImportResponse(BaseModel):
     owner: str
     repo: str
     status: str
+
+
+class GoogleDriveImportRequest(BaseModel):
+    """Partie 2.1.14, item 1's own request body. `drive_id` (not
+    `folder_id`/`file_id` separately) since this step's own literal
+    route accepts EITHER a real Drive folder or a real single file --
+    api/security/documents.py's own process_google_drive resolves
+    which for real. Deliberately no `HttpUrl` field here the way every
+    prior import step had one: a real Drive id is an opaque
+    Google-internal string, not a URL, with no meaningful FORMAT to
+    validate at this schema layer -- real validation (does it exist, is
+    it accessible) only happens once the deferred Celery task actually
+    calls the real Drive API. Deliberately has NO field for OAuth
+    credentials either -- see api/config.py's own GOOGLE_DRIVE_REFRESH_TOKEN
+    docstring: those are real, server-wide secrets an operator
+    configures once, never something a caller submits per-request."""
+
+    drive_id: str = Field(min_length=1)
+    patterns: list[str] | None = None
+    max_files: int = Field(default=100, ge=1, le=2000)
+
+
+class GoogleDriveImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as every prior async
+    import step's own response, and for the identical reason."""
+
+    drive_id: str
+    status: str

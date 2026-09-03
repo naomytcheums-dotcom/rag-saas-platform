@@ -260,6 +260,18 @@ ebooklib==0.20
 # with more calls against the same real GitHub REST API, same httpx
 # client, same reasoning for no SSRF-safe transport.
 
+# -- Documents / Google Drive import (Partie 2.1.14) ---------------------------
+# No new package at all -- a plain httpx.AsyncClient (already a real
+# dependency) against Google's own fixed OAuth token endpoint and Drive
+# API v3 host, no SSRF-safe transport needed (same reasoning as GitHub's
+# own import above: the real target host is always fixed, never
+# caller-controlled). Deliberately NOT google-api-python-client/
+# google-auth -- Drive's own real REST surface this step needs (OAuth
+# refresh-token exchange, files.list/get, alt=media download) is a
+# handful of plain HTTP calls, the same "no heavy SDK without a real,
+# expressed need" restraint as every prior import step's own library
+# choice (no Playwright, no git clone, no Search API).
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0
