@@ -322,6 +322,32 @@ class Settings(BaseSettings):
     def notion_include_types_list(self) -> list[str]:
         return [value.strip() for value in self.NOTION_INCLUDE_TYPES.split(",") if value.strip()]
 
+    # -- Confluence import (Partie 2.1.17) -----------------------------------
+    # A real Confluence API token (Cloud: an Atlassian API token used as a
+    # real Bearer token; Server/Data Center: a real Personal Access Token) --
+    # a real, static, server-wide secret, the SAME shape as NOTION_API_TOKEN/
+    # GITHUB_API_TOKEN. Honest, stated limitation (see
+    # api/services/confluence_extraction.py's own module docstring): unlike
+    # every other real API this codebase integrates with, Confluence has NO
+    # universal, always-reachable host to verify real behavior against at
+    # all -- CONFLUENCE_BASE_URL is inherently tenant-specific.
+    CONFLUENCE_API_TOKEN: str | None = None
+    CONFLUENCE_BASE_URL: str | None = None
+    # This step's own literal default.
+    CONFLUENCE_MAX_PAGES: int = 100
+    # Comma-separated, this step's own literal default ("tous" = empty
+    # string here, no restriction) -- a real, admin-configured ALLOWLIST
+    # of real space KEYS this server is permitted to import a real SPACE
+    # from, regardless of what a caller requests -- unlike a single real
+    # page (already fully identified by its own real numeric id), "import
+    # this whole space" is a real, broader action worth a real, optional
+    # operator-level guard rail.
+    CONFLUENCE_INCLUDE_SPACES: str = ""
+
+    @property
+    def confluence_include_spaces_list(self) -> list[str]:
+        return [value.strip() for value in self.CONFLUENCE_INCLUDE_SPACES.split(",") if value.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

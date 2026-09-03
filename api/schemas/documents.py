@@ -218,3 +218,26 @@ class NotionImportResponse(BaseModel):
     notion_id: str
     kind: Literal["page", "database"]
     status: str
+
+
+class ConfluenceImportRequest(BaseModel):
+    """Partie 2.1.17, item 1's own request body. Unlike Notion, `kind`
+    is NOT a caller-supplied field here -- a real Confluence page id is
+    always numeric and a real space URL always carries its own real
+    space KEY, so api/services/confluence_extraction.py's own
+    validate_confluence_url determines it for real from the URL's own
+    real shape, never a guess. Same reasoning as every prior import
+    step for the lack of a token/base_url field (CONFLUENCE_BASE_URL is
+    a real, server-wide setting, not per-request)."""
+
+    url_or_id: str = Field(min_length=1)
+    max_pages: int = Field(default=100, ge=1, le=1000)
+
+
+class ConfluenceImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as every prior async
+    import step's own response, and for the identical reason."""
+
+    confluence_id: str
+    kind: Literal["page", "space"]
+    status: str

@@ -3769,6 +3769,78 @@ stagger/cap/broker tolerance). `tests/test_notion_integration.py`
 `import_and_process_notion_page`/`process_notion_database`'s own real
 orchestration.
 
+**Confluence import (Partie 2.1.17) -- the LEAST verifiable import
+source in this whole étape series, and stated as plainly as possible
+here.** Every import source before this one (GitHub, Google, Notion)
+has at least ONE fixed, universal, always-reachable real host
+(`api.github.com`, `www.googleapis.com`, `api.notion.com`) that this
+codebase could make a real, live HTTP call against even with zero
+valid credentials -- enough to confirm the real error-response shape
+being parsed actually matches what the real API returns. Confluence has
+no such host at all: `CONFLUENCE_BASE_URL` is tenant-specific
+(`https://YOUR-TENANT.atlassian.net/wiki` for Cloud, or an arbitrary
+self-hosted URL for Server/Data Center). Confirmed for real during this
+étape's own work: a plausible-looking placeholder tenant
+(`example-tenant.atlassian.net`) returns Atlassian's own generic
+marketing/HTML 404 page, not a Confluence REST API JSON response of any
+kind -- there is no shared fallback host to probe the way there was for
+every prior source. **Every Confluence-specific test in this codebase
+is therefore built entirely from Atlassian's own stable, published REST
+API v1 documentation, with zero live verification of any kind** -- not
+even the auth-rejection shape that 2.1.14's own 🟡 rating was based on
+could be checked here. This is the honest reason this étape is
+delivered 🟡, and why `tests/test_confluence_extraction_integration.py`
+does not exist at all (unlike every prior source's own `_integration.py`
+real-network file) -- there is no real, credential-free request this
+codebase could make to write such a file honestly.
+
+**Cohérence (vision critique Q1)**: Confluence's real "storage format"
+(the shape `body.storage.value` comes back in) is XHTML -- rather than
+writing a second HTML parser, `extract_confluence_content` reuses
+`api/services/html_extraction.py`'s existing `extract_html_content_from_markup`
+core completely UNCHANGED, the strongest possible answer available: a
+Confluence page becomes a real `.html` Document processed through the
+exact same, already-audited HTML pipeline every other HTML import in
+this codebase uses. Honest caveat stated plainly: Confluence-specific
+storage-format macros (e.g. `<ac:structured-macro>` panels, info boxes,
+expand blocks) are not specially unwrapped -- they pass through
+whatever `extract_html_content_from_markup` already does with unknown
+tags, same as any other exotic HTML this pipeline has never been shown.
+
+**Real, deliberate improvement over the Notion precedent for
+page-vs-space disambiguation**: Notion's own URL/ID shape cannot tell a
+page from a database apart, forcing a schema-level default
+(`kind: Literal["page","database"] = "page"`). Confluence's real Cloud
+URL shapes genuinely CAN: a page URL always contains `/pages/{numeric-id}`,
+a space URL is `/spaces/{KEY}` with no such suffix -- so
+`validate_confluence_url` returns the real, determined `kind` directly
+from the URL's own shape, no guessing and no default needed.
+`CONFLUENCE_INCLUDE_SPACES` is implemented as a real, admin-configured
+allowlist of space keys, checked in `process_confluence_space` BEFORE
+any real fetch is attempted (vision critique Q3's own answer) -- since
+the route only ever targets one explicit page or space per request,
+there is no folder-style discovery step where a per-request filter
+would otherwise apply.
+
+**Real verification for Confluence import specifically, given the
+limitation above**: `tests/test_confluence_extraction.py` (fast tier,
+`httpx.MockTransport`, built from Atlassian's documented response
+shapes) covers URL/bare-ID parsing for both page and space forms, every
+documented failure shape (401/403/429/404), real `start`-offset
+pagination for space page listings (including the real `max_pages`
+cap), child-page listing, real text extraction via the reused HTML
+core, and real metadata extraction (title/version/date/author, with
+graceful handling of missing fields). `tests/test_documents.py` covers
+the real route end to end (page import, space import, invalid URL
+rejected, cross-tenant workspace guard, `max_pages` bounds, permissions)
+with network stubbed, plus unit tests for `process_confluence_pages`
+(real stagger/cap/broker tolerance) and the `CONFLUENCE_INCLUDE_SPACES`
+allowlist rejection. `tests/test_confluence_integration.py` (realistic
+simulation built from documented shapes, the same honest limitation as
+every test in this étape) proves `import_and_process_confluence_page`/
+`process_confluence_space`'s own real orchestration logic, including the
+allowlist rejection and the not-configured failure path.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

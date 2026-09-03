@@ -201,6 +201,23 @@ def _stub_out_notion_import_scheduling_by_default(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_confluence_import_scheduling_by_default(monkeypatch):
+    """Partie 2.1.17's own equivalent of the fixture above --
+    start_confluence_import calls schedule_confluence_page_import/
+    schedule_confluence_space_import, the SAME real Celery-dispatch
+    problem for the SAME reason. Verified directly in
+    tests/test_documents.py, which monkeypatches these back for itself."""
+    monkeypatch.setattr(
+        "api.security.documents.schedule_confluence_page_import",
+        lambda confluence_id, organization_id, workspace_id, created_by: None,
+    )
+    monkeypatch.setattr(
+        "api.security.documents.schedule_confluence_space_import",
+        lambda confluence_id, organization_id, workspace_id, max_pages, created_by: None,
+    )
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

@@ -38,6 +38,8 @@ from api.models.document import Document
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.schemas.documents import (
+    ConfluenceImportRequest,
+    ConfluenceImportResponse,
     DocumentListResponse,
     DocumentResponse,
     DocumentUrlImportRequest,
@@ -56,6 +58,7 @@ from api.schemas.documents import (
 )
 from api.security.documents import (
     import_document_from_url,
+    start_confluence_import,
     start_github_issues_import,
     start_github_repo_import,
     start_google_doc_import,
@@ -285,6 +288,29 @@ async def create_documents_from_notion(
 
     await db.commit()
     return NotionImportResponse(notion_id=notion_id, kind=kind, status="scheduled")
+
+
+@router.post("/organizations/{org_id}/documents/confluence", response_model=ConfluenceImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_confluence(
+    org_id: uuid.UUID, payload: ConfluenceImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.17, item 1's own literal route. 202 Accepted, same
+    reasoning as every prior async import route above -- nothing is
+    fetched synchronously. Only real, non-network validation (URL/id
+    format, workspace ownership) happens here; no Confluence token or
+    base URL is ever accepted in this request body -- both are real,
+    server-wide settings."""
+    try:
+        confluence_id, kind = await start_confluence_import(
+            db, org_id, workspace_id, current_user.id, payload.url_or_id, payload.max_pages,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return ConfluenceImportResponse(confluence_id=confluence_id, kind=kind, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)
