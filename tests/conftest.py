@@ -108,6 +108,15 @@ def _stub_out_document_processing_scheduling_by_default(monkeypatch):
     monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_url_import_scheduling_by_default(monkeypatch):
+    """Partie 2.1.10's own equivalent of the fixture above --
+    import_document_from_url calls schedule_url_import, the SAME real
+    Celery-dispatch problem for the SAME reason. Verified directly in
+    tests/test_documents.py, which monkeypatches it back for itself."""
+    monkeypatch.setattr("api.security.documents.schedule_url_import", lambda document_id: None)
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

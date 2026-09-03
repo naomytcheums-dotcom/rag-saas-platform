@@ -1012,3 +1012,109 @@ async def test_viewer_cannot_upload_an_epub_document(client, db_session, registe
 
     response = await _upload(client, org["id"], viewer_token, filename="book.epub", content=_real_epub_bytes())
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------- URL import --
+
+async def _import_url(client, org_id: str, token: str, url: str, workspace_id=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    return await client.post(
+        f"/organizations/{org_id}/documents/url", params=params,
+        json={"url": url}, headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_import_a_document_from_a_url(client, db_session, register_payload):
+    """Validation criterion (2.1.10): importing from a URL works,
+    through its own real route. Real network activity is deliberately
+    NOT triggered by this test -- schedule_url_import is stubbed by
+    tests/conftest.py's own autouse fixture, the same way S3/Celery are
+    stubbed for every other format's own fast upload tests -- this
+    only exercises the SYNCHRONOUS half of the route (vision critique
+    Q4's own answer: fast, no real network, real fetch deferred)."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_url(client, org["id"], owner_token, "https://example.com/article")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["source_url"] == "https://example.com/article"
+    assert body["name"] == "https://example.com/article"  # real fallback until the real fetch determines the page's own title
+    assert body["status"] == DocumentStatus.pending.value
+
+
+async def test_import_rejects_a_disallowed_url_scheme(client, db_session, register_payload):
+    """Vision critique Q2/Q5 -- an obviously invalid URL is rejected
+    immediately (a real, synchronous 400), not silently accepted and
+    deferred to a background failure."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_url(client, org["id"], owner_token, "ftp://example.com/file")
+    assert response.status_code in (400, 422)  # 422 if pydantic's own HttpUrl rejects it first
+
+
+async def test_import_rejects_a_url_with_embedded_credentials(client, db_session, register_payload):
+    """pydantic's own HttpUrl (the schema-layer check) does NOT reject
+    this -- confirmed for real -- so this proves api/services/url_fetching.py's
+    own validate_url is genuinely reached and enforced, not redundant."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_url(client, org["id"], owner_token, "http://user:pass@example.com/")
+    assert response.status_code == 400
+
+
+async def test_import_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "urlotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _import_url(client, org["id"], owner_token, "https://example.com/", workspace_id=other_workspace["id"])
+    assert response.status_code == 400
+
+
+async def test_import_document_from_url_schedules_url_import(client, db_session, register_payload, monkeypatch):
+    scheduled = []
+    monkeypatch.setattr("api.security.documents.schedule_url_import", lambda document_id: scheduled.append(document_id))
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    response = await _import_url(client, org["id"], owner_token, "https://example.com/article")
+
+    assert str(scheduled[0]) == response.json()["id"]
+
+
+async def test_schedule_url_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_url_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.url_import.fetch_and_process_url_task.delay", _boom)
+    schedule_url_import(uuid.uuid4())  # must not raise
+
+
+async def test_viewer_cannot_import_a_document_from_a_url(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "urlviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _import_url(client, org["id"], viewer_token, "https://example.com/article")
+    assert response.status_code == 403
+
+
+async def test_uploaded_documents_have_no_source_url(client, db_session, register_payload, monkeypatch):
+    """Real, explicit confirmation that source_url stays None for the
+    OTHER, much more common import path -- a plain file upload."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token)
+    assert response.json()["source_url"] is None

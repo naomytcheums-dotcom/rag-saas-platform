@@ -1,23 +1,24 @@
 """
-Partie 2.1.1 -- uploading, listing, viewing, and deleting an
-organization's documents.
+Partie 2.1.1/2.1.10 -- uploading, importing from a URL, listing,
+viewing, and deleting an organization's documents.
 
-Two of these four endpoints are org-scoped (`/organizations/{org_id}/
-documents`, same `require_org_member*` dependency-injection shape as
-every other org-scoped router) and two are NOT (`/documents/{document_id}`,
-this step's own literal paths) -- those look the document up FIRST, then
-check the CALLER's membership in ITS organization manually
-(_get_document_and_membership below), same 404-for-non-member-or-
-nonexistent anti-enumeration convention as require_org_member itself,
-just applied by hand since there's no org_id path parameter for FastAPI
-to resolve a Depends() against.
+Two of these five endpoints are org-scoped (`/organizations/{org_id}/
+documents`[`/url`], same `require_org_member*` dependency-injection
+shape as every other org-scoped router) and two are NOT
+(`/documents/{document_id}`, this step's own literal paths) -- those
+look the document up FIRST, then check the CALLER's membership in ITS
+organization manually (_get_document_and_membership below), same
+404-for-non-member-or-nonexistent anti-enumeration convention as
+require_org_member itself, just applied by hand since there's no
+org_id path parameter for FastAPI to resolve a Depends() against.
 
 POST is Owner/Admin/Manager/Member -- explicitly NOT Viewer (see
 api/security/organizations.py's require_org_member_excluding_viewer,
 built for exactly this: a write endpoint Viewer's own role shouldn't
-reach). DELETE is Member+ if the caller uploaded the document
-themselves, OR Admin/Owner as an administrative override -- a plain
-Member can't delete someone ELSE's document.
+reach) -- the SAME rule applies to importing from a URL, a real write
+just like a file upload is. DELETE is Member+ if the caller uploaded
+the document themselves, OR Admin/Owner as an administrative override
+-- a plain Member can't delete someone ELSE's document.
 """
 
 import uuid
@@ -30,8 +31,8 @@ from api.dependencies import get_current_user, get_db
 from api.models.document import Document
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
-from api.schemas.documents import DocumentListResponse, DocumentResponse
-from api.security.documents import upload_document
+from api.schemas.documents import DocumentListResponse, DocumentResponse, DocumentUrlImportRequest
+from api.security.documents import import_document_from_url, upload_document
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import delete_document_file
 
@@ -42,6 +43,7 @@ def _to_response(row: Document) -> DocumentResponse:
     return DocumentResponse(
         id=row.id, organization_id=row.organization_id, workspace_id=row.workspace_id, name=row.name,
         file_size=row.file_size, file_type=row.file_type, status=row.status, metadata=row.metadata_json,
+        source_url=row.source_url,
         created_by=row.created_by, created_at=row.created_at, updated_at=row.updated_at, processed_at=row.processed_at,
     )
 
@@ -81,6 +83,28 @@ async def create_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    await db.commit()
+    await db.refresh(document)
+    return _to_response(document)
+
+
+@router.post("/organizations/{org_id}/documents/url", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def create_document_from_url(
+    org_id: uuid.UUID, payload: DocumentUrlImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.10, item 1's own literal route. Only cheap,
+    non-network validation (URL format/scheme) happens here -- the real
+    accessibility/robots.txt/fetch all happen asynchronously afterward
+    (api/security/documents.py's own process_url_document, run by
+    Celery), so this returns fast even for a target that turns out to
+    be slow or unreachable."""
+    try:
+        document = await import_document_from_url(db, org_id, workspace_id, current_user.id, str(payload.url))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     await db.commit()
     await db.refresh(document)

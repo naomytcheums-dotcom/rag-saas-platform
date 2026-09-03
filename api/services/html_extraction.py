@@ -41,6 +41,18 @@ caught by api/security/documents.py's process_document's existing
 broad exception handler, ending in `status = "failed"` with the real
 error recorded, the exact same honest failure story Partie 2.1.4 built
 for a Markdown file with invalid YAML frontmatter.
+
+**`extract_html_content_from_markup`/`extract_html_metadata_from_markup`
+are the real, shared, STRING-based cores** (Partie 2.1.10) -- the file-
+based `extract_html_content`/`extract_html_metadata` below are now thin
+wrappers around them. `api/services/url_extraction.py` imports these
+same two functions directly (a fetched web page is real HTML content
+that never touches disk as its own file) rather than reimplementing
+readability/BeautifulSoup parsing a second time, or forcing a fetched
+page through a throwaway temp file just to satisfy a file_path-shaped
+API -- the exact same "one real implementation, two real callers"
+reasoning api/services/xml_extraction.py's own SAFE_XML_PARSER already
+established.
 """
 
 import readability
@@ -53,16 +65,23 @@ def _read_html(file_path: str) -> str:
     return extract_txt_text(file_path)
 
 
-def extract_html_content(file_path: str) -> str:
-    """Item 2's literal function -- the page's real main-content text
-    (article body, stripped of nav/header/footer/ads by readability's
-    scoring heuristic), not the raw page dump. See this module's own
-    docstring for the two real failure/edge-case findings verified
-    before writing this."""
-    html = _read_html(file_path)
+def extract_html_content_from_markup(html: str) -> str:
+    """The real shared core -- see this module's own docstring. Takes
+    real HTML markup directly (no file involved), the page's real
+    main-content text (article body, stripped of nav/header/footer/ads
+    by readability's scoring heuristic), not the raw page dump. See
+    this module's own docstring for the two real failure/edge-case
+    findings verified before writing this."""
     doc = readability.Document(html)
     summary_html = doc.summary()
     return BeautifulSoup(summary_html, "lxml").get_text(separator="\n\n", strip=True)
+
+
+def extract_html_content(file_path: str) -> str:
+    """Item 2's literal function -- a thin file-reading wrapper around
+    `extract_html_content_from_markup` (see this module's own
+    docstring for why the real logic lives there)."""
+    return extract_html_content_from_markup(_read_html(file_path))
 
 
 def _meta_content(soup: BeautifulSoup, name: str | None = None, property_: str | None = None) -> str | None:
@@ -73,9 +92,10 @@ def _meta_content(soup: BeautifulSoup, name: str | None = None, property_: str |
     return content or None
 
 
-def extract_html_metadata(file_path: str) -> dict:
+def extract_html_metadata_from_markup(html: str) -> dict:
     """
-    Item 2's literal function -- title/author/date/description, each
+    The real shared core -- see this module's own docstring. Takes
+    real HTML markup directly. title/author/date/description, each
     only included when a real value was actually found (no fabricated
     placeholders). Open Graph tags are preferred over their plainer
     equivalents when both are present (`og:title` over the bare
@@ -85,7 +105,7 @@ def extract_html_metadata(file_path: str) -> dict:
     `og:title`, the opposite priority a curated article summary
     usually wants).
     """
-    soup = BeautifulSoup(_read_html(file_path), "lxml")
+    soup = BeautifulSoup(html, "lxml")
 
     metadata: dict = {}
 
@@ -111,6 +131,13 @@ def extract_html_metadata(file_path: str) -> dict:
         metadata["description"] = description
 
     return metadata
+
+
+def extract_html_metadata(file_path: str) -> dict:
+    """Item 2's literal function -- a thin file-reading wrapper around
+    `extract_html_metadata_from_markup` (see this module's own
+    docstring for why the real logic lives there)."""
+    return extract_html_metadata_from_markup(_read_html(file_path))
 
 
 def extract_html_links(file_path: str) -> list[dict]:

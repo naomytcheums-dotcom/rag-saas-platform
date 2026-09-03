@@ -1,12 +1,14 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9 -- real
-infrastructure tests for api/security/documents.py: real embedding
-generation (sentence-transformers, a real model downloaded from
-HuggingFace Hub on first use, then cached), real chunking with a real
-tokenizer, and the real end-to-end process_document pipeline (real S3
-upload/download + real extraction + real chunking + real embeddings)
-against real Postgres, for PDF, DOCX, TXT, Markdown, HTML, CSV, JSON,
-XML, and EPUB.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10 --
+real infrastructure tests for api/security/documents.py: real
+embedding generation (sentence-transformers, a real model downloaded
+from HuggingFace Hub on first use, then cached), real chunking with a
+real tokenizer, and the real end-to-end process_document pipeline
+(real S3 upload/download + real extraction + real chunking + real
+embeddings) against real Postgres, for PDF, DOCX, TXT, Markdown, HTML,
+CSV, JSON, XML, and EPUB, plus the real end-to-end URL-import pipeline
+(process_url_document -- real DNS/SSRF-safe fetch of a real external
+page, THEN the same process_document pipeline).
 
 **JSON and XML have no "marks failed" integration test, unlike every
 other format, and deliberately so**: Markdown's frontmatter YAMLError,
@@ -43,7 +45,7 @@ from api.config import settings
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
-from api.security.documents import chunk_text, generate_embeddings, process_document
+from api.security.documents import chunk_text, generate_embeddings, process_document, process_url_document
 from api.services.document_storage import upload_document_file, validate_document_upload
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -140,6 +142,31 @@ async def _make_org_and_pending_document(session, *, file_bytes: bytes, filename
     session.add(document)
     await session.flush()
     document.file_key = upload_document_file(organization.id, document.id, filename, file_bytes, content_type)
+    await session.commit()
+    return owner, organization, document
+
+
+async def _make_org_and_pending_url_document(session, *, url: str):
+    """Partie 2.1.10's own equivalent of _make_org_and_pending_document
+    above -- a URL-imported document starts with no real file content
+    at all (file_key/file_size/file_type are all placeholders filled in
+    for real only once process_url_document actually fetches the URL),
+    unlike every other format's own fixture, which already has real
+    bytes to validate and upload up front."""
+    owner = User(email=_unique_email(), hashed_password="irrelevant")
+    session.add(owner)
+    await session.flush()
+
+    organization = Organization(name="Document ITest Org", slug=f"document-itest-{uuid.uuid4().hex[:8]}")
+    session.add(organization)
+    await session.flush()
+    session.add(OrganizationMember(organization_id=organization.id, user_id=owner.id, role=OrganizationRole.owner))
+
+    document = Document(
+        organization_id=organization.id, name=url, source_url=url, file_key="", file_size=0,
+        file_type="text/html", status=DocumentStatus.pending.value, created_by=owner.id,
+    )
+    session.add(document)
     await session.commit()
     return owner, organization, document
 
@@ -859,6 +886,74 @@ async def test_process_document_marks_failed_for_an_epub_missing_its_container_f
         document_id = document.id
         try:
             updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_url_document_runs_the_real_end_to_end_url_import_pipeline(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.10's own validation criterion -- the real, full chain:
+    real DNS resolution + SSRF-safe connection (api/services/
+    url_fetching.py), a real fetch of a real external page
+    (example.com, RFC 2606's own reserved documentation domain), real
+    upload to S3, THEN the exact same process_document pipeline every
+    other format already uses. Confirms the real page title replaces
+    the URL as Document.name, and real chunks/embeddings exist -- this
+    step's own real answer to vision critique Q1 (genuine pipeline
+    reuse, not a parallel one) and Q4 (this whole chain runs from a
+    Celery task in production, api/tasks/url_import.py -- called
+    directly here, matching how every other format's own integration
+    test calls process_document directly rather than going through
+    Celery itself).
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_url_document(session, url="https://example.com/")
+        document_id = document.id
+        try:
+            updated = await process_url_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.file_type == "text/html"
+            assert updated.source_url.startswith("https://example.com")
+            assert updated.name != "https://example.com/"  # replaced by the real page's own title
+            assert updated.file_size > 0
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_url_document_marks_failed_for_a_real_inaccessible_url(pg_engine, _require_documents_bucket):
+    """
+    Vision critique Q3's own real answer -- a real, live request to a
+    real host that genuinely returns 404 (not a mock, not a made-up
+    exception) ends this document in `status = failed` with the real
+    error recorded, never a crash or a document stuck at `processing`
+    forever.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_url_document(
+            session, url="https://example.com/this-path-genuinely-does-not-exist-404",
+        )
+        document_id = document.id
+        try:
+            updated = await process_url_document(session, document_id)
             await session.commit()
 
             assert updated.status == DocumentStatus.failed.value

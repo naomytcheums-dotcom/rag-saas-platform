@@ -27,6 +27,13 @@ itsdangerous==2.2.0
 # resolvable from a fresh environment at all -- see its own comment in
 # requirements.txt). Same pinned version requirements.txt already uses.
 httpx==0.28.1
+# httpcore was already present transitively (httpx's own real HTTP/1.1
+# implementation) -- pinned directly now that api/services/url_fetching.py
+# (Partie 2.1.10) imports its `_backends.anyio.AnyIOBackend` directly,
+# the real SSRF-safe-connection extension point httpx itself doesn't
+# expose as a public constructor argument -- see that module's own
+# docstring for the full real design.
+httpcore==1.0.9
 
 # -- Database (PostgreSQL, async) --------------------------------------------
 sqlalchemy[asyncio]==2.0.52
@@ -226,6 +233,13 @@ readability-lxml==0.9
 # HTML-to-text reuses `beautifulsoup4` + `lxml`, already real
 # dependencies since Partie 2.1.5.
 ebooklib==0.20
+
+# -- Documents / URL import (Partie 2.1.10) -----------------------------------
+# No genuinely new top-level package -- httpx (real fetch), lxml +
+# beautifulsoup4 + readability-lxml (real content/metadata extraction,
+# reusing Partie 2.1.5's own HTML extraction cores) are all already
+# real dependencies above. httpcore is now pinned directly (see its
+# own entry above) for the real SSRF-safe transport this step needed.
 
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1

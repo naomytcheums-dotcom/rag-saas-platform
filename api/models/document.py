@@ -1,6 +1,6 @@
 """
-Partie 2.1.1 -- documents an organization imports into its knowledge
-base, and the chunks each one is split into for retrieval.
+Partie 2.1.1/2.1.10 -- documents an organization imports into its
+knowledge base, and the chunks each one is split into for retrieval.
 
 `status` is a plain String, not a native Postgres enum -- same
 reasoning as AuditLog.action / CustomDomainStatus: a fixed, app-level
@@ -57,6 +57,12 @@ class Document(Base):
     # Workspace.created_by).
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Nullable -- only set for a document imported via Partie 2.1.10's
+    # POST .../documents/url (api/security/documents.py's
+    # import_document_from_url), NULL for every file upload. Real
+    # provenance a file upload has no equivalent of (a filename isn't
+    # "where this came from" the way a URL genuinely is).
+    source_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     file_key: Mapped[str] = mapped_column(String(1024), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     file_type: Mapped[str] = mapped_column(String(127), nullable=False)
