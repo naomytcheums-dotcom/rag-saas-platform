@@ -1,6 +1,6 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- document upload/list/detail/delete
-(PDF, DOCX, TXT, and Markdown). Fast SQLite suite, same tier as
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- document upload/list/detail/delete
+(PDF, DOCX, TXT, Markdown, and HTML). Fast SQLite suite, same tier as
 tests/test_custom_domains.py. Both real network dependencies are
 mocked throughout: S3 (api/security/documents.py's
 upload_document_file/download_document_file) and Celery dispatch
@@ -8,9 +8,9 @@ upload_document_file/download_document_file) and Celery dispatch
 see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
 -- no real network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT/Markdown extraction/chunking/embedding pipeline
-(process_document) and the real Celery task are tested for real,
-against real infrastructure, in tests/test_documents_integration.py.
+The real PDF/DOCX/TXT/Markdown/HTML extraction/chunking/embedding
+pipeline (process_document) and the real Celery task are tested for
+real, against real infrastructure, in tests/test_documents_integration.py.
 CASCADE-delete of a document's chunks is tested against real Postgres
 in tests/test_postgres_integration.py (SQLite doesn't enforce foreign
 keys).
@@ -567,4 +567,91 @@ async def test_viewer_cannot_upload_a_markdown_document(client, db_session, regi
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="notes.md", content=b"# Heading\n\nBody.")
+    assert response.status_code == 403
+
+
+# -------------------------------------------------------------- HTML upload --
+
+_REAL_HTML_PAGE = (
+    b"<!DOCTYPE html><html><head><title>Real Page</title></head>"
+    b"<body><article><p>Real HTML upload test content.</p></article></body></html>"
+)
+
+
+async def test_owner_can_upload_an_html_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.5): HTML upload works, through the
+    SAME endpoint as PDF/DOCX/TXT/Markdown."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="page.html", content=_REAL_HTML_PAGE, declared_content_type="text/html")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "page.html"
+    assert body["file_type"] == "text/html"
+
+
+async def test_upload_detects_html_from_content_regardless_of_filename(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1/robustness -- unlike Markdown (no content-only
+    signal exists, see api/services/document_storage.py's own module
+    docstring), real HTML has a genuine structural signature: the SAME
+    real HTML bytes are detected as `text/html` no matter what the
+    file is named, including a `.txt` name that would make a Markdown
+    upload fall back to `text/plain` instead."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="not_named_html.txt", content=_REAL_HTML_PAGE)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/html"
+
+
+async def test_upload_accepts_the_htm_extension_variant(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="page.htm", content=_REAL_HTML_PAGE)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/html"
+
+
+async def test_upload_classifies_prose_mentioning_html_as_plain_text(client, db_session, register_payload, monkeypatch):
+    """A file merely containing the word "html" as prose text, with no
+    real markup structure at all, is plain text -- not HTML, even when
+    named `.html`. Confirms _is_real_html's byte-pattern check isn't a
+    naive substring search."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="notes.html", content=b"Just some plain text mentioning html, no real tags at all.")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/plain"  # real content wins over the .html filename
+
+
+async def test_upload_rejects_html_named_file_that_is_not_real_text(client, db_session, register_payload, monkeypatch):
+    """Same "content over declared name" rule as every other format --
+    a `.html`-named file containing genuine binary garbage is rejected,
+    not silently accepted."""
+    import os
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.html", content=os.urandom(500))
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_an_html_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "htmlviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="page.html", content=_REAL_HTML_PAGE)
     assert response.status_code == 403

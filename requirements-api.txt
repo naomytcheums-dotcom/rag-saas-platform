@@ -166,6 +166,23 @@ markdown-it-py==4.2.0
 mdit-py-plugins==0.6.1
 pyyaml==6.0.3
 
+# -- Documents / HTML import (Partie 2.1.5) -----------------------------------
+# The exact libraries the master cahier des charges names for this item
+# ("2.1.5 | HTML | BeautifulSoup4 + readability-lxml"). beautifulsoup4
+# and lxml were already present transitively (the `unstructured` /
+# `pikepdf` dependency chains) -- pinned directly now that
+# api/services/html_extraction.py imports/relies on them itself, same
+# "pin what you actually import" convention as every other entry in
+# this section. readability-lxml (the real arc90-readability-algorithm
+# port, verified for real to correctly separate article body from
+# nav/header/footer boilerplate before relying on it) is a genuinely
+# new dependency; it in turn needs lxml[html-clean]'s lxml_html_clean
+# (lxml 5+ split its old, deprecated html.clean module out into this
+# separate package), pulled in automatically.
+beautifulsoup4==4.15.0
+lxml==6.1.3
+readability-lxml==0.9
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

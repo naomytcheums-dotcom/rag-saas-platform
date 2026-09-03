@@ -1,11 +1,11 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- real infrastructure tests for
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- real infrastructure tests for
 api/security/documents.py: real embedding generation
 (sentence-transformers, a real model downloaded from HuggingFace Hub on
 first use, then cached), real chunking with a real tokenizer, and the
 real end-to-end process_document pipeline (real S3 upload/download +
 real extraction + real chunking + real embeddings) against real
-Postgres, for PDF, DOCX, TXT, and Markdown.
+Postgres, for PDF, DOCX, TXT, Markdown, and HTML.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -174,6 +174,23 @@ def _real_test_markdown_bytes() -> bytes:
         "---\ntitle: Integration Test Markdown\nauthor: pytest\n---\n\n"
         "# First Heading\n\nRéel contenu d'intégration pour process_document, version Markdown.\n\n"
         "## Second Heading\n\nDeuxième section, sous un titre différent.\n"
+    ).encode("utf-8")
+
+
+def _real_test_html_bytes() -> bytes:
+    return (
+        "<!DOCTYPE html><html><head>"
+        "<title>Integration Test HTML</title>"
+        '<meta property="og:title" content="Integration Test HTML">'
+        '<meta name="author" content="pytest">'
+        "</head><body>"
+        '<nav><a href="/">Home</a></nav>'
+        "<article><h1>Real Article Heading</h1>"
+        "<p>Réel contenu d'intégration pour process_document, version HTML, assez long "
+        "pour que l'heuristique de readability le distingue clairement du menu de navigation.</p>"
+        "<p>Deuxième paragraphe réel, pour renforcer encore le score de densité de texte de "
+        "l'article face au court menu de navigation présent ailleurs sur la page.</p>"
+        "</article></body></html>"
     ).encode("utf-8")
 
 
@@ -423,6 +440,78 @@ async def test_process_document_marks_failed_for_a_corrupt_docx_upload(pg_engine
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
         owner, organization, document = await _make_org_and_pending_document(session, file_bytes=malformed_docx.getvalue(), filename="corrupt.docx")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_runs_the_real_html_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.5's own validation criterion, the HTML equivalent of the
+    tests above -- the SAME process_document pipeline, real
+    readability-lxml + BeautifulSoup4 parsing instead of any other
+    format's own extraction. Confirms the extracted chunk content is
+    the real article body (nav boilerplate excluded, this step's own
+    answer to vision critique Q2), real Open Graph title/author land in
+    Document.metadata alongside the real extracted links list.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_html_bytes(), filename="itest.html")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["title"] == "Integration Test HTML"
+            assert updated.metadata_json["author"] == "pytest"
+            assert updated.metadata_json["links"] == [{"href": "/", "text": "Home"}]
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            all_content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks)
+            assert "Real Article Heading" in all_content
+            assert "Deuxième paragraphe réel" in all_content
+            assert "Home" not in all_content  # nav boilerplate excluded from the chunked content
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is None  # HTML has a single whole-document section, same as DOCX/TXT
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_a_comment_only_html_file(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.5's own robustness criterion, and HTML's own genuine
+    corruption case (see api/services/html_extraction.py's own module
+    docstring): a file consisting of only an HTML comment passes
+    upload validation for real (a genuine WHATWG-defined HTML byte
+    pattern), but has zero parseable elements under lxml -- confirmed
+    for real to raise readability's own Unparseable ("Document is
+    empty") -- process_document's broad except clause must still catch
+    it and mark `failed`, not crash. A genuinely EMPTY body (unlike a
+    comment-only file) does NOT hit this path -- see
+    tests/test_html_extraction.py's own
+    test_extract_html_content_returns_empty_string_for_a_real_empty_body.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(
+            session, file_bytes=b"<!-- just a comment, no real element at all -->", filename="corrupt.html",
+        )
         document_id = document.id
         try:
             updated = await process_document(session, document_id)

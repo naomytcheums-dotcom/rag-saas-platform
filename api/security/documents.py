@@ -1,6 +1,6 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- uploading a PDF, DOCX, TXT, or
-Markdown document and processing it (real text/table/metadata
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- uploading a PDF, DOCX, TXT,
+Markdown, or HTML document and processing it (real text/table/metadata
 extraction, real chunking, real embeddings) into searchable
 DocumentChunk rows.
 
@@ -62,6 +62,7 @@ from api.models.workspace import Workspace
 from api.security.organization_settings import get_org_settings
 from api.services.document_extraction import (
     DOCX_CONTENT_TYPE,
+    HTML_CONTENT_TYPE,
     MARKDOWN_CONTENT_TYPE,
     PDF_CONTENT_TYPE,
     TXT_CONTENT_TYPE,
@@ -70,7 +71,8 @@ from api.services.document_extraction import (
 from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
 
 _TEMP_FILE_SUFFIXES = {
-    PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt", MARKDOWN_CONTENT_TYPE: ".md",
+    PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt",
+    MARKDOWN_CONTENT_TYPE: ".md", HTML_CONTENT_TYPE: ".html",
 }
 
 logger = logging.getLogger(__name__)
@@ -136,7 +138,7 @@ async def upload_document(
 ) -> Document:
     """
     Item 3's literal function. Real validation (size, actual PDF/DOCX/
-    TXT/Markdown content -- see api/services/document_storage.py's
+    TXT/Markdown/HTML content -- see api/services/document_storage.py's
     validate_document_upload, including why Markdown alone also needs
     this call's own `filename`) BEFORE anything touches S3 or the
     database, so a bad upload never leaves a half-created row or an

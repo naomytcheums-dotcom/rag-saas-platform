@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -2605,6 +2605,88 @@ including the filename-vs-TXT disambiguation case and rejecting a
 runs the real end-to-end Markdown pipeline (real frontmatter, real
 heading-based chunking, real embeddings) against real Postgres,
 alongside its own real invalid-frontmatter-processing test.
+
+**HTML (Partie 2.1.5) -- the exact libraries the master cahier des
+charges names for this item** ("2.1.5 | HTML | BeautifulSoup4 +
+readability-lxml"): `readability-lxml` for real main-content
+extraction (the same arc90-readability algorithm ported to Python,
+scoring blocks by real text density to find the article and discard
+nav/header/footer/ad chrome), `BeautifulSoup4` for real `<head>`
+metadata and `<a>` link extraction. Encoding reuses
+`api/services/txt_extraction.py`'s already-verified charset-normalizer
+detection, the same way Markdown extraction reuses it -- HTML source is
+still plain text at the byte level.
+
+**Real finding #1, verified before writing `api/services/html_extraction.py`,
+not assumed**: `readability.Document(html).summary()` does NOT raise on
+malformed markup -- unclosed tags, a `<div>` dropped mid-paragraph,
+mismatched nesting all get silently repaired into *some* tree by lxml's
+own HTML5-style error recovery, the same forgiveness a real browser
+applies rendering the same page. It also does NOT raise for a
+genuinely empty `<body></body>` -- `extract_html_content` just returns
+`""`, the same "valid, trivial content" treatment an empty TXT/Markdown
+file already gets (an empty section is skipped by `process_document`'s
+chunking loop, producing zero chunks, not an error). This is this
+step's real, tested answer to vision critique Q4 ("malformé ?" /
+"page vide ?") -- neither one crashes.
+
+**Real finding #2**: `readability-lxml` DOES raise a real, catchable
+exception (`readability.readability.Unparseable`, a `ValueError`
+subclass) for a document with literally ZERO parseable elements --
+concretely, a file containing only an HTML comment
+(`<!-- ... -->` and nothing else), confirmed for real to fail inside
+lxml itself (`lxml.etree.ParserError: Document is empty`). This is a
+genuine two-stage story, not a design gap: such a file legitimately
+passes upload-time validation (an HTML comment is one of the real byte
+patterns matched below) but genuinely fails at PROCESSING time, caught
+by `process_document`'s existing broad exception handler and ending in
+`status = "failed"` with the real error recorded -- the exact same
+honest failure story Partie 2.1.4 built for a Markdown file with
+invalid YAML frontmatter, and tested the same way
+(`tests/test_documents_integration.py`'s
+`test_process_document_marks_failed_for_a_comment_only_html_file`).
+
+**Real, spec-based content detection -- HTML does NOT need Markdown's
+filename exception**: unlike Markdown (byte-identical to plain text, no
+content signal exists at all), real HTML has a genuine structural
+signature. `api/services/document_storage.py`'s `_is_real_html`
+implements the WHATWG MIME Sniffing Standard's "matching an HTML byte
+pattern" algorithm (https://mimesniff.spec.whatwg.org/#matching-an-html-byte-pattern)
+-- the same content-sniffing rule real browsers use to detect
+`text/html` when a server sends no (or an untrustworthy) Content-Type.
+Checked in the same "most to least specific" order as PDF/DOCX, before
+the generic `is_valid_text`/Markdown fallback -- real HTML content is
+recognized regardless of what it's named (verified for real: the exact
+same HTML bytes upload as `text/html` whether named `.html`, `.htm`, or
+even `.txt`), while plain prose that merely mentions the word "html"
+with no real markup structure correctly stays `text/plain`.
+
+**Extracted links land in `metadata["links"]`** (this step's own
+optional item-2 function, `extract_html_links`) -- the same place every
+other format's own extras already live (TXT's encoding/line_count,
+Markdown's frontmatter/heading_count), not a fifth top-level key in the
+shared dispatcher shape just for one format. Title/author/date/
+description metadata prefers Open Graph tags (`og:title`,
+`og:description`) over their plainer equivalents (`<title>`, `<meta
+name="description">`) when both are present -- a deliberate editorial
+choice, the opposite of `readability-lxml`'s own `.title()` (verified
+for real to prefer the bare `<title>` tag over `og:title`).
+
+**Real verification for HTML specifically**: `tests/test_html_extraction.py`
+(no mocking, same discipline as every other format's suite) covers
+real article-vs-boilerplate extraction, malformed-markup tolerance, a
+genuinely empty body, the real comment-only `Unparseable` failure case,
+metadata extraction (including the Open Graph preference and the
+`<time datetime=...>` fallback), and link extraction.
+`tests/test_document_extraction.py` proves the dispatcher's shared
+shape for HTML too, including links flowing through `metadata["links"]`.
+`tests/test_documents.py` covers HTML upload end to end, including
+content-based detection regardless of filename, the `.htm` extension
+variant, prose merely mentioning "html" staying `text/plain`, and
+rejecting a `.html`-named file that isn't real text.
+`tests/test_documents_integration.py` runs the real end-to-end HTML
+pipeline (real article extraction, real embeddings) against real
+Postgres, alongside its own real comment-only-file failure test.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
