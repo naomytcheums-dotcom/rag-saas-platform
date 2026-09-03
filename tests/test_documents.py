@@ -1,18 +1,19 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- document upload/list/detail/delete
-(PDF, DOCX, TXT, Markdown, HTML, and CSV). Fast SQLite suite, same tier
-as tests/test_custom_domains.py. Both real network dependencies are
-mocked throughout: S3 (api/security/documents.py's
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- document upload/list/
+detail/delete (PDF, DOCX, TXT, Markdown, HTML, CSV, and JSON). Fast
+SQLite suite, same tier as tests/test_custom_domains.py. Both real
+network dependencies are mocked throughout: S3 (api/security/documents.py's
 upload_document_file/download_document_file) and Celery dispatch
 (schedule_document_processing, stubbed by default for the whole file --
 see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
 -- no real network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT/Markdown/HTML/CSV extraction/chunking/embedding
-pipeline (process_document) and the real Celery task are tested for
-real, against real infrastructure, in tests/test_documents_integration.py.
-CASCADE-delete of a document's chunks is tested against real Postgres
-in tests/test_postgres_integration.py (SQLite doesn't enforce foreign
+The real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON extraction/chunking/
+embedding pipeline (process_document) and the real Celery task are
+tested for real, against real infrastructure, in
+tests/test_documents_integration.py. CASCADE-delete of a document's
+chunks is tested against real Postgres in
+tests/test_postgres_integration.py (SQLite doesn't enforce foreign
 keys).
 """
 
@@ -715,4 +716,94 @@ async def test_viewer_cannot_upload_a_csv_document(client, db_session, register_
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="data.csv", content=b"name,age\nAlice,30\n")
+    assert response.status_code == 403
+
+
+# -------------------------------------------------------------- JSON upload --
+
+_REAL_JSON_ARRAY = b'[{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]'
+
+
+async def test_owner_can_upload_a_json_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.7): JSON upload works, through the
+    SAME endpoint as PDF/DOCX/TXT/Markdown/HTML/CSV."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="data.json", content=_REAL_JSON_ARRAY, declared_content_type="application/json")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "data.json"
+    assert body["file_type"] == "application/json"
+
+
+async def test_upload_detects_json_from_content_regardless_of_filename(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1/robustness -- unlike Markdown/CSV (no
+    content-only signal exists), valid JSON is an exact, deterministic
+    signal: the SAME real JSON bytes are detected as `application/json`
+    no matter what the file is named, including a `.txt` name that
+    would make a Markdown/CSV upload fall back to `text/plain` instead
+    (see api/services/document_storage.py's own module docstring)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="not_named_json.txt", content=_REAL_JSON_ARRAY)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/json"
+
+
+async def test_upload_classifies_a_bare_json_scalar_as_plain_text(client, db_session, register_payload, monkeypatch):
+    """Deliberate, documented narrowing (see api/services/document_storage.py's
+    own module docstring): a bare top-level scalar (`42`) IS valid JSON
+    per RFC 8259, but is indistinguishable from an ordinary short text
+    file -- classified as `text/plain`, not `application/json`, even
+    when named `.json`."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="scalar.json", content=b"42")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/plain"
+
+
+async def test_upload_classifies_malformed_json_as_plain_text(client, db_session, register_payload, monkeypatch):
+    """Same "content wins over declared name" story as HTML's own
+    prose-mentioning-html test: a `.json`-named file with a real
+    syntax error (a trailing comma) is NOT valid JSON, so it falls
+    through to the generic text bucket -- not a hard rejection, since
+    the bytes are still valid text."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="broken.json", content=b'{"a": 1,}')
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/plain"
+
+
+async def test_upload_rejects_a_json_named_file_that_is_not_real_text(client, db_session, register_payload, monkeypatch):
+    """Same "content over declared name" rule as every other format --
+    a `.json`-named file containing genuine binary garbage is rejected,
+    not silently accepted."""
+    import os
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.json", content=os.urandom(500))
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_a_json_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "jsonviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="data.json", content=_REAL_JSON_ARRAY)
     assert response.status_code == 403

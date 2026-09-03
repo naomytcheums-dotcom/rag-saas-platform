@@ -1,11 +1,25 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- real infrastructure tests
-for api/security/documents.py: real embedding generation
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- real infrastructure
+tests for api/security/documents.py: real embedding generation
 (sentence-transformers, a real model downloaded from HuggingFace Hub on
 first use, then cached), real chunking with a real tokenizer, and the
 real end-to-end process_document pipeline (real S3 upload/download +
 real extraction + real chunking + real embeddings) against real
-Postgres, for PDF, DOCX, TXT, Markdown, HTML, and CSV.
+Postgres, for PDF, DOCX, TXT, Markdown, HTML, CSV, and JSON.
+
+**JSON has no "marks failed" integration test, unlike every other
+format, and deliberately so**: Markdown's frontmatter YAMLError, CSV's
+extra-fields ParserError, and HTML's comment-only Unparseable are all
+real failure modes that surface ONLY at processing time, because none
+of those formats' own upload-time validation actually fully parses the
+content as its own real format. JSON is different -- api/services/
+document_storage.py's own _is_real_json ALREADY performs a real, full
+`json.loads` (the exact same parse extract_json_data itself performs)
+before ever accepting the upload, so a malformed or too-deeply-nested
+JSON file is rejected (or falls through to plain text) at UPLOAD time,
+covered by tests/test_documents.py's own upload tests -- there is no
+real "accepted now, fails later" gap left for an integration test to
+exercise honestly.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -200,6 +214,15 @@ def _real_test_csv_bytes() -> bytes:
         "Alice;30;Paris\n"
         "Bob;25;Lyon\n"
     ).encode("utf-8")
+
+
+def _real_test_json_bytes() -> bytes:
+    import json
+
+    return json.dumps([
+        {"id": 1, "note": "Réel contenu d'intégration pour process_document, version JSON."},
+        {"id": 2, "note": "Deuxième enregistrement réel."},
+    ]).encode("utf-8")
 
 
 @pytest.fixture
@@ -601,5 +624,50 @@ async def test_process_document_marks_failed_for_a_comment_only_html_file(pg_eng
 
             assert updated.status == DocumentStatus.failed.value
             assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_runs_the_real_json_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.7's own validation criterion, the JSON equivalent of the
+    tests above -- the SAME process_document pipeline, real stdlib
+    `json` parsing instead of any other format's own extraction.
+    Confirms the real key_count/depth/structure metadata land in
+    Document.metadata, and the chunked content is real JSON Lines (one
+    real record per array element, this step's own real answer to
+    vision critique Q2). See this module's own docstring for why there
+    is no accompanying "marks failed" test -- JSON's own upload-time
+    validation already fully parses the content, leaving no real
+    "accepted then fails" gap for processing to exercise.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_json_bytes(), filename="itest.json")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["key_count"] == 4  # 2 keys ("id","note") x 2 records
+            assert updated.metadata_json["depth"] == 2
+            assert updated.metadata_json["structure"] == "nested_array"
+            assert updated.metadata_json["table_count"] == 0  # a JSON array/object isn't converted to a DataFrame
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            all_content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks)
+            assert "Réel contenu d'intégration pour process_document, version JSON." in all_content
+            assert "Deuxième enregistrement réel." in all_content
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is None  # JSON has a single whole-document section, same as DOCX/TXT/HTML/CSV
         finally:
             await _cleanup(session, organization.id, owner.id)

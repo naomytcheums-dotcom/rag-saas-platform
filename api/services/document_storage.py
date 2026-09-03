@@ -1,17 +1,17 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- uploading, downloading, and
-deleting document files in S3 (or any S3-compatible store, e.g.
-Cloudflare R2 -- same as api/services/storage.py). A SEPARATE bucket
-(S3_DOCUMENTS_BUCKET_NAME, api/config.py) from avatars/branding, and
-objects are uploaded with NO ACL (private, bucket-owner-only) --
-documents are private organizational content, unlike the
-public-by-design avatar/logo/favicon assets api/services/storage.py
-handles. See that setting's own comment for why a second bucket, not a
-key prefix in the same one.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- uploading,
+downloading, and deleting document files in S3 (or any S3-compatible
+store, e.g. Cloudflare R2 -- same as api/services/storage.py). A
+SEPARATE bucket (S3_DOCUMENTS_BUCKET_NAME, api/config.py) from
+avatars/branding, and objects are uploaded with NO ACL (private,
+bucket-owner-only) -- documents are private organizational content,
+unlike the public-by-design avatar/logo/favicon assets
+api/services/storage.py handles. See that setting's own comment for
+why a second bucket, not a key prefix in the same one.
 
-PDF, DOCX, TXT, Markdown, HTML, and CSV are accepted (this codebase's
-scope through Partie 2.1.6). Other formats (JSON, XML, ...) are
-separate, later cahier items (2.1.7+), each with their own real-format
+PDF, DOCX, TXT, Markdown, HTML, CSV, and JSON are accepted (this
+codebase's scope through Partie 2.1.7). Other formats (XML, ...) are
+separate, later cahier items (2.1.8+), each with their own real-format
 validation to add when built, not something to fake-accept here.
 
 **Markdown and CSV are the two real, deliberate exceptions to this
@@ -57,9 +57,36 @@ for) -- but whether it's REALLY tabular data is only discoverable at
 PROCESSING time, by `extract_csv_data` actually parsing it, not at
 upload time. This is the honest, stated limitation, not a gap papered
 over.
+
+**JSON gets the STRONGEST content-based signal of any format so far --
+stronger even than HTML's own byte-pattern sniff**: `_is_real_json`
+below requires the content to start with a real `{` or `[` AND fully
+parse via the stdlib `json` module. Unlike HTML's heuristic (which can
+false-positive on prose containing `<a`) or CSV's delimiter sniffing
+(which can false-positive on comma-containing prose), there is no
+"content that merely LOOKS like valid JSON but isn't" -- it either
+parses under the exact, unambiguous JSON grammar or it doesn't, so
+JSON needs neither Markdown/CSV's filename exception nor a probabilistic
+heuristic. The one deliberate, honest narrowing: a bare top-level JSON
+scalar (`42`, `"hello"`, `true` -- all valid JSON per RFC 8259) is NOT
+classified as JSON here, specifically because THAT case genuinely is
+ambiguous with an ordinary short text file (the digits "42" typed as a
+plain note vs. deliberately uploaded as a raw JSON value are the exact
+same bytes) -- requiring a real `{`/`[` container avoids that one real
+false-positive risk. `api/services/json_extraction.py`'s own
+`extract_json_structure` still classifies a bare scalar correctly
+(`"scalar"`) for direct callers -- this module's own upload-time rule
+is a deliberately narrower, safer subset of what's syntactically valid
+JSON, not a limitation of the extraction module itself. A `.json`-named
+file that fails this real check (invalid JSON, or a bare scalar) falls
+through to the generic text/Markdown/CSV bucket below -- same "content
+wins over declared name" story HTML's own prose-mentioning-html test
+already proves, not a hard rejection, as long as the bytes are still
+valid text.
 """
 
 import io
+import json
 import uuid
 import zipfile
 
@@ -79,8 +106,10 @@ TXT_CONTENT_TYPE = "text/plain"
 MARKDOWN_CONTENT_TYPE = "text/markdown"
 HTML_CONTENT_TYPE = "text/html"
 CSV_CONTENT_TYPE = "text/csv"
+JSON_CONTENT_TYPE = "application/json"
 ALLOWED_DOCUMENT_CONTENT_TYPES = (
-    "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE, HTML_CONTENT_TYPE, CSV_CONTENT_TYPE,
+    "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE,
+    HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE,
 )
 
 # Real content-based HTML detection -- see this module's own docstring
@@ -151,6 +180,35 @@ def _is_real_html(content: bytes) -> bool:
     return False
 
 
+# RFC 8259's own definition of JSON whitespace -- deliberately NOT the
+# same set as _HTML_LEADING_WHITESPACE above (which includes formfeed,
+# a real byte JSON's own spec does not treat as whitespace).
+_JSON_LEADING_WHITESPACE = b" \t\r\n"
+_JSON_CONTAINER_START_BYTES = (b"{", b"[")
+
+
+def _is_real_json(content: bytes) -> bool:
+    """
+    Real, deterministic JSON detection (see this module's own
+    docstring for why this is the strongest content signal of any
+    format here) -- requires the content to start with a real `{` or
+    `[` (excluding the one genuinely ambiguous case, a bare top-level
+    scalar) AND fully parse under the stdlib `json` module. A
+    `RecursionError` (real, extremely deep nesting -- see
+    api/services/json_extraction.py's own module docstring) is treated
+    the same as a `json.JSONDecodeError` here: not real, usable JSON
+    for THIS codebase's purposes either way.
+    """
+    stripped = content.lstrip(_JSON_LEADING_WHITESPACE)
+    if not stripped.startswith(_JSON_CONTAINER_START_BYTES):
+        return False
+    try:
+        json.loads(content)
+        return True
+    except (json.JSONDecodeError, RecursionError, UnicodeDecodeError):
+        return False
+
+
 def validate_document_upload(content: bytes, filename: str = "") -> str:
     """Real, substantive checks before anything touches S3 or the
     database -- raises ValueError with a clear reason for any failure,
@@ -159,14 +217,14 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     (api/security/documents.py's upload_document) can store the right
     Document.file_type and pass it on to upload_document_file below
     without re-detecting it. Checked in order from MOST to LEAST
-    specific -- PDF/DOCX/HTML all have a real, narrow signature to
-    match; the generic "does this decode as text" check (and Markdown/
-    CSV's filename-based tie-break) only ever runs once those are ruled
-    out. `filename` defaults to "" (no Markdown/CSV match possible,
-    same as before this parameter existed) so every OTHER caller of
-    this function is unaffected -- see this module's own docstring for
-    why Markdown and CSV specifically need the filename at all (HTML
-    does not)."""
+    specific -- PDF/DOCX/HTML/JSON all have a real, narrow (or, for
+    JSON, fully deterministic) signature to match; the generic "does
+    this decode as text" check (and Markdown/CSV's filename-based
+    tie-break) only ever runs once those are ruled out. `filename`
+    defaults to "" (no Markdown/CSV match possible, same as before this
+    parameter existed) so every OTHER caller of this function is
+    unaffected -- see this module's own docstring for why Markdown and
+    CSV specifically need the filename at all (HTML and JSON do not)."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
     if _is_real_pdf(content):
@@ -175,9 +233,11 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
         return DOCX_CONTENT_TYPE
     if _is_real_html(content):
         return HTML_CONTENT_TYPE
+    if _is_real_json(content):
+        return JSON_CONTENT_TYPE
     if not is_valid_text(content):
         raise ValueError(
-            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, or CSV (checked by its actual content, not the declared type) -- "
+            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, or JSON (checked by its actual content, not the declared type) -- "
             f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
         )
     if filename.lower().endswith(_MARKDOWN_EXTENSIONS):

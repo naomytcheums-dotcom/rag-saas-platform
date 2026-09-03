@@ -1,16 +1,17 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6, item 3 -- extract_document_content,
-the single entry point api/security/documents.py's process_document
-calls regardless of format. Real, structural coherence across every
-supported format (vision critique Q1), not just similarly-named
-functions: each format's own extraction module returns its own
-format-specific pieces, and this dispatcher folds them into ONE shared
-shape:
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7, item 3 --
+extract_document_content, the single entry point
+api/security/documents.py's process_document calls regardless of
+format. Real, structural coherence across every supported format
+(vision critique Q1), not just similarly-named functions: each
+format's own extraction module returns its own format-specific pieces,
+and this dispatcher folds them into ONE shared shape:
 
     {
         "metadata": dict,          # author/title/page_or_paragraph_count/
                                     # encoding/heading_count/links/
-                                    # delimiter/row_count/etc.
+                                    # delimiter/row_count/key_count/
+                                    # depth/structure/etc.
         "sections": list[dict],    # [{"text": str, "metadata": dict}, ...]
                                     # -- text grouped by the format's own
                                     # natural unit, each carrying its OWN
@@ -19,20 +20,25 @@ shape:
                                     # "level": int|None} for Markdown
                                     # (Partie 2.1.4 -- real heading-based
                                     # sectioning, not a single blob), or
-                                    # {} for DOCX/TXT/HTML/CSV's single
-                                    # whole-document section (none of
-                                    # the four has a natural
+                                    # {} for DOCX/TXT/HTML/CSV/JSON's
+                                    # single whole-document section
+                                    # (none of the five has a natural
                                     # sub-division this codebase's spec
                                     # asked to preserve).
         "tables": list[DataFrame],  # a CSV's own real DataFrame lands
                                     # here too (Partie 2.1.6) -- a CSV
                                     # IS fundamentally one table, not a
                                     # format needing its own separate
-                                    # top-level concept.
-        "image_count": int,        # 0 for DOCX/TXT/Markdown/HTML/CSV --
-                                    # no image-extraction function was
-                                    # asked for any of them by this
-                                    # codebase's spec.
+                                    # top-level concept. Empty for JSON
+                                    # -- a JSON object/array is NOT
+                                    # generally tabular the way a CSV
+                                    # always is, and this step's own
+                                    # spec never asked for a dict/list
+                                    # -> DataFrame conversion.
+        "image_count": int,        # 0 for DOCX/TXT/Markdown/HTML/CSV/
+                                    # JSON -- no image-extraction
+                                    # function was asked for any of
+                                    # them by this codebase's spec.
     }
 
 **A real, deliberate generalization from 2.1.1-2.1.3's own shape**,
@@ -51,12 +57,14 @@ extract_html_links -- that step's own optional item 2 function) land
 under `metadata["links"]`, the same place every other format's
 format-specific extras already live (TXT's encoding/line_count,
 Markdown's frontmatter/heading_count, CSV's delimiter/row_count/
-column_count/columns) -- not a new top-level key just for one format.
+column_count/columns, JSON's key_count/depth/structure) -- not a new
+top-level key just for one format.
 """
 
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
 from api.services.docx_extraction import extract_docx_metadata, extract_docx_tables, extract_docx_text
 from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata
+from api.services.json_extraction import extract_json_metadata, extract_json_text
 from api.services.markdown_extraction import (
     extract_markdown_metadata,
     extract_markdown_sections,
@@ -71,6 +79,7 @@ TXT_CONTENT_TYPE = "text/plain"
 MARKDOWN_CONTENT_TYPE = "text/markdown"
 HTML_CONTENT_TYPE = "text/html"
 CSV_CONTENT_TYPE = "text/csv"
+JSON_CONTENT_TYPE = "application/json"
 
 
 def extract_document_content(file_path: str, file_type: str) -> dict:
@@ -78,7 +87,7 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
     none of this codebase's extraction modules handle -- a caller bug
     (this should never happen in practice, since api/services/
     document_storage.py's validate_document_upload only ever accepts
-    these same six types at upload time), not a recoverable
+    these same seven types at upload time), not a recoverable
     per-document failure."""
     if file_type == PDF_CONTENT_TYPE:
         return {
@@ -126,6 +135,13 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
             "metadata": extract_csv_metadata(file_path),
             "sections": [{"text": extract_csv_text(file_path), "metadata": {}}],
             "tables": [extract_csv_data(file_path)],
+            "image_count": 0,
+        }
+    if file_type == JSON_CONTENT_TYPE:
+        return {
+            "metadata": extract_json_metadata(file_path),
+            "sections": [{"text": extract_json_text(file_path), "metadata": {}}],
+            "tables": [],
             "image_count": 0,
         }
     raise ValueError(f"Unsupported file type for content extraction: {file_type!r}")

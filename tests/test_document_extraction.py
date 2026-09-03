@@ -1,11 +1,12 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6, item 3 -- api/services/document_extraction.py's
-extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7, item 3 -- api/services/document_extraction.py's
+extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON
 generation and extraction, no mocking -- proves every format really
 does come back through the SAME shared shape (vision critique Q1 --
 coherence), including Markdown's own real per-section heading metadata,
-HTML's real article-vs-boilerplate extraction, and CSV's own DataFrame
-landing in the shared "tables" list.
+HTML's real article-vs-boilerplate extraction, CSV's own DataFrame
+landing in the shared "tables" list, and JSON's real key_count/depth/
+structure metadata.
 """
 
 import docx
@@ -16,6 +17,7 @@ from api.services.document_extraction import (
     CSV_CONTENT_TYPE,
     DOCX_CONTENT_TYPE,
     HTML_CONTENT_TYPE,
+    JSON_CONTENT_TYPE,
     MARKDOWN_CONTENT_TYPE,
     PDF_CONTENT_TYPE,
     TXT_CONTENT_TYPE,
@@ -106,6 +108,18 @@ def real_html_path(tmp_path):
 def real_csv_path(tmp_path):
     path = tmp_path / "dispatch.csv"
     path.write_bytes("name,age,city\nAlice,30,Paris\nBob,25,Lyon\n".encode("utf-8"))
+    return str(path)
+
+
+@pytest.fixture
+def real_json_path(tmp_path):
+    import json
+
+    path = tmp_path / "dispatch.json"
+    path.write_bytes(json.dumps([
+        {"id": 1, "note": "Real JSON dispatcher test content."},
+        {"id": 2, "note": "A second record."},
+    ]).encode("utf-8"))
     return str(path)
 
 
@@ -214,6 +228,27 @@ def test_extract_document_content_dispatches_csv_correctly(real_csv_path):
     assert result["image_count"] == 0
 
 
+def test_extract_document_content_dispatches_json_correctly(real_json_path):
+    """Partie 2.1.7's own validation criterion: real key_count/depth/
+    structure metadata and its real answer to vision critique Q2 --
+    each real array element becomes one real JSON Lines record,
+    exactly like CSV's own extract_csv_text convention."""
+    result = extract_document_content(real_json_path, JSON_CONTENT_TYPE)
+    _assert_shared_shape(result)
+    assert result["metadata"]["key_count"] == 4  # 2 keys ("id","note") x 2 records
+    assert result["metadata"]["depth"] == 2
+    assert result["metadata"]["structure"] == "nested_array"
+    assert len(result["sections"]) == 1  # JSON has no pages either -- always exactly one section
+    lines = result["sections"][0]["text"].split("\n")
+    assert len(lines) == 2
+    assert '"id": 1' in lines[0]
+    assert "Real JSON dispatcher test content." in lines[0]
+    assert '"id": 2' in lines[1]
+    assert result["sections"][0]["metadata"] == {}
+    assert result["tables"] == []  # a JSON object/array isn't generally tabular -- no DataFrame conversion
+    assert result["image_count"] == 0
+
+
 def test_extract_document_content_raises_for_an_unsupported_type(real_pdf_path):
     with pytest.raises(ValueError):
-        extract_document_content(real_pdf_path, "application/json")
+        extract_document_content(real_pdf_path, "application/xml")

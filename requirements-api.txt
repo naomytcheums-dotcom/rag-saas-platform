@@ -192,6 +192,15 @@ readability-lxml==0.9
 # detect_csv_delimiter) uses Python's own stdlib `csv.Sniffer` -- no
 # dependency at all, real and battle-tested for exactly this job.
 
+# -- Documents / JSON import (Partie 2.1.7) -----------------------------------
+# api/services/json_extraction.py uses ONLY Python's own stdlib `json`
+# module (C-accelerated) -- no new dependency. A full JSONPath query
+# engine (e.g. jsonpath-ng), which the master cahier des charges'
+# one-line description for this item ("Parsing récursif configurable
+# (JSONPath)") could be read as implying, is deliberately NOT added:
+# none of this step's own literal action items ask for path-based
+# querying -- see that module's own docstring for the full reasoning.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0
