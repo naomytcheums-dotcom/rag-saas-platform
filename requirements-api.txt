@@ -111,6 +111,33 @@ pycasbin==2.8.0
 # (MissingGreenlet, sync lazy-loads under an async session).
 casbin-async-sqlalchemy-adapter==1.17.0
 
+# -- Documents / PDF import (Partie 2.1.1) ------------------------------------
+# The exact library the master cahier des charges names for this item
+# ("2.1.1 | PDF | pymupdf (fitz)") -- verified for real (against a real
+# generated PDF, not assumed from docs) to cover text, real table
+# detection (page.find_tables()), metadata, AND embedded images all on
+# its own, so no separate table-extraction library (pdfplumber, camelot)
+# is needed. Imported as `pymupdf`, not the classic `fitz` alias --
+# this version deprecates it.
+pymupdf==1.28.2
+# extract_pdf_tables returns one DataFrame per table (this step's own
+# literal return type).
+pandas==3.0.5
+# -- Embeddings for document chunks (also Partie 2.1.1's own
+# process_pdf_document spec, "chunking + embedding") -- the SAME model
+# already configured as organization_settings.embedding_model's default
+# (Partie 1.3.9) and already used by src/indexing.py for the RAG demo
+# pipeline, now actually READ and used for the first time by api/ (see
+# api/security/documents.py's own module docstring on the honest scope
+# of this relative to Partie 4's still-⬜ multi-provider abstraction).
+# Same CPU-only wheel trick as requirements.txt's own torch pin -- an
+# unpinned transitive dep here would resolve pip's default CUDA-enabled
+# build, pulling several GB of unused nvidia-*-cu12 packages this
+# CPU-only API service never needs.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0+cpu
+sentence-transformers==5.7.0
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

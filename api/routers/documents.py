@@ -1,0 +1,123 @@
+"""
+Partie 2.1.1 -- uploading, listing, viewing, and deleting an
+organization's documents.
+
+Two of these four endpoints are org-scoped (`/organizations/{org_id}/
+documents`, same `require_org_member*` dependency-injection shape as
+every other org-scoped router) and two are NOT (`/documents/{document_id}`,
+this step's own literal paths) -- those look the document up FIRST, then
+check the CALLER's membership in ITS organization manually
+(_get_document_and_membership below), same 404-for-non-member-or-
+nonexistent anti-enumeration convention as require_org_member itself,
+just applied by hand since there's no org_id path parameter for FastAPI
+to resolve a Depends() against.
+
+POST is Owner/Admin/Manager/Member -- explicitly NOT Viewer (see
+api/security/organizations.py's require_org_member_excluding_viewer,
+built for exactly this: a write endpoint Viewer's own role shouldn't
+reach). DELETE is Member+ if the caller uploaded the document
+themselves, OR Admin/Owner as an administrative override -- a plain
+Member can't delete someone ELSE's document.
+"""
+
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.dependencies import get_current_user, get_db
+from api.models.document import Document
+from api.models.organization import OrganizationMember, OrganizationRole
+from api.models.user import User
+from api.schemas.documents import DocumentListResponse, DocumentResponse
+from api.security.documents import upload_document
+from api.security.organizations import require_org_member, require_org_member_excluding_viewer
+from api.services.document_storage import delete_document_file
+
+router = APIRouter(tags=["documents"])
+
+
+def _to_response(row: Document) -> DocumentResponse:
+    return DocumentResponse(
+        id=row.id, organization_id=row.organization_id, workspace_id=row.workspace_id, name=row.name,
+        file_size=row.file_size, file_type=row.file_type, status=row.status, metadata=row.metadata_json,
+        created_by=row.created_by, created_at=row.created_at, updated_at=row.updated_at, processed_at=row.processed_at,
+    )
+
+
+async def _get_document_and_membership(db: AsyncSession, document_id: uuid.UUID, current_user: User) -> tuple[Document, OrganizationMember]:
+    """Shared by GET/DELETE /documents/{document_id} -- looks up the
+    document, then the caller's membership in ITS organization. 404 for
+    both "no such document" and "you're not a member of the
+    organization that owns it", collapsed into one response so a
+    non-member can't use this endpoint to probe which document ids
+    exist (same anti-enumeration reasoning as require_org_member)."""
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    document = await db.scalar(select(Document).where(Document.id == document_id))
+    if document is None:
+        raise not_found
+
+    membership = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == document.organization_id, OrganizationMember.user_id == current_user.id
+        )
+    )
+    if membership is None:
+        raise not_found
+    return document, membership
+
+
+@router.post("/organizations/{org_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def create_document(
+    org_id: uuid.UUID, file: UploadFile, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    content = await file.read()
+    try:
+        document = await upload_document(db, org_id, workspace_id, current_user.id, file.filename or "document.pdf", content)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    await db.commit()
+    await db.refresh(document)
+    return _to_response(document)
+
+
+@router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)
+async def list_documents(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.scalars(
+        select(Document).where(Document.organization_id == org_id).order_by(Document.created_at.desc())
+    )).all()
+    return DocumentListResponse(items=[_to_response(row) for row in rows])
+
+
+@router.get("/documents/{document_id}", response_model=DocumentResponse)
+async def get_document(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    return _to_response(document)
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+
+    is_owner_of_document = document.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_owner_of_document or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete documents you uploaded yourself")
+
+    await db.execute(delete(Document).where(Document.id == document.id))
+    await db.commit()
+
+    delete_document_file(document.file_key)  # best-effort, never blocks the response
+    return {"message": "Document deleted"}

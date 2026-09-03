@@ -90,6 +90,24 @@ def _stub_out_domain_verification_scheduling_by_default(monkeypatch):
     monkeypatch.setattr("api.security.custom_domains.schedule_domain_verification", lambda domain, countdown_seconds=None: None)
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_document_processing_scheduling_by_default(monkeypatch):
+    """
+    Partie 2.1.1's api/security/documents.py's upload_document calls
+    schedule_document_processing, which dispatches a real Celery task --
+    same real-network-round-trip problem 1.4.4's own
+    _stub_out_domain_verification_scheduling_by_default above already
+    hit and fixed for schedule_domain_verification (a lesson applied
+    here from the start rather than re-learned): every test that
+    uploads a document would otherwise depend on Redis and pay
+    apply_async's slow connection-timeout/retry cost even when it's
+    unreachable. schedule_document_processing's own real behavior is
+    verified directly in tests/test_documents.py, which monkeypatches
+    it back for itself where it actually matters to the test.
+    """
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

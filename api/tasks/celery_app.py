@@ -29,6 +29,7 @@ celery_app = Celery(
     include=[
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
+        "api.tasks.document_processing",
     ],
 )
 

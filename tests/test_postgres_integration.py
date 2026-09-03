@@ -39,6 +39,7 @@ from api.models.oauth import OAuthAccount, OAuthProvider
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.invitation import Invitation
 from api.models.custom_domain import CustomDomain
+from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.ssl_certificate import SSLCertificate
 from api.security.secret_encryption import encrypt_secret
 from api.models.organization_branding import OrganizationBranding
@@ -799,6 +800,44 @@ async def test_deleting_an_organization_cascades_through_custom_domains_to_ssl_c
         assert remaining_domain is None
         assert remaining_cert is None
     finally:
+        await pg_session.execute(delete(User).where(User.id == owner.id))
+        await pg_session.commit()
+
+
+async def test_deleting_a_document_cascades_to_its_chunks(pg_session):
+    """Partie 2.1.1: same reasoning as the other cascade tests in this
+    file -- api/routers/documents.py's delete_document is a Core bulk
+    DELETE, so only the database's own ON DELETE CASCADE
+    (api/alembic/versions/0031_documents.py) removes a document's
+    chunks, which SQLite won't enforce."""
+    owner_email = _unique_email()
+    owner = User(email=owner_email, hashed_password="irrelevant")
+    pg_session.add(owner)
+    await pg_session.flush()
+
+    organization = Organization(name="Document Cascade Test Org", slug=f"document-cascade-test-{uuid.uuid4().hex[:8]}")
+    pg_session.add(organization)
+    await pg_session.flush()
+    org_id = organization.id
+    pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+    document = Document(
+        organization_id=org_id, name="test.pdf", file_key="documents/irrelevant/test.pdf",
+        file_size=1024, file_type="application/pdf", status=DocumentStatus.completed.value, created_by=owner.id,
+    )
+    pg_session.add(document)
+    await pg_session.flush()
+    document_id = document.id
+    pg_session.add(DocumentChunk(document_id=document_id, content="chunk content", embedding=[0.1, 0.2, 0.3]))
+    await pg_session.commit()
+
+    try:
+        await pg_session.execute(delete(Document).where(Document.id == document_id))
+        await pg_session.commit()
+
+        remaining_chunk = await pg_session.scalar(select(DocumentChunk).where(DocumentChunk.document_id == document_id))
+        assert remaining_chunk is None
+    finally:
+        await pg_session.execute(delete(Organization).where(Organization.id == org_id))
         await pg_session.execute(delete(User).where(User.id == owner.id))
         await pg_session.commit()
 

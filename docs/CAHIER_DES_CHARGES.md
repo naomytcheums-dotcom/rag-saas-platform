@@ -108,13 +108,13 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 2 — Knowledge Base universelle — ⬜ NON COMMENCÉ (0/35)
+## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (1✅/0🟡/34⬜ sur 35, via l'Étape 2.1.1)
 
 ### 2.1 Import de documents
 
 | # | Format | Implémentation prévue |
 |---|---|---|
-| 2.1.1 | PDF | pymupdf (fitz) |
+| 2.1.1 | PDF | ✅ `pymupdf` (fitz) -- exactement la bibliothèque prévue ici, vérifiée pour de vrai (contre un vrai PDF généré, pas supposée depuis la doc) avant d'écrire le code de traitement : `page.find_tables()` détecte et extrait réellement des tableaux, donc AUCUNE bibliothèque séparée (pdfplumber, camelot) n'est nécessaire -- pymupdf seul couvre texte, tableaux, métadonnées ET images embarquées. Deux nouvelles tables (`documents`/`document_chunks`, migration 0031). Upload réel vers un bucket S3 SÉPARÉ et privé (`S3_DOCUMENTS_BUCKET_NAME`, sans ACL publique -- contrairement au bucket avatars/branding, dont la politique CI MinIO rend TOUT le contenu public, un risque réel évité ici par un bucket dédié plutôt qu'un simple préfixe de clé). Traitement asynchrone réel via Celery (`process_document_task`), qui transitionne `pending`→`processing`→`completed`/`failed` pour de vrai -- toute erreur (PDF corrompu, échec S3, échec d'embedding) est capturée et enregistrée, jamais un crash silencieux du worker. Chunking réel PAR PAGE (même algorithme que `src/indexing.py`, réimplémenté indépendamment pour préserver la frontière api/↔src/), utilisant pour la première fois `organization_settings.chunk_size`/`chunk_overlap` (1.3.9, jusqu'ici jamais lus). Embeddings réels via `sentence-transformers`, utilisant pour la première fois `organization_settings.embedding_model` -- honnêtement borné : ce n'est PAS l'abstraction multi-fournisseurs complète de la Partie 4 (toujours ⬜), juste une génération réelle et fonctionnelle avec le seul modèle déjà configuré par défaut. **Permissions : un vrai trou comblé, pas contourné en silence** -- l'Etape 1.2.5 avait explicitement anticipé et laissé cette lacune ("un endpoint d'écriture que Viewer ne devrait pas atteindre... devrait être sa propre fonction") ; `require_org_member_excluding_viewer` (nouveau) comble exactement ça pour `POST .../documents`. `DELETE /documents/{id}` : Member+ propriétaire, avec dérogation Admin/Owner, y compris si l'utilisateur a été rétrogradé en Viewer après l'upload (testé explicitement). 35 tests SQLite (upload, permissions, isolation cross-org) + 12 tests réels d'extraction PDF (aucun mock, PyMuPDF génère ET extrait) + 6 tests d'intégration réels (embeddings et chunking réels toujours exécutés ; le pipeline complet avec vrai S3 skip proprement si `S3_DOCUMENTS_BUCKET_NAME` n'est pas configuré -- délibérément non provisionné automatiquement) + 1 test de cascade réel contre Postgres, voir `tests/test_documents.py`/`tests/test_pdf_extraction.py`/`tests/test_documents_integration.py` |
 | 2.1.2 | DOCX | python-docx |
 | 2.1.3 | TXT | Lecture brute |
 | 2.1.4 | Markdown | **Existe déjà** (`src/ingestion.py`) — seul format géré actuellement |
@@ -368,16 +368,25 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 59 | 11.8% |
+| ✅ Fait | 60 | 12.0% |
 | 🟡 Partiel | 64 | 12.8% |
-| ⬜ Non commencé | 377 | 75.4% |
+| ⬜ Non commencé | 376 | 75.2% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **59/515 (~11.5%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **123/515 (~23.9%)**
-- Pondéré (✅=1, 🟡=0.5) : **~91.0/515 (~17.7%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **60/515 (~11.7%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **124/515 (~24.1%)**
+- Pondéré (✅=1, 🟡=0.5) : **~92.0/515 (~17.9%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 1.4.6 (White-label complet, 2026-09-03) :
+Mis à jour après Partie 2.1.1 (Import de documents PDF, 2026-09-03) :
+Partie 2 démarre : 0✅/0🟡/35⬜ → 1✅/0🟡/34⬜ sur 35 (2.1.1 seul item
+touché -- 2.1.2 à 2.1.19 restent des formats d'import séparés, non
+demandés par cette étape). Table `documents`/`document_chunks` réelles,
+extraction PDF réelle (`pymupdf`, vérifié pour de vrai), chunking et
+embeddings réels connectant pour la première fois deux réglages de
+1.3.9 (`chunk_size`/`chunk_overlap`/`embedding_model`) qui n'étaient
+jusqu'ici jamais lus par `api/`.
+
+Précédemment, après Partie 1.4.6 (White-label complet, 2026-09-03) :
 Partie 1.4 : 5✅/4🟡/1⬜ → 6✅/4🟡/0⬜ sur 10 -- **les 10 items de la
 Partie 1.4 sont désormais tous touchés** (1.4.6 passe de ⬜ à ✅ : le
 flag `hide_platform_branding` est réel, testé, et cohérent avec le
@@ -497,11 +506,13 @@ Partie, pour mémoire :
 2. **Partie 13 (Developer Experience)** : ruff/mypy/pre-commit/
    dependabot/bandit, lint+type-check en CI -- gains rapides et peu
    coûteux, réduisent la dette avant que le projet grossisse encore.
-3. **Partie 2 (Knowledge Base multi-format)** -- le cœur produit d'un
-   "RAG SaaS platform" ; dépend de 1.3 (désormais tous les items
-   touchés) pour le scoping par organisation/workspace. Gros chantier
-   (35 items, plusieurs parsers + jobs Celery), à découper en
-   sous-étapes (import, gestion documents, sync).
+3. **Partie 2 (Knowledge Base multi-format), le reste** -- le cœur
+   produit d'un "RAG SaaS platform" ; dépend de 1.3 (désormais tous les
+   items touchés) pour le scoping par organisation/workspace. 2.1.1
+   (PDF) livré -- reste 2.1.2 à 2.1.19 (18 autres formats d'import) et
+   toute la Partie 2.2 (gestion des documents : tags, versioning,
+   réindexation, détection de doublons, sync). Gros chantier restant,
+   à continuer de découper en sous-étapes.
 4. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
    le code existe déjà (`hallucination_detection.py`, `llm_judge.py`),
    juste jamais validé en conditions réelles faute de crédit API

@@ -201,6 +201,19 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: str | None = None
     S3_REGION: str = "auto"
     S3_PUBLIC_BASE_URL: str | None = None  # CDN/public URL prefix for uploaded objects
+    # Partie 2.1.1 -- a SEPARATE bucket from S3_BUCKET_NAME above, not a
+    # key prefix in the same one the way branding assets share it with
+    # avatars. Avatars/logos/favicons are uploaded public-read on
+    # purpose (meant to be shown to any visitor); documents are private
+    # organizational content and must never be. Reusing S3_BUCKET_NAME
+    # would risk exactly that in any deployment whose bucket policy
+    # makes the whole bucket public (this project's own CI MinIO setup
+    # does precisely that for the avatars bucket, see
+    # .github/workflows/regression.yml) -- a second bucket makes that
+    # policy scope correctly regardless of per-object ACLs. Same
+    # S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY/S3_ENDPOINT_URL/S3_REGION
+    # credentials, just a different bucket name.
+    S3_DOCUMENTS_BUCKET_NAME: str | None = None
 
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"

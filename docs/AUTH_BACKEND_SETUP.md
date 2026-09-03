@@ -2237,6 +2237,140 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
+### Documents (Partie 2.1.1)
+
+The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
+text/table/metadata extraction, real chunking, real embeddings. Two
+new tables, `documents` and `document_chunks` (migration `0031`).
+
+**`metadata`/`embedding` columns, deliberately generic, not
+Postgres-native types**: both `metadata_json` columns use the same
+generic `sa.JSON` (not `postgresql.JSONB`) as every other JSON column
+in this codebase, for the SQLite-fast-suite-compatibility reason
+already established for `organization_usage_details.metadata_json`
+(Partie 1.3.8). `DocumentChunk.embedding` gets the SAME treatment for
+the SAME reason, one level further: it's a plain JSON list of floats,
+not pgvector's native `VECTOR` type. That's a deliberate choice, not an
+oversight -- pgvector's SQLAlchemy type has no SQLite equivalent at
+all (unlike JSON, which degrades to TEXT there transparently), so using
+it would make this table entirely unrepresentable in the fast suite. A
+real pgvector column with an ANN index is genuine future work once
+retrieval actually needs efficient similarity search at scale (Partie
+3/4's own scope) -- for import + chunking, a Python-side list of floats
+is real, correct, and keeps this table testable the same way every
+other table in this codebase is.
+
+**PDF extraction, verified against a real generated PDF before writing
+a line of processing code** (same discipline as every external
+integration in this codebase): `api/services/pdf_extraction.py` uses
+PyMuPDF -- the exact library the master cahier names for this item
+("2.1.1 | PDF | pymupdf (fitz)", imported as `pymupdf`, not the now-
+deprecated `fitz` alias). Confirmed for real, not assumed from the
+docs: `page.find_tables()` genuinely detects and extracts real tabular
+data, so no separate table-extraction library (pdfplumber, camelot) is
+needed -- PyMuPDF alone covers text, tables, metadata, AND embedded
+images. A corrupt, empty, or non-PDF file raises PyMuPDF's own
+`FileDataError` (confirmed including the `EmptyFileError` subclass for
+a zero-byte file), translated into a plain `ValueError` -- this
+module's only exception type, so callers never need PyMuPDF's own
+exception hierarchy.
+
+**Chunking, per page, not per document**: the same token-sliding-
+window algorithm `src/indexing.py` already uses for the RAG demo
+pipeline (character offsets from the tokenizer's own offset mapping,
+not `decode()` -- `decode()` re-joins sub-word pieces with single
+spaces and destroys whitespace/indentation), reimplemented
+independently in `api/security/documents.py` rather than imported --
+`api/` has zero import dependency on `src/` (established at Partie
+1.3.9's own delivery, held here too). Chunked PER PAGE so each chunk's
+`metadata` records which page it came from (this step's own spec: "page,
+section, etc."), using `organization_settings.chunk_size`/`chunk_overlap`
+(Partie 1.3.9, defaults 512/50) -- another previously-configured-but-
+never-read setting, now actually consumed.
+
+**Embeddings -- real, and honestly bounded relative to Partie 4**:
+`organization_settings.embedding_model` already defaulted to
+`"sentence-transformers/all-MiniLM-L6-v2"` (the exact model
+`src/indexing.py` already uses) since Partie 1.3.9, but nothing in
+`api/` ever read it -- that gap was explicitly documented at delivery.
+`process_pdf_document` is the first real consumer: it loads whichever
+model an organization has configured and generates real embeddings for
+real, via `sentence-transformers` (added to `requirements-api.txt`,
+same CPU-only `torch` wheel trick as `requirements.txt`'s own pin, so
+this API service never pulls several GB of unused CUDA packages). This
+is **not** the full multi-provider LLM/Embedding abstraction Partie 4
+specifies (4.1/4.2/4.3, still ⬜) -- swapping providers today still
+means changing this one function, not calling a configured client
+through an abstraction layer -- but it is real, working,
+per-organization-configurable embedding generation, not a hardcoded
+stand-in. `sentence-transformers`/`torch` are DEFERRED imports (inside
+the functions that need them): merely uploading or listing documents
+never force-loads a multi-hundred-MB ML stack a given call path doesn't
+need.
+
+**Storage: a SEPARATE, private S3 bucket, not a prefix in the shared
+one**: `S3_DOCUMENTS_BUCKET_NAME` (`api/config.py`), distinct from
+`S3_BUCKET_NAME` (avatars/branding). Avatars/logos/favicons are
+uploaded public-read on purpose; documents are private organizational
+content and must never be -- reusing `S3_BUCKET_NAME` would risk
+exactly that in any deployment whose bucket policy makes the whole
+bucket public, which this project's OWN CI MinIO setup does for the
+avatars bucket (see `.github/workflows/regression.yml`). Objects are
+uploaded with no ACL at all (private, bucket-owner-only). The real
+magic bytes (`%PDF-`) are checked, never the client's declared
+Content-Type -- same "trust the bytes, not the header" philosophy as
+`api/services/storage.py`'s avatar/logo validation.
+
+**Robustness -- what happens if the PDF is corrupt, or extraction
+fails**: `process_pdf_document` transitions `pending` -> `processing`
+-> `completed`/`failed` for real. ANY failure along the way (a corrupt
+PDF, an S3 download error, an embedding error) is caught, recorded in
+`Document.metadata.error`, and ends in `failed` -- never left stuck at
+`processing` forever, never an uncaught exception crashing the Celery
+worker.
+
+**Permissions -- a real gap this step closed, not silently folded into
+an existing check**: Etape 1.2.5's own delivery (`docs/AUTH_BACKEND_SETUP.md`'s
+"Member" section, further up this file) explicitly predicted and left
+unbuilt exactly this scenario -- "a write endpoint Viewer specifically
+shouldn't reach... it should be its own function, not silently folded
+into `require_org_member_or_higher`." Document upload is that endpoint:
+`api/security/organizations.py`'s new `require_org_member_excluding_viewer`
+gates `POST .../documents` -- Viewer's entire purpose is read-only
+access, so letting it create content would contradict the role's own
+meaning, even though `GET .../documents`/`GET /documents/{id}` stay on
+plain `require_org_member` (Viewer legitimately reads everything at the
+base membership tier). `DELETE /documents/{id}` is "Member+ if
+propriétaire" -- the document's own creator can always delete it, an
+Owner/Admin can delete ANY document as an administrative override, and
+a plain Member cannot delete someone else's document (or their own,
+retroactively, if downgraded to Viewer after uploading it -- tested
+explicitly).
+
+**Endpoints**: `POST`/`GET /organizations/{org_id}/documents` and
+`GET`/`DELETE /documents/{document_id}` -- the latter two are NOT
+org-scoped paths, so there's no `org_id` for FastAPI to resolve a
+`require_org_member` dependency against; the caller's membership in the
+document's OWN organization is checked by hand
+(`_get_document_and_membership`), same 404-for-non-member-or-nonexistent
+anti-enumeration convention as everywhere else in this codebase.
+
+**Real verification, not just code review**: `tests/test_pdf_extraction.py`
+(no mocking -- PyMuPDF both generates and extracts from real test PDFs)
+covers text/table/metadata/image extraction against real content,
+including a real embedded image and real corrupt/empty-file error
+handling. `tests/test_documents.py` (fast SQLite suite, S3 and Celery
+both mocked) covers upload validation (size, real PDF signature),
+every role's permission boundary (including the Viewer-downgrade edge
+case above), cross-organization isolation for workspace assignment and
+for both non-org-scoped endpoints, and the broker-failure best-effort
+path. `tests/test_documents_integration.py` runs the REAL end-to-end
+pipeline -- real S3 (or MinIO) upload/download, real PDF extraction,
+real chunking, real embedding generation, against real Postgres.
+`tests/test_postgres_integration.py` proves `ON DELETE CASCADE` from a
+deleted document to its chunks against real Postgres (SQLite doesn't
+enforce foreign keys).
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

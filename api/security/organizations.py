@@ -142,6 +142,26 @@ async def require_org_member(
 require_org_member_or_higher = require_org_member
 
 
+async def require_org_member_excluding_viewer(membership: OrganizationMember = Depends(require_org_member)) -> OrganizationMember:
+    """
+    Partie 2.1.1 -- the exact gap Etape 1.2.5's own docstring above
+    (and docs/AUTH_BACKEND_SETUP.md's "Member" section) predicted and
+    deliberately left unbuilt: "a write endpoint Viewer specifically
+    shouldn't reach that isn't already covered by require_org_manager...
+    it should be its own function, not silently folded into
+    require_org_member_or_higher." Document upload/delete (POST/DELETE
+    .../documents) is that endpoint -- Viewer's entire purpose is
+    read-only access, so letting it create or remove content would
+    contradict the role's own meaning, even though it's fine reading
+    documents via require_org_member (GET .../documents,
+    GET /documents/{id}) the same way it reads everything else at the
+    base membership tier.
+    """
+    if membership.role == OrganizationRole.viewer:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This action is not available to Viewer members")
+    return membership
+
+
 async def require_org_manager(membership: OrganizationMember = Depends(require_org_member)) -> OrganizationMember:
     """
     Etape 1.2.4: Owner, Admin, or Manager -- the tier that can invite
