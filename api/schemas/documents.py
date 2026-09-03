@@ -7,7 +7,7 @@ import datetime as dt
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 
 class DocumentResponse(BaseModel):
@@ -164,4 +164,34 @@ class GoogleDriveImportResponse(BaseModel):
     import step's own response, and for the identical reason."""
 
     drive_id: str
+    status: str
+
+
+class GoogleDocImportRequest(BaseModel):
+    """Partie 2.1.15, item 1's own request body. Exactly one of
+    `document_url_or_id` (a single real Google Docs/Sheets/Slides URL
+    or a bare Drive id) or `document_urls_or_ids` (a real list, for
+    this step's own literal `process_google_docs_batch`) must be given
+    -- validated below rather than as two separate routes, matching
+    this step's own literal ONE route accepting either shape. Same
+    reasoning as GoogleDriveImportRequest above for the lack of an
+    `HttpUrl` field and the lack of any OAuth credential field."""
+
+    document_url_or_id: str | None = None
+    document_urls_or_ids: list[str] | None = None
+    export_format: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_target_given(self) -> "GoogleDocImportRequest":
+        if bool(self.document_url_or_id) == bool(self.document_urls_or_ids):
+            raise ValueError("exactly one of document_url_or_id or document_urls_or_ids must be given")
+        return self
+
+
+class GoogleDocImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as every prior async
+    import step's own response, and for the identical reason."""
+
+    document_ids: list[str]
+    mode: Literal["single", "batch"]
     status: str

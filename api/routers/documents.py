@@ -1,18 +1,18 @@
 """
-Partie 2.1.1/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14 -- uploading, importing
-from a URL (or in bulk from a sitemap, from a GitHub repository's
-files, from a GitHub repository's issues, or from a Google Drive
-folder/file), listing, viewing, and deleting an organization's
-documents.
+Partie 2.1.1/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15 -- uploading,
+importing from a URL (or in bulk from a sitemap, from a GitHub
+repository's files, from a GitHub repository's issues, from a Google
+Drive folder/file, or a Google Doc/Sheet/Slide), listing, viewing, and
+deleting an organization's documents.
 
-Six of these nine endpoints are org-scoped (`/organizations/{org_id}/
+Seven of these ten endpoints are org-scoped (`/organizations/{org_id}/
 documents`[`/url`|`/sitemap`|`/github/repo`|`/github/issues`|
-`/google-drive`], same `require_org_member*` dependency-injection
-shape as every other org-scoped router) and two are NOT
-(`/documents/{document_id}`, this step's own literal paths) -- those
-look the document up FIRST, then check the CALLER's membership in ITS
-organization manually (_get_document_and_membership below), same
-404-for-non-member-or-nonexistent anti-enumeration convention as
+`/google-drive`|`/google-docs`], same `require_org_member*`
+dependency-injection shape as every other org-scoped router) and two
+are NOT (`/documents/{document_id}`, this step's own literal paths) --
+those look the document up FIRST, then check the CALLER's membership
+in ITS organization manually (_get_document_and_membership below),
+same 404-for-non-member-or-nonexistent anti-enumeration convention as
 require_org_member itself, just applied by hand since there's no
 org_id path parameter for FastAPI to resolve a Depends() against.
 
@@ -20,11 +20,11 @@ POST is Owner/Admin/Manager/Member -- explicitly NOT Viewer (see
 api/security/organizations.py's require_org_member_excluding_viewer,
 built for exactly this: a write endpoint Viewer's own role shouldn't
 reach) -- the SAME rule applies to importing from a URL, a sitemap, a
-GitHub repository, a GitHub repository's issues, or a Google Drive
-folder/file, a real write just like a file upload is. DELETE is
-Member+ if the caller uploaded the document themselves, OR Admin/Owner
-as an administrative override -- a plain Member can't delete someone
-ELSE's document.
+GitHub repository, a GitHub repository's issues, a Google Drive
+folder/file, or a Google Doc/Sheet/Slide, a real write just like a
+file upload is. DELETE is Member+ if the caller uploaded the document
+themselves, OR Admin/Owner as an administrative override -- a plain
+Member can't delete someone ELSE's document.
 """
 
 import uuid
@@ -45,6 +45,8 @@ from api.schemas.documents import (
     GitHubIssuesImportResponse,
     GitHubRepoImportRequest,
     GitHubRepoImportResponse,
+    GoogleDocImportRequest,
+    GoogleDocImportResponse,
     GoogleDriveImportRequest,
     GoogleDriveImportResponse,
     SitemapImportRequest,
@@ -54,6 +56,7 @@ from api.security.documents import (
     import_document_from_url,
     start_github_issues_import,
     start_github_repo_import,
+    start_google_doc_import,
     start_google_drive_import,
     start_sitemap_import,
     upload_document,
@@ -231,6 +234,31 @@ async def create_documents_from_google_drive(
 
     await db.commit()
     return GoogleDriveImportResponse(drive_id=drive_id, status="scheduled")
+
+
+@router.post("/organizations/{org_id}/documents/google-docs", response_model=GoogleDocImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_google_docs(
+    org_id: uuid.UUID, payload: GoogleDocImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.15, item 1's own literal route. 202 Accepted, same
+    reasoning as every prior async import route above -- nothing is
+    exported synchronously; the real doc_type isn't even confirmed yet.
+    Accepts EITHER a single `document_url_or_id` OR a real
+    `document_urls_or_ids` list (see api/schemas/documents.py's own
+    GoogleDocImportRequest docstring), matching this step's own literal
+    single-document/batch pair of processing functions with ONE route."""
+    try:
+        document_ids, mode = await start_google_doc_import(
+            db, org_id, workspace_id, current_user.id,
+            payload.document_url_or_id, payload.document_urls_or_ids, payload.export_format,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return GoogleDocImportResponse(document_ids=document_ids, mode=mode, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)

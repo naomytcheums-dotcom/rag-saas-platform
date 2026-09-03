@@ -281,6 +281,20 @@ class Settings(BaseSettings):
     def google_drive_include_patterns_list(self) -> list[str]:
         return [pattern.strip() for pattern in self.GOOGLE_DRIVE_INCLUDE_PATTERNS.split(",") if pattern.strip()]
 
+    # -- Google Docs import (Partie 2.1.15) ----------------------------------
+    # Reuses GOOGLE_DRIVE_CLIENT_ID/SECRET/REFRESH_TOKEN above unchanged -- a
+    # real Google Doc IS, underneath, just a real Drive file with a special
+    # mimeType, exported via the SAME real OAuth flow and Drive API host (see
+    # api/services/google_drive_extraction.py's own dedicated docstring
+    # section). This step's own literal default -- DOCX, not text/plain --
+    # a real, deliberate choice: DOCX is already a real, fully-supported
+    # format (Partie 2.1.2), so a Google Doc becomes indistinguishable from
+    # one a user uploaded directly, the strongest possible "reuse the
+    # pipeline" answer. Real Sheets/Slides use their own real, separately
+    # hardcoded defaults (CSV/PDF, Partie 2.1.6/2.1.1) -- this ONE setting is
+    # deliberately DOC-specific, matching this step's own literal name.
+    GOOGLE_DOCS_EXPORT_FORMAT: str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

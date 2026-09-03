@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -3641,6 +3641,76 @@ importable file from the configured account's own real Drive root
 (no real, public, well-known Drive file exists the way `octocat/Hello-World`
 does for GitHub) and a real 404 failure test -- both skip, not fail,
 when real credentials aren't configured.
+
+**Google Docs/Sheets/Slides import (Partie 2.1.15) -- reuses Partie
+2.1.14's own OAuth flow completely unchanged.** A real Google Doc IS,
+underneath, a real Drive file with a special `mimeType` --
+`import_and_process_google_doc` exports it via Drive's own real
+`files.export` endpoint (NOT the separate `docs.googleapis.com` Docs
+API, which is for structured live-document access, not a flat content
+export this step's own literal ask needs) then runs it through the
+exact same upload/`process_document` pipeline every other format
+already uses -- vision critique Q1's own answer: a Google Doc becomes
+a real DOCX Document (`GOOGLE_DOCS_EXPORT_FORMAT`'s own literal
+default), a real Sheet a real CSV, a real Slide a real PDF -- three
+formats this codebase already fully supports (Partie 2.1.2/2.1.6/2.1.1),
+never a new "Google Docs" format or dispatcher branch. `should_include_drive_file`
+(2.1.14) and this step are real, complementary counterparts: 2.1.14
+excludes every real native Google Workspace file, this step is exactly
+what handles them instead.
+
+**Security (vision critique Q2)**: same answer as Partie 2.1.14 --
+`GOOGLE_DRIVE_REFRESH_TOKEN`/`CLIENT_ID`/`CLIENT_SECRET` are never
+threaded through Celery arguments, read fresh from settings inside
+`authenticate_docs` (a real, deliberately trivial alias for
+`authenticate_drive`) at the moment a real access token is actually
+needed.
+
+**Robustness (vision critique Q3)**: Google's own real, documented
+Drive API caps `files.export` at real files under 10MB -- a real,
+stable, published constraint (not independently triggered live, no
+real 10MB+ Doc was available to test against, the same "documented,
+not re-derived" honesty as Partie 2.1.14's own `invalid_grant`
+mapping). A real export failure (this limit, an auth failure, a real
+404) is caught by `import_and_process_google_doc`'s own real
+try/except, ending the document `failed` with the real error
+recorded -- confirmed via a realistic, simulated 403 in
+`tests/test_google_docs_integration.py`.
+
+**Real, deliberate design decisions**: `doc_type_from_mime_type`
+resolves the real doc_type from the ALREADY-FETCHED real `mimeType`
+(`fetch_google_doc_metadata`), never trusting `validate_google_doc_url`'s
+own offline, URL-shape-based guess for anything beyond the initial,
+cheap route-level check -- a real Drive file that turns out NOT to be
+a real native Google Workspace document at all is rejected with a
+clear, real error (Partie 2.1.14's own separate scope, not
+re-implemented here). This step's own literal route accepts EITHER a
+single `document_url_or_id` OR a real `document_urls_or_ids` list
+(`GoogleDocImportRequest`'s own `model_validator` enforces exactly
+one), unifying this step's own literal single-document and batch
+processing functions behind ONE route rather than two.
+
+**Real verification for Google Docs import specifically**:
+`tests/test_google_drive_extraction.py` (fast tier, `httpx.MockTransport`,
+extended for this step) covers real URL/bare-id validation for all
+three real doc types, real doc_type resolution from a real mimeType
+(including a real rejection for an ordinary Drive file), real
+export-format resolution (DOC-configurable vs. Sheet/Slide-hardcoded),
+real metadata extraction (title/owner/date, including the real
+display-name-vs-email fallback), real export success/failure/404, and
+real text/HTML content extraction. `tests/test_documents.py` covers
+the real route end to end (single import, batch import, both-or-
+neither-target rejected via a real 422, invalid URL rejected, cross-
+tenant workspace guard, export format passed through to scheduling,
+permissions) with network calls stubbed, plus focused unit tests for
+`process_google_docs_batch` (real per-document dispatch, real
+per-task broker-failure tolerance). `tests/test_google_docs_integration.py`
+(realistic simulation, not real network -- same honest limitation as
+Partie 2.1.14, no real Google OAuth credentials available) proves
+`import_and_process_google_doc`'s own real orchestration for a real
+Doc (exported as DOCX), a real Sheet (exported as CSV), a real
+ordinary Drive file correctly rejected, a real export failure, and a
+missing-refresh-token failure.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

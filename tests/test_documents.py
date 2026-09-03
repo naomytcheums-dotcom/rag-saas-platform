@@ -1823,3 +1823,171 @@ def test_process_google_drive_files_tolerates_a_broker_failure_for_one_file(monk
 
     assert scheduled == 2
     assert len(calls) == 2
+
+
+# -------------------------------------------------------- Google Docs import --
+
+async def _import_google_doc(client, org_id: str, token: str, document_url_or_id=None, document_urls_or_ids=None, workspace_id=None, export_format=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    body = {}
+    if document_url_or_id is not None:
+        body["document_url_or_id"] = document_url_or_id
+    if document_urls_or_ids is not None:
+        body["document_urls_or_ids"] = document_urls_or_ids
+    if export_format is not None:
+        body["export_format"] = export_format
+    return await client.post(
+        f"/organizations/{org_id}/documents/google-docs", params=params,
+        json=body, headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_start_a_single_google_doc_import(client, db_session, register_payload):
+    """Validation criterion (2.1.15): l'import d'un Google Doc
+    fonctionne, through its own real route. Real network activity is
+    deliberately NOT triggered -- schedule_google_doc_import is stubbed
+    by tests/conftest.py's own autouse fixture."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_google_doc(client, org["id"], owner_token, document_url_or_id="https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit")
+    assert response.status_code == 202
+    body = response.json()
+    assert body == {"document_ids": ["1AbCdEfGhIjKlMnOp"], "mode": "single", "status": "scheduled"}
+
+
+async def test_owner_can_start_a_batch_google_docs_import(client, db_session, register_payload):
+    """Validation criterion: l'import en lot fonctionne."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_google_doc(client, org["id"], owner_token, document_urls_or_ids=["1AbCdEfGhIjKlMnOp", "1QrStUvWxYzAbCdEf"])
+    assert response.status_code == 202
+    body = response.json()
+    assert body == {"document_ids": ["1AbCdEfGhIjKlMnOp", "1QrStUvWxYzAbCdEf"], "mode": "batch", "status": "scheduled"}
+
+
+async def test_google_doc_import_rejects_giving_both_a_single_and_a_batch_target(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_google_doc(client, org["id"], owner_token, document_url_or_id="1AbCdEfGhIjKlMnOp", document_urls_or_ids=["1QrStUvWxYzAbCdEf"])
+    assert response.status_code == 422  # pydantic's own model_validator rejects this before application code runs
+
+
+async def test_google_doc_import_rejects_giving_neither_target(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_google_doc(client, org["id"], owner_token)
+    assert response.status_code == 422
+
+
+async def test_google_doc_import_rejects_an_invalid_document_url(client, db_session, register_payload):
+    """Validation criterion: un document invalide est rejeté."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_google_doc(client, org["id"], owner_token, document_url_or_id="https://example.com/not-a-doc")
+    assert response.status_code == 400
+
+
+async def test_google_doc_import_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "googledocsotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _import_google_doc(client, org["id"], owner_token, document_url_or_id="1AbCdEfGhIjKlMnOp", workspace_id=other_workspace["id"])
+    assert response.status_code == 400
+
+
+async def test_google_doc_import_passes_export_format_through_to_scheduling(client, db_session, register_payload, monkeypatch):
+    captured = {}
+
+    def _capture(document_id, organization_id, workspace_id, export_format, created_by):
+        captured["document_id"] = document_id
+        captured["export_format"] = export_format
+
+    monkeypatch.setattr("api.security.documents.schedule_google_doc_import", _capture)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    response = await _import_google_doc(client, org["id"], owner_token, document_url_or_id="1AbCdEfGhIjKlMnOp", export_format="text/plain")
+
+    assert response.status_code == 202
+    assert captured["document_id"] == "1AbCdEfGhIjKlMnOp"
+    assert captured["export_format"] == "text/plain"
+
+
+async def test_schedule_google_doc_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_google_doc_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.google_docs_import.process_google_doc_task.delay", _boom)
+    schedule_google_doc_import("1AbC", uuid.uuid4(), None, None, uuid.uuid4())  # must not raise
+
+
+async def test_schedule_google_docs_batch_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_google_docs_batch_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.google_docs_import.process_google_docs_batch_task.delay", _boom)
+    schedule_google_docs_batch_import(["1AbC", "1DeF"], uuid.uuid4(), None, uuid.uuid4())  # must not raise
+
+
+async def test_viewer_cannot_start_a_google_doc_import(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "googledocsviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _import_google_doc(client, org["id"], viewer_token, document_url_or_id="1AbCdEfGhIjKlMnOp")
+    assert response.status_code == 403
+
+
+# ------------------------------------------------------- process_google_docs_batch --
+
+def test_process_google_docs_batch_schedules_one_task_per_document(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def delay(self, *args):
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.google_docs_import.process_google_doc_task", _FakeTask())
+
+    org_id, created_by = uuid.uuid4(), uuid.uuid4()
+    scheduled = documents_module.process_google_docs_batch(org_id, None, ["d1", "d2"], created_by)
+
+    assert scheduled == 2
+    assert calls[0] == ("d1", str(org_id), None, None, str(created_by))
+    assert calls[1] == ("d2", str(org_id), None, None, str(created_by))
+
+
+def test_process_google_docs_batch_tolerates_a_broker_failure_for_one_document(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FlakyTask:
+        def delay(self, *args):
+            if args[0] == "bad":
+                raise ConnectionError("broker unreachable")
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.google_docs_import.process_google_doc_task", _FlakyTask())
+
+    scheduled = documents_module.process_google_docs_batch(uuid.uuid4(), None, ["good-1", "bad", "good-2"], uuid.uuid4())
+
+    assert scheduled == 2
+    assert len(calls) == 2

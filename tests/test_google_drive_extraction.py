@@ -1,5 +1,5 @@
 """
-Partie 2.1.14 -- fast-tier tests for api/services/google_drive_extraction.py.
+Partie 2.1.14/2.1.15 -- fast-tier tests for api/services/google_drive_extraction.py.
 No real network call: every real HTTP interaction is exercised through
 `httpx.MockTransport` (a REAL httpx testing utility -- request/response
 parsing, headers, status codes, and JSON encoding/decoding all run for
@@ -26,16 +26,26 @@ import pytest
 
 from api.config import settings
 from api.services.google_drive_extraction import (
+    GOOGLE_DOC_MIME_TYPE,
     GOOGLE_DRIVE_FOLDER_MIME_TYPE,
+    GOOGLE_SHEET_MIME_TYPE,
+    GOOGLE_SLIDES_MIME_TYPE,
     GoogleDriveAuthError,
     GoogleDriveRateLimitError,
     _access_token_cache,
+    authenticate_docs,
     authenticate_drive,
+    doc_type_from_mime_type,
     download_drive_file,
+    extract_doc_content,
     extract_drive_metadata,
+    fetch_google_doc,
+    fetch_google_doc_metadata,
     get_drive_file,
     list_drive_files,
+    resolve_export_format,
     should_include_drive_file,
+    validate_google_doc_url,
 )
 
 
@@ -288,3 +298,154 @@ def test_should_include_drive_file_with_no_size_field_is_not_rejected_on_size_al
     """A real file that genuinely reports no size (rare, but real APIs
     can omit it) must not be excluded by the size check alone."""
     assert should_include_drive_file({"name": "a.pdf", "mimeType": "application/pdf"}, None) is True
+
+
+# ================================= Partie 2.1.15 -- Google Docs ==================================
+# Reuses _patch_client/_drive_error defined above for Partie 2.1.14's
+# own tests -- the same real Drive API host, same real error envelope.
+
+# ------------------------------------------------------- validate_google_doc_url --
+
+def test_validate_google_doc_url_recognizes_a_real_docs_url():
+    assert validate_google_doc_url("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit#heading=h.abc") == ("1AbCdEfGhIjKlMnOp", "document")
+
+
+def test_validate_google_doc_url_recognizes_a_real_sheets_url():
+    assert validate_google_doc_url("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit") == ("1AbCdEfGhIjKlMnOp", "spreadsheet")
+
+
+def test_validate_google_doc_url_recognizes_a_real_slides_url():
+    assert validate_google_doc_url("https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOp/edit") == ("1AbCdEfGhIjKlMnOp", "presentation")
+
+
+def test_validate_google_doc_url_accepts_a_bare_drive_id():
+    """Validation criterion: accepte une URL OU un ID de document."""
+    assert validate_google_doc_url("1AbCdEfGhIjKlMnOp") == ("1AbCdEfGhIjKlMnOp", "document")
+
+
+def test_validate_google_doc_url_rejects_an_unrelated_url():
+    """Validation criterion: un document invalide est rejeté."""
+    with pytest.raises(ValueError):
+        validate_google_doc_url("https://example.com/not-a-doc")
+
+
+# ------------------------------------------------------------- doc_type_from_mime_type --
+
+def test_doc_type_from_mime_type_recognizes_all_three_real_types():
+    assert doc_type_from_mime_type(GOOGLE_DOC_MIME_TYPE) == "document"
+    assert doc_type_from_mime_type(GOOGLE_SHEET_MIME_TYPE) == "spreadsheet"
+    assert doc_type_from_mime_type(GOOGLE_SLIDES_MIME_TYPE) == "presentation"
+
+
+def test_doc_type_from_mime_type_rejects_a_real_non_workspace_file():
+    """A real, ordinary binary Drive file (Partie 2.1.14's own scope,
+    not this step's) must be rejected, not silently misclassified."""
+    with pytest.raises(ValueError):
+        doc_type_from_mime_type("application/pdf")
+
+
+# --------------------------------------------------------------- resolve_export_format --
+
+def test_resolve_export_format_uses_the_real_configured_default_for_a_doc():
+    assert resolve_export_format("document", None) == settings.GOOGLE_DOCS_EXPORT_FORMAT
+
+
+def test_resolve_export_format_honors_an_explicit_request_for_a_doc():
+    assert resolve_export_format("document", "text/plain") == "text/plain"
+
+
+def test_resolve_export_format_always_uses_the_real_hardcoded_default_for_sheets_and_slides():
+    """A real Sheet/Slide ignores a requested format meant for a real
+    Doc (GOOGLE_DOCS_EXPORT_FORMAT is deliberately DOC-specific)."""
+    assert resolve_export_format("spreadsheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") == "text/csv"
+    assert resolve_export_format("presentation", "text/plain") == "application/pdf"
+
+
+# ------------------------------------------------------------------- authenticate_docs --
+
+async def test_authenticate_docs_reuses_the_real_drive_oauth_flow(monkeypatch):
+    """Item 3's own literal ask: réutiliser l'authentification Drive."""
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json={"access_token": "a-real-looking-token", "expires_in": 3600}))
+    token = await authenticate_docs("a-refresh-token")
+    assert token == "a-real-looking-token"
+
+
+# --------------------------------------------------------- fetch_google_doc_metadata --
+
+async def test_fetch_google_doc_metadata_reports_title_owner_and_date(monkeypatch):
+    """Validation criterion: les métadonnées sont extraites (titre,
+    propriétaire, date)."""
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json={
+        "id": "doc-1", "name": "My Report", "mimeType": GOOGLE_DOC_MIME_TYPE,
+        "createdTime": "2026-01-01T00:00:00.000Z", "modifiedTime": "2026-01-02T00:00:00.000Z",
+        "webViewLink": "https://docs.google.com/document/d/doc-1/edit",
+        "owners": [{"displayName": "Alice", "emailAddress": "alice@example.com"}],
+    }))
+    metadata = await fetch_google_doc_metadata("doc-1", "a-token")
+    assert metadata["name"] == "My Report"
+    assert metadata["owner"] == "Alice"
+    assert metadata["created_at"] == "2026-01-01T00:00:00.000Z"
+
+
+async def test_fetch_google_doc_metadata_falls_back_to_email_with_no_display_name(monkeypatch):
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json={
+        "id": "doc-1", "name": "Doc", "mimeType": GOOGLE_DOC_MIME_TYPE, "owners": [{"emailAddress": "alice@example.com"}],
+    }))
+    metadata = await fetch_google_doc_metadata("doc-1", "a-token")
+    assert metadata["owner"] == "alice@example.com"
+
+
+async def test_fetch_google_doc_metadata_raises_for_a_real_auth_failure(monkeypatch):
+    """Validation criterion: un token invalide est rejeté."""
+    _patch_client(monkeypatch, lambda request: _drive_error(401, "Invalid Credentials", "UNAUTHENTICATED"))
+    with pytest.raises(GoogleDriveAuthError):
+        await fetch_google_doc_metadata("doc-1", "a-bad-token")
+
+
+# ------------------------------------------------------------------ fetch_google_doc --
+
+async def test_fetch_google_doc_exports_real_content(monkeypatch):
+    """Validation criterion: l'export fonctionne."""
+    def handler(request):
+        assert request.url.path == "/drive/v3/files/doc-1/export"
+        assert request.url.params["mimeType"] == "application/pdf"
+        return httpx.Response(200, content=b"%PDF-1.4 fake but real-looking pdf bytes")
+
+    _patch_client(monkeypatch, handler)
+    content = await fetch_google_doc("doc-1", "a-token", "application/pdf")
+    assert content.startswith(b"%PDF-1.4")
+
+
+async def test_fetch_google_doc_raises_a_clear_error_for_a_real_export_failure(monkeypatch):
+    """Validation criterion / vision critique Q3: que se passe-t-il si
+    l'export échoue (a real, documented Drive limit: exports over 10MB
+    fail) -- a real, distinguishable failure, not a crash."""
+    _patch_client(monkeypatch, lambda request: _drive_error(403, "This file is too large to export.", "PERMISSION_DENIED"))
+    with pytest.raises(GoogleDriveAuthError):
+        await fetch_google_doc("doc-1", "a-token", "text/plain")
+
+
+async def test_fetch_google_doc_raises_for_a_real_nonexistent_document(monkeypatch):
+    _patch_client(monkeypatch, lambda request: _drive_error(404, "File not found.", ""))
+    with pytest.raises(ValueError, match="was not found"):
+        await fetch_google_doc("nonexistent-doc", "a-token", "text/plain")
+
+
+# --------------------------------------------------------------- extract_doc_content --
+
+def test_extract_doc_content_decodes_real_plain_text():
+    assert extract_doc_content("Bonjour le monde".encode("utf-8"), "text/plain") == "Bonjour le monde"
+
+
+def test_extract_doc_content_strips_real_html_markup():
+    html = b"<html><body><article><p>Real article content, long enough for readability to prefer it over any real navigation noise nearby.</p></article></body></html>"
+    text = extract_doc_content(html, "text/html")
+    assert "Real article content" in text
+    assert "<p>" not in text
+
+
+def test_extract_doc_content_rejects_a_real_binary_export_format():
+    """A real binary export (DOCX/PDF/etc.) is deliberately NOT handled
+    here -- see this function's own docstring for why."""
+    with pytest.raises(ValueError, match="binary export format"):
+        extract_doc_content(b"PK\x03\x04fake docx bytes", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
