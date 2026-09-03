@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -3437,6 +3437,98 @@ independently fetched real tree. `tests/test_documents_integration.py`
 runs the REAL end-to-end per-file pipeline (real GitHub fetch, real S3,
 real Postgres, real embeddings) against a real file and a real
 nonexistent one.
+
+**GitHub ISSUES import (Partie 2.1.13) -- the same reuse story, turned
+into real Markdown first.** A new route (`POST /organizations/{org_id}/documents/github/issues`),
+extending `api/services/github_extraction.py` with real Issues API
+functions rather than a separate module (issues and files are both
+just "the GitHub REST API", not two different concerns the way sitemap
+parsing was its own concept on top of URL fetching). Every real issue
+imported goes through `format_issue_for_import` (real Markdown: title,
+metadata, body, comments) then the exact same upload/`process_document`
+pipeline every other format uses -- a `.md` filename makes
+`validate_document_upload`'s own real filename fallback (Partie 2.1.4)
+classify it correctly, so the real, existing heading-based Markdown
+sectioning chunks an issue by its own real structure, not as one
+undifferentiated blob (vision critique Q1's own answer: yes, issues
+are imported as real Markdown documents).
+
+**Real findings, verified before writing this module, not assumed**:
+GitHub's own Issues REST endpoint returns real PULL REQUESTS too, not
+just real issues -- confirmed for real against a real, active
+repository: GitHub internally treats a PR as a special kind of issue,
+distinguishable ONLY by a real `pull_request` key present on the JSON
+object. `fetch_github_issues` always excludes these. GitHub's own real
+`labels` query parameter uses AND semantics (an issue must carry EVERY
+listed label) -- confirmed for real (`labels=docs,tests` returned only
+the one real issue with BOTH) -- so `labels` is deliberately NEVER
+forwarded to the real API at all; `should_include_issue` applies it
+CLIENT-side instead, with real OR semantics matching Partie 2.1.11's
+own sitemap `filter_sitemap_urls` precedent (any one of the given
+labels matches, the more intuitive reading of "filter by labels").
+`state`/`since` both go to the real API (state is one exact value,
+`since` is a real, documented `updated_at >=` cutoff, confirmed to
+accept either a bare `Z` suffix or a real `+00:00` offset) -- an
+invalid `state` or malformed `since` each get their own real, distinct
+422 from GitHub, though `GitHubIssuesImportRequest`'s own `state` field
+is already constrained via a real `Literal` at this server's OWN
+schema layer, a real, structural 422 of this server's own before ever
+reaching GitHub for that specific case.
+
+**A real, notable data-shape difference from every prior GitHub-sourced
+import**: `process_github_issues` already has to fetch each real
+issue's own comments (to decide whether/how to import it) BEFORE any
+Celery dispatch happens, so the fully-assembled real issue+comments
+data is passed STRAIGHT to the per-issue Celery task as an argument
+(this step's own literal `issue_data` parameter) -- unlike a repo
+file's real content (fetched INSIDE `process_github_file_task`
+instead, since content is too large to usefully thread through a
+Celery argument the way one issue's JSON is), `process_github_issue_task`
+makes NO further real GitHub API call at all. Comments are only ever
+fetched for an issue that actually HAS some (its own real `comments`
+count, already known from the first fetch) -- never a wasted real
+request for an issue with none.
+
+**Performance and real rate-limit respect (vision critique Q2/Q3),
+same proactive answer as Partie 2.1.12**: after fetching and capping
+the real matching issues to `max_issues`, a real, FREE `GET /rate_limit`
+call caps the real per-issue COMMENT fetches about to happen at
+whatever real quota is actually left, before making any of them --
+the same "check before you commit to N more real requests" design as
+`process_github_repo`. A repository with genuinely no matching real
+issues (vision critique Q3's own "que se passe-t-il si le dépôt n'a
+pas d'issues" answer) is not a failure -- 0 real issues, 0 real tasks
+scheduled, a real `"completed"`, exactly like `process_github_repo`
+finding 0 files after filtering.
+
+**Real verification for GitHub issues import specifically**:
+`tests/test_github_extraction.py` (fast tier, `httpx.MockTransport`)
+covers real state/OR-label filtering, real pull-request exclusion
+while paginating, pagination stopping at the first real empty page,
+`state`/`since` reaching the real query string while `labels` never
+does, real comment fetching, metadata extraction, and real Markdown
+formatting (with and without a body/comments). `tests/test_github_extraction_integration.py`
+(real network) uses `github/docs` specifically, not `octocat/Hello-World`/
+`Spoon-Knife` -- confirmed for real that those two have accumulated
+thousands of real but unlabeled, uncommented tutorial-practice issues
+(4397 and 603 respectively), while `github/docs` filtered to
+`state="open"` is a real, bounded (one real page), first-party,
+actually-curated, labeled, commented set -- covering a real label
+filter (discovered dynamically from real data, not hardcoded, so it
+stays correct as the repository's own real open issues change) and
+real comment fetching. `tests/test_documents.py` covers the real route
+end to end (start an import, invalid repo URL, invalid `state`,
+cross-tenant workspace guard, `max_issues` bounds, state/since/labels/
+max_issues passed through to scheduling, permissions) with network
+calls stubbed, plus focused unit tests for `process_github_issue_documents`
+(real stagger, its real cap, real per-task broker-failure tolerance).
+`tests/test_github_integration.py` (real network) proves
+`process_github_issues`'s own real fetch/filter/cap/comment-assembly
+orchestration against `github/docs`, a real label exclusion, and a
+real 404 failure. `tests/test_documents_integration.py` runs the REAL
+end-to-end per-issue pipeline (real GitHub fetch, real S3, real
+Postgres, real embeddings) against a real issue, landing as a real
+`text/markdown` Document.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

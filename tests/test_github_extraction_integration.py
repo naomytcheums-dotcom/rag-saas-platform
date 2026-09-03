@@ -1,12 +1,26 @@
 """
-Partie 2.1.12 -- real network tests for api/services/github_extraction.py.
-Unlike tests/test_github_extraction.py (whose tests never reach the
-real network at all), these actually reach the real GitHub REST API,
-unauthenticated, against `octocat/Hello-World` and `octocat/Spoon-Knife`
--- GitHub's own real, stable, first-party demo repositories, chosen
-instead of some other real project precisely so this test suite is
-never mistaken for a crawler hitting a real third-party production
-project.
+Partie 2.1.12/2.1.13 -- real network tests for
+api/services/github_extraction.py. Unlike tests/test_github_extraction.py
+(whose tests never reach the real network at all), these actually
+reach the real GitHub REST API, unauthenticated, against
+`octocat/Hello-World` and `octocat/Spoon-Knife` -- GitHub's own real,
+stable, first-party demo repositories, chosen instead of some other
+real project precisely so this test suite is never mistaken for a
+crawler hitting a real third-party production project.
+
+**The real issues tests below use `github/docs` instead** (GitHub's own
+first-party documentation site repository, the same "first-party
+reference material" spirit as Partie 2.1.11's own use of
+sitemaps.org's own sitemap.xml) -- confirmed for real, deliberately,
+NOT `octocat/Hello-World`/`Spoon-Knife`: those two have accumulated
+thousands of real but unlabeled, uncommented practice issues from
+people following GitHub's own tutorials (4397 and 603 respectively,
+confirmed for real before writing this), which would make a real
+pagination/label/comment test either slow (many real pages) or
+unable to find a single real labeled/commented example at all.
+`github/docs`, filtered to `state="open"`, is a real, bounded (one
+real page), first-party set of real, actually-curated, labeled,
+commented issues.
 
 Every call here passes `token=None` explicitly -- never
 `settings.GITHUB_API_TOKEN` -- so these "public repo, no token needed"
@@ -24,11 +38,15 @@ automated CI run can responsibly provision -- same restraint as Partie
 
 from api.services.github_extraction import (
     extract_github_metadata,
+    extract_issue_metadata,
     fetch_github_file_content,
     fetch_github_files,
+    fetch_github_issue_comments,
+    fetch_github_issues,
     fetch_github_rate_limit_remaining,
     fetch_github_repo,
     fetch_github_repo_tree,
+    format_issue_for_import,
 )
 
 
@@ -92,3 +110,58 @@ async def test_fetch_github_rate_limit_remaining_reports_a_real_number():
     remaining = await fetch_github_rate_limit_remaining(None)
     assert isinstance(remaining, int)
     assert remaining >= 0
+
+
+# ------------------------------------------------------------ GitHub issues --
+
+async def test_fetch_github_issues_returns_real_open_non_pr_issues():
+    """Validation criterion: l'import d'issues fonctionne, les issues
+    sont filtrées par état (open) -- against real, live GitHub issues,
+    confirmed to never include a real pull request."""
+    issues = await fetch_github_issues("github", "docs", None, state="open")
+    assert len(issues) > 0
+    assert all(issue["state"] == "open" for issue in issues)
+    assert all("/pull/" not in issue["html_url"] for issue in issues)
+
+
+async def test_fetch_github_issues_applies_a_real_label_filter():
+    """Validation criterion: les issues sont filtrées par labels --
+    discovers a real label from a real issue rather than hardcoding
+    one, so this stays correct as github/docs's own real open issues
+    change over time."""
+    all_open = await fetch_github_issues("github", "docs", None, state="open")
+    labeled = [issue for issue in all_open if issue["labels"]]
+    assert labeled, "expected at least one real open issue with a real label"
+    real_label = labeled[0]["labels"][0]["name"]
+
+    filtered = await fetch_github_issues("github", "docs", None, state="open", labels=[real_label])
+    assert len(filtered) > 0
+    assert all(any(label["name"] == real_label for label in issue["labels"]) for issue in filtered)
+
+
+async def test_fetch_github_issue_comments_returns_real_comments():
+    """Validation criterion: les commentaires sont importés -- against
+    a real issue dynamically found to actually have some."""
+    all_open = await fetch_github_issues("github", "docs", None, state="open")
+    commented = next((issue for issue in all_open if issue["comments"] > 0), None)
+    assert commented is not None, "expected at least one real open issue with real comments"
+
+    comments = await fetch_github_issue_comments("github", "docs", commented["number"], None)
+    assert len(comments) > 0
+    assert all("body" in comment and "user" in comment for comment in comments)
+
+
+async def test_extract_and_format_a_real_issue_end_to_end():
+    """Cross-check: extract_issue_metadata/format_issue_for_import
+    against a real issue and its real comments."""
+    all_open = await fetch_github_issues("github", "docs", None, state="open")
+    issue = all_open[0]
+    comments = await fetch_github_issue_comments("github", "docs", issue["number"], None) if issue["comments"] > 0 else []
+
+    metadata = extract_issue_metadata(issue)
+    assert metadata["number"] == issue["number"]
+    assert metadata["state"] == "open"
+
+    markdown = format_issue_for_import(issue, comments)
+    assert markdown.startswith(f"# {issue['title']}")
+    assert "**State:** open" in markdown

@@ -255,6 +255,11 @@ ebooklib==0.20
 # admin-configured GITHUB_API_BASE_URL, never caller-controlled). Base64
 # decoding uses Python's own stdlib.
 
+# -- Documents / GitHub issues import (Partie 2.1.13) -------------------------
+# No new package at all -- extends Partie 2.1.12's own github_extraction.py
+# with more calls against the same real GitHub REST API, same httpx
+# client, same reasoning for no SSRF-safe transport.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

@@ -1,30 +1,34 @@
 """
-Partie 2.1.12 -- real network integration test for
-api/security/documents.py's own process_github_repo: the real fetch
-(a real, external, public GitHub repository, never mocked) and the
-real filter/cap/fan-out decision-making, proven against a real target
-(`octocat/Spoon-Knife`, GitHub's own first-party demo repo).
+Partie 2.1.12/2.1.13 -- real network integration tests for
+api/security/documents.py's own process_github_repo/process_github_issues:
+the real fetch (a real, external, public GitHub repository, never
+mocked) and the real filter/cap/fan-out decision-making, proven against
+real targets (`octocat/Spoon-Knife` for files, `github/docs` for
+issues -- see tests/test_github_extraction_integration.py's own module
+docstring for why `github/docs` specifically for issues).
 
-`process_github_files` (the next real layer -- per-file Celery
-dispatch) is monkeypatched here to simply CAPTURE what it is called
-with, rather than dragged through a live broker or nested through a
-second `asyncio.run()` from within this already-running one --
-consistent with this codebase's own established boundary (see
-tests/test_celery_integration.py's own module docstring, and
-tests/test_sitemap_integration.py's own identical reasoning one step
-earlier in this same cahier). The real, full per-file pipeline this
-dispatch would go on to trigger (import_and_process_github_file ->
-process_document) is proven separately, for real, in
-tests/test_documents_integration.py's own GitHub section.
+`process_github_files`/`process_github_issue_documents` (the next real
+layer -- per-item Celery dispatch) are monkeypatched here to simply
+CAPTURE what they are called with, rather than dragged through a live
+broker or nested through a second `asyncio.run()` from within this
+already-running one -- consistent with this codebase's own established
+boundary (see tests/test_celery_integration.py's own module docstring,
+and tests/test_sitemap_integration.py's own identical reasoning
+earlier in this same cahier). The real, full per-item pipelines these
+dispatches would go on to trigger (import_and_process_github_file/
+import_and_process_github_issue -> process_document) are proven
+separately, for real, in tests/test_documents_integration.py's own
+GitHub sections.
 """
 
 import uuid
 from unittest.mock import patch
 
-from api.security.documents import process_github_repo
+from api.security.documents import process_github_issues, process_github_repo
 from api.services.github_extraction import fetch_github_repo, fetch_github_repo_tree
 
 _REAL_OWNER, _REAL_REPO = "octocat", "Spoon-Knife"
+_REAL_ISSUES_OWNER, _REAL_ISSUES_REPO = "github", "docs"
 
 
 def _patch_process_github_files(captured):
@@ -113,3 +117,78 @@ async def test_process_github_repo_agrees_with_an_independently_fetched_real_tre
         )
 
     assert len(captured["file_urls"]) == len(real_tree)
+
+
+def _patch_process_github_issue_documents(captured):
+    def _capture(organization_id, workspace_id, issues_data, created_by):
+        captured["organization_id"] = organization_id
+        captured["workspace_id"] = workspace_id
+        captured["issues_data"] = issues_data
+        captured["created_by"] = created_by
+        return len(issues_data)
+
+    return patch("api.security.documents.process_github_issue_documents", side_effect=_capture)
+
+
+async def test_process_github_issues_runs_the_real_fetch_and_assembles_real_issue_data():
+    """
+    Validation criterion: l'import d'issues fonctionne, les commentaires
+    sont importés -- against a real, external, non-mocked repository.
+    `max_issues=2` keeps the real number of per-issue comment fetches
+    this test triggers small and deliberate.
+    """
+    captured = {}
+    organization_id, created_by = uuid.uuid4(), uuid.uuid4()
+
+    with _patch_process_github_issue_documents(captured):
+        result = await process_github_issues(
+            organization_id, None, f"https://github.com/{_REAL_ISSUES_OWNER}/{_REAL_ISSUES_REPO}",
+            "open", None, None, 2, created_by,
+        )
+
+    assert result == "completed"
+    assert captured["organization_id"] == organization_id
+    assert captured["created_by"] == created_by
+    assert len(captured["issues_data"]) == 2
+    for entry in captured["issues_data"]:
+        assert entry["issue"]["state"] == "open"
+        # github/docs's own real open issues are all commented (confirmed
+        # before writing this test) -- so real comments must have been
+        # fetched for real, not left an empty placeholder.
+        if entry["issue"]["comments"] > 0:
+            assert len(entry["comments"]) > 0
+
+
+async def test_process_github_issues_excludes_issues_that_do_not_match_a_real_label():
+    """A real label that genuinely does not exist on this repository's
+    real open issues -- must exclude everything, not just narrow it."""
+    captured = {}
+    with _patch_process_github_issue_documents(captured):
+        result = await process_github_issues(
+            uuid.uuid4(), None, f"https://github.com/{_REAL_ISSUES_OWNER}/{_REAL_ISSUES_REPO}",
+            "open", None, ["this-label-genuinely-does-not-exist-anywhere"], 100, uuid.uuid4(),
+        )
+
+    assert result == "completed"
+    assert captured["issues_data"] == []
+
+
+async def test_process_github_issues_enforces_a_real_max_issues_cap():
+    captured = {}
+    with _patch_process_github_issue_documents(captured):
+        await process_github_issues(
+            uuid.uuid4(), None, f"https://github.com/{_REAL_ISSUES_OWNER}/{_REAL_ISSUES_REPO}", "open", None, None, 0, uuid.uuid4(),
+        )
+
+    assert captured["issues_data"] == []
+
+
+async def test_process_github_issues_returns_failed_for_a_real_nonexistent_repository():
+    """Vision critique Q3's own answer, at the top-level issues-fetch
+    boundary -- a real, live 404 (not a mock) ends this in a real,
+    logged "failed" result, never a crash."""
+    result = await process_github_issues(
+        uuid.uuid4(), None, "https://github.com/this-owner-genuinely-does-not-exist-404/nope",
+        "all", None, None, 100, uuid.uuid4(),
+    )
+    assert result == "failed"

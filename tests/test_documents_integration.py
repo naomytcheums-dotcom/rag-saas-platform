@@ -45,9 +45,16 @@ from api.config import settings
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
-from api.security.documents import chunk_text, generate_embeddings, import_and_process_github_file, process_document, process_url_document
+from api.security.documents import (
+    chunk_text,
+    generate_embeddings,
+    import_and_process_github_file,
+    import_and_process_github_issue,
+    process_document,
+    process_url_document,
+)
 from api.services.document_storage import upload_document_file, validate_document_upload
-from api.services.github_extraction import build_github_contents_file_url
+from api.services.github_extraction import build_github_contents_file_url, fetch_github_issue_comments, fetch_github_issues
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -1037,5 +1044,49 @@ async def test_import_and_process_github_file_marks_failed_for_a_real_nonexisten
 
             assert updated.status == DocumentStatus.failed.value
             assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_import_and_process_github_issue_runs_the_real_end_to_end_github_issue_pipeline(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.13's own validation criterion -- the real, full chain:
+    a real, unauthenticated GitHub Issues API fetch to build the
+    `issue_data` fixture (github/docs, the same real, bounded, curated
+    target tests/test_github_extraction_integration.py's own module
+    docstring explains), real Markdown formatting, real upload to S3,
+    THEN the exact same process_document pipeline every other format
+    already uses (vision critique Q1's own answer). Confirms it lands
+    as a real `text/markdown` Document (the real `.md` filename
+    fallback, Partie 2.1.4), with a real chunk and embedding.
+    """
+    all_open = await fetch_github_issues("github", "docs", None, state="open")
+    issue = all_open[0]
+    comments = await fetch_github_issue_comments("github", "docs", issue["number"], None) if issue["comments"] > 0 else []
+    issue_data = {"issue": issue, "comments": comments}
+
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization = await _make_org_and_owner(session)
+        try:
+            updated = await import_and_process_github_issue(session, organization.id, None, owner.id, issue_data)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.source_url == issue["html_url"]
+            assert updated.file_type == "text/markdown"
+            assert updated.file_size > 0
+            assert updated.processed_at is not None
+            assert updated.metadata_json["number"] == issue["number"]
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == updated.id)
+            )).all()
+            assert len(chunks) >= 1
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
         finally:
             await _cleanup(session, organization.id, owner.id)

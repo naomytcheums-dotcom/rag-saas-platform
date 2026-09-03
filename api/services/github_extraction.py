@@ -1,6 +1,7 @@
 """
-Partie 2.1.12 -- fetching a GitHub repository's real metadata and files
-via GitHub's REST API, for import into a knowledge base. Uses a plain
+Partie 2.1.12/2.1.13 -- fetching a GitHub repository's real metadata,
+files, and issues via GitHub's REST API, for import into a knowledge
+base. Uses a plain
 `httpx.AsyncClient` against a FIXED, admin-configured host
 (`settings.GITHUB_API_BASE_URL`, `api.github.com` by default) --
 unlike Partie 2.1.10's `fetch_url_content`, this deliberately does NOT
@@ -58,6 +59,31 @@ assumed**:
   safety cap, roughly 100,000 entries/7MB) is checked and logged -- an
   honest, stated limitation for an extraordinarily large repository,
   never silently ignored.
+- GitHub's real Issues REST endpoint (`GET /repos/{owner}/{repo}/issues`)
+  returns real PULL REQUESTS too, not just real issues -- confirmed for
+  real against a real, active repository (`expressjs/express`): GitHub
+  internally treats a PR as a special kind of issue, and the ONLY real,
+  documented way to tell them apart is a real `pull_request` key present
+  on the JSON object (real issues never have one). `fetch_github_issues`
+  below always excludes these -- never one of this step's own real
+  "issues" (vision critique Q1's own answer: only real issues, never a
+  PR mistaken for one, get imported).
+- GitHub's own real `labels` query parameter uses AND semantics -- an
+  issue must carry EVERY listed label, confirmed for real
+  (`labels=docs,tests` returned only the one real issue that had BOTH),
+  not "any of these labels" the way a caller would more naturally read
+  a "filter by labels" request. `fetch_github_issues` therefore does
+  NOT forward `labels` to the real API at all -- `should_include_issue`
+  applies it CLIENT-side instead, with real OR semantics (matching
+  Partie 2.1.11's own sitemap `filter_sitemap_urls` precedent: any one
+  of the given patterns/labels matches).
+- `since` accepts a real ISO 8601 string with either a bare `Z` suffix
+  or a real `+00:00` offset -- confirmed for real, both work -- but a
+  malformed one, or an invalid `state`, each get their own real,
+  distinct `422` from GitHub's own API (confirmed for real against both)
+  -- `GitHubIssuesImportRequest`'s own `state` field is constrained at
+  this server's OWN schema layer instead, a real, structural 422 of
+  this server's own before ever reaching GitHub for that specific case.
 """
 
 import base64
@@ -157,6 +183,15 @@ def _raise_for_github_response(response: httpx.Response, owner: str, repo: str, 
                 f"GitHub API rate limit exceeded (resets at unix time {response.headers.get('X-RateLimit-Reset')})"
             )
         raise ValueError(f"GitHub API request for '{owner}/{repo}' was forbidden: {response.text}")
+    if response.status_code == 422:
+        # Real, confirmed finding (Partie 2.1.13): an invalid `state` or
+        # a malformed `since` both get their own real, distinct 422 from
+        # GitHub's own Issues API -- api/schemas/documents.py's own
+        # GitHubIssuesImportRequest already rejects an invalid `state`
+        # with a real, structural 422 of THIS server's own before ever
+        # reaching GitHub, so this branch is mainly a safety net for
+        # fetch_github_issues called directly/standalone.
+        raise ValueError(f"GitHub API rejected this request for '{owner}/{repo}' as invalid: {response.text}")
     response.raise_for_status()
 
 
@@ -328,3 +363,121 @@ def build_github_blob_url(owner: str, repo: str, ref: str, path: str) -> str:
     column Partie 2.1.10 already added, reused unchanged here (no new
     column needed for this step)."""
     return f"https://github.com/{owner}/{repo}/blob/{ref}/{path}"
+
+
+def should_include_issue(issue: dict, state: str | None, labels: list[str] | None) -> bool:
+    """Item 3's literal function -- real state match (GitHub's own API
+    already applies `state` server-side by the time `fetch_github_issues`
+    calls this, but this is still a real, standalone, correct check on
+    its own, for a caller that uses it directly) and a real, OR-based
+    label match -- see this module's own docstring for why OR, not
+    GitHub's own AND."""
+    if state and state != "all" and issue.get("state") != state:
+        return False
+    if labels:
+        issue_labels = {label["name"] for label in issue.get("labels", [])}
+        if not issue_labels.intersection(labels):
+            return False
+    return True
+
+
+# Real safety cap on how many real PAGES of issues fetch_github_issues
+# will fetch (100 real issues/page) -- protects the FETCH phase itself
+# from a repository with an enormous real issue tracker, independent of
+# process_github_issues's own `max_issues` (applied afterward, at the
+# orchestration level -- same "filter before cap" ordering Partie
+# 2.1.11/2.1.12 already established).
+_MAX_ISSUE_PAGES = 50
+
+
+async def fetch_github_issues(
+    owner: str, repo: str, token: str | None, state: str = "all",
+    since: str | None = None, labels: list[str] | None = None,
+) -> list[dict]:
+    """Item 2's literal function -- paginates through GitHub's real
+    Issues API. `state`/`since` are both sent to the real API (neither
+    has GitHub's own labels ambiguity -- state is one exact value,
+    since is a real, documented `updated_at >=` cutoff); `labels` is
+    applied CLIENT-side via `should_include_issue` instead (see this
+    module's own docstring for why). Real pull requests are always
+    excluded first, before the label check even runs."""
+    params = {"state": state, "per_page": 100}
+    if since:
+        params["since"] = since
+
+    matched: list[dict] = []
+    async with _client() as client:
+        for page in range(1, _MAX_ISSUE_PAGES + 1):
+            response = await client.get(
+                f"{settings.GITHUB_API_BASE_URL}/repos/{owner}/{repo}/issues",
+                headers=_headers(token), params={**params, "page": page},
+            )
+            _raise_for_github_response(response, owner, repo)
+            batch = response.json()
+            if not batch:
+                break
+            matched.extend(
+                item for item in batch if "pull_request" not in item and should_include_issue(item, state, labels)
+            )
+    return matched
+
+
+async def fetch_github_issue_comments(owner: str, repo: str, issue_number: int, token: str | None) -> list[dict]:
+    """Item 2's literal function -- real comments for one real issue."""
+    async with _client() as client:
+        response = await client.get(
+            f"{settings.GITHUB_API_BASE_URL}/repos/{owner}/{repo}/issues/{issue_number}/comments", headers=_headers(token),
+        )
+    _raise_for_github_response(response, owner, repo)
+    return response.json()
+
+
+def extract_issue_metadata(issue: dict) -> dict:
+    """Item 2's literal function -- titre, état, labels, assignés,
+    milestone, plus a few more real fields (author, timestamps, the
+    real html_url, comment count) genuinely useful to keep alongside
+    them in `Document.metadata_json`."""
+    return {
+        "number": issue["number"],
+        "title": issue["title"],
+        "state": issue["state"],
+        "labels": [label["name"] for label in issue.get("labels", [])],
+        "assignees": [assignee["login"] for assignee in issue.get("assignees", [])],
+        "milestone": issue["milestone"]["title"] if issue.get("milestone") else None,
+        "author": issue.get("user", {}).get("login") if issue.get("user") else None,
+        "created_at": issue.get("created_at"),
+        "updated_at": issue.get("updated_at"),
+        "closed_at": issue.get("closed_at"),
+        "html_url": issue.get("html_url"),
+        "comment_count": issue.get("comments", 0),
+    }
+
+
+def format_issue_for_import(issue: dict, comments: list[dict] | None = None) -> str:
+    """Item 2's literal function -- titre + corps + commentaires,
+    formatted as real Markdown (vision critique Q1's own answer: yes,
+    so this flows through Partie 2.1.4's own real Markdown extraction
+    pipeline -- real heading-based sectioning included -- completely
+    unchanged, the same "reuse the existing pipeline" story as every
+    GitHub-sourced import so far)."""
+    metadata = extract_issue_metadata(issue)
+    lines = [f"# {metadata['title']}", "", f"- **State:** {metadata['state']}"]
+    if metadata["labels"]:
+        lines.append(f"- **Labels:** {', '.join(metadata['labels'])}")
+    if metadata["assignees"]:
+        lines.append(f"- **Assignees:** {', '.join(metadata['assignees'])}")
+    if metadata["milestone"]:
+        lines.append(f"- **Milestone:** {metadata['milestone']}")
+    if metadata["author"]:
+        lines.append(f"- **Author:** {metadata['author']}")
+    lines.append("")
+    if issue.get("body"):
+        lines.append(issue["body"])
+        lines.append("")
+    for comment in comments or []:
+        author = comment.get("user", {}).get("login") if comment.get("user") else "unknown"
+        lines.append(f"## Comment by {author}")
+        lines.append("")
+        lines.append(comment.get("body") or "")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"

@@ -1477,3 +1477,186 @@ def test_process_github_files_tolerates_a_broker_failure_for_one_file(monkeypatc
 
     assert scheduled == 2
     assert len(calls) == 2
+
+
+# --------------------------------------------------- GitHub issues import --
+
+async def _import_github_issues(client, org_id: str, token: str, repo_url: str, workspace_id=None, state=None, since=None, labels=None, max_issues=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    body = {"repo_url": repo_url}
+    if state is not None:
+        body["state"] = state
+    if since is not None:
+        body["since"] = since
+    if labels is not None:
+        body["labels"] = labels
+    if max_issues is not None:
+        body["max_issues"] = max_issues
+    return await client.post(
+        f"/organizations/{org_id}/documents/github/issues", params=params,
+        json=body, headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_start_a_github_issues_import(client, db_session, register_payload):
+    """Validation criterion (2.1.13): l'import d'issues fonctionne,
+    through its own real route. Real network activity is deliberately
+    NOT triggered -- schedule_github_issues_import is stubbed by
+    tests/conftest.py's own autouse fixture, the same "only the
+    synchronous half" reasoning as every prior GitHub/sitemap import
+    test."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://github.com/octocat/Hello-World")
+    assert response.status_code == 202
+    body = response.json()
+    assert body == {"owner": "octocat", "repo": "Hello-World", "status": "scheduled"}
+
+
+async def test_github_issues_import_rejects_an_invalid_repo_url(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://gitlab.com/octocat/Hello-World")
+    assert response.status_code in (400, 422)
+
+
+async def test_github_issues_import_rejects_an_invalid_state(client, db_session, register_payload):
+    """`state` is constrained to GitHub's own three real values at the
+    schema layer -- a real, structural 422, not a 400 raised by
+    application code."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://github.com/octocat/Hello-World", state="not-a-real-state")
+    assert response.status_code == 422
+
+
+async def test_github_issues_import_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "githubissuesotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://github.com/octocat/Hello-World", workspace_id=other_workspace["id"])
+    assert response.status_code == 400
+
+
+async def test_github_issues_import_rejects_max_issues_out_of_bounds(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://github.com/octocat/Hello-World", max_issues=0)
+    assert response.status_code == 422
+
+    response = await _import_github_issues(client, org["id"], owner_token, "https://github.com/octocat/Hello-World", max_issues=2001)
+    assert response.status_code == 422
+
+
+async def test_github_issues_import_passes_state_since_labels_and_max_issues_through_to_scheduling(client, db_session, register_payload, monkeypatch):
+    captured = {}
+
+    def _capture(repo_url, organization_id, workspace_id, state, since, labels, max_issues, created_by):
+        captured["state"] = state
+        captured["since"] = since
+        captured["labels"] = labels
+        captured["max_issues"] = max_issues
+
+    monkeypatch.setattr("api.security.documents.schedule_github_issues_import", _capture)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    response = await _import_github_issues(
+        client, org["id"], owner_token, "https://github.com/octocat/Hello-World",
+        state="open", since="2024-01-01T00:00:00Z", labels=["bug"], max_issues=42,
+    )
+
+    assert response.status_code == 202
+    assert captured["state"] == "open"
+    assert captured["since"] == "2024-01-01T00:00:00Z"
+    assert captured["labels"] == ["bug"]
+    assert captured["max_issues"] == 42
+
+
+async def test_schedule_github_issues_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_github_issues_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.github_import.process_github_issues_task.delay", _boom)
+    schedule_github_issues_import("https://github.com/octocat/Hello-World", uuid.uuid4(), None, "all", None, None, 100, uuid.uuid4())  # must not raise
+
+
+async def test_viewer_cannot_start_a_github_issues_import(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "githubissuesviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _import_github_issues(client, org["id"], viewer_token, "https://github.com/octocat/Hello-World")
+    assert response.status_code == 403
+
+
+# ------------------------------------------- process_github_issue_documents --
+
+def test_process_github_issue_documents_schedules_one_task_per_issue_with_a_real_stagger(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append((args, countdown))
+
+    monkeypatch.setattr("api.tasks.github_import.process_github_issue_task", _FakeTask())
+
+    org_id, workspace_id, created_by = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    issues_data = [{"issue": {"number": 1}, "comments": []}, {"issue": {"number": 2}, "comments": []}]
+    scheduled = documents_module.process_github_issue_documents(org_id, workspace_id, issues_data, created_by)
+
+    assert scheduled == 2
+    assert calls[0][0] == [issues_data[0], str(org_id), str(workspace_id), str(created_by)]
+    assert calls[0][1] == 0
+    assert calls[1][1] == documents_module._GITHUB_ISSUE_STAGGER_SECONDS
+
+
+def test_process_github_issue_documents_caps_the_real_stagger_for_a_very_long_list(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append(countdown)
+
+    monkeypatch.setattr("api.tasks.github_import.process_github_issue_task", _FakeTask())
+
+    many_issues = [{"issue": {"number": i}, "comments": []} for i in range(500)]
+    documents_module.process_github_issue_documents(uuid.uuid4(), None, many_issues, created_by=None)
+
+    assert max(calls) == documents_module._GITHUB_ISSUE_MAX_STAGGER_SECONDS
+
+
+def test_process_github_issue_documents_tolerates_a_broker_failure_for_one_issue(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FlakyTask:
+        def apply_async(self, args, countdown):
+            if args[0]["issue"]["number"] == 2:
+                raise ConnectionError("broker unreachable")
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.github_import.process_github_issue_task", _FlakyTask())
+
+    issues_data = [{"issue": {"number": 1}, "comments": []}, {"issue": {"number": 2}, "comments": []}, {"issue": {"number": 3}, "comments": []}]
+    scheduled = documents_module.process_github_issue_documents(uuid.uuid4(), None, issues_data, created_by=None)
+
+    assert scheduled == 2
+    assert len(calls) == 2

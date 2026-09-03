@@ -5,6 +5,7 @@ be able to see."""
 
 import datetime as dt
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -99,6 +100,39 @@ class GitHubRepoImportResponse(BaseModel):
     """Same real, honest, minimal acknowledgment as SitemapImportResponse
     above, and for the identical reason -- see
     api/tasks/github_import.py's own module docstring."""
+
+    owner: str
+    repo: str
+    status: str
+
+
+class GitHubIssuesImportRequest(BaseModel):
+    """Partie 2.1.13, item 1's own request body. `state` is constrained
+    to GitHub's own three real values via `Literal` -- confirmed for
+    real that GitHub's own API returns a real, distinct 422 for
+    anything else, so rejecting it here, at this server's own schema
+    layer, is a real, structural 422 of this server's own rather than
+    surfacing GitHub's later, and only inside a deferred Celery task.
+    `since`, if given, must be a real ISO 8601 string (confirmed for
+    real: GitHub accepts either a bare `Z` suffix or a `+00:00` offset)
+    -- left as a plain, unvalidated `str` here rather than a `datetime`
+    field, matching this step's own literal function signatures
+    exactly; a malformed one surfaces as GitHub's own real, honest 422
+    inside the deferred task instead (see
+    api/services/github_extraction.py's own module docstring). `labels`
+    uses real OR semantics (see that same module docstring for why,
+    not GitHub's own AND)."""
+
+    repo_url: HttpUrl
+    state: Literal["open", "closed", "all"] = "all"
+    since: str | None = None
+    labels: list[str] | None = None
+    max_issues: int = Field(default=100, ge=1, le=2000)
+
+
+class GitHubIssuesImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as SitemapImportResponse/
+    GitHubRepoImportResponse above, and for the identical reason."""
 
     owner: str
     repo: str

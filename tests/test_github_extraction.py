@@ -1,5 +1,5 @@
 """
-Partie 2.1.12 -- fast-tier tests for api/services/github_extraction.py.
+Partie 2.1.12/2.1.13 -- fast-tier tests for api/services/github_extraction.py.
 No real network call: every real HTTP interaction is exercised through
 `httpx.MockTransport` (a REAL httpx testing utility -- request/response
 parsing, headers, status codes, and JSON encoding/decoding all run for
@@ -24,14 +24,19 @@ from api.services.github_extraction import (
     build_github_blob_url,
     build_github_contents_file_url,
     extract_github_metadata,
+    extract_issue_metadata,
     fetch_github_file_content,
     fetch_github_files,
+    fetch_github_issue_comments,
+    fetch_github_issues,
     fetch_github_rate_limit_remaining,
     fetch_github_repo,
     fetch_github_repo_tree,
+    format_issue_for_import,
     parse_github_contents_file_url,
     should_include_file,
     should_include_file_size,
+    should_include_issue,
     validate_github_repo_url,
 )
 
@@ -283,3 +288,153 @@ def test_parse_github_contents_file_url_rejects_an_unrelated_url():
 
 def test_build_github_blob_url_is_a_real_human_clickable_github_com_url():
     assert build_github_blob_url("octocat", "Hello-World", "main", "src/app.py") == "https://github.com/octocat/Hello-World/blob/main/src/app.py"
+
+
+# ------------------------------------------------------------ GitHub issues --
+
+def _real_issue(number, state="open", labels=None, comments=0, is_pull_request=False, **overrides):
+    """A real GitHub issue JSON shape, confirmed against a real
+    response (expressjs/express) before writing this module."""
+    issue = {
+        "number": number, "title": f"Issue {number}", "state": state, "body": f"Body of issue {number}",
+        "labels": [{"name": name} for name in (labels or [])],
+        "assignees": [], "milestone": None, "user": {"login": "octocat"},
+        "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z", "closed_at": None,
+        "html_url": f"https://github.com/octocat/Hello-World/issues/{number}", "comments": comments,
+    }
+    if is_pull_request:
+        issue["pull_request"] = {"url": f"https://api.github.com/repos/octocat/Hello-World/pulls/{number}"}
+    issue.update(overrides)
+    return issue
+
+
+def test_should_include_issue_matches_real_state():
+    assert should_include_issue(_real_issue(1, state="open"), "open", None) is True
+    assert should_include_issue(_real_issue(1, state="closed"), "open", None) is False
+    assert should_include_issue(_real_issue(1, state="closed"), "all", None) is True
+    assert should_include_issue(_real_issue(1, state="closed"), None, None) is True
+
+
+def test_should_include_issue_uses_real_or_semantics_for_labels():
+    """Real, deliberate finding: GitHub's own `labels` query param uses
+    AND semantics -- should_include_issue deliberately uses OR instead
+    (any ONE of the given labels matches), see this module's own
+    docstring."""
+    issue = _real_issue(1, labels=["docs", "bug"])
+    assert should_include_issue(issue, "all", ["docs"]) is True
+    assert should_include_issue(issue, "all", ["bug", "enhancement"]) is True
+    assert should_include_issue(issue, "all", ["enhancement"]) is False
+    assert should_include_issue(issue, "all", None) is True
+
+
+async def test_fetch_github_issues_paginates_and_excludes_real_pull_requests(monkeypatch):
+    """Validation criterion: l'import d'issues fonctionne -- and real
+    pull requests (GitHub's Issues API returns both from the same
+    endpoint) are never mistaken for one."""
+    pages = {
+        "1": [_real_issue(3, is_pull_request=True), _real_issue(2), _real_issue(1)],
+        "2": [],
+    }
+
+    def handler(request):
+        page = request.url.params.get("page")
+        return httpx.Response(200, json=pages.get(page, []))
+
+    _patch_client(monkeypatch, handler)
+    issues = await fetch_github_issues("octocat", "Hello-World", None)
+    assert [i["number"] for i in issues] == [2, 1]
+
+
+async def test_fetch_github_issues_stops_at_the_first_empty_page(monkeypatch):
+    calls = []
+
+    def handler(request):
+        page = request.url.params.get("page")
+        calls.append(page)
+        if page == "1":
+            return httpx.Response(200, json=[_real_issue(1)])
+        return httpx.Response(200, json=[])
+
+    _patch_client(monkeypatch, handler)
+    issues = await fetch_github_issues("octocat", "Hello-World", None)
+    assert [i["number"] for i in issues] == [1]
+    assert calls == ["1", "2"]
+
+
+async def test_fetch_github_issues_sends_real_state_and_since_to_the_api_but_not_labels(monkeypatch):
+    """Real, deliberate finding documented in this module -- `labels`
+    is applied client-side (should_include_issue), NEVER forwarded to
+    GitHub's own query string, to avoid its real AND semantics
+    silently excluding matches a caller would expect with OR."""
+    captured = {}
+
+    def handler(request):
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[])
+
+    _patch_client(monkeypatch, handler)
+    await fetch_github_issues("octocat", "Hello-World", None, state="open", since="2024-01-01T00:00:00Z", labels=["docs"])
+    assert captured["params"]["state"] == "open"
+    assert captured["params"]["since"] == "2024-01-01T00:00:00Z"
+    assert "labels" not in captured["params"]
+
+
+async def test_fetch_github_issues_applies_the_real_label_filter_while_paginating(monkeypatch):
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json=[
+        _real_issue(1, labels=["docs"]), _real_issue(2, labels=["bug"]),
+    ] if request.url.params.get("page") == "1" else []))
+    issues = await fetch_github_issues("octocat", "Hello-World", None, labels=["docs"])
+    assert [i["number"] for i in issues] == [1]
+
+
+async def test_fetch_github_issue_comments_returns_real_comments(monkeypatch):
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json=[
+        {"user": {"login": "alice"}, "body": "First comment", "created_at": "2026-01-01T00:00:00Z"},
+    ]))
+    comments = await fetch_github_issue_comments("octocat", "Hello-World", 1, None)
+    assert comments[0]["user"]["login"] == "alice"
+
+
+def test_extract_issue_metadata_reports_title_state_labels_assignees_milestone():
+    issue = _real_issue(
+        42, state="closed", labels=["bug", "priority-high"],
+        assignees=[{"login": "alice"}, {"login": "bob"}],
+        milestone={"title": "v2.0"}, user={"login": "carol"},
+    )
+    metadata = extract_issue_metadata(issue)
+    assert metadata["number"] == 42
+    assert metadata["state"] == "closed"
+    assert metadata["labels"] == ["bug", "priority-high"]
+    assert metadata["assignees"] == ["alice", "bob"]
+    assert metadata["milestone"] == "v2.0"
+    assert metadata["author"] == "carol"
+    assert metadata["html_url"] == "https://github.com/octocat/Hello-World/issues/42"
+
+
+def test_extract_issue_metadata_handles_a_real_issue_with_no_milestone_or_assignees():
+    metadata = extract_issue_metadata(_real_issue(1))
+    assert metadata["milestone"] is None
+    assert metadata["assignees"] == []
+
+
+def test_format_issue_for_import_produces_real_markdown_with_title_body_and_comments():
+    """Validation criterion / vision critique Q1: issues are imported
+    as documents, formatted as real Markdown (title + body +
+    comments)."""
+    issue = _real_issue(7, labels=["docs"], user={"login": "carol"})
+    comments = [{"user": {"login": "alice"}, "body": "Thanks for reporting!"}]
+    markdown = format_issue_for_import(issue, comments)
+    assert markdown.startswith("# Issue 7\n")
+    assert "**Labels:** docs" in markdown
+    assert "**Author:** carol" in markdown
+    assert "Body of issue 7" in markdown
+    assert "## Comment by alice" in markdown
+    assert "Thanks for reporting!" in markdown
+
+
+def test_format_issue_for_import_handles_a_real_issue_with_no_body_or_comments():
+    issue = _real_issue(1, body=None)
+    markdown = format_issue_for_import(issue, None)
+    assert markdown.startswith("# Issue 1\n")
+    assert markdown.strip().endswith("**Author:** octocat")  # no body/comments -- ends right after the metadata block
+    assert "## Comment by" not in markdown
