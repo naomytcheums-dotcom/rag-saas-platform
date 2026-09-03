@@ -201,6 +201,18 @@ readability-lxml==0.9
 # none of this step's own literal action items ask for path-based
 # querying -- see that module's own docstring for the full reasoning.
 
+# -- Documents / XML import (Partie 2.1.8) ------------------------------------
+# The exact library the master cahier des charges names for this item
+# ("2.1.8 | XML | lxml") is ALREADY pinned above (Partie 2.1.5's own
+# `lxml==6.1.3`, a transitive need of readability-lxml) -- no new pin
+# needed. `xmltodict` (vision critique's own named alternative) was
+# installed temporarily to compare its real output format against
+# this module's own hand-written dict conversion, then removed --
+# never a real dependency, see api/services/xml_extraction.py's own
+# module docstring for the full reasoning, including the real
+# entity-expansion DoS finding that shaped this module's parser
+# configuration.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

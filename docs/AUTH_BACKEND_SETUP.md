@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -2880,6 +2880,109 @@ rejecting a `.json`-named file that isn't real text.
 `tests/test_documents_integration.py` runs the real end-to-end JSON
 pipeline (real key_count/depth/structure metadata, real embeddings)
 against real Postgres.
+
+**XML (Partie 2.1.8) -- the exact library the master cahier des
+charges names for this item** ("2.1.8 | XML | lxml"), already a
+dependency since Partie 2.1.5 (readability-lxml's own transitive
+requirement) -- no new pin needed. **Vision critique's own literal
+choice, answered directly**: `lxml.etree` deliberately mirrors the
+stdlib `xml.etree.ElementTree` API, so using it already IS "using
+ElementTree," just via the faster, already-present libxml2-backed
+implementation the master cahier itself asks for. `xmltodict`
+(confirmed for real: not already installed) is deliberately NOT added
+-- `extract_xml_data` reimplements its own well-known, real dict
+convention directly on `lxml.etree` (`@attr` keys, `#text` for mixed
+content, repeated siblings become a list), verified against a real
+`xmltodict.parse()` call (installed temporarily for comparison, then
+removed) before committing to the shape.
+
+**Real finding #1, a MORE reassuring story than Partie 2.1.7's own
+JSON depth problem**: libxml2 enforces its own real, DELIBERATE
+nesting-depth guard -- confirmed for real to reject anything past 257
+levels with a real `XMLSyntaxError`, by design, not an incidental side
+effect of the OS thread's own C stack size the way CPython's json
+parser's `RecursionError` turned out to be. Because this guard runs
+INSIDE `etree.fromstring` itself, `api/services/xml_extraction.py`'s
+own tree walkers are plain, ordinary RECURSIVE functions, not the
+iterative/explicit-stack rewrite JSON needed -- a tree lxml agreed to
+build can never be deep enough to trouble Python's own default
+recursion limit.
+
+**Real finding #2, a genuine SECURITY finding**: `etree.fromstring`
+with lxml's DEFAULT parser settings is confirmed, for real, vulnerable
+to a classic "billion laughs" entity-expansion denial-of-service --
+verified with a real, small payload before deciding how to parse
+arbitrary uploaded XML. (The classic XXE attack -- an external
+`SYSTEM` entity reading a local file -- is already refused by this
+lxml/libxml2 version's default parser, but that is a SEPARATE
+protection; billion-laughs is confirmed separately to still succeed
+against it.) Every parse in this module therefore uses a real,
+explicit, hardened `etree.XMLParser(resolve_entities=False,
+no_network=True)` -- confirmed for real to neutralize the
+billion-laughs case while still parsing normal documents correctly,
+still rejecting malformed XML, and still enforcing the real depth
+guard above. **Real, honest trade-off, stated plainly**:
+`resolve_entities=False` also stops BENIGN internal entities from
+resolving -- the correct, deliberate choice for a pipeline parsing
+arbitrary uploaded content from any organization's members, safety
+over a rarely-used XML feature that is also the exact mechanism the
+real attack depends on. `api/services/document_storage.py`'s own
+`_is_real_xml` reuses this SAME `SAFE_XML_PARSER` constant (not a
+second, independently-configured copy that could silently drift out
+of sync) for real upload-time detection.
+
+**Real finding #3, a genuine bug caught by actually running the
+billion-laughs case through this module's own walkers, not just
+confirming parsing itself didn't blow up**: with entity resolution
+disabled, an unresolved entity reference does NOT vanish from the tree
+-- it becomes a real, distinct child node whose `.tag` is lxml's own
+`etree.Entity` factory function, not a string. An initial version of
+this module's tree walkers assumed every value `for child in elem`
+yields is a normal element and crashed with a real `TypeError` the
+first time it hit one. `_is_element` (checking `isinstance(node.tag,
+str)`) fixes this -- the same real check also correctly skips XML
+comments and processing instructions along the way.
+
+**A real, honest format-ambiguity trade-off** (vision critique Q1):
+XML and HTML can both start with the exact same bytes -- a document
+beginning with a real `<?xml ...?>` declaration is checked, and
+trusted, BEFORE HTML's own sniff (no genuine HTML5 page produces one);
+undeclared XML is checked AFTER HTML's sniff instead, so an undeclared
+XML document whose root tag happens to collide with one of HTML's own
+sniff patterns (e.g. a hypothetical `<table>`-rooted XML document with
+no declaration) is classified as HTML, not XML -- a real, narrow,
+explicitly tested limitation (`tests/test_documents.py`'s own
+`test_upload_classifies_undeclared_xml_as_html_when_the_root_collides`),
+not a silently glossed-over gap.
+
+**Real, structured `tag/path: text` text extraction** (vision critique
+Q2): `extract_xml_text` emits one line per element that carries real
+text, showing both where a value came from and what it says, while
+deliberately leaving attributes out of the text itself (they live in
+`extract_xml_metadata`/`extract_xml_structure` instead) so extracted
+text stays natural-language-readable rather than bracket-heavy.
+`extract_xml_structure` returns a real DICT of two yes/no structural
+flags (`has_attributes`, `has_nested_elements`) rather than the single
+taxonomy string Partie 2.1.7's JSON structure classifier used -- a
+deliberate, more faithful shape for THIS step's own literal ask
+("attributs, éléments imbriqués" -- two real questions, not a
+category), not an inconsistency.
+
+**Real verification for XML specifically**: `tests/test_xml_extraction.py`
+(no mocking, same discipline as every other format's suite) covers
+real path/value text extraction, a real comment surviving iteration,
+the real billion-laughs neutralization (including the unresolved-entity
+node fix), malformed/empty/non-XML/binary rejection, the real
+excessive-depth failure, namespace local-name stripping, the real
+xmltodict-matching dict convention, and both flat and nested structure
+detection. `tests/test_document_extraction.py` proves the dispatcher's
+shared shape for XML too, including structure's two flags merging into
+metadata. `tests/test_documents.py` covers XML upload end to end,
+including declared-vs-undeclared content-based detection, the real
+HTML-collision limitation (locked in by its own test), and rejecting a
+`.xml`-named file that isn't real text. `tests/test_documents_integration.py`
+runs the real end-to-end XML pipeline (real element/attribute counts,
+real embeddings) against real Postgres.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

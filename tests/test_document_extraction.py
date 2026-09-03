@@ -1,12 +1,12 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7, item 3 -- api/services/document_extraction.py's
-extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8, item 3 -- api/services/document_extraction.py's
+extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML
 generation and extraction, no mocking -- proves every format really
 does come back through the SAME shared shape (vision critique Q1 --
 coherence), including Markdown's own real per-section heading metadata,
 HTML's real article-vs-boilerplate extraction, CSV's own DataFrame
-landing in the shared "tables" list, and JSON's real key_count/depth/
-structure metadata.
+landing in the shared "tables" list, JSON's real key_count/depth/
+structure metadata, and XML's real element/attribute counts.
 """
 
 import docx
@@ -21,6 +21,7 @@ from api.services.document_extraction import (
     MARKDOWN_CONTENT_TYPE,
     PDF_CONTENT_TYPE,
     TXT_CONTENT_TYPE,
+    XML_CONTENT_TYPE,
     extract_document_content,
 )
 
@@ -120,6 +121,19 @@ def real_json_path(tmp_path):
         {"id": 1, "note": "Real JSON dispatcher test content."},
         {"id": 2, "note": "A second record."},
     ]).encode("utf-8"))
+    return str(path)
+
+
+@pytest.fixture
+def real_xml_path(tmp_path):
+    path = tmp_path / "dispatch.xml"
+    path.write_bytes((
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<catalog>"
+        '<book id="bk101"><title>Real XML dispatcher test content.</title></book>'
+        '<book id="bk102"><title>A second book.</title></book>'
+        "</catalog>"
+    ).encode("utf-8"))
     return str(path)
 
 
@@ -249,6 +263,25 @@ def test_extract_document_content_dispatches_json_correctly(real_json_path):
     assert result["image_count"] == 0
 
 
+def test_extract_document_content_dispatches_xml_correctly(real_xml_path):
+    """Partie 2.1.8's own validation criterion: real root/element/
+    attribute counts and its real answer to vision critique Q1 --
+    structure's two boolean flags merge into the SAME metadata dict
+    extract_xml_metadata already returns, not a separate top-level key."""
+    result = extract_document_content(real_xml_path, XML_CONTENT_TYPE)
+    _assert_shared_shape(result)
+    assert result["metadata"]["root"] == "catalog"
+    assert result["metadata"]["element_count"] == 5  # catalog + 2 books + 2 titles
+    assert result["metadata"]["attribute_count"] == 2  # 2x book id
+    assert result["metadata"]["has_attributes"] is True
+    assert result["metadata"]["has_nested_elements"] is True
+    assert len(result["sections"]) == 1  # XML has no pages either -- always exactly one section
+    assert "catalog/book/title: Real XML dispatcher test content." in result["sections"][0]["text"]
+    assert result["sections"][0]["metadata"] == {}
+    assert result["tables"] == []  # a tree isn't generally tabular -- no DataFrame conversion
+    assert result["image_count"] == 0
+
+
 def test_extract_document_content_raises_for_an_unsupported_type(real_pdf_path):
     with pytest.raises(ValueError):
-        extract_document_content(real_pdf_path, "application/xml")
+        extract_document_content(real_pdf_path, "application/x-yaml")

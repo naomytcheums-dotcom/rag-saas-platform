@@ -1,14 +1,15 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- document upload/list/
-detail/delete (PDF, DOCX, TXT, Markdown, HTML, CSV, and JSON). Fast
-SQLite suite, same tier as tests/test_custom_domains.py. Both real
-network dependencies are mocked throughout: S3 (api/security/documents.py's
-upload_document_file/download_document_file) and Celery dispatch
-(schedule_document_processing, stubbed by default for the whole file --
-see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
--- no real network call belongs in the fast suite.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- document
+upload/list/detail/delete (PDF, DOCX, TXT, Markdown, HTML, CSV, JSON,
+and XML). Fast SQLite suite, same tier as tests/test_custom_domains.py.
+Both real network dependencies are mocked throughout: S3
+(api/security/documents.py's upload_document_file/download_document_file)
+and Celery dispatch (schedule_document_processing, stubbed by default
+for the whole file -- see tests/conftest.py's
+_stub_out_document_processing_scheduling_by_default) -- no real
+network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON extraction/chunking/
+The real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML extraction/chunking/
 embedding pipeline (process_document) and the real Celery task are
 tested for real, against real infrastructure, in
 tests/test_documents_integration.py. CASCADE-delete of a document's
@@ -806,4 +807,113 @@ async def test_viewer_cannot_upload_a_json_document(client, db_session, register
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="data.json", content=_REAL_JSON_ARRAY)
+    assert response.status_code == 403
+
+
+# --------------------------------------------------------------- XML upload --
+
+_REAL_DECLARED_XML = b'<?xml version="1.0"?><catalog><book id="1">Real content</book></catalog>'
+_REAL_UNDECLARED_XML = b"<catalog><book id=\"1\">Real content</book></catalog>"
+
+
+async def test_owner_can_upload_an_xml_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.8): XML upload works, through the
+    SAME endpoint as every other format."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="data.xml", content=_REAL_DECLARED_XML, declared_content_type="application/xml")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "data.xml"
+    assert body["file_type"] == "application/xml"
+
+
+async def test_upload_detects_declared_xml_from_content_regardless_of_filename(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1/robustness -- a real `<?xml ...?>` declaration
+    is an unambiguous, deterministic signal (see api/services/document_storage.py's
+    own module docstring): the SAME bytes are detected as `application/xml`
+    no matter what the file is named."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="not_named_xml.txt", content=_REAL_DECLARED_XML)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/xml"
+
+
+async def test_upload_detects_undeclared_xml_when_the_root_does_not_collide_with_html(client, db_session, register_payload, monkeypatch):
+    """Real XML without a `<?xml ...?>` declaration is still detected
+    from content, via the fallback check that runs after HTML's own
+    sniff (see api/services/document_storage.py's own module docstring)
+    -- as long as its root tag isn't one of HTML's own sniff patterns."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="data.xml", content=_REAL_UNDECLARED_XML)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/xml"
+
+
+async def test_upload_classifies_undeclared_xml_as_html_when_the_root_collides(client, db_session, register_payload, monkeypatch):
+    """Real, honest, documented limitation (see api/services/document_storage.py's
+    own module docstring) locked in by a test, not just asserted in
+    prose: an UNDECLARED XML document whose root tag happens to be one
+    of HTML's own sniff patterns (here, `<table>`) is classified as
+    HTML, not XML -- resolving a genuine ambiguity between two formats
+    that can open with the exact same bytes, in favor of the far more
+    common real-world case."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    undeclared_table_xml = b"<table><row><cell>1</cell></row></table>"
+    response = await _upload(client, org["id"], owner_token, filename="data.xml", content=undeclared_table_xml)
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/html"
+
+
+async def test_upload_classifies_malformed_xml_as_plain_text(client, db_session, register_payload, monkeypatch):
+    """Same "content wins over declared name" story as JSON/HTML's own
+    tests: a `.xml`-named file with a real syntax error (a mismatched
+    closing tag) is NOT valid XML, so it falls through to the generic
+    text bucket -- not a hard rejection, since the bytes are still
+    valid text. Root tag deliberately NOT one of HTML's own sniff
+    patterns (unlike `<a>`/`<p>`/`<table>`), so this exercises the
+    "genuinely not classifiable as anything real" path, not the
+    documented HTML-collision case covered by its own test above."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="broken.xml", content=b"<catalog><book></catalog>")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/plain"
+
+
+async def test_upload_rejects_an_xml_named_file_that_is_not_real_text(client, db_session, register_payload, monkeypatch):
+    """Same "content over declared name" rule as every other format --
+    a `.xml`-named file containing genuine binary garbage is rejected,
+    not silently accepted."""
+    import os
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.xml", content=os.urandom(500))
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_an_xml_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "xmlviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="data.xml", content=_REAL_DECLARED_XML)
     assert response.status_code == 403

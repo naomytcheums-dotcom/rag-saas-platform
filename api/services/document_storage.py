@@ -1,5 +1,5 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- uploading,
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- uploading,
 downloading, and deleting document files in S3 (or any S3-compatible
 store, e.g. Cloudflare R2 -- same as api/services/storage.py). A
 SEPARATE bucket (S3_DOCUMENTS_BUCKET_NAME, api/config.py) from
@@ -9,9 +9,9 @@ unlike the public-by-design avatar/logo/favicon assets
 api/services/storage.py handles. See that setting's own comment for
 why a second bucket, not a key prefix in the same one.
 
-PDF, DOCX, TXT, Markdown, HTML, CSV, and JSON are accepted (this
-codebase's scope through Partie 2.1.7). Other formats (XML, ...) are
-separate, later cahier items (2.1.8+), each with their own real-format
+PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, and XML are accepted (this
+codebase's scope through Partie 2.1.8). Other formats (...) are
+separate, later cahier items (2.1.9+), each with their own real-format
 validation to add when built, not something to fake-accept here.
 
 **Markdown and CSV are the two real, deliberate exceptions to this
@@ -83,6 +83,27 @@ through to the generic text/Markdown/CSV bucket below -- same "content
 wins over declared name" story HTML's own prose-mentioning-html test
 already proves, not a hard rejection, as long as the bytes are still
 valid text.
+
+**XML gets a real, deterministic content check too** (`_is_real_xml`
+below, reusing `api/services/xml_extraction.py`'s own `SAFE_XML_PARSER`
+-- see that module's own docstring for why this specific hardened
+parser configuration, not the library's default one, is the ONLY safe
+way to parse arbitrary uploaded XML). **A real, honest ordering
+decision, not an oversight**: a document beginning with an actual
+`<?xml ... ?>` declaration is checked, and accepted as XML, BEFORE
+`_is_real_html` runs -- a real, deliberate XML declaration is an
+unambiguous signal no genuine HTML5 page ever produces. Undeclared XML
+(technically legal, just less conventional) is checked AFTER
+`_is_real_html` instead, as a real, stated, narrow limitation: an
+undeclared XML document whose ROOT tag happens to collide with one of
+`_HTML_BYTE_PATTERNS` above (e.g. a hypothetical generic `<table>...`
+XML document with no declaration) is classified as HTML instead of
+XML. This is the honest trade-off of resolving a genuine ambiguity
+between two formats that can both open with the exact same bytes,
+prioritized by which resolution is far more common in practice (a
+real, undeclared, HTML-collision-prone XML document is a rare
+combination; a real declared XML document, or a real HTML page, are
+both common) -- not silently glossed over.
 """
 
 import io
@@ -92,9 +113,11 @@ import zipfile
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from lxml import etree
 
 from api.config import settings
 from api.services.txt_extraction import is_valid_text
+from api.services.xml_extraction import SAFE_XML_PARSER
 
 MAX_DOCUMENT_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 _PDF_MAGIC_BYTES = b"%PDF-"
@@ -107,9 +130,16 @@ MARKDOWN_CONTENT_TYPE = "text/markdown"
 HTML_CONTENT_TYPE = "text/html"
 CSV_CONTENT_TYPE = "text/csv"
 JSON_CONTENT_TYPE = "application/json"
+# This step's own spec names BOTH application/xml and text/xml (both
+# real, RFC 7303-registered media types for XML) -- but, exactly like
+# every other format here, the STORED type is always the one real,
+# canonical value this module detects from content, never whichever of
+# the two a client happened to declare. application/xml is the modern,
+# IANA-preferred one.
+XML_CONTENT_TYPE = "application/xml"
 ALLOWED_DOCUMENT_CONTENT_TYPES = (
     "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE,
-    HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE,
+    HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE, XML_CONTENT_TYPE,
 )
 
 # Real content-based HTML detection -- see this module's own docstring
@@ -209,6 +239,37 @@ def _is_real_json(content: bytes) -> bool:
         return False
 
 
+_XML_LEADING_WHITESPACE = b" \t\r\n"
+_XML_DECLARATION_PREFIX = b"<?xml"
+
+
+def _is_real_xml(content: bytes) -> bool:
+    """
+    Real, deterministic XML detection -- like JSON, either the content
+    parses under the real XML grammar or it doesn't, no heuristic
+    involved. Uses the SAME hardened `SAFE_XML_PARSER` (see
+    api/services/xml_extraction.py's own module docstring for the real
+    entity-expansion DoS this specifically guards against) that every
+    real extraction call in that module also uses -- one parser
+    configuration, reused, not two copies that could drift apart.
+    """
+    stripped = content.lstrip(_XML_LEADING_WHITESPACE)
+    if not stripped.startswith(b"<"):
+        return False
+    try:
+        etree.fromstring(content, parser=SAFE_XML_PARSER)
+        return True
+    except etree.XMLSyntaxError:
+        return False
+
+
+def _has_xml_declaration(content: bytes) -> bool:
+    """See this module's own docstring for why a real `<?xml ...?>`
+    declaration is checked, and trusted, BEFORE `_is_real_html` runs --
+    no genuine HTML5 page produces one."""
+    return content.lstrip(_XML_LEADING_WHITESPACE).startswith(_XML_DECLARATION_PREFIX)
+
+
 def validate_document_upload(content: bytes, filename: str = "") -> str:
     """Real, substantive checks before anything touches S3 or the
     database -- raises ValueError with a clear reason for any failure,
@@ -217,27 +278,36 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     (api/security/documents.py's upload_document) can store the right
     Document.file_type and pass it on to upload_document_file below
     without re-detecting it. Checked in order from MOST to LEAST
-    specific -- PDF/DOCX/HTML/JSON all have a real, narrow (or, for
-    JSON, fully deterministic) signature to match; the generic "does
-    this decode as text" check (and Markdown/CSV's filename-based
-    tie-break) only ever runs once those are ruled out. `filename`
-    defaults to "" (no Markdown/CSV match possible, same as before this
-    parameter existed) so every OTHER caller of this function is
-    unaffected -- see this module's own docstring for why Markdown and
-    CSV specifically need the filename at all (HTML and JSON do not)."""
+    specific -- PDF/DOCX/HTML/JSON/XML all have a real, narrow (or, for
+    JSON/XML, fully deterministic) signature to match; the generic
+    "does this decode as text" check (and Markdown/CSV's filename-based
+    tie-break) only ever runs once those are ruled out. A DECLARED XML
+    document (`<?xml ...?>`) is checked, and trusted, before HTML's own
+    sniff -- see this module's own docstring for why, and for the one
+    real, narrow ambiguity this ordering leaves (an undeclared XML
+    document whose root tag collides with an HTML sniff pattern).
+    `filename` defaults to "" (no Markdown/CSV match possible, same as
+    before this parameter existed) so every OTHER caller of this
+    function is unaffected -- see this module's own docstring for why
+    Markdown and CSV specifically need the filename at all (HTML/JSON/
+    XML do not)."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
     if _is_real_pdf(content):
         return "application/pdf"
     if _is_real_docx(content):
         return DOCX_CONTENT_TYPE
+    if _has_xml_declaration(content) and _is_real_xml(content):
+        return XML_CONTENT_TYPE
     if _is_real_html(content):
         return HTML_CONTENT_TYPE
     if _is_real_json(content):
         return JSON_CONTENT_TYPE
+    if _is_real_xml(content):
+        return XML_CONTENT_TYPE
     if not is_valid_text(content):
         raise ValueError(
-            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, or JSON (checked by its actual content, not the declared type) -- "
+            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, or XML (checked by its actual content, not the declared type) -- "
             f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
         )
     if filename.lower().endswith(_MARKDOWN_EXTENSIONS):

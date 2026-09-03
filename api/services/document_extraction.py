@@ -1,5 +1,5 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7, item 3 --
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8, item 3 --
 extract_document_content, the single entry point
 api/security/documents.py's process_document calls regardless of
 format. Real, structural coherence across every supported format
@@ -11,7 +11,8 @@ and this dispatcher folds them into ONE shared shape:
         "metadata": dict,          # author/title/page_or_paragraph_count/
                                     # encoding/heading_count/links/
                                     # delimiter/row_count/key_count/
-                                    # depth/structure/etc.
+                                    # depth/structure/root/element_count/
+                                    # attribute_count/has_nested_elements/etc.
         "sections": list[dict],    # [{"text": str, "metadata": dict}, ...]
                                     # -- text grouped by the format's own
                                     # natural unit, each carrying its OWN
@@ -20,23 +21,23 @@ and this dispatcher folds them into ONE shared shape:
                                     # "level": int|None} for Markdown
                                     # (Partie 2.1.4 -- real heading-based
                                     # sectioning, not a single blob), or
-                                    # {} for DOCX/TXT/HTML/CSV/JSON's
+                                    # {} for DOCX/TXT/HTML/CSV/JSON/XML's
                                     # single whole-document section
-                                    # (none of the five has a natural
+                                    # (none of the six has a natural
                                     # sub-division this codebase's spec
                                     # asked to preserve).
         "tables": list[DataFrame],  # a CSV's own real DataFrame lands
                                     # here too (Partie 2.1.6) -- a CSV
                                     # IS fundamentally one table, not a
                                     # format needing its own separate
-                                    # top-level concept. Empty for JSON
-                                    # -- a JSON object/array is NOT
-                                    # generally tabular the way a CSV
-                                    # always is, and this step's own
-                                    # spec never asked for a dict/list
-                                    # -> DataFrame conversion.
+                                    # top-level concept. Empty for
+                                    # JSON/XML -- neither format's data
+                                    # is generally tabular the way a
+                                    # CSV always is, and this step's
+                                    # own spec never asked for a
+                                    # dict/tree -> DataFrame conversion.
         "image_count": int,        # 0 for DOCX/TXT/Markdown/HTML/CSV/
-                                    # JSON -- no image-extraction
+                                    # JSON/XML -- no image-extraction
                                     # function was asked for any of
                                     # them by this codebase's spec.
     }
@@ -57,8 +58,9 @@ extract_html_links -- that step's own optional item 2 function) land
 under `metadata["links"]`, the same place every other format's
 format-specific extras already live (TXT's encoding/line_count,
 Markdown's frontmatter/heading_count, CSV's delimiter/row_count/
-column_count/columns, JSON's key_count/depth/structure) -- not a new
-top-level key just for one format.
+column_count/columns, JSON's key_count/depth/structure, XML's root/
+element_count/attribute_count/depth/has_attributes/has_nested_elements)
+-- not a new top-level key just for one format.
 """
 
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
@@ -72,6 +74,7 @@ from api.services.markdown_extraction import (
 )
 from api.services.pdf_extraction import extract_pdf_images, extract_pdf_metadata, extract_pdf_pages_text, extract_pdf_tables
 from api.services.txt_extraction import detect_encoding, extract_txt_text
+from api.services.xml_extraction import extract_xml_metadata, extract_xml_structure, extract_xml_text
 
 PDF_CONTENT_TYPE = "application/pdf"
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -80,6 +83,7 @@ MARKDOWN_CONTENT_TYPE = "text/markdown"
 HTML_CONTENT_TYPE = "text/html"
 CSV_CONTENT_TYPE = "text/csv"
 JSON_CONTENT_TYPE = "application/json"
+XML_CONTENT_TYPE = "application/xml"
 
 
 def extract_document_content(file_path: str, file_type: str) -> dict:
@@ -87,7 +91,7 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
     none of this codebase's extraction modules handle -- a caller bug
     (this should never happen in practice, since api/services/
     document_storage.py's validate_document_upload only ever accepts
-    these same seven types at upload time), not a recoverable
+    these same eight types at upload time), not a recoverable
     per-document failure."""
     if file_type == PDF_CONTENT_TYPE:
         return {
@@ -141,6 +145,17 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
         return {
             "metadata": extract_json_metadata(file_path),
             "sections": [{"text": extract_json_text(file_path), "metadata": {}}],
+            "tables": [],
+            "image_count": 0,
+        }
+    if file_type == XML_CONTENT_TYPE:
+        metadata = extract_xml_metadata(file_path)
+        structure = extract_xml_structure(file_path)
+        metadata["has_attributes"] = structure["has_attributes"]
+        metadata["has_nested_elements"] = structure["has_nested_elements"]
+        return {
+            "metadata": metadata,
+            "sections": [{"text": extract_xml_text(file_path), "metadata": {}}],
             "tables": [],
             "image_count": 0,
         }

@@ -1,8 +1,8 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7 -- uploading a PDF,
-DOCX, TXT, Markdown, HTML, CSV, or JSON document and processing it
-(real text/table/metadata extraction, real chunking, real embeddings)
-into searchable DocumentChunk rows.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- uploading a
+PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, or XML document and
+processing it (real text/table/metadata extraction, real chunking,
+real embeddings) into searchable DocumentChunk rows.
 
 **One shared pipeline for every supported format, not a parallel one
 per format** (2.1.2's own vision critique Q1 -- coherence, reconfirmed
@@ -21,7 +21,7 @@ api/<->src/ boundary (api/ has zero import dependency on src/, see
 api/security/organization_settings.py's own module docstring). Chunked
 per SECTION -- each carrying its OWN per-section metadata dict (a PDF's
 real page number; a Markdown section's real heading/level, Partie
-2.1.4's own real semantic-chunking answer; DOCX/TXT/HTML/CSV/JSON's
+2.1.4's own real semantic-chunking answer; DOCX/TXT/HTML/CSV/JSON/XML's
 single whole-document section, empty metadata) rather than a document-wide
 concatenated blob, so a chunk's metadata reflects exactly where in the
 source document it came from, whatever that means for its own format.
@@ -68,6 +68,7 @@ from api.services.document_extraction import (
     MARKDOWN_CONTENT_TYPE,
     PDF_CONTENT_TYPE,
     TXT_CONTENT_TYPE,
+    XML_CONTENT_TYPE,
     extract_document_content,
 )
 from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
@@ -75,7 +76,7 @@ from api.services.document_storage import download_document_file, upload_documen
 _TEMP_FILE_SUFFIXES = {
     PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt",
     MARKDOWN_CONTENT_TYPE: ".md", HTML_CONTENT_TYPE: ".html", CSV_CONTENT_TYPE: ".csv",
-    JSON_CONTENT_TYPE: ".json",
+    JSON_CONTENT_TYPE: ".json", XML_CONTENT_TYPE: ".xml",
 }
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ async def upload_document(
 ) -> Document:
     """
     Item 3's literal function. Real validation (size, actual PDF/DOCX/
-    TXT/Markdown/HTML/CSV/JSON content -- see api/services/document_storage.py's
+    TXT/Markdown/HTML/CSV/JSON/XML content -- see api/services/document_storage.py's
     validate_document_upload, including why Markdown and CSV also need
     this call's own `filename`) BEFORE anything touches S3 or the
     database, so a bad upload never leaves a half-created row or an
