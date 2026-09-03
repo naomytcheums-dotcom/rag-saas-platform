@@ -1,11 +1,11 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- real infrastructure tests for
-api/security/documents.py: real embedding generation
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- real infrastructure tests
+for api/security/documents.py: real embedding generation
 (sentence-transformers, a real model downloaded from HuggingFace Hub on
 first use, then cached), real chunking with a real tokenizer, and the
 real end-to-end process_document pipeline (real S3 upload/download +
 real extraction + real chunking + real embeddings) against real
-Postgres, for PDF, DOCX, TXT, Markdown, and HTML.
+Postgres, for PDF, DOCX, TXT, Markdown, HTML, and CSV.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -191,6 +191,14 @@ def _real_test_html_bytes() -> bytes:
         "<p>Deuxième paragraphe réel, pour renforcer encore le score de densité de texte de "
         "l'article face au court menu de navigation présent ailleurs sur la page.</p>"
         "</article></body></html>"
+    ).encode("utf-8")
+
+
+def _real_test_csv_bytes() -> bytes:
+    return (
+        "name;age;city\n"
+        "Alice;30;Paris\n"
+        "Bob;25;Lyon\n"
     ).encode("utf-8")
 
 
@@ -408,6 +416,80 @@ async def test_process_document_marks_failed_for_a_corrupt_pdf_upload(pg_engine,
         owner, organization, document = await _make_org_and_pending_document(
             session, file_bytes=b"%PDF-1.4\nthis has the right magic bytes but no real PDF structure at all", filename="corrupt.pdf",
         )
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_runs_the_real_csv_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.6's own validation criterion, the CSV equivalent of the
+    tests above -- the SAME process_document pipeline, real
+    csv.Sniffer delimiter detection (semicolon here, not comma, to
+    exercise real non-default detection) and real pandas parsing.
+    Confirms the real detected delimiter/row_count/column_count land in
+    Document.metadata, the extracted DataFrame lands in the
+    dispatcher's shared "tables" list (this step's own real answer to
+    vision critique Q1 -- a CSV IS one table, not a new top-level
+    concept), and the chunked content is real, structured JSON Lines.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_csv_bytes(), filename="itest.csv")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["delimiter"] == ";"
+            assert updated.metadata_json["row_count"] == 2
+            assert updated.metadata_json["column_count"] == 3
+            assert updated.metadata_json["columns"] == ["name", "age", "city"]
+            assert updated.metadata_json["table_count"] == 1  # the CSV's own DataFrame, real, in the shared "tables" list
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            all_content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks)
+            assert '"name":"Alice"' in all_content
+            assert '"city":"Lyon"' in all_content
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is None  # CSV has a single whole-document section, same as DOCX/TXT/HTML
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_a_csv_with_a_row_that_has_extra_fields(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.6's own robustness criterion, and its real answer to
+    vision critique Q4 ("colonnes incohérentes ?"): a row with FEWER
+    fields than the header is tolerated (real NaN-filled, not an error
+    -- see tests/test_csv_extraction.py's own
+    test_extract_csv_data_tolerates_a_row_with_fewer_fields_than_the_header),
+    but a row with MORE fields than the header genuinely raises a real
+    pandas.errors.ParserError (confirmed for real, see
+    api/services/csv_extraction.py's own module docstring) --
+    process_document's broad except clause must still catch it and mark
+    `failed`, not crash, the exact same honest failure story Partie
+    2.1.5 built for a comment-only HTML file.
+    """
+    malformed_csv = b"name,age,city\nAlice,30,Paris\nBob,25,Lyon,ExtraField\n"
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=malformed_csv, filename="corrupt.csv")
         document_id = document.id
         try:
             updated = await process_document(session, document_id)

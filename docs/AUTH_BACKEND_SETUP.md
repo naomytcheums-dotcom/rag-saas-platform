@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -2687,6 +2687,101 @@ rejecting a `.html`-named file that isn't real text.
 `tests/test_documents_integration.py` runs the real end-to-end HTML
 pipeline (real article extraction, real embeddings) against real
 Postgres, alongside its own real comment-only-file failure test.
+
+**CSV (Partie 2.1.6) -- the exact library the master cahier des
+charges names for this item** ("2.1.6 | CSV | pandas"), already a
+dependency since Partie 2.1.1's own PDF table extraction -- no new
+pin needed. Automatic delimiter detection uses Python's own stdlib
+`csv.Sniffer`, restricted to the four real separators this step's own
+spec names (`,;\t|`) to avoid a bizarre single-character false
+positive from unrelated punctuation. Encoding reuses
+`api/services/txt_extraction.py`'s already-verified detection, the
+same way Markdown/HTML extraction reuse it.
+
+**Real finding #1, verified before writing `api/services/csv_extraction.py`,
+not assumed**: `csv.Sniffer` reliably detects comma/semicolon/tab/pipe
+on a real, well-formed, CONSISTENT sample (confirmed for real against
+all four) -- but genuinely FAILS (`csv.Error: Could not determine
+delimiter`) on several realistic, still-valid inputs: a single-column
+CSV (there is no delimiter to find at all), a genuinely empty file,
+and -- more surprisingly -- ANY sample containing even one row with a
+different field count than the others (a single row missing its
+trailing value is enough to confuse the heuristic). `detect_csv_delimiter`
+falls back to `,` (the RFC 4180 / de-facto default) rather than raising
+and blocking the whole upload -- a real, stated limitation, same
+"plainly stated, not fixable" spirit as `txt_extraction.py`'s own
+ISO-8859-1/Windows-1252 ambiguity. This is this step's real, tested
+answer to vision critique Q3 ("la détection est-elle fiable ?").
+
+**Real finding #2**: delimiter sniffing is a character-frequency
+HEURISTIC, not real CSV validation -- confirmed for real that ordinary
+prose containing commas gets confidently (and wrongly) sniffed as
+comma-delimited. Restricting `csv.Sniffer`'s own `delimiters` parameter
+to the four real named separators prevents a bizarre false positive
+from unrelated punctuation, but cannot and does not fix THIS specific
+case (a real comma in prose is indistinguishable from a real CSV
+delimiter by character-frequency analysis alone) -- stated plainly,
+not worked around with a fragile heuristic this step's spec never
+asked for. Since CSV upload detection is filename-based (like
+Markdown -- see below), a `.csv`-named plain-text file is still
+accepted at upload; whether it's REALLY tabular data is only
+discoverable at PROCESSING time.
+
+**Real finding #3**: `pandas.read_csv` tolerates a row with FEWER
+fields than the header (missing trailing values become real `NaN`,
+confirmed for real -- not an error) but genuinely RAISES a real,
+catchable `pandas.errors.ParserError` for a row with MORE fields than
+the header, and a real `pandas.errors.EmptyDataError` for a genuinely
+empty file -- both real, distinct "malformed CSV" failure modes,
+caught by `process_document`'s existing broad exception handler the
+same way every other format's own genuine corruption case already is.
+This is this step's real, tested answer to vision critique Q4
+("colonnes incohérentes ?"): fewer fields tolerated, more fields
+rejected -- not symmetric, and stated as such. Quoted fields containing
+the delimiter character itself (`"Smith, John"` in a comma-delimited
+file) are parsed correctly as ONE field, confirmed for real.
+
+**CSV is a second real, deliberate exception to "content decides the
+type, never the declared name"**, alongside Markdown: at the byte
+level, valid CSV (especially single-column) IS simply valid text --
+there is no reliable content-only signal distinguishing it from a
+plain TXT upload. `api/services/document_storage.py`'s
+`validate_document_upload` checks the `.csv` extension the same way it
+already checks `.md`/`.markdown`, only after content-based
+`is_valid_text` already passed -- a `.csv`-named file containing real
+binary garbage is still rejected, not silently accepted (tested
+explicitly, alongside the SAME real bytes classified differently
+purely by filename, the same proof Markdown's own test suite already
+gives).
+
+**A real, structured text representation for the shared chunking
+pipeline** (vision critique Q2): `extract_csv_text` returns real JSON
+Lines (one JSON object per row, via pandas' own `to_json` rather than a
+hand-rolled formatter or the `tabulate` dependency `DataFrame.to_markdown()`
+would need) -- confirmed for real to convert missing/NaN values to
+real JSON `null` with no separate escaping logic needed for commas/
+quotes/unicode inside a cell. Self-describing per row (every value
+carries its own column name), unlike a bare positional list of cells.
+The dispatcher's own shared shape (vision critique Q1) puts the CSV's
+real DataFrame into the SAME `"tables"` list every other format's real
+tables already use -- a CSV IS fundamentally one table, not a format
+needing a new top-level concept.
+
+**Real verification for CSV specifically**: `tests/test_csv_extraction.py`
+(no mocking, same discipline as every other format's suite) covers
+real delimiter detection for all four named separators, the real
+comma/single-column/inconsistent-sample/empty-file fallback cases
+(including the honest prose-false-positive limitation), real DataFrame
+extraction (including a quoted field containing the delimiter), the
+real fewer-fields-tolerated/more-fields-rejected asymmetry, JSON Lines
+text extraction, and metadata extraction. `tests/test_document_extraction.py`
+proves the dispatcher's shared shape for CSV too, including its
+DataFrame landing in `"tables"`. `tests/test_documents.py` covers CSV
+upload end to end, including the filename-vs-TXT disambiguation case
+and rejecting a `.csv`-named file that isn't real text.
+`tests/test_documents_integration.py` runs the real end-to-end CSV
+pipeline (real semicolon-delimited detection, real embeddings) against
+real Postgres, alongside its own real extra-fields-row failure test.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

@@ -1,7 +1,7 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- uploading, downloading, and deleting
-document files in S3 (or any S3-compatible store, e.g. Cloudflare R2 --
-same as api/services/storage.py). A SEPARATE bucket
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- uploading, downloading, and
+deleting document files in S3 (or any S3-compatible store, e.g.
+Cloudflare R2 -- same as api/services/storage.py). A SEPARATE bucket
 (S3_DOCUMENTS_BUCKET_NAME, api/config.py) from avatars/branding, and
 objects are uploaded with NO ACL (private, bucket-owner-only) --
 documents are private organizational content, unlike the
@@ -9,38 +9,54 @@ public-by-design avatar/logo/favicon assets api/services/storage.py
 handles. See that setting's own comment for why a second bucket, not a
 key prefix in the same one.
 
-PDF, DOCX, TXT, Markdown, and HTML are accepted (this codebase's scope
-through Partie 2.1.5). Other formats (CSV, ...) are separate, later
-cahier items (2.1.6+), each with their own real-format validation to
-add when built, not something to fake-accept here.
+PDF, DOCX, TXT, Markdown, HTML, and CSV are accepted (this codebase's
+scope through Partie 2.1.6). Other formats (JSON, XML, ...) are
+separate, later cahier items (2.1.7+), each with their own real-format
+validation to add when built, not something to fake-accept here.
 
-**Markdown is a real, deliberate exception to this module's own
-"trust the bytes, never the declared name" rule for every other
-format**: PDF has real magic bytes, DOCX has a real internal ZIP
-structure -- Markdown has neither. At the byte level, a valid Markdown
-file IS simply valid text; there is no content-only signal that
-distinguishes it from a plain TXT upload (the same real bytes could
-legitimately be either). This step's own literal spec asks for exactly
-this: accept `text/markdown` **and** `.md`. The filename extension is
-therefore the ONLY meaningful signal available, used here as a
-genuine, necessary exception -- not a silent regression of the
-"content over declared type" philosophy, since the content must still
-independently pass the same real is_valid_text check either way (a
-`.md`-named file containing binary garbage is still rejected, not
-silently accepted as Markdown).
+**Markdown and CSV are the two real, deliberate exceptions to this
+module's own "trust the bytes, never the declared name" rule for every
+other format**: PDF has real magic bytes, DOCX has a real internal ZIP
+structure, HTML has a real content-sniffable byte pattern (see below)
+-- Markdown and CSV have neither. At the byte level, valid Markdown
+and valid single-column CSV are both simply valid text; there is no
+content-only signal that reliably distinguishes either from a plain
+TXT upload (the same real bytes could legitimately be any of the
+three). This step's own literal spec, like Markdown's before it, asks
+for exactly this: accept `text/csv` **and** `.csv`. The filename
+extension is therefore the ONLY meaningful signal available for
+either, used here as a genuine, necessary exception -- not a silent
+regression of the "content over declared type" philosophy, since the
+content must still independently pass the same real is_valid_text
+check either way (a `.csv`- or `.md`-named file containing binary
+garbage is still rejected, not silently accepted).
 
-**HTML does NOT need that same exception** -- unlike Markdown, real
-HTML has a genuine structural signature: `_is_real_html` below
+**HTML does NOT need that same exception** -- unlike Markdown and CSV,
+real HTML has a genuine structural signature: `_is_real_html` below
 implements the WHATWG MIME Sniffing Standard's "matching an HTML byte
 pattern" algorithm
 (https://mimesniff.spec.whatwg.org/#matching-an-html-byte-pattern), the
 same content-sniffing rule real browsers use to detect text/html when a
 server sends no (or an untrustworthy) Content-Type. Checked BEFORE the
-generic is_valid_text/Markdown fallback, same "most to least specific"
-ordering as PDF/DOCX -- a `.html`/`.htm` extension is accepted (per this
-step's own spec) but, exactly like PDF/DOCX, is never REQUIRED for
-detection: real HTML content is recognized as HTML regardless of what
-it's named.
+generic is_valid_text/Markdown/CSV fallback, same "most to least
+specific" ordering as PDF/DOCX -- a `.html`/`.htm` extension is
+accepted (per this step's own spec) but, exactly like PDF/DOCX, is
+never REQUIRED for detection: real HTML content is recognized as HTML
+regardless of what it's named.
+
+**CSV's own filename check comes with a real, honest caveat, unlike
+Markdown's**: Markdown's filename fallback is safe precisely because
+there is NO content-only signal to contradict it either way. CSV is
+different -- `api/services/csv_extraction.py`'s own real delimiter
+detection (`csv.Sniffer`) is a character-frequency HEURISTIC, not
+genuine CSV validation, and is confirmed for real to confidently (and
+wrongly) treat ordinary comma-containing prose as comma-delimited data.
+A `.csv`-named plain-text file is therefore still accepted here (real
+text content, real extension, exactly what this step's spec asks
+for) -- but whether it's REALLY tabular data is only discoverable at
+PROCESSING time, by `extract_csv_data` actually parsing it, not at
+upload time. This is the honest, stated limitation, not a gap papered
+over.
 """
 
 import io
@@ -57,11 +73,15 @@ MAX_DOCUMENT_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 _PDF_MAGIC_BYTES = b"%PDF-"
 _ZIP_MAGIC_BYTES = b"PK\x03\x04"
 _MARKDOWN_EXTENSIONS = (".md", ".markdown")
+_CSV_EXTENSIONS = (".csv",)
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 TXT_CONTENT_TYPE = "text/plain"
 MARKDOWN_CONTENT_TYPE = "text/markdown"
 HTML_CONTENT_TYPE = "text/html"
-ALLOWED_DOCUMENT_CONTENT_TYPES = ("application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE, HTML_CONTENT_TYPE)
+CSV_CONTENT_TYPE = "text/csv"
+ALLOWED_DOCUMENT_CONTENT_TYPES = (
+    "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE, HTML_CONTENT_TYPE, CSV_CONTENT_TYPE,
+)
 
 # Real content-based HTML detection -- see this module's own docstring
 # for the WHATWG spec this implements. Bytes/sets, not a regex: the
@@ -140,12 +160,13 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     Document.file_type and pass it on to upload_document_file below
     without re-detecting it. Checked in order from MOST to LEAST
     specific -- PDF/DOCX/HTML all have a real, narrow signature to
-    match; the generic "does this decode as text" check (and Markdown's
-    filename-based tie-break) only ever runs once those are ruled out.
-    `filename` defaults to "" (no Markdown match possible, same as
-    before this parameter existed) so every OTHER caller of this
-    function is unaffected -- see this module's own docstring for why
-    Markdown specifically needs the filename at all (HTML does not)."""
+    match; the generic "does this decode as text" check (and Markdown/
+    CSV's filename-based tie-break) only ever runs once those are ruled
+    out. `filename` defaults to "" (no Markdown/CSV match possible,
+    same as before this parameter existed) so every OTHER caller of
+    this function is unaffected -- see this module's own docstring for
+    why Markdown and CSV specifically need the filename at all (HTML
+    does not)."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
     if _is_real_pdf(content):
@@ -156,11 +177,13 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
         return HTML_CONTENT_TYPE
     if not is_valid_text(content):
         raise ValueError(
-            "file is not a valid PDF, DOCX, TXT, Markdown, or HTML (checked by its actual content, not the declared type) -- "
+            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, or CSV (checked by its actual content, not the declared type) -- "
             f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
         )
     if filename.lower().endswith(_MARKDOWN_EXTENSIONS):
         return MARKDOWN_CONTENT_TYPE
+    if filename.lower().endswith(_CSV_EXTENSIONS):
+        return CSV_CONTENT_TYPE
     return TXT_CONTENT_TYPE
 
 

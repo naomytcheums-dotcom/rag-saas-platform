@@ -183,6 +183,15 @@ beautifulsoup4==4.15.0
 lxml==6.1.3
 readability-lxml==0.9
 
+# -- Documents / CSV import (Partie 2.1.6) ------------------------------------
+# The exact library the master cahier des charges names for this item
+# ("2.1.6 | CSV | pandas") is ALREADY pinned above (Partie 2.1.1's own
+# `pandas==3.0.5`, for PDF table extraction) -- no new pin needed, and
+# deliberately not re-listed here to avoid a duplicate requirement line.
+# Delimiter detection (api/services/csv_extraction.py's
+# detect_csv_delimiter) uses Python's own stdlib `csv.Sniffer` -- no
+# dependency at all, real and battle-tested for exactly this job.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

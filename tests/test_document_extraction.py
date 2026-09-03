@@ -1,10 +1,11 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5, item 3 -- api/services/document_extraction.py's
-extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6, item 3 -- api/services/document_extraction.py's
+extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV
 generation and extraction, no mocking -- proves every format really
 does come back through the SAME shared shape (vision critique Q1 --
-coherence), including Markdown's own real per-section heading metadata
-and HTML's real article-vs-boilerplate extraction.
+coherence), including Markdown's own real per-section heading metadata,
+HTML's real article-vs-boilerplate extraction, and CSV's own DataFrame
+landing in the shared "tables" list.
 """
 
 import docx
@@ -12,6 +13,7 @@ import pymupdf
 import pytest
 
 from api.services.document_extraction import (
+    CSV_CONTENT_TYPE,
     DOCX_CONTENT_TYPE,
     HTML_CONTENT_TYPE,
     MARKDOWN_CONTENT_TYPE,
@@ -100,6 +102,13 @@ def real_html_path(tmp_path):
     return str(path)
 
 
+@pytest.fixture
+def real_csv_path(tmp_path):
+    path = tmp_path / "dispatch.csv"
+    path.write_bytes("name,age,city\nAlice,30,Paris\nBob,25,Lyon\n".encode("utf-8"))
+    return str(path)
+
+
 def _assert_shared_shape(result: dict):
     """Every format must return the exact same top-level keys, with
     "sections" a list of {"text": str, "metadata": dict} entries -- this
@@ -185,6 +194,26 @@ def test_extract_document_content_dispatches_html_correctly(real_html_path):
     assert links == {"/", "/about", "/privacy"}  # links extracted from the FULL page, nav/footer included
 
 
+def test_extract_document_content_dispatches_csv_correctly(real_csv_path):
+    """Partie 2.1.6's own validation criterion: real delimiter
+    detection, real tabular data, and its real answer to vision
+    critique Q1 -- a CSV's own DataFrame lands in the SAME "tables"
+    list every other format's real tables already use, not a new
+    top-level concept just for CSV."""
+    result = extract_document_content(real_csv_path, CSV_CONTENT_TYPE)
+    _assert_shared_shape(result)
+    assert result["metadata"]["delimiter"] == ","
+    assert result["metadata"]["row_count"] == 2
+    assert result["metadata"]["column_count"] == 3
+    assert result["metadata"]["columns"] == ["name", "age", "city"]
+    assert len(result["sections"]) == 1  # CSV has no pages either -- always exactly one section
+    assert '"name":"Alice"' in result["sections"][0]["text"]
+    assert result["sections"][0]["metadata"] == {}
+    assert len(result["tables"]) == 1
+    assert result["tables"][0].shape == (2, 3)
+    assert result["image_count"] == 0
+
+
 def test_extract_document_content_raises_for_an_unsupported_type(real_pdf_path):
     with pytest.raises(ValueError):
-        extract_document_content(real_pdf_path, "text/csv")
+        extract_document_content(real_pdf_path, "application/json")

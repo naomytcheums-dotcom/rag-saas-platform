@@ -1,14 +1,14 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- document upload/list/detail/delete
-(PDF, DOCX, TXT, Markdown, and HTML). Fast SQLite suite, same tier as
-tests/test_custom_domains.py. Both real network dependencies are
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- document upload/list/detail/delete
+(PDF, DOCX, TXT, Markdown, HTML, and CSV). Fast SQLite suite, same tier
+as tests/test_custom_domains.py. Both real network dependencies are
 mocked throughout: S3 (api/security/documents.py's
 upload_document_file/download_document_file) and Celery dispatch
 (schedule_document_processing, stubbed by default for the whole file --
 see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
 -- no real network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT/Markdown/HTML extraction/chunking/embedding
+The real PDF/DOCX/TXT/Markdown/HTML/CSV extraction/chunking/embedding
 pipeline (process_document) and the real Celery task are tested for
 real, against real infrastructure, in tests/test_documents_integration.py.
 CASCADE-delete of a document's chunks is tested against real Postgres
@@ -654,4 +654,65 @@ async def test_viewer_cannot_upload_an_html_document(client, db_session, registe
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="page.html", content=_REAL_HTML_PAGE)
+    assert response.status_code == 403
+
+
+# --------------------------------------------------------------- CSV upload --
+
+async def test_owner_can_upload_a_csv_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.6): CSV upload works, through the
+    SAME endpoint as PDF/DOCX/TXT/Markdown/HTML."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    content = "name,age\nAlice,30\nBob,25\n".encode("utf-8")
+    response = await _upload(client, org["id"], owner_token, filename="data.csv", content=content, declared_content_type="text/csv")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "data.csv"
+    assert body["file_type"] == "text/csv"
+
+
+async def test_upload_distinguishes_csv_from_txt_by_filename_only(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1 -- like Markdown, CSV is a second real,
+    deliberate exception to "content decides the type, never the
+    name": the exact SAME valid-text bytes become `text/csv` when
+    named `.csv` and `text/plain` otherwise -- there is no reliable
+    content-only signal that could tell them apart (see
+    api/services/document_storage.py's own module docstring)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    same_bytes = "name,age\nAlice,30\n".encode("utf-8")
+    as_csv = await _upload(client, org["id"], owner_token, filename="a.csv", content=same_bytes)
+    as_txt = await _upload(client, org["id"], owner_token, filename="a.txt", content=same_bytes)
+
+    assert as_csv.json()["file_type"] == "text/csv"
+    assert as_txt.json()["file_type"] == "text/plain"
+
+
+async def test_upload_rejects_a_csv_named_file_that_is_not_real_text(client, db_session, register_payload, monkeypatch):
+    """The filename alone never overrides real content validation --
+    a `.csv`-named file containing genuine binary garbage is still
+    rejected, not silently accepted as CSV."""
+    import os
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.csv", content=os.urandom(500))
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_a_csv_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "csvviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="data.csv", content=b"name,age\nAlice,30\n")
     assert response.status_code == 403

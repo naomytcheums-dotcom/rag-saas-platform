@@ -1,6 +1,6 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5 -- uploading a PDF, DOCX, TXT,
-Markdown, or HTML document and processing it (real text/table/metadata
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6 -- uploading a PDF, DOCX, TXT,
+Markdown, HTML, or CSV document and processing it (real text/table/metadata
 extraction, real chunking, real embeddings) into searchable
 DocumentChunk rows.
 
@@ -21,7 +21,7 @@ api/<->src/ boundary (api/ has zero import dependency on src/, see
 api/security/organization_settings.py's own module docstring). Chunked
 per SECTION -- each carrying its OWN per-section metadata dict (a PDF's
 real page number; a Markdown section's real heading/level, Partie
-2.1.4's own real semantic-chunking answer; DOCX/TXT's single
+2.1.4's own real semantic-chunking answer; DOCX/TXT/HTML/CSV's single
 whole-document section, empty metadata) rather than a document-wide
 concatenated blob, so a chunk's metadata reflects exactly where in the
 source document it came from, whatever that means for its own format.
@@ -61,6 +61,7 @@ from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.workspace import Workspace
 from api.security.organization_settings import get_org_settings
 from api.services.document_extraction import (
+    CSV_CONTENT_TYPE,
     DOCX_CONTENT_TYPE,
     HTML_CONTENT_TYPE,
     MARKDOWN_CONTENT_TYPE,
@@ -72,7 +73,7 @@ from api.services.document_storage import download_document_file, upload_documen
 
 _TEMP_FILE_SUFFIXES = {
     PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt",
-    MARKDOWN_CONTENT_TYPE: ".md", HTML_CONTENT_TYPE: ".html",
+    MARKDOWN_CONTENT_TYPE: ".md", HTML_CONTENT_TYPE: ".html", CSV_CONTENT_TYPE: ".csv",
 }
 
 logger = logging.getLogger(__name__)
@@ -138,8 +139,8 @@ async def upload_document(
 ) -> Document:
     """
     Item 3's literal function. Real validation (size, actual PDF/DOCX/
-    TXT/Markdown/HTML content -- see api/services/document_storage.py's
-    validate_document_upload, including why Markdown alone also needs
+    TXT/Markdown/HTML/CSV content -- see api/services/document_storage.py's
+    validate_document_upload, including why Markdown and CSV also need
     this call's own `filename`) BEFORE anything touches S3 or the
     database, so a bad upload never leaves a half-created row or an
     orphaned S3 object behind. A workspace_id, if given, must belong to
