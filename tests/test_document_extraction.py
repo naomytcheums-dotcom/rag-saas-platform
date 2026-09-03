@@ -1,7 +1,7 @@
 """
-Partie 2.1.2, item 3 -- api/services/document_extraction.py's
-extract_document_content dispatcher. Real PDF/DOCX generation and
-extraction, no mocking -- proves both formats really do come back
+Partie 2.1.2/2.1.3, item 3 -- api/services/document_extraction.py's
+extract_document_content dispatcher. Real PDF/DOCX/TXT generation and
+extraction, no mocking -- proves every format really does come back
 through the SAME shared shape (vision critique Q1 -- coherence).
 """
 
@@ -9,7 +9,7 @@ import docx
 import pymupdf
 import pytest
 
-from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, extract_document_content
+from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, TXT_CONTENT_TYPE, extract_document_content
 
 
 @pytest.fixture
@@ -32,6 +32,18 @@ def real_docx_path(tmp_path):
     document.add_paragraph("Real DOCX dispatcher test content.")
     path = tmp_path / "dispatch.docx"
     document.save(str(path))
+    return str(path)
+
+
+@pytest.fixture
+def real_txt_path(tmp_path):
+    path = tmp_path / "dispatch.txt"
+    # A real accented character (not pure ASCII) so encoding detection
+    # has genuine UTF-8-specific signal to key off -- pure ASCII text is
+    # ALSO trivially valid ASCII, a more specific match
+    # charset-normalizer correctly prefers over "utf_8" (confirmed for
+    # real: this is not a bug, ASCII is a strict subset of UTF-8).
+    path.write_bytes("Réel contenu TXT dispatcher test.\nA second line.".encode("utf-8"))
     return str(path)
 
 
@@ -64,6 +76,17 @@ def test_extract_document_content_dispatches_docx_correctly(real_docx_path):
     assert result["image_count"] == 0  # no image extraction built for DOCX by this step
 
 
+def test_extract_document_content_dispatches_txt_correctly(real_txt_path):
+    result = extract_document_content(real_txt_path, TXT_CONTENT_TYPE)
+    _assert_shared_shape(result)
+    assert result["metadata"]["encoding"] == "utf_8"
+    assert result["metadata"]["line_count"] == 2
+    assert len(result["sections"]) == 1  # TXT has no pages either -- always exactly one section
+    assert result["sections"][0] == "Réel contenu TXT dispatcher test.\nA second line."
+    assert result["tables"] == []
+    assert result["image_count"] == 0
+
+
 def test_extract_document_content_raises_for_an_unsupported_type(real_pdf_path):
     with pytest.raises(ValueError):
-        extract_document_content(real_pdf_path, "text/plain")
+        extract_document_content(real_pdf_path, "text/html")

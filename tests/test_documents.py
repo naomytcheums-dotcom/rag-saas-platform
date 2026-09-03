@@ -1,14 +1,14 @@
 """
-Partie 2.1.1/2.1.2 -- document upload/list/detail/delete (PDF and
-DOCX). Fast SQLite suite, same tier as tests/test_custom_domains.py.
-Both real network dependencies are mocked throughout: S3
-(api/security/documents.py's upload_document_file/download_document_file)
-and Celery dispatch (schedule_document_processing, stubbed by default
-for the whole file -- see tests/conftest.py's
-_stub_out_document_processing_scheduling_by_default) -- no real network
-call belongs in the fast suite.
+Partie 2.1.1/2.1.2/2.1.3 -- document upload/list/detail/delete (PDF,
+DOCX, and TXT). Fast SQLite suite, same tier as
+tests/test_custom_domains.py. Both real network dependencies are
+mocked throughout: S3 (api/security/documents.py's
+upload_document_file/download_document_file) and Celery dispatch
+(schedule_document_processing, stubbed by default for the whole file --
+see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
+-- no real network call belongs in the fast suite.
 
-The real PDF/DOCX extraction/chunking/embedding pipeline
+The real PDF/DOCX/TXT extraction/chunking/embedding pipeline
 (process_document) and the real Celery task are tested for real,
 against real infrastructure, in tests/test_documents_integration.py.
 CASCADE-delete of a document's chunks is tested against real Postgres
@@ -91,12 +91,19 @@ async def test_owner_can_upload_a_pdf_document(client, db_session, register_payl
     assert body["file_type"] == "application/pdf"
 
 
-async def test_upload_rejects_a_non_pdf_file(client, db_session, register_payload, monkeypatch):
+async def test_upload_rejects_content_that_is_neither_pdf_docx_nor_text(client, db_session, register_payload, monkeypatch):
+    """Since Partie 2.1.3, plain text itself became a legitimate,
+    accepted upload (see test_owner_can_upload_a_txt_document below) --
+    what must still be rejected is content that fails EVERY real check:
+    not real PDF/DOCX structure, and not decodable as text under any
+    common encoding either (genuine random binary)."""
+    import os
+
     _stub_s3(monkeypatch)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
 
-    response = await _upload(client, org["id"], owner_token, filename="not-a-pdf.txt", content=b"just plain text, not a pdf at all")
+    response = await _upload(client, org["id"], owner_token, filename="garbage.bin", content=os.urandom(500))
     assert response.status_code == 400
 
 
@@ -437,4 +444,56 @@ async def test_viewer_cannot_upload_a_docx_document(client, db_session, register
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="report.docx", content=_real_docx_bytes())
+    assert response.status_code == 403
+
+
+# -------------------------------------------------------------- TXT upload --
+
+async def test_owner_can_upload_a_txt_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.3): TXT upload works, through the SAME
+    endpoint as PDF/DOCX."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="notes.txt", content="Real plain text content.".encode("utf-8"), declared_content_type="text/plain")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "notes.txt"
+    assert body["file_type"] == "text/plain"
+
+
+async def test_upload_accepts_a_latin1_encoded_txt_file(client, db_session, register_payload, monkeypatch):
+    """A real, non-UTF-8 encoded text file must still be accepted --
+    upload validation only needs to confirm it decodes as text under
+    SOME common encoding, not specifically UTF-8."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    content = "Un texte réel encodé en ISO-8859-1, avec des accents.".encode("iso-8859-1")
+    response = await _upload(client, org["id"], owner_token, filename="latin1.txt", content=content, declared_content_type="text/plain")
+    assert response.status_code == 201
+
+
+async def test_upload_accepts_a_genuinely_empty_txt_file(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q4 -- an empty file is a real, valid edge case,
+    not an error."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="empty.txt", content=b"", declared_content_type="text/plain")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/plain"
+
+
+async def test_viewer_cannot_upload_a_txt_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "txtviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="notes.txt", content=b"Some text.", declared_content_type="text/plain")
     assert response.status_code == 403

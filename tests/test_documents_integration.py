@@ -1,11 +1,11 @@
 """
-Partie 2.1.1/2.1.2 -- real infrastructure tests for
+Partie 2.1.1/2.1.2/2.1.3 -- real infrastructure tests for
 api/security/documents.py: real embedding generation
 (sentence-transformers, a real model downloaded from HuggingFace Hub on
 first use, then cached), real chunking with a real tokenizer, and the
 real end-to-end process_document pipeline (real S3 upload/download +
 real extraction + real chunking + real embeddings) against real
-Postgres, for both PDF and DOCX.
+Postgres, for PDF, DOCX, and TXT.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -163,6 +163,10 @@ def _real_test_docx_bytes() -> bytes:
     return buffer.getvalue()
 
 
+def _real_test_txt_bytes() -> bytes:
+    return "Réel contenu d'intégration pour process_document, version TXT.\nDeuxième ligne.".encode("iso-8859-1")
+
+
 @pytest.fixture
 def _require_documents_bucket():
     """NOT autouse -- only the two full-pipeline tests below need a
@@ -245,6 +249,53 @@ async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine
             await _cleanup(session, organization.id, owner.id)
 
 
+async def test_process_document_runs_the_real_txt_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.3's own validation criterion, the TXT equivalent of the
+    PDF/DOCX tests above -- the SAME process_document pipeline, real
+    ISO-8859-1 encoding detection and decoding (charset-normalizer)
+    instead of PyMuPDF's/python-docx's own extraction. Confirms TXT
+    chunks also carry NO `page` key (same honest reasoning as DOCX --
+    plain text has no pages either), and that the real detected
+    encoding is recorded in Document.metadata.
+
+    Deliberately does NOT have a "corrupt TXT" counterpart the way the
+    PDF/DOCX tests below do: unlike a structured binary format, a TXT
+    file that already passed upload_document_file's own real
+    is_valid_text check (the SAME encoding-detection logic
+    process_document itself uses) cannot independently fail extraction
+    -- there is no separate "valid container, corrupt content" failure
+    mode for plain text the way there is for a PDF/DOCX's internal
+    structure. This is a real, honest observation about the format's
+    own limits, not a gap left untested.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_txt_bytes(), filename="itest.txt")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["encoding"] in ("iso8859_1", "cp1252")
+            assert updated.metadata_json["line_count"] == 2
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is None
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
 async def test_process_document_marks_failed_for_a_corrupt_pdf_upload(pg_engine, _require_documents_bucket):
     """Vision critique Q3 -- a real corrupt file, uploaded for real,
     processed for real: must end in `failed` with the real error
@@ -253,8 +304,9 @@ async def test_process_document_marks_failed_for_a_corrupt_pdf_upload(pg_engine,
     upload_document_file's own real-signature check, unlike an
     obviously-not-a-PDF file, which is rejected at UPLOAD time instead
     -- see tests/test_documents.py's own
-    test_upload_rejects_a_non_pdf_file) but has no valid PDF structure
-    behind it, so PyMuPDF's own real parser fails on it."""
+    test_upload_rejects_content_that_is_neither_pdf_docx_nor_text) but
+    has no valid PDF structure behind it, so PyMuPDF's own real parser
+    fails on it."""
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
         owner, organization, document = await _make_org_and_pending_document(

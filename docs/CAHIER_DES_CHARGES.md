@@ -108,7 +108,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (2✅/0🟡/33⬜ sur 35, via les Étapes 2.1.1/2.1.2)
+## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (3✅/0🟡/32⬜ sur 35, via les Étapes 2.1.1/2.1.2/2.1.3)
 
 ### 2.1 Import de documents
 
@@ -116,7 +116,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 |---|---|---|
 | 2.1.1 | PDF | ✅ `pymupdf` (fitz) -- exactement la bibliothèque prévue ici, vérifiée pour de vrai (contre un vrai PDF généré, pas supposée depuis la doc) avant d'écrire le code de traitement : `page.find_tables()` détecte et extrait réellement des tableaux, donc AUCUNE bibliothèque séparée (pdfplumber, camelot) n'est nécessaire -- pymupdf seul couvre texte, tableaux, métadonnées ET images embarquées. Deux nouvelles tables (`documents`/`document_chunks`, migration 0031). Upload réel vers un bucket S3 SÉPARÉ et privé (`S3_DOCUMENTS_BUCKET_NAME`, sans ACL publique -- contrairement au bucket avatars/branding, dont la politique CI MinIO rend TOUT le contenu public, un risque réel évité ici par un bucket dédié plutôt qu'un simple préfixe de clé). Traitement asynchrone réel via Celery (`process_document_task`), qui transitionne `pending`→`processing`→`completed`/`failed` pour de vrai -- toute erreur (PDF corrompu, échec S3, échec d'embedding) est capturée et enregistrée, jamais un crash silencieux du worker. Chunking réel PAR PAGE (même algorithme que `src/indexing.py`, réimplémenté indépendamment pour préserver la frontière api/↔src/), utilisant pour la première fois `organization_settings.chunk_size`/`chunk_overlap` (1.3.9, jusqu'ici jamais lus). Embeddings réels via `sentence-transformers`, utilisant pour la première fois `organization_settings.embedding_model` -- honnêtement borné : ce n'est PAS l'abstraction multi-fournisseurs complète de la Partie 4 (toujours ⬜), juste une génération réelle et fonctionnelle avec le seul modèle déjà configuré par défaut. **Permissions : un vrai trou comblé, pas contourné en silence** -- l'Etape 1.2.5 avait explicitement anticipé et laissé cette lacune ("un endpoint d'écriture que Viewer ne devrait pas atteindre... devrait être sa propre fonction") ; `require_org_member_excluding_viewer` (nouveau) comble exactement ça pour `POST .../documents`. `DELETE /documents/{id}` : Member+ propriétaire, avec dérogation Admin/Owner, y compris si l'utilisateur a été rétrogradé en Viewer après l'upload (testé explicitement). 35 tests SQLite (upload, permissions, isolation cross-org) + 12 tests réels d'extraction PDF (aucun mock, PyMuPDF génère ET extrait) + 6 tests d'intégration réels (embeddings et chunking réels toujours exécutés ; le pipeline complet avec vrai S3 skip proprement si `S3_DOCUMENTS_BUCKET_NAME` n'est pas configuré -- délibérément non provisionné automatiquement) + 1 test de cascade réel contre Postgres, voir `tests/test_documents.py`/`tests/test_pdf_extraction.py`/`tests/test_documents_integration.py` |
 | 2.1.2 | DOCX | ✅ `python-docx` -- exactement la bibliothèque prévue ici. **Même structure que le code PDF de 2.1.1, délibérément** (cohérence vérifiée par test, pas seulement affirmée) : `api/services/docx_extraction.py` reproduit fonction pour fonction `extract_docx_text`/`extract_docx_tables`/`extract_docx_metadata` de son équivalent PDF, plus `extract_docx_styles` (nom de style Word réel par paragraphe -- "Heading 1", "Normal", etc. -- pour un futur chunking sémantique, Partie 3.2.4, toujours ⬜ ; cette étape expose seulement la structure réelle déjà stockée par Word, elle ne construit pas le chunking par titre lui-même). Nouveau dispatcher `api/services/document_extraction.py`'s `extract_document_content`, appelé par le pipeline de traitement réel (renommé `process_pdf_document` → `process_document`, puisqu'un nom encore "PDF" en traitant un DOCX serait trompeur) -- PDF et DOCX partagent réellement le même code de chunking/embedding à partir de ce point, pas deux pipelines parallèles qui se ressemblent. Un DOCX n'a pas de pages fixes au niveau du format (la pagination est un détail d'affichage Word, jamais stocké dans le XML) -- ses chunks ne portent honnêtement aucune clé `page`, contrairement à un chunk PDF. **Découverte réelle en testant, pas hypothétique** : la hiérarchie d'exceptions de `python-docx` est bien moins prévisible que celle de PyMuPDF -- un fichier non-DOCX lève `PackageNotFoundError`, mais un ZIP structurellement valide avec un XML interne corrompu lève une simple `AttributeError` venue du cœur de `python-docx`, confirmé pour de vrai avant d'écrire le code (pas supposé) ; la fonction d'ouverture capture donc largement (`Exception`), pas seulement l'exception DOCX-spécifique. Validation d'upload généralisée dans `api/services/document_storage.py` : un DOCX est un ZIP, donc la signature seule ne suffit pas à le distinguer d'un XLSX/PPTX/ZIP quelconque -- confirmation réelle que `word/document.xml` est présent à l'intérieur. **Bug réel trouvé et corrigé en cours de route** : la migration 0031 (2.1.1) avait oublié d'activer le Row-Level-Security sur les deux nouvelles tables, cassant un test d'invariant déjà existant (`test_every_application_table_has_row_level_security_enabled`) -- corrigé par une migration de suivi (0032) plutôt que de réécrire une migration déjà appliquée. 34 tests SQLite/réels supplémentaires (extraction DOCX réelle sans mock, dispatcher, upload DOCX de bout en bout, rejet d'un ZIP non-DOCX, incohérence type déclaré/réel) + 4 tests d'intégration réels supplémentaires (pipeline DOCX complet, échec DOCX corrompu -- les deux formes réelles de corruption), voir `tests/test_docx_extraction.py`/`tests/test_document_extraction.py`/`tests/test_documents.py`/`tests/test_documents_integration.py` |
-| 2.1.3 | TXT | Lecture brute |
+| 2.1.3 | TXT | ✅ Lecture brute + détection réelle d'encodage (`charset-normalizer`, déjà présent transitivement via `requests`/`acme`, épinglé directement maintenant que le code l'importe lui-même). **Validation d'un genre différent, pas juste un troisième format collé au même moule** : contrairement au PDF/DOCX (signature/structure réelle à vérifier), un texte brut n'a aucune signature -- "est-ce un vrai TXT" ne peut vouloir dire que "est-ce que ça se décode comme du texte sous un encodage réel courant", vérifié en dernier dans `validate_document_upload` (après avoir écarté PDF/DOCX en premier, du plus spécifique au moins spécifique). **Découverte réelle en testant, pas hypothétique** : la détection universelle naïve d'encodage se trompe réellement sur les encodages occidentaux mono-octet historiques -- un échantillon français réel encodé en ISO-8859-1 a été détecté comme `cp1257` (un codepage balte sans rapport) et mal décodé, confirmé avant d'écrire le code. **Correction vérifiée pour de vrai** : le paramètre `cp_isolation` de `charset-normalizer` restreint les candidats à une liste réaliste (`ascii`, `utf_8`, `iso8859_1`, `cp1252`, `utf_16`) -- retesté avec succès sur UTF-8/ISO-8859-1/Windows-1252. **Limite réelle, non corrigible, énoncée clairement plutôt que masquée** (vision critique 2) : ISO-8859-1 et Windows-1252 sont identiques octet pour octet pour tout caractère du texte occidental normal -- `detect_encoding` peut rapporter l'un ou l'autre pour les mêmes octets, ce n'est pas un bug mais une ambiguïté réelle et inévitable (même convention que les navigateurs web). Un texte pur ASCII est correctement étiqueté `"ascii"`, pas `"utf_8"` -- un résultat plus précis, pas une erreur de détection. **Robustesse** : un fichier vide est un texte valide et trivial (testé explicitement) ; contrairement au PDF/DOCX, TXT n'a pas de mode d'échec "conteneur valide, contenu corrompu" distinct -- la validation d'upload et le traitement partagent exactement la même détection, donc un TXT accepté à l'upload ne peut pas échouer indépendamment à l'extraction (documenté explicitement plutôt que de fabriquer un faux scénario de "TXT corrompu"). **Performance** : la détection elle-même n'échantillonne que quelques blocs de ~512 octets par défaut, indépendamment de la taille du fichier (confirmé par la signature réelle de la fonction), donc pas de dégradation avec de gros fichiers. 14 tests dédiés à l'extraction/détection (`tests/test_txt_extraction.py`, UTF-8/ISO-8859-1/Windows-1252/UTF-16/binaire/vide) + tests supplémentaires pour le dispatcher, l'upload TXT de bout en bout (y compris fichier vide et non-UTF-8), et le pipeline d'intégration réel complet, voir `tests/test_txt_extraction.py`/`tests/test_document_extraction.py`/`tests/test_documents.py`/`tests/test_documents_integration.py` |
 | 2.1.4 | Markdown | **Existe déjà** (`src/ingestion.py`) — seul format géré actuellement |
 | 2.1.5 | HTML | BeautifulSoup4 + readability-lxml |
 | 2.1.6 | CSV | pandas |
@@ -368,16 +368,25 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 61 | 12.2% |
+| ✅ Fait | 62 | 12.4% |
 | 🟡 Partiel | 64 | 12.8% |
-| ⬜ Non commencé | 375 | 75.0% |
+| ⬜ Non commencé | 374 | 74.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **61/515 (~11.8%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **125/515 (~24.3%)**
-- Pondéré (✅=1, 🟡=0.5) : **~93.0/515 (~18.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **62/515 (~12.0%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **126/515 (~24.5%)**
+- Pondéré (✅=1, 🟡=0.5) : **~94.0/515 (~18.3%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 2.1.2 (Import de documents DOCX, 2026-09-03) :
+Mis à jour après Partie 2.1.3 (Import de documents TXT, 2026-09-03) :
+Partie 2 : 2✅/0🟡/33⬜ → 3✅/0🟡/32⬜ sur 35 (2.1.3 seul item touché --
+même pipeline partagé que 2.1.1/2.1.2, dispatcher étendu. Découverte
+réelle en testant : la détection universelle naïve d'encodage se
+trompe sur les encodages occidentaux mono-octet historiques -- corrigée
+en restreignant les candidats à une liste réaliste, retestée avec
+succès. Limite réelle et non corrigible documentée honnêtement :
+ISO-8859-1/Windows-1252 sont ambigus par nature pour un texte normal).
+
+Précédemment, après Partie 2.1.2 (Import de documents DOCX, 2026-09-03) :
 Partie 2 : 1✅/0🟡/34⬜ → 2✅/0🟡/33⬜ sur 35 (2.1.2 seul item touché --
 même structure que 2.1.1, dispatcher partagé `extract_document_content`,
 pipeline de traitement renommé `process_pdf_document` → `process_document`
@@ -519,10 +528,10 @@ Partie, pour mémoire :
 3. **Partie 2 (Knowledge Base multi-format), le reste** -- le cœur
    produit d'un "RAG SaaS platform" ; dépend de 1.3 (désormais tous les
    items touchés) pour le scoping par organisation/workspace. 2.1.1
-   (PDF) et 2.1.2 (DOCX) livrés, même pipeline partagé -- reste 2.1.3 à
-   2.1.19 (17 autres formats d'import) et toute la Partie 2.2 (gestion
-   des documents : tags, versioning, réindexation, détection de
-   doublons, sync). Gros chantier restant,
+   (PDF), 2.1.2 (DOCX) et 2.1.3 (TXT) livrés, même pipeline partagé --
+   reste 2.1.4 à 2.1.19 (16 autres formats d'import) et toute la
+   Partie 2.2 (gestion des documents : tags, versioning, réindexation,
+   détection de doublons, sync). Gros chantier restant,
    à continuer de découper en sous-étapes.
 4. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
    le code existe déjà (`hallucination_detection.py`, `llm_judge.py`),

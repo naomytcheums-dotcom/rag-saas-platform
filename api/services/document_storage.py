@@ -1,16 +1,17 @@
 """
-Partie 2.1.1/2.1.2 -- uploading, downloading, and deleting document
-files in S3 (or any S3-compatible store, e.g. Cloudflare R2 -- same as
-api/services/storage.py). A SEPARATE bucket (S3_DOCUMENTS_BUCKET_NAME,
-api/config.py) from avatars/branding, and objects are uploaded with NO
-ACL (private, bucket-owner-only) -- documents are private organizational
-content, unlike the public-by-design avatar/logo/favicon assets
-api/services/storage.py handles. See that setting's own comment for why
-a second bucket, not a key prefix in the same one.
+Partie 2.1.1/2.1.2/2.1.3 -- uploading, downloading, and deleting
+document files in S3 (or any S3-compatible store, e.g. Cloudflare R2 --
+same as api/services/storage.py). A SEPARATE bucket
+(S3_DOCUMENTS_BUCKET_NAME, api/config.py) from avatars/branding, and
+objects are uploaded with NO ACL (private, bucket-owner-only) --
+documents are private organizational content, unlike the
+public-by-design avatar/logo/favicon assets api/services/storage.py
+handles. See that setting's own comment for why a second bucket, not a
+key prefix in the same one.
 
-PDF and DOCX are accepted (this codebase's scope through Partie 2.1.2).
-Other formats (TXT, HTML, ...) are separate, later cahier items
-(2.1.3+), each with their own real-format validation to add when built,
+PDF, DOCX, and TXT are accepted (this codebase's scope through Partie
+2.1.3). Other formats (HTML, CSV, ...) are separate, later cahier items
+(2.1.4+), each with their own real-format validation to add when built,
 not something to fake-accept here.
 """
 
@@ -22,12 +23,14 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from api.config import settings
+from api.services.txt_extraction import is_valid_text
 
 MAX_DOCUMENT_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 _PDF_MAGIC_BYTES = b"%PDF-"
 _ZIP_MAGIC_BYTES = b"PK\x03\x04"
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-ALLOWED_DOCUMENT_CONTENT_TYPES = ("application/pdf", DOCX_CONTENT_TYPE)
+TXT_CONTENT_TYPE = "text/plain"
+ALLOWED_DOCUMENT_CONTENT_TYPES = ("application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE)
 
 
 def _is_real_pdf(content: bytes) -> bool:
@@ -67,15 +70,22 @@ def validate_document_upload(content: bytes) -> str:
     otherwise returns the REAL detected content type (never the
     client's declared one) so the caller (api/security/documents.py's
     upload_document) can store the right Document.file_type and pass it
-    on to upload_document_file below without re-detecting it."""
+    on to upload_document_file below without re-detecting it. Checked in
+    order from MOST to LEAST specific -- PDF/DOCX both have a real,
+    narrow signature to match; a generic "does this decode as text"
+    check could otherwise misclassify almost anything, so it only ever
+    runs as the last, catch-all check once the more specific formats
+    have already been ruled out."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
     if _is_real_pdf(content):
         return "application/pdf"
     if _is_real_docx(content):
         return DOCX_CONTENT_TYPE
+    if is_valid_text(content):
+        return TXT_CONTENT_TYPE
     raise ValueError(
-        "file is not a valid PDF or DOCX (checked by its actual content, not the declared type) -- "
+        "file is not a valid PDF, DOCX, or TXT (checked by its actual content, not the declared type) -- "
         f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
     )
 

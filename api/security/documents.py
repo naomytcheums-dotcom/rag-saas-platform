@@ -1,16 +1,17 @@
 """
-Partie 2.1.1/2.1.2 -- uploading a PDF or DOCX document and processing
-it (real text/table/metadata extraction, real chunking, real
+Partie 2.1.1/2.1.2/2.1.3 -- uploading a PDF, DOCX, or TXT document and
+processing it (real text/table/metadata extraction, real chunking, real
 embeddings) into searchable DocumentChunk rows.
 
 **One shared pipeline for every supported format, not a parallel one
-per format** (2.1.2's own vision critique Q1 -- coherence): process_document
-below calls api/services/document_extraction.py's extract_document_content
-dispatcher, which returns the SAME shape (metadata/sections/tables/
-image_count) regardless of whether the underlying file is a PDF
-(api/services/pdf_extraction.py) or a DOCX (api/services/docx_extraction.py)
--- chunking, embedding, and DocumentChunk creation below never need to
-know which.
+per format** (2.1.2's own vision critique Q1 -- coherence, reconfirmed
+by 2.1.3): process_document below calls api/services/document_extraction.py's
+extract_document_content dispatcher, which returns the SAME shape
+(metadata/sections/tables/image_count) regardless of whether the
+underlying file is a PDF (api/services/pdf_extraction.py), a DOCX
+(api/services/docx_extraction.py), or a TXT
+(api/services/txt_extraction.py) -- chunking, embedding, and
+DocumentChunk creation below never need to know which.
 
 **Chunking** reimplements the same token-sliding-window algorithm
 src/indexing.py already uses (character offsets from the tokenizer's
@@ -59,10 +60,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.workspace import Workspace
 from api.security.organization_settings import get_org_settings
-from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, extract_document_content
+from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, TXT_CONTENT_TYPE, extract_document_content
 from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
 
-_TEMP_FILE_SUFFIXES = {PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx"}
+_TEMP_FILE_SUFFIXES = {PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt"}
 
 logger = logging.getLogger(__name__)
 
