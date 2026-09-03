@@ -8,16 +8,19 @@ tests/test_acme_integration.py against Let's Encrypt staging).
 **A real, honest finding from writing this file, not a hypothetical**:
 this project's own RESEND_API_KEY (already used for real by
 api/services/email.py's password-reset/etc. emails) is scoped
-send-only -- Resend's real Domains API rejects it with a real 401
-`restricted_api_key` error. The tests below verify BOTH real outcomes
-correctly (a full-access key succeeding, or a restricted key failing
-with exactly that error) rather than assuming one -- see
+send-only -- Resend's real Domains API rejects it with a real 4xx
+error. Confirmed to vary by environment, not a fixed code: local dev's
+send-only-restricted key gets a `401 restricted_api_key`; CI's
+placeholder key (not a real key at all) gets a different `400
+validation_error` ("API key is invalid"). The tests below verify BOTH
+real outcomes correctly (a full-access key succeeding, or ANY real 4xx
+rejection) rather than assuming one specific error -- see
 test_resend_domain_lifecycle_against_the_real_api's own docstring.
 
 Skips the Resend-dependent tests (not a failure) only when RESEND_API_KEY
-is entirely unset or the network is unreachable -- a real 401 for
-insufficient permissions is itself a meaningful, asserted-on outcome,
-not something to skip past.
+is entirely unset or the network is unreachable -- a real 4xx response
+FROM Resend for insufficient permissions is itself a meaningful,
+asserted-on outcome, not something to skip past.
 """
 
 import uuid
@@ -104,14 +107,19 @@ async def test_resend_domain_lifecycle_against_the_real_api():
     - a full-access key: a real domain gets created, with the real
       `records` shape Resend actually returns, then deleted so no junk
       domain is left behind in the real Resend account.
-    - a send-only-restricted key (confirmed, at the time this test was
-      written, to be this environment's actual key): a real 401 from
-      Resend's real API, correctly translated by
-      api/services/resend_domains.py into a RuntimeError naming the
-      restriction -- not swallowed, not misreported as a generic failure.
+    - a key that can't manage domains -- confirmed (by actually running
+      this test in two different real environments) to come back as
+      TWO DIFFERENT real Resend errors depending on exactly what's wrong
+      with the key: local dev's real, send-only-restricted key gets a
+      401 `restricted_api_key`; CI's placeholder key (not a real key at
+      all, see .github/workflows/regression.yml's RESEND_API_KEY) gets a
+      400 `validation_error` ("API key is invalid"). Both are asserted
+      on here (any real 4xx response FROM Resend, not a specific code),
+      correctly translated by api/services/resend_domains.py into a
+      RuntimeError -- not swallowed, not misreported as a generic failure.
 
     If RESEND_API_KEY becomes unset or the network is unreachable, this
-    still fails loudly rather than skipping -- unlike a 401 (a real,
+    still fails loudly rather than skipping -- unlike a 4xx (a real,
     meaningful response FROM Resend), those indicate this test can't
     reach Resend AT ALL, which is worth knowing about, not hiding.
     """
@@ -119,7 +127,7 @@ async def test_resend_domain_lifecycle_against_the_real_api():
     try:
         result = create_resend_domain(domain)
     except RuntimeError as exc:
-        assert "restricted_api_key" in str(exc) or "401" in str(exc), f"Unexpected Resend failure (not the known key-restriction case): {exc}"
+        assert "Resend returned an error (status 4" in str(exc), f"Unexpected Resend failure (not a real 4xx response from Resend): {exc}"
         return
 
     assert result["id"]

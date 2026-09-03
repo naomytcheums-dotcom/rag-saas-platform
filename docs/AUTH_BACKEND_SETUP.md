@@ -2098,12 +2098,15 @@ response, so an Owner sees the complete, honest picture.
 hypothetical**: this project's own `RESEND_API_KEY` (already used for
 real by every `api/services/email.py` send) is scoped **send-only** --
 Resend's real Domains API rejects domain-management calls with a real
-`401 restricted_api_key` error. The code correctly detects and
-surfaces this (a `RuntimeError` naming the restriction, never
-swallowed or misreported), and `ensure_email_domain_setup` degrades
-gracefully when it happens (`resend_domain_id` just stays unset,
-retried on the next call) -- but genuine domain creation/verification
-with Resend could not be exercised end-to-end in this environment
+4xx error (a `401 restricted_api_key` locally; CI's placeholder key
+gets a different real `400 validation_error`, "API key is invalid" --
+both real, both correctly handled, neither a specific code to rely on).
+The code correctly detects and surfaces this (a `RuntimeError` naming
+the real error, never swallowed or misreported), and
+`ensure_email_domain_setup` degrades gracefully when it happens
+(`resend_domain_id` just stays unset, retried on the next call) -- but
+genuine domain creation/verification with Resend could not be exercised
+end-to-end in this environment
 without a full-access key. `tests/test_email_domains_integration.py`'s
 `test_resend_domain_lifecycle_against_the_real_api` asserts on
 whichever of these two real outcomes this environment's key actually
