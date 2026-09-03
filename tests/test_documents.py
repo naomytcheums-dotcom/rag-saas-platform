@@ -1,17 +1,19 @@
 """
-Partie 2.1.1 -- document upload/list/detail/delete. Fast SQLite suite,
-same tier as tests/test_custom_domains.py. Both real network
-dependencies are mocked throughout: S3 (api/security/documents.py's
-upload_document_file/download_document_file) and Celery dispatch
-(schedule_document_processing, stubbed by default for the whole file --
-see tests/conftest.py's _stub_out_document_processing_scheduling_by_default) --
-no real network call belongs in the fast suite.
+Partie 2.1.1/2.1.2 -- document upload/list/detail/delete (PDF and
+DOCX). Fast SQLite suite, same tier as tests/test_custom_domains.py.
+Both real network dependencies are mocked throughout: S3
+(api/security/documents.py's upload_document_file/download_document_file)
+and Celery dispatch (schedule_document_processing, stubbed by default
+for the whole file -- see tests/conftest.py's
+_stub_out_document_processing_scheduling_by_default) -- no real network
+call belongs in the fast suite.
 
-The real PDF extraction/chunking/embedding pipeline (process_pdf_document)
-and the real Celery task are tested for real, against real
-infrastructure, in tests/test_documents_integration.py. CASCADE-delete
-of a document's chunks is tested against real Postgres in
-tests/test_postgres_integration.py (SQLite doesn't enforce foreign keys).
+The real PDF/DOCX extraction/chunking/embedding pipeline
+(process_document) and the real Celery task are tested for real,
+against real infrastructure, in tests/test_documents_integration.py.
+CASCADE-delete of a document's chunks is tested against real Postgres
+in tests/test_postgres_integration.py (SQLite doesn't enforce foreign
+keys).
 """
 
 import uuid
@@ -45,15 +47,31 @@ async def _add_member(db_session, org_id, user_id, role: OrganizationRole, invit
     await db_session.commit()
 
 
+def _real_docx_bytes() -> bytes:
+    """A real, minimal DOCX -- python-docx writing to an in-memory
+    buffer, same library api/services/docx_extraction.py itself uses,
+    so this is a genuine OOXML package (real ZIP, real word/document.xml)
+    rather than a hand-faked one."""
+    import io
+
+    import docx
+
+    document = docx.Document()
+    document.add_paragraph("Real DOCX upload test content.")
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
 def _stub_s3(monkeypatch):
-    monkeypatch.setattr("api.security.documents.upload_document_file", lambda org_id, doc_id, filename, content: f"documents/{org_id}/{doc_id}/{filename}")
+    monkeypatch.setattr("api.security.documents.upload_document_file", lambda org_id, doc_id, filename, content, content_type: f"documents/{org_id}/{doc_id}/{filename}")
 
 
-async def _upload(client, org_id: str, token: str, filename="report.pdf", content=_REAL_PDF_MAGIC, workspace_id=None):
+async def _upload(client, org_id: str, token: str, filename="report.pdf", content=_REAL_PDF_MAGIC, workspace_id=None, declared_content_type="application/pdf"):
     params = {"workspace_id": str(workspace_id)} if workspace_id else {}
     return await client.post(
         f"/organizations/{org_id}/documents", params=params,
-        files={"file": (filename, content, "application/pdf")}, headers=_auth_header(token),
+        files={"file": (filename, content, declared_content_type)}, headers=_auth_header(token),
     )
 
 
@@ -357,3 +375,66 @@ async def test_deleting_a_nonexistent_document_returns_404(client, db_session, r
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     response = await client.delete(f"/documents/{uuid.uuid4()}", headers=_auth_header(owner_token))
     assert response.status_code == 404
+
+
+# ------------------------------------------------------------- DOCX upload --
+
+async def test_owner_can_upload_a_docx_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.2): DOCX upload works, through the SAME
+    endpoint as PDF."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(
+        client, org["id"], owner_token, filename="report.docx", content=_real_docx_bytes(),
+        declared_content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "report.docx"
+    assert body["file_type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+async def test_upload_ignores_the_declared_content_type_and_checks_the_real_bytes(client, db_session, register_payload, monkeypatch):
+    """A client declaring 'application/pdf' on a real DOCX file's bytes
+    (or vice versa) must be judged by the actual content, not the
+    declared header -- same "trust the bytes" philosophy as
+    api/services/storage.py's avatar/logo validation."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="report.docx", content=_real_docx_bytes(), declared_content_type="application/pdf")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+async def test_upload_rejects_a_zip_file_that_is_not_a_real_docx(client, db_session, register_payload, monkeypatch):
+    """A plain ZIP (or an XLSX/PPTX, which share the exact same leading
+    magic bytes as DOCX) must still be rejected -- the ZIP signature
+    alone isn't enough, api/services/document_storage.py's
+    _is_real_docx also confirms word/document.xml is present."""
+    import io
+    import zipfile
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("some_file.txt", "just a plain zip, not a docx")
+    response = await _upload(client, org["id"], owner_token, filename="fake.docx", content=buffer.getvalue())
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_a_docx_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "docxviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="report.docx", content=_real_docx_bytes())
+    assert response.status_code == 403

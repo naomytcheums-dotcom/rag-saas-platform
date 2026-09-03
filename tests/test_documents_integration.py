@@ -1,10 +1,11 @@
 """
-Partie 2.1.1 -- real infrastructure tests for api/security/documents.py:
-real embedding generation (sentence-transformers, a real model
-downloaded from HuggingFace Hub on first use, then cached), real
-chunking with a real tokenizer, and the real end-to-end
-process_pdf_document pipeline (real S3 upload/download + real
-extraction + real chunking + real embeddings) against real Postgres.
+Partie 2.1.1/2.1.2 -- real infrastructure tests for
+api/security/documents.py: real embedding generation
+(sentence-transformers, a real model downloaded from HuggingFace Hub on
+first use, then cached), real chunking with a real tokenizer, and the
+real end-to-end process_document pipeline (real S3 upload/download +
+real extraction + real chunking + real embeddings) against real
+Postgres, for both PDF and DOCX.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -26,8 +27,8 @@ from api.config import settings
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
-from api.security.documents import chunk_text, generate_embeddings, process_pdf_document
-from api.services.document_storage import upload_document_file
+from api.security.documents import chunk_text, generate_embeddings, process_document
+from api.services.document_storage import upload_document_file, validate_document_upload
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -100,7 +101,7 @@ def test_chunk_text_returns_a_single_piece_for_short_text():
 
 # --------------------------------------------------- full pipeline (real S3) --
 
-async def _make_org_and_pending_document(session, *, pdf_bytes: bytes):
+async def _make_org_and_pending_document(session, *, file_bytes: bytes, filename: str):
     owner = User(email=_unique_email(), hashed_password="irrelevant")
     session.add(owner)
     await session.flush()
@@ -110,13 +111,17 @@ async def _make_org_and_pending_document(session, *, pdf_bytes: bytes):
     await session.flush()
     session.add(OrganizationMember(organization_id=organization.id, user_id=owner.id, role=OrganizationRole.owner))
 
+    # Real content-type detection, same as the real upload path
+    # (api/security/documents.py's upload_document) -- not hardcoded,
+    # so this fixture works for both PDF and DOCX bytes.
+    content_type = validate_document_upload(file_bytes)
     document = Document(
-        organization_id=organization.id, name="itest.pdf", file_key="",
-        file_size=len(pdf_bytes), file_type="application/pdf", status=DocumentStatus.pending.value, created_by=owner.id,
+        organization_id=organization.id, name=filename, file_key="",
+        file_size=len(file_bytes), file_type=content_type, status=DocumentStatus.pending.value, created_by=owner.id,
     )
     session.add(document)
     await session.flush()
-    document.file_key = upload_document_file(organization.id, document.id, "itest.pdf", pdf_bytes)
+    document.file_key = upload_document_file(organization.id, document.id, filename, file_bytes, content_type)
     await session.commit()
     return owner, organization, document
 
@@ -132,11 +137,30 @@ def _real_test_pdf_bytes() -> bytes:
 
     doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_text((72, 72), "Real integration test content for process_pdf_document.")
+    page.insert_text((72, 72), "Real integration test content for process_document.")
     doc.set_metadata({"title": "Integration Test PDF", "author": "pytest"})
     pdf_bytes = doc.tobytes()
     doc.close()
     return pdf_bytes
+
+
+def _real_test_docx_bytes() -> bytes:
+    import io
+
+    import docx
+
+    document = docx.Document()
+    document.core_properties.title = "Integration Test DOCX"
+    document.core_properties.author = "pytest"
+    document.add_paragraph("Real integration test content for process_document, DOCX flavor.")
+    table = document.add_table(rows=2, cols=2)
+    data = [["Name", "Value"], ["real", "table"]]
+    for r in range(2):
+        for c in range(2):
+            table.cell(r, c).text = data[r][c]
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -148,20 +172,20 @@ def _require_documents_bucket():
         pytest.skip("S3_DOCUMENTS_BUCKET_NAME is not configured -- skipping the real end-to-end document pipeline test")
 
 
-async def test_process_pdf_document_runs_the_real_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine, _require_documents_bucket):
     """
     Validation criterion: the full real pipeline -- real S3 upload/
     download, real PyMuPDF extraction, real chunking, real embeddings --
-    against real Postgres. Proves process_pdf_document actually
-    transitions pending -> completed, creates real DocumentChunk rows
-    with real, non-null embeddings, and records real extracted metadata.
+    against real Postgres. Proves process_document actually transitions
+    pending -> completed, creates real DocumentChunk rows with real,
+    non-null embeddings, and records real extracted metadata.
     """
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
-        owner, organization, document = await _make_org_and_pending_document(session, pdf_bytes=_real_test_pdf_bytes())
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_pdf_bytes(), filename="itest.pdf")
         document_id = document.id
         try:
-            updated = await process_pdf_document(session, document_id)
+            updated = await process_document(session, document_id)
             await session.commit()
 
             assert updated.status == DocumentStatus.completed.value
@@ -178,11 +202,50 @@ async def test_process_pdf_document_runs_the_real_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] == {"page": 1}
         finally:
             await _cleanup(session, organization.id, owner.id)
 
 
-async def test_process_pdf_document_marks_failed_for_a_corrupt_upload(pg_engine, _require_documents_bucket):
+async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.2's own validation criterion, the DOCX equivalent of the
+    PDF test above -- the SAME process_document pipeline, real
+    python-docx extraction (text, a real table, real metadata) instead
+    of PyMuPDF's. Confirms DOCX chunks carry NO `page` key (honest --
+    see api/services/document_extraction.py's own docstring on why a
+    DOCX has no fixed pages at the file-format level), unlike the PDF
+    test above's `{"page": 1}`.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_docx_bytes(), filename="itest.docx")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["title"] == "Integration Test DOCX"
+            assert updated.metadata_json["author"] == "pytest"
+            assert updated.metadata_json["table_count"] == 1
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is None
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_a_corrupt_pdf_upload(pg_engine, _require_documents_bucket):
     """Vision critique Q3 -- a real corrupt file, uploaded for real,
     processed for real: must end in `failed` with the real error
     recorded, never crash or leave the document stuck at `processing`.
@@ -194,10 +257,44 @@ async def test_process_pdf_document_marks_failed_for_a_corrupt_upload(pg_engine,
     behind it, so PyMuPDF's own real parser fails on it."""
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
-        owner, organization, document = await _make_org_and_pending_document(session, pdf_bytes=b"%PDF-1.4\nthis has the right magic bytes but no real PDF structure at all")
+        owner, organization, document = await _make_org_and_pending_document(
+            session, file_bytes=b"%PDF-1.4\nthis has the right magic bytes but no real PDF structure at all", filename="corrupt.pdf",
+        )
         document_id = document.id
         try:
-            updated = await process_pdf_document(session, document_id)
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_a_corrupt_docx_upload(pg_engine, _require_documents_bucket):
+    """Partie 2.1.2's own robustness criterion -- a real ZIP with the
+    right `word/document.xml` part present (so it passes
+    upload_document_file's own real _is_real_docx structural check,
+    the DOCX equivalent of the PDF test above) but genuinely malformed
+    XML inside it, confirmed for real (see
+    api/services/docx_extraction.py's own module docstring) to raise a
+    bare AttributeError from python-docx's own object model rather than
+    any DOCX-specific exception -- process_document's broad except
+    clause must still catch it and mark `failed`, not crash."""
+    import io
+    import zipfile
+
+    malformed_docx = io.BytesIO()
+    with zipfile.ZipFile(malformed_docx, "w") as archive:
+        archive.writestr("word/document.xml", b"not valid xml at all <<<")
+        archive.writestr("[Content_Types].xml", b"<Types/>")
+
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=malformed_docx.getvalue(), filename="corrupt.docx")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
             await session.commit()
 
             assert updated.status == DocumentStatus.failed.value

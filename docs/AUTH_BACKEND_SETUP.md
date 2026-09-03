@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1)
+### Documents (Partie 2.1.1/2.1.2)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -2293,7 +2293,7 @@ never-read setting, now actually consumed.
 `"sentence-transformers/all-MiniLM-L6-v2"` (the exact model
 `src/indexing.py` already uses) since Partie 1.3.9, but nothing in
 `api/` ever read it -- that gap was explicitly documented at delivery.
-`process_pdf_document` is the first real consumer: it loads whichever
+`process_document` is the first real consumer: it loads whichever
 model an organization has configured and generates real embeddings for
 real, via `sentence-transformers` (added to `requirements-api.txt`,
 same CPU-only `torch` wheel trick as `requirements.txt`'s own pin, so
@@ -2317,14 +2317,19 @@ exactly that in any deployment whose bucket policy makes the whole
 bucket public, which this project's OWN CI MinIO setup does for the
 avatars bucket (see `.github/workflows/regression.yml`). Objects are
 uploaded with no ACL at all (private, bucket-owner-only). The real
-magic bytes (`%PDF-`) are checked, never the client's declared
-Content-Type -- same "trust the bytes, not the header" philosophy as
-`api/services/storage.py`'s avatar/logo validation.
+content is checked, never the client's declared Content-Type -- same
+"trust the bytes, not the header" philosophy as `api/services/storage.py`'s
+avatar/logo validation: PDF's real `%PDF-` magic bytes, or (2.1.2)
+DOCX's own real structure -- a ZIP signature alone isn't enough to
+identify DOCX specifically (XLSX/PPTX/a plain .zip share the exact same
+leading bytes), so `_is_real_docx` also opens it as a real ZIP and
+confirms `word/document.xml` is present, the one part every valid
+DOCX's OOXML package is required to have.
 
-**Robustness -- what happens if the PDF is corrupt, or extraction
-fails**: `process_pdf_document` transitions `pending` -> `processing`
+**Robustness -- what happens if the file is corrupt, or extraction
+fails**: `process_document` transitions `pending` -> `processing`
 -> `completed`/`failed` for real. ANY failure along the way (a corrupt
-PDF, an S3 download error, an embedding error) is caught, recorded in
+file, an S3 download error, an embedding error) is caught, recorded in
 `Document.metadata.error`, and ends in `failed` -- never left stuck at
 `processing` forever, never an uncaught exception crashing the Celery
 worker.
@@ -2360,16 +2365,71 @@ anti-enumeration convention as everywhere else in this codebase.
 covers text/table/metadata/image extraction against real content,
 including a real embedded image and real corrupt/empty-file error
 handling. `tests/test_documents.py` (fast SQLite suite, S3 and Celery
-both mocked) covers upload validation (size, real PDF signature),
+both mocked) covers upload validation (size, real PDF/DOCX signature),
 every role's permission boundary (including the Viewer-downgrade edge
 case above), cross-organization isolation for workspace assignment and
 for both non-org-scoped endpoints, and the broker-failure best-effort
 path. `tests/test_documents_integration.py` runs the REAL end-to-end
-pipeline -- real S3 (or MinIO) upload/download, real PDF extraction,
-real chunking, real embedding generation, against real Postgres.
-`tests/test_postgres_integration.py` proves `ON DELETE CASCADE` from a
-deleted document to its chunks against real Postgres (SQLite doesn't
-enforce foreign keys).
+pipeline for BOTH formats -- real S3 (or MinIO) upload/download, real
+extraction, real chunking, real embedding generation, against real
+Postgres. `tests/test_postgres_integration.py` proves `ON DELETE CASCADE`
+from a deleted document to its chunks against real Postgres (SQLite
+doesn't enforce foreign keys).
+
+**DOCX (Partie 2.1.2), the same shape as PDF, deliberately (vision
+critique Q1 -- coherence)**: `api/services/docx_extraction.py` (real
+`python-docx`, the library the master cahier names for this item) --
+`extract_docx_text`/`extract_docx_tables`/`extract_docx_metadata` mirror
+their PDF counterparts function-for-function, and `extract_docx_styles`
+surfaces each paragraph's real Word style name (`"Heading 1"`,
+`"Normal"`, etc.) for a FUTURE structure-aware chunker (Partie 3.2.4,
+still ⬜) -- this step only exposes the real structure Word already
+stores, it does not build heading-aware chunking itself.
+`api/services/document_extraction.py`'s `extract_document_content` is
+the one dispatcher `process_document` actually calls, folding both
+formats into the exact same shape (`metadata`/`sections`/`tables`/
+`image_count`) -- PDF and DOCX processing genuinely share code from
+that point on, not two parallel pipelines that happen to look similar.
+A DOCX has no fixed pages at the file-format level (pagination is a
+Word rendering-time concern, not stored in the XML) -- `sections` is
+always a single, whole-document entry for DOCX, so its chunks honestly
+carry no `page` key rather than a fabricated one (a PDF chunk still
+gets `{"page": N}`, confirmed by a real end-to-end test for each format).
+
+**A real, honest finding from testing this before writing a line of
+processing code, not a hypothetical**: python-docx's exception
+hierarchy is far less predictable than PyMuPDF's own single
+`FileDataError`. An outright non-DOCX file raises
+`docx.opc.exceptions.PackageNotFoundError`, but a file that's a
+structurally valid ZIP with a valid `[Content_Types].xml` yet malformed
+internal XML raises a bare `AttributeError` from deep inside python-docx's
+own object model -- confirmed for real, not assumed, which is why
+`docx_extraction.py`'s `_open` catches broadly (`Exception`) rather than
+that one specific exception type; a narrower catch would have left that
+second, equally real corruption case as an unhandled crash.
+`tests/test_docx_extraction.py` and `tests/test_documents_integration.py`'s
+own corrupt-DOCX tests cover BOTH real corruption shapes, not just the
+obvious one.
+
+**Upload validation, generalized, not duplicated**:
+`api/services/document_storage.py`'s `validate_document_upload` now
+returns the REAL detected content type (PDF or DOCX) rather than just
+validating a single fixed one, so `Document.file_type` always reflects
+the actual bytes uploaded, regardless of what Content-Type header the
+client declared (tested explicitly with a deliberately-mismatched
+header).
+
+**Real verification for DOCX specifically**: `tests/test_docx_extraction.py`
+(no mocking, same discipline as the PDF suite) covers text/table/
+metadata/style extraction against real content, including both real
+corruption shapes above. `tests/test_document_extraction.py` proves the
+dispatcher's shared shape for real, for both formats.
+`tests/test_documents.py` covers DOCX upload end to end (including the
+declared-vs-real-content-type mismatch case and rejecting a plain ZIP/
+XLSX/PPTX that isn't really a DOCX), and
+`tests/test_documents_integration.py` runs the real end-to-end DOCX
+pipeline (real python-docx extraction, real chunking, real embeddings)
+against real Postgres, alongside its own real corrupt-DOCX-processing test.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

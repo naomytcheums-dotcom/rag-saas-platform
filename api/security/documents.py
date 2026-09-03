@@ -1,7 +1,16 @@
 """
-Partie 2.1.1 -- uploading a PDF document and processing it (real text/
-table/metadata extraction, real chunking, real embeddings) into
-searchable DocumentChunk rows.
+Partie 2.1.1/2.1.2 -- uploading a PDF or DOCX document and processing
+it (real text/table/metadata extraction, real chunking, real
+embeddings) into searchable DocumentChunk rows.
+
+**One shared pipeline for every supported format, not a parallel one
+per format** (2.1.2's own vision critique Q1 -- coherence): process_document
+below calls api/services/document_extraction.py's extract_document_content
+dispatcher, which returns the SAME shape (metadata/sections/tables/
+image_count) regardless of whether the underlying file is a PDF
+(api/services/pdf_extraction.py) or a DOCX (api/services/docx_extraction.py)
+-- chunking, embedding, and DocumentChunk creation below never need to
+know which.
 
 **Chunking** reimplements the same token-sliding-window algorithm
 src/indexing.py already uses (character offsets from the tokenizer's
@@ -10,15 +19,18 @@ with single spaces and destroys whitespace/indentation) -- independently,
 not imported from src/, preserving this codebase's established
 api/<->src/ boundary (api/ has zero import dependency on src/, see
 api/security/organization_settings.py's own module docstring). Chunked
-PER PAGE, not on one concatenated blob, so each chunk's metadata can
-record which page it came from.
+per SECTION (a PDF's own pages; a DOCX's single whole-document section,
+since DOCX has no fixed pages at the file-format level -- see
+extract_docx_metadata's own docstring), not on one concatenated blob
+across every section, so a PDF chunk's metadata can still record which
+page it came from.
 
 **Embeddings, a real, deliberately bounded piece of Partie 4's own
 scope**: organization_settings.embedding_model (Partie 1.3.9) already
 defaults to "sentence-transformers/all-MiniLM-L6-v2" -- the exact model
 src/indexing.py already uses -- but until this step, NOTHING in api/
 ever read it (that gap was explicitly documented at 1.3.9's own
-delivery). process_pdf_document below is the first real consumer:
+delivery). process_document below is the first real consumer:
 it loads whichever model an organization has configured and generates
 real embeddings for real. This is NOT the full multi-provider LLM/
 Embedding abstraction Partie 4 specifies (4.1/4.2/4.3, still ⬜) --
@@ -47,8 +59,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.workspace import Workspace
 from api.security.organization_settings import get_org_settings
+from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, extract_document_content
 from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
-from api.services.pdf_extraction import extract_pdf_images, extract_pdf_metadata, extract_pdf_pages_text, extract_pdf_tables
+
+_TEMP_FILE_SUFFIXES = {PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx"}
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +126,8 @@ async def upload_document(
     created_by: uuid.UUID, filename: str, content: bytes,
 ) -> Document:
     """
-    Item 3's literal function. Real validation (size, actual PDF magic
-    bytes -- see api/services/document_storage.py's
+    Item 3's literal function. Real validation (size, actual PDF/DOCX
+    magic bytes/structure -- see api/services/document_storage.py's
     validate_document_upload) BEFORE anything touches S3 or the
     database, so a bad upload never leaves a half-created row or an
     orphaned S3 object behind. A workspace_id, if given, must belong to
@@ -128,7 +142,7 @@ async def upload_document(
     (a broker hiccup must never fail the upload itself, same reasoning
     as api/security/custom_domains.py's schedule_domain_verification).
     """
-    validate_document_upload(content)
+    content_type = validate_document_upload(content)
 
     if workspace_id is not None:
         workspace = await db.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.organization_id == organization_id))
@@ -137,13 +151,13 @@ async def upload_document(
 
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
-        file_key="", file_size=len(content), file_type="application/pdf",
+        file_key="", file_size=len(content), file_type=content_type,
         status=DocumentStatus.pending.value, created_by=created_by,
     )
     db.add(document)
     await db.flush()  # assigns document.id, needed for the S3 key below
 
-    document.file_key = upload_document_file(organization_id, document.id, filename, content)
+    document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
     await db.flush()
 
     schedule_document_processing(document.id)
@@ -165,16 +179,21 @@ def schedule_document_processing(document_id: uuid.UUID) -> None:
         logger.warning("schedule_document_processing: could not schedule processing for document '%s': %s", document_id, exc)
 
 
-async def process_pdf_document(db: AsyncSession, document_id: uuid.UUID) -> Document:
+async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document:
     """
-    Item 3's literal function -- the real extraction + chunking +
-    embedding pipeline, run by api/tasks/document_processing.py's
-    Celery task. Transitions status pending -> processing -> completed/
+    Item 3's literal function (named process_pdf_document in 2.1.1,
+    renamed here now that a second format exists -- a function still
+    called "process_PDF_document" while actually processing a DOCX file
+    would be actively misleading, not just imprecise) -- the real
+    extraction + chunking + embedding pipeline, run by api/tasks/
+    document_processing.py's Celery task, for EVERY supported format
+    through the SAME code path (api/services/document_extraction.py's
+    dispatcher). Transitions status pending -> processing -> completed/
     failed for real (never left stuck at `processing` forever): ANY
-    failure along the way (a corrupt PDF, an S3 download error, an
+    failure along the way (a corrupt file, an S3 download error, an
     embedding error) is caught, recorded in Document.metadata_json, and
     ends in `failed` -- exactly this step's own vision critique answer
-    to "que se passe-t-il si le PDF est corrompu" -- rather than
+    to "que se passe-t-il si le fichier est corrompu" -- rather than
     crashing the Celery worker or leaving the document silently stuck.
     """
     document = await db.scalar(select(Document).where(Document.id == document_id))
@@ -186,15 +205,13 @@ async def process_pdf_document(db: AsyncSession, document_id: uuid.UUID) -> Docu
 
     try:
         content = download_document_file(document.file_key)
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        suffix = _TEMP_FILE_SUFFIXES.get(document.file_type, "")
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
         try:
-            metadata = extract_pdf_metadata(tmp_path)
-            pages_text = extract_pdf_pages_text(tmp_path)
-            tables = extract_pdf_tables(tmp_path)
-            images = extract_pdf_images(tmp_path)
+            extracted = extract_document_content(tmp_path, document.file_type)
 
             settings_dict = await get_org_settings(db, document.organization_id)
             os.environ.setdefault("USE_TF", "0")
@@ -202,13 +219,20 @@ async def process_pdf_document(db: AsyncSession, document_id: uuid.UUID) -> Docu
 
             tokenizer = AutoTokenizer.from_pretrained(settings_dict["embedding_model"])
 
+            # "page" is only meaningful for a format that actually HAS
+            # pages at the file-format level (PDF) -- a DOCX's single
+            # whole-document section gets no page number rather than a
+            # fabricated one (see api/services/document_extraction.py's
+            # own docstring on why DOCX always has exactly one section).
+            is_paginated = document.file_type == PDF_CONTENT_TYPE
+
             chunk_records: list[dict] = []
-            for page_number, page_text in enumerate(pages_text, start=1):
-                page_text = page_text.strip()
-                if not page_text:
+            for section_number, section_text in enumerate(extracted["sections"], start=1):
+                section_text = section_text.strip()
+                if not section_text:
                     continue
-                for piece in chunk_text(tokenizer, page_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
-                    chunk_records.append({"content": piece, "page": page_number})
+                for piece in chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
+                    chunk_records.append({"content": piece, "page": section_number} if is_paginated else {"content": piece})
 
             embeddings: list[list[float] | None] = [None] * len(chunk_records)
             if chunk_records:
@@ -221,16 +245,19 @@ async def process_pdf_document(db: AsyncSession, document_id: uuid.UUID) -> Docu
             for record, embedding in zip(chunk_records, embeddings):
                 db.add(DocumentChunk(
                     document_id=document.id, content=record["content"],
-                    metadata_json={"page": record["page"]}, embedding=embedding,
+                    metadata_json={"page": record["page"]} if "page" in record else None, embedding=embedding,
                 ))
 
-            document.metadata_json = {**metadata, "table_count": len(tables), "image_count": len(images), "chunk_count": len(chunk_records)}
+            document.metadata_json = {
+                **extracted["metadata"], "table_count": len(extracted["tables"]),
+                "image_count": extracted["image_count"], "chunk_count": len(chunk_records),
+            }
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)
         finally:
             Path(tmp_path).unlink(missing_ok=True)
     except Exception as exc:
-        logger.warning("process_pdf_document: processing failed for document '%s': %s", document_id, exc)
+        logger.warning("process_document: processing failed for document '%s': %s", document_id, exc)
         document.status = DocumentStatus.failed.value
         document.metadata_json = {**(document.metadata_json or {}), "error": str(exc)}
 

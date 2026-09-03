@@ -1,12 +1,14 @@
 """
-Partie 2.1.1, item 4 -- the real async document-processing task, run by
-Celery workers. Same asyncio.run() bridge as api/tasks/
+Partie 2.1.1/2.1.2, item 4 -- the real async document-processing task,
+run by Celery workers. Same asyncio.run() bridge as api/tasks/
 domain_verification.py / ssl_certificate_renewal.py, and for the
-identical reason: the real work (PDF extraction, chunking, embedding
-generation -- api/security/documents.py's process_pdf_document) stays
-async for the FastAPI routes/tests that also call it, so duplicating it
-as a parallel sync implementation just for this one task would be
-needless, error-prone duplication.
+identical reason: the real work (PDF/DOCX extraction, chunking,
+embedding generation -- api/security/documents.py's process_document)
+stays async for the FastAPI routes/tests that also call it, so
+duplicating it as a parallel sync implementation just for this one task
+would be needless, error-prone duplication. This task's own name was
+already format-agnostic from 2.1.1 onward -- only the function it calls
+needed renaming once DOCX support made "process_pdf_document" inaccurate.
 """
 
 import asyncio
@@ -16,7 +18,7 @@ import uuid
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
-from api.security.documents import process_pdf_document
+from api.security.documents import process_document
 from api.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ async def _process_document_async(document_id: str) -> str:
     try:
         async with session_factory() as db:
             try:
-                document = await process_pdf_document(db, uuid.UUID(document_id))
+                document = await process_document(db, uuid.UUID(document_id))
                 await db.commit()
                 return document.status
             except ValueError:
