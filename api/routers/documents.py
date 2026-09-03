@@ -1,10 +1,10 @@
 """
-Partie 2.1.1/2.1.10/2.1.11 -- uploading, importing from a URL (or in
-bulk from a sitemap), listing, viewing, and deleting an organization's
-documents.
+Partie 2.1.1/2.1.10/2.1.11/2.1.12 -- uploading, importing from a URL
+(or in bulk from a sitemap, or from a GitHub repository), listing,
+viewing, and deleting an organization's documents.
 
-Three of these six endpoints are org-scoped (`/organizations/{org_id}/
-documents`[`/url`|`/sitemap`], same `require_org_member*`
+Four of these seven endpoints are org-scoped (`/organizations/{org_id}/
+documents`[`/url`|`/sitemap`|`/github/repo`], same `require_org_member*`
 dependency-injection shape as every other org-scoped router) and two
 are NOT (`/documents/{document_id}`, this step's own literal paths) --
 those look the document up FIRST, then check the CALLER's membership
@@ -16,10 +16,11 @@ org_id path parameter for FastAPI to resolve a Depends() against.
 POST is Owner/Admin/Manager/Member -- explicitly NOT Viewer (see
 api/security/organizations.py's require_org_member_excluding_viewer,
 built for exactly this: a write endpoint Viewer's own role shouldn't
-reach) -- the SAME rule applies to importing from a URL or a sitemap, a
-real write just like a file upload is. DELETE is Member+ if the caller
-uploaded the document themselves, OR Admin/Owner as an administrative
-override -- a plain Member can't delete someone ELSE's document.
+reach) -- the SAME rule applies to importing from a URL, a sitemap, or
+a GitHub repository, a real write just like a file upload is. DELETE
+is Member+ if the caller uploaded the document themselves, OR
+Admin/Owner as an administrative override -- a plain Member can't
+delete someone ELSE's document.
 """
 
 import uuid
@@ -36,10 +37,12 @@ from api.schemas.documents import (
     DocumentListResponse,
     DocumentResponse,
     DocumentUrlImportRequest,
+    GitHubRepoImportRequest,
+    GitHubRepoImportResponse,
     SitemapImportRequest,
     SitemapImportResponse,
 )
-from api.security.documents import import_document_from_url, start_sitemap_import, upload_document
+from api.security.documents import import_document_from_url, start_github_repo_import, start_sitemap_import, upload_document
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import delete_document_file
 
@@ -139,6 +142,30 @@ async def create_documents_from_sitemap(
 
     await db.commit()
     return SitemapImportResponse(sitemap_url=normalized_url, status="scheduled")
+
+
+@router.post("/organizations/{org_id}/documents/github/repo", response_model=GitHubRepoImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_github_repo(
+    org_id: uuid.UUID, payload: GitHubRepoImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.12, item 1's own literal route. 202 Accepted, same
+    reasoning as the sitemap route above -- nothing is created
+    synchronously, the repository isn't even fetched yet. Only real,
+    non-network validation (repo URL format, workspace ownership)
+    happens here; no GitHub token is ever accepted in this request body
+    -- see api/schemas/documents.py's own GitHubRepoImportRequest
+    docstring for why."""
+    try:
+        owner, repo = await start_github_repo_import(
+            db, org_id, workspace_id, current_user.id, str(payload.repo_url), payload.file_patterns, payload.max_files,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return GitHubRepoImportResponse(owner=owner, repo=repo, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)

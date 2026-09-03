@@ -215,6 +215,41 @@ class Settings(BaseSettings):
     # credentials, just a different bucket name.
     S3_DOCUMENTS_BUCKET_NAME: str | None = None
 
+    # -- GitHub repository import (Partie 2.1.12) ---------------------------
+    # A real Personal Access Token (fine-grained or classic, `repo` scope
+    # for private repos) -- NOT the same thing as GITHUB_OAUTH_CLIENT_ID/
+    # SECRET above, which authenticate a USER signing in with GitHub.
+    # This one authenticates THIS SERVER's own outbound calls to the
+    # GitHub REST API when importing a repo's files into a knowledge
+    # base. Optional: a PUBLIC repo needs no token at all (GitHub's REST
+    # API allows unauthenticated reads, just at a much lower real rate
+    # limit -- 60 requests/hour vs. 5,000/hour authenticated, confirmed
+    # for real before writing api/services/github_extraction.py). A
+    # PRIVATE repo genuinely cannot be imported without one -- there is
+    # no way around that, and no attempt is made to pretend otherwise.
+    GITHUB_API_TOKEN: str | None = None
+    GITHUB_API_BASE_URL: str = "https://api.github.com"
+    # This step's own literal default -- confirmed for real to match
+    # GitHub's own Contents API limit for returning a file's content
+    # inline as base64 (a file over this size gets `encoding: "none"`,
+    # `content: ""` instead, needing a second real request to a
+    # DIFFERENT host, raw.githubusercontent.com -- see that module's own
+    # docstring for why this codebase deliberately never needs to make
+    # that second call at all).
+    GITHUB_MAX_FILE_SIZE: int = 1 * 1024 * 1024  # 1 MB
+    # Comma-separated, this step's own literal default -- a real
+    # ALLOWLIST, not an optional narrowing filter (unlike Partie 2.1.11's
+    # sitemap `filters`): an ordinary code repository genuinely contains
+    # plenty of content a knowledge base should never ingest (binaries,
+    # images, compiled output, lockfiles) with no format-level signal
+    # distinguishing them the way validate_document_upload's real content
+    # checks do for an upload -- see github_include_patterns_list below.
+    GITHUB_INCLUDE_PATTERNS: str = ".md,.txt,.py,.js,.ts,.json,.yml,.yaml"
+
+    @property
+    def github_include_patterns_list(self) -> list[str]:
+        return [pattern.strip() for pattern in self.GITHUB_INCLUDE_PATTERNS.split(",") if pattern.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

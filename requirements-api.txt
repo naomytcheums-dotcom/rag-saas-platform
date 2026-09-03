@@ -247,6 +247,14 @@ ebooklib==0.20
 # 2.1.10's own SSRF-safe fetch_url_content; gzip decompression and glob
 # filtering use Python's own stdlib (gzip, fnmatch), nothing to pin.
 
+# -- Documents / GitHub repo import (Partie 2.1.12) ---------------------------
+# No new package at all -- a plain httpx.AsyncClient (already a real
+# dependency since Partie 2.1.10) against GitHub's own REST API, no SSRF-
+# safe transport needed (see api/services/github_extraction.py's own
+# module docstring for why: the real target host is always the fixed,
+# admin-configured GITHUB_API_BASE_URL, never caller-controlled). Base64
+# decoding uses Python's own stdlib.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

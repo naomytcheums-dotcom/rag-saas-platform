@@ -74,3 +74,32 @@ class SitemapImportResponse(BaseModel):
 
     sitemap_url: str
     status: str
+
+
+class GitHubRepoImportRequest(BaseModel):
+    """Partie 2.1.12, item 1's own request body. Deliberately has NO
+    field for a GitHub token -- see api/config.py's own
+    GITHUB_API_TOKEN docstring: that's a real, server-wide secret an
+    operator configures once, never something a caller submits
+    per-request. `file_patterns`, if omitted, falls back to
+    settings.github_include_patterns_list (a real ALLOWLIST, unlike
+    Partie 2.1.11's optional sitemap `filters`) -- see
+    api/services/github_extraction.py's own module docstring.
+    `max_files` bounded lower than Partie 2.1.11's own sitemap
+    `max_urls`: each GitHub file costs one real, rate-limited API call
+    on top of the full document-processing pipeline, a more expensive
+    per-unit real cost than a sitemap page."""
+
+    repo_url: HttpUrl
+    file_patterns: list[str] | None = None
+    max_files: int = Field(default=100, ge=1, le=2000)
+
+
+class GitHubRepoImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as SitemapImportResponse
+    above, and for the identical reason -- see
+    api/tasks/github_import.py's own module docstring."""
+
+    owner: str
+    repo: str
+    status: str
