@@ -69,7 +69,17 @@ def malformed_path(tmp_path):
 
 @pytest.fixture
 def too_deep_path(tmp_path):
-    depth = 5000
+    # Real, environment-dependent finding (confirmed the hard way -- an
+    # earlier, smaller depth here passed on local Windows dev but did
+    # NOT raise on the Linux CI runner, a genuinely different real C
+    # stack size/Python build): the exact depth at which json.loads
+    # raises RecursionError is NOT a portable constant (see this
+    # module's own docstring for the honest correction). 1,000,000
+    # levels is a deliberately enormous safety margin over either
+    # environment's own real threshold, confirmed for real to still
+    # fail in well under a millisecond, not something to worry about
+    # for test runtime.
+    depth = 1_000_000
     content = ("[" * depth + "1" + "]" * depth).encode("utf-8")
     return _write(tmp_path, "too_deep.json", content)
 

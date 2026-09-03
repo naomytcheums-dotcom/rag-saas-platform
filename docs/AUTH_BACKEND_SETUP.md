@@ -2792,22 +2792,30 @@ action items ask for path-based querying; the real recursive parsing
 itself is there (`_compute_stats`), just not exposed as a query
 language nobody asked for.
 
-**Real finding #1, verified before writing this module, not assumed**:
-the stdlib C-accelerated JSON parser tolerates nesting far beyond
-Python's own default recursion limit (1000) -- confirmed for real to
-succeed up to 2998 levels and fail with a real `RecursionError` at
-2999. `json.dumps` re-serializing that same structure hits the
-identical ceiling, not a lower one.
+**Real finding #1, verified before writing this module, not assumed --
+and CORRECTED after CI caught a real portability bug in the first
+version of this claim**: the stdlib C-accelerated JSON parser tolerates
+nesting far beyond Python's own default recursion limit (1000) before
+raising a real `RecursionError`, but the EXACT depth this happens at is
+NOT a portable constant -- a first version of this docstring (and its
+test) claimed a specific number confirmed on local Windows dev, but the
+real Linux CI runner tolerated MORE nesting than that same number (a
+genuinely different real C stack size/Python build) and that test
+failed there. The honest statement: this ceiling is environment-
+dependent, not a fixed number this codebase can rely on -- `json.dumps`
+re-serializing an already-parsed structure hits whatever that same
+environment's own ceiling is too, not a lower one.
 
 **Real finding #2, a genuine bug caught before it shipped**: a first,
 naive RECURSIVE Python implementation of the depth/key-count computation
-failed at around depth 500 in this environment -- far EARLIER than
-`json.loads`' own ~2998-level ceiling -- because each Python call frame
-adds to the interpreter's stack on top of whatever the caller (pytest,
-Celery, uvicorn) already used, unlike the C parser's own internal
-recursion handling. `_compute_stats` is therefore ITERATIVE (an
-explicit stack), confirmed for real to handle the same depth
-`json.loads` itself accepts. This is this step's real, tested answer
+failed at around depth 500 in local testing -- far EARLIER than
+`json.loads`' own ceiling in that same environment -- because each
+Python call frame adds to the interpreter's stack on top of whatever
+the caller (pytest, Celery, uvicorn) already used, unlike the C
+parser's own internal recursion handling. `_compute_stats` is therefore
+ITERATIVE (an explicit stack), confirmed for real to handle depths far
+beyond what a recursive version could, regardless of environment. This
+is this step's real, tested answer
 to vision critique Q3's "si la structure est trop profonde ?": handled
 correctly, and only because an initial wrong approach was caught by
 testing before it shipped, not assumed correct.
