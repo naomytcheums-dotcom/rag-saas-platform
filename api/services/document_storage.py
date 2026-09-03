@@ -1,18 +1,19 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- uploading,
-downloading, and deleting document files in S3 (or any S3-compatible
-store, e.g. Cloudflare R2 -- same as api/services/storage.py). A
-SEPARATE bucket (S3_DOCUMENTS_BUCKET_NAME, api/config.py) from
-avatars/branding, and objects are uploaded with NO ACL (private,
-bucket-owner-only) -- documents are private organizational content,
-unlike the public-by-design avatar/logo/favicon assets
-api/services/storage.py handles. See that setting's own comment for
-why a second bucket, not a key prefix in the same one.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9 --
+uploading, downloading, and deleting document files in S3 (or any
+S3-compatible store, e.g. Cloudflare R2 -- same as
+api/services/storage.py). A SEPARATE bucket (S3_DOCUMENTS_BUCKET_NAME,
+api/config.py) from avatars/branding, and objects are uploaded with NO
+ACL (private, bucket-owner-only) -- documents are private
+organizational content, unlike the public-by-design avatar/logo/
+favicon assets api/services/storage.py handles. See that setting's own
+comment for why a second bucket, not a key prefix in the same one.
 
-PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, and XML are accepted (this
-codebase's scope through Partie 2.1.8). Other formats (...) are
-separate, later cahier items (2.1.9+), each with their own real-format
-validation to add when built, not something to fake-accept here.
+PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, and EPUB are accepted
+(this codebase's scope through Partie 2.1.9). Other formats (...) are
+separate, later cahier items (2.1.10+), each with their own
+real-format validation to add when built, not something to fake-accept
+here.
 
 **Markdown and CSV are the two real, deliberate exceptions to this
 module's own "trust the bytes, never the declared name" rule for every
@@ -104,6 +105,19 @@ prioritized by which resolution is far more common in practice (a
 real, undeclared, HTML-collision-prone XML document is a rare
 combination; a real declared XML document, or a real HTML page, are
 both common) -- not silently glossed over.
+
+**EPUB is a real ZIP, exactly like DOCX, with its own even more
+specific real signature** -- `_is_real_epub` below checks for the
+same real ZIP magic bytes DOCX itself checks, then confirms the
+archive's own mandatory `mimetype` entry (required by the EPUB Open
+Container Format spec to be the FIRST, UNCOMPRESSED entry) contains
+the exact bytes `application/epub+zip` -- confirmed for real against a
+real generated EPUB before relying on it. This is an even more
+authoritative signature than DOCX's own "does `word/document.xml`
+exist" check (a spec-mandated, fixed-content file, not just a
+required-but-otherwise-arbitrary internal part), so EPUB needs no
+filename fallback either -- real content is recognized regardless of
+what it's named, exactly like PDF/DOCX/HTML/JSON/XML before it.
 """
 
 import io
@@ -137,9 +151,11 @@ JSON_CONTENT_TYPE = "application/json"
 # the two a client happened to declare. application/xml is the modern,
 # IANA-preferred one.
 XML_CONTENT_TYPE = "application/xml"
+EPUB_CONTENT_TYPE = "application/epub+zip"
+_EPUB_MIMETYPE_ENTRY_CONTENT = b"application/epub+zip"
 ALLOWED_DOCUMENT_CONTENT_TYPES = (
     "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE,
-    HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE, XML_CONTENT_TYPE,
+    HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE, XML_CONTENT_TYPE, EPUB_CONTENT_TYPE,
 )
 
 # Real content-based HTML detection -- see this module's own docstring
@@ -186,6 +202,23 @@ def _is_real_docx(content: bytes) -> bool:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             return "word/document.xml" in archive.namelist()
     except zipfile.BadZipFile:
+        return False
+
+
+def _is_real_epub(content: bytes) -> bool:
+    """
+    A real ZIP, like DOCX -- but confirms the archive's own real,
+    OCF-spec-mandated `mimetype` entry contains the exact bytes
+    `application/epub+zip` (see this module's own docstring), an even
+    more specific signature than DOCX's "does this internal file
+    exist" check.
+    """
+    if not content.startswith(_ZIP_MAGIC_BYTES):
+        return False
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            return archive.read("mimetype") == _EPUB_MIMETYPE_ENTRY_CONTENT
+    except (zipfile.BadZipFile, KeyError):
         return False
 
 
@@ -278,25 +311,27 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     (api/security/documents.py's upload_document) can store the right
     Document.file_type and pass it on to upload_document_file below
     without re-detecting it. Checked in order from MOST to LEAST
-    specific -- PDF/DOCX/HTML/JSON/XML all have a real, narrow (or, for
-    JSON/XML, fully deterministic) signature to match; the generic
-    "does this decode as text" check (and Markdown/CSV's filename-based
-    tie-break) only ever runs once those are ruled out. A DECLARED XML
-    document (`<?xml ...?>`) is checked, and trusted, before HTML's own
-    sniff -- see this module's own docstring for why, and for the one
-    real, narrow ambiguity this ordering leaves (an undeclared XML
-    document whose root tag collides with an HTML sniff pattern).
-    `filename` defaults to "" (no Markdown/CSV match possible, same as
-    before this parameter existed) so every OTHER caller of this
-    function is unaffected -- see this module's own docstring for why
-    Markdown and CSV specifically need the filename at all (HTML/JSON/
-    XML do not)."""
+    specific -- PDF/DOCX/EPUB/HTML/JSON/XML all have a real, narrow (or,
+    for JSON/XML/EPUB, fully deterministic) signature to match; the
+    generic "does this decode as text" check (and Markdown/CSV's
+    filename-based tie-break) only ever runs once those are ruled out.
+    A DECLARED XML document (`<?xml ...?>`) is checked, and trusted,
+    before HTML's own sniff -- see this module's own docstring for why,
+    and for the one real, narrow ambiguity this ordering leaves (an
+    undeclared XML document whose root tag collides with an HTML sniff
+    pattern). `filename` defaults to "" (no Markdown/CSV match possible,
+    same as before this parameter existed) so every OTHER caller of
+    this function is unaffected -- see this module's own docstring for
+    why Markdown and CSV specifically need the filename at all (HTML/
+    JSON/XML/EPUB do not)."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
     if _is_real_pdf(content):
         return "application/pdf"
     if _is_real_docx(content):
         return DOCX_CONTENT_TYPE
+    if _is_real_epub(content):
+        return EPUB_CONTENT_TYPE
     if _has_xml_declaration(content) and _is_real_xml(content):
         return XML_CONTENT_TYPE
     if _is_real_html(content):
@@ -307,7 +342,7 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
         return XML_CONTENT_TYPE
     if not is_valid_text(content):
         raise ValueError(
-            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, or XML (checked by its actual content, not the declared type) -- "
+            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, or EPUB (checked by its actual content, not the declared type) -- "
             f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
         )
     if filename.lower().endswith(_MARKDOWN_EXTENSIONS):

@@ -1,7 +1,7 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- document
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9 -- document
 upload/list/detail/delete (PDF, DOCX, TXT, Markdown, HTML, CSV, JSON,
-and XML). Fast SQLite suite, same tier as tests/test_custom_domains.py.
+XML, and EPUB). Fast SQLite suite, same tier as tests/test_custom_domains.py.
 Both real network dependencies are mocked throughout: S3
 (api/security/documents.py's upload_document_file/download_document_file)
 and Celery dispatch (schedule_document_processing, stubbed by default
@@ -9,9 +9,9 @@ for the whole file -- see tests/conftest.py's
 _stub_out_document_processing_scheduling_by_default) -- no real
 network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML extraction/chunking/
-embedding pipeline (process_document) and the real Celery task are
-tested for real, against real infrastructure, in
+The real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML/EPUB extraction/
+chunking/embedding pipeline (process_document) and the real Celery
+task are tested for real, against real infrastructure, in
 tests/test_documents_integration.py. CASCADE-delete of a document's
 chunks is tested against real Postgres in
 tests/test_postgres_integration.py (SQLite doesn't enforce foreign
@@ -63,6 +63,36 @@ def _real_docx_bytes() -> bytes:
     buffer = io.BytesIO()
     document.save(buffer)
     return buffer.getvalue()
+
+
+def _real_epub_bytes() -> bytes:
+    """A real, minimal EPUB -- ebooklib writing to a real temp file
+    (ebooklib's own writer needs a real path, not an in-memory buffer),
+    same library api/services/epub_extraction.py itself uses, so this
+    is a genuine OCF package (real ZIP, real spec-mandated `mimetype`
+    entry) rather than a hand-faked one."""
+    import tempfile
+    from pathlib import Path
+
+    from ebooklib import epub
+
+    book = epub.EpubBook()
+    book.set_identifier("id1")
+    book.set_title("Upload Test Book")
+    book.set_language("en")
+    book.add_author("pytest")
+    chapter = epub.EpubHtml(title="Chapter 1", file_name="chap1.xhtml", lang="en")
+    chapter.content = "<html><body><p>Real EPUB upload test content.</p></body></html>"
+    book.add_item(chapter)
+    book.toc = (epub.Link("chap1.xhtml", "Chapter 1", "chap1"),)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = ["nav", chapter]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "upload_test.epub"
+        epub.write_epub(str(path), book)
+        return path.read_bytes()
 
 
 def _stub_s3(monkeypatch):
@@ -916,4 +946,69 @@ async def test_viewer_cannot_upload_an_xml_document(client, db_session, register
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="data.xml", content=_REAL_DECLARED_XML)
+    assert response.status_code == 403
+
+
+# -------------------------------------------------------------- EPUB upload --
+
+async def test_owner_can_upload_an_epub_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.9): EPUB upload works, through the
+    SAME endpoint as every other format."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(
+        client, org["id"], owner_token, filename="book.epub", content=_real_epub_bytes(), declared_content_type="application/epub+zip",
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "book.epub"
+    assert body["file_type"] == "application/epub+zip"
+
+
+async def test_upload_ignores_the_declared_content_type_for_epub_and_checks_the_real_bytes(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1/robustness -- like DOCX, EPUB is detected
+    from its own real, spec-mandated ZIP content (the `mimetype`
+    entry), regardless of what the client declares or what the file
+    is named."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(
+        client, org["id"], owner_token, filename="not_named_epub.bin", content=_real_epub_bytes(), declared_content_type="application/octet-stream",
+    )
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/epub+zip"
+
+
+async def test_upload_rejects_a_zip_file_that_is_not_a_real_epub(client, db_session, register_payload, monkeypatch):
+    """Same "content over declared name" rule as DOCX's own equivalent
+    test -- a real ZIP that simply isn't an EPUB (no spec-mandated
+    `mimetype` entry) is rejected, not silently accepted just because
+    it happens to be a ZIP."""
+    import io
+    import zipfile
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("hello.txt", "just a random zip, not an epub")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.epub", content=buffer.getvalue())
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_an_epub_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "epubviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="book.epub", content=_real_epub_bytes())
     assert response.status_code == 403

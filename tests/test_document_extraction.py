@@ -1,21 +1,24 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8, item 3 -- api/services/document_extraction.py's
-extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9, item 3 -- api/services/document_extraction.py's
+extract_document_content dispatcher. Real PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML/EPUB
 generation and extraction, no mocking -- proves every format really
 does come back through the SAME shared shape (vision critique Q1 --
 coherence), including Markdown's own real per-section heading metadata,
 HTML's real article-vs-boilerplate extraction, CSV's own DataFrame
 landing in the shared "tables" list, JSON's real key_count/depth/
-structure metadata, and XML's real element/attribute counts.
+structure metadata, XML's real element/attribute counts, and EPUB's
+real per-chapter sectioning.
 """
 
 import docx
 import pymupdf
 import pytest
+from ebooklib import epub
 
 from api.services.document_extraction import (
     CSV_CONTENT_TYPE,
     DOCX_CONTENT_TYPE,
+    EPUB_CONTENT_TYPE,
     HTML_CONTENT_TYPE,
     JSON_CONTENT_TYPE,
     MARKDOWN_CONTENT_TYPE,
@@ -134,6 +137,25 @@ def real_xml_path(tmp_path):
         '<book id="bk102"><title>A second book.</title></book>'
         "</catalog>"
     ).encode("utf-8"))
+    return str(path)
+
+
+@pytest.fixture
+def real_epub_path(tmp_path):
+    book = epub.EpubBook()
+    book.set_identifier("id1")
+    book.set_title("Dispatcher EPUB")
+    book.set_language("en")
+    book.add_author("pytest")
+    c1 = epub.EpubHtml(title="Chapter 1", file_name="chap1.xhtml", lang="en")
+    c1.content = "<html><body><p>Real EPUB dispatcher test content.</p></body></html>"
+    book.add_item(c1)
+    book.toc = (epub.Link("chap1.xhtml", "Chapter 1", "chap1"),)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = ["nav", c1]
+    path = tmp_path / "dispatch.epub"
+    epub.write_epub(str(path), book)
     return str(path)
 
 
@@ -279,6 +301,24 @@ def test_extract_document_content_dispatches_xml_correctly(real_xml_path):
     assert "catalog/book/title: Real XML dispatcher test content." in result["sections"][0]["text"]
     assert result["sections"][0]["metadata"] == {}
     assert result["tables"] == []  # a tree isn't generally tabular -- no DataFrame conversion
+    assert result["image_count"] == 0
+
+
+def test_extract_document_content_dispatches_epub_correctly(real_epub_path):
+    """Partie 2.1.9's own validation criterion, and its real answer to
+    vision critique Q2 -- following Partie 2.1.4's own Markdown
+    precedent, EPUB gets one real section PER CHAPTER (not a single
+    whole-document blob), each carrying its own real chapter title as
+    per-section metadata."""
+    result = extract_document_content(real_epub_path, EPUB_CONTENT_TYPE)
+    _assert_shared_shape(result)
+    assert result["metadata"]["title"] == "Dispatcher EPUB"
+    assert result["metadata"]["author"] == ["pytest"]
+    assert result["metadata"]["toc"] == [{"title": "Chapter 1", "href": "chap1.xhtml", "level": 1}]
+    assert len(result["sections"]) == 1  # one real chapter
+    assert result["sections"][0]["metadata"] == {"chapter": "Chapter 1"}
+    assert "Real EPUB dispatcher test content." in result["sections"][0]["text"]
+    assert result["tables"] == []  # a book isn't generally tabular -- no DataFrame conversion
     assert result["image_count"] == 0
 
 

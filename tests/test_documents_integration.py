@@ -1,12 +1,12 @@
 """
-Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8 -- real
+Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9 -- real
 infrastructure tests for api/security/documents.py: real embedding
 generation (sentence-transformers, a real model downloaded from
 HuggingFace Hub on first use, then cached), real chunking with a real
 tokenizer, and the real end-to-end process_document pipeline (real S3
 upload/download + real extraction + real chunking + real embeddings)
 against real Postgres, for PDF, DOCX, TXT, Markdown, HTML, CSV, JSON,
-and XML.
+XML, and EPUB.
 
 **JSON and XML have no "marks failed" integration test, unlike every
 other format, and deliberately so**: Markdown's frontmatter YAMLError,
@@ -235,6 +235,56 @@ def _real_test_xml_bytes() -> bytes:
         '<item id="2"><note>Deuxième élément réel.</note></item>'
         "</catalog>"
     ).encode("utf-8")
+
+
+def _real_test_epub_bytes() -> bytes:
+    """ebooklib's own writer needs a real file path, not an in-memory
+    buffer -- written to a real temp file, then read back as bytes,
+    same reasoning as tests/test_documents.py's own _real_epub_bytes()."""
+    import tempfile
+    from pathlib import Path
+
+    from ebooklib import epub
+
+    book = epub.EpubBook()
+    book.set_identifier("itest-id")
+    book.set_title("Integration Test EPUB")
+    book.set_language("fr")
+    book.add_author("pytest")
+    book.add_metadata("DC", "publisher", "Real Publisher")
+
+    c1 = epub.EpubHtml(title="Chapitre 1", file_name="c1.xhtml", lang="fr")
+    c1.content = "<html><body><p>Réel contenu d'intégration pour process_document, chapitre un.</p></body></html>"
+    c2 = epub.EpubHtml(title="Chapitre 2", file_name="c2.xhtml", lang="fr")
+    c2.content = "<html><body><p>Deuxième chapitre réel.</p></body></html>"
+    book.add_item(c1)
+    book.add_item(c2)
+    book.toc = (epub.Link("c1.xhtml", "Chapitre 1", "c1"), epub.Link("c2.xhtml", "Chapitre 2", "c2"))
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = ["nav", c1, c2]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "itest.epub"
+        epub.write_epub(str(path), book)
+        return path.read_bytes()
+
+
+def _real_epub_missing_container_bytes() -> bytes:
+    """A real ZIP with the real, spec-mandated `mimetype` entry (so it
+    passes upload_document_file's own real _is_real_epub structural
+    check, the EPUB equivalent of the PDF/DOCX corrupt-upload tests
+    above) but missing META-INF/container.xml entirely -- confirmed
+    for real (see api/services/epub_extraction.py's own module
+    docstring) to raise a bare KeyError from ebooklib's own reader,
+    not any EPUB-specific exception."""
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+    return buf.getvalue()
 
 
 @pytest.fixture
@@ -730,5 +780,88 @@ async def test_process_document_runs_the_real_xml_pipeline_end_to_end(pg_engine,
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
                 assert chunk["metadata_json"] is None  # XML has a single whole-document section, same as DOCX/TXT/HTML/CSV/JSON
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_runs_the_real_epub_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.9's own validation criterion, the EPUB equivalent of the
+    tests above -- the SAME process_document pipeline, real ebooklib
+    parsing plus real BeautifulSoup text extraction instead of any
+    other format's own extraction. Confirms the real title/author/
+    publisher/language/toc metadata land in Document.metadata, and
+    that chunks carry REAL per-chapter metadata (Partie 2.1.9's own
+    real answer to vision critique Q2, following Partie 2.1.4's own
+    Markdown precedent -- real chapter boundaries genuinely wired into
+    chunking, not extracted and left unused).
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_epub_bytes(), filename="itest.epub")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["title"] == "Integration Test EPUB"
+            assert updated.metadata_json["author"] == ["pytest"]
+            assert updated.metadata_json["publisher"] == "Real Publisher"
+            assert updated.metadata_json["language"] == "fr"
+            assert updated.metadata_json["toc"] == [
+                {"title": "Chapitre 1", "href": "c1.xhtml", "level": 1},
+                {"title": "Chapitre 2", "href": "c2.xhtml", "level": 1},
+            ]
+            assert updated.metadata_json["table_count"] == 0  # a book isn't converted to a DataFrame
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            chapters_seen = set()
+            all_content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks)
+            assert "Réel contenu d'intégration pour process_document, chapitre un." in all_content
+            assert "Deuxième chapitre réel." in all_content
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is not None
+                assert "chapter" in chunk["metadata_json"]
+                chapters_seen.add(chunk["metadata_json"]["chapter"])
+            assert chapters_seen == {"Chapitre 1", "Chapitre 2"}
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_an_epub_missing_its_container_file(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.9's own robustness criterion, and EPUB's own genuine
+    "accepted then fails" gap, unlike JSON/XML's (see this module's
+    own docstring on why those two have none): upload-time
+    `_is_real_epub` only checks the real ZIP's own `mimetype` entry, a
+    much shallower check than a full `epub.read_epub()` parse -- a
+    file can genuinely pass that check and still be missing
+    META-INF/container.xml entirely, confirmed for real to raise a
+    bare KeyError from ebooklib's own reader at PROCESSING time.
+    process_document's broad except clause must still catch it and
+    mark `failed`, not crash -- the exact same honest failure story
+    Partie 2.1.2 built for a corrupt DOCX upload.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(
+            session, file_bytes=_real_epub_missing_container_bytes(), filename="corrupt.epub",
+        )
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
         finally:
             await _cleanup(session, organization.id, owner.id)

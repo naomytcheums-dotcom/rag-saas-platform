@@ -1,5 +1,5 @@
 """
-Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8, item 3 --
+Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9, item 3 --
 extract_document_content, the single entry point
 api/security/documents.py's process_document calls regardless of
 format. Real, structural coherence across every supported format
@@ -12,7 +12,8 @@ and this dispatcher folds them into ONE shared shape:
                                     # encoding/heading_count/links/
                                     # delimiter/row_count/key_count/
                                     # depth/structure/root/element_count/
-                                    # attribute_count/has_nested_elements/etc.
+                                    # attribute_count/has_nested_elements/
+                                    # publisher/language/date/toc/etc.
         "sections": list[dict],    # [{"text": str, "metadata": dict}, ...]
                                     # -- text grouped by the format's own
                                     # natural unit, each carrying its OWN
@@ -20,10 +21,16 @@ and this dispatcher folds them into ONE shared shape:
                                     # for PDF, {"heading": str|None,
                                     # "level": int|None} for Markdown
                                     # (Partie 2.1.4 -- real heading-based
-                                    # sectioning, not a single blob), or
-                                    # {} for DOCX/TXT/HTML/CSV/JSON/XML's
-                                    # single whole-document section
-                                    # (none of the six has a natural
+                                    # sectioning, not a single blob),
+                                    # {"chapter": str} for EPUB (Partie
+                                    # 2.1.9 -- the SAME real, natural-
+                                    # boundary sectioning Markdown's
+                                    # own heading-based split pioneered,
+                                    # applied to EPUB's own real
+                                    # chapters), or {} for DOCX/TXT/
+                                    # HTML/CSV/JSON/XML's single
+                                    # whole-document section (none of
+                                    # the six has a natural
                                     # sub-division this codebase's spec
                                     # asked to preserve).
         "tables": list[DataFrame],  # a CSV's own real DataFrame lands
@@ -31,15 +38,17 @@ and this dispatcher folds them into ONE shared shape:
                                     # IS fundamentally one table, not a
                                     # format needing its own separate
                                     # top-level concept. Empty for
-                                    # JSON/XML -- neither format's data
-                                    # is generally tabular the way a
-                                    # CSV always is, and this step's
-                                    # own spec never asked for a
-                                    # dict/tree -> DataFrame conversion.
+                                    # JSON/XML/EPUB -- none of the
+                                    # three is generally tabular the
+                                    # way a CSV always is, and this
+                                    # step's own spec never asked for a
+                                    # dict/tree/book -> DataFrame
+                                    # conversion.
         "image_count": int,        # 0 for DOCX/TXT/Markdown/HTML/CSV/
-                                    # JSON/XML -- no image-extraction
-                                    # function was asked for any of
-                                    # them by this codebase's spec.
+                                    # JSON/XML/EPUB -- no image-
+                                    # extraction function was asked for
+                                    # any of them by this codebase's
+                                    # spec.
     }
 
 **A real, deliberate generalization from 2.1.1-2.1.3's own shape**,
@@ -59,12 +68,23 @@ under `metadata["links"]`, the same place every other format's
 format-specific extras already live (TXT's encoding/line_count,
 Markdown's frontmatter/heading_count, CSV's delimiter/row_count/
 column_count/columns, JSON's key_count/depth/structure, XML's root/
-element_count/attribute_count/depth/has_attributes/has_nested_elements)
--- not a new top-level key just for one format.
+element_count/attribute_count/depth/has_attributes/has_nested_elements,
+EPUB's publisher/language/date/toc) -- not a new top-level key just
+for one format.
+
+**EPUB uses `extract_epub_chapters` for its sections, not
+`extract_epub_text`** -- the same real, natural-chapter-boundary
+sectioning choice Partie 2.1.4 made for Markdown's own heading
+boundaries, not the single-whole-document-section treatment every
+other format here gets. `api/services/epub_extraction.py`'s own
+`extract_epub_text` still exists as its own real, independently useful
+function (a single flat string), exactly like `extract_markdown_text`
+does alongside `extract_markdown_sections`.
 """
 
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
 from api.services.docx_extraction import extract_docx_metadata, extract_docx_tables, extract_docx_text
+from api.services.epub_extraction import extract_epub_chapters, extract_epub_metadata, extract_epub_toc
 from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata
 from api.services.json_extraction import extract_json_metadata, extract_json_text
 from api.services.markdown_extraction import (
@@ -84,6 +104,7 @@ HTML_CONTENT_TYPE = "text/html"
 CSV_CONTENT_TYPE = "text/csv"
 JSON_CONTENT_TYPE = "application/json"
 XML_CONTENT_TYPE = "application/xml"
+EPUB_CONTENT_TYPE = "application/epub+zip"
 
 
 def extract_document_content(file_path: str, file_type: str) -> dict:
@@ -91,7 +112,7 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
     none of this codebase's extraction modules handle -- a caller bug
     (this should never happen in practice, since api/services/
     document_storage.py's validate_document_upload only ever accepts
-    these same eight types at upload time), not a recoverable
+    these same nine types at upload time), not a recoverable
     per-document failure."""
     if file_type == PDF_CONTENT_TYPE:
         return {
@@ -156,6 +177,18 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
         return {
             "metadata": metadata,
             "sections": [{"text": extract_xml_text(file_path), "metadata": {}}],
+            "tables": [],
+            "image_count": 0,
+        }
+    if file_type == EPUB_CONTENT_TYPE:
+        metadata = extract_epub_metadata(file_path)
+        metadata["toc"] = extract_epub_toc(file_path)
+        return {
+            "metadata": metadata,
+            "sections": [
+                {"text": chapter["text"], "metadata": {"chapter": chapter["title"]} if chapter["title"] else {}}
+                for chapter in extract_epub_chapters(file_path)
+            ],
             "tables": [],
             "image_count": 0,
         }
