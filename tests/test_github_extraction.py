@@ -17,6 +17,7 @@ import base64
 
 import httpx
 import pytest
+import yaml
 
 from api.config import settings
 from api.services.github_extraction import (
@@ -420,11 +421,20 @@ def test_extract_issue_metadata_handles_a_real_issue_with_no_milestone_or_assign
 def test_format_issue_for_import_produces_real_markdown_with_title_body_and_comments():
     """Validation criterion / vision critique Q1: issues are imported
     as documents, formatted as real Markdown (title + body +
-    comments)."""
+    comments), with real YAML frontmatter FIRST -- see this function's
+    own docstring for the real CI bug (metadata_json silently
+    overwritten by process_document) this frontmatter fixes: Partie
+    2.1.4's own real extract_markdown_metadata recovers it naturally."""
     issue = _real_issue(7, labels=["docs"], user={"login": "carol"})
     comments = [{"user": {"login": "alice"}, "body": "Thanks for reporting!"}]
     markdown = format_issue_for_import(issue, comments)
-    assert markdown.startswith("# Issue 7\n")
+    assert markdown.startswith("---\n")
+    frontmatter, _sep, body = markdown[4:].partition("\n---\n")
+    real_metadata = yaml.safe_load(frontmatter)
+    assert real_metadata["number"] == 7
+    assert real_metadata["labels"] == ["docs"]
+    assert real_metadata["author"] == "carol"
+    assert body.strip().startswith("# Issue 7")
     assert "**Labels:** docs" in markdown
     assert "**Author:** carol" in markdown
     assert "Body of issue 7" in markdown
@@ -435,6 +445,6 @@ def test_format_issue_for_import_produces_real_markdown_with_title_body_and_comm
 def test_format_issue_for_import_handles_a_real_issue_with_no_body_or_comments():
     issue = _real_issue(1, body=None)
     markdown = format_issue_for_import(issue, None)
-    assert markdown.startswith("# Issue 1\n")
+    assert markdown.startswith("---\n")
     assert markdown.strip().endswith("**Author:** octocat")  # no body/comments -- ends right after the metadata block
     assert "## Comment by" not in markdown

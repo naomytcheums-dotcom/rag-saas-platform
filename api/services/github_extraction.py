@@ -92,6 +92,7 @@ import re
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import httpx
+import yaml
 
 from api.config import settings
 from api.services.url_fetching import USER_AGENT
@@ -459,9 +460,33 @@ def format_issue_for_import(issue: dict, comments: list[dict] | None = None) -> 
     so this flows through Partie 2.1.4's own real Markdown extraction
     pipeline -- real heading-based sectioning included -- completely
     unchanged, the same "reuse the existing pipeline" story as every
-    GitHub-sourced import so far)."""
+    GitHub-sourced import so far).
+
+    **Real bug found via real CI, not hypothetical**: an earlier version
+    of this function produced plain human-readable metadata lines only,
+    and `api/security/documents.py`'s `import_and_process_github_issue`
+    separately set `Document.metadata_json = extract_issue_metadata(issue)`
+    BEFORE handing off to `process_document` -- but `process_document`
+    unconditionally OVERWRITES `metadata_json` with whatever
+    `extract_document_content` itself finds, discarding that real issue
+    metadata entirely (confirmed for real: a live CI run against a real
+    GitHub issue reproducibly ended with `metadata_json` missing the
+    real `number` key). The real, correct fix -- and a better one than
+    just "assign it again after" -- is to encode this exact metadata as
+    REAL YAML FRONTMATTER at the very top of this function's own real
+    Markdown output: Partie 2.1.4's own `extract_markdown_metadata`
+    already parses real frontmatter for every other Markdown document,
+    so `process_document`'s own real extraction naturally recovers it,
+    no special-casing needed anywhere in the shared pipeline. Real,
+    necessary detail: the frontmatter block must be the ABSOLUTE FIRST
+    thing in the document (confirmed for real: `mdit-py-plugins`'s
+    `front_matter_plugin` only recognizes one at position 0, not after
+    any leading blank line) -- `yaml.safe_dump` (not hand-built strings)
+    handles real, correct escaping for a title/label/username containing
+    a colon or quote, which naive string formatting would not."""
     metadata = extract_issue_metadata(issue)
-    lines = [f"# {metadata['title']}", "", f"- **State:** {metadata['state']}"]
+    frontmatter = yaml.safe_dump(metadata, sort_keys=False, allow_unicode=True)
+    lines = [f"---\n{frontmatter}---", "", f"# {metadata['title']}", "", f"- **State:** {metadata['state']}"]
     if metadata["labels"]:
         lines.append(f"- **Labels:** {', '.join(metadata['labels'])}")
     if metadata["assignees"]:

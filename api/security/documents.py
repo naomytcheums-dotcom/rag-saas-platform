@@ -141,7 +141,6 @@ from api.services.document_extraction import (
 from api.services.github_extraction import (
     build_github_blob_url,
     build_github_contents_file_url,
-    extract_issue_metadata,
     fetch_github_file_content,
     fetch_github_issue_comments,
     fetch_github_issues,
@@ -974,6 +973,19 @@ async def import_and_process_github_issue(
     2.1.4) classify this correctly as Markdown, so the real, existing
     heading-based Markdown sectioning chunks it by issue/comment
     structure, not as one undifferentiated blob.
+
+    **Deliberately does NOT set `document.metadata_json` itself** -- a
+    real bug found via real CI: `process_document` below unconditionally
+    OVERWRITES `metadata_json` with whatever `extract_document_content`
+    finds, so an earlier version of this function that set it here first
+    had that real issue metadata silently discarded the moment
+    `process_document` ran. The real, correct fix lives in
+    `format_issue_for_import` instead (real YAML frontmatter, recovered
+    naturally by Partie 2.1.4's own real `extract_markdown_metadata` --
+    see that function's own docstring for the full story), so
+    `metadata_json` ends up with the real issue metadata via the SAME
+    path every other Markdown document's real metadata already takes,
+    not a second, competing assignment.
     """
     issue = issue_data["issue"]
     comments = issue_data.get("comments", [])
@@ -1001,7 +1013,6 @@ async def import_and_process_github_issue(
         document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
-        document.metadata_json = extract_issue_metadata(issue)
         await db.flush()
     except Exception as exc:
         logger.warning("import_and_process_github_issue: formatting/upload failed for issue '%s': %s", issue.get("html_url"), exc)

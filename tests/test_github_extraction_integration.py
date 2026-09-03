@@ -163,5 +163,6 @@ async def test_extract_and_format_a_real_issue_end_to_end():
     assert metadata["state"] == "open"
 
     markdown = format_issue_for_import(issue, comments)
-    assert markdown.startswith(f"# {issue['title']}")
+    assert markdown.startswith("---\n")  # real YAML frontmatter first -- see that function's own docstring for why
+    assert f"# {issue['title']}" in markdown
     assert "**State:** open" in markdown
