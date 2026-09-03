@@ -152,6 +152,20 @@ python-docx==1.2.0
 # actually import" convention as dnspython/Pillow/cryptography above.
 charset-normalizer==3.5.1
 
+# -- Documents / Markdown import (Partie 2.1.4) -------------------------------
+# markdown-it-py and PyYAML were already present transitively (rich ->
+# sentence-transformers's own dependency chain; huggingface_hub/
+# transformers) -- both pinned directly now that
+# api/services/markdown_extraction.py imports them itself, same "pin
+# what you actually import" convention as every other entry in this
+# section. mdit-py-plugins (the official markdown-it-py extension
+# package, same maintainers) is a genuinely new dependency -- CommonMark
+# alone does not parse GFM tables or YAML frontmatter at all, confirmed
+# for real before relying on either.
+markdown-it-py==4.2.0
+mdit-py-plugins==0.6.1
+pyyaml==6.0.3
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

@@ -1,6 +1,6 @@
 """
-Partie 2.1.1/2.1.2/2.1.3 -- document upload/list/detail/delete (PDF,
-DOCX, and TXT). Fast SQLite suite, same tier as
+Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- document upload/list/detail/delete
+(PDF, DOCX, TXT, and Markdown). Fast SQLite suite, same tier as
 tests/test_custom_domains.py. Both real network dependencies are
 mocked throughout: S3 (api/security/documents.py's
 upload_document_file/download_document_file) and Celery dispatch
@@ -8,7 +8,7 @@ upload_document_file/download_document_file) and Celery dispatch
 see tests/conftest.py's _stub_out_document_processing_scheduling_by_default)
 -- no real network call belongs in the fast suite.
 
-The real PDF/DOCX/TXT extraction/chunking/embedding pipeline
+The real PDF/DOCX/TXT/Markdown extraction/chunking/embedding pipeline
 (process_document) and the real Celery task are tested for real,
 against real infrastructure, in tests/test_documents_integration.py.
 CASCADE-delete of a document's chunks is tested against real Postgres
@@ -496,4 +496,75 @@ async def test_viewer_cannot_upload_a_txt_document(client, db_session, register_
     await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
 
     response = await _upload(client, org["id"], viewer_token, filename="notes.txt", content=b"Some text.", declared_content_type="text/plain")
+    assert response.status_code == 403
+
+
+# --------------------------------------------------------- Markdown upload --
+
+async def test_owner_can_upload_a_markdown_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.4): Markdown upload works, through the
+    SAME endpoint as PDF/DOCX/TXT."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    content = "# Real Markdown\n\nReal upload test content.".encode("utf-8")
+    response = await _upload(client, org["id"], owner_token, filename="notes.md", content=content, declared_content_type="text/markdown")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "notes.md"
+    assert body["file_type"] == "text/markdown"
+
+
+async def test_upload_distinguishes_markdown_from_txt_by_filename_only(client, db_session, register_payload, monkeypatch):
+    """Vision critique Q1 -- Markdown is the one real, deliberate
+    exception to "content decides the type, never the name": the exact
+    SAME valid-text bytes become `text/markdown` when named `.md` and
+    `text/plain` otherwise -- there is no content-only signal that
+    could tell them apart (see api/services/document_storage.py's own
+    module docstring)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    same_bytes = "# Heading\n\nSame bytes, different filename.".encode("utf-8")
+    as_markdown = await _upload(client, org["id"], owner_token, filename="a.md", content=same_bytes)
+    as_txt = await _upload(client, org["id"], owner_token, filename="a.txt", content=same_bytes)
+
+    assert as_markdown.json()["file_type"] == "text/markdown"
+    assert as_txt.json()["file_type"] == "text/plain"
+
+
+async def test_upload_accepts_the_markdown_extension_variant(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="notes.markdown", content=b"# Heading\n\nBody.")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "text/markdown"
+
+
+async def test_upload_rejects_a_md_named_file_that_is_not_real_text(client, db_session, register_payload, monkeypatch):
+    """The filename alone never overrides real content validation --
+    a `.md`-named file containing genuine binary garbage is still
+    rejected, not silently accepted as Markdown."""
+    import os
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload(client, org["id"], owner_token, filename="fake.md", content=os.urandom(500))
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_a_markdown_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "mdviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload(client, org["id"], viewer_token, filename="notes.md", content=b"# Heading\n\nBody.")
     assert response.status_code == 403

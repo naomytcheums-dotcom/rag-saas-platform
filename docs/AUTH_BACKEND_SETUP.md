@@ -2237,7 +2237,7 @@ own, is NOT public), 404 handling, and that the flag is visible through
 BOTH the new white-label endpoint and the pre-existing public branding
 endpoint (the coherence question above, proven, not just claimed).
 
-### Documents (Partie 2.1.1/2.1.2/2.1.3)
+### Documents (Partie 2.1.1/2.1.2/2.1.3/2.1.4)
 
 The first piece of Partie 2 (Knowledge Base) -- importing a PDF, real
 text/table/metadata extraction, real chunking, real embeddings. Two
@@ -2517,6 +2517,94 @@ end (including a non-UTF-8-encoded file and a genuinely empty file),
 and `tests/test_documents_integration.py` runs the real end-to-end TXT
 pipeline (real encoding detection, real chunking, real embeddings)
 against real Postgres.
+
+**Markdown (Partie 2.1.4) -- item 1's own literal ask: what's reused
+from `src/ingestion.py`, and what genuinely isn't**: `src/ingestion.py`
+was read in full before writing any new code, not assumed. It IS real,
+but not reusable here: it resolves FastAPI-doc-specific `{* path *}`
+snippet includes against a SIBLING `../fastapi` checkout and strips
+mkdocs-material's `///admonition///` syntax -- both narrowly correct
+for that one documentation corpus, and actively WRONG for a general
+user-uploaded Markdown file (a customer's file containing literal
+`{* ... *}` text should never be resolved against a repo that doesn't
+exist in this deployment). It also has NO YAML frontmatter parsing at
+all, and its own "cleaned" output stays markdown-FORMATTED text on
+purpose (for its own downstream chunker) -- this step's literal ask
+("texte brut... sans la syntaxe Markdown") is a different goal either
+way. What IS genuinely reused, as a CONCEPT, not code (`api/` has zero
+import dependency on `src/`, held since Partie 1.3.9):
+`src/indexing.py`'s `split_into_sections` groups chunks by heading
+boundary so each carries its nearest heading as context --
+`extract_markdown_sections` does the same thing, independently, off a
+real token stream instead of regex.
+
+**Real parsing via `markdown-it-py`** (a real CommonMark parser,
+already a transitive dependency through `rich`, itself needed by
+`sentence-transformers`), plus its official `mdit-py-plugins`
+extensions -- verified for real, not assumed, before relying on
+either: CommonMark alone does NOT parse GFM tables at all (a table
+without the plugin comes through as one opaque paragraph of raw
+`| a | b |` text) or YAML frontmatter (there's no concept of it without
+the plugin). Real syntax-free text extraction walks each `inline`
+token's own `children` (populated by markdown-it-py's inline-parsing
+pass) rather than its raw `.content`, which still has markdown syntax
+embedded -- confirmed for real: `**bold**`/`[text](url)` markup
+survives in the parent token's own content, only the children split
+cleanly into real text vs. pure formatting-marker tokens with empty
+content.
+
+**A real, deliberate generalization of the shared dispatcher shape**,
+motivated directly by Markdown's real structure: PDF/DOCX/TXT's
+`sections` were plain strings with, at most, an inferred page number;
+`api/services/document_extraction.py`'s shared shape now makes every
+section a `{"text": str, "metadata": dict}` pair, so a PDF's real page
+number and a Markdown section's real heading/level are both just
+entries in that per-section dict -- `process_document`'s chunking loop
+tags every chunk sliced from a section with that SAME metadata,
+unchanged, never needing a format-specific special case (removing the
+PDF-only `is_paginated` branch 2.1.1-2.1.3 needed). This is this step's
+real, wired-in answer to vision critique Q2 ("les titres sont-ils
+conservés pour le chunking sémantique ?") -- "yes", not "extracted but
+unused" (DOCX's own, more conservative answer for `extract_docx_styles`,
+still true for structure BEYOND heading-based sectioning).
+
+**Frontmatter -- Markdown's own real corruption case** (vision
+critique Q3/robustness): CommonMark itself never fails to parse (by
+design, any input renders as something, even a paragraph of literal
+text) -- but a frontmatter block with genuinely invalid YAML inside it
+does raise a real `yaml.YAMLError` (confirmed for real: an unclosed
+flow sequence), translated into a clean `ValueError` the same way every
+other format's own genuine failure mode is. Unlike TXT (which has NO
+distinct "valid container, corrupt content" failure mode at all, see
+that section above), Markdown genuinely has one, and it's tested for
+real, not assumed away.
+
+**Markdown vs. TXT -- the ONE real, deliberate exception to "content
+decides the type, never the declared name"**: at the byte level, valid
+Markdown IS simply valid text -- there is no content-only signal
+distinguishing it from a plain TXT upload the way PDF's magic bytes or
+DOCX's ZIP structure do. This step's own literal spec asks for exactly
+this ambiguity to be resolved by name (`text/markdown` **and** `.md`),
+so `api/services/document_storage.py`'s `validate_document_upload` now
+also takes the upload's `filename`, checked ONLY after content-based
+`is_valid_text` already passed -- a `.md`-named file containing real
+binary garbage is still rejected, not silently accepted as Markdown
+just because of its name (tested explicitly, alongside the SAME real
+bytes classified differently purely by filename).
+
+**Real verification for Markdown specifically**: `tests/test_markdown_extraction.py`
+(no mocking, same discipline as every other format's suite) covers
+syntax-free text extraction, heading/list-item structure, real
+frontmatter metadata (present, absent, and genuinely invalid),
+heading-based sectioning, and real GFM table extraction.
+`tests/test_document_extraction.py` proves the dispatcher's shared
+shape for Markdown too, including its real per-section heading
+metadata. `tests/test_documents.py` covers Markdown upload end to end,
+including the filename-vs-TXT disambiguation case and rejecting a
+`.md`-named file that isn't real text. `tests/test_documents_integration.py`
+runs the real end-to-end Markdown pipeline (real frontmatter, real
+heading-based chunking, real embeddings) against real Postgres,
+alongside its own real invalid-frontmatter-processing test.
 
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 

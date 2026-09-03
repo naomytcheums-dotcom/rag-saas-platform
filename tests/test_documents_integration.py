@@ -1,11 +1,11 @@
 """
-Partie 2.1.1/2.1.2/2.1.3 -- real infrastructure tests for
+Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- real infrastructure tests for
 api/security/documents.py: real embedding generation
 (sentence-transformers, a real model downloaded from HuggingFace Hub on
 first use, then cached), real chunking with a real tokenizer, and the
 real end-to-end process_document pipeline (real S3 upload/download +
 real extraction + real chunking + real embeddings) against real
-Postgres, for PDF, DOCX, and TXT.
+Postgres, for PDF, DOCX, TXT, and Markdown.
 
 The full end-to-end pipeline test SKIPS (not a failure) if
 S3_DOCUMENTS_BUCKET_NAME isn't configured -- this session deliberately
@@ -113,8 +113,10 @@ async def _make_org_and_pending_document(session, *, file_bytes: bytes, filename
 
     # Real content-type detection, same as the real upload path
     # (api/security/documents.py's upload_document) -- not hardcoded,
-    # so this fixture works for both PDF and DOCX bytes.
-    content_type = validate_document_upload(file_bytes)
+    # so this fixture works for every supported format's bytes. Passes
+    # `filename` through too: Markdown is the one format that genuinely
+    # needs it (see api/services/document_storage.py's own docstring).
+    content_type = validate_document_upload(file_bytes, filename)
     document = Document(
         organization_id=organization.id, name=filename, file_key="",
         file_size=len(file_bytes), file_type=content_type, status=DocumentStatus.pending.value, created_by=owner.id,
@@ -165,6 +167,14 @@ def _real_test_docx_bytes() -> bytes:
 
 def _real_test_txt_bytes() -> bytes:
     return "Réel contenu d'intégration pour process_document, version TXT.\nDeuxième ligne.".encode("iso-8859-1")
+
+
+def _real_test_markdown_bytes() -> bytes:
+    return (
+        "---\ntitle: Integration Test Markdown\nauthor: pytest\n---\n\n"
+        "# First Heading\n\nRéel contenu d'intégration pour process_document, version Markdown.\n\n"
+        "## Second Heading\n\nDeuxième section, sous un titre différent.\n"
+    ).encode("utf-8")
 
 
 @pytest.fixture
@@ -292,6 +302,75 @@ async def test_process_document_runs_the_real_txt_pipeline_end_to_end(pg_engine,
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
                 assert chunk["metadata_json"] is None
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_runs_the_real_markdown_pipeline_end_to_end(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.4's own validation criterion, the Markdown equivalent of
+    the tests above -- the SAME process_document pipeline, real
+    markdown-it-py parsing (frontmatter, headings, GFM-free prose)
+    instead of any other format's own extraction. Confirms Markdown
+    chunks carry REAL heading/level metadata (this step's own answer to
+    vision critique Q2: headings genuinely wired into chunking, unlike
+    DOCX's own more conservative extract_docx_styles), one real section
+    per heading, and that the real frontmatter fields land in
+    Document.metadata alongside the real heading_count.
+    """
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=_real_test_markdown_bytes(), filename="itest.md")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.completed.value
+            assert updated.metadata_json["title"] == "Integration Test Markdown"
+            assert updated.metadata_json["author"] == "pytest"
+            assert updated.metadata_json["heading_count"] == 2
+            assert updated.processed_at is not None
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            assert len(chunks) >= 1
+            headings_seen = set()
+            for chunk_row in chunks:
+                chunk = chunk_row._mapping
+                assert chunk["content"].strip()
+                assert chunk["embedding"] is not None
+                assert len(chunk["embedding"]) == 384
+                assert chunk["metadata_json"] is not None
+                assert "heading" in chunk["metadata_json"]
+                headings_seen.add(chunk["metadata_json"]["heading"])
+            assert headings_seen == {"First Heading", "Second Heading"}
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_marks_failed_for_a_markdown_file_with_invalid_frontmatter(pg_engine, _require_documents_bucket):
+    """
+    Partie 2.1.4's own robustness criterion, and Markdown's own genuine
+    corruption case (unlike TXT, which has none -- see the TXT test
+    above's own docstring): CommonMark itself never fails to parse, but
+    a frontmatter block with real invalid YAML inside it does raise
+    (confirmed for real, see api/services/markdown_extraction.py's own
+    module docstring) -- process_document's broad except clause must
+    still catch it and mark `failed`, not crash.
+    """
+    invalid_frontmatter_markdown = "---\ntitle: [unclosed bracket\n---\n\n# Heading\n".encode("utf-8")
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=invalid_frontmatter_markdown, filename="corrupt.md")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+
+            assert updated.status == DocumentStatus.failed.value
+            assert "error" in updated.metadata_json
         finally:
             await _cleanup(session, organization.id, owner.id)
 

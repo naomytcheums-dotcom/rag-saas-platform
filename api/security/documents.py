@@ -1,17 +1,16 @@
 """
-Partie 2.1.1/2.1.2/2.1.3 -- uploading a PDF, DOCX, or TXT document and
-processing it (real text/table/metadata extraction, real chunking, real
-embeddings) into searchable DocumentChunk rows.
+Partie 2.1.1/2.1.2/2.1.3/2.1.4 -- uploading a PDF, DOCX, TXT, or
+Markdown document and processing it (real text/table/metadata
+extraction, real chunking, real embeddings) into searchable
+DocumentChunk rows.
 
 **One shared pipeline for every supported format, not a parallel one
 per format** (2.1.2's own vision critique Q1 -- coherence, reconfirmed
-by 2.1.3): process_document below calls api/services/document_extraction.py's
-extract_document_content dispatcher, which returns the SAME shape
-(metadata/sections/tables/image_count) regardless of whether the
-underlying file is a PDF (api/services/pdf_extraction.py), a DOCX
-(api/services/docx_extraction.py), or a TXT
-(api/services/txt_extraction.py) -- chunking, embedding, and
-DocumentChunk creation below never need to know which.
+by every format since): process_document below calls
+api/services/document_extraction.py's extract_document_content
+dispatcher, which returns the SAME shape (metadata/sections/tables/
+image_count) regardless of underlying format -- chunking, embedding,
+and DocumentChunk creation below never need to know which.
 
 **Chunking** reimplements the same token-sliding-window algorithm
 src/indexing.py already uses (character offsets from the tokenizer's
@@ -20,11 +19,12 @@ with single spaces and destroys whitespace/indentation) -- independently,
 not imported from src/, preserving this codebase's established
 api/<->src/ boundary (api/ has zero import dependency on src/, see
 api/security/organization_settings.py's own module docstring). Chunked
-per SECTION (a PDF's own pages; a DOCX's single whole-document section,
-since DOCX has no fixed pages at the file-format level -- see
-extract_docx_metadata's own docstring), not on one concatenated blob
-across every section, so a PDF chunk's metadata can still record which
-page it came from.
+per SECTION -- each carrying its OWN per-section metadata dict (a PDF's
+real page number; a Markdown section's real heading/level, Partie
+2.1.4's own real semantic-chunking answer; DOCX/TXT's single
+whole-document section, empty metadata) rather than a document-wide
+concatenated blob, so a chunk's metadata reflects exactly where in the
+source document it came from, whatever that means for its own format.
 
 **Embeddings, a real, deliberately bounded piece of Partie 4's own
 scope**: organization_settings.embedding_model (Partie 1.3.9) already
@@ -60,10 +60,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.workspace import Workspace
 from api.security.organization_settings import get_org_settings
-from api.services.document_extraction import DOCX_CONTENT_TYPE, PDF_CONTENT_TYPE, TXT_CONTENT_TYPE, extract_document_content
+from api.services.document_extraction import (
+    DOCX_CONTENT_TYPE,
+    MARKDOWN_CONTENT_TYPE,
+    PDF_CONTENT_TYPE,
+    TXT_CONTENT_TYPE,
+    extract_document_content,
+)
 from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
 
-_TEMP_FILE_SUFFIXES = {PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt"}
+_TEMP_FILE_SUFFIXES = {
+    PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt", MARKDOWN_CONTENT_TYPE: ".md",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +135,10 @@ async def upload_document(
     created_by: uuid.UUID, filename: str, content: bytes,
 ) -> Document:
     """
-    Item 3's literal function. Real validation (size, actual PDF/DOCX
-    magic bytes/structure -- see api/services/document_storage.py's
-    validate_document_upload) BEFORE anything touches S3 or the
+    Item 3's literal function. Real validation (size, actual PDF/DOCX/
+    TXT/Markdown content -- see api/services/document_storage.py's
+    validate_document_upload, including why Markdown alone also needs
+    this call's own `filename`) BEFORE anything touches S3 or the
     database, so a bad upload never leaves a half-created row or an
     orphaned S3 object behind. A workspace_id, if given, must belong to
     this SAME organization -- otherwise an Owner of org A could file a
@@ -143,7 +152,7 @@ async def upload_document(
     (a broker hiccup must never fail the upload itself, same reasoning
     as api/security/custom_domains.py's schedule_domain_verification).
     """
-    content_type = validate_document_upload(content)
+    content_type = validate_document_upload(content, filename)
 
     if workspace_id is not None:
         workspace = await db.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.organization_id == organization_id))
@@ -220,20 +229,20 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
 
             tokenizer = AutoTokenizer.from_pretrained(settings_dict["embedding_model"])
 
-            # "page" is only meaningful for a format that actually HAS
-            # pages at the file-format level (PDF) -- a DOCX's single
-            # whole-document section gets no page number rather than a
-            # fabricated one (see api/services/document_extraction.py's
-            # own docstring on why DOCX always has exactly one section).
-            is_paginated = document.file_type == PDF_CONTENT_TYPE
-
+            # Each section carries its OWN per-format metadata dict
+            # (api/services/document_extraction.py's own docstring --
+            # a PDF's real page number, a Markdown section's real
+            # heading/level, or {} for DOCX/TXT's single whole-document
+            # section) -- every chunk sliced from that section inherits
+            # it unchanged, so this loop never needs to know which
+            # format it's chunking.
             chunk_records: list[dict] = []
-            for section_number, section_text in enumerate(extracted["sections"], start=1):
-                section_text = section_text.strip()
+            for section in extracted["sections"]:
+                section_text = section["text"].strip()
                 if not section_text:
                     continue
                 for piece in chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
-                    chunk_records.append({"content": piece, "page": section_number} if is_paginated else {"content": piece})
+                    chunk_records.append({"content": piece, "metadata": section["metadata"]})
 
             embeddings: list[list[float] | None] = [None] * len(chunk_records)
             if chunk_records:
@@ -246,7 +255,7 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             for record, embedding in zip(chunk_records, embeddings):
                 db.add(DocumentChunk(
                     document_id=document.id, content=record["content"],
-                    metadata_json={"page": record["page"]} if "page" in record else None, embedding=embedding,
+                    metadata_json=record["metadata"] or None, embedding=embedding,
                 ))
 
             document.metadata_json = {
