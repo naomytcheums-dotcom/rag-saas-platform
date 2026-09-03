@@ -241,6 +241,12 @@ ebooklib==0.20
 # real dependencies above. httpcore is now pinned directly (see its
 # own entry above) for the real SSRF-safe transport this step needed.
 
+# -- Documents / Sitemap import (Partie 2.1.11) -------------------------------
+# No new package at all -- real sitemap XML parsing reuses Partie 2.1.8's
+# own lxml (SAFE_XML_PARSER, api/services/xml_extraction.py) and Partie
+# 2.1.10's own SSRF-safe fetch_url_content; gzip decompression and glob
+# filtering use Python's own stdlib (gzip, fnmatch), nothing to pin.
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

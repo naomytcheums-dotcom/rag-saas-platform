@@ -1,24 +1,25 @@
 """
-Partie 2.1.1/2.1.10 -- uploading, importing from a URL, listing,
-viewing, and deleting an organization's documents.
+Partie 2.1.1/2.1.10/2.1.11 -- uploading, importing from a URL (or in
+bulk from a sitemap), listing, viewing, and deleting an organization's
+documents.
 
-Two of these five endpoints are org-scoped (`/organizations/{org_id}/
-documents`[`/url`], same `require_org_member*` dependency-injection
-shape as every other org-scoped router) and two are NOT
-(`/documents/{document_id}`, this step's own literal paths) -- those
-look the document up FIRST, then check the CALLER's membership in ITS
-organization manually (_get_document_and_membership below), same
-404-for-non-member-or-nonexistent anti-enumeration convention as
+Three of these six endpoints are org-scoped (`/organizations/{org_id}/
+documents`[`/url`|`/sitemap`], same `require_org_member*`
+dependency-injection shape as every other org-scoped router) and two
+are NOT (`/documents/{document_id}`, this step's own literal paths) --
+those look the document up FIRST, then check the CALLER's membership
+in ITS organization manually (_get_document_and_membership below),
+same 404-for-non-member-or-nonexistent anti-enumeration convention as
 require_org_member itself, just applied by hand since there's no
 org_id path parameter for FastAPI to resolve a Depends() against.
 
 POST is Owner/Admin/Manager/Member -- explicitly NOT Viewer (see
 api/security/organizations.py's require_org_member_excluding_viewer,
 built for exactly this: a write endpoint Viewer's own role shouldn't
-reach) -- the SAME rule applies to importing from a URL, a real write
-just like a file upload is. DELETE is Member+ if the caller uploaded
-the document themselves, OR Admin/Owner as an administrative override
--- a plain Member can't delete someone ELSE's document.
+reach) -- the SAME rule applies to importing from a URL or a sitemap, a
+real write just like a file upload is. DELETE is Member+ if the caller
+uploaded the document themselves, OR Admin/Owner as an administrative
+override -- a plain Member can't delete someone ELSE's document.
 """
 
 import uuid
@@ -31,8 +32,14 @@ from api.dependencies import get_current_user, get_db
 from api.models.document import Document
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
-from api.schemas.documents import DocumentListResponse, DocumentResponse, DocumentUrlImportRequest
-from api.security.documents import import_document_from_url, upload_document
+from api.schemas.documents import (
+    DocumentListResponse,
+    DocumentResponse,
+    DocumentUrlImportRequest,
+    SitemapImportRequest,
+    SitemapImportResponse,
+)
+from api.security.documents import import_document_from_url, start_sitemap_import, upload_document
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import delete_document_file
 
@@ -109,6 +116,29 @@ async def create_document_from_url(
     await db.commit()
     await db.refresh(document)
     return _to_response(document)
+
+
+@router.post("/organizations/{org_id}/documents/sitemap", response_model=SitemapImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_sitemap(
+    org_id: uuid.UUID, payload: SitemapImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.11, item 1's own literal route. 202 Accepted, not 201
+    Created -- unlike a single upload or URL import, nothing is
+    actually created yet by the time this response is sent: the
+    sitemap itself isn't even fetched until the real Celery task runs
+    (vision critique Q2's own answer). Only real, non-network
+    validation (sitemap URL format, workspace ownership) happens here."""
+    try:
+        normalized_url = await start_sitemap_import(
+            db, org_id, workspace_id, current_user.id, str(payload.url), payload.filters, payload.max_urls,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return SitemapImportResponse(sitemap_url=normalized_url, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)

@@ -1118,3 +1118,179 @@ async def test_uploaded_documents_have_no_source_url(client, db_session, registe
 
     response = await _upload(client, org["id"], owner_token)
     assert response.json()["source_url"] is None
+
+
+# ------------------------------------------------------- Sitemap import --
+
+async def _import_sitemap(client, org_id: str, token: str, url: str, workspace_id=None, filters=None, max_urls=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    body = {"url": url}
+    if filters is not None:
+        body["filters"] = filters
+    if max_urls is not None:
+        body["max_urls"] = max_urls
+    return await client.post(
+        f"/organizations/{org_id}/documents/sitemap", params=params,
+        json=body, headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_start_a_sitemap_import(client, db_session, register_payload):
+    """Validation criterion (2.1.11): l'import de sitemap fonctionne,
+    through its own real route. Real network activity is deliberately
+    NOT triggered -- schedule_sitemap_import is stubbed by
+    tests/conftest.py's own autouse fixture, the same "only the
+    synchronous half" reasoning as 2.1.10's own equivalent test."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_sitemap(client, org["id"], owner_token, "https://example.com/sitemap.xml")
+    assert response.status_code == 202
+    body = response.json()
+    assert body["sitemap_url"] == "https://example.com/sitemap.xml"
+    assert body["status"] == "scheduled"
+
+
+async def test_sitemap_import_rejects_a_disallowed_url_scheme(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_sitemap(client, org["id"], owner_token, "ftp://example.com/sitemap.xml")
+    assert response.status_code in (400, 422)  # 422 if pydantic's own HttpUrl rejects it first
+
+
+async def test_sitemap_import_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "sitemapotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _import_sitemap(client, org["id"], owner_token, "https://example.com/sitemap.xml", workspace_id=other_workspace["id"])
+    assert response.status_code == 400
+
+
+async def test_sitemap_import_rejects_max_urls_out_of_bounds(client, db_session, register_payload):
+    """SitemapImportRequest.max_urls is bounded (ge=1, le=5000) via
+    pydantic's own Field -- a real, structural 422, not a 400 raised by
+    application code."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _import_sitemap(client, org["id"], owner_token, "https://example.com/sitemap.xml", max_urls=0)
+    assert response.status_code == 422
+
+    response = await _import_sitemap(client, org["id"], owner_token, "https://example.com/sitemap.xml", max_urls=5001)
+    assert response.status_code == 422
+
+
+async def test_sitemap_import_passes_filters_and_max_urls_through_to_scheduling(client, db_session, register_payload, monkeypatch):
+    captured = {}
+
+    def _capture(sitemap_url, organization_id, workspace_id, filters, max_urls, created_by):
+        captured["sitemap_url"] = sitemap_url
+        captured["filters"] = filters
+        captured["max_urls"] = max_urls
+
+    monkeypatch.setattr("api.security.documents.schedule_sitemap_import", _capture)
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    response = await _import_sitemap(
+        client, org["id"], owner_token, "https://example.com/sitemap.xml", filters=["/blog/*"], max_urls=42,
+    )
+
+    assert response.status_code == 202
+    assert captured["filters"] == ["/blog/*"]
+    assert captured["max_urls"] == 42
+
+
+async def test_schedule_sitemap_import_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_sitemap_import
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.sitemap_import.process_sitemap_task.delay", _boom)
+    schedule_sitemap_import("https://example.com/sitemap.xml", uuid.uuid4(), None, None, 500, uuid.uuid4())  # must not raise
+
+
+async def test_viewer_cannot_start_a_sitemap_import(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "sitemapviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _import_sitemap(client, org["id"], viewer_token, "https://example.com/sitemap.xml")
+    assert response.status_code == 403
+
+
+# ------------------------------------------------ process_sitemap_urls --
+
+def test_process_sitemap_urls_schedules_one_task_per_filtered_url_with_a_real_stagger(monkeypatch):
+    """Validation criterion: filtering happens, and every scheduled
+    task gets a real, increasing countdown (the courtesy stagger)."""
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append((args, countdown))
+
+    monkeypatch.setattr("api.tasks.sitemap_import.process_single_url_task", _FakeTask())
+
+    org_id, workspace_id, created_by = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    urls = ["https://example.com/blog/1", "https://example.com/blog/2", "https://example.com/about"]
+    scheduled = documents_module.process_sitemap_urls(org_id, workspace_id, urls, filters=["/blog/*"], created_by=created_by)
+
+    assert scheduled == 2
+    assert len(calls) == 2
+    assert calls[0][0] == ["https://example.com/blog/1", str(org_id), str(workspace_id), str(created_by)]
+    assert calls[0][1] == 0  # first url has no delay
+    assert calls[1][1] == documents_module._SITEMAP_PER_URL_STAGGER_SECONDS  # second url staggered by one interval
+
+
+def test_process_sitemap_urls_caps_the_real_stagger_for_a_very_long_list(monkeypatch):
+    """Vision critique Q3 (scalabilité) -- a sitemap large enough that
+    the naive per-url stagger would exceed _SITEMAP_MAX_STAGGER_SECONDS
+    is capped, not left to grow unbounded."""
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append(countdown)
+
+    monkeypatch.setattr("api.tasks.sitemap_import.process_single_url_task", _FakeTask())
+
+    many_urls = [f"https://example.com/page-{i}" for i in range(500)]
+    documents_module.process_sitemap_urls(uuid.uuid4(), None, many_urls, filters=None, created_by=None)
+
+    assert max(calls) == documents_module._SITEMAP_MAX_STAGGER_SECONDS
+
+
+def test_process_sitemap_urls_tolerates_a_broker_failure_for_one_url(monkeypatch):
+    """Same "one real failure must not abort the whole batch" contract
+    as schedule_url_import/schedule_sitemap_import -- one broker hiccup
+    scheduling ONE url is logged and skipped, the rest still schedule."""
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FlakyTask:
+        def apply_async(self, args, countdown):
+            if args[0] == "https://example.com/bad":
+                raise ConnectionError("broker unreachable")
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.sitemap_import.process_single_url_task", _FlakyTask())
+
+    urls = ["https://example.com/good-1", "https://example.com/bad", "https://example.com/good-2"]
+    scheduled = documents_module.process_sitemap_urls(uuid.uuid4(), None, urls, filters=None, created_by=None)
+
+    assert scheduled == 2
+    assert len(calls) == 2

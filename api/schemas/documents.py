@@ -1,12 +1,12 @@
 """Request/response bodies for api/routers/documents.py (Partie
-2.1.1/2.1.10). Deliberately has NO field for `file_key` -- that's an
-internal S3 storage detail, not something a client needs or should be
-able to see."""
+2.1.1/2.1.10/2.1.11). Deliberately has NO field for `file_key` -- that's
+an internal S3 storage detail, not something a client needs or should
+be able to see."""
 
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class DocumentResponse(BaseModel):
@@ -47,3 +47,30 @@ class DocumentUrlImportRequest(BaseModel):
     has its own real check for that, not a redundant one."""
 
     url: HttpUrl
+
+
+class SitemapImportRequest(BaseModel):
+    """Partie 2.1.11, item 4's own request body. `filters` is the
+    step's own literal (optional) glob-pattern list (see
+    api/services/sitemap_extraction.py's own filter_sitemap_urls);
+    `max_urls` is the step's own literal real safety cap on how many
+    PAGES get imported (independent of `_MAX_SUB_SITEMAPS`, a separate,
+    internal cap on sub-sitemaps -- see api/tasks/sitemap_import.py's
+    own module docstring), bounded to a real, sane range rather than
+    letting a client request an unbounded fan-out."""
+
+    url: HttpUrl
+    filters: list[str] | None = None
+    max_urls: int = Field(default=500, ge=1, le=5000)
+
+
+class SitemapImportResponse(BaseModel):
+    """A real, honest, minimal acknowledgment -- see
+    api/tasks/sitemap_import.py's own module docstring for why there is
+    no persisted "sitemap import job" to report richer status about:
+    the sitemap itself is not even fetched until the real Celery task
+    runs, so nothing more than "this was accepted for processing" is
+    knowable synchronously."""
+
+    sitemap_url: str
+    status: str
