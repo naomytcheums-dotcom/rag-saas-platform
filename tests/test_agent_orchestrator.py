@@ -20,6 +20,7 @@ from api.config import settings
 from api.models.agent_run import AgentRunRecord
 from api.security.agent_runs import get_run, get_runs
 from api.services.agent_orchestrator import AgentOrchestrator
+from api.security.tool_permissions import grant_tool_permission
 from api.services.tools import CALCULATOR_TOOL, WORD_COUNT_TOOL
 
 
@@ -188,6 +189,30 @@ async def test_run_agent_with_no_relevant_tools_still_completes(monkeypatch, db_
     assert run.status == "completed"
     trace_event = next(e for e in run.trace if e["event"] == "tools_selected")
     assert trace_event["tools"] == []
+
+
+async def test_run_agent_excludes_a_real_denied_tool(monkeypatch, db_session):
+    """Validation criterion: sécurité (Partie 5.1.3) -- si l'utilisateur
+    n'a pas la permission, l'outil est désactivé (jamais sélectionné,
+    jamais décrit au LLM)."""
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    await grant_tool_permission(db_session, org_id, None, user_id, "calculator", "deny", granted_by=None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(
+        "agent-1", "calculator math", db=db_session, tools=[CALCULATOR_TOOL, WORD_COUNT_TOOL],
+        organization_id=org_id, created_by=user_id,
+    )
+
+    trace_event = next(e for e in run.trace if e["event"] == "tools_selected")
+    assert "calculator" not in trace_event["tools"]
+    system_message = mock_acompletion.call_args.kwargs["messages"][0]["content"]
+    assert "calculator" not in system_message
 
 
 # ------------------------------------- persistence (fix) -------------------------------------

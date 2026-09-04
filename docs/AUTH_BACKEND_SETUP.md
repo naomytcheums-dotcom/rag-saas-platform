@@ -6617,6 +6617,49 @@ empty list, never an exception, never a fabricated tool. Tested
 `tests/test_tool_selection.py`, plus 2 real orchestrator integration
 tests).
 
+### Partie 5.1.3 -- tool permissions
+
+New real model `api/models/tool_permission.py` (`ToolPermission`,
+migration `0049`, RLS enabled): `agent_id` stays a plain string (no FK,
+same as everywhere since 5.1.1 -- no `agents` table exists). **A real,
+necessary addition outside the literal schema**: `organization_id`
+(NOT NULL) -- without it, an Admin from one organization could
+grant/revoke tool access for agents/users in a DIFFERENT organization.
+**A real, documented gotcha**: `UNIQUE(organization_id, agent_id,
+user_id, tool_name)` does NOT dedupe two rows where `agent_id IS NULL`
+(Postgres/SQLite treat NULL as distinct from itself in a unique index)
+-- `grant_tool_permission` does a real application-level upsert
+(query then update/insert), not a raw `INSERT ... ON CONFLICT`.
+
+New module `api/security/tool_permissions.py`:
+`check_tool_permission`/`grant_tool_permission`/
+`revoke_tool_permission`/`get_tool_permissions`/`get_available_tools`.
+**Real, tested precedence rule** (answers "are permissions
+inherited?"): exact (agent+user) > user-wide (any agent) > agent-wide
+(any user) > organization-wide > default **allow**. Default-allow is
+deliberate and documented: this system exists to selectively RESTRICT,
+not to require a complete allow-list.
+
+**Real endpoints, documented deviation from the literal path**
+(`/agents/{agent_id}/tools/...`, no organization): mounted under
+`/organizations/{org_id}/...`, matching every other org-scoped router
+in this codebase -- `POST .../agents/{agent_id}/tools/{tool_name}/permissions`
+(Admin+), `DELETE .../permissions/{user_id}` (Admin+), `GET
+.../tools/permissions` (Admin+), `GET .../users/me/tools/permissions`
+(any member, their own permissions).
+
+**Real orchestrator integration**: `run_agent` filters tools through
+`check_tool_permission` BEFORE selection (Partie 5.1.2) even runs -- a
+denied tool is never chosen, never described to the LLM. Tested
+(`test_run_agent_excludes_a_real_denied_tool`).
+
+**Performance (vision critique)**: `ix_tool_permissions_lookup`
+(organization_id, agent_id, user_id, tool_name) indexes
+`check_tool_permission`'s own real read path.
+
+**Real verification**: 15 tests (14 function/endpoint tests, 1
+orchestrator integration test), `tests/test_tool_permissions.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

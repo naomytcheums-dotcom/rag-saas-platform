@@ -65,7 +65,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.agent_run import AgentRunRecord, AgentRunStatus
+from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
+from api.security.tool_permissions import check_tool_permission
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
 from api.services.tool_selection import select_tools
@@ -133,7 +135,19 @@ class AgentOrchestrator:
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
         if tools:
-            selected_tools = await select_tools(input, tools)
+            # Partie 5.1.3 -- a denied tool is filtered out BEFORE
+            # selection even runs, so it can never be chosen or
+            # described to the LLM ("l'outil est désactivé").
+            # `created_by` doubles as the acting user for this check --
+            # the same identity already recorded on the run itself.
+            async with self._db_lock:
+                permitted = []
+                for tool in tools:
+                    decision = await check_tool_permission(db, organization_id, agent_id, created_by, tool.name)
+                    if decision == ToolPermissionValue.allow.value:
+                        permitted.append(tool)
+
+            selected_tools = await select_tools(input, permitted)
             trace.append(self._trace_event("tools_selected", {"tools": [t.name for t in selected_tools]}))
             if selected_tools:
                 catalog = "\n".join(f"- {t.name}: {t.description}" for t in selected_tools)

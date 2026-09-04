@@ -492,13 +492,27 @@ Tests réels dédiés (19 tests, dont un vrai test de timeout, un vrai test d'ar
 
 Tests réels dédiés (18 + 2 tests d'intégration orchestrateur = 20 tests), voir `tests/test_tools.py` et `tests/test_tool_selection.py`.
 
+#### Partie 5.1.3 — Permissions par outil
+
+✅ **Nouveau modèle réel** `api/models/tool_permission.py` (`ToolPermission`, migration `0049`, RLS activée) : `agent_id` reste une simple chaîne (pas de FK, comme partout depuis 5.1.1 -- aucune table `agents` n'existe). **Ajout réel et nécessaire, hors du schéma littéral** : `organization_id` (NOT NULL) -- sans lui, un Admin d'une organisation pourrait accorder/révoquer l'accès à des outils pour des agents/utilisateurs d'une AUTRE organisation. **Piège réel documenté** : `UNIQUE(organization_id, agent_id, user_id, tool_name)` ne déduplique PAS deux lignes où `agent_id IS NULL` (Postgres/SQLite traitent NULL comme distinct de lui-même dans un index unique) -- `grant_tool_permission` fait donc un vrai upsert applicatif (requête puis update/insert), pas un `INSERT ... ON CONFLICT` brut.
+
+✅ **Nouveau module réel** `api/security/tool_permissions.py` : `check_tool_permission`/`grant_tool_permission`/`revoke_tool_permission`/`get_tool_permissions`/`get_available_tools`. **Vraie règle de priorité, testée** (réponse à "les permissions sont-elles héritées ?") : exact (agent+user) > large-utilisateur (tout agent) > large-agent (tout utilisateur) > large-organisation > défaut **allow**. Défaut-allow délibéré et documenté : ce système sert à RESTRENDRE sélectivement, pas à exiger une liste blanche complète.
+
+✅ **Endpoints réels**, déviation documentée du chemin littéral (`/agents/{agent_id}/tools/...` sans organisation) : montés sous `/organizations/{org_id}/...`, cohérent avec chaque autre routeur org-scopé de ce dépôt -- `POST .../agents/{agent_id}/tools/{tool_name}/permissions` (Admin+), `DELETE .../permissions/{user_id}` (Admin+), `GET .../tools/permissions` (Admin+), `GET .../users/me/tools/permissions` (tout membre, ses propres permissions).
+
+✅ **Intégration réelle dans l'orchestrateur** : `run_agent` filtre les outils via `check_tool_permission` AVANT même la sélection (Partie 5.1.2) -- un outil refusé n'est jamais choisi, jamais décrit au LLM. Testé (`test_run_agent_excludes_a_real_denied_tool`).
+
+**Performance (vision critique)** : `ix_tool_permissions_lookup` (organization_id, agent_id, user_id, tool_name) indexe le chemin de lecture réel de `check_tool_permission`.
+
+Tests réels dédiés (14 tests fonction+endpoint, 1 test d'intégration orchestrateur = 15 tests), voir `tests/test_tool_permissions.py`.
+
 Tool timeout, retry, tool result validation, agent memory (court-terme),
 agent traces (au-delà de l'orchestrateur central lui-même) : **existent
 déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
 récentes) -- des versions réelles, testées, indépendantes sont
-construites ci-dessous côté `api/` pour cette même Partie. Tool
-permissions, per-tool budget, fallback, parallel tool calls, human
-approval, conversation memory cross-session (DB), task planning : ⬜.
+construites ci-dessous côté `api/` pour cette même Partie. Per-tool
+budget, fallback, parallel tool calls, human approval, conversation
+memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 
