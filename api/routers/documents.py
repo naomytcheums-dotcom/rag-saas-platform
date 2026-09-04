@@ -53,6 +53,8 @@ from api.schemas.documents import (
     GoogleDriveImportResponse,
     NotionImportRequest,
     NotionImportResponse,
+    OneDriveImportRequest,
+    OneDriveImportResponse,
     SitemapImportRequest,
     SitemapImportResponse,
 )
@@ -64,6 +66,7 @@ from api.security.documents import (
     start_google_doc_import,
     start_google_drive_import,
     start_notion_import,
+    start_onedrive_import,
     start_sitemap_import,
     upload_document,
 )
@@ -311,6 +314,30 @@ async def create_documents_from_confluence(
 
     await db.commit()
     return ConfluenceImportResponse(confluence_id=confluence_id, kind=kind, status="scheduled")
+
+
+@router.post("/organizations/{org_id}/documents/onedrive", response_model=OneDriveImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_from_onedrive(
+    org_id: uuid.UUID, payload: OneDriveImportRequest, workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.1.18, item 1's own literal route. 202 Accepted, same
+    reasoning as every prior async import route above -- nothing is
+    fetched synchronously; the OneDrive item isn't even confirmed to
+    exist yet. Only real, non-network validation (non-empty folder_id,
+    workspace ownership) happens here; no OAuth credential is ever
+    accepted in this request body -- see api/schemas/documents.py's own
+    OneDriveImportRequest docstring for why."""
+    try:
+        folder_id = await start_onedrive_import(
+            db, org_id, workspace_id, current_user.id, payload.folder_id, payload.patterns, payload.max_files,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return OneDriveImportResponse(folder_id=folder_id, status="scheduled")
 
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)

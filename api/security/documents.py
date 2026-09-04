@@ -210,6 +210,15 @@ from api.services.confluence_extraction import (
     fetch_confluence_space_pages,
     validate_confluence_url,
 )
+from api.services.onedrive_extraction import (
+    OneDriveAuthError,
+    authenticate_onedrive,
+    download_onedrive_file,
+    extract_onedrive_metadata,
+    get_onedrive_file,
+    list_onedrive_files,
+    should_include_onedrive_file,
+)
 from api.services.sitemap_extraction import (
     fetch_sitemap,
     filter_sitemap_urls,
@@ -1859,6 +1868,194 @@ def schedule_confluence_space_import(
         )
     except Exception as exc:  # noqa: BLE001 -- a broker hiccup must never break the request
         logger.warning("schedule_confluence_space_import: could not schedule import for Confluence space '%s': %s", confluence_id, exc)
+
+
+async def import_and_process_onedrive_file(
+    db: AsyncSession, organization_id: uuid.UUID, workspace_id: uuid.UUID | None,
+    created_by: uuid.UUID | None, file_id: str,
+) -> Document:
+    """
+    The real per-file counterpart to api/tasks/onedrive_import.py's
+    process_onedrive_file_task (item 5's literal task) -- the SAME real
+    "authenticate, fetch metadata, download, upload, process" shape as
+    import_and_process_google_drive_file, at OneDrive's own real auth
+    layer: `authenticate_onedrive` is called HERE too (this task's own
+    real access token, not reused from process_onedrive's own call --
+    same reasoning as Partie 2.1.14's own equivalent choice: a real
+    access token obtained minutes ago could have already expired by the
+    time a LATER task in the same batch actually runs).
+    """
+    refresh_token = settings.ONEDRIVE_REFRESH_TOKEN
+    if not refresh_token:
+        raise ValueError("ONEDRIVE_REFRESH_TOKEN is not configured")
+    access_token = await authenticate_onedrive(refresh_token)
+    onedrive_file = await get_onedrive_file(file_id, access_token)
+    metadata = extract_onedrive_metadata(onedrive_file)
+
+    if workspace_id is not None:
+        workspace = await db.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.organization_id == organization_id))
+        if workspace is None:
+            raise ValueError("workspace_id does not belong to this organization")
+
+    filename = metadata["name"] or file_id
+    document = Document(
+        organization_id=organization_id, workspace_id=workspace_id, name=filename,
+        source_url=metadata["web_url"], file_key="", file_size=0, file_type=TXT_CONTENT_TYPE,
+        status=DocumentStatus.pending.value, created_by=created_by,
+    )
+    db.add(document)
+    await db.flush()
+
+    document.status = DocumentStatus.processing.value
+    await db.flush()
+
+    try:
+        content = await download_onedrive_file(file_id, access_token)
+        content_type = validate_document_upload(content, filename=filename)
+        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_size = len(content)
+        document.file_type = content_type
+        await db.flush()
+    except Exception as exc:
+        logger.warning("import_and_process_onedrive_file: fetch failed for OneDrive file '%s': %s", file_id, exc)
+        document.status = DocumentStatus.failed.value
+        document.metadata_json = {**(document.metadata_json or {}), "error": str(exc)}
+        await db.flush()
+        return document
+
+    return await process_document(db, document.id)
+
+
+# Same real courtesy-stagger reasoning as _GOOGLE_DRIVE_PER_FILE_STAGGER_SECONDS
+# above -- one real Celery task per real OneDrive file, spread over real time.
+_ONEDRIVE_PER_FILE_STAGGER_SECONDS = 1
+_ONEDRIVE_MAX_STAGGER_SECONDS = 300
+
+
+def process_onedrive_files(
+    organization_id: uuid.UUID, workspace_id: uuid.UUID | None, file_ids: list[str], created_by: uuid.UUID | None,
+) -> int:
+    """
+    The real Celery fan-out for a OneDrive import -- one real task
+    (api/tasks/onedrive_import.py's process_onedrive_file_task) per real
+    OneDrive file id. Same "one broker hiccup for ONE file must never
+    abort the rest of the batch" reasoning as process_google_drive_files.
+    """
+    from api.tasks.onedrive_import import process_onedrive_file_task
+
+    scheduled = 0
+    for index, file_id in enumerate(file_ids):
+        countdown = min(index * _ONEDRIVE_PER_FILE_STAGGER_SECONDS, _ONEDRIVE_MAX_STAGGER_SECONDS)
+        try:
+            process_onedrive_file_task.apply_async(
+                args=[file_id, str(organization_id), str(workspace_id) if workspace_id else None,
+                      str(created_by) if created_by else None],
+                countdown=countdown,
+            )
+            scheduled += 1
+        except Exception as exc:  # noqa: BLE001 -- a broker hiccup for ONE file must never abort the whole OneDrive import
+            logger.warning("process_onedrive_files: could not schedule import for OneDrive file '%s': %s", file_id, exc)
+    return scheduled
+
+
+async def process_onedrive(
+    organization_id: uuid.UUID, workspace_id: uuid.UUID | None, folder_id: str,
+    patterns: list[str] | None, max_files: int, created_by: uuid.UUID,
+) -> str:
+    """
+    Item 4's literal task's own real logic -- run by
+    api/tasks/onedrive_import.py's process_onedrive_task, the SAME "no
+    database session needed at all" bridge shape as process_google_drive.
+
+    `folder_id` may be a real FOLDER or a real single FILE -- this
+    step's own literal route accepts either, same as Partie 2.1.14's
+    own `drive_id` -- so `get_onedrive_file` is called FIRST to find
+    out which (a real item carrying a real `folder` facet vs. a real
+    `file` facet), then either `list_onedrive_files` (a real folder) or
+    the single file itself (already filtered through
+    should_include_onedrive_file) is fanned out. A missing/invalid
+    `ONEDRIVE_REFRESH_TOKEN`, an expired/revoked one, or a real
+    404/permission failure on the target itself all end this real
+    background job in a real, logged `"failed"` -- same honest
+    limitation every prior import step already states: no persisted,
+    user-visible "OneDrive import job" status, only this function's own
+    Celery result and logs.
+    """
+    refresh_token = settings.ONEDRIVE_REFRESH_TOKEN
+    if not refresh_token:
+        logger.warning("process_onedrive: ONEDRIVE_REFRESH_TOKEN is not configured")
+        return "failed"
+
+    try:
+        access_token = await authenticate_onedrive(refresh_token)
+    except OneDriveAuthError as exc:
+        logger.warning("process_onedrive: could not authenticate: %s", exc)
+        return "failed"
+
+    try:
+        target = await get_onedrive_file(folder_id, access_token)
+    except ValueError as exc:
+        logger.warning("process_onedrive: could not fetch OneDrive item '%s': %s", folder_id, exc)
+        return "failed"
+
+    try:
+        if "folder" in target:
+            files = await list_onedrive_files(folder_id, access_token, patterns)
+        else:
+            files = [target] if should_include_onedrive_file(target, patterns) else []
+    except ValueError as exc:
+        logger.warning("process_onedrive: could not list OneDrive folder '%s': %s", folder_id, exc)
+        return "failed"
+
+    capped_files = files[:max_files]
+    scheduled = process_onedrive_files(organization_id, workspace_id, [f["id"] for f in capped_files], created_by)
+    logger.info(
+        "process_onedrive: '%s' -> %d real files matched, %d scheduled (max_files=%d)",
+        folder_id, len(files), scheduled, max_files,
+    )
+    return "completed"
+
+
+async def start_onedrive_import(
+    db: AsyncSession, organization_id: uuid.UUID, workspace_id: uuid.UUID | None,
+    created_by: uuid.UUID, folder_id: str, patterns: list[str] | None, max_files: int,
+) -> str:
+    """
+    Item 1's own route's real backing function -- real, cheap,
+    non-network validation happens here synchronously (workspace
+    ownership), same reasoning as start_google_drive_import: a real
+    OneDrive item id is an opaque Microsoft-internal string with no
+    meaningful FORMAT to validate offline -- confirming it actually
+    exists and is accessible genuinely requires a real network call,
+    deliberately deferred to process_onedrive_task.
+    """
+    if not folder_id:
+        raise ValueError("folder_id must not be empty")
+
+    if workspace_id is not None:
+        workspace = await db.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.organization_id == organization_id))
+        if workspace is None:
+            raise ValueError("workspace_id does not belong to this organization")
+
+    schedule_onedrive_import(folder_id, organization_id, workspace_id, patterns, max_files, created_by)
+    return folder_id
+
+
+def schedule_onedrive_import(
+    folder_id: str, organization_id: uuid.UUID, workspace_id: uuid.UUID | None,
+    patterns: list[str] | None, max_files: int, created_by: uuid.UUID,
+) -> None:
+    """Real Celery dispatch, wrapped best-effort -- same reasoning as
+    schedule_google_drive_import: a broker hiccup must never fail the
+    request that triggered the OneDrive import."""
+    from api.tasks.onedrive_import import process_onedrive_task
+
+    try:
+        process_onedrive_task.delay(
+            folder_id, str(organization_id), str(workspace_id) if workspace_id else None, patterns, max_files, str(created_by),
+        )
+    except Exception as exc:  # noqa: BLE001 -- a broker hiccup must never break the request
+        logger.warning("schedule_onedrive_import: could not schedule import for '%s': %s", folder_id, exc)
 
 
 async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document:

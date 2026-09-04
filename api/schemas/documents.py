@@ -241,3 +241,28 @@ class ConfluenceImportResponse(BaseModel):
     confluence_id: str
     kind: Literal["page", "space"]
     status: str
+
+
+class OneDriveImportRequest(BaseModel):
+    """Partie 2.1.18, item 1's own request body. `folder_id` (not
+    `folder_id`/`file_id` separately), same reasoning as
+    GoogleDriveImportRequest's own `drive_id` field: this step's own literal
+    route accepts EITHER a real OneDrive folder or a real single file --
+    api/security/documents.py's own process_onedrive resolves which for
+    real. Deliberately no `HttpUrl` field: a real OneDrive item id is an
+    opaque Microsoft-internal string, not a URL, with no meaningful
+    FORMAT to validate at this schema layer. Deliberately has NO field
+    for OAuth credentials either -- see api/config.py's own
+    ONEDRIVE_REFRESH_TOKEN docstring."""
+
+    folder_id: str = Field(min_length=1)
+    patterns: list[str] | None = None
+    max_files: int = Field(default=100, ge=1, le=2000)
+
+
+class OneDriveImportResponse(BaseModel):
+    """Same real, honest, minimal acknowledgment as every prior async
+    import step's own response, and for the identical reason."""
+
+    folder_id: str
+    status: str

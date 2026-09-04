@@ -348,6 +348,26 @@ class Settings(BaseSettings):
     def confluence_include_spaces_list(self) -> list[str]:
         return [value.strip() for value in self.CONFLUENCE_INCLUDE_SPACES.split(",") if value.strip()]
 
+    # -- OneDrive import (Partie 2.1.18) -------------------------------------
+    # Same real OAuth 2.0 refresh-token shape as GOOGLE_DRIVE_CLIENT_ID/SECRET/
+    # REFRESH_TOKEN above, exchanged for a real, short-lived access token
+    # against Microsoft's own real, universal `common` tenant endpoint
+    # (api/services/onedrive_extraction.py's own authenticate_onedrive) --
+    # see that module's own docstring for the real, live error shapes
+    # confirmed for this pair without any valid credential.
+    ONEDRIVE_CLIENT_ID: str | None = None
+    ONEDRIVE_CLIENT_SECRET: str | None = None
+    ONEDRIVE_REFRESH_TOKEN: str | None = None
+    # This step's own literal default.
+    ONEDRIVE_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50 MB
+    # Comma-separated, this step's own literal (unnamed) default -- same real
+    # ALLOWLIST reasoning as GOOGLE_DRIVE_INCLUDE_PATTERNS.
+    ONEDRIVE_INCLUDE_PATTERNS: str = ".pdf,.docx,.txt,.md,.html,.csv,.json,.xml,.epub"
+
+    @property
+    def onedrive_include_patterns_list(self) -> list[str]:
+        return [pattern.strip() for pattern in self.ONEDRIVE_INCLUDE_PATTERNS.split(",") if pattern.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

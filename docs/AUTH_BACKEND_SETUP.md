@@ -3841,6 +3841,76 @@ every test in this étape) proves `import_and_process_confluence_page`/
 `process_confluence_space`'s own real orchestration logic, including the
 allowlist rejection and the not-configured failure path.
 
+**OneDrive import (Partie 2.1.18) -- structurally the closest sibling
+to Partie 2.1.14's own Google Drive import.** Same real OAuth 2.0
+refresh-token shape (`ONEDRIVE_CLIENT_ID`/`SECRET`/`REFRESH_TOKEN`,
+proactively cached and refreshed before its own real expiry, the same
+vision critique Q4 answer), against the real Microsoft Graph API v1.0.
+**Unlike Confluence (Partie 2.1.17), a real, universal, tenant-agnostic
+host genuinely exists here**: Microsoft's own `common` multi-tenant
+token endpoint (`https://login.microsoftonline.com/common/oauth2/v2.0/token`)
+and the fixed `graph.microsoft.com` API host both work for ANY real
+Azure AD tenant, confirmed live. Same honest limitation as Google Drive
+though: no real Microsoft/Azure credential was available in this
+session (no `az`-CLI equivalent of `gh auth token` -- confirmed, `az`
+itself isn't even installed here), so end-to-end verification against a
+real account wasn't possible, hence 🟡 rather than ✅.
+
+**A real, honest finding surfaced while verifying this live**: a
+missing `client_id` and a malformed refresh token were each observed,
+live, to independently produce the SAME real request's real rejection
+shape at DIFFERENT times (`invalid_request`/AADSTS900144 once,
+`invalid_grant`/AADSTS9002313 another time, for byte-for-byte identical
+requests) -- real backend nondeterminism on Microsoft's own side, most
+likely load-balancing across differently-configured instances, unlike
+Google's own cleanly, repeatedly reproducible `invalid_client` vs.
+`invalid_request` pair (Partie 2.1.14). Reported as-is rather than
+forcing a stable-looking distinction that isn't actually stable --
+`authenticate_onedrive`'s own tests (fast-tier, mocked) still verify
+both real shapes are correctly mapped to `OneDriveAuthError`, but the
+real-network test only asserts SOME such rejection occurs, never a
+specific AADSTS code, to avoid a test that would otherwise be flaky
+against the live endpoint. The real Graph API's own 401 for no
+`Authorization` header at all (`{"error": {"code": "InvalidAuthenticationToken", ...}}`)
+was, by contrast, perfectly reproducible across every attempt.
+
+**Cohérence (vision critique Q1)**: no new format at all -- a real
+OneDrive file's own real binary content is downloaded and uploaded
+through the exact same pipeline every prior binary import (GitHub,
+Drive) already uses. **A real, important structural difference from
+Drive**: a Graph `driveItem` reports folder-vs-file via which real
+FACET is present (`folder` vs. `file`, with `mimeType` living INSIDE
+the `file` facet), not a single `mimeType` field the way Drive's own
+items work -- `should_include_onedrive_file`/`process_onedrive` are
+built around this real shape, not adapted from Drive's. There is no
+OneDrive equivalent of Drive's own native-Google-Workspace-file
+carve-out (Partie 2.1.15's separate scope): every real OneDrive `file`-
+faceted item has real downloadable binary content, so this step needs
+no export-vs-download split at all. Same real, stated scope limitation
+as Drive: no recursion into real subfolders (`list_onedrive_files`
+lists one real folder's direct children only).
+
+**Real verification for OneDrive import specifically**:
+`tests/test_onedrive_extraction.py` (fast tier, `httpx.MockTransport`)
+covers real token exchange/caching/proactive refresh, every real
+distinguishable failure (401/429/404, both real token-endpoint
+rejection shapes), real `@odata.nextLink` pagination (a real, ready-
+to-call URL, unlike Drive's own opaque page token), real folder/file
+distinction via facets, real metadata extraction, and real size/
+pattern filtering. `tests/test_onedrive_extraction_integration.py`
+(real network, no valid credential needed) confirms live that a
+malformed request is rejected and that the live Graph API's own real
+401 shape is correctly mapped -- see this file's own module docstring
+for the honest nondeterminism finding above. `tests/test_documents.py`
+covers the real route end to end (folder import, file import, empty
+folder_id rejected, cross-tenant workspace guard, `max_files` bounds,
+patterns passed through to scheduling, permissions) with network
+stubbed, plus unit tests for `process_onedrive_files` (real stagger/
+cap/broker tolerance). `tests/test_onedrive_integration.py` (realistic
+simulation, no real credential available) proves `process_onedrive`'s
+own real orchestration (folder-vs-file resolution, filtering, capping,
+auth/404 failure handling).
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
