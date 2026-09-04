@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from api.config import settings
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.document_image import DocumentImage
+from api.models.metadata_enrichment import DocumentKeyword
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.security.documents import (
@@ -384,6 +385,16 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
             assert updated.metadata_json["structure"] == [
                 {"type": "paragraph", "level": None, "content": "Real integration test content for process_document.", "children": []},
             ]
+            # Partie 3.1.10 -- real enrichment, actually reachable
+            # through the full real pipeline (not just unit-tested in
+            # isolation).
+            assert updated.metadata_json["summary"]
+            assert updated.metadata_json["reading_time_minutes"] >= 0
+            assert isinstance(updated.metadata_json["complexity_score"], float)
+            keyword_rows = (await session.execute(
+                DocumentKeyword.__table__.select().where(DocumentKeyword.document_id == document_id)
+            )).all()
+            assert len(keyword_rows) > 0
             # Partie 2.2.11 -- real proof of the success path: stamped
             # when this real run started, and no error left behind.
             assert updated.indexing_started_at is not None

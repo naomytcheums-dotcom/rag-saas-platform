@@ -5683,18 +5683,18 @@ line for a real, common plain-text convention) -- stated plainly: no
 universal, unambiguous "this is a heading" signal exists for plain text
 the way the other 4 formats' own real markup provides.
 
-**Deux vrais bugs trouvés et corrigés en testant, avant toute
-livraison** : (1) `position` doit toujours pointer sur le début du
-VRAI texte du titre, jamais sur le début de la ligne entière -- pour
-Markdown/generic, la ligne porte un vrai préfixe (`# `, `1.1 `) avant
-le titre ; `position` pointait initialement sur la ligne, cassant tout
-appelant en aval qui compare `text[position:position+len(title)]` au
-titre lui-même (confirmé par un vrai test de régression dédié). (2)
-`split_by_headings` laissait fuir le vrai préfixe du titre SUIVANT
-(`##`, `1.1`) à la fin du contenu de CHAQUE section -- corrigé en
-bornant chaque section au dernier vrai saut de ligne avant le titre
-suivant, pas directement sur sa position (un no-op réel et inoffensif
-pour PDF/DOCX/HTML, dont la position ne porte déjà aucun préfixe).
+**Two real bugs found and fixed while testing, before any of this
+shipped**: (1) `position` must always point at the start of the REAL
+title text, never the start of the whole line -- for Markdown/generic,
+the line carries a real prefix (`# `, `1.1 `) before the title;
+`position` originally pointed at the line, breaking any downstream
+caller comparing `text[position:position+len(title)]` to the title
+itself (confirmed by a dedicated real regression test). (2)
+`split_by_headings` was leaking the NEXT heading's own real prefix
+(`##`, `1.1`) into the end of EACH section's own content -- fixed by
+bounding each section at the last real newline before the next
+heading, not directly at its position (a real, harmless no-op for
+PDF/DOCX/HTML, whose own position never carries a prefix at all).
 
 **Real verification**: `tests/test_headings_extraction.py` covers all
 5 real per-format extractors (including a real, hand-built PDF/DOCX via
@@ -5729,36 +5729,34 @@ literal `DocumentStructure -> liste de StructureElement` wording
 doesn't actually ask for -- a caller wanting the nested tree combines
 this module's own flat headings with Partie 3.1.9 directly.
 
-**Un vrai bug d'intégration trouvé et corrigé en branchant cette étape
-dans le pipeline réel** : pour Markdown ET HTML, `extracted["sections"]`
-(le texte déjà produit par le pipeline existant) a DÉJÀ sa vraie
-syntaxe dépouillée (Markdown : `extract_markdown_sections` ne garde que
-le texte inline réel ; HTML : `readability` + `BeautifulSoup.get_text()`
-retire déjà toutes les balises) -- appeler `detect_structure_markdown`/
-`detect_structure_html` sur ce texte déjà nettoyé n'aurait jamais
-trouvé le moindre titre/liste/bloc de code réel, silencieusement.
-Corrigé en relisant le vrai fichier source BRUT (`extract_txt_text(tmp_path)`,
-la même vraie lecture avec détection d'encodage que
-`html_extraction.py`'s own `_read_html` utilise déjà en interne) pour
-ces deux formats spécifiquement -- PDF/DOCX n'ont jamais ce problème
-(leurs propres fonctions ouvrent directement le vrai fichier).
+**A real integration bug found and fixed while wiring this étape into
+the real pipeline**: for BOTH Markdown and HTML, `extracted["sections"]`
+(the text the existing pipeline already produces) has ALREADY had its
+real syntax stripped (Markdown: `extract_markdown_sections` keeps only
+real inline text; HTML: `readability` + `BeautifulSoup.get_text()`
+already strips every tag) -- calling `detect_structure_markdown`/
+`detect_structure_html` on that already-cleaned text would never have
+found a single real heading/list/code block, silently. Fixed by
+re-reading the real, RAW source file (`extract_txt_text(tmp_path)`,
+the same real encoding-aware read `html_extraction.py`'s own
+`_read_html` already uses internally) for those two formats
+specifically -- PDF/DOCX never have this problem (their own functions
+open the real file directly).
 
-**Un deuxième vrai bug trouvé en testant `detect_structure_pdf` sur un
-document réel mais court** : la base de référence "corps de texte" de
-`extract_headings_pdf` (Partie 3.1.9) utilisait initialement la
-médiane statistique des tailles de police -- sur un document à
-seulement 2 tailles distinctes, la médiane par indice de liste
-sélectionne la PLUS GRANDE taille (le vrai titre lui-même) comme
-référence, rendant la détection de titre impossible même sur un cas
-évident. Corrigé en pondérant par le nombre réel de CARACTÈRES par
-taille (pas le nombre de spans) -- le corps de texte réel couvre
-presque toujours beaucoup plus de caractères qu'un titre, même sur un
-document court, un signal honnête et robuste là où la médiane ne
-l'était pas.
+**A second real bug found while testing `detect_structure_pdf` against
+a real but short document**: `extract_headings_pdf`'s (Partie 3.1.9)
+own "body text" baseline originally used a plain statistical median --
+on a document with only 2 distinct font sizes, a by-index median picks
+the LARGER size (the real heading itself) as the baseline, making
+heading detection impossible even on an obvious real case. Fixed by
+weighting by real CHARACTER count per size (not span count) -- real
+body text reliably covers far more characters than a heading, even in
+a short document, a real, honest, robust signal where the median
+wasn't.
 
-**Robustesse (vision critique 3)**: chaque fonction retourne une liste
-vide honnête pour un texte vide/sans structure détectable, ne lève
-jamais.
+**Robustesse (vision critique 3)**: every function returns a real,
+honest empty list for empty text/no detectable structure, never
+raises.
 
 **Real verification**: `tests/test_structure_detection.py` covers all
 5 real per-format detectors (headings/paragraphs/list items/code
@@ -5770,6 +5768,69 @@ no heading -- this fixture's own uniform font size), and the real
 Markdown test gained one confirming the real headings extracted from
 the RAW file match the document's own already-established
 `heading_count`/per-chunk heading metadata.
+
+### Partie 3.1.10 -- advanced metadata enrichment
+
+New module `api/services/metadata_enrichment.py`: `extract_keywords`/
+`extract_entities`/`extract_summary`/`extract_topics`/
+`extract_reading_time`/`extract_complexity_score` (item 2's own
+literal functions). New real tables, `document_keywords`/
+`document_entities` (migration `0046`, RLS enabled inline on both) --
+the only per-item extracted data in the whole 3.1.x series to get its
+own real table (the same real precedent as `DocumentTag`, Partie
+2.2.6), unlike tables/structure (Partie 3.1.4/3.1.8), which stay one
+real block inside `metadata_json` since they're read as a whole,
+never filtered per item. Integrated into `process_document`.
+
+**Zero new heavy dependency**: neither spaCy (needs its own separate
+trained model download just for real NER) nor NLTK (needs its own
+corpus downloads even for stopwords/sentence tokenization) -- every
+function here is real, hand-written, or reuses `sklearn` (already a
+real dependency of this codebase).
+
+**`extract_keywords`**: a real, hand-implemented RAKE (Rapid Automatic
+Keyword Extraction). **A real bug found and fixed while testing**:
+candidate phrase boundaries must be BOTH stopwords AND punctuation --
+without splitting on punctuation first, a run of content words
+spanning several real sentences with no stopword between them became
+one absurd, unusably long "phrase"; fixed by splitting on real
+punctuation before the stopword-based phrase split.
+
+**`extract_entities`, a real, documented scope limit**: a real, fixed,
+pattern-based vocabulary (email/URL/date/money/phone), never a
+fabricated claim of full named-entity recognition -- real person/
+organization/location names need a real trained model (spaCy), a
+genuinely heavy new dependency this étape's own scope doesn't justify.
+
+**`extract_topics`, a real, documented scope limit**: real LDA
+(`sklearn.decomposition.LatentDirichletAllocation`), but run on THIS
+document's own real sentences as its own small corpus -- a real,
+honest signal (this document's own dominant term clusters), narrower
+than real cross-document topic modeling, but real, never fabricated;
+honestly empty when there isn't enough real signal to fit a real model.
+
+**`extract_complexity_score`**: the real, standard Flesch Reading Ease
+formula, with a real syllable counter via vowel-group counting (the
+same real approximation `textstat` uses internally, not installed as
+a dependency here for just this one function).
+
+**Performance (vision critique 1)**: `extract_keywords`/
+`extract_summary`/`extract_topics` are all bounded to
+`_MAX_ENRICHMENT_INPUT_CHARS` (50,000 chars) of the real, combined
+extracted text -- a real, deliberate performance bound for a large
+document.
+
+**Robustesse, a real bug found and fixed**: `extract_complexity_score(None)`
+raised a real `TypeError` (called `_WORD_RE.findall(None)` before its
+own empty-text guard) -- fixed with an early guard, confirmed by a
+real regression test.
+
+**Real verification**: `tests/test_metadata_enrichment.py` covers all
+6 real functions, including the phrase-boundary bug and the
+robustness bug above as dedicated regression tests, and every real
+empty-input case. `tests/test_documents_integration.py`'s own real PDF
+test gained a real assertion confirming `DocumentKeyword` rows are
+genuinely created through the full real pipeline.
 
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope

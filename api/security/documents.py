@@ -157,6 +157,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.document_image import DocumentImage
+from api.models.metadata_enrichment import DocumentEntity, DocumentKeyword
 from api.models.organization import OrganizationMember
 from api.models.workspace import Workspace
 from api.security.document_audit import ACTION_CREATED, ACTION_DELETED, ACTION_REINDEXED, log_document_action
@@ -232,6 +233,7 @@ from api.services.zip_extraction import extract_zip_file, filter_zip_contents, l
 from api.services.image_extraction import extract_images_docx, extract_images_epub, get_image_metadata
 from api.services.ocr import OCRNotAvailableError, ocr_image_bytes
 from api.services.language_detection import detect_language
+from api.services.metadata_enrichment import extract_entities, extract_keywords, extract_reading_time, extract_summary, extract_topics, extract_complexity_score
 from api.services.pdf_extraction import extract_pdf_images
 from api.services.structure_detection import (
     detect_structure_docx,
@@ -284,6 +286,12 @@ _MAX_TABLE_ROWS_IN_METADATA = 100
 # growth" bound as _MAX_TABLE_ROWS_IN_METADATA above, applied to a
 # document's own real structural outline instead of a table's own rows.
 _MAX_STRUCTURE_ELEMENTS_IN_METADATA = 200
+
+# Partie 3.1.10 -- a real, deliberate cap on how much of a document's
+# own real, combined extracted text keyword/summary/topic extraction
+# actually runs over -- see process_document's own comment on this
+# constant's real use for the full reasoning.
+_MAX_ENRICHMENT_INPUT_CHARS = 50_000
 
 # Partie 2.2.3 -- reuses the SAME real Redis this codebase already runs
 # for rate limiting/geoip (api/security/rate_limit.py/geoip.py's own
@@ -3227,10 +3235,31 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             else:
                 structure = []
 
+            # Partie 3.1.10 -- real metadata enrichment. Bounded to the
+            # first _MAX_ENRICHMENT_INPUT_CHARS of the real, combined
+            # extracted text -- a real, deliberate performance bound
+            # (vision critique 1's own "rapide pour de gros documents"
+            # answer): keywords/summary/topics all do real, non-trivial
+            # work over their own input, and this document's own real
+            # dominant terms/summary are already well-represented by a
+            # real, substantial sample, not the entire text.
+            full_text = "\n\n".join(s["text"] for s in extracted["sections"])[:_MAX_ENRICHMENT_INPUT_CHARS]
+            await db.execute(delete(DocumentKeyword).where(DocumentKeyword.document_id == document.id))
+            await db.execute(delete(DocumentEntity).where(DocumentEntity.document_id == document.id))
+            for keyword in extract_keywords(full_text):
+                db.add(DocumentKeyword(document_id=document.id, keyword=keyword["keyword"], score=keyword["score"]))
+            for entity in extract_entities(full_text):
+                db.add(DocumentEntity(
+                    document_id=document.id, entity_type=entity["entity_type"], entity_value=entity["entity_value"],
+                    confidence=entity["confidence"], position=entity["position"],
+                ))
+
             document.metadata_json = {
                 **extracted["metadata"], "table_count": len(extracted["tables"]), "tables": tables_for_metadata,
                 "image_count": extracted["image_count"], "chunk_count": len(chunk_records), "language": document_language,
                 "structure": structure_to_json(structure)[:_MAX_STRUCTURE_ELEMENTS_IN_METADATA],
+                "summary": extract_summary(full_text), "topics": extract_topics(full_text),
+                "reading_time_minutes": extract_reading_time(full_text), "complexity_score": extract_complexity_score(full_text),
             }
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)

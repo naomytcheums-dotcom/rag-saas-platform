@@ -157,9 +157,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~14/41, dont 3.1.1-3.1.9 réels dans `api/`, 2026-09-04)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~15/41, dont 3.1.1-3.1.10 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — 🟡 (9/10 ✅, 1 item non encore spécifié par l'utilisateur)
+### 3.1 Ingestion — ✅ (10/10, la Partie 3.1 est désormais intégralement couverte)
 
 **Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
 
@@ -174,7 +174,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.1.7 | Détection de langue | ✅ Voir détails ci-dessous |
 | 3.1.8 | Détection de structure documentaire | ✅ Voir détails ci-dessous |
 | 3.1.9 | Extraction des titres et sections | ✅ Voir détails ci-dessous |
-| 3.1.10 | Non encore spécifié | ⬜ |
+| 3.1.10 | Extraction avancée des métadonnées | ✅ Voir détails ci-dessous |
 
 #### Partie 3.1.1 — Nettoyage du texte
 
@@ -215,6 +215,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.1.8 — Détection de structure documentaire
 
 ✅ **Nouveau module réel** `api/services/structure_detection.py` : les 5 fonctions littérales par format, `StructureElement`/`DocumentStructure`, `structure_to_json`/`structure_to_markdown`. Intégré dans `process_document`, stocké dans `Document.metadata_json["structure"]`, plafonné à 200 éléments (même raisonnement que le plafond de 3.1.4 sur les lignes de tableau). **Cohérence (vision critique 1), choix de portée réel et délibéré** : `DocumentStructure` reste une VRAIE LISTE PLATE, dans l'ordre du document -- `children` existe (champ littéral) mais reste vide ici par construction ; imbriquer les titres en arbre est exactement ce que `build_section_hierarchy` (3.1.9) fait déjà, dupliquer cette logique ici serait une complexité réelle non demandée par le texte littéral "DocumentStructure -> liste de StructureElement". **Un vrai bug d'intégration trouvé en branchant cette étape dans le pipeline réel** : pour Markdown ET HTML, `extracted["sections"]` a déjà sa vraie syntaxe dépouillée par le pipeline existant (texte inline réel pour Markdown, `readability`+`BeautifulSoup.get_text()` pour HTML) -- appeler la détection de structure sur ce texte déjà nettoyé n'aurait jamais rien trouvé, silencieusement. Corrigé en relisant le vrai fichier source BRUT pour ces deux formats spécifiquement. **Un deuxième vrai bug** : la référence "corps de texte" de `extract_headings_pdf` (3.1.9) utilisait initialement la médiane statistique -- sur un document à 2 tailles de police distinctes, la médiane par indice sélectionne la PLUS GRANDE taille (le titre lui-même) comme référence, rendant la détection impossible même sur un cas évident ; corrigé en pondérant par le nombre réel de caractères par taille, un signal honnête et robuste même sur un document court. Tests réels dédiés (5 détecteurs par format, rendu JSON/Markdown réel), voir `tests/test_structure_detection.py`, plus deux assertions réelles ajoutées aux tests d'intégration PDF/Markdown existants.
+
+#### Partie 3.1.10 — Extraction avancée des métadonnées
+
+✅ **Nouveau module réel** `api/services/metadata_enrichment.py` : `extract_keywords`/`extract_entities`/`extract_summary`/`extract_topics`/`extract_reading_time`/`extract_complexity_score` (fonctions littérales de l'item 2). **Nouvelles tables réelles** `document_keywords`/`document_entities` (migration `0046`, RLS en ligne sur les deux) -- les seules données extraites par item de toute la série 3.1.x à avoir leur propre table (même précédent réel que `DocumentTag`, 2.2.6), contrairement aux tableaux/structure (2.2.16/3.1.8) qui restent un bloc dans `metadata_json` puisqu'ils sont lus comme un tout, jamais filtrés par item. Intégré dans `process_document`. **Zéro nouvelle dépendance lourde** : ni spaCy (modèle entraîné séparé à télécharger rien que pour le NER) ni NLTK (téléchargements de corpus même pour les stopwords/la segmentation de phrases) -- tout est réel, écrit à la main, ou réutilise `sklearn` (déjà une dépendance réelle de ce dépôt). **`extract_keywords`** : vraie implémentation RAKE (Rapid Automatic Keyword Extraction) écrite à la main. **Vrai bug trouvé et corrigé en testant** : les limites de phrase candidate doivent être à la fois les stopwords ET la ponctuation -- sans la ponctuation, une suite de mots pleins traversant plusieurs vraies phrases sans stopword entre elles devenait une "phrase" absurdement longue et inutilisable ; corrigé en découpant d'abord sur la ponctuation réelle. **`extract_entities`, limite réelle et documentée** : vocabulaire fixe et basé sur des motifs (email/URL/date/montant/téléphone), jamais une fausse prétention de reconnaissance d'entités nommées complète -- les vrais noms de personnes/organisations/lieux ont besoin d'un vrai modèle entraîné (spaCy), une dépendance nouvelle et lourde que le périmètre de cette étape ne justifie pas. **`extract_topics`, limite réelle et documentée** : vrai LDA (`sklearn.decomposition.LatentDirichletAllocation`), mais appliqué sur les vraies phrases de CE document comme son propre petit corpus -- un vrai signal honnête (les groupes de termes dominants de ce document), plus étroit qu'une vraie modélisation de sujets inter-documents, mais réel et non fabriqué ; honnêtement vide si pas assez de signal réel pour ajuster un vrai modèle. **`extract_complexity_score`** : vrai score de Flesch Reading Ease standard, avec un vrai compteur de syllabes par comptage de groupes de voyelles (même approximation que `textstat`, non installé comme dépendance pour cette seule fonction). **Performance (vision critique 1)** : `extract_keywords`/`extract_summary`/`extract_topics` sont plafonnés à `_MAX_ENRICHMENT_INPUT_CHARS` (50 000 caractères) du texte extrait combiné -- un vrai choix de performance délibéré pour un gros document. **Robustesse, vrai bug trouvé et corrigé** : `extract_complexity_score(None)` levait une vraie `TypeError` (appelait `_WORD_RE.findall(None)` avant la vérification de vide) -- corrigé par une garde précoce, confirmé par un vrai test de régression. Tests réels dédiés (6 fonctions, dont le bug de limite de phrase et le bug de robustesse ci-dessus en régression dédiée, cas vides pour toutes), voir `tests/test_metadata_enrichment.py`, plus une vraie vérification d'intégration confirmant que des lignes `DocumentKeyword` sont réellement créées par le pipeline complet.
 
 ### 3.2 Chunking
 
@@ -419,14 +423,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 88 | 17.6% |
+| ✅ Fait | 89 | 17.8% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 346 | 69.2% |
+| ⬜ Non commencé | 345 | 69.0% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **95/515 (~18.4%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **167/515 (~32.4%)**
-- Pondéré (✅=1, 🟡=0.5) : **~128/515 (~24.9%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **96/515 (~18.6%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **168/515 (~32.6%)**
+- Pondéré (✅=1, 🟡=0.5) : **~129/515 (~25.0%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
