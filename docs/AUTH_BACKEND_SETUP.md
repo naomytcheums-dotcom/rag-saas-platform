@@ -5905,6 +5905,57 @@ keeps using the existing token-based `chunk_text` (Partie 3.2.1)
 unchanged, since this étape's own literal action items never asked
 for a pipeline swap.
 
+### Partie 3.2.3 -- semantic chunking
+
+New module `api/services/semantic_chunking.py`: `compute_sentence_embeddings`/
+`compute_semantic_similarity`/`find_breakpoints`/
+`chunk_by_semantic_similarity`/`merge_semantic_chunks` (item 2's own
+literal functions). **Reuses this codebase's own existing real
+embedding infrastructure** (`generate_embeddings`,
+`api/security/documents.py`, the same real sentence-transformers model
+already used since Partie 2.1.1 for the real RAG pipeline itself)
+rather than building new embedding infrastructure -- defaults to
+`DEFAULT_SETTINGS["embedding_model"]`
+(`api/security/organization_settings.py`) when no organization context
+is given, since these 5 functions are standalone capability, not yet
+wired into `process_document` (same reasoning as Partie 3.2.2). **Also
+reuses** Partie 3.1.10's own real sentence splitter (`split_sentences`,
+made public in `api/services/metadata_enrichment.py` -- renamed from
+`_split_sentences` specifically for this reuse, `tests/test_metadata_enrichment.py`
+updated accordingly) and Partie 3.2.2's own real recursive splitter
+(`chunk_recursive_text`) as the real fallback for the rare semantic
+chunk still too big after grouping (a single sentence longer than
+`SEMANTIC_CHUNK_MAX_SIZE`).
+
+**Real algorithm**: a real semantic breakpoint is placed between two
+CONSECUTIVE real sentences whose real cosine similarity drops below
+`SEMANTIC_CHUNK_THRESHOLD` (0.7 by default) -- semantically close
+sentences stay in the same chunk, a real topic shift starts a new one.
+
+**A real bug found and fixed while testing** (in `_merge_small_chunks`,
+reused from Partie 3.2.2 via `chunk_recursive_text`, called by
+`merge_semantic_chunks`): merging a real small trailing piece into the
+previous chunk never checked the real result still respected
+`max_size` -- a real, tiny leftover could push an already near-`max_size`
+chunk over the limit, silently breaking that whole module's own core
+guarantee ("no chunk ever exceeds `max_size`"). Fixed by only merging
+when the real result still fits within `max_size`; otherwise the small
+piece ships as its own, real, undersized chunk -- confirmed by a real,
+dedicated regression test in `tests/test_chunking.py`, the bug itself
+first surfaced by a real test in `tests/test_semantic_chunking.py`.
+
+**Real verification**: `tests/test_semantic_chunking.py` (15 tests),
+using the real embedding model (no mocking -- the same real precedent
+`tests/test_documents_integration.py` already established), with two
+real, distinct topics (cooking vs. astronomy) to check for a real
+semantic split, plus every real edge case (empty input, a single
+sentence, orthogonal/opposite/zero vectors, real merging and real hard
+splitting).
+
+**Stockage/intégration (vision critique)**: same real, documented
+scope limit as Partie 3.2.2 -- standalone capability, not yet wired
+into the real ingestion pipeline.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

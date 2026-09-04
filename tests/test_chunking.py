@@ -59,6 +59,16 @@ def test_chunk_recursive_text_merges_real_small_trailing_pieces():
     assert len(chunks) == 1  # too small a trailing piece ("Ok.") merges back
 
 
+def test_chunk_recursive_text_never_merges_past_the_real_max_size():
+    """A regression test for a real bug found while building Partie
+    3.2.3: merging a real small trailing piece into the previous real
+    chunk without checking the real result against max_size could
+    silently produce a chunk bigger than max_size -- max_size is the
+    harder real constraint, so such a merge must be skipped."""
+    chunks = chunk_recursive_text("A third short one.", max_size=15, separators=[". ", " ", ""])
+    assert all(len(c) <= 15 for c in chunks)
+
+
 def test_chunk_recursive_markdown_prefers_real_heading_boundaries():
     md = "# Title\n\nIntro.\n\n## Section A\n\nSome real content in section A that is reasonably long for testing purposes here.\n\n## Section B\n\nMore real content."
     chunks = chunk_recursive_markdown(md, max_size=60)

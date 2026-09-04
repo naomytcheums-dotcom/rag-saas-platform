@@ -94,16 +94,16 @@ def test_extract_entities_is_empty_for_none_or_empty():
 
 def test_extract_summary_returns_real_sentences_in_original_order():
     """Validation criterion: l'extraction de résumé fonctionne."""
-    from api.services.metadata_enrichment import _split_sentences
+    from api.services.metadata_enrichment import split_sentences
 
     summary = extract_summary(_TEXT, max_sentences=2)
     # The real sentence splitter is reused for verification too -- a
     # naive `.split(".")` would wrongly split on the real email/URL's
     # own periods ("info@example.com"), which this module's own real
     # splitter correctly does not.
-    chosen = _split_sentences(summary)
+    chosen = split_sentences(summary)
     assert len(chosen) == 2
-    all_sentences = _split_sentences(_TEXT)
+    all_sentences = split_sentences(_TEXT)
     positions = [all_sentences.index(s) for s in chosen]
     assert positions == sorted(positions)
 

@@ -47,7 +47,7 @@ def chunk_recursive_text(
     if not text or not text.strip():
         return []
     chunks = _split_text(text, list(separators), max_size)
-    return _merge_small_chunks(chunks, min_size, merge_separator)
+    return _merge_small_chunks(chunks, min_size, merge_separator, max_size)
 
 
 def _split_text(text: str, separators: list[str], max_size: int) -> list[str]:
@@ -81,19 +81,30 @@ def _split_text(text: str, separators: list[str], max_size: int) -> list[str]:
     return [c.strip() for c in chunks if c.strip()]
 
 
-def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str) -> list[str]:
+def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str, max_size: int) -> list[str]:
     """A real, deliberate second pass -- item 3's own literal
     `RECURSIVE_CHUNK_MIN_SIZE` setting only makes sense as a real
     post-merge step: the real split above can legitimately produce a
     real, tiny trailing piece (e.g. one short sentence left over after
     its own paragraph), merged back into the PREVIOUS real chunk
-    rather than shipped as its own, too-small chunk."""
+    rather than shipped as its own, too-small chunk.
+
+    **A real bug found and fixed while building Partie 3.2.3** (which
+    reuses this function through `chunk_recursive_text`): merging
+    without checking the real result against `max_size` could silently
+    break this module's own core guarantee that no real chunk ever
+    exceeds `max_size` -- a real, tiny trailing piece next to an
+    already near-`max_size` previous chunk merged into something
+    bigger than `max_size`. `max_size` is the harder real constraint,
+    so a merge that would exceed it is skipped; the small piece ships
+    as its own, real, undersized chunk instead."""
     if not chunks:
         return []
     merged = [chunks[0]]
     for chunk in chunks[1:]:
-        if len(chunk) < min_size:
-            merged[-1] = merged[-1] + merge_separator + chunk
+        candidate = merged[-1] + merge_separator + chunk
+        if len(chunk) < min_size and len(candidate) <= max_size:
+            merged[-1] = candidate
         else:
             merged.append(chunk)
     return merged

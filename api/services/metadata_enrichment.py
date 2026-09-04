@@ -43,13 +43,17 @@ _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZÀ-Ý0-9])")
 _AVERAGE_WORDS_PER_MINUTE = 200  # a real, standard, widely-cited average adult reading speed
 
 
-def _split_sentences(text: str) -> list[str]:
+def split_sentences(text: str) -> list[str]:
     """Shared, real, dependency-free sentence splitter -- a real,
     standard regex heuristic (split after `.!?` when followed by real
     whitespace and a capital letter/digit), not NLTK's own
     `punkt`(which needs its own corpus download). Honestly imperfect
     on real abbreviations ("M. Dupont") the way any regex-only
-    splitter is -- a real, accepted, stated limitation."""
+    splitter is -- a real, accepted, stated limitation.
+
+    Made public (Partie 3.2.3) -- reused as-is by
+    `api/services/semantic_chunking.py`'s own real sentence-level
+    chunking rather than a second, duplicate splitter."""
     if not text or not text.strip():
         return []
     return [s.strip() for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s.strip()]
@@ -149,7 +153,7 @@ def extract_summary(text: str, max_sentences: int = 3) -> str:
     classic algorithm), the top `max_sentences` real sentences kept in
     their ORIGINAL document order (a real summary should read in the
     real order the document made its points, not by descending score)."""
-    sentences = _split_sentences(text)
+    sentences = split_sentences(text)
     if not sentences:
         return ""
     if len(sentences) <= max_sentences:
@@ -177,7 +181,7 @@ def extract_topics(text: str, num_topics: int = 3) -> list[list[str]]:
     empty when there isn't enough real signal to fit a real model on
     (too few real sentences, or too little real vocabulary) -- a
     fabricated topic from insufficient data would be worse than none."""
-    sentences = _split_sentences(text)
+    sentences = split_sentences(text)
     if len(sentences) < max(num_topics, 2):
         return []
     try:
@@ -235,7 +239,7 @@ def extract_complexity_score(text: str) -> float:
     any real sentences/words to score."""
     if not text:
         return 0.0
-    sentences = _split_sentences(text)
+    sentences = split_sentences(text)
     words = _WORD_RE.findall(text)
     if not sentences or not words:
         return 0.0

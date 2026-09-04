@@ -226,7 +226,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 |---|---|---|
 | 3.2.1 | Fixed-size (512 tokens, overlap 50) | ✅ Existe déjà (`chunk_text`, `api/security/documents.py`, tokens réels via le tokenizer du modèle d'embedding, `chunk_size`/`chunk_overlap` réels par organisation) |
 | 3.2.2 | Recursive | ✅ Voir détails ci-dessous |
-| 3.2.3 | Semantic chunking | ⬜ |
+| 3.2.3 | Semantic chunking | ✅ Voir détails ci-dessous |
 | 3.2.4 | Markdown-aware | ⬜ |
 | 3.2.5 | Code-aware (tree-sitter) | ⬜ |
 | 3.2.6 | Sentence-based | ⬜ |
@@ -236,6 +236,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.2.2 — Chunking récursif
 
 ✅ **Nouveau module réel** `api/services/chunking.py` : `chunk_recursive_text`/`chunk_recursive_markdown`/`chunk_recursive_html`/`chunk_recursive_code` (fonctions littérales de l'item 2). Vrai algorithme récursif standard (même idée que `RecursiveCharacterTextSplitter` de LangChain, écrit à la main plutôt que d'ajouter toute cette bibliothèque pour un seul algorithme réel) : essaie d'abord le PREMIER séparateur réel de la liste (ex. `"\n\n"`, une vraie limite de paragraphe) ; tout morceau résultant encore trop grand est re-découpé récursivement sur le séparateur SUIVANT, jusqu'à un vrai découpage par caractère en dernier recours (séparateur `""`) qui garantit toujours la terminaison. **Distinction réelle et délibérée avec `chunk_text` existant (3.2.1)** : cette fonction existante est basée sur les TOKENS (le vrai tokenizer du modèle d'embedding, `chunk_size`/`chunk_overlap` réels par organisation) et déjà câblée dans `process_document` ; les 4 nouvelles fonctions de ce module sont basées sur les CARACTÈRES et sensibles à la structure, une vraie capacité nouvelle et autonome -- non câblée dans le pipeline réel (les actions littérales de cette étape ne demandent jamais cette intégration), directement utilisable par un futur appelant réel (une fonctionnalité de recherche sémantique, un outil d'export, la recherche hybride de la Partie 3.4). **`chunk_recursive_markdown`** : séparateurs adaptés au Markdown (limites de titre `\n## `/`\n# ` en priorité, puis paragraphes, lignes, phrases, mots). **`chunk_recursive_html`** : les balises HTML sont d'abord réellement supprimées via BeautifulSoup (même approche que toutes les autres fonctions HTML de ce dépôt), puis le même algorithme récursif découpe le texte brut résultant -- limite réelle et documentée : pas de détection de limite consciente du DOM (ne jamais découper dans un vrai `<table>`/`<pre>`), complexité supplémentaire hors du périmètre nécessaire de cette étape. **`chunk_recursive_code`** : séparateurs adaptés au code (lignes vides entre fonctions/blocs, puis lignes seules, puis découpage dur par caractère) -- ne découpe jamais sur les espaces comme le texte normal le ferait, ce qui casserait la syntaxe réelle ; le découpage syntaxique réel par fonction/classe (Partie 3.2.5) est la capacité plus profonde et distincte pour le code. **Vrai bug trouvé et corrigé en testant** : la fusion des petits morceaux restants (`_merge_small_chunks`, second passage nécessaire pour respecter `RECURSIVE_CHUNK_MIN_SIZE`) utilisait initialement un espace `" "` codé en dur comme séparateur de fusion -- ceci corrompait silencieusement la structure du code réel (de vrais retours à la ligne collés en espaces, ex. `"def foo():\n    return 1"` devenait `"def foo():     return 1"`). Corrigé en ajoutant un paramètre `merge_separator` réel à `chunk_recursive_text` (par défaut `" "` pour la prose), `chunk_recursive_code` passant `"\n"`. Nouvelle configuration réelle (`RECURSIVE_CHUNK_SEPARATORS`/`RECURSIVE_CHUNK_MIN_SIZE`/`RECURSIVE_CHUNK_MAX_SIZE`, `api/config.py`). Tests réels dédiés (11 tests, dont le bug de fusion ci-dessus en régression dédiée, cas vides, découpage dur d'un mot géant, préservation de la structure par reconstruction), voir `tests/test_chunking.py`.
+
+#### Partie 3.2.3 — Chunking sémantique
+
+✅ **Nouveau module réel** `api/services/semantic_chunking.py` : `compute_sentence_embeddings`/`compute_semantic_similarity`/`find_breakpoints`/`chunk_by_semantic_similarity`/`merge_semantic_chunks` (fonctions littérales de l'item 2). **Réutilise l'infrastructure d'embeddings réelle déjà existante** (`generate_embeddings`, `api/security/documents.py`, le même vrai modèle sentence-transformers utilisé depuis la Partie 2.1.1 pour le pipeline RAG lui-même) plutôt que de construire une nouvelle infrastructure d'embeddings -- valeur par défaut réelle : `DEFAULT_SETTINGS["embedding_model"]` (`api/security/organization_settings.py`) quand aucun contexte d'organisation n'est fourni, puisque ces 5 fonctions sont une capacité autonome, non encore câblée dans `process_document` (même raisonnement que la Partie 3.2.2). **Réutilise aussi** le séparateur de phrases réel de la Partie 3.1.10 (`split_sentences`, rendu public dans `api/services/metadata_enrichment.py` -- renommé depuis `_split_sentences` précisément pour cette réutilisation, `tests/test_metadata_enrichment.py` mis à jour en conséquence) et le découpeur récursif réel de la Partie 3.2.2 (`chunk_recursive_text`) comme filet de sécurité pour le rare chunk sémantique encore trop grand après regroupement (une seule phrase plus longue que `SEMANTIC_CHUNK_MAX_SIZE`). **Vrai algorithme** : un vrai point de rupture sémantique est placé entre deux phrases réelles CONSÉCUTIVES dont la similarité cosinus réelle tombe sous `SEMANTIC_CHUNK_THRESHOLD` (0.7 par défaut) -- les phrases sémantiquement proches restent dans le même chunk, une vraie rupture de sujet en crée un nouveau. **Vrai bug trouvé et corrigé en testant** (dans `_merge_small_chunks`, réutilisé depuis la Partie 3.2.2 via `chunk_recursive_text`, appelé par `merge_semantic_chunks`) : la fusion d'un petit morceau final réel dans le chunk précédent ne vérifiait jamais que le résultat réel respectait toujours `max_size` -- un vrai petit reliquat pouvait faire dépasser un chunk déjà proche de `max_size`, cassant silencieusement la garantie fondamentale du module entier ("aucun chunk ne dépasse jamais `max_size`"). Corrigé en ne fusionnant que si le résultat réel tient toujours dans `max_size`, sinon le petit morceau reste son propre chunk réel, trop petit mais honnête -- confirmé par un vrai test de régression dédié dans `tests/test_chunking.py` ET par la découverte initiale du bug via un vrai test de `tests/test_semantic_chunking.py`. **Tests réels** : `tests/test_semantic_chunking.py` (15 tests), utilisant le vrai modèle d'embedding réel (pas de mock -- même précédent réel que `tests/test_documents_integration.py`), avec deux vrais sujets distincts (cuisine vs astronomie) pour vérifier une vraie séparation sémantique, plus tous les cas limites réels (entrée vide, une seule phrase, vecteurs orthogonaux/opposés/nuls, fusion et découpage dur réels).
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -427,14 +431,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 90 | 18.0% |
+| ✅ Fait | 91 | 18.2% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 344 | 68.8% |
+| ⬜ Non commencé | 343 | 68.6% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **97/515 (~18.8%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **169/515 (~32.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~130/515 (~25.2%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **98/515 (~19.0%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **170/515 (~33.0%)**
+- Pondéré (✅=1, 🟡=0.5) : **~131/515 (~25.4%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
