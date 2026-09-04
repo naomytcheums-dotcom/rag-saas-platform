@@ -31,7 +31,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -69,6 +69,9 @@ import api.security.documents as documents_security
 from api.security.documents import (
     get_document_progress,
     import_document_from_url,
+    permanent_delete_document,
+    replace_document,
+    soft_delete_document,
     start_confluence_import,
     start_document_batch_upload,
     start_github_issues_import,
@@ -99,7 +102,7 @@ from api.security.document_versions import (
     restore_document_version,
 )
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
-from api.services.document_storage import delete_document_file, stream_document_file
+from api.services.document_storage import stream_document_file
 from api.services.metadata_normalization import normalize_document_metadata
 
 router = APIRouter(tags=["documents"])
@@ -115,12 +118,45 @@ def _to_response(row: Document) -> DocumentResponse:
 
 
 async def _get_document_and_membership(db: AsyncSession, document_id: uuid.UUID, current_user: User) -> tuple[Document, OrganizationMember]:
-    """Shared by GET/DELETE /documents/{document_id} -- looks up the
-    document, then the caller's membership in ITS organization. 404 for
-    both "no such document" and "you're not a member of the
-    organization that owns it", collapsed into one response so a
-    non-member can't use this endpoint to probe which document ids
-    exist (same anti-enumeration reasoning as require_org_member)."""
+    """Shared by GET/DELETE/metadata/preview/progress/tags/versions
+    /documents/{document_id}* -- looks up the document, then the
+    caller's membership in ITS organization. 404 for both "no such
+    document" and "you're not a member of the organization that owns
+    it", collapsed into one response so a non-member can't use this
+    endpoint to probe which document ids exist (same anti-enumeration
+    reasoning as require_org_member).
+
+    Partie 2.2.8 -- also filters `deleted_at IS NULL`: this is the ONE
+    shared choke point every single-document route in this whole file
+    already calls, so a real soft-deleted document becomes invisible
+    everywhere at once (get, delete-again, metadata, preview, progress,
+    tags, versions) by fixing this ONE function, rather than
+    separately retrofitting each of those routes by hand -- see
+    `api/security/documents.py`'s own `soft_delete_document` docstring.
+    The one real exception is permanent deletion
+    (`DELETE /documents/{document_id}/permanent`), which deliberately
+    uses `_get_document_and_membership_including_deleted` below
+    instead, since an Admin/Owner must be able to reach an
+    ALREADY-soft-deleted document to purge it for real."""
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    document = await db.scalar(select(Document).where(Document.id == document_id, Document.deleted_at.is_(None)))
+    if document is None:
+        raise not_found
+
+    membership = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == document.organization_id, OrganizationMember.user_id == current_user.id
+        )
+    )
+    if membership is None:
+        raise not_found
+    return document, membership
+
+
+async def _get_document_and_membership_including_deleted(db: AsyncSession, document_id: uuid.UUID, current_user: User) -> tuple[Document, OrganizationMember]:
+    """Partie 2.2.8 -- the ONE real exception to
+    `_get_document_and_membership`'s own `deleted_at IS NULL` filter,
+    used ONLY by `DELETE /documents/{document_id}/permanent`."""
     not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     document = await db.scalar(select(Document).where(Document.id == document_id))
     if document is None:
@@ -436,7 +472,7 @@ async def list_documents(
     org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.scalars(
-        select(Document).where(Document.organization_id == org_id).order_by(Document.created_at.desc())
+        select(Document).where(Document.organization_id == org_id, Document.deleted_at.is_(None)).order_by(Document.created_at.desc())
     )).all()
     return DocumentListResponse(items=[_to_response(row) for row in rows])
 
@@ -532,6 +568,11 @@ async def stream_document_processing_progress(
 async def delete_document(
     document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    """Partie 2.2.8, item 3's own literal ask -- this route is now a
+    real SOFT delete (`soft_delete_document`), not the real, permanent
+    row+S3 removal it used to be before this étape -- see this
+    module's own top docstring update and `DELETE .../permanent` below
+    for the new real, irreversible route this behavior moved to."""
     document, membership = await _get_document_and_membership(db, document_id, current_user)
 
     is_owner_of_document = document.created_by == current_user.id
@@ -539,11 +580,56 @@ async def delete_document(
     if membership.role == OrganizationRole.viewer or not (is_owner_of_document or is_org_admin_or_owner):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete documents you uploaded yourself")
 
-    await db.execute(delete(Document).where(Document.id == document.id))
+    await soft_delete_document(db, document.id, current_user.id)
     await db.commit()
-
-    delete_document_file(document.file_key)  # best-effort, never blocks the response
     return {"message": "Document deleted"}
+
+
+@router.delete("/documents/{document_id}/permanent")
+async def permanently_delete_document(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.2.8, item 3's own literal route -- real, irreversible
+    deletion (vision critique 3's own answer: yes, both the real S3
+    object and the real database row). Owner/Admin ONLY (vision
+    critique 1's own explicit ask), no "creator" override the way soft
+    delete has -- a plain Member who uploaded a document can soft-
+    delete it themselves, but never purge it permanently. Uses
+    `_get_document_and_membership_including_deleted` (see that
+    function's own docstring): an Admin/Owner must be able to reach an
+    ALREADY-soft-deleted document to purge it for real, not just a
+    still-visible one."""
+    document, membership = await _get_document_and_membership_including_deleted(db, document_id, current_user)
+    if membership.role not in (OrganizationRole.owner, OrganizationRole.admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an organization Owner or Admin can permanently delete a document")
+
+    await permanent_delete_document(db, document.id)
+    await db.commit()
+    return {"message": "Document permanently deleted"}
+
+
+@router.post("/documents/{document_id}/replace", response_model=DocumentVersionResponse, status_code=status.HTTP_201_CREATED)
+async def replace_document_route(
+    document_id: uuid.UUID, file: UploadFile, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.2.8, item 2's own literal route -- Member+ si
+    propriétaire, same real permission shape as version creation. A
+    real, honest alias for Partie 2.2.7's own version-creation
+    mechanism -- see `api/security/documents.py`'s own
+    `replace_document` docstring for why this is a deliberate reuse,
+    not a second implementation."""
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+    _require_document_owner_or_admin(document, membership, current_user, "You can only replace a document you uploaded yourself")
+
+    content = await file.read()
+    try:
+        version = await replace_document(db, document.id, file.filename or document.name, content, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    documents_security.schedule_document_processing(document.id)
+    return _version_to_response(version)
 
 
 # =========================== Partie 2.2.6 -- tags/catégories ===========================

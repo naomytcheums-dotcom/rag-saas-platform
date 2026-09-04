@@ -503,8 +503,12 @@ async def test_progress_stream_for_a_nonexistent_document_returns_404(client, db
 # --------------------------------------------------------------- deleting --
 
 async def test_creator_can_delete_their_own_document(client, db_session, register_payload, monkeypatch):
+    """Partie 2.2.8 -- DELETE /documents/{id} is now a real SOFT
+    delete: the real row and its real S3 object both survive, only
+    `deleted_at`/`deleted_by` are set (see `DELETE .../permanent`'s
+    own tests for the real, irreversible deletion this route no
+    longer performs)."""
     _stub_s3(monkeypatch)
-    monkeypatch.setattr("api.routers.documents.delete_document_file", lambda file_key: None)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
     member_token, member = await _register(client, db_session, "docdeleteself@example.com")
@@ -516,7 +520,14 @@ async def test_creator_can_delete_their_own_document(client, db_session, registe
     assert response.status_code == 200
 
     row = await db_session.scalar(select(Document).where(Document.id == uuid.UUID(document_id)))
-    assert row is None
+    assert row is not None
+    assert row.deleted_at is not None
+    assert row.deleted_by == member.id
+
+    # Validation criterion / vision critique -- a soft-deleted document
+    # is invisible to every real single-document route from here on.
+    detail = await client.get(f"/documents/{document_id}", headers=_auth_header(member_token))
+    assert detail.status_code == 404
 
 
 async def test_member_cannot_delete_someone_elses_document(client, db_session, register_payload, monkeypatch):
@@ -543,7 +554,6 @@ async def test_member_cannot_delete_someone_elses_document(client, db_session, r
 
 async def test_admin_can_delete_any_document_as_an_override(client, db_session, register_payload, monkeypatch):
     _stub_s3(monkeypatch)
-    monkeypatch.setattr("api.routers.documents.delete_document_file", lambda file_key: None)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
     uploader_token, uploader = await _register(client, db_session, "docadminoverrideuploader@example.com")
@@ -560,7 +570,6 @@ async def test_admin_can_delete_any_document_as_an_override(client, db_session, 
 
 async def test_owner_can_delete_any_document_as_an_override(client, db_session, register_payload, monkeypatch):
     _stub_s3(monkeypatch)
-    monkeypatch.setattr("api.routers.documents.delete_document_file", lambda file_key: None)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
     uploader_token, uploader = await _register(client, db_session, "docowneroverrideuploader@example.com")
@@ -3290,3 +3299,128 @@ async def test_viewer_can_list_and_view_document_versions(client, db_session, re
     assert listing.status_code == 200
     detail = await client.get(f"/documents/{document_id}/versions/1", headers=_auth_header(viewer_token))
     assert detail.status_code == 200
+
+
+# ------------------------------------------------ permanent delete / replace --
+
+async def test_admin_can_permanently_delete_a_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la suppression définitive supprime tout
+    (S3 + DB)."""
+    _stub_s3(monkeypatch)
+    s3_deletes = []
+    monkeypatch.setattr("api.security.documents.delete_document_file", lambda file_key: s3_deletes.append(file_key))
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    uploader_token, uploader = await _register(client, db_session, "permdeluploader@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), uploader.id, OrganizationRole.member, invited_by=owner.id)
+    created = await _upload(client, org["id"], uploader_token)
+    document_id = created.json()["id"]
+
+    admin_token, admin = await _register(client, db_session, "permdeladmin@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), admin.id, OrganizationRole.admin, invited_by=owner.id)
+
+    response = await client.delete(f"/documents/{document_id}/permanent", headers=_auth_header(admin_token))
+    assert response.status_code == 200
+    assert len(s3_deletes) == 1
+
+    row = await db_session.scalar(select(Document).where(Document.id == uuid.UUID(document_id)))
+    assert row is None
+
+
+async def test_member_cannot_permanently_delete_their_own_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique 1: réservée à Owner/Admin,
+    même le propriétaire d'un simple rôle Member ne peut pas purger."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    member_token, member = await _register(client, db_session, "permdelmember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), member.id, OrganizationRole.member, invited_by=owner.id)
+    created = await _upload(client, org["id"], member_token)
+    document_id = created.json()["id"]
+
+    response = await client.delete(f"/documents/{document_id}/permanent", headers=_auth_header(member_token))
+    assert response.status_code == 403
+
+    row = await db_session.scalar(select(Document).where(Document.id == uuid.UUID(document_id)))
+    assert row is not None
+
+
+async def test_admin_can_permanently_delete_an_already_soft_deleted_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique 2: un document supprimé
+    logiquement reste atteignable pour une purge définitive."""
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.delete_document_file", lambda file_key: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.delete(f"/documents/{document_id}", headers=_auth_header(owner_token))  # soft delete first
+
+    response = await client.delete(f"/documents/{document_id}/permanent", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+
+    row = await db_session.scalar(select(Document).where(Document.id == uuid.UUID(document_id)))
+    assert row is None
+
+
+async def test_permanent_delete_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.delete(f"/documents/{uuid.uuid4()}/permanent", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_owner_can_replace_a_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: le remplacement crée une nouvelle
+    version."""
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.post(
+        f"/documents/{document_id}/replace", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 201
+    assert response.json()["version_number"] == 1
+
+    versions = await client.get(f"/documents/{document_id}/versions", headers=_auth_header(owner_token))
+    assert len(versions.json()) == 1
+
+
+async def test_member_cannot_replace_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    other_member_token, other_member = await _register(client, db_session, "replaceother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(
+        f"/documents/{document_id}/replace", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(other_member_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_a_soft_deleted_document_is_invisible_to_listing_and_detail(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique -- modifier les requêtes
+    pour exclure les documents supprimés."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.delete(f"/documents/{document_id}", headers=_auth_header(owner_token))
+
+    listing = await client.get(f"/organizations/{org['id']}/documents", headers=_auth_header(owner_token))
+    assert listing.json()["items"] == []
+
+    for path in (
+        f"/documents/{document_id}", f"/documents/{document_id}/metadata", f"/documents/{document_id}/preview",
+        f"/documents/{document_id}/progress", f"/documents/{document_id}/tags", f"/documents/{document_id}/versions",
+    ):
+        response = await client.get(path, headers=_auth_header(owner_token))
+        assert response.status_code == 404, f"{path} should be invisible once soft-deleted"

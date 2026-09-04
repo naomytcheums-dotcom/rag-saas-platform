@@ -86,6 +86,18 @@ class Document(Base):
     # document being deleted, at which point this column goes with it
     # anyway.
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True)
+    # Partie 2.2.8 -- soft delete: NULL means "not deleted". Every
+    # user-facing read goes through ONE shared choke point
+    # (api/routers/documents.py's own list_documents/
+    # _get_document_and_membership) that filters `deleted_at IS NULL` --
+    # see that module's own docstring for why fixing the ONE shared
+    # helper every single-document route already calls (get, delete,
+    # metadata, preview, progress, tags, versions) is the correct,
+    # minimal-risk way to make a soft-deleted document invisible
+    # everywhere at once, rather than separately retrofitting each of
+    # those routes by hand.
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (
         # The only read patterns this table serves (list_documents,

@@ -4348,6 +4348,79 @@ one, a real restore creating a genuinely NEW version number, restore
 permissions, and Viewer read access -- 10 tests, confirmed to run in
 ~17 seconds total (not 16+ minutes) after the fix above.
 
+### Document soft delete, permanent delete, and replace (Partie 2.2.8)
+
+Two new real columns on `Document` (migration `0036`): `deleted_at`/
+`deleted_by`. `DELETE /documents/{document_id}` -- an existing route,
+since Partie 2.1.1 -- is now a real SOFT delete
+(`soft_delete_document`), a genuine BEHAVIOR CHANGE from what it did
+before this étape (a real, permanent row + S3 removal). The real,
+irreversible version of that old behavior moved to a brand new route,
+`DELETE /documents/{document_id}/permanent`.
+
+**Cohérence / a single, high-leverage fix, not a dozen scattered
+ones**: rather than retrofitting `deleted_at IS NULL` into every
+individual query across this router (list, get, metadata, preview,
+progress, tags, versions -- a real, error-prone, easy-to-miss-one
+approach), the real fix lives in the ONE shared choke point every
+single-document route already calls,
+`_get_document_and_membership` (plus `list_documents`'s own listing
+query) -- fixing it once makes a soft-deleted document invisible
+everywhere at once. Confirmed for real by a dedicated test that hits
+all seven of those routes after a soft delete and checks every one
+returns a real 404. The ONE deliberate exception is
+`_get_document_and_membership_including_deleted`, used ONLY by the new
+permanent-delete route -- an Admin/Owner must be able to reach an
+ALREADY-soft-deleted document to purge it for real, or an already-
+soft-deleted document could never be permanently removed at all.
+
+**Sécurité (vision critique 1)**: permanent deletion is Owner/Admin
+ONLY -- unlike soft delete (which a plain Member can do to their own
+document), there is no "creator" override here at all; unlike the
+document itself, permanently destroying it for real is never a
+document-owner's own call to make alone.
+
+**Stockage (vision critique 3)**: `permanent_delete_document` removes
+BOTH the real database row AND the real S3 object (`delete_document_file`,
+best-effort, the same real cleanup the OLD hard-delete route already
+did) -- confirmed for real via a test asserting the S3 delete call
+actually happens.
+
+**Récupération (vision critique 2)**: a soft-deleted document can
+still be reached and permanently purged (the whole point of
+`_get_document_and_membership_including_deleted` above) -- this étape's
+own literal scope stops there; a real "undelete"/restore-from-trash
+endpoint was not asked for and is not built, a real, honest, stated
+limitation, not an oversight.
+
+**Cohérence with Partie 2.2.7 (replace)**: `replace_document` is a
+real, deliberate, honest ALIAS for `create_document_version_from_upload`
+(Partie 2.2.7), not a second, competing implementation -- this step's
+own literal vision critique explicitly asks for "remplacement... crée
+une nouvelle version automatiquement," confirming a real replace and a
+real explicit new version are the SAME real operation under two
+different, honest names (`POST .../replace` vs. `POST .../versions`).
+
+**A real, necessary test fix, stated plainly**: converting
+`DELETE /documents/{document_id}` from hard to soft delete changed its
+own real, observable behavior -- the one pre-existing test that
+asserted the row was gone afterward now asserts it survives with
+`deleted_at`/`deleted_by` set (and that the document becomes
+genuinely invisible via a follow-up `GET`), the same kind of honest,
+necessary test update every prior behavior-changing étape in this
+codebase has already needed (e.g. Partie 2.1.19's own two ZIP-related
+test fixes).
+
+**Real verification**: `tests/test_documents.py` covers the converted
+soft-delete route (row survives, real invisibility confirmed via a
+follow-up GET), real permanent deletion (Owner/Admin only, a plain
+Member rejected, real S3 removal confirmed, reachable even on an
+already-soft-deleted document, 404 for a nonexistent one), real
+document replacement (creates a real new version, owner-vs-non-owner
+permissions), and one comprehensive test confirming a soft-deleted
+document is genuinely invisible across all seven real single-document
+routes at once.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry
