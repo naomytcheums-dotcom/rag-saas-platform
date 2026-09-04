@@ -537,6 +537,28 @@ class Settings(BaseSettings):
     MMR_LAMBDA: float = 0.7
     MMR_TOP_K: int = 5
 
+    # -- Query rewriting (Partie 3.4.2) ----------------------------------------
+    QUERY_REWRITING_ENABLED: bool = True
+    QUERY_REWRITING_METHOD: str = "hybrid"
+    QUERY_REWRITING_MIN_LENGTH: int = 3
+
+    # -- HyDE (Partie 3.4.3) ---------------------------------------------------
+    HYDE_ENABLED: bool = True
+    HYDE_MAX_TOKENS: int = 256
+    HYDE_NUM_DOCUMENTS: int = 1
+    HYDE_TEMPERATURE: float = 0.7
+
+    # -- Multi-query retrieval (Partie 3.4.4) ----------------------------------
+    MULTI_QUERY_ENABLED: bool = True
+    MULTI_QUERY_NUM_VARIANTS: int = 3
+    MULTI_QUERY_MERGE_METHOD: str = "rrf"
+    MULTI_QUERY_RRF_K: int = 60
+
+    # -- Context compression (Partie 3.4.10) -----------------------------------
+    CONTEXT_COMPRESSION_ENABLED: bool = True
+    CONTEXT_COMPRESSION_MAX_TOKENS: int = 2000
+    CONTEXT_COMPRESSION_METHOD: str = "extract"
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

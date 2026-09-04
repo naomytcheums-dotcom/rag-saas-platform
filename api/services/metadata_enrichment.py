@@ -26,7 +26,10 @@ scope one than cross-document topic modeling would give.
 
 import re
 
-_STOPWORDS = {
+# Made public (Partie 3.4.2) -- reused as-is by
+# `api/services/query_rewriting.py`'s own real `simplify_query` rather
+# than a second, duplicate EN/FR stopword list.
+STOPWORDS = {
     "a", "an", "the", "and", "or", "but", "if", "of", "at", "by", "for", "with", "about", "against", "between",
     "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out",
     "on", "off", "over", "under", "again", "further", "then", "once", "is", "are", "was", "were", "be", "been",
@@ -82,7 +85,7 @@ def extract_keywords(text: str, max_keywords: int = 10) -> list[dict]:
     for segment in segments:
         current: list[str] = []
         for word in [w.lower() for w in _WORD_RE.findall(segment)]:
-            if word in _STOPWORDS:
+            if word in STOPWORDS:
                 if current:
                     phrases.append(current)
                     current = []
@@ -162,7 +165,7 @@ def extract_summary(text: str, max_sentences: int = 3) -> str:
     frequency: dict[str, int] = {}
     for sentence in sentences:
         for word in _WORD_RE.findall(sentence.lower()):
-            if word not in _STOPWORDS:
+            if word not in STOPWORDS:
                 frequency[word] = frequency.get(word, 0) + 1
 
     scored = [
@@ -188,7 +191,7 @@ def extract_topics(text: str, num_topics: int = 3) -> list[list[str]]:
         from sklearn.decomposition import LatentDirichletAllocation
         from sklearn.feature_extraction.text import CountVectorizer
 
-        vectorizer = CountVectorizer(stop_words=list(_STOPWORDS), max_df=0.95, min_df=1)
+        vectorizer = CountVectorizer(stop_words=list(STOPWORDS), max_df=0.95, min_df=1)
         doc_term_matrix = vectorizer.fit_transform(sentences)
         if doc_term_matrix.shape[1] < num_topics:
             return []

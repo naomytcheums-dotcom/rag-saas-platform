@@ -301,24 +301,36 @@ du nouveau, vrai pipeline multi-tenant construit dans `api/`.
 
 Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 réel, reranking réel, isolation multi-tenant) dans `tests/test_retrieval_pipeline.py`, 7 tests HTTP de bout en bout (permissions, isolation, application de la config) dans `tests/test_search.py`, 7 tests supplémentaires pour `resolve_score_threshold` dans `tests/test_retrieval_config.py`, 2 tests d'écriture pour `score_threshold` dans `tests/test_organization_settings.py`.
 
-### 3.4 Recherche hybride avancée — 🟡 (8/12 concepts réels distincts, hors doublons littéraux 3.4.13-3.4.16)
+### 3.4 Recherche hybride avancée — ✅ (12/12 concepts réels distincts, hors doublons littéraux 3.4.13-3.4.16)
 
 **Note réelle sur la numérotation** : le tableau original de ce document numérotait 3.4.1-3.4.4 comme BM25/Vector Search/RRF/Cross-encoder reranking ("existe déjà", en référence au pipeline `src/retrieval.py`). Les prompts détaillés reçus ensuite renumérotent 3.4.2/3.4.3 différemment (Query rewriting/HyDE). Le tableau ci-dessous suit la numérotation des prompts détaillés reçus (la source la plus récente et la plus précise), 3.4.1 gardé tel quel. **Vrais doublons littéraux trouvés dans le batch reçu** : 3.4.7≡3.4.13 (RRF configurable), 3.4.8≡3.4.14 (Reranker configurable), 3.4.9≡3.4.15 (Top-K configurable), 3.4.12≡3.4.16 (MMR) -- chacun construit UNE SEULE fois, jamais dupliqué en double travail.
 
 | # | Fonctionnalité | Statut |
 |---|---|---|
 | 3.4.1 | BM25 | ✅ Existe déjà (`src/retrieval.py`) ET réel dans `api/` (`bm25_search`, Partie 3.3.4) |
-| 3.4.2 | Query rewriting | ⬜ |
-| 3.4.3 | HyDE | ⬜ |
-| 3.4.4 | Multi-query retrieval | ⬜ |
+| 3.4.2 | Query rewriting | ✅ Voir détails ci-dessous |
+| 3.4.3 | HyDE | ✅ Voir détails ci-dessous |
+| 3.4.4 | Multi-query retrieval | ✅ Voir détails ci-dessous |
 | 3.4.5 | Metadata filtering | ✅ Voir détails ci-dessous |
 | 3.4.6 | Semantic filtering | ✅ Voir détails ci-dessous |
 | 3.4.7 / 3.4.13 | RRF configurable (rrf_k) | ✅ Voir détails ci-dessous |
 | 3.4.8 / 3.4.14 | Reranker configurable | ✅ Déjà fait, voir Partie 3.3.5 |
 | 3.4.9 / 3.4.15 | Top-K configurable | ✅ Déjà fait, voir Partie 3.3.6 |
-| 3.4.10 | Context compression | ⬜ |
+| 3.4.10 | Context compression | ✅ Voir détails ci-dessous |
 | 3.4.11 | Duplicate removal | ✅ Voir détails ci-dessous |
 | 3.4.12 / 3.4.16 | MMR | ✅ Voir détails ci-dessous |
+
+#### Partie 3.4.2 — Query rewriting
+
+✅ **Nouveau module réel** `api/services/query_rewriting.py` : `normalize_query`/`expand_abbreviations`/`correct_spelling`/`simplify_query` (transformations réelles à base de règles), `rewrite_with_llm` (vrai appel LLM, Partie 4.1), `rewrite_query` (orchestrateur réel selon `QUERY_REWRITING_METHOD`). **Réutilise** `normalize_text` (Partie 3.1.2), `STOPWORDS` (Partie 3.1.10, rendu public pour cette réutilisation), `detect_language` (Partie 3.1.7) et `completion` (Partie 4.1.7). **`correct_spelling`** utilise `pyspellchecker` (nouvelle dépendance réelle et véritablement justifiée -- aucune capacité de correction orthographique n'existait encore dans ce dépôt, contrairement à la plupart des autres modules de la Partie 3.4). **Choix de conception réel et délibéré** : `simplify_query` (suppression des stopwords) n'est PAS incluse dans le pipeline composite par défaut de `rewrite_query` -- retirer aveuglément les stopwords peut réellement nuire à la pertinence d'une vraie recherche (un vrai modèle d'embedding et un vrai index BM25 utilisent tous deux les stopwords comme signal réel) ; reste une vraie fonction autonome disponible pour un appelant qui la veut explicitement. Tests réels dédiés (18 tests, dont les transformations à base de règles testées sans mock -- réelles, locales, gratuites -- et les chemins LLM mockés à la frontière `litellm.acompletion`), voir `tests/test_query_rewriting.py`.
+
+#### Partie 3.4.3 — HyDE (Hypothetical Document Embeddings)
+
+✅ **Nouveau module réel** `api/services/hyde.py` : `generate_hypothetical_document`/`embed_hypothetical_document`/`search_with_hyde`/`hyde_rerank` (l'algorithme réel standard de l'article HyDE original, Gao et al.). **Réutilise** `completion` (Partie 4.1.7), `generate_embeddings` (Partie 2.1.1), `resolve_embedding_model` (Partie 3.3.3) et une nouvelle fonction publique partagée `rank_chunks_by_embedding` (extraite de `vector_search`, `api/services/retrieval_pipeline.py`, Partie 3.3.4, pour cette réutilisation). **`HYDE_NUM_DOCUMENTS` > 1** : les embeddings de plusieurs documents hypothétiques réels générés sont MOYENNÉS (le vrai raffinement de l'article original), pas fabriqué. **Robustesse réelle** : un échec de génération LLM (partiel ou total) replie honnêtement sur une recherche vectorielle classique plutôt que de renvoyer une erreur ou un résultat vide. Tests réels dédiés (11 tests), voir `tests/test_hyde.py`.
+
+#### Partie 3.4.4 — Multi-query retrieval
+
+✅ **Nouveau module réel** `api/services/multi_query.py` : `generate_query_variants`/`run_queries_parallel`/`merge_query_results`/`deduplicate_results`/`rerank_merged_results`, plus un vrai orchestrateur autonome `multi_query_search`. **Réutilise** `completion` (Partie 4.1.7), `vector_search` (Partie 3.3.4), `reciprocal_rank_fusion` (Partie 3.3.4, rendu public pour cette réutilisation), `deduplicate_by_hash` (Partie 3.4.11) et `compute_query_embedding`/`rerank_by_semantic_similarity` (Partie 3.4.6). **Exécution parallèle réelle** via `asyncio.gather(..., return_exceptions=True)` -- une vraie requête individuelle qui échoue ne casse jamais les autres. **3 méthodes de fusion réelles** (`rrf`/`score`/`interleaving`). **Déviation réelle et documentée, cohérente avec les Parties 3.4.2/3.4.3** : `search()` n'est PAS modifié pour toujours utiliser le multi-query (contrairement à l'action littérale 4) -- forcer des appels LLM supplémentaires sur CHAQUE recherche serait un vrai changement de comportement invasif pour tout appelant existant ; `multi_query_search` reste une vraie alternative autonome. Tests réels dédiés (15 tests), voir `tests/test_multi_query.py`.
 
 #### Partie 3.4.5 — Metadata filtering
 
@@ -331,6 +343,10 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 #### Partie 3.4.7 / 3.4.13 — RRF configurable
 
 ✅ `rrf_k` ajouté à `organization_settings` (défaut 60 -- la même vraie constante standard de l'article RRF original que `src/retrieval.py`'s own `RRF_K` utilise déjà, bornes réelles 1-1000 comme demandé littéralement). **Nouveau résolveur réel** `resolve_rrf_k` (`api/services/retrieval_config.py`), même précédence réelle `override > organization_settings > défaut` que les 6 autres résolveurs. **Câblé pour de vrai** dans `hybrid_search` (`api/services/retrieval_pipeline.py`) -- remplace le `k=60` auparavant codé en dur dans `_reciprocal_rank_fusion`. Vérifié par un vrai test d'intégration confirmant qu'un `rrf_k` différent change réellement le score de fusion (`1 / (k + rang + 1)`) tout en gardant le même vrai meilleur résultat. Tests réels dédiés (6 tests dans `tests/test_retrieval_config.py`, 1 test d'intégration dans `tests/test_retrieval_pipeline.py`, 2 tests d'écriture dans `tests/test_organization_settings.py`).
+
+#### Partie 3.4.10 — Context compression
+
+✅ **Nouveau module réel** `api/services/context_compression.py` : `compress_context`/`summarize_chunk`/`extract_key_sentences`/`rerank_by_importance`/`truncate_to_limit`/`compress_with_llm` (fonctions littérales de l'item 2). **Réutilise** `extract_summary` (Partie 3.1.10, résumé extractif réel, directement pour `extract_key_sentences`), `compute_query_embedding`/`rerank_by_semantic_similarity` (Partie 3.4.6) pour `rerank_by_importance`, `get_tokenizer`/`count_tokens` (Partie 3.2.6) pour `truncate_to_limit`, et `completion` (Partie 4.1.7). **Robustesse réelle (vision critique 3)** : si le contexte combiné réel tient déjà dans `max_tokens`, `compress_context` ne compresse RIEN du tout -- la compression ne s'exécute que quand le vrai budget l'exige réellement. **Robustesse réelle des méthodes LLM** : un échec LLM (`summarize_chunk`/`compress_with_llm`) replie honnêtement sur le contenu réel non modifié -- une compression échouée ne doit jamais faire perdre silencieusement du contenu déjà récupéré. `truncate_to_limit` garde toujours au moins un vrai chunk, même surdimensionné, plutôt que de renvoyer un résultat vide. Tests réels dédiés (18 tests), voir `tests/test_context_compression.py`.
 
 #### Partie 3.4.11 — Duplicate removal
 
@@ -540,14 +556,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 115 | 23.0% |
+| ✅ Fait | 119 | 23.8% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 319 | 63.8% |
+| ⬜ Non commencé | 315 | 63.0% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **122/515 (~23.7%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **194/515 (~37.7%)**
-- Pondéré (✅=1, 🟡=0.5) : **~155/515 (~30.1%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
+- Strictement ✅ : **126/515 (~24.5%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **198/515 (~38.4%)**
+- Pondéré (✅=1, 🟡=0.5) : **~159/515 (~30.9%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

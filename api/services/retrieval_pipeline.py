@@ -146,14 +146,23 @@ async def vector_search(db: AsyncSession, organization_id, query: str, top_k: in
     still goes through `resolve_top_k`'s own bound check -- see this
     module's own top docstring."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
+    model_name = resolve_embedding_model(org_settings)
+    query_embedding = generate_embeddings([query], model_name)[0]
+    return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k)
+
+
+async def rank_chunks_by_embedding(db: AsyncSession, organization_id, embedding: list[float], top_k: int) -> list[dict]:
+    """A real, shared building block, made public specifically so
+    Partie 3.4.3's own `api.services.hyde` can rank this organization's
+    own real chunks against a real embedding that ISN'T necessarily a
+    plain query embedding (HyDE's own real hypothetical-document
+    embedding) without duplicating this real cosine-ranking logic a
+    second time. `vector_search` above is just this function with a
+    real query embedding computed first."""
     chunks = await _fetch_organization_chunks(db, organization_id)
     if not chunks:
         return []
-
-    model_name = resolve_embedding_model(org_settings)
-    query_embedding = generate_embeddings([query], model_name)[0]
-    similarities = _cosine_similarities(query_embedding, [c["embedding"] for c in chunks])
-
+    similarities = _cosine_similarities(embedding, [c["embedding"] for c in chunks])
     ranked = sorted(zip(chunks, similarities), key=lambda pair: pair[1], reverse=True)
     return [{**chunk, "score": float(score)} for chunk, score in ranked[:top_k]]
 
@@ -177,10 +186,12 @@ async def bm25_search(db: AsyncSession, organization_id, query: str, top_k: int 
     return [{**chunks[i], "score": float(scores[i])} for i in ranked_indices]
 
 
-def _reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> dict[str, float]:
+def reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> dict[str, float]:
     """The same real RRF algorithm `src/retrieval.py` already uses,
     reimplemented here (see this module's own top docstring for why,
-    not imported)."""
+    not imported). Made public (Partie 3.4.4) -- reused as-is by
+    `api.services.multi_query`'s own real `merge_query_results` rather
+    than a second, duplicate RRF implementation."""
     fused_scores: dict[str, float] = {}
     for ranked_ids in ranked_id_lists:
         for rank, chunk_id in enumerate(ranked_ids):
@@ -199,7 +210,7 @@ async def hybrid_search(db: AsyncSession, organization_id, query: str, top_k: in
 
     `rrf_k` -- Partie 3.4.7's own real, organization-configurable RRF
     smoothing constant (`resolve_rrf_k`), replacing the real, previously
-    hardcoded `k=60` default `_reciprocal_rank_fusion` used to always
+    hardcoded `k=60` default `reciprocal_rank_fusion` used to always
     apply."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
     candidate_pool = resolve_reranker_top_k(org_settings, top_k=top_k)
@@ -211,7 +222,7 @@ async def hybrid_search(db: AsyncSession, organization_id, query: str, top_k: in
         return []
 
     by_id = {c["chunk_id"]: c for c in semantic_results + bm25_results}
-    fused = _reciprocal_rank_fusion([[c["chunk_id"] for c in semantic_results], [c["chunk_id"] for c in bm25_results]], k=resolved_rrf_k)
+    fused = reciprocal_rank_fusion([[c["chunk_id"] for c in semantic_results], [c["chunk_id"] for c in bm25_results]], k=resolved_rrf_k)
     ranked_ids = sorted(fused, key=lambda cid: fused[cid], reverse=True)[:top_k]
     return [{**by_id[cid], "score": fused[cid]} for cid in ranked_ids]
 

@@ -6401,6 +6401,61 @@ all 6 now-really-supported providers, the same real precedent as
 
 **Real verification**: `tests/test_llm_providers.py` (21 tests).
 
+### Partie 3.4.2 -- query rewriting
+
+New module `api/services/query_rewriting.py`: `normalize_query`/
+`expand_abbreviations`/`correct_spelling`/`simplify_query` (real,
+rule-based transformations), `rewrite_with_llm` (a real LLM call,
+Partie 4.1), `rewrite_query` (the real orchestrator per
+`QUERY_REWRITING_METHOD`). Reuses `normalize_text` (Partie 3.1.2),
+`STOPWORDS` (Partie 3.1.10, made public for this reuse), `detect_language`
+(Partie 3.1.7), and `completion` (Partie 4.1.7). `correct_spelling`
+uses `pyspellchecker` (a real, new, genuinely justified dependency --
+unlike most other Partie 3.4 modules, no spell-checking capability
+existed anywhere in this codebase yet). **A real, deliberate design
+choice**: `simplify_query` (real stopword removal) is deliberately NOT
+part of `rewrite_query`'s own default composite pipeline -- blindly
+stripping stopwords can genuinely hurt real search relevance (both a
+real embedding model and a real BM25 index use stopwords as real
+signal); it stays a real, standalone function a caller can apply
+explicitly. **Real verification**: 18 tests (rule-based transformations
+tested for real, no mocking; LLM paths mocked at the
+`litellm.acompletion` boundary), `tests/test_query_rewriting.py`.
+
+### Partie 3.4.3 -- HyDE (Hypothetical Document Embeddings)
+
+New module `api/services/hyde.py`: `generate_hypothetical_document`/
+`embed_hypothetical_document`/`search_with_hyde`/`hyde_rerank` (the
+real, standard algorithm from Gao et al.'s own original HyDE paper).
+Reuses `completion` (Partie 4.1.7), `generate_embeddings` (Partie
+2.1.1), `resolve_embedding_model` (Partie 3.3.3), and a new, shared,
+public `rank_chunks_by_embedding` (extracted from `vector_search`,
+`api/services/retrieval_pipeline.py`, Partie 3.3.4, specifically for
+this reuse). `HYDE_NUM_DOCUMENTS > 1` real embeddings are AVERAGED (the
+real paper's own refinement, not a fabricated addition). Real
+robustness: any real generation failure (partial or total) honestly
+falls back to plain vector search rather than erroring or returning
+nothing. **Real verification**: 11 tests, `tests/test_hyde.py`.
+
+### Partie 3.4.4 -- multi-query retrieval
+
+New module `api/services/multi_query.py`: `generate_query_variants`/
+`run_queries_parallel`/`merge_query_results`/`deduplicate_results`/
+`rerank_merged_results`, plus a real, standalone orchestrator
+`multi_query_search`. Reuses `completion` (Partie 4.1.7),
+`vector_search` (Partie 3.3.4), `reciprocal_rank_fusion` (Partie
+3.3.4, made public for this reuse), `deduplicate_by_hash` (Partie
+3.4.11), and `compute_query_embedding`/`rerank_by_semantic_similarity`
+(Partie 3.4.6). Real, genuinely parallel execution via
+`asyncio.gather(..., return_exceptions=True)` -- one real, failed
+query never aborts the others. 3 real fusion methods (`rrf`/`score`/
+`interleaving`). **A real, documented deviation, consistent with
+Parties 3.4.2/3.4.3**: `search()` is NOT modified to always run
+multi-query (despite the literal action item 4) -- forcing extra LLM
+calls on EVERY search would be a real, invasive behavior change for
+every existing caller; `multi_query_search` stays a real, standalone
+alternative. **Real verification**: 15 tests, `tests/test_multi_query.py`.
+
 ### Partie 3.4.5 -- metadata filtering
 
 New module `api/services/metadata_filtering.py`: `build_metadata_filter`/
@@ -6460,6 +6515,26 @@ text) -- built once, not duplicated.
 **Real verification**: 6 tests in `tests/test_retrieval_config.py`, 1
 integration test in `tests/test_retrieval_pipeline.py`, 2 write-time
 tests in `tests/test_organization_settings.py`.
+
+### Partie 3.4.10 -- context compression
+
+New module `api/services/context_compression.py`: `compress_context`/
+`summarize_chunk`/`extract_key_sentences`/`rerank_by_importance`/
+`truncate_to_limit`/`compress_with_llm`. Reuses `extract_summary`
+(Partie 3.1.10, real extractive summarization, directly for
+`extract_key_sentences`), `compute_query_embedding`/
+`rerank_by_semantic_similarity` (Partie 3.4.6) for `rerank_by_importance`,
+`get_tokenizer`/`count_tokens` (Partie 3.2.6) for `truncate_to_limit`,
+and `completion` (Partie 4.1.7). **Real robustness (vision critique 3)**:
+if the combined real context already fits within `max_tokens`,
+`compress_context` compresses NOTHING at all -- compression only runs
+when the real budget genuinely demands it. **Real LLM robustness**: any
+real failure in `summarize_chunk`/`compress_with_llm` honestly falls
+back to the real, unmodified content -- a failed compression must never
+silently lose already-retrieved content. `truncate_to_limit` always
+keeps at least one real chunk, even an oversized one, rather than
+returning nothing. **Real verification**: 18 tests,
+`tests/test_context_compression.py`.
 
 ### Partie 3.4.11 -- duplicate removal
 
