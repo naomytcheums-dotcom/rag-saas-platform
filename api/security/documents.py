@@ -2785,12 +2785,23 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
     ends in `failed` -- exactly this step's own vision critique answer
     to "que se passe-t-il si le fichier est corrompu" -- rather than
     crashing the Celery worker or leaving the document silently stuck.
+
+    Partie 2.2.11 -- `indexing_started_at` is stamped the moment this
+    run begins (any prior `indexing_error` is cleared at the same time,
+    so a reindex that's actively re-running never keeps showing a stale
+    error from a previous attempt); `indexing_error` is set only on the
+    `failed` path, alongside the SAME real exception already recorded
+    in `metadata_json["error"]` -- one real error, two places it needs
+    to be readable from (the existing metadata blob, and the new
+    dedicated status routes below), not two competing sources of truth.
     """
     document = await db.scalar(select(Document).where(Document.id == document_id))
     if document is None:
         raise ValueError(f"'{document_id}' is not a registered document")
 
     document.status = DocumentStatus.processing.value
+    document.indexing_started_at = dt.datetime.now(dt.timezone.utc)
+    document.indexing_error = None
     await db.flush()
     await send_progress_update(document.id, _PROGRESS_BY_STATUS[DocumentStatus.processing.value], document.status)
 
@@ -2851,6 +2862,7 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
         logger.warning("process_document: processing failed for document '%s': %s", document_id, exc)
         document.status = DocumentStatus.failed.value
         document.metadata_json = {**(document.metadata_json or {}), "error": str(exc)}
+        document.indexing_error = str(exc)
 
     await db.flush()
     await send_progress_update(document.id, _PROGRESS_BY_STATUS[document.status], document.status)

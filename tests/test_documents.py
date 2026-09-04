@@ -3627,3 +3627,124 @@ async def test_document_history_for_a_nonexistent_document_returns_404(client, d
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     response = await client.get(f"/documents/{uuid.uuid4()}/history", headers=_auth_header(owner_token))
     assert response.status_code == 404
+
+
+# ------------------------------------------------------- 2.2.11 -- indexing status --
+
+async def test_owner_can_view_document_status_right_after_upload(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: le statut d'indexation est consultable via
+    l'API, reflétant le vrai statut du document (pending juste après
+    l'upload, avant tout traitement réel)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/status", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["status"] == DocumentStatus.pending.value
+    assert body["indexing_started_at"] is None
+    assert body["processed_at"] is None
+    assert body["indexing_error"] is None
+
+
+async def test_document_status_shows_the_real_error_after_a_failed_indexing_attempt(client, db_session, register_payload, monkeypatch):
+    """Vision critique -- une erreur réelle d'indexation doit être
+    consultable, pas seulement visible dans les logs serveur."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    document = await db_session.get(Document, uuid.UUID(document_id))
+    document.status = DocumentStatus.failed.value
+    document.indexing_started_at = document.created_at
+    document.indexing_error = "S3 object not found"
+    await db_session.commit()
+
+    response = await client.get(f"/documents/{document_id}/status", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == DocumentStatus.failed.value
+    assert body["indexing_error"] == "S3 object not found"
+    assert body["indexing_started_at"] is not None
+
+
+async def test_viewer_can_view_document_status(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    viewer_token, viewer = await _register(client, db_session, "statusviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.get(f"/documents/{document_id}/status", headers=_auth_header(viewer_token))
+    assert response.status_code == 200
+
+
+async def test_document_status_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/status", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_document_status_belonging_to_another_organization_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    outsider_token, outsider = await _register(client, db_session, "statusoutsider@example.com")
+    response = await client.get(f"/documents/{document_id}/status", headers=_auth_header(outsider_token))
+    assert response.status_code == 404  # anti-enumeration
+
+
+async def test_admin_can_view_organization_document_status_summary(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: un résumé du statut d'indexation de
+    l'organisation est consultable (compte réel par statut)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    first = await _upload(client, org["id"], owner_token)
+    await _upload(client, org["id"], owner_token)
+
+    completed_document = await db_session.get(Document, uuid.UUID(first.json()["id"]))
+    completed_document.status = DocumentStatus.completed.value
+    await db_session.commit()
+
+    response = await client.get(f"/organizations/{org['id']}/documents/status", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["organization_id"] == org["id"]
+    assert body["total"] == 2
+    assert body["by_status"] == {DocumentStatus.pending.value: 1, DocumentStatus.completed.value: 1}
+
+
+async def test_member_cannot_view_organization_document_status_summary(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    member_token, member = await _register(client, db_session, "statussummarymember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.get(f"/organizations/{org['id']}/documents/status", headers=_auth_header(member_token))
+    assert response.status_code == 403
+
+
+async def test_organization_document_status_summary_excludes_soft_deleted_documents(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await _upload(client, org["id"], owner_token)
+    await client.delete(f"/documents/{document_id}", headers=_auth_header(owner_token))
+
+    response = await client.get(f"/organizations/{org['id']}/documents/status", headers=_auth_header(owner_token))
+    body = response.json()
+    assert body["total"] == 1

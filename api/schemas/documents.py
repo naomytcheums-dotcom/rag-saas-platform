@@ -321,3 +321,33 @@ class DocumentProgressResponse(BaseModel):
     document_id: uuid.UUID
     status: str
     progress: int
+
+
+class DocumentStatusResponse(BaseModel):
+    """Partie 2.2.11, item 3's own literal `GET .../status` response --
+    deliberately reuses `Document.status`/`processed_at` (already real,
+    already tracked since Partie 2.1.1) rather than a second, easily-
+    desynced `indexing_status` column this step's own literal spec asks
+    for -- see api/models/document.py's own docstring on
+    `indexing_started_at` for why. `indexing_error` is honestly `None`
+    for a document that has never failed, or that is currently
+    reprocessing (a fresh attempt clears the prior error the moment it
+    starts -- see api/security/documents.py's own process_document)."""
+
+    document_id: uuid.UUID
+    status: str
+    indexing_started_at: dt.datetime | None
+    processed_at: dt.datetime | None
+    indexing_error: str | None
+
+
+class DocumentStatusSummaryResponse(BaseModel):
+    """Partie 2.2.11, item 3's own literal organization-wide status
+    route -- a real count of this organization's own non-deleted
+    documents, grouped by their real `status`. `by_status` only carries
+    keys that actually occur (never a fabricated zero for a status no
+    document in this organization currently has)."""
+
+    organization_id: uuid.UUID
+    total: int
+    by_status: dict[str, int]

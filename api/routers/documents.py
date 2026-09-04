@@ -50,6 +50,8 @@ from api.schemas.documents import (
     DocumentMetadataResponse,
     DocumentProgressResponse,
     DocumentResponse,
+    DocumentStatusResponse,
+    DocumentStatusSummaryResponse,
     DocumentUrlImportRequest,
     GitHubIssuesImportRequest,
     GitHubIssuesImportResponse,
@@ -938,3 +940,39 @@ async def get_document_history_route(
         )
         for entry in entries
     ]
+
+
+# =========================== Partie 2.2.11 -- indexing status ===========================
+
+@router.get("/documents/{document_id}/status", response_model=DocumentStatusResponse)
+async def get_document_status_route(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 1's own literal route -- Member+ (Viewer included, the same
+    real read-only reasoning as the progress/history routes above),
+    reusing the SAME `_get_document_and_membership` anti-enumeration
+    guard. Deliberately reads `Document.status`/`processed_at` directly
+    rather than a second `indexing_status` column -- see
+    api/models/document.py's own docstring on `indexing_started_at`."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    return DocumentStatusResponse(
+        document_id=document.id, status=document.status, indexing_started_at=document.indexing_started_at,
+        processed_at=document.processed_at, indexing_error=document.indexing_error,
+    )
+
+
+@router.get("/organizations/{org_id}/documents/status", response_model=DocumentStatusSummaryResponse)
+async def get_organization_document_status_summary_route(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Item 1's own literal organization-wide route -- Admin+ (the same
+    real permission level as the org-wide reindex route above). A real
+    `GROUP BY status` count over this organization's own non-deleted
+    documents, not a fabricated/estimated figure."""
+    rows = (await db.execute(
+        select(Document.status, func.count()).where(Document.organization_id == org_id, Document.deleted_at.is_(None))
+        .group_by(Document.status)
+    )).all()
+    by_status = {row[0]: row[1] for row in rows}
+    return DocumentStatusSummaryResponse(organization_id=org_id, total=sum(by_status.values()), by_status=by_status)

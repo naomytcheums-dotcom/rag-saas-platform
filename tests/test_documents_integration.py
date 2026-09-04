@@ -369,6 +369,10 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
             assert updated.metadata_json["title"] == "Integration Test PDF"
             assert updated.metadata_json["page_count"] == 1
             assert updated.processed_at is not None
+            # Partie 2.2.11 -- real proof of the success path: stamped
+            # when this real run started, and no error left behind.
+            assert updated.indexing_started_at is not None
+            assert updated.indexing_error is None
 
             chunks = (await session.execute(
                 DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
@@ -561,6 +565,10 @@ async def test_process_document_marks_failed_for_a_corrupt_pdf_upload(pg_engine,
 
             assert updated.status == DocumentStatus.failed.value
             assert "error" in updated.metadata_json
+            # Partie 2.2.11 -- the SAME real error, also readable from the
+            # dedicated status route/columns, not just metadata_json.
+            assert updated.indexing_error == updated.metadata_json["error"]
+            assert updated.indexing_started_at is not None
         finally:
             await _cleanup(session, organization.id, owner.id)
 

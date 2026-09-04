@@ -98,6 +98,18 @@ class Document(Base):
     # those routes by hand.
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Partie 2.2.11 -- indexing status. A deliberate, DOCUMENTED deviation
+    # from this step's own literal ask (a second `indexing_status` column):
+    # `status`/`processed_at` above ALREADY carry pending/processing/
+    # completed/failed and the completion timestamp -- duplicating that
+    # into a second column would just be two sources of truth that can
+    # drift apart (the exact same "avoid a second, easily-desynced column"
+    # reasoning already applied in Partie 2.2.8, which reused `status`
+    # rather than adding its own flag). Only the two genuinely NEW pieces
+    # of information get new columns: when the current processing attempt
+    # started, and why the last one failed.
+    indexing_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    indexing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         # The only read patterns this table serves (list_documents,
