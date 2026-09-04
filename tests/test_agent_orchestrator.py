@@ -215,6 +215,50 @@ async def test_run_agent_loads_real_memory_into_the_system_prompt(monkeypatch, d
     assert any(e["event"] == "memory_loaded" for e in run.trace)
 
 
+# ------------------------------------- conversation (Partie 5.1.12 integration) -------------------------------------
+
+
+async def test_run_agent_loads_and_extends_a_real_conversation(monkeypatch, db_session):
+    """Validation criterion: cohérence -- l'historique est chargé et la
+    continuité fonctionne entre appels successifs."""
+    from api.security.conversations import create_conversation, get_conversation_messages
+
+    mock_acompletion = AsyncMock(return_value=_real_response("Nice to meet you too!"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    conversation = await create_conversation(db_session, "agent-1", uuid.uuid4(), "Test")
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "Nice to meet you!", db=db_session, conversation_id=conversation.id)
+
+    assert run.status == "completed"
+    messages = await get_conversation_messages(db_session, conversation.id)
+    assert [m.role for m in messages] == ["user", "assistant"]
+    assert messages[0].content == "Nice to meet you!"
+    assert messages[1].content == "Nice to meet you too!"
+
+
+async def test_run_agent_replays_real_prior_conversation_turns(monkeypatch, db_session):
+    from api.security.conversations import add_message, create_conversation
+
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    conversation = await create_conversation(db_session, "agent-1", uuid.uuid4(), "Test")
+    await add_message(db_session, conversation.id, "user", "my name is Ada")
+    await add_message(db_session, conversation.id, "assistant", "hi Ada")
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    await orchestrator.run_agent("agent-1", "what's my name?", db=db_session, conversation_id=conversation.id)
+
+    messages = mock_acompletion.call_args.kwargs["messages"]
+    contents = [m["content"] for m in messages]
+    assert "my name is Ada" in contents
+    assert "hi Ada" in contents
+
+
 async def test_run_agent_excludes_a_real_denied_tool(monkeypatch, db_session):
     """Validation criterion: sécurité (Partie 5.1.3) -- si l'utilisateur
     n'a pas la permission, l'outil est désactivé (jamais sélectionné,

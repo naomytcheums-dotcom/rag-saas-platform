@@ -598,9 +598,27 @@ Tests réels dédiés (18 tests fonction+endpoint), voir `tests/test_human_appro
 
 Tests réels dédiés (13 tests fonction + 1 test d'intégration orchestrateur = 14), voir `tests/test_agent_memory.py`.
 
+#### Partie 5.1.12 — Mémoire de conversation cross-session
+
+✅ **Nouveaux modèles réels** `api/models/conversation.py` (`Conversation`, `ConversationMessage`, migration `0054`, RLS activée). **Décision réelle et délibérée, pas une déviation** : les chemins littéraux de cette étape (`POST /conversations`, etc.) ne portent aucune organisation -- contrairement à 5.1.3/5.1.10 (vrais outils admin plateforme), une conversation est une ressource personnelle. Le contrôle d'accès est donc une vraie propriété (`user_id == appelant.id`), pas un rôle d'organisation -- cohérent avec les chemins littéraux, sans déviation nécessaire.
+
+✅ **Nouveau module réel** `api/security/conversations.py` : les 8 fonctions littérales. `add_message` touche réellement `updated_at` de la conversation parente.
+
+✅ **Bug réel trouvé et corrigé pendant les tests** : `update_conversation_title`/`archive_conversation` s'appuyaient sur `onupdate=func.now()` (calculé côté serveur) -- après `commit()` (avec `expire_on_commit=False`), SQLAlchemy laisse cette valeur "expirée", et une lecture synchrone ultérieure (la sérialisation de réponse FastAPI, hors contexte async) déclenche une vraie `MissingGreenlet`. Corrigé en fixant `updated_at` explicitement en Python avant le flush, comme `add_message` le faisait déjà.
+
+✅ **Endpoints réels**, les 8 littéraux, sous `/conversations` (pas d'organisation, cohérent), gate `require_current_user` + vérification réelle de propriété (404, pas 403, anti-énumération, même logique que `DELETE /sessions/{id}`).
+
+✅ **Intégration réelle dans l'orchestrateur** : `run_agent` accepte `conversation_id` -- l'historique réel est rejoué comme de vrais tours précédents (pas aplati en une chaîne), le nouvel input utilisateur ET la réponse finale sont sauvegardés automatiquement, testé sur deux appels successifs (continuité réelle).
+
+**Gestion des tokens (vision critique)** : troncature réelle mais simple, par NOMBRE de messages (`CONVERSATION_HISTORY_MAX_MESSAGES=20`) -- pas une vraie troncature par comptage de tokens par fournisseur (travail futur séparé, réel mais plus complexe) ; un vrai filet de sécurité contre une croissance non bornée, documenté comme tel.
+
+**Sécurité (vision critique)** : isolation par utilisateur testée (`test_get_conversations_lists_only_this_users_own_conversations`, `test_cannot_read_another_users_conversation`).
+
+Tests réels dédiés (13 tests fonction+endpoint + 2 tests d'intégration orchestrateur = 15), voir `tests/test_conversations.py`.
+
 Agent traces (au-delà de l'orchestrateur central lui-même) : **existent
 déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
-récentes). Conversation memory cross-session (DB), task planning : ⬜.
+récentes). Task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

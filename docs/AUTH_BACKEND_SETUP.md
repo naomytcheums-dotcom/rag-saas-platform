@@ -6908,6 +6908,49 @@ would need a real, separate summarization step, not asked for here.
 **Real verification**: 14 tests (13 function tests, 1 orchestrator
 integration test), `tests/test_agent_memory.py`.
 
+### Partie 5.1.12 -- cross-session conversation memory
+
+New real models `api/models/conversation.py` (`Conversation`,
+`ConversationMessage`, migration `0054`, RLS enabled). **A real,
+deliberate call, not a deviation**: this étape's own literal paths
+(`POST /conversations`, ...) carry no organization -- unlike 5.1.3/
+5.1.10 (real platform-wide admin tools), a conversation is a personal
+resource. Access control is therefore real ownership (`user_id ==
+caller.id`), not an organization role -- matching the literal paths,
+no deviation needed.
+
+New module `api/security/conversations.py`: all 8 literal functions.
+`add_message` really touches the parent conversation's `updated_at`.
+
+**A real bug found and fixed while testing**: `update_conversation_title`/
+`archive_conversation` relied on `onupdate=func.now()` (server-computed)
+-- after `commit()` (with `expire_on_commit=False`), SQLAlchemy leaves
+that value EXPIRED, and a later synchronous read (FastAPI's own
+response serialization, outside any async context) raises a real
+`MissingGreenlet`. Fixed by setting `updated_at` explicitly in Python
+before flush, same as `add_message` already did.
+
+**Real endpoints**, all 8 literal ones, under `/conversations` (no
+organization, consistent), gated by `require_current_user` plus a real
+ownership check (404, not 403, same anti-enumeration logic as `DELETE
+/sessions/{id}`).
+
+**Real orchestrator integration**: `run_agent` takes `conversation_id`
+-- real history replays as real prior turns (not flattened into one
+string), the new user input AND the final response are saved
+automatically, tested across two successive calls (real continuity).
+
+**Token management (vision critique)**: real but simple, message-COUNT
+truncation (`CONVERSATION_HISTORY_MAX_MESSAGES=20`) -- not a real
+per-provider token-counting truncation (separate, real, more complex
+future work); a real safeguard against unbounded growth, documented as
+such.
+
+**Security (vision critique)**: per-user isolation tested.
+
+**Real verification**: 15 tests (13 function/endpoint tests, 2
+orchestrator integration tests), `tests/test_conversations.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

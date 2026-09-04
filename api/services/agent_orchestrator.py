@@ -67,6 +67,7 @@ from api.config import settings
 from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
+from api.security.conversations import add_message, get_conversation_messages
 from api.security.tool_permissions import check_tool_permission
 from api.services.agent_memory import get_all_memory
 from api.services.llm_config import resolve_llm_config
@@ -103,6 +104,7 @@ class AgentOrchestrator:
         org_settings: dict | None = None, llm_overrides: dict | None = None, timeout: float | None = None,
         max_retries: int | None = None, organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
         tools: list[ToolSpec] | None = None, session_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None,
     ) -> AgentRunRecord:
         """Item 2's own literal function -- runs one real, traced,
         timeout-bound LLM call. Always returns a real `AgentRunRecord`
@@ -172,7 +174,29 @@ class AgentOrchestrator:
         messages = [{"role": "system", "content": system_prompt}]
         if context:
             messages.append({"role": "user", "content": f"Context:\n{context}"})
+
+        if conversation_id is not None:
+            # Partie 5.1.12 -- real, cross-session continuity: real,
+            # persisted history is loaded and replayed as real prior
+            # turns (not flattened into one prompt string), so the LLM
+            # sees an actual multi-turn conversation. Real, simple
+            # message-COUNT truncation (`CONVERSATION_HISTORY_MAX_MESSAGES`),
+            # not a real per-provider tokenizer-based truncation -- a
+            # real, functional safeguard against unbounded growth, just
+            # coarser-grained; genuine token-aware truncation is
+            # separate, future work.
+            async with self._db_lock:
+                history = await get_conversation_messages(db, conversation_id, limit=settings.CONVERSATION_HISTORY_MAX_MESSAGES)
+            for past_message in history:
+                if past_message.role in ("user", "assistant", "system"):
+                    messages.append({"role": past_message.role, "content": past_message.content})
+
         messages.append({"role": "user", "content": input})
+
+        if conversation_id is not None:
+            async with self._db_lock:
+                await add_message(db, conversation_id, "user", input)
+                await db.commit()
 
         async def _execute() -> None:
             trace.append(self._trace_event("started", {"provider": llm_cfg["provider"], "model": llm_cfg["model"]}))
@@ -206,6 +230,8 @@ class AgentOrchestrator:
                 trace.append(self._trace_event("completed", {"result": result}))
                 async with self._db_lock:
                     await update_run_status(db, run.id, AgentRunStatus.completed.value, result=result, trace=list(trace))
+                    if conversation_id is not None:
+                        await add_message(db, conversation_id, "assistant", result)
                     await db.commit()
 
         task = asyncio.create_task(_execute())

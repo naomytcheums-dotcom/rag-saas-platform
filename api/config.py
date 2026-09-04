@@ -644,6 +644,15 @@ class Settings(BaseSettings):
     AGENT_MEMORY_TTL: int = 3600
     AGENT_MEMORY_ENABLED: bool = True
 
+    # -- Conversation memory, cross-session (Partie 5.1.12) ----------------------
+    # Not one of this étape's own literal settings -- a real, necessary
+    # addition: the étape's own vision critique explicitly asks whether
+    # history is truncated for token limits. A real, simple message-COUNT
+    # window (not a real per-provider tokenizer-based truncation, which
+    # would be separate, future work) -- documented in
+    # api/services/agent_orchestrator.py's own docstring.
+    CONVERSATION_HISTORY_MAX_MESSAGES: int = 20
+
     # -- Task planning (Partie 5.1.13) -------------------------------------------
     TASK_PLANNING_ENABLED: bool = True
     TASK_PLANNING_MAX_STEPS: int = 20
