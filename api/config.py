@@ -559,6 +559,40 @@ class Settings(BaseSettings):
     CONTEXT_COMPRESSION_MAX_TOKENS: int = 2000
     CONTEXT_COMPRESSION_METHOD: str = "extract"
 
+    # -- Embedding providers (Partie 4.2.1-4.2.6) ------------------------------
+    # See api/services/embedding_providers.py's own top docstring for
+    # the real design: OpenAI/Voyage/Cohere via litellm.aembedding
+    # (already a real dependency since Partie 4.1.7, no separate SDKs
+    # needed); Sentence Transformers/Hugging Face reuse the exact same
+    # real, existing, local `generate_embeddings` (Partie 2.1.1).
+    OPENAI_EMBEDDING_API_KEY: str = ""
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_EMBEDDING_DIMENSIONS: int = 1536
+
+    VOYAGE_API_KEY: str = ""
+    VOYAGE_EMBEDDING_MODEL: str = "voyage-2"
+    VOYAGE_EMBEDDING_DIMENSIONS: int = 1024
+
+    COHERE_API_KEY: str = ""
+    COHERE_EMBEDDING_MODEL: str = "embed-english-v3.0"
+    COHERE_EMBEDDING_DIMENSIONS: int = 1024
+    COHERE_EMBEDDING_INPUT_TYPE: str = "search_document"
+
+    SENTENCE_TRANSFORMERS_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    SENTENCE_TRANSFORMERS_DIMENSIONS: int = 384
+    SENTENCE_TRANSFORMERS_DEVICE: str = "cpu"
+    SENTENCE_TRANSFORMERS_BATCH_SIZE: int = 32
+
+    HF_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    HF_EMBEDDING_DIMENSIONS: int = 384
+    HF_EMBEDDING_DEVICE: str = "cpu"
+    HF_EMBEDDING_BATCH_SIZE: int = 32
+    HF_TOKEN: str = ""
+
+    # -- LLM generation configuration (Partie 4.3.1-4.3.5) ---------------------
+    SYSTEM_PROMPT_MAX_LENGTH: int = 1000
+    MAX_TOKENS_CEILING: int = 32768
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

@@ -88,8 +88,11 @@ class LLMAuthenticationError(LLMError):
 # Item 4's own literal per-provider config (4.1.1-4.1.6's own literal
 # settings, all real, all in api/config.py) -- one real, small lookup
 # table rather than a long if/elif chain repeated across every
-# function below.
-_PROVIDER_SETTINGS = {
+# function below. Made public (Partie 4.3.1) -- reused as-is by
+# `api.services.llm_config`'s own real `resolve_llm_provider`/
+# `resolve_llm_model` rather than a second, duplicate provider
+# registry.
+PROVIDER_SETTINGS = {
     "anthropic": {"api_key": "ANTHROPIC_API_KEY", "model": "ANTHROPIC_MODEL", "max_tokens": "ANTHROPIC_MAX_TOKENS", "temperature": "ANTHROPIC_TEMPERATURE"},
     "openai": {"api_key": "OPENAI_API_KEY", "model": "OPENAI_MODEL", "max_tokens": "OPENAI_MAX_TOKENS", "temperature": "OPENAI_TEMPERATURE"},
     "gemini": {"api_key": "GEMINI_API_KEY", "model": "GEMINI_MODEL", "max_tokens": "GEMINI_MAX_TOKENS", "temperature": "GEMINI_TEMPERATURE"},
@@ -111,14 +114,14 @@ def get_available_providers() -> list[str]:
     real API key/base URL actually configured, not just the full real
     list of 6 this module knows how to call."""
     available = []
-    for provider in _PROVIDER_SETTINGS:
+    for provider in PROVIDER_SETTINGS:
         if provider == "ollama":
             if settings.OLLAMA_BASE_URL:
                 available.append(provider)
         elif provider == "openai_compatible":
             if settings.OPENAI_COMPATIBLE_BASE_URL:
                 available.append(provider)
-        elif getattr(settings, _PROVIDER_SETTINGS[provider]["api_key"]):
+        elif getattr(settings, PROVIDER_SETTINGS[provider]["api_key"]):
             available.append(provider)
     return available
 
@@ -134,10 +137,10 @@ def get_default_provider(org_settings: dict | None = None) -> str:
 
 
 def _provider_kwargs(provider: str, model: str | None) -> dict:
-    if provider not in _PROVIDER_SETTINGS:
-        raise LLMProviderError(f"Unknown LLM provider: {provider!r} (expected one of {sorted(_PROVIDER_SETTINGS)})")
+    if provider not in PROVIDER_SETTINGS:
+        raise LLMProviderError(f"Unknown LLM provider: {provider!r} (expected one of {sorted(PROVIDER_SETTINGS)})")
 
-    config = _PROVIDER_SETTINGS[provider]
+    config = PROVIDER_SETTINGS[provider]
     resolved_model = model or getattr(settings, config["model"])
     api_key = getattr(settings, config["api_key"]) if config["api_key"] else None
 

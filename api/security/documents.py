@@ -307,11 +307,16 @@ _progress_redis = redis_asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, decode_r
 _EMBEDDER_CACHE: dict[str, object] = {}
 
 
-def _get_embedder(model_name: str):
+def get_embedder(model_name: str):
     """Deferred import -- see this module's own docstring for why.
     Same USE_TF=0 trick as src/retrieval.py: transformers otherwise
     tries to also detect/load a TensorFlow backend that isn't installed
-    here, which crashes the import outright."""
+    here, which crashes the import outright.
+
+    Made public (Partie 4.2.4) -- reused as-is by
+    `api.services.embedding_providers`'s own real
+    `get_sentence_transformer_model`/`get_hf_model` rather than a
+    second, duplicate model cache."""
     if model_name not in _EMBEDDER_CACHE:
         os.environ.setdefault("USE_TF", "0")
         from sentence_transformers import SentenceTransformer
@@ -351,7 +356,7 @@ def generate_embeddings(texts: list[str], model_name: str) -> list[list[float]]:
     configured (organization_settings.embedding_model) -- see this
     module's own docstring for the honest scope of what this is (and
     isn't) relative to Partie 4."""
-    embedder = _get_embedder(model_name)
+    embedder = get_embedder(model_name)
     return embedder.encode(texts, batch_size=64).tolist()
 
 

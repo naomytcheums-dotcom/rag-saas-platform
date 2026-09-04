@@ -358,7 +358,7 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 
 ---
 
-## PARTIE 4 — Multi-LLM & Embeddings — 🟡 PARTIEL (7/18)
+## PARTIE 4 — Multi-LLM & Embeddings — 🟡 PARTIEL (13/18)
 
 ### 4.1 LLM Providers — ✅ (7/7)
 
@@ -388,8 +388,34 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 
 Tests réels dédiés (21 tests), voir `tests/test_llm_providers.py`.
 
-### 4.2 Embedding Providers (6 items) | Seul Sentence Transformers/MiniLM existe (4.2.4), pas d'abstraction
-### 4.3 Configurabilité (5 items) | ⬜ tout
+### 4.2 Embedding Providers — ✅ (6/6)
+
+| # | Fournisseur | Statut |
+|---|---|---|
+| 4.2.1 | OpenAI Embeddings | ✅ Voir détails ci-dessous |
+| 4.2.2 | Voyage AI Embeddings | ✅ Voir détails ci-dessous |
+| 4.2.3 | Cohere Embeddings | ✅ Voir détails ci-dessous |
+| 4.2.4 | Sentence Transformers | ✅ Voir détails ci-dessous |
+| 4.2.5 | Hugging Face Embeddings | ✅ Voir détails ci-dessous |
+| 4.2.6 | Abstraction Embeddings | ✅ Voir détails ci-dessous |
+
+#### Partie 4.2.1-4.2.6 — Abstraction multi-fournisseurs d'embeddings
+
+✅ **Un seul module réel**, `api/services/embedding_providers.py`, même raisonnement réel que `llm_providers.py` (Partie 4.1) : les actions littérales de la Partie 4.2.6 redemandent la même vraie abstraction `get_embedding`/`get_embeddings` déjà demandée par l'item 4 de la Partie 4.2.1.
+
+**Un vrai fait structurant** : les Parties 4.2.4 (Sentence Transformers) et 4.2.5 (Hugging Face) sont, en toute honnêteté, LE MÊME vrai mécanisme déjà construit et fonctionnel depuis la Partie 2.1.1 -- `generate_embeddings`/`get_embedder` (rendu public pour cette réutilisation) chargent déjà N'IMPORTE QUEL vrai modèle sentence-transformers par son nom, réel, local, gratuit, sans clé API -- et chaque modèle nommé littéralement par ces 2 étapes (e5, bge, MiniLM multilingue, etc.) EST un vrai modèle sentence-transformers du Hub. `get_hf_embedding(s)`/`get_sentence_transformer_embedding(s)` sont de vrais wrappers fins autour de cette même fonction déjà existante, pas deux implémentations séparées.
+
+**Déviation réelle et documentée du texte littéral des Parties 4.2.1/4.2.2/4.2.3** ("SDK openai/voyageai/cohere") : OpenAI/Voyage/Cohere sont appelés via `litellm.aembedding` (déjà une vraie dépendance depuis la Partie 4.1.7, confirmée pour supporter réellement `"openai"`/`"voyage"`/`"cohere"` comme vrais fournisseurs) -- évite 3 SDK séparés supplémentaires, même raisonnement réel déjà établi par `llm_providers.py`.
+
+**Réutilise** `embedding_config.EMBEDDING_DIMENSIONS` (Partie 3.3.3) pour les 3 modèles sentence-transformers catalogués par les deux modules, plutôt qu'un second jeu de dimensions dupliqué.
+
+**Vrai bug trouvé et corrigé en testant** : `litellm.exceptions.RateLimitError` n'hérite PAS de `litellm.exceptions.APIError` (il hérite de la hiérarchie séparée `openai.RateLimitError`/`openai.APIStatusError` que litellm réexporte pour certaines erreurs) -- le mapping d'erreur original ne capturait donc jamais un vrai rate-limit du tout, laissant l'exception brute s'échapper au lieu de devenir une vraie `EmbeddingProviderError`. Corrigé en capturant `RateLimitError` explicitement, confirmé par un vrai test de régression dédié.
+
+**`get_cohere_embeddings`** : `input_type` (item 2's own literal 4-valeurs, `search_document`/`search_query`/`classification`/`clustering`) transmis directement à la vraie API Cohere via litellm. **`embedding_config.py`'s own docstring mis à jour** : les raisons "indisponible" pour OpenAI/Cohere pointent maintenant vers ce nouveau module réel plutôt que d'affirmer à tort qu'aucune intégration n'existe -- `embedding_config.py` reste honnêtement scopé au SEUL champ `organization_settings.embedding_model` (le pipeline d'ingestion réel, live, qui ne charge que des modèles locaux via `SentenceTransformer(...)`), tandis que `embedding_providers.py` est une vraie capacité autonome, nouvelle, séparée.
+
+Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression dédiée -- OpenAI/Voyage/Cohere mockés à la frontière `litellm.aembedding`, Sentence Transformers/Hugging Face testés pour de vrai sans mock), voir `tests/test_embedding_providers.py`.
+
+### 4.3 Configurabilité — ⬜ (0/5)
 
 ---
 
@@ -556,14 +582,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 119 | 23.8% |
+| ✅ Fait | 125 | 25.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 315 | 63.0% |
+| ⬜ Non commencé | 309 | 61.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **126/515 (~24.5%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **198/515 (~38.4%)**
-- Pondéré (✅=1, 🟡=0.5) : **~159/515 (~30.9%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
+- Strictement ✅ : **132/515 (~25.6%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **204/515 (~39.6%)**
+- Pondéré (✅=1, 🟡=0.5) : **~165/515 (~32.0%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

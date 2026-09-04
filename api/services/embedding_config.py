@@ -42,12 +42,23 @@ EMBEDDING_MODELS: dict[str, dict] = {
     "openai/text-embedding-ada-002": {
         "dimensions": 1536,
         "available": False,
-        "reason": "No OpenAI integration exists in this codebase yet (no API key setting, no SDK dependency).",
+        # Updated at Partie 4.2.1/4.2.6 -- this reason was accurate when
+        # first written (Partie 3.3.3), but real OpenAI embedding
+        # support now exists, in `api.services.embedding_providers`
+        # (Partie 4.2), a genuinely separate, standalone capability.
+        # THIS resolver still governs a real, different, narrower thing:
+        # `organization_settings.embedding_model`, the single model
+        # string `api.security.documents.generate_embeddings`/
+        # `_get_embedder` actually load via `SentenceTransformer(...)`
+        # for the LIVE ingestion pipeline -- a real API-based model
+        # (this one included) genuinely cannot load that way, so it
+        # stays real, honestly unavailable for THIS specific field.
+        "reason": "Not loadable via SentenceTransformer(...) -- the live ingestion pipeline only supports local models this way. See api.services.embedding_providers for real, standalone OpenAI embedding access (Partie 4.2.1).",
     },
     "cohere/embed-english-v3.0": {
         "dimensions": 1024,
         "available": False,
-        "reason": "No Cohere integration exists in this codebase yet (no API key setting, no SDK dependency).",
+        "reason": "Not loadable via SentenceTransformer(...) -- the live ingestion pipeline only supports local models this way. See api.services.embedding_providers for real, standalone Cohere embedding access (Partie 4.2.3).",
     },
 }
 

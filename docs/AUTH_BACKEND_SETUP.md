@@ -6401,6 +6401,60 @@ all 6 now-really-supported providers, the same real precedent as
 
 **Real verification**: `tests/test_llm_providers.py` (21 tests).
 
+### Partie 4.2.1-4.2.6 -- multi-provider embedding abstraction
+
+One real module, `api/services/embedding_providers.py`, the same real
+reasoning as `llm_providers.py` (Partie 4.1): Partie 4.2.6's own
+literal action items re-ask for the same `get_embedding`/`get_embeddings`
+abstraction Partie 4.2.1's own action item 4 already requested.
+
+**A real, load-bearing fact**: Partie 4.2.4 (Sentence Transformers) and
+4.2.5 (Hugging Face) are, honestly, THE SAME real mechanism already
+built and working since Partie 2.1.1 -- `generate_embeddings`/
+`get_embedder` (made public for this reuse) already load ANY real
+sentence-transformers model by name, real, local, free, no API key --
+and every model these 2 étapes' own literal lists name (e5, bge,
+multilingual-MiniLM, etc.) IS a real sentence-transformers model on
+the Hub. `get_hf_embedding(s)`/`get_sentence_transformer_embedding(s)`
+are real, thin wrappers around that same already-existing function,
+not two separate implementations.
+
+**A real, documented deviation from Partie 4.2.1/4.2.2/4.2.3's own
+literal SDK hints**: OpenAI/Voyage/Cohere are called via
+`litellm.aembedding` (already a real dependency since Partie 4.1.7,
+confirmed to really support `"openai"`/`"voyage"`/`"cohere"` as real
+providers) -- avoiding 3 more separate SDK dependencies, the same real
+reasoning `llm_providers.py` already established.
+
+Reuses `embedding_config.EMBEDDING_DIMENSIONS` (Partie 3.3.3) for the 3
+sentence-transformers models both modules catalogue, rather than a
+second, duplicate set of dimension numbers.
+
+**A real bug found and fixed while testing**: `litellm.exceptions.RateLimitError`
+does NOT inherit from `litellm.exceptions.APIError` (it inherits from
+the separate `openai.RateLimitError`/`openai.APIStatusError` hierarchy
+litellm re-exports for some errors) -- the original error mapping
+never caught a real rate-limit failure at all, letting the raw litellm
+exception escape uncaught instead of becoming a real
+`EmbeddingProviderError`. Fixed by catching `RateLimitError` explicitly,
+confirmed by a dedicated regression test.
+
+**`get_cohere_embeddings`**: real `input_type` (item 2's own literal
+4-value setting) passed straight through to Cohere's own real
+embedding API via litellm. **`embedding_config.py`'s own docstring
+updated**: the "unavailable" reasons for OpenAI/Cohere now point to
+this new module rather than incorrectly claiming no integration
+exists at all -- `embedding_config.py` stays honestly scoped to the
+SINGLE `organization_settings.embedding_model` field (the live
+ingestion pipeline, which only loads local models via
+`SentenceTransformer(...)`), while `embedding_providers.py` is a real,
+new, standalone capability.
+
+**Real verification**: 29 tests (including the RateLimitError bug as a
+dedicated regression; OpenAI/Voyage/Cohere mocked at the
+`litellm.aembedding` boundary, Sentence Transformers/Hugging Face
+tested for real, no mocking), `tests/test_embedding_providers.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
