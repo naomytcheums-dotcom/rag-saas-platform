@@ -247,6 +247,18 @@ ebooklib==0.20
 pytesseract==0.3.13
 pdf2image==1.17.0
 
+# -- Documents / language detection (Partie 3.1.7) -----------------------------
+# A pure-Python port of Google's own language-detection library -- no
+# system binary, no model file to download (unlike fasttext's own
+# ~130MB compressed model, the literal spec's alternative choice) --
+# a real, deliberate, lower-risk pick for a metadata-enrichment
+# feature this codebase's own CI/dev environment shouldn't need extra
+# infrastructure for. Non-deterministic between runs unless seeded
+# (a real, documented quirk of its own underlying Naive Bayes
+# algorithm) -- api/services/language_detection.py's own module seeds
+# it once at import time.
+langdetect==1.0.9
+
 # -- Documents / URL import (Partie 2.1.10) -----------------------------------
 # No genuinely new top-level package -- httpx (real fetch), lxml +
 # beautifulsoup4 + readability-lxml (real content/metadata extraction,

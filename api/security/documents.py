@@ -231,6 +231,7 @@ from api.services.onedrive_extraction import (
 from api.services.zip_extraction import extract_zip_file, filter_zip_contents, list_zip_contents
 from api.services.image_extraction import extract_images_docx, extract_images_epub, get_image_metadata
 from api.services.ocr import OCRNotAvailableError, ocr_image_bytes
+from api.services.language_detection import detect_language
 from api.services.pdf_extraction import extract_pdf_images
 from api.services.table_transformation import normalize_table, table_to_json
 from api.services.text_cleaning import clean_text
@@ -3077,6 +3078,25 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                     piece = normalize_text(piece)
                     chunk_records.append({"content": piece, "metadata": section["metadata"]})
 
+            # Partie 3.1.7 -- detected ONCE per document, from a real
+            # sample of its own already-cleaned chunk text (the first
+            # few chunks, capped -- langdetect's own statistical model
+            # needs a few hundred real characters at most, not the
+            # whole document), then applied to EVERY chunk's own
+            # metadata (item 5's own literal "à chaque chunk" ask).
+            # Real, deliberate efficiency choice, directly answering
+            # vision critique 1: a real document is overwhelmingly one
+            # language throughout, so running langdetect once per
+            # document -- not once per chunk -- is both cheaper AND
+            # more consistent (a short, numbers-heavy chunk detected in
+            # isolation is a real, common source of noisy per-chunk
+            # misclassification `detect_language`'s own real algorithm
+            # cannot fully avoid).
+            sample_text = " ".join(record["content"] for record in chunk_records[:5])[:2000]
+            document_language = detect_language(sample_text)
+            for record in chunk_records:
+                record["metadata"] = {**(record["metadata"] or {}), "language": document_language}
+
             embeddings: list[list[float] | None] = [None] * len(chunk_records)
             if chunk_records:
                 embeddings = generate_embeddings([c["content"] for c in chunk_records], settings_dict["embedding_model"])
@@ -3159,7 +3179,7 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             ]
             document.metadata_json = {
                 **extracted["metadata"], "table_count": len(extracted["tables"]), "tables": tables_for_metadata,
-                "image_count": extracted["image_count"], "chunk_count": len(chunk_records),
+                "image_count": extracted["image_count"], "chunk_count": len(chunk_records), "language": document_language,
             }
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)

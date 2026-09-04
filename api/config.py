@@ -403,6 +403,14 @@ class Settings(BaseSettings):
     OCR_DPI: int = 300
     OCR_TIMEOUT: int = 30
 
+    # -- Language detection (Partie 3.1.7) -----------------------------------
+    # This step's own literal defaults, EXCEPT the fallback: "fr", not
+    # "en" -- the same real-world-primary-language reasoning as OCR_LANGUAGE
+    # above, not a copy-paste of the literal spec's own generic "en".
+    LANGUAGE_DETECTION_ENABLED: bool = True
+    LANGUAGE_DETECTION_FALLBACK: str = "fr"
+    LANGUAGE_DETECTION_MIN_LENGTH: int = 20
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

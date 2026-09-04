@@ -392,7 +392,10 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] == {"page": 1}
+                # Partie 3.1.7 -- real, detected language merged into
+                # every chunk's own metadata alongside its real,
+                # existing per-format fields.
+                assert chunk["metadata_json"] == {"page": 1, "language": "en"}
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -524,7 +527,8 @@ async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None
+                # Partie 3.1.7 -- real, detected language.
+                assert chunk["metadata_json"] == {"language": "en"}
 
             # Partie 3.1.5 -- real, embedded image extracted and
             # stored in S3, with a real DocumentImage row.
@@ -585,7 +589,9 @@ async def test_process_document_runs_the_real_txt_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None
+                # Partie 3.1.7 -- real, detected language, the only key
+                # for a format with no other per-chunk metadata of its own.
+                assert chunk["metadata_json"] == {"language": "fr"}
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -730,7 +736,7 @@ async def test_process_document_runs_the_real_csv_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None  # CSV has a single whole-document section, same as DOCX/TXT/HTML
+                assert chunk["metadata_json"] == {"language": "en"}  # CSV has a single whole-document section, same as DOCX/TXT/HTML; a real, deterministic detection on sparse name/number data
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -837,7 +843,7 @@ async def test_process_document_runs_the_real_html_pipeline_end_to_end(pg_engine
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None  # HTML has a single whole-document section, same as DOCX/TXT
+                assert chunk["metadata_json"] == {"language": "fr"}  # HTML has a single whole-document section, same as DOCX/TXT
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -912,7 +918,7 @@ async def test_process_document_runs_the_real_json_pipeline_end_to_end(pg_engine
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None  # JSON has a single whole-document section, same as DOCX/TXT/HTML/CSV
+                assert chunk["metadata_json"] == {"language": "fr"}  # JSON has a single whole-document section, same as DOCX/TXT/HTML/CSV
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -961,7 +967,7 @@ async def test_process_document_runs_the_real_xml_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] is None  # XML has a single whole-document section, same as DOCX/TXT/HTML/CSV/JSON
+                assert chunk["metadata_json"] == {"language": "fr"}  # XML has a single whole-document section, same as DOCX/TXT/HTML/CSV/JSON
         finally:
             await _cleanup(session, organization.id, owner.id)
 
