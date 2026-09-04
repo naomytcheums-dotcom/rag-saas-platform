@@ -434,6 +434,19 @@ class Settings(BaseSettings):
     CODE_CHUNK_MAX_TOKENS: int = 512
     CODE_CHUNK_PRESERVE_IMPORTS: bool = True
 
+    # -- Sentence/paragraph/parent-child chunking (Partie 3.2.6-3.2.8) -------
+    SENTENCE_CHUNK_MAX_SENTENCES: int = 10
+    SENTENCE_CHUNK_OVERLAP_SENTENCES: int = 2
+    SENTENCE_CHUNK_MIN_SENTENCES: int = 2
+    PARAGRAPH_CHUNK_MAX_PARAGRAPHS: int = 5
+    PARAGRAPH_CHUNK_OVERLAP_PARAGRAPHS: int = 1
+    PARAGRAPH_CHUNK_MIN_PARAGRAPHS: int = 1
+    PARENT_CHILD_CHILD_SIZE: int = 128
+    PARENT_CHILD_PARENT_SIZE: int = 512
+    PARENT_CHILD_CHILD_OVERLAP: int = 20
+    PARENT_CHILD_PARENT_OVERLAP: int = 50
+    PARENT_CHILD_ENABLED: bool = True
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

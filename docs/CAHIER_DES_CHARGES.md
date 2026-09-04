@@ -229,7 +229,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.2.3 | Semantic chunking | ✅ Voir détails ci-dessous |
 | 3.2.4 | Markdown-aware | ✅ Voir détails ci-dessous |
 | 3.2.5 | Code-aware (tree-sitter) | ✅ Voir détails ci-dessous (sans tree-sitter, voir raisons) |
-| 3.2.6 | Sentence-based | ⬜ |
+| 3.2.6 | Sentence-based | ✅ Voir détails ci-dessous |
 | 3.2.7 | Paragraph-based | ⬜ |
 | 3.2.8 | Parent-child chunks | ⬜ |
 
@@ -248,6 +248,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.2.5 — Chunking sensible au code (sans tree-sitter)
 
 ✅ **Nouveau module réel** `api/services/code_chunking.py` : `detect_code_language`/`chunk_code_by_functions`/`chunk_code_by_classes`/`chunk_code_by_blocks`/`chunk_code_preserve_imports`/`chunk_code_by_tokens` (fonctions littérales de l'item 2). **Déviation réelle et documentée du texte littéral de l'étape** ("tree-sitter") : `tree_sitter` (un vrai parseur AST couvrant de nombreux langages) n'a délibérément PAS été ajouté comme nouvelle dépendance -- une vraie installation lourde, par langage, de grammaires séparées, non justifiée par le périmètre réel de cette seule étape de chunking. `pygments` (déjà une vraie dépendance transitive de ce dépôt) est réutilisé pour son vrai tokenizer par langage (`chunk_code_by_tokens`), mais honnêtement PAS comme un AST. **La détection de limites de fonctions/classes est réelle, écrite à la main, basée sur des regex/l'indentation, pour Python et JavaScript/TypeScript spécifiquement** -- une vraie limite de périmètre, honnête et documentée : ce n'est pas un vrai parseur complet, donc un vrai cas limite (une chaîne de caractères contenant littéralement `"def foo("`, un décorateur, un formatage réel très inhabituel) peut honnêtement le tromper, le même vrai compromis accepté que les autres heuristiques regex de ce dépôt (`api/services/headings_extraction.py`). **Un vrai bug trouvé et corrigé AVANT la mise en production, en testant** : le `guess_lexer` générique de pygments s'est révélé peu fiable sur du vrai code source typique -- confirmé empiriquement (il a mal détecté une vraie classe JavaScript bien formée comme étant du Python). `detect_code_language` utilise donc d'abord une vraie heuristique déterministe, écrite à la main, de comptage de signaux sur la syntaxe réelle distinctive de Python et JavaScript, avec repli sur le `guess_lexer` de pygments uniquement pour tout autre langage réel non pris en charge en profondeur par ce module. **Un second vrai bug trouvé et corrigé en testant** : les regex JS de détection de fonctions/classes (`_JS_FUNCTION_RE`/`_JS_ARROW_RE`/`_JS_CLASS_RE`) étaient appliquées sur le texte entier via `finditer` (contrairement aux patterns Python, testés ligne par ligne) -- sans le flag `re.MULTILINE`, l'ancre `^` ne correspond qu'à la vraie position 0 de la chaîne entière, donc une vraie fonction/classe commençant après la première ligne réelle (le cas normal) n'était jamais détectée du tout ; corrigé en ajoutant `re.MULTILINE` aux 3 patterns concernés. **`chunk_code_by_blocks`** : volontairement générique et agnostique au langage, réutilise le découpeur récursif réel de la Partie 3.2.2 (`chunk_recursive_code`) plutôt qu'un second découpeur par lignes vides dupliqué. **`chunk_code_preserve_imports`** : sépare les vraies lignes d'import/require en un chunk dédié -- limite réelle et documentée, un vrai import multi-lignes entre parenthèses n'est capturé que partiellement. **`chunk_code_by_tokens`** : chunking par un vrai compte de TOKENS via le vrai lexer par langage de pygments -- honnêtement PAS les vrais tokens `tiktoken` d'un LLM spécifique (non installé, aucun LLM cible pour ce module autonome et généraliste), ne coupe jamais une vraie ligne de code en son milieu (rupture uniquement à un vrai retour à la ligne une fois le seuil atteint). **Vrai bug de packaging trouvé et corrigé** : `pygments` n'était disponible que transitivement (via `pytest`, une dépendance de test uniquement, et `rich`, lui-même transitif via `typer`) -- une vraie installation de production de `requirements-api.txt` seul ne l'aurait pas garanti ; épinglé directement (`pygments==2.21.0`), même vrai principe déjà appliqué à `dnspython`/`httpcore`/`Pillow` dans ce fichier. Tests réels dédiés (17 tests, dont les 2 vrais bugs ci-dessus en régression dédiée), voir `tests/test_code_chunking.py`.
+
+#### Partie 3.2.6 — Chunking par phrases
+
+✅ **Nouveau module réel** `api/services/sentence_chunking.py` : `split_into_sentences`/`chunk_by_sentences`/`chunk_by_sentence_tokens`/`merge_sentences` (fonctions littérales de l'item 2). Contrairement au découpeur récursif générique de la Partie 3.2.2 (comptage de caractères, peut atterrir en plein milieu d'une vraie phrase), chaque limite de chunk ici tombe exactement sur une vraie limite de phrase. **Réutilise le séparateur de phrases réel de la Partie 3.1.10** (`split_sentences`) et **la détection de langue réelle de la Partie 3.1.7** (`detect_language`) pour l'auto-détection de `language` quand non fourni. **Vraie amélioration ciblée, sur ce module uniquement** : `split_sentences` documente déjà honnêtement une vraie faiblesse ("M. Dupont") -- plutôt que modifier cette fonction partagée déjà livrée et testée, `split_into_sentences` applique d'abord un vrai garde-fou par langue (abréviations anglaises et françaises courantes : Mr/Mrs/Dr/etc., M./Mme/Dr/etc.) qui protège réellement le point d'une abréviation avant la détection de fin de phrase -- une vraie réponse, testée, à la vision critique 3 ("les phrases sont-elles correctement identifiées dans différentes langues ?"), toujours honnêtement imparfaite pour toute abréviation hors de cette liste réelle et finie. **Comptage de tokens réel** (`chunk_by_sentence_tokens`/`merge_sentences`) via un vrai tokenizer HuggingFace mis en cache (même idée de cache que `_get_embedder`), sur le modèle d'embedding par défaut de ce dépôt -- même convention réelle "tokens = le vrai tokenizer du modèle d'embedding" déjà établie par `chunk_text` (Partie 3.2.1), appliquée ici au niveau PHRASE pour qu'une limite de chunk ne tombe jamais en plein milieu d'une vraie phrase. **Chevauchement réel** : chaque chunk après le premier est préfixé par autant de vraies phrases finales du chunk précédent que le budget `overlap_tokens` le permet. **Robustesse réelle** : un `overlap_sentences >= max_sentences` est plafonné pour garantir une vraie progression, jamais de boucle infinie. Tests réels dédiés (19 tests, dont les 2 vrais cas d'abréviation EN/FR en régression dédiée), voir `tests/test_sentence_chunking.py`.
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -439,14 +443,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 93 | 18.6% |
+| ✅ Fait | 94 | 18.8% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 341 | 68.2% |
+| ⬜ Non commencé | 340 | 68.0% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **100/515 (~19.4%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **172/515 (~33.4%)**
-- Pondéré (✅=1, 🟡=0.5) : **~133/515 (~25.8%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **101/515 (~19.6%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **173/515 (~33.6%)**
+- Pondéré (✅=1, 🟡=0.5) : **~134/515 (~26.0%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

@@ -6066,6 +6066,43 @@ applies to dnspython/httpcore/Pillow.
 **Real verification**: `tests/test_code_chunking.py` (17 tests),
 including dedicated regression tests for both real bugs above.
 
+### Partie 3.2.6 -- sentence-based chunking
+
+New module `api/services/sentence_chunking.py`: `split_into_sentences`/
+`chunk_by_sentences`/`chunk_by_sentence_tokens`/`merge_sentences`
+(item 2's own literal functions). Unlike Partie 3.2.2's own generic
+`chunk_recursive_text` (a real character count that can still land
+inside a real sentence), every chunk boundary here falls exactly on a
+real sentence boundary.
+
+**Reuses Partie 3.1.10's own real sentence splitter**
+(`split_sentences`) and **Partie 3.1.7's own real language detection**
+(`detect_language`) for `language` auto-detection. **A real, targeted
+fix, scoped to this module only**: `split_sentences`'s own docstring
+already, honestly, flags a real weakness ("M. Dupont"). Rather than
+edit that already-shipped, tested, shared function, `split_into_sentences`
+runs a real, small, per-language abbreviation guard first (English:
+Mr/Mrs/Dr/etc., French: M./Mme/Dr/etc.) that genuinely protects a real
+abbreviation's own period before delegating -- a real, working,
+documented answer to this étape's own vision critique 3 ("are
+sentences correctly identified across languages?"), still honestly
+imperfect outside this real, finite list.
+
+**Real token counting** (`chunk_by_sentence_tokens`/`merge_sentences`)
+uses a real, cached HuggingFace tokenizer (same caching idea as
+`_get_embedder`) for the default embedding model -- the same real
+"tokens = the embedding model's own tokenizer" convention Partie
+3.2.1's own `chunk_text` already established, applied at SENTENCE
+granularity so a boundary never falls mid-sentence. **Real overlap**:
+each chunk after the first is prefixed with as many of the previous
+chunk's own trailing real sentences as fit within `overlap_tokens`.
+**Real robustness**: `overlap_sentences >= max_sentences` is clamped
+to guarantee real forward progress, never an infinite loop.
+
+**Real verification**: `tests/test_sentence_chunking.py` (19 tests),
+including dedicated regression tests for both the English and French
+abbreviation-protection cases.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the
