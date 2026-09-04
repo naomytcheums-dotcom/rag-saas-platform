@@ -6829,6 +6829,55 @@ executes a tool today.
 
 **Real verification**: 19 tests, `tests/test_tool_validation.py`.
 
+### Partie 5.1.10 -- human approval
+
+New real model `api/models/human_approval.py` (`HumanApproval`,
+migration `0052`, RLS enabled): `agent_run_id` references a real,
+existing `AgentRunRecord` (Partie 5.1.1). **A real, necessary
+addition**: `organization_id` (denormalized from the referenced run at
+request time) -- the same real reason `agent_runs.organization_id`
+itself was added: without it, "list pending approvals for this
+organization" would need a join on every single read.
+
+New module `api/security/human_approval.py`: `request_human_approval`/
+`approve_human_request`/`reject_human_request`/`get_pending_approvals`/
+`get_approval_status`/`check_approval_expired` (this étape's own
+literal functions) plus `requires_human_approval(tool_name)` and
+`list_pending_approvals_for_organization` (real additional helpers).
+**Real, lazy expiry**: a `pending` request whose `expires_at` has
+passed transitions to `expired` the moment anything reads or acts on
+it (`check_approval_expired`, `get_approval_status`,
+`approve_human_request`, `reject_human_request` all trigger it) -- no
+real, separate background sweep needed. Approving/rejecting an
+already-resolved (or expired) request is a real no-op, tested.
+
+**A real, handled gotcha**: the fast SQLite suite's own
+`DateTime(timezone=True)` columns round-trip timezone-NAIVE (SQLite has
+no real timezone-aware datetime type, unlike Postgres) -- comparing
+directly against `datetime.now(timezone.utc)` raised a real
+`TypeError`. Fixed with a real normalization (`_as_aware_utc`) that
+re-labels a naive read-back as UTC -- every value this codebase ever
+writes here already is UTC, so this is never a real misinterpretation
+as local time.
+
+**Real endpoints, documented deviation from the literal path**
+(`/approvals/...`, no organization, no stated role tier): mounted
+under `/organizations/{org_id}/approvals/...`. Approving/rejecting is
+judged itself a sensitive action -> `require_org_admin` (same reasoning
+as `quotas.py`'s own raise-a-limit gate); reading a known approval's
+status stays `require_org_member`.
+
+**Security (vision critique)**:
+`list_pending_approvals_for_organization` is really scoped by
+organization, tested. A Member cannot approve/reject (403, tested).
+
+**Consistency (vision critique)**: `requires_human_approval` is real,
+tested, ready -- but NOT automatically called by `run_agent` today,
+same honest reason as 5.1.4/5.1.6/5.1.7/5.1.9 (no real tool-execution
+loop in the orchestrator).
+
+**Real verification**: 18 tests, `tests/test_human_approval.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (1 item vérifié réel dans `api/` + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (10 items vérifiés réels dans `api/` -- 5.1.1 à 5.1.10 -- + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -570,10 +570,26 @@ Tests réels dédiés (10 tests), voir `tests/test_parallel_tools.py`.
 
 Tests réels dédiés (19 tests), voir `tests/test_tool_validation.py`.
 
+#### Partie 5.1.10 — Approbation humaine
+
+✅ **Nouveau modèle réel** `api/models/human_approval.py` (`HumanApproval`, migration `0052`, RLS activée) : `agent_run_id` référence un vrai `AgentRunRecord` existant (Partie 5.1.1). **Ajout réel et nécessaire** : `organization_id` (dénormalisé depuis le run référencé, à la création) -- même raison réelle que l'ajout équivalent sur `agent_runs` lui-même : sans lui, "lister les approbations en attente de cette organisation" exigerait une jointure sur chaque lecture.
+
+✅ **Nouveau module réel** `api/security/human_approval.py` : `request_human_approval`/`approve_human_request`/`reject_human_request`/`get_pending_approvals`/`get_approval_status`/`check_approval_expired` (fonctions littérales) + `requires_human_approval(tool_name)` et `list_pending_approvals_for_organization` (aides réelles supplémentaires). **Expiration réelle et paresseuse** : une requête `pending` dont `expires_at` est dépassé passe à `expired` dès qu'elle est lue ou agie dessus (`check_approval_expired`, `get_approval_status`, `approve_human_request`, `reject_human_request` la déclenchent tous) -- pas besoin d'un vrai balayage périodique séparé. Approuver/rejeter une requête déjà résolue (ou expirée) est un vrai no-op, testé.
+
+**Piège réel géré** : la suite SQLite rapide (`DateTime(timezone=True)`) fait perdre le fuseau horaire à la relecture (SQLite n'a pas de vrai type datetime avec fuseau, contrairement à Postgres) -- comparer directement à `datetime.now(timezone.utc)` lève une vraie `TypeError`. Corrigé par une vraie normalisation (`_as_aware_utc`) qui réattribue UTC à toute valeur naïve relue, sans jamais la mal-interpréter comme une heure locale.
+
+✅ **Endpoints réels**, déviation documentée du chemin littéral (`/approvals/...`, sans organisation, sans palier de rôle précisé) : montés sous `/organizations/{org_id}/approvals/...`. Approuver/rejeter est jugé lui-même une action sensible → `require_org_admin` (même raisonnement que `quotas.py` pour relever une limite) ; consulter le statut d'une approbation connue reste `require_org_member`.
+
+**Sécurité (vision critique)** : `list_pending_approvals_for_organization` est réellement scopée par organisation, testé (`test_list_pending_approvals_for_organization_scopes_correctly`). Un Member ne peut pas approuver/rejeter (403, testé).
+
+**Cohérence (vision critique)** : `requires_human_approval` est une fonction réelle, testée, prête -- mais PAS appelée automatiquement par `run_agent` aujourd'hui, même raison honnête que 5.1.4/5.1.6/5.1.7/5.1.9 (aucune vraie boucle d'exécution d'outils dans l'orchestrateur).
+
+Tests réels dédiés (18 tests fonction+endpoint), voir `tests/test_human_approval.py`.
+
 Agent memory (court-terme), agent traces (au-delà de l'orchestrateur
 central lui-même) : **existent déjà** côté `src/`/agent (hérité, non
-revérifié dans les sessions récentes). Human approval, conversation
-memory cross-session (DB), task planning : ⬜.
+revérifié dans les sessions récentes). Conversation memory
+cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 
