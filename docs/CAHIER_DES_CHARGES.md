@@ -648,9 +648,25 @@ Tests réels dédiés (16 tests fonction+endpoint + 1 test d'intégration orches
 
 ### 5.2 Outils intégrés
 
-Search KB, GitHub, Human Escalation : existent déjà. Web Search
-(Tavily), Database (SQL), Calculator, URL Reader, Calendar complet,
-Email, Custom Tools (webhooks) : ⬜.
+**Nouveau package réel** `api/tools/` -- distinct de `api/services/tools.py` (Partie 5.1.2, l'abstraction `ToolSpec` + 2 outils de démo) : chaque module ici enveloppe une vraie infrastructure déjà réelle et vivante de ce dépôt.
+
+#### Partie 5.2.1 — Search Knowledge Base
+
+✅ **Nouveau module réel** `api/tools/search_kb.py` : les 4 fonctions littérales + `make_search_kb_tool` (fabrique réelle supplémentaire, nécessaire car `ToolSpec.handler` ne porte pas de `db`/`organization_id` propre -- fermeture réelle sur les deux). **Réutilise réellement** `retrieval_pipeline.search_with_context` (Partie 3.3.4-3.3.7) -- le même vrai moteur que `POST /organizations/{org_id}/search`, aucune duplication.
+
+✅ **`search_knowledge_base_by_metadata`, vrai problème résolu** : `search()` court-circuite sur `[]` pour une requête vide -- inutilisable comme astuce "tout matcher". `retrieval_pipeline._fetch_organization_chunks` a été rendu public (`fetch_organization_chunks`, même précédent réel que `rank_chunks_by_embedding`) pour lire les vrais chunks de l'organisation sans embedding de requête du tout.
+
+✅ **`KB_SEARCH_RERANK_ENABLED` réellement câblé** : `search_knowledge_base` bascule sur la vraie stratégie `"hybrid_reranked"` quand actif ; `search_knowledge_base_with_rerank` reste un vrai forçage explicite indépendant du réglage. **`KB_SEARCH_MAX_TOKENS` réellement utilisé** dans le handler de l'outil (troncature réelle mais approximative, ~4 caractères/token, même honnêteté que `CONVERSATION_HISTORY_MAX_MESSAGES`).
+
+**Sécurité (vision critique)** : `organization_id` réel et obligatoire partout, threadé directement dans la vraie requête déjà isolée par tenant -- testé (`test_search_knowledge_base_never_returns_another_organizations_chunks`).
+
+**Gap hérité, honnête, non introduit ici** : `filters` passe par `metadata_filtering.apply_metadata_filter` (Partie 3.4.5), dont le propre docstring documente déjà que les résultats de recherche réels ne peuplent pas encore `author`/`tags`/`document_type`/`source`/`file_size` au niveau racine -- un filtre sur l'un de ces champs ne matchera honnêtement rien tant que ce gap préexistant n'est pas comblé.
+
+Tests réels dédiés (7 tests, embeddings réels, pas de mock), voir `tests/test_search_kb_tool.py`.
+
+GitHub, Human Escalation : existent déjà côté `src/`, non revérifiés.
+Web Search (Tavily), Database (SQL), Calculator étendu, URL Reader,
+Calendar complet, Email, Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)

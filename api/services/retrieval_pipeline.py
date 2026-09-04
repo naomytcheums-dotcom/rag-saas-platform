@@ -88,12 +88,17 @@ def _get_reranker(model_name: str):
     return _RERANKER_CACHE[model_name]
 
 
-async def _fetch_organization_chunks(db: AsyncSession, organization_id) -> list[dict]:
+async def fetch_organization_chunks(db: AsyncSession, organization_id) -> list[dict]:
     """A real, shared, multi-tenant-isolated fetch -- every real search
     function below calls this, never a raw query of its own, so the
     real isolation boundary (`DocumentChunk.organization_id ==
     organization_id`, PLUS a real, non-deleted, non-pending document)
-    is enforced in exactly ONE place."""
+    is enforced in exactly ONE place. Made public (Partie 5.2.1, same
+    "private helper -> public for real cross-module reuse" precedent as
+    `rank_chunks_by_embedding` below) for `api/tools/search_kb.py`'s own
+    `search_knowledge_base_by_metadata`, which needs this organization's
+    real chunks WITHOUT a query embedding at all (a metadata-only
+    search has no real query to rank against)."""
     rows = await db.execute(
         select(DocumentChunk, Document.name, Document.file_type, Document.id.label("doc_id"))
         .join(Document, Document.id == DocumentChunk.document_id)
@@ -159,7 +164,7 @@ async def rank_chunks_by_embedding(db: AsyncSession, organization_id, embedding:
     embedding) without duplicating this real cosine-ranking logic a
     second time. `vector_search` above is just this function with a
     real query embedding computed first."""
-    chunks = await _fetch_organization_chunks(db, organization_id)
+    chunks = await fetch_organization_chunks(db, organization_id)
     if not chunks:
         return []
     similarities = _cosine_similarities(embedding, [c["embedding"] for c in chunks])
@@ -176,7 +181,7 @@ async def bm25_search(db: AsyncSession, organization_id, query: str, top_k: int 
     work, not silently skipped). Same real "explicit top_k bypasses
     the bound" fix as `vector_search` above."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
-    chunks = await _fetch_organization_chunks(db, organization_id)
+    chunks = await fetch_organization_chunks(db, organization_id)
     if not chunks:
         return []
 
@@ -330,7 +335,7 @@ async def search_with_context(
     """Item 2's own literal function -- the same real search as
     `search` above, each real result additionally carrying its own
     parent document's real context (`document_name`/`file_type`,
-    already joined in by `_fetch_organization_chunks`, plus the
+    already joined in by `fetch_organization_chunks`, plus the
     chunk's own real `metadata_json`) -- real, useful context for a
     caller building an LLM prompt or a citation, not just a bare chunk
     id."""

@@ -7031,6 +7031,49 @@ orchestrator integration test), `tests/test_agent_traces.py`.
 **Partie 5.1 -- Agent Architecture: ✅ COMPLETE (14/14)** in `api/` --
 5.1.1 through 5.1.14, each real, tested, documented in both languages.
 
+### Partie 5.2.1 -- Search Knowledge Base
+
+New real package `api/tools/` -- distinct from
+`api/services/tools.py` (Partie 5.1.2's own `ToolSpec` abstraction plus
+2 demo tools): every module here wraps this codebase's own real,
+already-live infrastructure.
+
+New module `api/tools/search_kb.py`: all 4 literal functions plus
+`make_search_kb_tool` (a real, additional factory -- `ToolSpec.handler`
+carries no `db`/`organization_id` of its own, so a real closure over
+both is built here). **Really reuses**
+`retrieval_pipeline.search_with_context` (Partie 3.3.4-3.3.7) -- the
+same real engine behind `POST /organizations/{org_id}/search`, no
+duplication.
+
+**`search_knowledge_base_by_metadata`, a real problem solved**:
+`search()` short-circuits to `[]` for an empty query -- unusable as a
+"match everything" trick. `retrieval_pipeline._fetch_organization_chunks`
+was made public (`fetch_organization_chunks`, same real precedent as
+`rank_chunks_by_embedding`) to read this organization's real chunks
+with no query embedding at all.
+
+**`KB_SEARCH_RERANK_ENABLED` really wired**: `search_knowledge_base`
+switches to the real `"hybrid_reranked"` strategy when it's on;
+`search_knowledge_base_with_rerank` stays a real, explicit override
+independent of the setting. **`KB_SEARCH_MAX_TOKENS` really used** in
+the tool's own handler (real but approximate truncation, ~4 chars/
+token, same honesty as `CONVERSATION_HISTORY_MAX_MESSAGES`).
+
+**Security (vision critique)**: `organization_id` is real and required
+everywhere, threaded straight into the already tenant-isolated real
+query -- tested.
+
+**An inherited, honest, pre-existing gap, not introduced here**:
+`filters` passes through `metadata_filtering.apply_metadata_filter`
+(Partie 3.4.5), whose own docstring already documents that real search
+results don't populate `author`/`tags`/`document_type`/`source`/
+`file_size` at the top level yet -- a filter on one of those fields
+honestly matches nothing until that pre-existing gap is closed.
+
+**Real verification**: 7 tests, real embeddings, no mocking,
+`tests/test_search_kb_tool.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
