@@ -30,6 +30,8 @@ def _write_real_book(path, *, authors=("Jane Doe",), nested_toc=False):
         book.add_author(author)
     book.add_metadata("DC", "publisher", "Acme Publishing")
     book.add_metadata("DC", "date", "2026-01-15")
+    book.add_metadata("DC", "subject", "Fiction")
+    book.add_metadata("DC", "subject", "Adventure")
 
     c1 = epub.EpubHtml(title="Chapter 1", file_name="chap1.xhtml", lang="en")
     c1.content = "<html><body><h1>Chapter One</h1><p>This is the real first chapter content.</p></body></html>"
@@ -136,6 +138,13 @@ def test_extract_epub_metadata_returns_real_title_author_publisher_language_date
     assert metadata["publisher"] == "Acme Publishing"
     assert metadata["language"] == "en"
     assert metadata["date"] == "2026-01-15"
+
+
+def test_extract_epub_metadata_returns_the_real_subject_list(real_epub_path):
+    """Partie 2.2.5 -- the real Dublin Core dc:subject entries, EPUB's
+    own equivalent of keywords/tags."""
+    metadata = extract_epub_metadata(real_epub_path)
+    assert metadata["subject"] == ["Fiction", "Adventure"]
 
 
 def test_extract_epub_metadata_returns_every_real_author_for_a_multi_author_book(multi_author_epub_path):

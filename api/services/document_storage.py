@@ -438,6 +438,28 @@ def download_document_file(file_key: str) -> bytes:
         raise RuntimeError(f"document download failed: {exc}") from exc
 
 
+_PREVIEW_CHUNK_SIZE = 256 * 1024  # 256 KB
+
+
+def stream_document_file(file_key: str):
+    """
+    Partie 2.2.4 -- real, CHUNKED S3 download for
+    `api/routers/documents.py`'s own preview route. Unlike
+    `download_document_file`'s own full in-memory `.read()` (needed by
+    `process_document`, which must hand a real extraction library the
+    WHOLE content anyway), this streams a real document's own bytes
+    straight from S3's own real `StreamingBody`, in bounded chunks --
+    vision critique 1's own "la preview est-elle rapide pour les gros
+    fichiers" answer: a large real document is never fully buffered in
+    this server's own memory just to preview it.
+    """
+    try:
+        response = _client().get_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=file_key)
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"document download failed: {exc}") from exc
+    return response["Body"].iter_chunks(chunk_size=_PREVIEW_CHUNK_SIZE)
+
+
 def delete_document_file(file_key: str) -> None:
     """Best-effort delete -- same reasoning as api/services/storage.py's
     delete_avatar/delete_branding_asset: a DELETE that already removed

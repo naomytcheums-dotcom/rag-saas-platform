@@ -319,6 +319,185 @@ async def test_get_document_belonging_to_another_organization_returns_404(client
     assert response.status_code == 404  # anti-enumeration
 
 
+# --------------------------------------------------------------- metadata --
+
+async def test_owner_can_get_normalized_document_metadata(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.2.5): les métadonnées normalisées sont
+    accessibles via l'API, dérivées du vrai metadata_json déjà stocké
+    par process_document (jamais recalculées/dupliquées en base)."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    document = await db_session.get(Document, uuid.UUID(document_id))
+    document.metadata_json = {"title": "My PDF", "author": "Jane Doe", "creationDate": "D:20230115143000+00'00'", "keywords": "alpha, beta", "page_count": 3}
+    await db_session.commit()
+
+    response = await client.get(f"/documents/{document_id}/metadata", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["title"] == "My PDF"
+    assert body["author"] == "Jane Doe"
+    assert body["created_date"] == "2023-01-15T14:30:00"
+    assert body["keywords"] == ["alpha", "beta"]
+    assert body["raw"]["page_count"] == 3
+
+
+async def test_document_metadata_is_honestly_empty_before_processing(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique 3: pas de métadonnées
+    fabriquées quand le document n'a pas encore été traité."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/metadata", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] is None
+    assert body["author"] is None
+    assert body["keywords"] == []
+
+
+async def test_document_metadata_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/metadata", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_document_metadata_belonging_to_another_organization_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    outsider_token, outsider = await _register(client, db_session, "docmetaoutsider@example.com")
+    response = await client.get(f"/documents/{document_id}/metadata", headers=_auth_header(outsider_token))
+    assert response.status_code == 404  # anti-enumeration
+
+
+# ----------------------------------------------------------------- preview --
+
+async def test_owner_can_preview_a_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.2.4): la preview fonctionne, servie de
+    manière sécurisée (jamais un accès S3 direct/public)."""
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.routers.documents.stream_document_file", lambda file_key: iter([_REAL_PDF_MAGIC]))
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/preview", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == _REAL_PDF_MAGIC
+    assert "inline" in response.headers["content-disposition"]
+
+
+async def test_preview_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/preview", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_preview_belonging_to_another_organization_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    outsider_token, outsider = await _register(client, db_session, "docpreviewoutsider@example.com")
+    response = await client.get(f"/documents/{document_id}/preview", headers=_auth_header(outsider_token))
+    assert response.status_code == 404  # anti-enumeration
+
+
+async def test_preview_returns_a_real_502_when_s3_fails(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+
+    def _boom(file_key):
+        raise RuntimeError("document download failed: S3 is down")
+
+    monkeypatch.setattr("api.routers.documents.stream_document_file", _boom)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/preview", headers=_auth_header(owner_token))
+    assert response.status_code == 502
+
+
+# ---------------------------------------------------------------- progress --
+
+async def test_owner_can_poll_document_progress(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.2.3): la progression est accessible via
+    l'API, dérivée du vrai statut du document."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/progress", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["status"] == DocumentStatus.pending.value
+    assert body["progress"] == 0
+
+
+async def test_document_progress_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/progress", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_document_progress_belonging_to_another_organization_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    outsider_token, outsider = await _register(client, db_session, "docprogressoutsider@example.com")
+    response = await client.get(f"/documents/{document_id}/progress", headers=_auth_header(outsider_token))
+    assert response.status_code == 404  # anti-enumeration
+
+
+async def test_owner_can_stream_document_progress_via_sse(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.2.3): la progression est diffusée en
+    temps réel via SSE."""
+    _stub_s3(monkeypatch)
+
+    async def _fake_stream(db, document_id):
+        yield 'data: {"status": "processing", "progress": 50}\n\n'
+        yield 'data: {"status": "completed", "progress": 100}\n\n'
+
+    monkeypatch.setattr("api.routers.documents.stream_document_progress", _fake_stream)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/progress/stream", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "completed" in response.text
+
+
+async def test_progress_stream_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/progress/stream", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
 # --------------------------------------------------------------- deleting --
 
 async def test_creator_can_delete_their_own_document(client, db_session, register_payload, monkeypatch):

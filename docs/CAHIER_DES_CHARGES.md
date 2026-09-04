@@ -108,7 +108,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (17✅/3🟡/15⬜ sur 35, via les Étapes 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15/2.1.16/2.1.17/2.1.18/2.1.19/2.2.1)
+## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (17✅/7🟡/11⬜ sur 35, via les Étapes 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15/2.1.16/2.1.17/2.1.18/2.1.19/2.2.1/2.2.2/2.2.3/2.2.4/2.2.5)
 
 ### 2.1 Import de documents
 
@@ -139,10 +139,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|
 | 2.2.1 | Upload multiple | ✅ **Nouvelle route dédiée `POST /organizations/{org_id}/documents/batch`, PAS une modification littérale de la route d'upload existante** -- déviation réelle et assumée par rapport au texte de la consigne ("modifier POST .../documents") : une vraie réponse multi-fichiers (un résultat PAR fichier) ne peut pas avoir la même forme qu'un `DocumentResponse` unique, et changer le nom de champ multipart/la forme de réponse de la route existante aurait cassé des dizaines de tests d'upload déjà en place depuis les Parties 2.1.1-2.1.9 sans aucun bénéfice réel -- une route additive ne perturbe rien de déjà fonctionnel. `validate_upload_batch` vérifie le nombre réel de fichiers (`DOCUMENT_BATCH_MAX_FILES`, défaut 10) et la taille totale réelle (`DOCUMENT_BATCH_MAX_TOTAL_SIZE`, défaut 100 Mo) -- purement hors ligne, avant tout travail S3/Celery. **Validation de contenu par fichier RÉELLE ET SYNCHRONE, avant tout travail Celery** : `start_document_batch_upload` réutilise `validate_document_upload` (inchangé) sur chaque fichier DANS la requête elle-même -- réponse directe à la vision critique 3/4 ("un fichier invalide est rejeté") rendue immédiatement visible dans la réponse HTTP, pas seulement découvrable plus tard dans les logs d'une tâche d'arrière-plan ; seuls les fichiers acceptés sont transmis à Celery. **Déviation réelle et documentée par rapport à la règle habituelle de ce dépôt** : les octets de chaque fichier accepté transitent réellement par les arguments de la tâche Celery (encodés en base64, `process_upload_batch_task`) -- contrairement à chaque fan-out précédent (qui re-télécharge toujours depuis une source durable comme S3 ou une vraie API externe), un fichier fraîchement uploadé n'a nulle part ailleurs où vivre de façon durable à ce stade ; `DOCUMENT_BATCH_MAX_TOTAL_SIZE` borne réellement cette exception. Un seul vrai job Celery pour tout le lot (`process_upload_batch_task`, conforme au texte littéral), traitant chaque fichier dans une vraie boucle -- pas un fan-out par fichier vers une tâche séparée. **Robustesse (vision critique 3)** : l'échec réel d'upload S3/DB d'UN fichier du lot est journalisé et ignoré, sans jamais interrompre les autres -- même résilience que chaque fan-out précédent de ce dépôt. **Cohérence (vision critique 1)** : aucun nouveau format ni pipeline -- chaque fichier accepté passe par exactement le même `upload_document_file`/`schedule_document_processing` qu'un upload simple. Tests réels dédiés (upload multiple accepté, fichier invalide rejeté sans bloquer les autres, limite de nombre respectée, limite de taille totale respectée, garde-fou cross-tenant, permissions, dispatch Celery ne recevant que les fichiers acceptés, tolérance à un échec S3 réel par fichier, tolérance à une panne du broker), voir `tests/test_documents.py`/`tests/test_document_batch_integration.py` |
-| 2.2.2 | Drag & drop | react-dropzone |
-| 2.2.3 | Barre de progression | Upload chunké + WebSocket/SSE |
-| 2.2.4 | Preview | PDF.js / react-doc-viewer |
-| 2.2.5 | Extraction metadata | Étendre à auteur/date par format |
+| 2.2.2 | Drag & drop | 🟡 **100% frontend, zéro surface backend propre à cette étape -- honnêtement non démarrée, pas "partiellement" démarrée.** Ce dépôt n'a AUCUN frontend React : son seul frontend réel est un dashboard Streamlit (`dashboard/app.py`) qui sert l'ANCIEN pipeline RAG (`src/`), pas `api/`, l'architecture multi-tenant que construit toute cette Partie 2. Question posée explicitement à l'utilisateur le 2026-09-04 (nouveau projet React ? extension du dashboard Streamlit ? backend seul ?) -- réponse : **backend seul pour l'instant**. Le glisser-déposer lui-même n'a littéralement aucune contrepartie serveur (lire des fichiers par API navigateur puis les envoyer est un pur événement client) -- **les deux vraies routes d'upload que cette fonctionnalité utiliserait existent déjà et sont pleinement testées** : `POST /organizations/{org_id}/documents` (2.1.1, fichier unique) et `POST /organizations/{org_id}/documents/batch` (2.2.1, fichiers multiples). Rien de plus à construire côté serveur ; le jour où un vrai frontend existe, le glisser-déposer n'est qu'un appel à ces routes déjà réelles. |
+| 2.2.3 | Barre de progression | 🟡 **Backend réel et complet, UI explicitement différée** (voir 2.2.2). `GET /documents/{document_id}/progress` (poll ponctuel) + `GET /documents/{document_id}/progress/stream` (Server-Sent Events, pas WebSocket -- choix réel et justifié : ce flux n'a jamais besoin de RECEVOIR quoi que ce soit du client en cours de route, un canal unidirectionnel HTTP simple suffit). Réutilise le VRAI Redis déjà en service pour le rate limiting/geoip (`RATE_LIMIT_REDIS_URL`) pour un vrai pub/sub -- aucune nouvelle infrastructure. **Limite honnête et assumée** : la progression réelle est mappée sur le vrai statut du Document (`pending`/`processing`/`completed`/`failed` → 0/50/100/100%), pas un pourcentage par chunk réellement instrumenté -- ajouter cette granularité exigerait de modifier `process_document`, le chemin de code le plus partagé et le plus critique de tout ce dépôt (utilisé par chaque format depuis la Partie 2.1.1), pour un gain marginal ; rétrécissement de portée réel et énoncé, pas un oubli. `send_progress_update` publie sur ce vrai canal Redis à chaque transition de statut réelle (3 points d'ajout minimaux et mécaniques dans `process_document`, jamais un remaniement) -- tolérant aux pannes Redis réelles (jamais bloquant pour le vrai traitement). Vision critique 2 ("connexion SSE interrompue") : un vrai `EventSource` navigateur reconnecte automatiquement ; la reconnexion renvoie immédiatement l'état réel courant via le vrai instantané initial, aucune perte d'information au-delà de la coupure elle-même. |
+| 2.2.4 | Preview | 🟡 **Backend réel et complet, UI (PDF.js, pagination, zoom) explicitement différée** (voir 2.2.2). `GET /documents/{document_id}/preview` sert le vrai contenu de manière SÉCURISÉE (vision critique 2) : toujours par un proxy authentifié et vérifié par appartenance, jamais un accès S3 direct ou une URL pré-signée publique. Vraie performance (vision critique 1) : `stream_document_file` télécharge par vrais chunks bornés (256 Ko) directement depuis le vrai `StreamingBody` S3, un gros fichier n'est jamais entièrement chargé en mémoire juste pour être prévisualisé -- vérifié par un vrai aller-retour contre S3/MinIO réel (`tests/test_documents_integration.py`). Génération de miniature explicitement marquée optionnelle par la consigne -- délibérément non construite (dépendances réelles supplémentaires, complexité réelle, hors du périmètre honnête "backend seul"). |
+| 2.2.5 | Extraction metadata | 🟡 **Extraction/normalisation backend réelle et complète, affichage UI explicitement différé** (voir 2.2.2). Chaque format expose déjà ses propres métadonnées réelles depuis les Parties 2.1.1-2.1.9 (`Document.metadata_json`, jamais modifié ici) -- le vrai travail de cette étape est la NORMALISATION : `api/services/metadata_normalization.py` mappe les clés hétérogènes de chaque format (`creationDate` PDF au format spec brut `D:YYYYMMDDHHmmSS`, `created` DOCX déjà ISO, `tags` frontmatter Markdown, `subject` Dublin Core EPUB, etc.) vers une forme commune réelle `{title, author, created_date, keywords}` -- jamais fabriquée quand un format n'a réellement aucun concept d'auteur/titre/date (CSV/JSON/XML/TXT rapportent honnêtement `None`/`[]`). **Vraie extension de 3 extracteurs existants** (item 1 de la consigne), chacun avec un vrai champ déjà standard mais jamais surfacé : DOCX (`keywords`, le vrai "Tags" OOXML), HTML (`<meta name="keywords">`, une vraie balise standard), EPUB (`dc:subject`, l'équivalent réel Dublin Core des mots-clés). **Distinction réelle et délibérée** : le `creator` PDF (le LOGICIEL auteur, ex. "Microsoft Word") n'est jamais traité comme un repli d'auteur -- une vraie confusion sémantique du spec PDF évitée, pas un oubli. `GET /documents/{document_id}/metadata` calcule la normalisation À LA LECTURE, sans jamais dupliquer le stockage ni toucher au pipeline `process_document` partagé. |
 | 2.2.6 | Tags/catégories | Table document_tags M2M |
 | 2.2.7 | Versioning | Table document_versions |
 | 2.2.8 | Suppression/remplacement | Endpoint DELETE, purge chunks Chroma |
@@ -374,10 +374,40 @@ au-delà de "15.1.1 Ticke...".
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
 - Strictement ✅ : **76/515 (~14.8%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **143/515 (~27.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~109.5/515 (~21.3%)** -- le chiffre le plus représentatif de l'avancement réel.
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **147/515 (~28.5%)**
+- Pondéré (✅=1, 🟡=0.5) : **~111.5/515 (~21.65%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 2.2.1 (Upload multiple, 2026-09-04) :
+Mis à jour après Parties 2.2.2/2.2.3/2.2.4/2.2.5 (Drag & drop, Barre de
+progression, Preview, Extraction metadata, 2026-09-04) :
+Partie 2 : 17✅/3🟡/15⬜ → 17✅/7🟡/11⬜ sur 35 (les quatre 🟡 -- avant de
+commencer, question posée explicitement à l'utilisateur sur comment
+traiter la partie frontend de ces quatre étapes (toutes demandent
+littéralement un composant React), puisque ce dépôt n'a AUCUN frontend
+React -- son seul frontend réel est un dashboard Streamlit servant
+l'ANCIEN pipeline RAG, pas `api/`. Réponse : backend seul pour
+l'instant. 2.2.2 (drag & drop) est 100% frontend, honnêtement non
+démarrée -- les deux routes d'upload qu'elle utiliserait (2.1.1 et
+2.2.1) existent déjà. 2.2.3 (progression) : `GET .../progress` +
+`GET .../progress/stream` (SSE, pas WebSocket -- ce flux n'a jamais
+besoin de recevoir quoi que ce soit du client), réutilisant le vrai
+Redis déjà en service (rate limiting/geoip) pour un vrai pub/sub, sans
+nouvelle infrastructure ; granularité honnêtement limitée au statut du
+Document (0/50/100/100%), pas un pourcentage par chunk -- éviterait de
+toucher `process_document`, le chemin le plus partagé de tout ce
+dépôt, pour un gain marginal. 2.2.4 (preview) : route sécurisée
+(jamais d'accès S3 direct/public) avec téléchargement par vrais chunks
+bornés en mémoire, vérifié contre S3/MinIO réel ; miniature (explicitement
+optionnelle dans la consigne) non construite. 2.2.5 (métadonnées) :
+normalisation réelle des métadonnées hétérogènes déjà extraites depuis
+2.1.1-2.1.9 vers une forme commune {title, author, created_date,
+keywords} -- jamais fabriquée pour un format sans le concept réel
+(CSV/JSON/XML/TXT) ; extension réelle de 3 extracteurs existants
+(DOCX/HTML/EPUB) pour surfacer un vrai champ déjà standard mais jamais
+exposé ; distinction réelle PDF `creator` (logiciel) vs `author`
+(personne), jamais confondus. Aucune nouvelle colonne de base de
+données pour les quatre étapes).
+
+Précédemment, mis à jour après Partie 2.2.1 (Upload multiple, 2026-09-04) :
 Partie 2 : 16✅/3🟡/16⬜ → 17✅/3🟡/15⬜ sur 35 (2.2.1 seul item touché --
 ✅, nouvelle route dédiée `POST .../documents/batch` plutôt qu'une
 modification littérale de la route d'upload existante -- une vraie
@@ -870,18 +900,24 @@ Partie, pour mémoire :
    moindre nouvelle colonne de base de données. **La série complète
    2.1.10-2.1.19 (import multi-source) est maintenant intégralement
    livrée.** La Partie 2.2 (gestion des documents) a démarré avec 2.2.1
-   (upload multiple, ✅, nouvelle route dédiée `POST .../documents/batch`) --
+   (upload multiple, ✅, nouvelle route dédiée `POST .../documents/batch`).
    2.2.2 (drag & drop), 2.2.3 (barre de progression), 2.2.4 (preview) et
-   2.2.5 (extraction de métadonnées) demandent tous un réel composant
-   frontend, or ce dépôt n'a AUCUN frontend React -- son seul frontend
+   2.2.5 (extraction de métadonnées) demandaient tous un réel composant
+   React, or ce dépôt n'a AUCUN frontend React -- son seul frontend
    existant est un dashboard Streamlit (`dashboard/app.py`) qui sert
    l'ANCIEN pipeline RAG (`src/`), pas `api/`, l'architecture multi-
    tenant que construit toute cette Partie 2. Question posée à
-   l'utilisateur avant de construire quoi que ce soit côté frontend
-   (React neuf ? extension du dashboard Streamlit existant ? backend
-   seul pour l'instant ?) -- voir l'échange du 2026-09-04. Reste
-   toute la Partie 2.2 (gestion des documents : tags, versioning,
-   réindexation, détection de doublons, sync). Gros chantier restant,
+   l'utilisateur avant de construire quoi que ce soit côté frontend --
+   réponse : **backend seul pour l'instant**. Les quatre étapes ont donc
+   été livrées en 🟡, chacune avec son vrai travail backend complet
+   (2.2.2 : rien à construire, les routes d'upload existent déjà ;
+   2.2.3 : SSE + poll réels via le vrai Redis existant ; 2.2.4 : route
+   de preview sécurisée, streaming par vrais chunks bornés ; 2.2.5 :
+   normalisation réelle des métadonnées + extension de 3 extracteurs)
+   et l'affichage/l'interaction utilisateur explicitement différés.
+   Reste toute la suite de la Partie 2.2 (2.2.6 à 2.2.16 : tags,
+   versioning, réindexation, détection de doublons, sync). Gros
+   chantier restant,
    à continuer de découper en sous-étapes.
 4. **Partie 6 (Citations & Anti-hallucination), validation réelle** --
    le code existe déjà (`hallucination_detection.py`, `llm_judge.py`),

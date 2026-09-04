@@ -92,7 +92,13 @@ def extract_epub_metadata(file_path: str) -> dict:
     multiple real `dc:creator` entries, and silently keeping only the
     first would drop real data the other, genuinely singular-in-
     practice fields (title/publisher/language/date) don't need to
-    worry about."""
+    worry about.
+
+    Partie 2.2.5 -- extended with `subject` (also a real LIST), the
+    EPUB/Dublin Core equivalent of keywords or tags (`dc:subject`, the
+    same real, standard field a book's own genre/topic tags are stored
+    under, per the OPF spec) -- same real multi-value shape as `author`,
+    since a real book can declare more than one real subject."""
     book = _open(file_path)
     metadata: dict = {}
 
@@ -103,6 +109,10 @@ def extract_epub_metadata(file_path: str) -> dict:
     authors = [value for value, _attrs in book.get_metadata("DC", "creator")]
     if authors:
         metadata["author"] = authors
+
+    subjects = [value for value, _attrs in book.get_metadata("DC", "subject")]
+    if subjects:
+        metadata["subject"] = subjects
 
     for key, dc_name in (("publisher", "publisher"), ("language", "language"), ("date", "date")):
         value = _dc(book, dc_name)

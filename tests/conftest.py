@@ -256,6 +256,25 @@ def _stub_out_upload_batch_scheduling_by_default(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_progress_updates_by_default(monkeypatch):
+    """Partie 2.2.3's own equivalent of the fixtures above --
+    process_document calls send_progress_update (a real Redis PUBLISH)
+    at each real status transition. Same real-network problem every
+    prior schedule_* stub above already exists for, but for Redis
+    pub/sub instead of Celery dispatch -- and a real, more urgent
+    reason to stub it here: an unreachable real Redis's own real
+    connection timeout (several seconds) would silently, drastically
+    slow down EVERY test in this whole fast SQLite suite that calls
+    process_document even once, not just fail loudly. Verified directly
+    in tests/test_documents.py, which monkeypatches it back for itself
+    where it actually matters to the test."""
+    async def _noop(document_id, progress, status):
+        return None
+
+    monkeypatch.setattr("api.security.documents.send_progress_update", _noop)
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

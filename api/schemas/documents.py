@@ -293,3 +293,31 @@ class DocumentBatchUploadResponse(BaseModel):
 
     results: list[DocumentBatchUploadResult]
     scheduled: int
+
+
+class DocumentMetadataResponse(BaseModel):
+    """Partie 2.2.5, item 3's own literal endpoint response -- the real,
+    common cross-format shape api/services/metadata_normalization.py's
+    own normalize_document_metadata produces, plus this document's own
+    id. `author`/`created_date`/`title` are honestly `None`, and
+    `keywords` an honestly empty list, for a format with no real
+    concept of one (CSV/JSON/XML/TXT) -- never a fabricated guess."""
+
+    document_id: uuid.UUID
+    title: str | None = None
+    author: str | list[str] | None = None
+    created_date: str | None = None
+    keywords: list[str]
+    raw: dict
+
+
+class DocumentProgressResponse(BaseModel):
+    """Partie 2.2.3, item 3's own literal `get_upload_progress`
+    response shape -- a real, coarse but honest 0/50/100/100 percentage
+    mapped from this document's own real `status` column (see
+    api/security/documents.py's own `_PROGRESS_BY_STATUS`), never a
+    fabricated per-chunk figure this codebase does not actually track."""
+
+    document_id: uuid.UUID
+    status: str
+    progress: int

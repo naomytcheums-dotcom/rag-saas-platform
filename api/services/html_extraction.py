@@ -130,6 +130,14 @@ def extract_html_metadata_from_markup(html: str) -> dict:
     if description:
         metadata["description"] = description
 
+    # Partie 2.2.5 -- the real, standard `<meta name="keywords">` tag,
+    # a genuine, if dated, HTML convention (comma-separated per its own
+    # long-standing real-world usage, same raw shape PDF's own
+    # `keywords` field carries) -- not previously extracted here.
+    keywords = _meta_content(soup, name="keywords")
+    if keywords:
+        metadata["keywords"] = keywords
+
     return metadata
 
 

@@ -68,11 +68,21 @@ def extract_docx_metadata(file_path: str) -> dict:
     paragraph_count -- not part of python-docx's core_properties
     itself, but the DOCX equivalent of PDF's page_count (this format
     has no fixed "pages" at the file-format level, since pagination is
-    a rendering-time concern in Word, not something stored in the XML)."""
+    a rendering-time concern in Word, not something stored in the XML).
+
+    Partie 2.2.5 -- extended with `keywords`, the real OOXML core
+    property Word's own "Properties" panel calls "Tags" (a real,
+    semicolon-separated string, per the OOXML core-properties schema --
+    same raw, unparsed shape as PDF's own `keywords` field; splitting
+    it is `api/services/metadata_normalization.py`'s own job, not this
+    extractor's, matching this codebase's existing "extractor returns
+    the format's own real shape, normalization is a separate, later
+    concern" pattern)."""
     document = _open(file_path)
     props = document.core_properties
     return {
         "title": props.title, "author": props.author, "subject": props.subject,
+        "keywords": props.keywords,
         "created": props.created.isoformat() if props.created else None,
         "modified": props.modified.isoformat() if props.modified else None,
         "paragraph_count": len(document.paragraphs),

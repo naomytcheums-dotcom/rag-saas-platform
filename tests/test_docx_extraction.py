@@ -23,6 +23,7 @@ def real_docx_path(tmp_path):
     document = docx.Document()
     document.core_properties.author = "pytest"
     document.core_properties.title = "Real Test DOCX"
+    document.core_properties.keywords = "alpha; beta; gamma"
 
     document.add_heading("Main Title", level=1)
     document.add_paragraph("This is real body text under the main title.")
@@ -125,6 +126,12 @@ def test_extract_docx_metadata_returns_the_real_title_author_and_paragraph_count
     assert metadata["title"] == "Real Test DOCX"
     assert metadata["author"] == "pytest"
     assert metadata["paragraph_count"] == 4  # 2 headings + 2 body paragraphs
+
+
+def test_extract_docx_metadata_returns_the_real_keywords_tag(real_docx_path):
+    """Partie 2.2.5 -- the real OOXML "Tags" core property."""
+    metadata = extract_docx_metadata(real_docx_path)
+    assert metadata["keywords"] == "alpha; beta; gamma"
 
 
 def test_extract_docx_metadata_raises_for_a_corrupt_docx(corrupt_docx_path):

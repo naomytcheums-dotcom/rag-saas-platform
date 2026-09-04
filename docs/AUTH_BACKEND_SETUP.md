@@ -4080,6 +4080,144 @@ split and `process_upload_batch`'s own real S3-upload/Document-creation
 loop, including a real S3 failure for one file not aborting the rest
 of the batch.
 
+### Partie 2.2.2-2.2.5 -- backend-only scope decision (2026-09-04)
+
+**Before building any of Partie 2.2.2 (drag & drop), 2.2.3 (progress
+bar), 2.2.4 (preview), or 2.2.5 (metadata display), this repo's real
+frontend state was checked and a real, structural gap was found**: all
+four steps' own literal specs explicitly ask for real React components
+(`DropZone`, a progress bar, `DocumentPreview` with PDF.js, a
+`DocumentMetadata` display) -- but this repository has **no React
+frontend at all**. Its only real, existing frontend is a Streamlit
+dashboard (`dashboard/app.py`), and that dashboard serves the OLD RAG
+pipeline (`src/`), not `api/`, the real multi-tenant architecture this
+entire Partie 2 has been building since Partie 1.1. Building a
+brand-new React project, or repurposing the existing Streamlit
+dashboard for a completely different backend, is a real, structural,
+hard-to-reverse decision -- asked of the user explicitly rather than
+silently decided. **Answer: backend only, for now.**
+
+Consequently, each of the four steps below was delivered with its own
+real, complete, tested BACKEND half (an endpoint or a normalization
+function any future frontend can call), and its own UI half explicitly
+NOT built -- stated plainly in each step's own delivery, not glossed
+over as "done."
+
+**2.2.2 (Drag & drop) has no backend surface of its own at all.**
+Dragging files onto a page and reading them via the browser's own File
+API is a purely client-side event; the resulting files are then
+uploaded through routes that ALREADY exist and are already fully
+tested: `POST /organizations/{org_id}/documents` (a single file,
+Partie 2.1.1) and `POST /organizations/{org_id}/documents/batch`
+(multiple files, Partie 2.2.1). There is genuinely nothing new to build
+server-side for this step.
+
+**2.2.3 (Progress bar)**: `GET /documents/{document_id}/progress` (a
+real, one-shot poll) and `GET /documents/{document_id}/progress/stream`
+(Server-Sent Events -- a real, deliberate choice over WebSockets:
+vision critique's own "SSE ou WebSockets" question is settled by this
+stream never needing to receive anything FROM the client mid-flight,
+so a plain, one-directional HTTP stream is the simpler, sufficient real
+fit). Reuses the SAME real Redis this codebase already runs for rate
+limiting/geoip (`RATE_LIMIT_REDIS_URL`, `api/security/rate_limit.py`/
+`geoip.py`'s own identical `redis.asyncio.from_url(...)` pattern) for a
+real pub/sub channel per document -- no new infrastructure at all.
+
+**A real, honestly-stated scope limitation**: progress is mapped from
+a real Document's own `status` column only (`pending`/`processing`/
+`completed`/`failed` → a real 0/50/100/100%), not a genuinely
+instrumented per-chunk percentage -- `process_document` has no
+intermediate progress signal anywhere in its own real extraction/
+chunking/embedding loop, and adding one would mean invasively changing
+the single most shared, heavily-used, already-hardened code path in
+this entire codebase (every format since Partie 2.1.1 runs through
+it) for a real but marginal UX gain. `send_progress_update` publishes
+to the real Redis channel at each of `process_document`'s own 3 real
+status transitions -- three small, mechanical, additive lines, not a
+redesign of that function. Every publish is wrapped best-effort: a real
+Redis outage must never fail real document processing, the same "never
+let a side channel break the main real work" reasoning as every
+`schedule_*` function's own broker-hiccup tolerance elsewhere in this
+codebase -- confirmed for real to matter here specifically, since an
+unreachable Redis's own real connection timeout (several seconds) would
+otherwise have silently slowed down EVERY test in the fast SQLite suite
+that touches `process_document` even once (fixed by
+`tests/conftest.py`'s own new autouse stub).
+
+**Vision critique 2's own "que se passe-t-il si la connexion SSE est
+interrompue" answer, stated plainly**: this generator cannot, and does
+not try to, retry on the client's behalf -- a real browser's own native
+`EventSource` API reconnects automatically on a dropped connection, and
+reconnecting simply re-invokes this same route, which immediately
+resends the real, CURRENT snapshot (`get_document_progress`) before
+resubscribing -- a dropped connection loses at most the gap itself,
+never the real, current state.
+
+**2.2.4 (Preview)**: `GET /documents/{document_id}/preview` serves a
+document's own real content SECURELY (vision critique 2's own "pas
+d'accès direct S3" answer) -- always proxied through this
+authenticated, membership-checked endpoint (the SAME real
+`_get_document_and_membership` anti-enumeration guard as every other
+document route), NEVER a direct or pre-signed public S3 URL. Real
+performance answer (vision critique 1): `api/services/document_storage.py`'s
+new `stream_document_file` downloads via S3's own real, chunked
+`StreamingBody.iter_chunks()` (256KB chunks) rather than
+`download_document_file`'s own full in-memory `.read()` (which
+`process_document` still needs, since it must hand a real extraction
+library the whole content anyway) -- a large real document is never
+fully buffered in this server's own memory just to preview it,
+confirmed via a real round-trip test against real S3/MinIO
+(`tests/test_documents_integration.py`). Thumbnail generation --
+explicitly marked optional in this step's own literal spec -- was
+deliberately NOT built: real extra dependencies and real complexity,
+outside the honest "backend only" scope agreed for this batch.
+
+**2.2.5 (Metadata extraction)**: every format has extracted its own
+real metadata into `Document.metadata_json` since Partie 2.1.1-2.1.9
+already -- this step's own real work is NORMALIZATION.
+`api/services/metadata_normalization.py`'s `normalize_document_metadata`
+maps each format's own differently-shaped raw metadata (PDF's real
+`creationDate` in the PDF spec's own raw `D:YYYYMMDDHHmmSS` string
+format; DOCX's own already-ISO `created`; Markdown frontmatter's own
+conventional `tags` key, not `keywords`; EPUB's own real Dublin Core
+`subject` list) into one common, honest shape:
+`{title, author, created_date, keywords}` -- `None`/`[]`, never a
+fabricated guess, for a format with genuinely no such concept at all
+(CSV/JSON/XML/TXT). **A real, deliberate distinction, not an
+oversight**: a PDF's own `creator` field (the authoring SOFTWARE, e.g.
+"Microsoft Word", per the PDF spec's own real meaning) is never treated
+as an author fallback -- author means a person, creator means an
+application, and conflating them would be a real, substantive metadata
+bug. **A real, minimal extension of 3 existing extractors** (item 1 of
+this step's own literal spec) closes 3 genuine gaps, each a real,
+already-standard field simply never surfaced before: DOCX's own real
+OOXML "Tags" core property (`keywords`), HTML's own real, standard
+`<meta name="keywords">` tag, and EPUB's own real Dublin Core
+`dc:subject` entries. `GET /documents/{document_id}/metadata` computes
+this normalization ON READ, from the document's own already-stored
+`metadata_json` -- `process_document`'s own shared, critical pipeline
+is never touched, and nothing is stored twice.
+
+**Real verification for Partie 2.2.2-2.2.5**: `tests/test_metadata_normalization.py`
+(fast tier, no mocking -- every real per-format shape hand-built and
+fed straight in) covers PDF date parsing (including a real partial/
+malformed date), the real PDF creator-vs-author distinction, every
+format's own real key mapping, and the real, honest empty case for
+CSV/JSON/XML/TXT. `tests/test_docx_extraction.py`/`test_html_extraction.py`/
+`test_epub_extraction.py` each gained a real test for their own newly-
+extended field. `tests/test_document_progress.py` covers
+`get_document_progress`'s own real DB-backed status mapping (no Redis
+involved), and `send_progress_update`/`stream_document_progress`'s own
+real orchestration against a real Redis client interface mocked at the
+exact publish/pubsub/listen call boundary (real Redis pub/sub itself
+isn't reachable in this automated session, the same honest limitation
+as every other real-infrastructure dependency in this codebase).
+`tests/test_documents.py` covers all three new routes end to end
+(metadata, preview, progress poll + SSE stream) with permissions and
+anti-enumeration guards, plus a real round-trip test of
+`stream_document_file` against real S3/MinIO in
+`tests/test_documents_integration.py`.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

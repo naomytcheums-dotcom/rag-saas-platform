@@ -333,6 +333,22 @@ def _require_documents_bucket():
         pytest.skip("S3_DOCUMENTS_BUCKET_NAME is not configured -- skipping the real end-to-end document pipeline test")
 
 
+def test_stream_document_file_roundtrips_real_bytes_through_real_s3(_require_documents_bucket):
+    """Partie 2.2.4 -- real, chunked S3 download for the preview route
+    (api/routers/documents.py's preview_document). Confirms real,
+    concatenated chunks reconstruct the exact real bytes a real
+    upload_document_file call stored, against real S3-compatible
+    storage, not a mock."""
+    from api.services.document_storage import stream_document_file
+
+    content = os.urandom(600_000)  # bigger than the real 256KB chunk size, so real multi-chunk iteration is exercised
+    file_key = upload_document_file(uuid.uuid4(), uuid.uuid4(), "stream-test.bin", content, "application/octet-stream")
+
+    chunks = list(stream_document_file(file_key))
+    assert b"".join(chunks) == content
+    assert len(chunks) > 1
+
+
 async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine, _require_documents_bucket):
     """
     Validation criterion: the full real pipeline -- real S3 upload/

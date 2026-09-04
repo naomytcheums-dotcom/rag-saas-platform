@@ -19,6 +19,7 @@ _REAL_ARTICLE_HTML = """<!DOCTYPE html>
 <meta name="author" content="Jane Doe">
 <meta property="article:published_time" content="2026-01-15T10:00:00Z">
 <meta name="description" content="A short description of the article.">
+<meta name="keywords" content="alpha, beta, gamma">
 </head>
 <body>
 <nav><ul><li><a href="/">Home</a></li><li><a href="/about">About</a></li></ul></nav>
@@ -163,6 +164,12 @@ def test_extract_html_metadata_prefers_open_graph_over_plain_tags(article_path):
     assert metadata["author"] == "Jane Doe"
     assert metadata["date"] == "2026-01-15T10:00:00Z"
     assert metadata["description"] == "A short description of the article."
+
+
+def test_extract_html_metadata_returns_the_real_keywords_meta_tag(article_path):
+    """Partie 2.2.5 -- the real, standard `<meta name="keywords">` tag."""
+    metadata = extract_html_metadata(article_path)
+    assert metadata["keywords"] == "alpha, beta, gamma"
 
 
 def test_extract_html_metadata_falls_back_to_the_title_tag_when_no_og_title(no_og_meta_path):
