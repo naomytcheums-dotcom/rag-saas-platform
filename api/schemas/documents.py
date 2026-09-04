@@ -266,3 +266,30 @@ class OneDriveImportResponse(BaseModel):
 
     folder_id: str
     status: str
+
+
+class DocumentBatchUploadResult(BaseModel):
+    """Partie 2.2.1 -- one real, per-file outcome from a batch upload,
+    decided SYNCHRONOUSLY (see api/security/documents.py's
+    start_document_batch_upload) -- `accepted=False` means this file's
+    own real CONTENT failed validate_document_upload's real check and
+    was never handed to Celery/S3 at all; `accepted=True` means it was,
+    but its own real S3 upload/Document creation only happens later,
+    inside process_upload_batch_task."""
+
+    filename: str
+    accepted: bool
+    error: str | None = None
+
+
+class DocumentBatchUploadResponse(BaseModel):
+    """Partie 2.2.1, item 1's own response shape -- a real LIST of
+    per-file outcomes, since a single batch can no longer be
+    represented by one bare DocumentResponse the way a single upload
+    is. No Document ids are returned here -- they don't exist yet
+    (created later, inside process_upload_batch) -- the same honest
+    "no persisted, user-visible parent job status" limitation every
+    prior bulk import in this codebase already states."""
+
+    results: list[DocumentBatchUploadResult]
+    scheduled: int

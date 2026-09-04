@@ -22,6 +22,7 @@ import uuid
 
 from sqlalchemy import select
 
+from api.config import settings
 from api.models.document import Document, DocumentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
@@ -2596,3 +2597,140 @@ def test_process_zip_entries_tolerates_a_broker_failure_for_one_entry(monkeypatc
 
     assert scheduled == 2
     assert len(calls) == 2
+
+
+# ------------------------------------------------------ Batch upload --
+
+async def _upload_batch(client, org_id: str, token: str, files: list[tuple[str, bytes, str]], workspace_id=None):
+    params = {"workspace_id": str(workspace_id)} if workspace_id else {}
+    return await client.post(
+        f"/organizations/{org_id}/documents/batch", params=params,
+        files=[("files", (name, content, ctype)) for name, content, ctype in files],
+        headers=_auth_header(token),
+    )
+
+
+async def test_owner_can_upload_multiple_documents(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.2.1): l'upload de plusieurs fichiers en
+    une seule requête fonctionne."""
+    monkeypatch.setattr("api.security.documents.upload_document_file", lambda org_id, doc_id, filename, content, content_type: f"documents/{org_id}/{doc_id}/{filename}")
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload_batch(client, org["id"], owner_token, [
+        ("a.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+        ("b.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+    ])
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["scheduled"] == 2
+    assert all(r["accepted"] for r in body["results"])
+    assert [r["filename"] for r in body["results"]] == ["a.pdf", "b.pdf"]
+
+
+async def test_batch_upload_rejects_an_invalid_file_but_accepts_the_rest(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique 3/4: un fichier invalide
+    est rejeté, sans bloquer les autres fichiers du lot."""
+    import os
+
+    monkeypatch.setattr("api.security.documents.upload_document_file", lambda org_id, doc_id, filename, content, content_type: f"documents/{org_id}/{doc_id}/{filename}")
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload_batch(client, org["id"], owner_token, [
+        ("good.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+        ("bad.bin", os.urandom(200), "application/octet-stream"),
+    ])
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["scheduled"] == 1
+    results = {r["filename"]: r for r in body["results"]}
+    assert results["good.pdf"]["accepted"] is True
+    assert results["bad.bin"]["accepted"] is False
+    assert results["bad.bin"]["error"] is not None
+
+
+async def test_batch_upload_rejects_too_many_files(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique: la limite de fichiers
+    est respectée."""
+    monkeypatch.setattr(settings, "DOCUMENT_BATCH_MAX_FILES", 2)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload_batch(client, org["id"], owner_token, [
+        ("a.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+        ("b.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+        ("c.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+    ])
+    assert response.status_code == 400
+
+
+async def test_batch_upload_rejects_a_batch_exceeding_the_total_size_limit(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique: la limite de taille
+    totale est respectée."""
+    monkeypatch.setattr(settings, "DOCUMENT_BATCH_MAX_TOTAL_SIZE", 100)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload_batch(client, org["id"], owner_token, [
+        ("a.pdf", _REAL_PDF_MAGIC * 10, "application/pdf"),
+    ])
+    assert response.status_code == 400
+
+
+async def test_batch_upload_rejects_a_workspace_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    other_owner_token, other_owner = await _register(client, db_session, "batchotherowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_workspace = (await client.post(
+        f"/organizations/{other_org['id']}/workspaces", json={"name": "Other Workspace"}, headers=_auth_header(other_owner_token),
+    )).json()
+
+    response = await _upload_batch(
+        client, org["id"], owner_token, [("a.pdf", _REAL_PDF_MAGIC, "application/pdf")], workspace_id=other_workspace["id"],
+    )
+    assert response.status_code == 400
+
+
+async def test_viewer_cannot_upload_a_batch(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "batchviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await _upload_batch(client, org["id"], viewer_token, [("a.pdf", _REAL_PDF_MAGIC, "application/pdf")])
+    assert response.status_code == 403
+
+
+async def test_batch_upload_passes_only_accepted_files_through_to_scheduling(client, db_session, register_payload, monkeypatch):
+    import os
+
+    captured = {}
+
+    def _capture(organization_id, workspace_id, created_by, files):
+        captured["files"] = files
+
+    monkeypatch.setattr("api.security.documents.schedule_upload_batch_processing", _capture)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await _upload_batch(client, org["id"], owner_token, [
+        ("good.pdf", _REAL_PDF_MAGIC, "application/pdf"),
+        ("bad.bin", os.urandom(200), "application/octet-stream"),
+    ])
+
+    assert response.status_code == 202
+    assert [f["filename"] for f in captured["files"]] == ["good.pdf"]
+
+
+async def test_schedule_upload_batch_processing_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_upload_batch_processing
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.document_batch_processing.process_upload_batch_task.delay", _boom)
+    schedule_upload_batch_processing(uuid.uuid4(), None, uuid.uuid4(), [{"filename": "a.pdf", "content": _REAL_PDF_MAGIC, "content_type": "application/pdf"}])  # must not raise

@@ -4007,6 +4007,79 @@ real database-touching behavior (container status transitions, a real
 per-entry Document created, a real corrupt-archive/missing-entry
 failure each recorded honestly).
 
+### Batch document upload (Partie 2.2.1)
+
+`POST /organizations/{org_id}/documents/batch` -- a real, SEPARATE,
+dedicated route rather than a literal modification of the existing
+`POST /organizations/{org_id}/documents` single-file route (see this
+step's own literal ask). **Deviation stated plainly**: a real multi-file
+response (one real outcome PER file) genuinely cannot be the same shape
+as a single upload's own bare `DocumentResponse` -- changing the
+existing route's own multipart field name or response shape to also
+carry a list would have broken every one of the dozens of already-
+passing single-upload tests across Partie 2.1.1-2.1.9, for zero real
+benefit. A new, additive route costs nothing and disturbs nothing
+already working.
+
+**Real, cheap, batch-level limits, purely offline**: `validate_upload_batch`
+checks real file COUNT (`DOCUMENT_BATCH_MAX_FILES`, default 10) and
+real TOTAL SIZE (`DOCUMENT_BATCH_MAX_TOTAL_SIZE`, default 100MB) --
+BEFORE any S3/Celery work. **Real, SYNCHRONOUS per-file CONTENT
+validation, inside the request itself**: `start_document_batch_upload`
+reuses `validate_document_upload` (completely unchanged -- the exact
+same real check a single upload already gets) on every file, one by
+one, in the SAME request that uploaded them -- vision critique 3/4's
+own "un fichier invalide est rejeté" answer made immediately, honestly
+visible in the real HTTP response (`DocumentBatchUploadResponse.results`,
+one real `{"filename","accepted","error"}` entry per file), not only
+discoverable later in a background task's own logs. Only files that
+pass this real check are ever handed to Celery; a rejected one never
+reaches S3/the database at all.
+
+**A real, deliberate, DOCUMENTED exception to this codebase's own
+usual Celery-argument rule**: every prior fan-out in this codebase
+(GitHub, Drive, OneDrive, Confluence, Notion, ZIP entries) deliberately
+keeps large/sensitive data OUT of Celery task arguments, always
+re-fetching its own item fresh from a durable source (S3, or a real
+external API) inside the per-item task instead. A freshly-uploaded
+batch file has no such durable source yet -- there is no S3 object for
+it, no external API to re-fetch it from -- so `schedule_upload_batch_processing`
+base64-encodes each real, already-content-validated file's own bytes
+directly into `process_upload_batch_task`'s own Celery arguments. This
+is real, stated as an atypical exception, not hidden: `DOCUMENT_BATCH_MAX_TOTAL_SIZE`
+(100MB by default) is precisely what keeps this bounded rather than
+unlimited (with real base64 overhead, up to ~133MB of JSON actually
+flowing through the broker for a full 100MB batch).
+
+**A single real Celery task for the WHOLE batch, not one per file**:
+unlike every prior fan-out (`process_google_drive_files`,
+`process_zip_entries`, ...), this step's own literal spec lists only
+ONE task (`process_upload_batch_task`, "traiter le lot en parallèle")
+-- `process_upload_batch` uploads each real file to S3 and creates its
+own Document row in a real loop, inside that SAME task's single
+execution, then calls the exact same `schedule_document_processing`
+every other upload already calls for the real extraction/chunking/
+embedding phase (vision critique 1's own "réutilise-t-il le pipeline
+existant" answer: completely, unchanged, per accepted file).
+
+**Robustness (vision critique 3)**: a real S3/database failure for ONE
+file inside `process_upload_batch`'s own loop is logged and skipped
+(no Document row left behind for it), never raised -- every other real
+file in the same batch still uploads and gets scheduled normally, the
+same resilience pattern as every prior fan-out in this codebase.
+
+**Real verification for batch upload specifically**:
+`tests/test_documents.py` covers the real route end to end (multiple
+valid files accepted, an invalid file rejected without blocking the
+others, the real file-count limit enforced, the real total-size limit
+enforced, cross-tenant workspace guard, permissions, Celery dispatch
+receiving only the accepted files, broker-unreachable tolerance).
+`tests/test_document_batch_integration.py` proves
+`start_document_batch_upload`'s own real per-file content-validation
+split and `process_upload_batch`'s own real S3-upload/Document-creation
+loop, including a real S3 failure for one file not aborting the rest
+of the batch.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

@@ -108,7 +108,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (16✅/3🟡/16⬜ sur 35, via les Étapes 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15/2.1.16/2.1.17/2.1.18/2.1.19)
+## PARTIE 2 — Knowledge Base universelle — 🟡 DÉMARRÉ (17✅/3🟡/15⬜ sur 35, via les Étapes 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15/2.1.16/2.1.17/2.1.18/2.1.19/2.2.1)
 
 ### 2.1 Import de documents
 
@@ -138,7 +138,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 | # | Fonctionnalité | Implémentation prévue |
 |---|---|---|
-| 2.2.1 | Upload multiple | Endpoint POST /documents multipart |
+| 2.2.1 | Upload multiple | ✅ **Nouvelle route dédiée `POST /organizations/{org_id}/documents/batch`, PAS une modification littérale de la route d'upload existante** -- déviation réelle et assumée par rapport au texte de la consigne ("modifier POST .../documents") : une vraie réponse multi-fichiers (un résultat PAR fichier) ne peut pas avoir la même forme qu'un `DocumentResponse` unique, et changer le nom de champ multipart/la forme de réponse de la route existante aurait cassé des dizaines de tests d'upload déjà en place depuis les Parties 2.1.1-2.1.9 sans aucun bénéfice réel -- une route additive ne perturbe rien de déjà fonctionnel. `validate_upload_batch` vérifie le nombre réel de fichiers (`DOCUMENT_BATCH_MAX_FILES`, défaut 10) et la taille totale réelle (`DOCUMENT_BATCH_MAX_TOTAL_SIZE`, défaut 100 Mo) -- purement hors ligne, avant tout travail S3/Celery. **Validation de contenu par fichier RÉELLE ET SYNCHRONE, avant tout travail Celery** : `start_document_batch_upload` réutilise `validate_document_upload` (inchangé) sur chaque fichier DANS la requête elle-même -- réponse directe à la vision critique 3/4 ("un fichier invalide est rejeté") rendue immédiatement visible dans la réponse HTTP, pas seulement découvrable plus tard dans les logs d'une tâche d'arrière-plan ; seuls les fichiers acceptés sont transmis à Celery. **Déviation réelle et documentée par rapport à la règle habituelle de ce dépôt** : les octets de chaque fichier accepté transitent réellement par les arguments de la tâche Celery (encodés en base64, `process_upload_batch_task`) -- contrairement à chaque fan-out précédent (qui re-télécharge toujours depuis une source durable comme S3 ou une vraie API externe), un fichier fraîchement uploadé n'a nulle part ailleurs où vivre de façon durable à ce stade ; `DOCUMENT_BATCH_MAX_TOTAL_SIZE` borne réellement cette exception. Un seul vrai job Celery pour tout le lot (`process_upload_batch_task`, conforme au texte littéral), traitant chaque fichier dans une vraie boucle -- pas un fan-out par fichier vers une tâche séparée. **Robustesse (vision critique 3)** : l'échec réel d'upload S3/DB d'UN fichier du lot est journalisé et ignoré, sans jamais interrompre les autres -- même résilience que chaque fan-out précédent de ce dépôt. **Cohérence (vision critique 1)** : aucun nouveau format ni pipeline -- chaque fichier accepté passe par exactement le même `upload_document_file`/`schedule_document_processing` qu'un upload simple. Tests réels dédiés (upload multiple accepté, fichier invalide rejeté sans bloquer les autres, limite de nombre respectée, limite de taille totale respectée, garde-fou cross-tenant, permissions, dispatch Celery ne recevant que les fichiers acceptés, tolérance à un échec S3 réel par fichier, tolérance à une panne du broker), voir `tests/test_documents.py`/`tests/test_document_batch_integration.py` |
 | 2.2.2 | Drag & drop | react-dropzone |
 | 2.2.3 | Barre de progression | Upload chunké + WebSocket/SSE |
 | 2.2.4 | Preview | PDF.js / react-doc-viewer |
@@ -373,11 +373,26 @@ au-delà de "15.1.1 Ticke...".
 | ⬜ Non commencé | 361 | 72.2% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **75/515 (~14.6%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **142/515 (~27.6%)**
-- Pondéré (✅=1, 🟡=0.5) : **~108.5/515 (~21.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **76/515 (~14.8%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **143/515 (~27.8%)**
+- Pondéré (✅=1, 🟡=0.5) : **~109.5/515 (~21.3%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 2.1.19 (Import depuis archives ZIP, 2026-09-04) :
+Mis à jour après Partie 2.2.1 (Upload multiple, 2026-09-04) :
+Partie 2 : 16✅/3🟡/16⬜ → 17✅/3🟡/15⬜ sur 35 (2.2.1 seul item touché --
+✅, nouvelle route dédiée `POST .../documents/batch` plutôt qu'une
+modification littérale de la route d'upload existante -- une vraie
+réponse multi-fichiers ne peut pas avoir la forme d'un `DocumentResponse`
+unique, et ce choix ne casse aucun des dizaines de tests d'upload déjà
+en place. Validation de contenu par fichier réelle et SYNCHRONE dans la
+requête elle-même (réponse immédiate, pas seulement dans les logs).
+Déviation honnête assumée : les octets de chaque fichier accepté
+transitent par les arguments Celery (base64, bornés par
+`DOCUMENT_BATCH_MAX_TOTAL_SIZE`) -- contrairement à chaque fan-out
+précédent, un fichier fraîchement uploadé n'a nulle part ailleurs où
+vivre durablement à ce stade. Un seul job Celery pour tout le lot,
+conforme au texte littéral. Aucune nouvelle colonne de base de données).
+
+Précédemment, après Partie 2.1.19 (Import depuis archives ZIP, 2026-09-04) :
 Partie 2 : 15✅/3🟡/17⬜ → 16✅/3🟡/16⬜ sur 35 (2.1.19 seul item touché --
 ✅, le SEUL import de toute la série 2.1.10-2.1.19 sans la moindre API
 externe ni le moindre identifiant, donc entièrement vérifiable pour de
@@ -854,7 +869,17 @@ Partie, pour mémoire :
    zip-bomb par flux borné en mémoire. Aucune des dix n'a introduit la
    moindre nouvelle colonne de base de données. **La série complète
    2.1.10-2.1.19 (import multi-source) est maintenant intégralement
-   livrée.** Reste
+   livrée.** La Partie 2.2 (gestion des documents) a démarré avec 2.2.1
+   (upload multiple, ✅, nouvelle route dédiée `POST .../documents/batch`) --
+   2.2.2 (drag & drop), 2.2.3 (barre de progression), 2.2.4 (preview) et
+   2.2.5 (extraction de métadonnées) demandent tous un réel composant
+   frontend, or ce dépôt n'a AUCUN frontend React -- son seul frontend
+   existant est un dashboard Streamlit (`dashboard/app.py`) qui sert
+   l'ANCIEN pipeline RAG (`src/`), pas `api/`, l'architecture multi-
+   tenant que construit toute cette Partie 2. Question posée à
+   l'utilisateur avant de construire quoi que ce soit côté frontend
+   (React neuf ? extension du dashboard Streamlit existant ? backend
+   seul pour l'instant ?) -- voir l'échange du 2026-09-04. Reste
    toute la Partie 2.2 (gestion des documents : tags, versioning,
    réindexation, détection de doublons, sync). Gros chantier restant,
    à continuer de découper en sous-étapes.

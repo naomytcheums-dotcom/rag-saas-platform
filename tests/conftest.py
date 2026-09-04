@@ -243,6 +243,19 @@ def _stub_out_zip_processing_scheduling_by_default(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_upload_batch_scheduling_by_default(monkeypatch):
+    """Partie 2.2.1's own equivalent of the fixture above --
+    start_document_batch_upload calls schedule_upload_batch_processing
+    for a real batch upload, the SAME real Celery-dispatch problem for
+    the SAME reason. Verified directly in tests/test_documents.py,
+    which monkeypatches it back for itself."""
+    monkeypatch.setattr(
+        "api.security.documents.schedule_upload_batch_processing",
+        lambda organization_id, workspace_id, created_by, files: None,
+    )
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

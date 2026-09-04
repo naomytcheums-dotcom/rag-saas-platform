@@ -388,6 +388,11 @@ class Settings(BaseSettings):
     def zip_include_patterns_list(self) -> list[str]:
         return [pattern.strip() for pattern in self.ZIP_INCLUDE_PATTERNS.split(",") if pattern.strip()]
 
+    # -- Document batch upload (Partie 2.2.1) --------------------------------
+    # This step's own literal defaults.
+    DOCUMENT_BATCH_MAX_FILES: int = 10
+    DOCUMENT_BATCH_MAX_TOTAL_SIZE: int = 100 * 1024 * 1024  # 100 MB
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

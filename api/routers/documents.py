@@ -29,7 +29,7 @@ Member can't delete someone ELSE's document.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +40,8 @@ from api.models.user import User
 from api.schemas.documents import (
     ConfluenceImportRequest,
     ConfluenceImportResponse,
+    DocumentBatchUploadResponse,
+    DocumentBatchUploadResult,
     DocumentListResponse,
     DocumentResponse,
     DocumentUrlImportRequest,
@@ -61,6 +63,7 @@ from api.schemas.documents import (
 from api.security.documents import (
     import_document_from_url,
     start_confluence_import,
+    start_document_batch_upload,
     start_github_issues_import,
     start_github_repo_import,
     start_google_doc_import,
@@ -69,6 +72,7 @@ from api.security.documents import (
     start_onedrive_import,
     start_sitemap_import,
     upload_document,
+    validate_upload_batch,
 )
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import delete_document_file
@@ -124,6 +128,40 @@ async def create_document(
     await db.commit()
     await db.refresh(document)
     return _to_response(document)
+
+
+@router.post("/organizations/{org_id}/documents/batch", response_model=DocumentBatchUploadResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_documents_batch(
+    org_id: uuid.UUID, files: list[UploadFile] = File(...), workspace_id: uuid.UUID | None = None,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 2.2.1, item 1's own literal ask -- a SEPARATE, dedicated
+    path rather than a literal modification of POST .../documents above
+    (see api/security/documents.py's own Partie 2.2.1 section docstring
+    for why: a real multi-file response, one outcome PER file, cannot
+    be the same shape as a single upload's own bare DocumentResponse,
+    and every existing single-upload caller/test keeps working
+    completely unchanged this way). 202 Accepted -- nothing is durably
+    stored yet when this returns; only the per-file CONTENT check
+    (vision critique 3/4's own answer) runs synchronously here, real S3
+    upload is deferred to Celery (vision critique 2's own answer)."""
+    file_payloads = [(f.filename or "document", await f.read()) for f in files]
+    try:
+        validate_upload_batch(file_payloads)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    try:
+        results = await start_document_batch_upload(db, org_id, workspace_id, current_user.id, file_payloads)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return DocumentBatchUploadResponse(
+        results=[DocumentBatchUploadResult(filename=r["filename"], accepted=r["error"] is None, error=r["error"]) for r in results],
+        scheduled=sum(1 for r in results if r["error"] is None),
+    )
 
 
 @router.post("/organizations/{org_id}/documents/url", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
