@@ -291,6 +291,30 @@ async def test_run_agent_without_plan_first_never_plans(monkeypatch, db_session)
     assert mock_acompletion.call_count == 1
 
 
+# ------------------------------------- granular traces (Partie 5.1.14 integration) -------------------------------------
+
+
+async def test_run_agent_records_a_real_granular_llm_call_trace(monkeypatch, db_session):
+    """Validation criterion: cohérence -- les traces granulaires sont
+    intégrées dans l'orchestrateur, sans remplacer le journal léger
+    existant."""
+    from api.services.agent_traces import get_agent_traces
+
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "hi", db=db_session)
+
+    granular_traces = await get_agent_traces(db_session, run.id)
+    assert len(granular_traces) == 1
+    assert granular_traces[0].step_type == "llm_call"
+    assert granular_traces[0].status == "completed"
+    assert granular_traces[0].duration_ms is not None
+    # the existing lightweight event log is untouched
+    assert [e["event"] for e in run.trace] == ["created", "started", "completed"]
+
+
 async def test_run_agent_excludes_a_real_denied_tool(monkeypatch, db_session):
     """Validation criterion: sécurité (Partie 5.1.3) -- si l'utilisateur
     n'a pas la permission, l'outil est désactivé (jamais sélectionné,

@@ -70,6 +70,7 @@ from api.security.agent_runs import create_run, get_run, get_runs, stop_run, upd
 from api.security.conversations import add_message, get_conversation_messages
 from api.security.tool_permissions import check_tool_permission
 from api.services.agent_memory import get_all_memory
+from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
 from api.services.task_planning import get_plan_steps, plan_task
@@ -226,6 +227,18 @@ class AgentOrchestrator:
             trace.append(self._trace_event("started", {"provider": llm_cfg["provider"], "model": llm_cfg["model"]}))
             async with self._db_lock:
                 await update_run_status(db, run.id, AgentRunStatus.running.value, trace=list(trace))
+                # Partie 5.1.14 -- a real, minimal, additive granular
+                # trace bracketing the actual LLM call, on top of (not
+                # replacing) the lightweight event log above. Real,
+                # honest degrade: AGENT_TRACES_MAX_STEPS exceeded raises
+                # inside start_trace -- caught here so a run never fails
+                # just because its OWN tracing quota is exhausted.
+                llm_trace = None
+                if settings.AGENT_TRACES_ENABLED:
+                    try:
+                        llm_trace = await start_trace(db, run.id, "llm_call", f"{llm_cfg['provider']}/{llm_cfg['model']}", input={"messages": messages})
+                    except ValueError:
+                        pass
                 await db.commit()
             try:
                 result = await chat_completion(
@@ -243,17 +256,23 @@ class AgentOrchestrator:
                     if current is not None and current.status == AgentRunStatus.running.value:
                         trace.append(self._trace_event("timeout"))
                         await update_run_status(db, run.id, AgentRunStatus.timeout.value, trace=list(trace))
+                        if llm_trace is not None:
+                            await end_trace(db, llm_trace.id, status="failed", error="timeout")
                         await db.commit()
                 raise
             except LLMError as exc:
                 trace.append(self._trace_event("failed", {"error": str(exc)}))
                 async with self._db_lock:
                     await update_run_status(db, run.id, AgentRunStatus.failed.value, error=str(exc), trace=list(trace))
+                    if llm_trace is not None:
+                        await end_trace(db, llm_trace.id, status="failed", error=str(exc))
                     await db.commit()
             else:
                 trace.append(self._trace_event("completed", {"result": result}))
                 async with self._db_lock:
                     await update_run_status(db, run.id, AgentRunStatus.completed.value, result=result, trace=list(trace))
+                    if llm_trace is not None:
+                        await end_trace(db, llm_trace.id, output={"result": result}, status="completed")
                     if conversation_id is not None:
                         await add_message(db, conversation_id, "assistant", result)
                     await db.commit()

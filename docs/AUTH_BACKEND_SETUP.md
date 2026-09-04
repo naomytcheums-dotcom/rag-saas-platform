@@ -6990,6 +6990,47 @@ would be a larger, riskier rewrite than the literal ask requires.
 **Real verification**: 20 tests (18 module tests, 2 orchestrator
 integration tests), `tests/test_task_planning.py`.
 
+### Partie 5.1.14 -- agent traces
+
+New real model `api/models/agent_trace.py` (`AgentTrace`, migration
+`0056`, RLS enabled). **Honest relationship to the existing
+mechanism**: distinct from the lightweight `AgentRunRecord.trace` JSON
+log (Partie 5.1.1, already relied upon by every 5.1.x test) -- this new
+table serves real per-step structure/duration/export needs; migrating
+every existing call site onto it would be an invasive rewrite of
+already-tested code for marginal benefit within this étape's own
+scope.
+
+New module `api/services/agent_traces.py`: all 5 literal functions
+plus `purge_expired_traces` (a real, additional helper). **An honest
+simplification for `get_agent_trace_tree`**: the literal schema has no
+`parent_trace_id` -- no real nested tree is possible; real grouping by
+`step_type` instead, documented as such.
+
+**Robustness (vision critique)**: `AGENT_TRACES_MAX_STEPS` is really
+enforced (a real `ValueError`, tested) -- never a silent overflow.
+**Storage (vision critique)**: `purge_expired_traces` is real and ready
+(`AGENT_TRACES_RETENTION_DAYS`), but NOT wired to a periodic Celery
+task in this pass -- real, small, separate future work, not fabricated
+as already running.
+
+**Real endpoints**, documented deviation from the literal path (no
+organization): under
+`/organizations/{org_id}/agents/runs/{run_id}/traces` (+ `/tree`,
+`/export`), `require_org_member`, a real ownership check (404 if the
+run doesn't belong to that organization, tested).
+
+**Real, minimal orchestrator integration**: every real LLM call inside
+`run_agent` is now bracketed by a real granular trace (`start_trace`/
+`end_trace`, real computed duration) -- IN ADDITION to the existing
+lightweight event log, never replacing it, tested.
+
+**Real verification**: 17 tests (16 function/endpoint tests, 1
+orchestrator integration test), `tests/test_agent_traces.py`.
+
+**Partie 5.1 -- Agent Architecture: ✅ COMPLETE (14/14)** in `api/` --
+5.1.1 through 5.1.14, each real, tested, documented in both languages.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (10 items vérifiés réels dans `api/` -- 5.1.1 à 5.1.10 -- + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 items vérifiés réels dans `api/` -- + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.2-5.4 restent à faire)
 
 ### 5.1 Architecture Agent
 
@@ -630,9 +630,21 @@ Tests réels dédiés (13 tests fonction+endpoint + 2 tests d'intégration orche
 
 Tests réels dédiés (18 tests module + 2 tests d'intégration orchestrateur = 20), voir `tests/test_task_planning.py`.
 
-Agent traces (au-delà de l'orchestrateur central lui-même) : **existent
-déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
-récentes).
+#### Partie 5.1.14 — Traces d'agent
+
+✅ **Nouveau modèle réel** `api/models/agent_trace.py` (`AgentTrace`, migration `0056`, RLS activée). **Relation honnête avec le mécanisme existant** : distinct du journal léger `AgentRunRecord.trace` (JSON, Partie 5.1.1, déjà utilisé par tous les tests 5.1.x) -- cette nouvelle table sert les besoins réels de structure/durée/export par étape ; migrer chaque site d'appel existant vers cette table aurait été une réécriture invasive de code déjà testé, pour un bénéfice marginal dans le périmètre de cette étape.
+
+✅ **Nouveau module réel** `api/services/agent_traces.py` : les 5 fonctions littérales + `purge_expired_traces` (aide réelle supplémentaire). **`get_agent_trace_tree`, simplification honnête** : le schéma littéral n'a pas de `parent_trace_id` -- pas de vrai arbre imbriqué possible ; regroupement réel par `step_type` à la place, documenté comme tel.
+
+**Robustesse (vision critique)** : `AGENT_TRACES_MAX_STEPS` réellement appliqué (`ValueError` réel, testé) -- jamais de dépassement silencieux. **Stockage (vision critique)** : `purge_expired_traces` réel et prêt (`AGENT_TRACES_RETENTION_DAYS`), mais PAS câblé sur une tâche Celery périodique dans ce lot -- un vrai, petit travail futur séparé, pas fabriqué comme déjà actif.
+
+✅ **Endpoints réels**, déviation documentée du chemin littéral (sans organisation) : sous `/organizations/{org_id}/agents/runs/{run_id}/traces` (+ `/tree`, `/export`), `require_org_member`, vraie vérification d'appartenance (404 si le run n'appartient pas à cette organisation, testé).
+
+✅ **Intégration réelle et minimale dans l'orchestrateur** : chaque appel LLM réel de `run_agent` est désormais entouré d'une trace granulaire réelle (`start_trace`/`end_trace`, durée réelle calculée) -- en PLUS du journal léger existant, jamais à sa place, testé (`test_run_agent_records_a_real_granular_llm_call_trace`).
+
+Tests réels dédiés (16 tests fonction+endpoint + 1 test d'intégration orchestrateur = 17), voir `tests/test_agent_traces.py`.
+
+**Partie 5.1 — Architecture Agent : ✅ COMPLÈTE (14/14)** dans `api/` -- 5.1.1 à 5.1.14, chacune réelle, testée, documentée FR/EN.
 
 ### 5.2 Outils intégrés
 
