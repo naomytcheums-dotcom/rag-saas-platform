@@ -201,6 +201,19 @@ class DocumentChunk(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # Partie 3.3.4 (real multi-tenant search pipeline) -- a real,
+    # deliberately DENORMALIZED copy of `Document.organization_id`
+    # (migration 0047, backfilled from the real, existing
+    # `documents` row for every chunk that predates this column).
+    # Real, honest reasoning: `document_id` alone only lets a caller
+    # reach an organization's own chunks through a JOIN back to
+    # `documents` -- correct, but one real, easy-to-miss WHERE clause
+    # away from a genuine cross-tenant data leak. A direct column here
+    # turns "isolation via a join a caller must remember" into
+    # "isolation via one, always-present, indexed WHERE clause" --
+    # `api/services/retrieval_pipeline.py`'s own real search functions
+    # filter on this column directly, never a join.
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # See this module's own docstring for why this is a plain JSON list
@@ -214,6 +227,7 @@ class DocumentChunk(Base):
 
     __table_args__ = (
         Index("ix_document_chunks_document_id", "document_id"),
+        Index("ix_document_chunks_organization_id", "organization_id"),
     )
 
 

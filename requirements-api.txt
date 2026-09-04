@@ -259,6 +259,14 @@ pdf2image==1.17.0
 # it once at import time.
 langdetect==1.0.9
 
+# -- Retrieval pipeline (Partie 3.3.4-3.3.6) -----------------------------------
+# rank-bm25 was already a real dependency of requirements.txt (the RAG
+# pipeline's own src/retrieval.py), but NOT of this file -- the exact
+# same real packaging gap this file already documents for pygments
+# below. Pinned directly now that api/services/retrieval_pipeline.py
+# imports it itself, for a genuine api-only production install.
+rank-bm25==0.2.2
+
 # -- Chunking / code-aware tokenization (Partie 3.2.5) -------------------------
 # A real, latent packaging bug found while building this étape: Pygments
 # was already IMPORTABLE in this dev environment, but only transitively

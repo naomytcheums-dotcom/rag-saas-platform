@@ -12,6 +12,7 @@ from api.services.retrieval_config import (
     resolve_reranker_model,
     resolve_reranker_top_k,
     resolve_retrieval_strategy,
+    resolve_score_threshold,
     resolve_top_k,
 )
 
@@ -119,3 +120,43 @@ def test_resolve_reranker_top_k_defaults_to_top_k_times_10():
 
 def test_resolve_reranker_top_k_override_wins():
     assert resolve_reranker_top_k({"top_k": 5}, override=999) == 999
+
+
+# ------------------------------- 3.3.7 score threshold ------------------------------------
+
+
+def test_resolve_score_threshold_falls_back_to_the_real_default():
+    """Validation criterion: le fallback fonctionne."""
+    assert resolve_score_threshold() == DEFAULT_SETTINGS["score_threshold"]
+
+
+def test_resolve_score_threshold_reads_from_real_organization_settings():
+    """Validation criterion: le seuil est lu depuis
+    organization_settings."""
+    assert resolve_score_threshold({"score_threshold": 0.8}) == 0.8
+
+
+def test_resolve_score_threshold_override_wins():
+    assert resolve_score_threshold({"score_threshold": 0.8}, override=0.2) == 0.2
+
+
+def test_resolve_score_threshold_accepts_the_real_boundary_values():
+    assert resolve_score_threshold(override=0.0) == 0.0
+    assert resolve_score_threshold(override=1.0) == 1.0
+
+
+def test_resolve_score_threshold_rejects_a_real_negative_value():
+    """Validation criterion: robustesse -- seuil invalide (négatif)."""
+    with pytest.raises(ValueError):
+        resolve_score_threshold(override=-0.1)
+
+
+def test_resolve_score_threshold_rejects_a_real_value_above_1():
+    """Validation criterion: robustesse -- seuil invalide (> 1)."""
+    with pytest.raises(ValueError):
+        resolve_score_threshold(override=1.1)
+
+
+def test_resolve_score_threshold_rejects_a_non_numeric_value():
+    with pytest.raises(ValueError):
+        resolve_score_threshold(override="high")  # type: ignore[arg-type]

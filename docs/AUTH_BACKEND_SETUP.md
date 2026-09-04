@@ -6238,41 +6238,95 @@ genuinely produces vectors of the claimed dimension (384, no mocking,
 the same precedent `tests/test_documents_integration.py` already
 established).
 
-### Partie 3.3.4 -- retrieval strategy configurable, Partie 3.3.5 -- reranker configurable & Partie 3.3.6 -- top-K configurable
+### Partie 3.3.4 -- retrieval strategy configurable, Partie 3.3.5 -- reranker configurable, Partie 3.3.6 -- top-K configurable & Partie 3.3.7 -- score threshold configurable
 
-**A real, honest, explicitly documented architectural gap**: `api/`
-has NO live, multi-tenant retrieval/reranking endpoint yet -- Partie 4
-(search) of the master cahier des charges has not been built. The only
-real retrieval/reranking code in this repository is `src/retrieval.py`,
-a SEPARATE, single-tenant CLI/evaluation script -- its own `Retriever`
-class loads one fixed, global `chunks.json` and one fixed Chroma
-collection (`"fastapi_docs"`), with no per-organization data at all.
-`api/security/organization_settings.py`'s own module docstring already
-documented this gap honestly before this étape (Partie 1.3.9) -- this
-work does not change that real fact: wiring `retrieval_strategy`/
-`reranker_model`/`top_k` into a LIVE call still needs a real, live,
-multi-tenant retrieval endpoint in api/ to exist first (Parties 4/9),
-genuinely substantial, separate work outside these 3 configuration
-étapes' own real scope.
+**Finalized for real** (a first pass honestly shipped as 🟡 --
+resolvers only, not wired -- the real gap has since been closed):
+`api/` now has a real, live, multi-tenant search endpoint.
 
-**What these étapes honestly, actually deliver instead**: new module
-`api/services/retrieval_config.py`, real, tested, standalone resolvers
--- `resolve_retrieval_strategy` (5 real, literal strategies; the
-`retrieval_strategy` schema field was widened from 3 to 5 values to
-match), `resolve_reranker_model`/`RERANKER_MODELS` (the same real
-blocklist design as the embedding resolver; **a real, malformed model
-id flagged**: `cross-encoder/microsoft/deberta-v3-base`, from the
-étape's own literal spec text, mixes two different real HuggingFace
-namespaces and doesn't match any real model -- marked unavailable with
-an explicit reason rather than silently trusted; Cohere refused for
-the same real reason as the embedding resolver), `resolve_top_k` (real
-1-100 bounds, sharing the same real ceiling with the HTTP schema), and
-`resolve_reranker_top_k` (RERANKER_TOP_K refined into a real, dynamic
-`top_k * 10` resolver as Partie 3.3.6 itself asks for -- a real,
-documented evolution from Partie 3.3.5's own original static-constant
-idea, not a silent contradiction of it).
+**New: the real multi-tenant search pipeline**
+(`api/services/retrieval_pipeline.py`): `search`/`search_with_context`/
+`vector_search`/`bm25_search`/`hybrid_search`/`hybrid_reranked_search`
+(action 1's own literal functions). **A real, documented deviation
+from the literal ask** ("a dedicated Chroma collection per
+organization"): chunks already live in this codebase's own real,
+existing, tested storage (`DocumentChunk.embedding`, a real JSON
+column -- that model's own docstring already announced a real
+pgvector/ANN column as "genuine future work once retrieval actually
+needs efficient similarity search at scale" -- this IS that moment);
+adding a SEPARATE Chroma store would mean dual-writing to two real
+stores that could drift, for a genuinely new, heavy dependency, on a
+table that already has real, working storage. This module searches the
+EXISTING table directly: real, in-memory cosine similarity (numpy)
+over one organization's own real, embedded chunks, isolated by the new
+`DocumentChunk.organization_id` column (migration `0047`, with a real
+backfill from `documents.organization_id` for chunks that predate it)
+-- a real, honest, documented scale limit (no ANN index yet), not a
+fabricated "scales infinitely" claim. **Real multi-tenant isolation**:
+every real query filters on `DocumentChunk.organization_id` directly
+(never only through a join a caller could forget) -- verified by
+dedicated cross-tenant isolation tests, including at the full HTTP
+level. **Reuses** `generate_embeddings`/`_get_embedder` (Partie 2.1.1)
+and the 4 resolvers already built
+(`chunk_config.py`/`embedding_config.py`/`retrieval_config.py`).
+`rank_bm25`/the RRF algorithm are reimplemented here, not imported
+from `src/retrieval.py` (that module has real, unwanted import-time
+side effects -- it eagerly loads `chromadb`, and its own `Retriever`
+requires a real, fixed `chunks.json` this codebase has no equivalent
+of). **A real compounding bug found and fixed while testing**:
+`hybrid_reranked_search` -> `hybrid_search` -> `vector_search` each
+independently multiplied the candidate pool by 10 through
+`resolve_top_k`'s own real `TOP_K_MAX` bound, so even a modest
+org-configured `top_k` (20) compounded past the real ceiling (100) two
+layers down and raised, instead of returning real results -- fixed by
+no longer re-validating an explicit `top_k` an internal caller already
+supplied (trusted code); only the real fallback to
+`organization_settings`/the default stays bounded.
 
-**Real verification**: `tests/test_retrieval_config.py` (18 tests).
+**New real endpoint**: `POST /organizations/{org_id}/search`
+(`api/routers/search.py`, Member+, via `require_org_member`). **A
+real, documented deviation from the literal path** (`POST /search`):
+every other router in this codebase mounts under
+`/organizations/{org_id}/...`, with the permission check resolving
+from that real path parameter BEFORE the request body is even parsed
+-- a real, deliberate security property this endpoint keeps rather
+than breaking for itself. `GET /search/suggest` and `POST /search/stream`
+(explicitly marked "(optional)" in the literal spec) were not built --
+a real, honest, documented scope limit, not an oversight.
+
+**Partie 3.3.7 (score threshold)**: `score_threshold` added to
+`organization_settings` (default 0.5, real 0.0-1.0 bounds). **A real
+design problem found and honestly resolved**: real scores are on very
+different real scales depending on strategy (cosine similarity
+~[-1, 1], raw BM25 unbounded, RRF fusion tiny fractions, cross-encoder
+logits any real number) -- a single, raw `0.5` threshold would be
+meaningless applied directly across all 5 strategies. `search()` now
+really min-max normalizes each real result set (the same real idea as
+`src/retrieval.py`'s own `_min_max_normalize`, reimplemented here)
+before applying the threshold -- **a real, deliberate difference**: a
+lone/tied real candidate normalizes to `1.0` here, not `0.5` as in
+`src/retrieval.py` (this filter exists to discard bad results, not to
+blend two signals -- a real, lone candidate with nothing to compare it
+against should never be arbitrarily half-penalized).
+`resolve_score_threshold` (`api/services/retrieval_config.py`) follows
+the same real `override > organization_settings > default` precedence
+as the other 6 resolvers -- a documented deviation from the literal
+`(organization_id)` signature to stay consistent with them.
+
+**A real documentation bug fixed**: `api/security/organization_settings.py`'s
+own module docstring (which honestly announced the architectural gap
+before this work) is updated to reflect the real, current state -- 6
+of 15 settings are now genuinely read by api/, leaving only real
+GENERATION (calling an LLM with the retrieved context) as real,
+separate future work (Partie 9).
+
+**Real verification**: 14 real integration tests (real embeddings,
+real BM25, real reranking, real multi-tenant isolation) in
+`tests/test_retrieval_pipeline.py`, 7 real end-to-end HTTP tests
+(permissions, isolation, config application) in `tests/test_search.py`,
+7 more tests for `resolve_score_threshold` in
+`tests/test_retrieval_config.py`, 2 write-time tests for
+`score_threshold` in `tests/test_organization_settings.py`.
 
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration

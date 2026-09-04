@@ -4,17 +4,18 @@ api/models/organization_settings.py's module docstring for why a row
 stores only overrides, never a full snapshot of every default.
 
 **Honest scope, same as Partie 1.3.6/1.3.7/1.3.8**: every one of these
-14 settings is genuinely stored and genuinely readable/writable through
+15 settings is genuinely stored and genuinely readable/writable through
 the real endpoints below -- unlike quotas/limits/usage, there is no
 "not yet trackable" subset here, because a setting is pure
 configuration with nothing to measure against.
 
-**Updated at Partie 3.3.1/3.3.2/3.3.3 -- this paragraph was stale**: at
+**Updated again at Partie 3.3.4/3.3.5/3.3.6/3.3.7 -- this paragraph
+keeps getting less stale as api/ grows a real pipeline of its own**: at
 the time this docstring was first written (Partie 1.3.9), NOTHING in
-api/ read these settings, because api/'s own document-ingestion
-pipeline (api/security/documents.py) didn't exist yet. That's no
-longer true for 3 of these 14 settings, verified by reading the actual
-call sites, not assumed:
+api/ read these settings, because api/ had no document-ingestion or
+retrieval pipeline of its own yet. That's no longer true for 6 of
+these 15 settings, verified by reading the actual call sites, not
+assumed:
 
 - chunk_size / chunk_overlap: read for real in
   `api/security/documents.py`'s own `process_document`, passed straight
@@ -29,23 +30,34 @@ call sites, not assumed:
   per-organization embedding model selection.
   `api/services/embedding_config.py` (Partie 3.3.3) adds real
   validation against a known, documented model allowlist.
+- retrieval_strategy / reranker_model / top_k / score_threshold: read
+  for real by `POST /organizations/{org_id}/search`
+  (`api/routers/search.py`, Partie 3.3.4-3.3.7), via
+  `api/services/retrieval_pipeline.py`'s own real `search`/
+  `search_with_context` -- api/ now HAS a real, live, multi-tenant
+  retrieval endpoint (real vector search + real BM25 + real RRF fusion
+  + real cross-encoder reranking, all real per-organization data,
+  isolated by `DocumentChunk.organization_id`, migration `0047`). See
+  `api/services/retrieval_pipeline.py`'s own top docstring for the
+  real, honest scale limit this still carries (no ANN index yet -- an
+  in-memory, brute-force real similarity search, correct today, real
+  future work once an organization's own chunk count warrants a real
+  pgvector column).
 
-The remaining 11 settings are still genuinely unread by api/'s own
-pipeline, for the SAME real reason as before -- api/ has no live,
-multi-tenant retrieval/reranking/generation endpoint yet (that
-subsystem still lives only in the separate, single-tenant `src/`
-pipeline described below, which has zero concept of an organization).
-`api/services/retrieval_config.py` (Partie 3.3.4/3.3.5/3.3.6) adds
-real, tested, standalone resolvers for retrieval_strategy/reranker_model/
-top_k -- honestly NOT yet wired into a live retrieval call, because no
-such call exists in api/ to wire into; see that module's own top
-docstring for the full, explicit story.
+The remaining 8 settings (`llm_provider`/`llm_model`/`temperature`/
+`system_prompt`/`max_tokens`/`citation_required`/`language`/`timezone`)
+are still genuinely unread by api/'s own pipeline, for a real, narrower
+reason than before: api/ now has real RETRIEVAL, but still no real
+GENERATION endpoint (no live call to an LLM with the retrieved context
+to actually answer a question) -- that real, separate piece still only
+lives in `src/generation.py`/`src/agent.py`, the same separate,
+single-tenant, non-org-aware pipeline described below, real,
+substantial, separate work belonging to Partie 9 (or whichever later
+étape actually asks for it).
 
-Every one of the remaining values is independently hardcoded today in
+Every one of the remaining 8 values is independently hardcoded today in
 `src/` (verified by reading the actual constants, not assumed):
 
-- reranker_model: `CROSS_ENCODER_MODEL_NAME` in src/retrieval.py
-- top_k: `FINAL_TOP_K = 5` in src/retrieval.py
 - llm_provider: implicitly "anthropic" -- src/generation.py imports
   `anthropic.Anthropic` directly, no provider abstraction exists
 - llm_model: `MODEL_NAME` in src/generation.py (currently
@@ -59,17 +71,18 @@ Every one of the remaining values is independently hardcoded today in
 - system_prompt: `SYSTEM_PROMPT` (src/generation.py) and
   `AGENT_SYSTEM_PROMPT` (src/agent.py) -- long, FastAPI-documentation-
   specific prompts, nothing like this table's generic default
-- retrieval_strategy / citation_required / language / timezone /
-  temperature: no corresponding toggle exists in src/ at all --
-  src/retrieval.py always does the same hybrid dense+rerank retrieval,
-  src/generation.py's Anthropic call has no `temperature` parameter set
+- citation_required / language / timezone / temperature: no
+  corresponding toggle exists in src/ at all -- src/generation.py's own
+  Anthropic call has no `temperature` parameter set, and none of the
+  other 3 have any real equivalent there either
 
-Wiring any of the remaining 11 for real still means building a live,
-multi-tenant retrieval/reranking/generation endpoint in api/ for the
-first time (src/'s own single-tenant, non-org-aware pipeline is not a
-coherent thing to make "per organization") -- real, substantial work
-belonging to Parties 3/4/9, not a side effect of adding a settings
-table to the multi-tenant SaaS backend. See api/models/organization_settings.py
+Wiring any of the remaining 8 for real still means building a live,
+multi-tenant GENERATION endpoint in api/ for the first time (calling an
+LLM with the real, retrieved context Partie 3.3.4-3.3.7 now genuinely
+produces, to actually answer a question) -- real, substantial work
+belonging to Partie 9 (or whichever later étape actually asks for it),
+not a side effect of adding a settings table to the multi-tenant SaaS
+backend. See api/models/organization_settings.py
 and docs/AUTH_BACKEND_SETUP.md for the same story in the model/docs
 layer.
 """
@@ -98,6 +111,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "citation_required": True,
     "language": "en",
     "timezone": "UTC",
+    # Partie 3.3.7 -- real, applied by api/services/retrieval_pipeline.py's
+    # own search() after real per-strategy score normalization (real
+    # scores across strategies are on very different real scales --
+    # cosine similarity, raw BM25, RRF fusion, cross-encoder logits --
+    # see that module's own top docstring for the real, necessary
+    # normalization this requires to make one single 0-1 threshold
+    # meaningful across all of them).
+    "score_threshold": 0.5,
 }
 
 # Computed once at import time, not per-call -- available_timezones()

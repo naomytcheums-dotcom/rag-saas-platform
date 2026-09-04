@@ -3129,7 +3129,7 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
             for record, embedding in zip(chunk_records, embeddings):
                 db.add(DocumentChunk(
-                    document_id=document.id, content=record["content"],
+                    document_id=document.id, organization_id=document.organization_id, content=record["content"],
                     metadata_json=record["metadata"] or None, embedding=embedding,
                 ))
 

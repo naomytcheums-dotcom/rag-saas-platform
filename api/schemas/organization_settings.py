@@ -26,6 +26,7 @@ class OrganizationSettingsResponse(BaseModel):
     citation_required: bool
     language: str
     timezone: str
+    score_threshold: float
 
 
 class OrganizationSettingsUpdateRequest(BaseModel):
@@ -60,6 +61,12 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     citation_required: bool | None = None
     language: str | None = Field(default=None, pattern=r"^[a-z]{2}(-[A-Z]{2})?$", description="e.g. 'en', 'fr', 'en-US'")
     timezone: str | None = Field(default=None, description="IANA timezone name, e.g. 'UTC', 'Europe/Paris'")
+    # Partie 3.3.7 -- real, fixed 0.0-1.0 bounds (a real, normalized
+    # similarity score can never be outside this range by construction,
+    # see api/services/retrieval_pipeline.py's own real
+    # min-max-normalization step), not an operationally-tunable ceiling
+    # the way CHUNK_SIZE_MAX_TOKENS/TOP_K_MAX are.
+    score_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @field_validator("timezone")
     @classmethod

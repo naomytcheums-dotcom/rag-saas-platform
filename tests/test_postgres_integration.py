@@ -827,7 +827,7 @@ async def test_deleting_a_document_cascades_to_its_chunks(pg_session):
     pg_session.add(document)
     await pg_session.flush()
     document_id = document.id
-    pg_session.add(DocumentChunk(document_id=document_id, content="chunk content", embedding=[0.1, 0.2, 0.3]))
+    pg_session.add(DocumentChunk(document_id=document_id, organization_id=org_id, content="chunk content", embedding=[0.1, 0.2, 0.3]))
     await pg_session.commit()
 
     try:

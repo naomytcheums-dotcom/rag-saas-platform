@@ -244,6 +244,35 @@ async def test_negative_chunk_size_is_rejected(client, db_session, register_payl
     assert response.status_code == 422
 
 
+async def test_score_threshold_defaults_and_can_be_updated(client, db_session, register_payload):
+    """Partie 3.3.7."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    default_response = await client.get(f"/organizations/{org['id']}/settings", headers=_auth_header(owner_token))
+    assert default_response.json()["score_threshold"] == DEFAULT_SETTINGS["score_threshold"]
+
+    updated = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"score_threshold": 0.8}, headers=_auth_header(owner_token),
+    )
+    assert updated.json()["score_threshold"] == 0.8
+
+
+async def test_score_threshold_outside_0_1_is_rejected(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    negative = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"score_threshold": -0.1}, headers=_auth_header(owner_token),
+    )
+    assert negative.status_code == 422
+
+    too_high = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"score_threshold": 1.1}, headers=_auth_header(owner_token),
+    )
+    assert too_high.status_code == 422
+
+
 async def test_out_of_range_temperature_is_rejected(client, db_session, register_payload):
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
