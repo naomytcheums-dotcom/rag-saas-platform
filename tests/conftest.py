@@ -257,6 +257,18 @@ def _stub_out_upload_batch_scheduling_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _stub_out_reindex_scheduling_by_default(monkeypatch):
+    """Partie 2.2.9's own equivalent of the fixtures above --
+    reindex_document_route/reindex_organization_documents_route call
+    schedule_document_reindex/schedule_organization_reindex, the SAME
+    real Celery-dispatch problem for the SAME reason. Verified directly
+    in tests/test_documents.py, which monkeypatches these back for
+    itself where it actually matters to the test."""
+    monkeypatch.setattr("api.security.documents.schedule_document_reindex", lambda document_id: None)
+    monkeypatch.setattr("api.security.documents.schedule_organization_reindex", lambda organization_id: None)
+
+
+@pytest.fixture(autouse=True)
 def _stub_out_progress_updates_by_default(monkeypatch):
     """Partie 2.2.3's own equivalent of the fixtures above --
     process_document calls send_progress_update (a real Redis PUBLISH)

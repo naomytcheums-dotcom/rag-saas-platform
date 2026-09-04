@@ -1,0 +1,76 @@
+"""
+Partie 2.2.9, items 2/3's own literal tasks -- manually re-triggering a
+real document's own extraction/chunking/embedding pipeline (a single
+document, or every real, non-deleted document in an organization).
+
+Neither task does any NEW real work of its own: `reindex_document_task`
+bridges to `process_document` (the SAME real pipeline every format has
+used since Partie 2.1.1, which already deletes and recreates a
+document's own chunks on any rerun), and
+`reindex_organization_documents_task` bridges to `reindex_organization`,
+which fans out to real, individual `reindex_document_task` calls (one
+real Celery task per real document, the SAME resilience shape as every
+other bulk operation in this codebase -- one document's own real
+failure never blocks the rest).
+"""
+
+import asyncio
+import logging
+import uuid
+
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from api.config import settings
+from api.security.documents import reindex_document, reindex_organization
+from api.tasks.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
+
+
+async def _reindex_document_async(document_id: str) -> str:
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    try:
+        async with session_factory() as db:
+            try:
+                status_value = await reindex_document(db, uuid.UUID(document_id))
+                await db.commit()
+                return status_value
+            except ValueError as exc:
+                # Same reasoning as every other per-item task in this
+                # codebase -- one bad (or already-deleted) document
+                # must never be treated as a Celery task failure among
+                # possibly hundreds of siblings in an org-wide reindex.
+                logger.warning("reindex_document_task: rejected document '%s': %s", document_id, exc)
+                await db.rollback()
+                return "rejected"
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="api.tasks.reindex.reindex_document_task")
+def reindex_document_task(document_id: str) -> str:
+    """Item 2's own literal task -- réindexe un seul document (voir
+    api/security/documents.py's reindex_document for the real logic --
+    it's the exact same real process_document pipeline every format
+    already uses, not new extraction/chunking code)."""
+    return asyncio.run(_reindex_document_async(document_id))
+
+
+async def _reindex_organization_documents_async(organization_id: str) -> int:
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    try:
+        async with session_factory() as db:
+            return await reindex_organization(db, uuid.UUID(organization_id))
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="api.tasks.reindex.reindex_organization_documents_task")
+def reindex_organization_documents_task(organization_id: str) -> int:
+    """Item 2's own literal task -- liste et dispatch un vrai
+    reindex_document_task par document réel et non supprimé de
+    l'organisation (voir api/security/documents.py's
+    reindex_organization for the real fan-out logic)."""
+    return asyncio.run(_reindex_organization_documents_async(organization_id))

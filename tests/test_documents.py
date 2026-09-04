@@ -3424,3 +3424,88 @@ async def test_a_soft_deleted_document_is_invisible_to_listing_and_detail(client
     ):
         response = await client.get(path, headers=_auth_header(owner_token))
         assert response.status_code == 404, f"{path} should be invisible once soft-deleted"
+
+
+# --------------------------------------------------------------- reindex --
+
+async def test_owner_can_reindex_their_own_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la réindexation d'un document fonctionne."""
+    _stub_s3(monkeypatch)
+    captured = []
+    monkeypatch.setattr("api.security.documents.schedule_document_reindex", lambda document_id: captured.append(document_id))
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.post(f"/documents/{document_id}/reindex", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert len(captured) == 1
+
+
+async def test_member_cannot_reindex_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    other_member_token, other_member = await _register(client, db_session, "reindexother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(f"/documents/{document_id}/reindex", headers=_auth_header(other_member_token))
+    assert response.status_code == 403
+
+
+async def test_admin_can_reindex_any_document(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    admin_token, admin = await _register(client, db_session, "reindexadmin@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), admin.id, OrganizationRole.admin, invited_by=owner.id)
+
+    response = await client.post(f"/documents/{document_id}/reindex", headers=_auth_header(admin_token))
+    assert response.status_code == 200
+
+
+async def test_admin_can_reindex_an_entire_organization(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la réindexation de tous les documents
+    fonctionne."""
+    _stub_s3(monkeypatch)
+    captured = []
+    monkeypatch.setattr("api.security.documents.schedule_organization_reindex", lambda organization_id: captured.append(organization_id))
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    await _upload(client, org["id"], owner_token)
+    await _upload(client, org["id"], owner_token)
+
+    response = await client.post(f"/organizations/{org['id']}/documents/reindex", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json()["document_count"] == 2
+    assert len(captured) == 1
+
+
+async def test_member_cannot_reindex_an_entire_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    member_token, member = await _register(client, db_session, "reindexorgmember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(f"/organizations/{org['id']}/documents/reindex", headers=_auth_header(member_token))
+    assert response.status_code == 403
+
+
+async def test_organization_reindex_excludes_soft_deleted_documents(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await _upload(client, org["id"], owner_token)
+    await client.delete(f"/documents/{document_id}", headers=_auth_header(owner_token))
+
+    response = await client.post(f"/organizations/{org['id']}/documents/reindex", headers=_auth_header(owner_token))
+    assert response.json()["document_count"] == 1

@@ -4421,6 +4421,87 @@ permissions), and one comprehensive test confirming a soft-deleted
 document is genuinely invisible across all seven real single-document
 routes at once.
 
+**A real, urgent fix needed immediately after Partie 2.2.6/2.2.7 shipped**:
+CI's own real Postgres run (the FIRST real validation these two
+étapes' own migrations ever got, since the fast SQLite suite builds
+its schema straight from the ORM models via `create_all()`, never
+through Alembic at all) caught a real, genuine gap:
+`tests/test_postgres_integration.py`'s own
+`test_every_application_table_has_row_level_security_enabled` failed
+for `document_tags`/`document_tag_assignments`/`document_versions` --
+migrations `0034`/`0035` created these three tables without the real
+`ENABLE ROW LEVEL SECURITY` statement every application table has
+carried since migration `0002` (inline in every migration since `0014`).
+This is the EXACT SAME real, recurring mistake migration `0032` already
+fixed once before, for `documents`/`document_chunks` (migration `0031`'s
+own equivalent miss) -- confirming this is a genuinely easy step to
+forget when writing a new `create_table` migration, not a one-off
+slip. Fixed the same way `0032` did: a real, small follow-up migration
+(`0037`) enabling RLS on all three tables, rather than editing the
+already-pushed `0034`/`0035` in place.
+
+### Partie 2.2.9 -- manual reindexing
+
+Two new real routes: `POST /documents/{document_id}/reindex` (Member+
+si propriétaire) and `POST /organizations/{org_id}/documents/reindex`
+(Admin+, this step's own literal ask). Two new real Celery tasks,
+`api/tasks/reindex.py`'s `reindex_document_task`/
+`reindex_organization_documents_task`.
+
+**Cohérence -- the strongest possible "reuse the pipeline" answer in
+this whole Partie 2.2 batch**: `reindex_document` does not implement
+ANY new chunk-deletion or re-extraction logic at all -- it just calls
+the real, existing `process_document`, which has deleted and recreated
+a document's own chunks/embeddings on every real rerun since Partie
+2.1.1. Reindexing a document IS re-running `process_document`, nothing
+more.
+
+**Performance (vision critique 1)**: org-wide reindexing is real,
+genuinely Celery-driven at TWO levels, not one giant synchronous
+loop -- `reindex_organization` lists every real, non-deleted document
+in the organization, then fans out ONE real `reindex_document_task`
+PER document (the same real per-item Celery fan-out shape, with the
+same real courtesy stagger, as every other bulk operation in this
+codebase), rather than looping through them all inside a single task.
+
+**Robustesse (vision critique 2)**: "que se passe-t-il si la
+réindexation échoue à mi-chemin" -- because each document gets its OWN
+real Celery task, a real failure partway through an org-wide reindex
+only marks THAT one document `failed` (via `process_document`'s own
+existing, unchanged exception handling); every other document's own
+task keeps running and completing normally, confirmed by a real test
+where a broker failure for one document out of three does not prevent
+the other two from being scheduled.
+
+**Journalisation (vision critique 3)**: real errors are logged via the
+exact same `logger.warning` call `process_document` already emits on
+any real failure -- reused unchanged, not a second, competing logging
+path built for this étape.
+
+**Real verification**: `tests/test_documents.py` covers both new
+routes end to end (owner/non-owner/Admin permissions on the single-
+document route, Admin-only on the org-wide route, a real document
+count in the org-wide response, soft-deleted documents correctly
+excluded from that count). `tests/test_reindex.py` proves
+`reindex_document`'s own real orchestration (calls `process_document`
+unchanged, rejects a nonexistent or soft-deleted document),
+`reindex_documents`'s own real fan-out (one real Celery task per
+document, a real stagger, one broker failure not blocking the rest),
+and `reindex_organization`'s own real, non-deleted-only document
+listing.
+
+**A real bug caught and fixed before it ever reached CI, using the
+SAME diagnostic already learned from Partie 2.2.7**: the new reindex
+routes originally called `schedule_document_reindex`/
+`schedule_organization_reindex` via names imported directly into
+`api/routers/documents.py` -- the exact same "patch where it's
+defined, not where a bare name was imported" gotcha `create_new_document_version`
+already hit once. Caught immediately this time (a `faulthandler`
+thread dump again confirmed a real `Celery.delay()` blocking on Redis)
+and fixed the same way: `documents_security.schedule_document_reindex(...)`/
+`documents_security.schedule_organization_reindex(...)`, resolved
+through the module object at call time.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

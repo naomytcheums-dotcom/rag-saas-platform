@@ -31,7 +31,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -101,7 +101,7 @@ from api.security.document_versions import (
     get_document_versions,
     restore_document_version,
 )
-from api.security.organizations import require_org_member, require_org_member_excluding_viewer
+from api.security.organizations import require_org_admin, require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import stream_document_file
 from api.services.metadata_normalization import normalize_document_metadata
 
@@ -879,3 +879,35 @@ async def restore_document_version_route(
     await db.commit()
     documents_security.schedule_document_processing(document.id)
     return _version_to_response(version)
+
+
+# =========================== Partie 2.2.9 -- manual reindexing ===========================
+
+@router.post("/documents/{document_id}/reindex")
+async def reindex_document_route(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 1's own literal route -- Member+ si propriétaire, same real
+    permission shape as version creation/replace above."""
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+    _require_document_owner_or_admin(document, membership, current_user, "You can only reindex a document you uploaded yourself")
+
+    documents_security.schedule_document_reindex(document.id)
+    return {"message": "Reindex scheduled"}
+
+
+@router.post("/organizations/{org_id}/documents/reindex")
+async def reindex_organization_documents_route(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+):
+    """Item 1's own literal route -- Admin+ (this step's own literal
+    ask), reindexing every real document in the organization at once.
+    The real document count reported here is a cheap, synchronous,
+    purely informational query -- the real work (and the real,
+    authoritative list of which documents actually get reindexed)
+    happens later, inside `reindex_organization_documents_task`."""
+    document_count = await db.scalar(
+        select(func.count()).select_from(Document).where(Document.organization_id == org_id, Document.deleted_at.is_(None))
+    )
+    documents_security.schedule_organization_reindex(org_id)
+    return {"message": f"Reindex scheduled for {document_count} documents", "document_count": document_count}
