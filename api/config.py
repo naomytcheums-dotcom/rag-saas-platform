@@ -684,7 +684,15 @@ class Settings(BaseSettings):
     SQL_TOOL_ENABLED: bool = True
     SQL_TOOL_MAX_ROWS: int = 100
     SQL_TOOL_MAX_QUERY_LENGTH: int = 5000
-    SQL_TOOL_ALLOWED_TABLES: list[str] = ["documents", "document_chunks", "conversations", "conversation_messages"]
+    # "conversation_messages" deliberately excluded from the real
+    # default -- see api/tools/sql_tool.py's own top docstring: it has
+    # no real organization_id column of its own (only reachable via a
+    # JOIN through conversations, which this tool's real single-table
+    # design explicitly rejects), so the tool's own mandatory
+    # organization_id filter would fail against it with a real SQL
+    # error, not a security hole -- but broken, not honest to ship
+    # enabled by default.
+    SQL_TOOL_ALLOWED_TABLES: list[str] = ["documents", "document_chunks", "conversations"]
     SQL_TOOL_READ_ONLY: bool = True
 
     # -- URL reader tool (Partie 5.2.6) --------------------------------------------

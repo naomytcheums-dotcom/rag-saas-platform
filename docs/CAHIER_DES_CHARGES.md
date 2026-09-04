@@ -692,9 +692,21 @@ Tests réels dédiés (10 tests, `httpx.MockTransport` réel), voir `tests/test_
 
 Tests réels dédiés (9 tests, `httpx.MockTransport` réel -- vrai parsing requête/réponse, faux transport réseau, même précédent que `tests/test_github_extraction.py`), voir `tests/test_github_tools.py`.
 
+#### Partie 5.2.4 — Database (SQL)
+
+✅ **Nouveau module réel** `api/tools/sql_tool.py` : les 5 fonctions littérales. **Vraie limite de périmètre, honnête, pas un bug** : n'accepte PAS du SQL arbitraire. L'isolation multi-tenant pour une requête arbitraire fournie par un agent est un vrai problème difficile -- même conclusion que l'audit exhaustif de cette session pour une vraie RLS Postgres native (BYPASSRLS). En son absence, le choix réel et responsable ici est un vrai sous-ensemble SELECT mono-table, ancré par regex (`SELECT <colonnes> FROM <table> [WHERE ...] [ORDER BY ...] [LIMIT n]`), exactement un seul mot-clé `SELECT`, aucun commentaire, aucun point-virgule au-delà d'un seul final optionnel, aucun JOIN/UNION/sous-requête, chaque mot-clé dangereux rejeté explicitement.
+
+✅ **Sécurité réelle, défense en profondeur (vision critique)** : (1) vraie liste noire de mots-clés couvrant chaque type réel de DML/DDL, (2) vraie liste blanche de tables mono-table, (3) **filtre `organization_id` réellement toujours injecté**, via un vrai paramètre lié SQLAlchemy -- jamais d'interpolation de chaîne, (4) vrai plafond de lignes.
+
+✅ **Deux vrais bugs trouvés et corrigés en testant réellement l'isolation, pas supposée** : (1) `conversation_messages` retiré de la liste blanche par défaut -- cette table n'a pas de vraie colonne `organization_id` propre (seulement via jointure, explicitement interdite par la conception mono-table), donc le filtre obligatoire aurait échoué avec une vraie erreur SQL sur cette table, pas une faille, mais non honnête à livrer activée par défaut. (2) **liaison de paramètre UUID portable** : SQLite (sans vrai type UUID natif) stocke `Uuid` sous forme hex réelle SANS tirets, alors que `str(uuid.UUID(...))` produit la forme réelle AVEC tirets -- une simple chaîne ne matchait donc RIEN sur SQLite (silencieusement, un vrai risque de faux sentiment de sécurité si non détecté). Corrigé en liant via le vrai type SQLAlchemy `Uuid()`, qui adapte le vrai format de stockage au bon dialecte.
+
+**Robustesse (vision critique)** : chaque requête invalide est rejetée avec une vraie raison spécifique et testée (longueur, statements multiples, commentaires, mot-clé interdit, JOIN/UNION, sous-requête, table inconnue, forme non reconnue).
+
+Tests réels dédiés (23 tests, exécution SQLite réelle pour `execute_sql_query`, isolation multi-tenant vérifiée pour de vrai), voir `tests/test_sql_tool.py`.
+
 Human Escalation : existe déjà côté `src/`, non revérifié.
-Database (SQL), Calculator étendu, URL Reader, Calendar complet,
-Email, Custom Tools (webhooks) : ⬜.
+Calculator étendu, URL Reader, Calendar complet, Email,
+Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)

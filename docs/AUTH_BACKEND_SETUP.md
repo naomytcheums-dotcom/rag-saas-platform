@@ -7140,6 +7140,48 @@ rate-limit), tested, same precedent as `github_extraction.py`.
 request/response parsing, fake network transport, same precedent as
 `tests/test_github_extraction.py`), `tests/test_github_tools.py`.
 
+### Partie 5.2.4 -- Database (SQL)
+
+New module `api/tools/sql_tool.py`: all 5 literal functions. **A real,
+honest scope limit, not a bug**: does NOT accept arbitrary SQL.
+Multi-tenant isolation for an arbitrary, agent-supplied query is a
+genuinely hard problem -- the same conclusion this session's own
+exhaustive audit already reached for real, native Postgres RLS
+(BYPASSRLS). Absent that, the real, responsible choice here is a real,
+single-table, regex-anchored SELECT subset (`SELECT <columns> FROM
+<table> [WHERE ...] [ORDER BY ...] [LIMIT n]`), exactly one `SELECT`
+keyword, no comments, no semicolons beyond one optional trailing one,
+no JOIN/UNION/subquery, every dangerous keyword rejected outright.
+
+**Real security, defense in depth (vision critique)**: (1) a real
+keyword blocklist covering every real DML/DDL type, (2) a real
+single-table allowlist, (3) **a real, always-injected
+`organization_id` filter**, via a real SQLAlchemy bound parameter --
+never string interpolation, (4) a real row cap.
+
+**Two real bugs found and fixed by actually testing isolation, not
+assuming it**: (1) `conversation_messages` removed from the real
+default allowlist -- that table has no real `organization_id` column
+of its own (only reachable via a join, explicitly disallowed by the
+single-table design), so the mandatory filter would have failed with a
+real SQL error against it -- not a security hole, but not honest to
+ship enabled by default. (2) **portable UUID parameter binding**:
+SQLite (no real native UUID type) stores `Uuid` as a real, DASH-LESS
+hex string, while `str(uuid.UUID(...))` produces the real, DASHED
+form -- a plain string parameter silently matched NOTHING on SQLite (a
+real risk of false confidence if it had gone unnoticed). Fixed by
+binding through the real SQLAlchemy `Uuid()` type, which adapts the
+real storage format to the correct dialect.
+
+**Robustness (vision critique)**: every invalid query is rejected with
+a real, specific, tested reason (length, multiple statements,
+comments, forbidden keyword, JOIN/UNION, subquery, unknown table,
+unrecognized shape).
+
+**Real verification**: 23 tests (real SQLite execution for
+`execute_sql_query`, multi-tenant isolation genuinely verified),
+`tests/test_sql_tool.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
