@@ -29,7 +29,7 @@ Member can't delete someone ELSE's document.
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,12 +46,14 @@ from api.schemas.documents import (
     ConfluenceImportResponse,
     DocumentBatchUploadResponse,
     DocumentBatchUploadResult,
+    DeduplicationResultResponse,
     DocumentListResponse,
     DocumentMetadataResponse,
     DocumentProgressResponse,
     DocumentResponse,
     DocumentStatusResponse,
     DocumentStatusSummaryResponse,
+    DocumentUploadResponse,
     DocumentUrlImportRequest,
     GitHubIssuesImportRequest,
     GitHubIssuesImportResponse,
@@ -70,7 +72,9 @@ from api.schemas.documents import (
 )
 import api.security.documents as documents_security
 from api.security.documents import (
+    deduplicate_organization,
     get_document_progress,
+    get_similar_documents,
     import_document_from_url,
     permanent_delete_document,
     replace_document,
@@ -204,15 +208,15 @@ def _tag_to_response(tag: DocumentTag) -> DocumentTagResponse:
     )
 
 
-@router.post("/organizations/{org_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/organizations/{org_id}/documents", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
-    org_id: uuid.UUID, file: UploadFile, workspace_id: uuid.UUID | None = None,
+    org_id: uuid.UUID, response: Response, file: UploadFile, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
     try:
-        document = await upload_document(db, org_id, workspace_id, current_user.id, file.filename or "document.pdf", content)
+        document, is_duplicate = await upload_document(db, org_id, workspace_id, current_user.id, file.filename or "document.pdf", content)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except RuntimeError as exc:
@@ -220,7 +224,11 @@ async def create_document(
 
     await db.commit()
     await db.refresh(document)
-    return _to_response(document)
+    if is_duplicate:
+        # Partie 2.2.12 -- nothing was actually created; 201 would be a
+        # real lie here.
+        response.status_code = status.HTTP_200_OK
+    return DocumentUploadResponse(**_to_response(document).model_dump(), is_duplicate=is_duplicate)
 
 
 @router.post("/organizations/{org_id}/documents/batch", response_model=DocumentBatchUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -976,3 +984,36 @@ async def get_organization_document_status_summary_route(
     )).all()
     by_status = {row[0]: row[1] for row in rows}
     return DocumentStatusSummaryResponse(organization_id=org_id, total=sum(by_status.values()), by_status=by_status)
+
+
+# =========================== Partie 2.2.12 -- duplicate detection ===========================
+
+@router.get("/documents/{document_id}/duplicates", response_model=list[DocumentResponse])
+async def get_document_duplicates_route(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 4's own literal route -- Member+ (Viewer included, a real
+    read like the status/history/progress routes above), same real
+    `_get_document_and_membership` anti-enumeration guard. Honestly
+    empty for a document with no `content_hash` at all (not created via
+    a direct upload -- see `Document.content_hash`'s own docstring)."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    duplicates = await get_similar_documents(db, document)
+    return [_to_response(d) for d in duplicates]
+
+
+@router.post("/organizations/{org_id}/documents/deduplicate", response_model=DeduplicationResultResponse)
+async def deduplicate_organization_documents_route(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 4's own literal route -- Admin+, the same real permission
+    level as every other organization-wide, multi-document action on
+    this router (org-wide reindex, org-wide status summary). Real,
+    reversible cleanup: keeps the oldest real upload in each real
+    duplicate group, SOFT-deletes the rest (see
+    `deduplicate_organization`'s own docstring for why soft, never
+    permanent, is the deliberate choice here)."""
+    result = await deduplicate_organization(db, org_id, current_user.id)
+    await db.commit()
+    return DeduplicationResultResponse(**result)

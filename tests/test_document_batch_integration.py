@@ -116,8 +116,12 @@ async def test_process_upload_batch_creates_a_real_document_per_file(db_session,
     monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: scheduled_ids.append(document_id))
 
     files = [
-        {"filename": "a.pdf", "content": _REAL_PDF, "content_type": "application/pdf"},
-        {"filename": "b.pdf", "content": _REAL_PDF, "content_type": "application/pdf"},
+        # Partie 2.2.12 -- distinct content per file: identical bytes
+        # across two files in the same organization are now a real,
+        # detected duplicate, and this test's own point is that BOTH
+        # real, DIFFERENT files get their own document.
+        {"filename": "a.pdf", "content": _REAL_PDF + b" a", "content_type": "application/pdf"},
+        {"filename": "b.pdf", "content": _REAL_PDF + b" b", "content_type": "application/pdf"},
     ]
     scheduled = await process_upload_batch(db_session, organization.id, None, owner.id, files)
 
@@ -140,9 +144,12 @@ async def test_process_upload_batch_tolerates_a_real_s3_failure_for_one_file(db_
     monkeypatch.setattr("api.security.documents.upload_document_file", _flaky_upload)
 
     files = [
-        {"filename": "good-1.pdf", "content": _REAL_PDF, "content_type": "application/pdf"},
-        {"filename": "bad.pdf", "content": _REAL_PDF, "content_type": "application/pdf"},
-        {"filename": "good-2.pdf", "content": _REAL_PDF, "content_type": "application/pdf"},
+        # Partie 2.2.12 -- distinct content per file, same reasoning as
+        # the test above: three genuinely different files, not the same
+        # bytes three times.
+        {"filename": "good-1.pdf", "content": _REAL_PDF + b" g1", "content_type": "application/pdf"},
+        {"filename": "bad.pdf", "content": _REAL_PDF + b" bad", "content_type": "application/pdf"},
+        {"filename": "good-2.pdf", "content": _REAL_PDF + b" g2", "content_type": "application/pdf"},
     ]
     scheduled = await process_upload_batch(db_session, organization.id, None, owner.id, files)
 

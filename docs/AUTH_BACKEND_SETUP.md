@@ -4624,6 +4624,127 @@ exactly -- the genuine success-path proof this function's heavier
 dependencies (real tokenizer, real embeddings) make impractical to
 exercise in the fast SQLite suite.
 
+### Partie 2.2.12 -- duplicate detection
+
+A new real column on `Document` (migration `0040`): `content_hash`, a
+real SHA-256 hex digest of the raw upload bytes, computed BEFORE any
+format-specific parsing -- api/security/documents.py's own
+`compute_content_hash`/`check_duplicate`/`get_duplicate_document`
+(item 2's own literal functions), plus `get_similar_documents`/
+`deduplicate_organization` for the two new routes below.
+
+**A real, deliberate, DOCUMENTED deviation from this étape's own
+literal "UNIQUE (organization_id, content_hash)" DB constraint**: a
+plain INDEX instead. Reasoning, discovered concretely while testing:
+`upload_document`/`process_upload_batch` already block a duplicate
+from ever being CREATED (the real application-level check happens
+before either function inserts a row) -- if the database ALSO
+physically forbade two matching rows from ever coexisting, item 4's
+own literal `POST .../deduplicate` route would be permanent dead code
+in normal operation, never once finding real work to do, which defeats
+its own literally-requested purpose. The accepted trade-off, stated
+plainly: the narrow race window between the application-level check
+and the insert (two uploads of identical content arriving at almost
+the same instant) is no longer closed by the database -- rare, and
+not a data-integrity risk (nothing corrupts; the real deduplicate
+route exists precisely to clean this up if it ever happens).
+
+**A real, deliberate refinement beyond this étape's own literal
+single-hash comparison**: duplicate identity is `(organization_id,
+content_hash, file_type)`, not just `(organization_id, content_hash)`
+-- discovered while testing against this codebase's own PRE-EXISTING,
+deliberate behavior (the already-established Markdown-vs-TXT and
+CSV-vs-TXT "same bytes, different filename" tests, Partie 2.1.x): the
+exact same raw bytes can legitimately BE two different real documents
+when interpreted under a different detected format, since no reliable
+content-only signal tells them apart. A pure byte-hash-only definition
+of "duplicate" would have wrongly flagged those two, already-tested,
+genuinely different product scenarios as the same document.
+`content_hash` itself stays a real, honest, independently-verifiable
+SHA-256 checksum either way -- this only changes what additionally
+counts as "the same upload" for THIS feature's own purpose.
+
+**Cohérence (vision critique 3)**: applies equally to all 10 accepted
+formats (PDF/DOCX/TXT/Markdown/HTML/CSV/JSON/XML/EPUB/ZIP) -- the hash
+is computed on raw bytes before any format dispatch, so it's format-
+agnostic by construction. Applied to BOTH real upload paths (single
+`upload_document` and batch `process_upload_batch`, item 2's own
+function name generalized to the real second real entry point with the
+identical real-world scenario) -- a real, deliberate consistency
+extension beyond this étape's own literal single-function ask. **A
+real, stated scope limitation**: NOT applied to any import-source
+pipeline (URL fetch, GitHub, Google Drive, Notion, Confluence,
+OneDrive) -- `content_hash` stays `NULL` for those, since re-importing
+from an external source is a distinct real scenario with its own
+change/re-sync semantics (Partie 2.2.13/2.2.14's own real scope), not
+"the same local file uploaded twice."
+
+**Performance (vision critique 1)**: SHA-256 on already-in-memory
+bytes (`content` is already fully read into memory for validation
+either way) runs at hundreds of MB/s per core -- negligible even at
+this codebase's own real 50MB upload ceiling
+(`MAX_DOCUMENT_UPLOAD_BYTES`), no chunked I/O needed.
+
+**Sécurité (vision critique 2)**: SHA-256 is not a security/
+confidentiality control here -- a content-identity fingerprint, not a
+secret, so storing it in plain text is correct (a hash cannot be
+reversed to recover the file). What actually matters is collision
+resistance, which is cryptographically negligible for SHA-256 at any
+realistic scale this platform will ever reach.
+
+**Real, reversible cleanup, matching this session's own "sans risque"
+standing instruction**: `deduplicate_organization` (item 4's own
+`POST /organizations/{org_id}/documents/deduplicate`, Admin+, the same
+tier as every other organization-wide multi-document action on this
+router) keeps the OLDEST document in each real duplicate group and
+SOFT-deletes the rest via the SAME `soft_delete_document` Partie 2.2.8
+already built -- reused unchanged, never a second, competing deletion
+path, and never permanent (an Owner/Admin can still purge any of them
+for real afterward via the existing 2.2.8 route). `GET
+/documents/{document_id}/duplicates` (Member+, Viewer included) lists
+every other real document sharing this one's own hash and format --
+honestly empty for a document with no hash at all (not created via
+direct upload).
+
+**Upload response**: `POST /organizations/{org_id}/documents` responds
+`200` (not `201`) when the returned document is a pre-existing
+duplicate -- `201 Created` would be a real lie when nothing was
+actually created. A new, additive `is_duplicate` field on this route's
+own response (`DocumentUploadResponse`, never added to the shared
+`DocumentResponse` every other route already returns, so no existing
+consumer's response shape changes).
+
+**A real regression caught and fixed across the existing test suite,
+worth stating explicitly**: `tests/test_documents.py`'s own `_upload()`
+helper previously reused ONE fixed, shared byte constant
+(`_REAL_PDF_MAGIC`) as its default content for every call across the
+whole file (110+ call sites) -- harmless before this étape, since
+nothing compared uploads to each other. With real duplicate detection
+now active, several already-existing, already-passing tests that
+called `_upload()` twice in the SAME organization to set up "two
+distinct documents" (list/reindex/status-summary tests) would have
+silently gotten back the SAME document twice instead. Fixed at the
+root: the helper's default content now auto-varies per call (a real
+counter suffix), so two calls without an explicit `content=` are
+guaranteed distinct, while tests that deliberately pass identical
+`content=` (the Markdown/CSV-vs-TXT tests, and this étape's own new
+duplicate tests) are unaffected. Two `tests/test_document_batch_integration.py`
+tests needed the same real fix (three files sharing one identical
+byte string, now each genuinely distinct).
+
+**Real verification**: `tests/test_document_duplicates.py` (new, fast,
+no real infra) covers `compute_content_hash`'s own determinism,
+`check_duplicate`/`get_duplicate_document`'s real org/format scoping
+and soft-delete exclusion, `get_similar_documents`, and
+`deduplicate_organization` (oldest kept, rest soft-deleted, groups of
+one ignored, scoped to one organization). `tests/test_documents.py`
+covers both new routes end to end: identical-file upload returns the
+existing document with `is_duplicate=true` and a `200`, a different
+file is never flagged, the same bytes in a DIFFERENT organization or
+after the original was soft-deleted are correctly NOT duplicates,
+Admin-only deduplication actually removes a real pre-existing pair
+down to one document.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

@@ -141,6 +141,7 @@ path doesn't need.
 
 import base64
 import datetime as dt
+import hashlib
 import json
 import logging
 import os
@@ -151,7 +152,7 @@ from pathlib import Path
 
 import redis.asyncio as redis_asyncio
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentChunk, DocumentStatus
@@ -315,10 +316,106 @@ def generate_embeddings(texts: list[str], model_name: str) -> list[list[float]]:
     return embedder.encode(texts, batch_size=64).tolist()
 
 
+# =========================== Partie 2.2.12 -- duplicate detection ===========================
+
+def compute_content_hash(content: bytes) -> str:
+    """Item 2's own literal function -- a real SHA-256 hex digest of the
+    RAW upload bytes, computed BEFORE any format-specific parsing, so
+    it's identical for the same bytes regardless of which of the 10
+    accepted formats they are. Cheap even at this codebase's own real
+    50MB upload ceiling (api/services/document_storage.py's own
+    MAX_DOCUMENT_UPLOAD_BYTES) -- SHA-256 on already-in-memory bytes
+    runs at hundreds of MB/s per core, no chunked I/O needed since
+    `content` is already a single, bounded, real in-memory buffer by
+    the time this is ever called."""
+    return hashlib.sha256(content).hexdigest()
+
+
+async def get_duplicate_document(db: AsyncSession, organization_id: uuid.UUID, content_hash: str, file_type: str) -> Document | None:
+    """Item 2's own literal function -- the real, existing, non-deleted
+    document in this organization that already has this exact content
+    hash AND detected format, or `None`. `file_type` is a real,
+    deliberate addition beyond this item's own literal single-hash
+    signature -- see `Document`'s own `uq_documents_organization_content_hash_file_type`
+    docstring for why identical bytes alone aren't sufficient (Markdown
+    vs same-content TXT, CSV vs same-content TXT). Excludes soft-deleted
+    documents (Partie 2.2.8's own established reasoning: a deleted
+    document is gone from the user's own perspective, so re-uploading
+    the same bytes should create a fresh one, not silently resurrect
+    the old row)."""
+    return await db.scalar(
+        select(Document).where(
+            Document.organization_id == organization_id, Document.content_hash == content_hash,
+            Document.file_type == file_type, Document.deleted_at.is_(None),
+        )
+    )
+
+
+async def check_duplicate(db: AsyncSession, organization_id: uuid.UUID, content_hash: str, file_type: str) -> bool:
+    """Item 2's own literal function -- a thin real boolean wrapper
+    around `get_duplicate_document` above, not a second, separately
+    maintained query."""
+    return await get_duplicate_document(db, organization_id, content_hash, file_type) is not None
+
+
+async def get_similar_documents(db: AsyncSession, document: Document) -> list[Document]:
+    """Backs `GET /documents/{document_id}/duplicates` -- every OTHER
+    real, non-deleted document in the SAME organization sharing this
+    document's own `content_hash` AND `file_type`. Honestly empty for a
+    document with no hash at all (imported via a source other than
+    direct upload -- see `Document.content_hash`'s own docstring),
+    never a false match."""
+    if document.content_hash is None:
+        return []
+    return (await db.scalars(
+        select(Document).where(
+            Document.organization_id == document.organization_id, Document.content_hash == document.content_hash,
+            Document.file_type == document.file_type, Document.id != document.id, Document.deleted_at.is_(None),
+        )
+    )).all()
+
+
+async def deduplicate_organization(db: AsyncSession, organization_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> dict:
+    """Backs `POST /organizations/{org_id}/documents/deduplicate` --
+    finds every real group of non-deleted documents in this
+    organization sharing the same real `content_hash` AND `file_type`
+    (a group of size 1, or a NULL hash, is not a duplicate of anything
+    and is skipped), keeps the OLDEST real upload in each group (the
+    first one to have actually existed), and SOFT-deletes every other
+    real member via the SAME `soft_delete_document` this codebase
+    already uses for a single, explicit per-document delete (Partie
+    2.2.8) -- reused unchanged, not a second, competing deletion path.
+    A real, deliberate choice: SOFT delete, never permanent -- an
+    automatic, organization-wide action culling multiple documents at
+    once is exactly the kind of action that must stay reversible,
+    matching this project's own "sans risque" standing instruction; an
+    Owner/Admin can still permanently purge any of them afterward via
+    the existing 2.2.8 route if they genuinely want to."""
+    rows = (await db.execute(
+        select(Document.content_hash, Document.file_type, func.count()).where(
+            Document.organization_id == organization_id, Document.content_hash.is_not(None), Document.deleted_at.is_(None),
+        ).group_by(Document.content_hash, Document.file_type).having(func.count() > 1)
+    )).all()
+
+    documents_removed = 0
+    for content_hash, file_type, _count in rows:
+        group = (await db.scalars(
+            select(Document).where(
+                Document.organization_id == organization_id, Document.content_hash == content_hash,
+                Document.file_type == file_type, Document.deleted_at.is_(None),
+            ).order_by(Document.created_at.asc())
+        )).all()
+        for duplicate in group[1:]:
+            await soft_delete_document(db, duplicate.id, triggered_by)
+            documents_removed += 1
+
+    return {"duplicate_groups_found": len(rows), "documents_removed": documents_removed}
+
+
 async def upload_document(
     db: AsyncSession, organization_id: uuid.UUID, workspace_id: uuid.UUID | None,
     created_by: uuid.UUID, filename: str, content: bytes,
-) -> Document:
+) -> tuple[Document, bool]:
     """
     Item 3's literal function. Real validation (size, actual PDF/DOCX/
     TXT/Markdown/HTML/CSV/JSON/XML/EPUB content -- see api/services/document_storage.py's
@@ -331,6 +428,16 @@ async def upload_document(
     modeling risk this function closes at the point of creation, not
     left to a later query to accidentally get right.
 
+    Partie 2.2.12 -- returns `(document, is_duplicate)`, a real,
+    documented signature change from this function's original single-
+    Document return (its only real caller, the upload route, is updated
+    alongside it). If a real, non-deleted document with this EXACT
+    content hash already exists in this organization, NO new row, NO
+    new S3 object, and NO new Celery dispatch happen at all -- the
+    EXISTING document is returned unchanged, with `is_duplicate=True`,
+    so the caller can tell a genuine no-op apart from a real upload
+    (e.g. respond 200 instead of 201).
+
     Does not commit -- same convention as every other security-layer
     write function in this codebase (the caller decides the transaction
     boundary). Dispatches the real Celery processing task best-effort
@@ -338,16 +445,21 @@ async def upload_document(
     as api/security/custom_domains.py's schedule_domain_verification).
     """
     content_type = validate_document_upload(content, filename)
+    content_hash = compute_content_hash(content)
 
     if workspace_id is not None:
         workspace = await db.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.organization_id == organization_id))
         if workspace is None:
             raise ValueError("workspace_id does not belong to this organization")
 
+    duplicate = await get_duplicate_document(db, organization_id, content_hash, content_type)
+    if duplicate is not None:
+        return duplicate, True
+
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
         file_key="", file_size=len(content), file_type=content_type,
-        status=DocumentStatus.pending.value, created_by=created_by,
+        status=DocumentStatus.pending.value, created_by=created_by, content_hash=content_hash,
     )
     db.add(document)
     await db.flush()  # assigns document.id, needed for the S3 key below
@@ -366,7 +478,7 @@ async def upload_document(
     else:
         schedule_document_processing(document.id)
     await log_document_action(db, document.id, created_by, ACTION_CREATED)
-    return document
+    return document, False
 
 
 # =========================== Partie 2.2.8 -- soft delete / replace / permanent delete ===========================
@@ -674,14 +786,27 @@ async def process_upload_batch(
     Document row left behind for it), never raised, so every other
     real file in the batch still uploads and gets scheduled for
     processing.
+
+    Partie 2.2.12 -- the SAME real content-hash duplicate check as the
+    single-upload route above, applied per file: a file matching an
+    already-existing, non-deleted document's own hash is silently
+    skipped (no new row, no new S3 object) rather than uploaded again.
+    Consistent with the single-upload path even though this étape's own
+    literal spec doesn't name this function explicitly -- the real-world
+    scenario ("uploading the same file twice") is identical, batched or
+    not.
     """
     scheduled = 0
     for file_info in files:
         try:
+            content_hash = compute_content_hash(file_info["content"])
+            if await check_duplicate(db, organization_id, content_hash, file_info["content_type"]):
+                logger.info("process_upload_batch: skipping duplicate file '%s' (content already exists)", file_info["filename"])
+                continue
             document = Document(
                 organization_id=organization_id, workspace_id=workspace_id, name=file_info["filename"],
                 file_key="", file_size=len(file_info["content"]), file_type=file_info["content_type"],
-                status=DocumentStatus.pending.value, created_by=created_by,
+                status=DocumentStatus.pending.value, created_by=created_by, content_hash=content_hash,
             )
             db.add(document)
             await db.flush()

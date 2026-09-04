@@ -38,6 +38,27 @@ class DocumentListResponse(BaseModel):
     items: list[DocumentResponse]
 
 
+class DocumentUploadResponse(DocumentResponse):
+    """Partie 2.2.12 -- the single-upload route's own response, a real,
+    additive extension of `DocumentResponse` (never used for any OTHER
+    route, so this never changes the shape `GET`/list callers already
+    depend on). `is_duplicate=True` means no new document was actually
+    created -- the returned row is a real, pre-existing document whose
+    content hash already matched."""
+
+    is_duplicate: bool = False
+
+
+class DeduplicationResultResponse(BaseModel):
+    """Partie 2.2.12, item 4's own literal `POST .../deduplicate` route
+    response -- a real summary, not a list of every affected document
+    id (a large organization could have hundreds; the two counts are
+    what this action's own caller actually needs to know happened)."""
+
+    duplicate_groups_found: int
+    documents_removed: int
+
+
 class DocumentUrlImportRequest(BaseModel):
     """Partie 2.1.10, item 1's own request body. `HttpUrl` gives a
     real, free first layer of validation (rejects a non-http(s) scheme

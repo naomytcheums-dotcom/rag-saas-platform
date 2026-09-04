@@ -18,6 +18,7 @@ tests/test_postgres_integration.py (SQLite doesn't enforce foreign
 keys).
 """
 
+import itertools
 import uuid
 
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from api.config import settings
 from api.models.document import Document, DocumentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.security.documents import compute_content_hash
 
 _REAL_PDF_MAGIC = b"%PDF-1.4\n%fake but real-looking pdf bytes for upload validation\n"
 
@@ -102,7 +104,24 @@ def _stub_s3(monkeypatch):
     monkeypatch.setattr("api.security.document_versions.upload_document_file", fake_upload)
 
 
-async def _upload(client, org_id: str, token: str, filename="report.pdf", content=_REAL_PDF_MAGIC, workspace_id=None, declared_content_type="application/pdf"):
+_upload_content_counter = itertools.count()
+
+
+async def _upload(client, org_id: str, token: str, filename="report.pdf", content=None, workspace_id=None, declared_content_type="application/pdf"):
+    """Partie 2.2.12 -- `content` defaults to a REAL, uniquely-varied
+    PDF (a fresh counter suffix appended each call) rather than the
+    single, fixed `_REAL_PDF_MAGIC` constant every previous call used
+    unchanged -- now that duplicate content is genuinely detected and
+    blocked (same organization, same hash), two unrelated `_upload()`
+    calls in the same test/organization that each mean "a distinct real
+    document" must no longer accidentally share one identical byte
+    string, or the second would silently become a no-op returning the
+    first document again. A test that DELIBERATELY wants identical
+    bytes (e.g. to test the duplicate-detection feature itself, or the
+    existing Markdown/CSV-vs-TXT-by-filename-only tests) still passes
+    `content=` explicitly and is unaffected."""
+    if content is None:
+        content = _REAL_PDF_MAGIC + f"unique-upload-{next(_upload_content_counter)}\n".encode()
     params = {"workspace_id": str(workspace_id)} if workspace_id else {}
     return await client.post(
         f"/organizations/{org_id}/documents", params=params,
@@ -3748,3 +3767,140 @@ async def test_organization_document_status_summary_excludes_soft_deleted_docume
     response = await client.get(f"/organizations/{org['id']}/documents/status", headers=_auth_header(owner_token))
     body = response.json()
     assert body["total"] == 1
+
+
+# ------------------------------------------------------- 2.2.12 -- duplicate detection --
+
+async def test_uploading_the_same_file_twice_returns_the_existing_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la détection de doublons fonctionne pour
+    un fichier identique."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    same_bytes = _REAL_PDF_MAGIC + b"identical real content"
+
+    first = await _upload(client, org["id"], owner_token, filename="report.pdf", content=same_bytes)
+    assert first.status_code == 201
+    assert first.json()["is_duplicate"] is False
+
+    second = await _upload(client, org["id"], owner_token, filename="report-copy.pdf", content=same_bytes)
+    assert second.status_code == 200  # nothing created -- 201 would be a lie
+    assert second.json()["is_duplicate"] is True
+    assert second.json()["id"] == first.json()["id"]
+    # The ORIGINAL document is returned unchanged -- its own real name,
+    # not the second upload's filename.
+    assert second.json()["name"] == "report.pdf"
+
+    listing = await client.get(f"/organizations/{org['id']}/documents", headers=_auth_header(owner_token))
+    assert len(listing.json()["items"]) == 1
+
+
+async def test_uploading_a_different_file_is_not_flagged_as_a_duplicate(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: un fichier différent n'est pas détecté
+    comme doublon."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    first = await _upload(client, org["id"], owner_token, filename="a.pdf", content=_REAL_PDF_MAGIC + b"content A")
+    second = await _upload(client, org["id"], owner_token, filename="b.pdf", content=_REAL_PDF_MAGIC + b"content B")
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["is_duplicate"] is False
+    assert second.json()["id"] != first.json()["id"]
+
+
+async def test_uploading_the_same_bytes_in_a_different_organization_is_not_a_duplicate(client, db_session, register_payload, monkeypatch):
+    """Vision critique cohérence -- pas de faux positif cross-tenant."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org_a = await _create_org(client, owner_token, "Acme A")
+    org_b = await _create_org(client, owner_token, "Acme B")
+    same_bytes = _REAL_PDF_MAGIC + b"shared across two orgs"
+
+    first = await _upload(client, org_a["id"], owner_token, content=same_bytes)
+    second = await _upload(client, org_b["id"], owner_token, content=same_bytes)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["is_duplicate"] is False
+
+
+async def test_uploading_the_same_bytes_after_the_original_was_deleted_is_not_a_duplicate(client, db_session, register_payload, monkeypatch):
+    """Vision critique -- un document supprimé logiquement ne bloque
+    pas un ré-upload du même contenu."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    same_bytes = _REAL_PDF_MAGIC + b"will be deleted then re-uploaded"
+
+    first = await _upload(client, org["id"], owner_token, content=same_bytes)
+    await client.delete(f"/documents/{first.json()['id']}", headers=_auth_header(owner_token))
+
+    second = await _upload(client, org["id"], owner_token, content=same_bytes)
+    assert second.status_code == 201
+    assert second.json()["is_duplicate"] is False
+    assert second.json()["id"] != first.json()["id"]
+
+
+async def test_owner_can_view_document_duplicates(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    same_bytes = _REAL_PDF_MAGIC + b"has real duplicates"
+
+    first = await _upload(client, org["id"], owner_token, filename="a.pdf", content=same_bytes)
+    document_id = first.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/duplicates", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json() == []  # no duplicate exists yet -- honestly empty
+
+
+async def test_document_duplicates_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/duplicates", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_admin_can_deduplicate_an_organization(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la déduplication manuelle fonctionne."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    # Bypass the upload-time block to construct a real, pre-existing
+    # duplicate pair -- the exact scenario `POST .../deduplicate` exists
+    # to clean up (see Document's own docstring on why the upload path
+    # blocking new duplicates does not mean none can ever exist).
+    same_bytes = _REAL_PDF_MAGIC + b"a real pre-existing duplicate"
+    content_hash = compute_content_hash(same_bytes)
+    org_id = uuid.UUID(org["id"])
+    first = Document(
+        organization_id=org_id, name="a.pdf", file_key="k1", file_size=10, file_type="application/pdf",
+        status=DocumentStatus.completed.value, content_hash=content_hash,
+    )
+    second = Document(
+        organization_id=org_id, name="b.pdf", file_key="k2", file_size=10, file_type="application/pdf",
+        status=DocumentStatus.completed.value, content_hash=content_hash,
+    )
+    db_session.add_all([first, second])
+    await db_session.commit()
+
+    response = await client.post(f"/organizations/{org['id']}/documents/deduplicate", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json() == {"duplicate_groups_found": 1, "documents_removed": 1}
+
+    listing = await client.get(f"/organizations/{org['id']}/documents", headers=_auth_header(owner_token))
+    assert len(listing.json()["items"]) == 1
+
+
+async def test_member_cannot_deduplicate_an_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    member_token, member = await _register(client, db_session, "deduplicatemember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(f"/organizations/{org['id']}/documents/deduplicate", headers=_auth_header(member_token))
+    assert response.status_code == 403
