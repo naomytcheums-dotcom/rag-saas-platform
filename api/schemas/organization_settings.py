@@ -27,6 +27,7 @@ class OrganizationSettingsResponse(BaseModel):
     language: str
     timezone: str
     score_threshold: float
+    rrf_k: int
 
 
 class OrganizationSettingsUpdateRequest(BaseModel):
@@ -71,6 +72,9 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # min-max-normalization step), not an operationally-tunable ceiling
     # the way CHUNK_SIZE_MAX_TOKENS/TOP_K_MAX are.
     score_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Partie 3.4.7 -- real bounds matching that étape's own literal ask
+    # ("Min: 1, Max: 1000").
+    rrf_k: int | None = Field(default=None, ge=1, le=1000)
 
     @field_validator("timezone")
     @classmethod

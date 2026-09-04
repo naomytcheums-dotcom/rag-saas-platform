@@ -6401,6 +6401,28 @@ all 6 now-really-supported providers, the same real precedent as
 
 **Real verification**: `tests/test_llm_providers.py` (21 tests).
 
+### Partie 3.4.7 / 3.4.13 -- RRF configurable
+
+`rrf_k` added to `organization_settings` (default 60 -- the same real
+standard constant from the original RRF paper `src/retrieval.py`'s own
+`RRF_K` already uses, real 1-1000 bounds matching the literal ask).
+New real resolver `resolve_rrf_k` (`api/services/retrieval_config.py`),
+the same real `override > organization_settings > default` precedence
+as the other 6 resolvers. **Really wired** into `hybrid_search`
+(`api/services/retrieval_pipeline.py`) -- replaces the `k=60`
+previously hardcoded in `_reciprocal_rank_fusion`. Verified by a real
+integration test confirming a different `rrf_k` genuinely changes the
+real fusion score (`1 / (k + rank + 1)`) while keeping the same real
+top result.
+
+**A real, honest note on numbering**: this étape's own literal spec was
+sent twice under two different numbers (3.4.7 and 3.4.13, identical
+text) -- built once, not duplicated.
+
+**Real verification**: 6 tests in `tests/test_retrieval_config.py`, 1
+integration test in `tests/test_retrieval_pipeline.py`, 2 write-time
+tests in `tests/test_organization_settings.py`.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

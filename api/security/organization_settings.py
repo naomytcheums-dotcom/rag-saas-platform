@@ -119,6 +119,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # normalization this requires to make one single 0-1 threshold
     # meaningful across all of them).
     "score_threshold": 0.5,
+    # Partie 3.4.7 -- real, applied by
+    # api/services/retrieval_pipeline.py's own hybrid_search (Reciprocal
+    # Rank Fusion's own smoothing constant) -- 60 is the same real,
+    # standard default from the original RRF paper src/retrieval.py's
+    # own RRF_K already uses.
+    "rrf_k": 60,
 }
 
 # Computed once at import time, not per-call -- available_timezones()

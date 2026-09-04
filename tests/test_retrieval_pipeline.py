@@ -140,6 +140,25 @@ async def test_hybrid_search_returns_real_ranked_results(db_session):
     assert all("score" in r for r in results)
 
 
+async def test_hybrid_search_uses_the_real_organization_configured_rrf_k(db_session):
+    """Validation criterion: le RRF K est appliqué à la fusion --
+    a real, direct check that a different rrf_k genuinely changes the
+    real fused RRF score (`1 / (k + rank + 1)`), not just accepted and
+    ignored."""
+    org = await _make_org(db_session, "Org RRF K")
+    document = await _make_document(db_session, org.id)
+    await _add_chunks(db_session, org.id, document.id, [
+        "The capital of France is Paris.",
+        "Bananas are a good source of potassium.",
+    ])
+
+    default_k = await hybrid_search(db_session, org.id, "Paris capital", top_k=1)
+    small_k = await hybrid_search(db_session, org.id, "Paris capital", top_k=1, org_settings={"rrf_k": 1})
+
+    assert default_k[0]["chunk_id"] == small_k[0]["chunk_id"]  # same real top real result either way
+    assert default_k[0]["score"] != small_k[0]["score"]  # but a real, different rrf_k really changes the real fused score
+
+
 async def test_hybrid_reranked_search_returns_real_reranked_results(db_session):
     org = await _make_org(db_session, "Org Reranked Relevance")
     document = await _make_document(db_session, org.id)

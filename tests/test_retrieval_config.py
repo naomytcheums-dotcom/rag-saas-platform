@@ -1,8 +1,7 @@
-"""Partie 3.3.4/3.3.5/3.3.6 -- tests for
-api/services/retrieval_config.py's own real, standalone resolvers.
-
-See that module's own top docstring for why these are honestly NOT
-wired into a live retrieval call: no such call exists yet in api/."""
+"""Partie 3.3.4/3.3.5/3.3.6/3.3.7/3.4.7 -- tests for
+api/services/retrieval_config.py's own real, standalone resolvers, all
+now really wired into api/services/retrieval_pipeline.py's own live
+search pipeline (see that module's own top docstring)."""
 
 import pytest
 
@@ -12,6 +11,7 @@ from api.services.retrieval_config import (
     resolve_reranker_model,
     resolve_reranker_top_k,
     resolve_retrieval_strategy,
+    resolve_rrf_k,
     resolve_score_threshold,
     resolve_top_k,
 )
@@ -160,3 +160,39 @@ def test_resolve_score_threshold_rejects_a_real_value_above_1():
 def test_resolve_score_threshold_rejects_a_non_numeric_value():
     with pytest.raises(ValueError):
         resolve_score_threshold(override="high")  # type: ignore[arg-type]
+
+
+# ---------------------------------- 3.4.7 RRF k -------------------------------------------
+
+
+def test_resolve_rrf_k_falls_back_to_the_real_default():
+    """Validation criterion: le fallback fonctionne."""
+    assert resolve_rrf_k() == DEFAULT_SETTINGS["rrf_k"]
+
+
+def test_resolve_rrf_k_reads_from_real_organization_settings():
+    """Validation criterion: le RRF K est lu depuis
+    organization_settings."""
+    assert resolve_rrf_k({"rrf_k": 120}) == 120
+
+
+def test_resolve_rrf_k_override_wins():
+    assert resolve_rrf_k({"rrf_k": 120}, override=10) == 10
+
+
+def test_resolve_rrf_k_rejects_zero_and_negative():
+    """Validation criterion: robustesse -- valeur invalide."""
+    with pytest.raises(ValueError):
+        resolve_rrf_k(override=0)
+    with pytest.raises(ValueError):
+        resolve_rrf_k(override=-1)
+
+
+def test_resolve_rrf_k_rejects_a_real_too_large_value():
+    with pytest.raises(ValueError):
+        resolve_rrf_k(override=1001)
+
+
+def test_resolve_rrf_k_accepts_the_real_boundary_values():
+    assert resolve_rrf_k(override=1) == 1
+    assert resolve_rrf_k(override=1000) == 1000

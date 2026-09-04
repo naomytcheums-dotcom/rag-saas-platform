@@ -1,8 +1,8 @@
 """
 Partie 3.3.4 (retrieval strategy) + 3.3.5 (reranker) + 3.3.6 (top-k) +
-3.3.7 (score threshold) -- combined into one module: all 4 resolve
-small, closely-related pieces of the SAME real `organization_settings`
-retrieval configuration.
+3.3.7 (score threshold) + 3.4.7 (RRF k) -- combined into one module:
+all 5 resolve small, closely-related pieces of the SAME real
+`organization_settings` retrieval configuration.
 
 **Updated at Partie 3.3.4's own real follow-up (same batch, same
 conversation)**: this docstring originally, honestly documented a real
@@ -165,4 +165,23 @@ def resolve_score_threshold(org_settings: dict | None = None, override: float | 
     value = float(value)
     if not (0.0 <= value <= 1.0):
         raise ValueError(f"Invalid score_threshold: {value!r} (must be between 0.0 and 1.0)")
+    return value
+
+
+def resolve_rrf_k(org_settings: dict | None = None, override: int | None = None) -> int:
+    """Item 2's own literal function (3.4.7) -- same real
+    override > org_settings > default precedence as every other
+    resolver in this module. Real bounds match that étape's own
+    literal ask (1-1000)."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("rrf_k") is not None:
+        value = org_settings["rrf_k"]
+    else:
+        value = DEFAULT_SETTINGS["rrf_k"]
+
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"Invalid rrf_k: {value!r} (must be a positive integer)")
+    if value > 1000:
+        raise ValueError(f"rrf_k {value} exceeds the real maximum of 1000")
     return value

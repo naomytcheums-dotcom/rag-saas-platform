@@ -63,6 +63,7 @@ from api.services.retrieval_config import (
     resolve_reranker_model,
     resolve_reranker_top_k,
     resolve_retrieval_strategy,
+    resolve_rrf_k,
     resolve_score_threshold,
     resolve_top_k,
 )
@@ -187,16 +188,22 @@ def _reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> di
     return fused_scores
 
 
-async def hybrid_search(db: AsyncSession, organization_id, query: str, top_k: int | None = None, org_settings: dict | None = None) -> list[dict]:
+async def hybrid_search(db: AsyncSession, organization_id, query: str, top_k: int | None = None, rrf_k: int | None = None, org_settings: dict | None = None) -> list[dict]:
     """Item 2's own literal function -- real vector + real BM25,
     combined via real Reciprocal Rank Fusion (the same real, standard
     algorithm `src/retrieval.py` already uses for its own, separate,
     single-tenant corpus). Same real "explicit top_k bypasses the
     bound" fix as `vector_search`'s own docstring explains -- this
     function's OWN `candidate_pool` (below) is exactly the real,
-    internal, deliberately-wider value that fix exists for."""
+    internal, deliberately-wider value that fix exists for.
+
+    `rrf_k` -- Partie 3.4.7's own real, organization-configurable RRF
+    smoothing constant (`resolve_rrf_k`), replacing the real, previously
+    hardcoded `k=60` default `_reciprocal_rank_fusion` used to always
+    apply."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
     candidate_pool = resolve_reranker_top_k(org_settings, top_k=top_k)
+    resolved_rrf_k = resolve_rrf_k(org_settings, override=rrf_k)
 
     semantic_results = await vector_search(db, organization_id, query, top_k=candidate_pool, org_settings=org_settings)
     bm25_results = await bm25_search(db, organization_id, query, top_k=candidate_pool, org_settings=org_settings)
@@ -204,7 +211,7 @@ async def hybrid_search(db: AsyncSession, organization_id, query: str, top_k: in
         return []
 
     by_id = {c["chunk_id"]: c for c in semantic_results + bm25_results}
-    fused = _reciprocal_rank_fusion([[c["chunk_id"] for c in semantic_results], [c["chunk_id"] for c in bm25_results]])
+    fused = _reciprocal_rank_fusion([[c["chunk_id"] for c in semantic_results], [c["chunk_id"] for c in bm25_results]], k=resolved_rrf_k)
     ranked_ids = sorted(fused, key=lambda cid: fused[cid], reverse=True)[:top_k]
     return [{**by_id[cid], "score": fused[cid]} for cid in ranked_ids]
 

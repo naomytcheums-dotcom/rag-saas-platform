@@ -301,15 +301,28 @@ du nouveau, vrai pipeline multi-tenant construit dans `api/`.
 
 Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 réel, reranking réel, isolation multi-tenant) dans `tests/test_retrieval_pipeline.py`, 7 tests HTTP de bout en bout (permissions, isolation, application de la config) dans `tests/test_search.py`, 7 tests supplémentaires pour `resolve_score_threshold` dans `tests/test_retrieval_config.py`, 2 tests d'écriture pour `score_threshold` dans `tests/test_organization_settings.py`.
 
-### 3.4 Recherche hybride avancée
+### 3.4 Recherche hybride avancée — 🟡 (4/16 construits dans ce lot + 4 doublons littéraux dédupliqués)
+
+**Note réelle sur la numérotation** : le tableau original de ce document numérotait 3.4.1-3.4.4 comme BM25/Vector Search/RRF/Cross-encoder reranking ("existe déjà", en référence au pipeline `src/retrieval.py`). Les prompts détaillés reçus ensuite renumérotent 3.4.2/3.4.3 différemment (Query rewriting/HyDE). Le tableau ci-dessous suit la numérotation des prompts détaillés reçus (la source la plus récente et la plus précise), 3.4.1 gardé tel quel. **Vrais doublons littéraux trouvés dans le batch reçu** : 3.4.7≡3.4.13 (RRF configurable), 3.4.8≡3.4.14 (Reranker configurable), 3.4.9≡3.4.15 (Top-K configurable), 3.4.12≡3.4.16 (MMR) -- chacun construit UNE SEULE fois, jamais dupliqué en double travail.
 
 | # | Fonctionnalité | Statut |
 |---|---|---|
-| 3.4.1 | BM25 | ✅ Existe déjà |
-| 3.4.2 | Vector Search | ✅ Existe déjà |
-| 3.4.3 | RRF | ✅ Existe déjà |
-| 3.4.4 | Cross-encoder reranking | ✅ Existe déjà |
-| 3.4.5-16 | Query expansion, HyDE, multi-query, filtering, compression, MMR, dédup | ⬜ (12 items) |
+| 3.4.1 | BM25 | ✅ Existe déjà (`src/retrieval.py`) ET réel dans `api/` (`bm25_search`, Partie 3.3.4) |
+| 3.4.2 | Query rewriting | ⬜ |
+| 3.4.3 | HyDE | ⬜ |
+| 3.4.4 | Multi-query retrieval | ⬜ |
+| 3.4.5 | Metadata filtering | ⬜ |
+| 3.4.6 | Semantic filtering | ⬜ |
+| 3.4.7 / 3.4.13 | RRF configurable (rrf_k) | ✅ Voir détails ci-dessous |
+| 3.4.8 / 3.4.14 | Reranker configurable | ✅ Déjà fait, voir Partie 3.3.5 |
+| 3.4.9 / 3.4.15 | Top-K configurable | ✅ Déjà fait, voir Partie 3.3.6 |
+| 3.4.10 | Context compression | ⬜ |
+| 3.4.11 | Duplicate removal | ⬜ |
+| 3.4.12 / 3.4.16 | MMR | ⬜ |
+
+#### Partie 3.4.7 / 3.4.13 — RRF configurable
+
+✅ `rrf_k` ajouté à `organization_settings` (défaut 60 -- la même vraie constante standard de l'article RRF original que `src/retrieval.py`'s own `RRF_K` utilise déjà, bornes réelles 1-1000 comme demandé littéralement). **Nouveau résolveur réel** `resolve_rrf_k` (`api/services/retrieval_config.py`), même précédence réelle `override > organization_settings > défaut` que les 6 autres résolveurs. **Câblé pour de vrai** dans `hybrid_search` (`api/services/retrieval_pipeline.py`) -- remplace le `k=60` auparavant codé en dur dans `_reciprocal_rank_fusion`. Vérifié par un vrai test d'intégration confirmant qu'un `rrf_k` différent change réellement le score de fusion (`1 / (k + rang + 1)`) tout en gardant le même vrai meilleur résultat. Tests réels dédiés (6 tests dans `tests/test_retrieval_config.py`, 1 test d'intégration dans `tests/test_retrieval_pipeline.py`, 2 tests d'écriture dans `tests/test_organization_settings.py`).
 
 ---
 
@@ -511,14 +524,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 110 | 22.0% |
+| ✅ Fait | 111 | 22.2% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 324 | 64.8% |
+| ⬜ Non commencé | 323 | 64.6% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **117/515 (~22.7%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **189/515 (~36.7%)**
-- Pondéré (✅=1, 🟡=0.5) : **~150/515 (~29.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **118/515 (~22.9%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **190/515 (~36.9%)**
+- Pondéré (✅=1, 🟡=0.5) : **~151/515 (~29.3%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9/3.4.12 et leurs doublons littéraux (3.4.13-3.4.16) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe déjà, sous d'autres numéros) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
