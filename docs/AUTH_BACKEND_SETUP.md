@@ -5057,6 +5057,117 @@ correctly rejected -- the real, deliberate distinction from 2.2.14),
 cron validation via the route, and the anti-enumeration 404 for a
 schedule in another organization.
 
+### Partie 2.2.16 -- batch processing
+
+Two new real tables, `batch_jobs`/`batch_job_items` (migration `0044`,
+RLS enabled inline on both). New module `api/security/batch_jobs.py`
+-- CRUD, plus `create_batch_job`/`process_batch_job`/
+`get_batch_job_status`/`cancel_batch_job` (item 3's own literal
+functions). New Celery tasks, `api/tasks/batch_jobs.py`'s
+`process_batch_job_task`/`resume_batch_job_task` (item 4's own literal
+tasks). New, dedicated router, `api/routers/batch_jobs.py` (registered
+in `api/main.py`).
+
+**A real, generic tracking LAYER, not a sixth competing pipeline**:
+`process_batch_job` implements zero new per-item logic for any of its
+5 real `job_type`s -- it dispatches straight to the SAME real,
+unchanged function an earlier Partie 2.2 étape already built and
+tested: `upload_document` (2.1.1/2.2.12, `job_type="upload"`),
+`reindex_document` (2.2.9, `"reindex"`), `soft_delete_document` (2.2.8,
+`"delete"`), `sync_external_source` (2.2.14, `"sync"`),
+`replace_document` (2.2.8, `"replace"`). Partie 2.2.1's own
+`process_upload_batch` (one HTTP multipart request, aggregate-only
+result) stays unchanged for that specific real scenario -- THIS
+étape's own real, distinct value is per-item, PERSISTED progress
+tracking, resumability, and cancellation across any of the 5 real
+operations, not a second batch-upload mechanism.
+
+**Two real, small, necessary, DOCUMENTED additions beyond this étape's
+own literal columns**: `BatchJobItem.sequence` -- neither of this
+étape's own literal tables has any real ordering column at all, but
+`process_batch_job` must align each row back to its own real input
+(see below); `BatchJobStatus.cancelled` -- not one of this étape's own
+literal 4 status values, but item 5's own literal `cancel_batch_job`
+needs a real, honest terminal state to land a cancelled job in,
+distinct from `failed` (a cancellation is a deliberate choice, not an
+error) -- the same "a name existing for what a literally-requested
+function actually needs to produce" reasoning as Partie 2.2.10's own
+`restored` action.
+
+**Where per-item input data actually lives, a real, necessary,
+DOCUMENTED addition beyond "config (JSONB) -- configuration du job"**:
+`BatchJob.config["items"]`. `process_batch_job` runs later, in a
+separate real Celery task/DB session -- it needs a real, durable place
+to read each item's own real input from (an upload's own real file
+bytes, base64-encoded -- the SAME real, documented exception to "never
+smuggle a blob through" this codebase already made once, for the same
+reason, in Partie 2.2.1's own `schedule_upload_batch_processing`) --
+there is nowhere else durable for it to live between job creation and
+processing.
+
+**Performance (vision critique 1)**: job creation returns immediately
+(`201`, `status="pending"`) -- the real work is dispatched to
+`process_batch_job_task` via the SAME best-effort `schedule_*`
+pattern every other real Celery dispatch in this codebase uses,
+confirmed by a real test that a job is genuinely scheduled, not run
+synchronously inside the request.
+
+**Robustesse (vision critique 2) / Gestion des erreurs (vision
+critique 3)**: the SAME real "one item's own failure never blocks the
+rest" resilience as every other bulk operation in this codebase -- a
+real failure on ONE item is caught, rolled back, and recorded on THAT
+item's own row (`BatchJobItem.error`) without aborting the batch,
+confirmed by a real test with one failing item among several. Commits
+after EACH item, not once at the end -- the exact same real bug class
+already caught and fixed in Partie 2.2.13/2.2.14/2.2.15's own periodic
+tasks. A genuinely CATASTROPHIC, job-level failure (outside any single
+item's own try/except -- confirmed for real with a malformed
+`config`) is caught by an outer safety net and recorded as a real
+`status="failed"` with a real `error` message -- the same "never left
+stuck at `processing` forever" principle `process_document` already
+established, now applied at the job level too.
+
+**Real, honest, COOPERATIVE cancellation, stated plainly rather than
+oversold**: `cancel_batch_job` sets a real flag `process_batch_job`'s
+own per-item loop checks BETWEEN items -- an item already actively
+being processed at the moment of cancellation still finishes (no
+in-flight real S3/Celery/DB call gets forcibly aborted mid-way),
+confirmed by a real test where cancellation triggered during the first
+item's own processing leaves the remaining items genuinely `pending`,
+never processed. An already-`completed` job cannot be cancelled --
+there is nothing left to stop.
+
+**Real, deliberate resumability**: `process_batch_job_task` and
+`resume_batch_job_task` are the exact SAME real function under two
+names -- `process_batch_job` is already, by its own real design, safe
+to call again on a job that's `pending`/`processing`/`failed`/
+`cancelled` (it only ever (re-)attempts real, still-`pending` items),
+the same "two honest names for one real, already-idempotent operation"
+pattern already established for Partie 2.2.8's own
+`replace_document`/`create_document_version_from_upload`. Confirmed
+for real: resuming a job interrupted by cancellation only re-attempts
+the genuinely remaining item, never re-running the one already
+`completed`.
+
+**Sécurité**: every real endpoint is Admin+ (this étape's own literal
+ask) -- a batch job can itself run any of Partie 2.2.8/2.2.9/2.2.14's
+own real destructive/administrative actions (delete, reindex,
+external sync) across many real items at once, a bigger real lever
+than any single-item route on this platform.
+
+**Real verification**: `tests/test_batch_jobs.py` (new, fast, no real
+infra, mocked at each real underlying pipeline's own call boundary)
+covers CRUD (type validation, empty-batch rejection, one real
+`BatchJobItem` per input), `process_batch_job` dispatching correctly
+for `reindex`/`upload` (including real base64 decoding), real per-item
+failure isolation, the real catastrophic-failure safety net, real
+cooperative cancellation stopping before further items, and real
+resumability re-attempting only the genuinely pending item. Route
+tests cover Admin+ permissions on all 5 endpoints (Member correctly
+rejected), a job genuinely scheduled via Celery rather than run
+synchronously, and the anti-enumeration 404 for a job in another
+organization.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming
