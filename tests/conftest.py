@@ -264,8 +264,8 @@ def _stub_out_reindex_scheduling_by_default(monkeypatch):
     real Celery-dispatch problem for the SAME reason. Verified directly
     in tests/test_documents.py, which monkeypatches these back for
     itself where it actually matters to the test."""
-    monkeypatch.setattr("api.security.documents.schedule_document_reindex", lambda document_id: None)
-    monkeypatch.setattr("api.security.documents.schedule_organization_reindex", lambda organization_id: None)
+    monkeypatch.setattr("api.security.documents.schedule_document_reindex", lambda document_id, triggered_by=None: None)
+    monkeypatch.setattr("api.security.documents.schedule_organization_reindex", lambda organization_id, triggered_by=None: None)
 
 
 @pytest.fixture(autouse=True)

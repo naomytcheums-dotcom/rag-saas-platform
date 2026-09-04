@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentVersion
+from api.security.document_audit import ACTION_UPDATED, ACTION_VERSION_RESTORED, log_document_action
 from api.services.document_storage import upload_document_file, validate_document_upload
 
 
@@ -77,7 +78,14 @@ async def create_document_version_from_upload(
 
     content_type = validate_document_upload(content, filename)
     file_key = upload_document_file(document.organization_id, document.id, filename, content, content_type)
-    return await create_document_version(db, document_id, file_key, len(content), None, created_by, file_type=content_type)
+    version = await create_document_version(db, document_id, file_key, len(content), None, created_by, file_type=content_type)
+    # Partie 2.2.10 -- the ONE real shared choke point both
+    # POST .../versions and POST .../replace go through, so logging
+    # "updated" here (never inside restore_document_version below,
+    # which never calls this function) gives exactly one real audit
+    # entry per real action, never a double one for a real restore.
+    await log_document_action(db, document_id, created_by, ACTION_UPDATED, metadata={"version_number": version.version_number})
+    return version
 
 
 async def get_document_version(db: AsyncSession, document_id: uuid.UUID, version_number: int) -> DocumentVersion:
@@ -112,4 +120,6 @@ async def restore_document_version(db: AsyncSession, document_id: uuid.UUID, ver
     already gets.
     """
     target = await get_document_version(db, document_id, version_number)
-    return await create_document_version(db, document_id, target.file_key, target.file_size, target.metadata_json, restored_by)
+    version = await create_document_version(db, document_id, target.file_key, target.file_size, target.metadata_json, restored_by)
+    await log_document_action(db, document_id, restored_by, ACTION_VERSION_RESTORED, metadata={"restored_from_version_number": version_number, "new_version_number": version.version_number})
+    return version

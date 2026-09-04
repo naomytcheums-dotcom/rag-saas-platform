@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentTag, DocumentTagAssignment
+from api.security.document_audit import ACTION_TAG_ADDED, ACTION_TAG_REMOVED, log_document_action
 
 
 async def create_tag(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, name: str, color: str | None) -> DocumentTag:
@@ -124,11 +125,16 @@ async def assign_tag_to_document(db: AsyncSession, document_id: uuid.UUID, tag_i
     except IntegrityError as exc:
         await db.rollback()
         raise ValueError("this tag is already assigned to this document") from exc
+    await log_document_action(db, document_id, assigned_by, ACTION_TAG_ADDED, metadata={"tag_id": str(tag_id)})
 
 
-async def unassign_tag_from_document(db: AsyncSession, document_id: uuid.UUID, tag_id: uuid.UUID) -> None:
+async def unassign_tag_from_document(db: AsyncSession, document_id: uuid.UUID, tag_id: uuid.UUID, removed_by: uuid.UUID | None = None) -> None:
     """Item 3's own literal `DELETE /documents/{document_id}/tags/{tag_id}`
-    route's real backing function."""
+    route's real backing function. `removed_by` -- a real, small,
+    DELIBERATE addition beyond this step's own literal signature,
+    optional and defaulting to `None`, so any other real caller keeps
+    working unchanged -- Partie 2.2.10's own "tag_removed" audit-log
+    action needs a real actor to attribute the action to."""
     assignment = await db.scalar(
         select(DocumentTagAssignment).where(DocumentTagAssignment.document_id == document_id, DocumentTagAssignment.tag_id == tag_id)
     )
@@ -136,6 +142,7 @@ async def unassign_tag_from_document(db: AsyncSession, document_id: uuid.UUID, t
         raise ValueError("this tag is not assigned to this document")
     await db.delete(assignment)
     await db.flush()
+    await log_document_action(db, document_id, removed_by, ACTION_TAG_REMOVED, metadata={"tag_id": str(tag_id)})
 
 
 async def list_document_tags(db: AsyncSession, document_id: uuid.UUID) -> list[DocumentTag]:

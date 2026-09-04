@@ -4502,6 +4502,87 @@ and fixed the same way: `documents_security.schedule_document_reindex(...)`/
 `documents_security.schedule_organization_reindex(...)`, resolved
 through the module object at call time.
 
+### Partie 2.2.10 -- document history / audit log
+
+A new real table, `document_audit_logs` (migration `0038`, RLS enabled
+inline this time -- see this file's own Partie 2.2.6/2.2.7 section for
+why that mattered). New module, `api/security/document_audit.py` --
+`log_document_action`/`get_document_history`, and the real, fixed
+action vocabulary this étape's own literal spec names:
+`created`/`updated`/`deleted`/`restored`/`reindexed`/`tag_added`/
+`tag_removed`/`version_restored`.
+
+**A real, honest gap stated plainly**: `restored` (undelete from a
+real soft delete) is defined in the real vocabulary but genuinely
+never produced anywhere in this codebase -- Partie 2.2.8's own module
+docstring already states its own real scope limitation (no real
+undelete/restore-from-trash endpoint was built). The name exists so a
+future real undelete feature has exactly one real place to log into,
+not a name invented on the spot later.
+
+**A real, deliberate design choice distinguishing this from Partie
+2.2.3's own Redis progress pub/sub**: `log_document_action` is never
+wrapped in a best-effort try/except -- it shares the SAME real database
+transaction as the action it records. A missed progress update costs
+nothing but a stale UI; a missing audit record for an action that DID
+happen would defeat this étape's own purpose, so the two either both
+commit or both roll back together.
+
+**Real integration into 6 already-existing functions across 3 files**
+(item 4's own literal ask), each a single, additive line using the
+SAME real actor id that function already had on hand -- no new
+parameter threading beyond what was already there, except two real,
+small, DELIBERATE additions: `unassign_tag_from_document` gained an
+optional `removed_by` parameter, and `reindex_document`/
+`reindex_documents`/`reindex_organization` (and their own Celery task
+signatures) gained an optional `triggered_by` -- neither action
+previously had a real actor available at the point logging needed to
+happen, and both default to `None`, so every existing real caller from
+2.2.6/2.2.9 keeps working unchanged.
+
+- `upload_document` (`api/security/documents.py`) → `created`
+- `soft_delete_document` → `deleted`
+- `reindex_document` → `reindexed`
+- `create_document_version_from_upload` (`api/security/document_versions.py`,
+  the ONE real shared choke point both `POST .../versions` and
+  `POST .../replace` go through) → `updated`
+- `restore_document_version` → `version_restored` (NOT `updated` --
+  restoring calls the lower-level `create_document_version` directly,
+  never `create_document_version_from_upload`, so a real restore gets
+  exactly one real log entry, never a redundant second `updated` one)
+- `assign_tag_to_document`/`unassign_tag_from_document`
+  (`api/security/document_tags.py`) → `tag_added`/`tag_removed`
+
+**Performance (vision critique 1)**: not asynchronous/Celery-backed --
+a deliberate, honest choice, not an oversight: this is a plain, cheap,
+same-transaction INSERT alongside a write the caller is already making
+either way, not a real, separate expensive operation that would
+benefit from deferral.
+
+**Stockage (vision critique 2)**: kept indefinitely -- no real
+retention/purge policy was asked for or built, a real, stated scope
+limitation matching this codebase's own established pattern of naming
+a limitation rather than silently building something narrower than
+asked.
+
+**Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
+uses the SAME real `_get_document_and_membership` anti-enumeration
+guard as every other document route -- only members of the
+organization that owns the document can ever see its history, a real,
+deliberate "Viewer included" read (same reasoning as the tag/version
+list routes).
+
+**Real verification**: `tests/test_document_audit.py` covers
+`log_document_action`/`get_document_history`'s own real orchestration
+(pagination, per-document isolation, the real, fixed action
+vocabulary). `tests/test_documents.py` covers the real route end to
+end and confirms REAL log entries actually appear after each of the 6
+integrated real actions (upload, tag add/remove, explicit new version,
+replace, version restore -- confirmed to log `updated` exactly once,
+never twice, for a real restore -- and reindex), plus Viewer read
+access and the real 404 a soft-deleted document's own history
+correctly inherits from `_get_document_and_membership`.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

@@ -95,7 +95,7 @@ def test_reindex_documents_schedules_one_task_per_document_with_a_real_stagger(m
     scheduled = documents_module.reindex_documents(document_ids)
 
     assert scheduled == 2
-    assert calls[0][0] == [str(document_ids[0])]
+    assert calls[0][0] == [str(document_ids[0]), None]
     assert calls[0][1] == 0
     assert calls[1][1] == documents_module._REINDEX_STAGGER_SECONDS
 

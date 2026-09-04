@@ -156,6 +156,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.workspace import Workspace
+from api.security.document_audit import ACTION_CREATED, ACTION_DELETED, ACTION_REINDEXED, log_document_action
 from api.security.organization_settings import get_org_settings
 from api.services.document_extraction import (
     CSV_CONTENT_TYPE,
@@ -364,6 +365,7 @@ async def upload_document(
         schedule_zip_processing(document.id, organization_id, workspace_id, created_by)
     else:
         schedule_document_processing(document.id)
+    await log_document_action(db, document.id, created_by, ACTION_CREATED)
     return document
 
 
@@ -385,6 +387,7 @@ async def soft_delete_document(db: AsyncSession, document_id: uuid.UUID, deleted
     document.deleted_at = dt.datetime.now(dt.timezone.utc)
     document.deleted_by = deleted_by
     await db.flush()
+    await log_document_action(db, document.id, deleted_by, ACTION_DELETED)
     return document
 
 
@@ -431,7 +434,7 @@ async def replace_document(db: AsyncSession, document_id: uuid.UUID, filename: s
 
 # =========================== Partie 2.2.9 -- manual reindexing ===========================
 
-async def reindex_document(db: AsyncSession, document_id: uuid.UUID) -> str:
+async def reindex_document(db: AsyncSession, document_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> str:
     """
     Item 3's own literal function -- re-runs the real, existing
     `process_document` pipeline (defined further below in this same
@@ -442,11 +445,19 @@ async def reindex_document(db: AsyncSession, document_id: uuid.UUID) -> str:
     exact same real `logger.warning` `process_document` already emits
     on any real failure -- reused unchanged, not a second, competing
     logging path.
+
+    `triggered_by` -- a real, small, DELIBERATE addition beyond this
+    step's own literal signature (Partie 2.2.10's own "reindexed"
+    audit-log action needs a real, honest actor to attribute the
+    action to; this step's own literal task signature never carried
+    one) -- optional and defaulting to `None`, so every existing real
+    caller from Partie 2.2.9 keeps working unchanged.
     """
     document = await db.get(Document, document_id)
     if document is None or document.deleted_at is not None:
         raise ValueError(f"'{document_id}' is not a registered, non-deleted document")
     updated = await process_document(db, document_id)
+    await log_document_action(db, document_id, triggered_by, ACTION_REINDEXED)
     return updated.status
 
 
@@ -456,7 +467,7 @@ _REINDEX_STAGGER_SECONDS = 1
 _REINDEX_MAX_STAGGER_SECONDS = 300
 
 
-def reindex_documents(document_ids: list[uuid.UUID]) -> int:
+def reindex_documents(document_ids: list[uuid.UUID], triggered_by: uuid.UUID | None = None) -> int:
     """
     NOT one of this step's own literal functions -- the real Celery
     fan-out `reindex_organization` below delegates to: one real
@@ -477,14 +488,16 @@ def reindex_documents(document_ids: list[uuid.UUID]) -> int:
     for index, document_id in enumerate(document_ids):
         countdown = min(index * _REINDEX_STAGGER_SECONDS, _REINDEX_MAX_STAGGER_SECONDS)
         try:
-            reindex_document_task.apply_async(args=[str(document_id)], countdown=countdown)
+            reindex_document_task.apply_async(
+                args=[str(document_id), str(triggered_by) if triggered_by else None], countdown=countdown,
+            )
             scheduled += 1
         except Exception as exc:  # noqa: BLE001 -- a broker hiccup for ONE document must never abort the whole reindex
             logger.warning("reindex_documents: could not schedule reindex for document '%s': %s", document_id, exc)
     return scheduled
 
 
-async def reindex_organization(db: AsyncSession, organization_id: uuid.UUID) -> int:
+async def reindex_organization(db: AsyncSession, organization_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> int:
     """
     Item 3's own literal function -- run by
     `api/tasks/reindex.py`'s own `reindex_organization_documents_task`
@@ -496,27 +509,27 @@ async def reindex_organization(db: AsyncSession, organization_id: uuid.UUID) -> 
     document_ids = (await db.scalars(
         select(Document.id).where(Document.organization_id == organization_id, Document.deleted_at.is_(None))
     )).all()
-    return reindex_documents(list(document_ids))
+    return reindex_documents(list(document_ids), triggered_by)
 
 
-def schedule_document_reindex(document_id: uuid.UUID) -> None:
+def schedule_document_reindex(document_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> None:
     """Real Celery dispatch, wrapped best-effort -- same reasoning as
     every other `schedule_*` function in this module."""
     from api.tasks.reindex import reindex_document_task
 
     try:
-        reindex_document_task.delay(str(document_id))
+        reindex_document_task.delay(str(document_id), str(triggered_by) if triggered_by else None)
     except Exception as exc:  # noqa: BLE001 -- a broker hiccup must never break the request
         logger.warning("schedule_document_reindex: could not schedule reindex for document '%s': %s", document_id, exc)
 
 
-def schedule_organization_reindex(organization_id: uuid.UUID) -> None:
+def schedule_organization_reindex(organization_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> None:
     """Real Celery dispatch, wrapped best-effort -- same reasoning as
     every other `schedule_*` function in this module."""
     from api.tasks.reindex import reindex_organization_documents_task
 
     try:
-        reindex_organization_documents_task.delay(str(organization_id))
+        reindex_organization_documents_task.delay(str(organization_id), str(triggered_by) if triggered_by else None)
     except Exception as exc:  # noqa: BLE001 -- a broker hiccup must never break the request
         logger.warning("schedule_organization_reindex: could not schedule reindex for organization '%s': %s", organization_id, exc)
 

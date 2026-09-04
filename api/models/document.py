@@ -229,3 +229,42 @@ class DocumentVersion(Base):
         UniqueConstraint("document_id", "version_number", name="uq_document_versions_document_id_version_number"),
         Index("ix_document_versions_document_id", "document_id"),
     )
+
+
+class DocumentAuditLog(Base):
+    """
+    Partie 2.2.10 -- a real, append-only record of every real action
+    taken on a document (item 1's own literal columns). `action` is a
+    plain string, not a native Postgres enum -- same reasoning as
+    `Document.status`/`AuditLog.action` elsewhere in this codebase: a
+    fixed, app-level set of real values (see
+    `api/security/document_audit.py`'s own module docstring for the
+    real list) that never needs a migration to extend.
+
+    **A real, deliberate transactional choice, unlike Partie 2.2.3's
+    own Redis progress pub/sub**: logging a real action is never
+    wrapped in a best-effort try/except -- it shares the SAME database
+    transaction as the real action it records, so the two either both
+    commit or both roll back together. A progress update is a real,
+    disposable side channel (a missed one costs nothing but a slightly
+    stale UI); an audit record is the real source of truth this étape
+    exists to provide -- silently losing one while the real action it
+    describes still happened would defeat its own purpose.
+    """
+
+    __tablename__ = "document_audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Nullable, SET NULL on delete: a real audit record outlives
+    # whoever performed the action -- same reasoning as
+    # Document.created_by.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    changes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    timestamp: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_document_audit_logs_document_id", "document_id"),
+    )
