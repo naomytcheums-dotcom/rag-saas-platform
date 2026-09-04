@@ -4964,6 +4964,99 @@ rejected, Manager correctly allowed), the anti-enumeration 404 for a
 source in another organization, and that `config` is never present in
 any real response body.
 
+### Partie 2.2.15 -- scheduled reindexing
+
+A new real column on `Document` (`reindex_schedule`, a real, optional
+PER-DOCUMENT override cron pattern) and a new real table,
+`reindex_schedules` (migration `0043`, RLS enabled inline), an
+organization-wide named cron schedule. New module
+`api/security/reindex_schedules.py` -- CRUD, plus `schedule_reindex`/
+`check_scheduled_reindexes`/`run_scheduled_reindexes` (item 3's own
+literal functions), plus `check_scheduled_document_reindexes` for the
+real per-document half. New Celery tasks,
+`api/tasks/reindex_schedule.py`'s `execute_scheduled_reindex_task`
+(item 4) and `check_scheduled_reindexes_task` (item 5's own literal
+Beat task). New, dedicated router, `api/routers/reindex_schedules.py`
+(registered in `api/main.py`).
+
+**Zero new cron-parsing dependency**: `_crontab_from_pattern` parses a
+stored 5-field cron string straight into Celery's OWN `celery.schedules.crontab`
+(already a real dependency of this codebase for Beat itself) and
+reuses its real `is_due`/`remaining_estimate` methods -- confirmed for
+real, live, against the installed Celery version, rather than assumed
+from documentation. Real, synchronous validation at creation/update
+time -- a malformed pattern is rejected before it's ever persisted,
+the same convention every other create function in this codebase
+already follows.
+
+**Cohérence -- another strong "reuse the pipeline" answer**:
+`schedule_reindex` implements no new reindexing logic at all -- it
+calls the SAME real, unchanged `reindex_organization` (Partie 2.2.9),
+`triggered_by=None` (an automated run has no real human actor). The
+real per-document override (`Document.reindex_schedule`) similarly
+calls the SAME unchanged `reindex_document`. Deliberately reuses the
+EXISTING `Document.indexing_started_at` (Partie 2.2.11) as its own
+real "last run" reference point for the per-document half, rather than
+adding a second, duplicate `last_run_at`/`next_run_at` pair just for
+this -- the same "avoid a second, easily-desynced source of truth"
+reasoning already applied repeatedly in this codebase.
+
+**Performance (vision critique 1)**: `check_scheduled_reindexes_task`
+is Celery Beat's own literal item-5 task, but registered on a genuine
+`timedelta(minutes=1)` interval, NOT a daily `crontab` like every other
+sweep in this file -- a real, deliberate distinction: a STORED cron
+pattern can legitimately ask for "every minute" itself, so the checker
+deciding what's due must run at least that often to honor it (the same
+"timedelta, not crontab" reasoning Partie 1.4.4's own domain-
+verification poll already established). Every actual reindex a due
+schedule triggers still runs through Partie 2.2.9's own real, already-
+Celery-backed `reindex_organization`/`reindex_document`.
+
+**Gestion des conflits (vision critique 2), stated honestly rather than
+fabricated**: neither `reindex_organization` nor `reindex_document`
+track "already running" state -- a scheduled reindex firing while a
+manual one is already in progress for the SAME organization/document
+results, at worst, in real REDUNDANT work (a document processed twice
+in close succession), never corruption: `process_document`'s own real
+chunk delete-then-recreate (established since Partie 2.1.1) is already
+safe under repetition, the exact same idempotency guarantee Partie
+2.2.9 already relies on for its own "reindexed twice by accident"
+case. A real, accepted limitation: no distributed lock prevents the
+redundant work itself -- given this feature's own real cadence
+(schedules meant for hourly/daily use, not sub-second), building real
+cross-process locking for this narrow overlap is disproportionate to
+what this étape actually asks for.
+
+**Robustesse (vision critique 3)**: the SAME real "one item's own
+failure never blocks the rest" resilience as every other bulk
+operation in this codebase, confirmed by a real test where one of two
+due schedules fails. **A real bug caught and fixed before it shipped,
+the SAME bug class already found twice in Partie 2.2.13/2.2.14's own
+periodic tasks**: `run_scheduled_reindexes` now commits after EACH
+schedule/document it processes, not once at the very end -- a failure
+that happens after a real, partial `flush()` leaves the session's own
+transaction unusable until rolled back, and a rollback that came too
+late would have silently undone every OTHER item already successfully
+reindexed earlier in the same sweep.
+
+**A real, deliberate, stricter permission tier than Partie 2.2.14's own
+sources**: every write here is Admin+ (this étape's own literal ask),
+not Manager+ -- an automatic, organization-wide, RECURRING reindex is
+a bigger real lever to hand out than a single sync connection.
+
+**Real verification**: `tests/test_reindex_schedules.py` (new, fast,
+no real infra, mocked at the `reindex_organization`/`reindex_document`
+call boundary) covers cron validation (a real malformed pattern
+rejected), `next_run_at` computed on create/update, real due-checking
+for both organization-wide schedules and per-document overrides
+(disabled/soft-deleted correctly excluded), `schedule_reindex`'s own
+real orchestration and timestamp advancement, and `run_scheduled_reindexes`'s
+own real resilience (one failing schedule never blocks a sibling that
+still succeeds). Route tests cover Admin+ permissions (Manager
+correctly rejected -- the real, deliberate distinction from 2.2.14),
+cron validation via the route, and the anti-enumeration 404 for a
+schedule in another organization.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

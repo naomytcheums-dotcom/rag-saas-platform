@@ -144,6 +144,19 @@ class Document(Base):
     # of truth" reasoning as Partie 2.2.8/2.2.11).
     last_modified: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_checked: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Partie 2.2.15 -- a real, optional, PER-DOCUMENT override cron
+    # pattern (5-field, e.g. "0 2 * * *"), independent of
+    # `ReindexSchedule` (api/models/reindex_schedule.py's own
+    # organization-wide schedule) -- a document with its own real,
+    # different reindexing cadence (e.g. a single, frequently-changing
+    # reference doc) doesn't need a whole new org-wide schedule just
+    # for itself. NULL means "no per-document schedule", the common
+    # case. Reuses the existing `indexing_started_at` (Partie 2.2.11)
+    # as its own real "last run" reference point rather than adding a
+    # duplicate per-document last_run_at/next_run_at pair -- the same
+    # "avoid a second, easily-desynced source of truth" reasoning
+    # already applied repeatedly in this codebase.
+    reindex_schedule: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     __table_args__ = (
         # The only read patterns this table serves (list_documents,

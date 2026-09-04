@@ -30,6 +30,7 @@ celery_app = Celery(
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
         "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
+        "api.tasks.reindex_schedule",
     ],
 )
 
@@ -103,5 +104,15 @@ celery_app.conf.beat_schedule = {
     "sync-external-sources-daily": {
         "task": "api.tasks.external_source_sync.sync_all_sources_periodic_task",
         "schedule": crontab(hour=5, minute=15),
+    },
+    # Partie 2.2.15 -- a genuine fixed-interval poll (every minute), NOT
+    # a daily crontab like every sweep above: a stored cron pattern can
+    # legitimately be as fine-grained as "every minute" itself, so the
+    # checker deciding what's due must run at least that often to honor
+    # it -- same "timedelta, not crontab" reasoning as Partie 1.4.4's
+    # own check-pending-domain-verifications entry.
+    "check-scheduled-reindexes": {
+        "task": "api.tasks.reindex_schedule.check_scheduled_reindexes_task",
+        "schedule": timedelta(minutes=1),
     },
 }
