@@ -1,4 +1,6 @@
-"""Request/response bodies for api/routers/tool_config.py (Partie 5.1.4/5.1.5)."""
+"""Request/response bodies for api/routers/tool_config.py (Partie 5.1.4/5.1.5/5.1.7)."""
+
+import uuid
 
 from pydantic import BaseModel
 
@@ -24,3 +26,18 @@ class ToolBudgetResponse(BaseModel):
 
 class ToolBudgetUpdateRequest(BaseModel):
     budget_limit: int
+
+
+class ToolFallbackResponse(BaseModel):
+    id: uuid.UUID
+    tool_name: str
+    fallback_tool: str
+    priority: int
+
+    model_config = {"from_attributes": True}
+
+
+class ToolFallbackCreateRequest(BaseModel):
+    tool_name: str
+    fallback_tool: str
+    priority: int = 1

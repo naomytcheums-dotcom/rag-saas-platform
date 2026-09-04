@@ -6735,6 +6735,35 @@ would just fail the same way again).
 **Real verification**: 12 tests (10 in the module's own file, 2
 integration tests in `test_tool_timeout.py`), `tests/test_retry.py`.
 
+### Partie 5.1.7 -- fallback
+
+New real models `api/models/tool_fallback.py` (`ToolFallback` -- several
+real rows per `tool_name`, one per `priority`, a real ordered chain;
+`LlmFallback` -- one real fallback per provider) plus migration `0051`,
+RLS enabled. Same global/superadmin reasoning as 5.1.4/5.1.5.
+
+New module `api/services/fallback.py`: `get_tool_fallback`/
+`set_tool_fallback`/`execute_with_fallback`/`get_llm_fallback`/
+`set_llm_fallback` (this étape's own literal functions) plus
+`get_tool_fallback_chain`/`delete_tool_fallbacks`/`list_tool_fallbacks`
+(real additional helpers the endpoints need). `execute_with_fallback`
+tries the primary tool, then each tool in the chain in order (capped
+at `FALLBACK_MAX_CHAIN`), re-raising the real last exception if
+everything fails -- never silently swallows a real, total failure.
+**Robustness (vision critique)**: `FALLBACK_ENABLED=False` really
+disables fallback entirely (the primary's own failure propagates
+immediately), tested.
+
+**Real endpoints** under `/admin/tools/fallback` (superadmin): `GET`,
+`POST`, `DELETE /{tool_name}` (removes every configured priority for
+that tool).
+
+**Consistency (vision critique)**: no orchestrator integration, same
+honest reason as 5.1.4/5.1.6 -- `run_agent` never actually executes a
+tool today.
+
+**Real verification**: 14 tests, `tests/test_fallback.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -16,8 +16,10 @@ from api.dependencies import get_db, require_superadmin
 from api.models.tool_config import ToolBudget
 from api.models.user import User
 from api.schemas.tool_config import (
-    ToolBudgetResponse, ToolBudgetUpdateRequest, ToolTimeoutResponse, ToolTimeoutUpdateRequest,
+    ToolBudgetResponse, ToolBudgetUpdateRequest, ToolFallbackCreateRequest, ToolFallbackResponse,
+    ToolTimeoutResponse, ToolTimeoutUpdateRequest,
 )
+from api.services.fallback import delete_tool_fallbacks, list_tool_fallbacks, set_tool_fallback
 from api.services.tool_budget import list_tool_budgets, reset_tool_budget, set_tool_budget
 from api.services.tool_timeout import list_tool_timeouts, set_tool_timeout
 
@@ -74,3 +76,25 @@ async def reset_tool_budget_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No budget configured for this tool")
     await db.commit()
     return await db.get(ToolBudget, tool_name)
+
+
+@router.get("/fallback", response_model=list[ToolFallbackResponse])
+async def get_tool_fallbacks(_admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    return await list_tool_fallbacks(db)
+
+
+@router.post("/fallback", response_model=ToolFallbackResponse)
+async def create_tool_fallback(
+    payload: ToolFallbackCreateRequest, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    row = await set_tool_fallback(db, payload.tool_name, payload.fallback_tool, payload.priority, updated_by=admin.id)
+    await db.commit()
+    return row
+
+
+@router.delete("/fallback/{tool_name}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_tool_fallback(tool_name: str, _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    removed = await delete_tool_fallbacks(db, tool_name)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No fallback configured for this tool")
+    await db.commit()

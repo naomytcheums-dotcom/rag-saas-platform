@@ -536,12 +536,24 @@ Tests réels dédiés (20 tests fonction+endpoint), voir `tests/test_tool_budget
 
 Tests réels dédiés (10 tests du module + 2 tests d'intégration dans `test_tool_timeout.py` = 12), voir `tests/test_retry.py`.
 
+#### Partie 5.1.7 — Fallback
+
+✅ **Nouveaux modèles réels** `api/models/tool_fallback.py` (`ToolFallback` -- plusieurs lignes réelles par `tool_name`, une par `priority`, une vraie chaîne ordonnée ; `LlmFallback` -- un seul fallback réel par provider) + migration `0051`, RLS activée. Même raisonnement global/superadmin que 5.1.4/5.1.5.
+
+✅ **Nouveau module réel** `api/services/fallback.py` : `get_tool_fallback`/`set_tool_fallback`/`execute_with_fallback`/`get_llm_fallback`/`set_llm_fallback` (fonctions littérales) + `get_tool_fallback_chain`/`delete_tool_fallbacks`/`list_tool_fallbacks` (aides réelles supplémentaires nécessaires aux endpoints). `execute_with_fallback` essaie l'outil principal, puis chaque outil de la chaîne dans l'ordre (plafonné par `FALLBACK_MAX_CHAIN`), et ré-lève la vraie dernière exception si tout échoue -- ne masque jamais un vrai échec total. **Robustesse (vision critique)** : `FALLBACK_ENABLED=False` désactive réellement tout fallback (l'échec du primaire propage immédiatement), testé.
+
+✅ **Endpoints réels** sous `/admin/tools/fallback` (superadmin) : `GET`, `POST`, `DELETE /{tool_name}` (supprime toutes les priorités configurées pour cet outil).
+
+**Cohérence (vision critique)** : pas d'intégration dans l'orchestrateur pour la même raison honnête que 5.1.4/5.1.6 -- `run_agent` n'exécute jamais réellement un outil aujourd'hui.
+
+Tests réels dédiés (14 tests fonction+endpoint), voir `tests/test_fallback.py`.
+
 Tool result validation, agent memory (court-terme), agent traces
 (au-delà de l'orchestrateur central lui-même) : **existent déjà** côté
 `src/`/agent (hérité, non revérifié dans les sessions récentes) -- une
 version réelle, testée, indépendante est construite ci-dessous côté
-`api/` pour cette même Partie. Fallback, parallel tool calls, human
-approval, conversation memory cross-session (DB), task planning : ⬜.
+`api/` pour cette même Partie. Parallel tool calls, human approval,
+conversation memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 
