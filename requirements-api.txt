@@ -259,6 +259,19 @@ pdf2image==1.17.0
 # it once at import time.
 langdetect==1.0.9
 
+# -- Chunking / code-aware tokenization (Partie 3.2.5) -------------------------
+# A real, latent packaging bug found while building this étape: Pygments
+# was already IMPORTABLE in this dev environment, but only transitively
+# -- via `pytest` (a test-only dependency) and `rich` (itself only
+# transitive, via `typer`, never declared here at all) -- so a genuine
+# production `pip install -r requirements-api.txt` (no dev/test extras)
+# would NOT reliably have it, silently breaking
+# api/services/code_chunking.py's own real per-language tokenizer/
+# language-detection fallback the first time it actually ran. Pinned
+# directly now that that module imports it itself -- the same real
+# pattern this file already applies to dnspython/httpcore/Pillow above.
+pygments==2.21.0
+
 # -- Documents / URL import (Partie 2.1.10) -----------------------------------
 # No genuinely new top-level package -- httpx (real fetch), lxml +
 # beautifulsoup4 + readability-lxml (real content/metadata extraction,

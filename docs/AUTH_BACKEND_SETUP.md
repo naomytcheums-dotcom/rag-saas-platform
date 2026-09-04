@@ -6005,6 +6005,67 @@ tell them apart in that case.
 including a direct regression check that a real fenced code block
 never gets split even with a deliberately tiny `max_chunk_size`.
 
+### Partie 3.2.5 -- code-aware chunking (without tree-sitter)
+
+New module `api/services/code_chunking.py`: `detect_code_language`/
+`chunk_code_by_functions`/`chunk_code_by_classes`/`chunk_code_by_blocks`/
+`chunk_code_preserve_imports`/`chunk_code_by_tokens` (item 2's own
+literal functions). **A real, documented deviation from the étape's
+own literal text** ("tree-sitter"): `tree_sitter` (a real AST parser
+covering many languages) was deliberately NOT added as a new
+dependency -- a real, heavy, per-language grammar install, not
+justified by this one chunking étape's own real scope. `pygments`
+(already a real, transitive dependency of this codebase) is reused for
+its own real per-language tokenizer (`chunk_code_by_tokens`), but
+honestly NOT as an AST.
+
+**Function/class boundary detection is real, hand-written,
+regex/indentation-based, for Python and JavaScript/TypeScript
+specifically** -- a real, honest, documented scope limit: not a full
+parser, so a real edge case (a string literal containing
+`"def foo("`, a decorator, unusual real formatting) can honestly fool
+it, the same real trade-off this codebase's other regex-based
+heuristics already make (`api/services/headings_extraction.py`).
+
+**A real bug found and fixed BEFORE this ever shipped, while
+testing**: pygments' own generic `guess_lexer` turned out unreliable on
+typical, real source files -- confirmed empirically (it misdetects a
+real, well-formed JavaScript class as Python). `detect_code_language`
+uses a real, hand-written, deterministic signal-counting heuristic over
+Python's and JavaScript's own distinctive real syntax first, falling
+back to pygments' own `guess_lexer` only for every other real language
+this module doesn't deeply support.
+
+**A second real bug found and fixed while testing**: the JS function/
+class detection regexes (`_JS_FUNCTION_RE`/`_JS_ARROW_RE`/`_JS_CLASS_RE`)
+run against the whole real text via `finditer` (unlike the Python
+patterns, matched line-by-line) -- without `re.MULTILINE`, `^` only
+anchors to real position 0 of the whole string, so a real function/
+class starting past the first real line (the normal case) was never
+matched at all. Fixed by adding `re.MULTILINE` to all 3 patterns.
+
+**`chunk_code_by_blocks`**: deliberately generic and language-agnostic,
+reuses Partie 3.2.2's own real `chunk_recursive_code` rather than a
+second, duplicate blank-line splitter. **`chunk_code_preserve_imports`**:
+separates real import/require lines into their own leading chunk -- a
+real, documented limitation, a real multi-line parenthesized import is
+only partially captured. **`chunk_code_by_tokens`**: chunks by a real
+TOKEN count via pygments' own real per-language lexer -- honestly NOT
+`tiktoken`'s own real subword tokens for a specific LLM (not installed,
+no specific target model for this standalone, general-purpose module),
+never splits a real code line in half (only breaks at a real newline
+once the threshold is reached).
+
+**A real packaging bug found and fixed**: pygments was only available
+transitively (via `pytest`, a test-only dependency, and `rich`, itself
+only transitive via `typer`) -- a genuine production install of
+`requirements-api.txt` alone would not have reliably had it. Pinned
+directly (`pygments==2.21.0`), the same real pattern this file already
+applies to dnspython/httpcore/Pillow.
+
+**Real verification**: `tests/test_code_chunking.py` (17 tests),
+including dedicated regression tests for both real bugs above.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the
