@@ -3911,6 +3911,102 @@ simulation, no real credential available) proves `process_onedrive`'s
 own real orchestration (folder-vs-file resolution, filtering, capping,
 auth/404 failure handling).
 
+**ZIP archive import (Partie 2.1.19) -- the ONLY import source in this
+whole 2.1.10-2.1.19 series with NO external API and NO credentials at
+all.** Purely local `zipfile` (stdlib) work against a `.zip` file
+already uploaded through the EXISTING plain upload route
+(`POST /organizations/{org_id}/documents`, Partie 2.1.1) -- unlike
+every other source (2.1.10-2.1.18), this step gets no dedicated route
+of its own: `api/services/document_storage.py`'s own
+`validate_document_upload` simply recognizes real ZIP magic bytes (its
+own existing ZIP-family ordering already checks DOCX and EPUB first, so
+neither is ever misclassified as a generic zip), and `upload_document`
+branches to `schedule_zip_processing` instead of the generic
+`schedule_document_processing` for that one content type.
+`ZIP_INCLUDE_PATTERNS`/`ZIP_MAX_FILES`/`ZIP_MAX_ENTRY_SIZE` are
+therefore real, server-wide config defaults, not per-request fields --
+the plain upload route has no room for extras the way a dedicated
+import route's own request schema does.
+
+**Real, deliberate deviation from this step's own literal
+`process_zip_archive` signature**: `zip_file_id` is added (not listed
+in the literal spec) because the real per-entry Celery fan-out needs it
+to independently re-download the SAME container archive from S3 later
+-- the same kind of small, documented, necessity-driven correction as
+Partie 2.1.12's own dropped `token` parameter or Partie 2.1.13/2.1.14's
+own added `created_by`. **A real, deliberate architectural choice worth
+stating plainly**: `process_zip_entry_task` never receives a real local
+temp file path or the entry's own decompressed bytes through its Celery
+arguments -- only `{"zip_file_id", "entry_name"}` (small, serializable
+references) -- and re-downloads the whole container archive from S3
+itself before extracting just that one entry. This costs one real,
+repeated S3 download per entry, a genuine trade-off against the
+alternative (extracting every entry once while the container's own temp
+file is still open) -- but that alternative would only be correct on a
+SINGLE worker process; nothing guarantees a real local temp file
+created by `process_zip_task` is even visible to whichever worker
+process/container later picks up `process_zip_entry_task` in a real,
+distributed Celery deployment, the same "never assume co-location,
+always re-fetch the authoritative source" reasoning
+`import_and_process_google_drive_file` already applies to its own
+OAuth token.
+
+**Real ZipSlip protection (vision critique's own explicit ask)**:
+`should_include_zip_entry` rejects any entry whose own name contains a
+real path-traversal sequence or is absolute -- not because this
+codebase's own extraction method is vulnerable to the classic ZipSlip
+disk-write exploit (it isn't: nothing here ever calls
+`ZipFile.extract()`/`extractall()`, `extract_zip_file` reads a real
+entry's bytes directly by its own exact name), but because that same
+entry name is stored, unchanged, as the resulting Document's own
+`name` -- a real, if lower-severity, "confusing/spoofable display name"
+concern worth closing anyway. **A real, more substantive defense
+against a "zip bomb"** (a maliciously crafted entry whose own declared
+`file_size` metadata undersells its real decompressed size, which
+trusting that metadata alone as an upfront filter would miss
+entirely): `extract_zip_file` reads a real entry through a genuine
+STREAMING loop, raising the moment more than `max_size` real, ACTUALLY-
+decompressed bytes have been read -- a real, physical memory bound,
+regardless of what the archive's own attacker-controlled central
+directory claims.
+
+**Cohérence (vision critique 1)**: no new format at all, taken further
+than every prior "reuse the pipeline" story -- a real ZIP entry is
+extracted, then runs through the EXACT SAME `validate_document_upload`/
+`process_document` pipeline as a directly-uploaded file of that same
+real type, indistinguishable once imported. The container `.zip`
+Document itself ends `completed` with ZERO chunks of its own (an
+honest, deliberate choice: its role is a real audit record of the
+upload and its own entry dispatch, not a chunkable/searchable document)
+-- `metadata_json` records how many real entries were found vs.
+actually scheduled, the same honest "no persisted, user-visible parent
+job status" limitation every prior bulk import already states.
+
+**Real verification for ZIP import specifically -- the single most
+fully, genuinely end-to-end-verifiable test file of the entire
+import-source series, since there is no external API/network to fake
+at all**: `tests/test_zip_extraction.py` (fast tier, NO mocking of any
+kind -- every test builds a real, genuine ZIP archive on real local
+disk) covers real listing, real ZipSlip/absolute-path/directory
+rejection, real pattern+size filtering, real bounded-memory extraction
+(including the real streaming cutoff triggering on an oversized entry),
+and a real corrupt archive raising a real `BadZipFile`.
+`tests/test_documents.py` covers the real upload route end to end (a
+real zip accepted as `application/zip`, correctly dispatched to
+`schedule_zip_processing` and NOT the generic task, permissions) plus
+unit tests for `process_zip_entries` (real stagger/broker tolerance) --
+and updates two Partie 2.1.2/2.1.9 tests that previously asserted a
+plain zip must be REJECTED, now correctly asserting it's accepted as
+its own real format instead (an honest, expected side effect of adding
+ZIP support, not a regression). `tests/test_zip_integration.py`
+(orchestration, a real local zip file + S3 stubbed, the same boundary
+every other orchestration test file draws) proves
+`process_zip_archive`'s own pure logic, and
+`import_and_process_zip_archive`/`import_and_process_zip_entry`'s own
+real database-touching behavior (container status transitions, a real
+per-entry Document created, a real corrupt-archive/missing-entry
+failure each recorded honestly).
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

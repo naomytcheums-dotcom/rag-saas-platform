@@ -449,11 +449,16 @@ async def test_upload_ignores_the_declared_content_type_and_checks_the_real_byte
     assert response.json()["file_type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
-async def test_upload_rejects_a_zip_file_that_is_not_a_real_docx(client, db_session, register_payload, monkeypatch):
+async def test_upload_of_a_zip_file_misnamed_docx_is_classified_as_a_real_zip_not_a_docx(client, db_session, register_payload, monkeypatch):
     """A plain ZIP (or an XLSX/PPTX, which share the exact same leading
-    magic bytes as DOCX) must still be rejected -- the ZIP signature
-    alone isn't enough, api/services/document_storage.py's
-    _is_real_docx also confirms word/document.xml is present."""
+    magic bytes as DOCX) is never misclassified as a DOCX just because
+    of its own declared filename -- api/services/document_storage.py's
+    _is_real_docx also confirms word/document.xml is present, which
+    this plain zip genuinely lacks. Since Partie 2.1.19, a plain zip is
+    itself a real, legitimately supported upload (application/zip, its
+    own real member files imported separately) -- this test used to
+    assert 400 rejection before that step existed; content wins over
+    declared name here exactly as it does for DOCX/EPUB/HTML/JSON/XML."""
     import io
     import zipfile
 
@@ -465,7 +470,8 @@ async def test_upload_rejects_a_zip_file_that_is_not_a_real_docx(client, db_sess
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("some_file.txt", "just a plain zip, not a docx")
     response = await _upload(client, org["id"], owner_token, filename="fake.docx", content=buffer.getvalue())
-    assert response.status_code == 400
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/zip"
 
 
 async def test_viewer_cannot_upload_a_docx_document(client, db_session, register_payload, monkeypatch):
@@ -983,11 +989,13 @@ async def test_upload_ignores_the_declared_content_type_for_epub_and_checks_the_
     assert response.json()["file_type"] == "application/epub+zip"
 
 
-async def test_upload_rejects_a_zip_file_that_is_not_a_real_epub(client, db_session, register_payload, monkeypatch):
+async def test_upload_of_a_zip_file_misnamed_epub_is_classified_as_a_real_zip_not_an_epub(client, db_session, register_payload, monkeypatch):
     """Same "content over declared name" rule as DOCX's own equivalent
-    test -- a real ZIP that simply isn't an EPUB (no spec-mandated
-    `mimetype` entry) is rejected, not silently accepted just because
-    it happens to be a ZIP."""
+    test above -- a real ZIP that simply isn't an EPUB (no spec-mandated
+    `mimetype` entry) is never misclassified as one just because it
+    happens to be a ZIP. Since Partie 2.1.19, it's still a real,
+    legitimately supported upload in its own right (application/zip) --
+    this test used to assert 400 rejection before that step existed."""
     import io
     import zipfile
 
@@ -1000,7 +1008,8 @@ async def test_upload_rejects_a_zip_file_that_is_not_a_real_epub(client, db_sess
         zf.writestr("hello.txt", "just a random zip, not an epub")
 
     response = await _upload(client, org["id"], owner_token, filename="fake.epub", content=buffer.getvalue())
-    assert response.status_code == 400
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "application/zip"
 
 
 async def test_viewer_cannot_upload_an_epub_document(client, db_session, register_payload, monkeypatch):
@@ -2470,6 +2479,120 @@ def test_process_onedrive_files_tolerates_a_broker_failure_for_one_file(monkeypa
     monkeypatch.setattr("api.tasks.onedrive_import.process_onedrive_file_task", _FlakyTask())
 
     scheduled = documents_module.process_onedrive_files(uuid.uuid4(), None, ["good-1", "bad", "good-2"], created_by=None)
+
+    assert scheduled == 2
+    assert len(calls) == 2
+
+
+# ------------------------------------------------------------ ZIP upload --
+
+def _real_zip_bytes(entries: dict[str, bytes | str]) -> bytes:
+    import io
+    import zipfile as zipfile_module
+
+    buf = io.BytesIO()
+    with zipfile_module.ZipFile(buf, "w") as archive:
+        for name, content in entries.items():
+            archive.writestr(name, content)
+    return buf.getvalue()
+
+
+async def test_owner_can_upload_a_zip_archive(client, db_session, register_payload, monkeypatch):
+    """Validation criterion (2.1.19): l'upload d'une archive ZIP
+    fonctionne, reutilisant la meme route/pipeline qu'un PDF/DOCX."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    content = _real_zip_bytes({"report.pdf": b"%PDF-1.4 fake pdf", "notes.txt": "hello"})
+    response = await _upload(client, org["id"], owner_token, filename="archive.zip", content=content, declared_content_type="application/zip")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "archive.zip"
+    assert body["file_type"] == "application/zip"
+    assert body["status"] == DocumentStatus.pending.value
+
+
+async def test_zip_upload_dispatches_the_real_zip_task_not_the_generic_one(client, db_session, register_payload, monkeypatch):
+    """Real, deliberate branch in upload_document -- a real ZIP archive
+    is never run through the generic process_document_task."""
+    _stub_s3(monkeypatch)
+    generic_calls = []
+    zip_calls = []
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: generic_calls.append(document_id))
+    monkeypatch.setattr("api.security.documents.schedule_zip_processing", lambda document_id, organization_id, workspace_id, created_by: zip_calls.append(document_id))
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    content = _real_zip_bytes({"notes.txt": "hello"})
+    response = await _upload(client, org["id"], owner_token, filename="archive.zip", content=content, declared_content_type="application/zip")
+
+    assert response.status_code == 201
+    assert len(zip_calls) == 1
+    assert len(generic_calls) == 0
+
+
+async def test_viewer_cannot_upload_a_zip_archive(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "zipviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    content = _real_zip_bytes({"notes.txt": "hello"})
+    response = await _upload(client, org["id"], viewer_token, filename="archive.zip", content=content, declared_content_type="application/zip")
+    assert response.status_code == 403
+
+
+async def test_schedule_zip_processing_does_not_raise_when_the_broker_is_unreachable(monkeypatch):
+    from api.security.documents import schedule_zip_processing
+
+    def _boom(*args, **kwargs):
+        raise ConnectionError("broker unreachable")
+
+    monkeypatch.setattr("api.tasks.zip_import.process_zip_task.delay", _boom)
+    schedule_zip_processing(uuid.uuid4(), uuid.uuid4(), None, uuid.uuid4())  # must not raise
+
+
+# --------------------------------------------------- process_zip_entries --
+
+def test_process_zip_entries_schedules_one_task_per_entry_with_a_real_stagger(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FakeTask:
+        def apply_async(self, args, countdown):
+            calls.append((args, countdown))
+
+    monkeypatch.setattr("api.tasks.zip_import.process_zip_entry_task", _FakeTask())
+
+    org_id, workspace_id, zip_file_id, created_by = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    entry_names = ["a.pdf", "b.pdf"]
+    scheduled = documents_module.process_zip_entries(org_id, workspace_id, zip_file_id, entry_names, created_by)
+
+    assert scheduled == 2
+    assert calls[0][0] == [{"zip_file_id": str(zip_file_id), "entry_name": "a.pdf"}, str(org_id), str(workspace_id), str(created_by)]
+    assert calls[0][1] == 0
+    assert calls[1][1] == documents_module._ZIP_ENTRY_STAGGER_SECONDS
+
+
+def test_process_zip_entries_tolerates_a_broker_failure_for_one_entry(monkeypatch):
+    from api.security import documents as documents_module
+
+    calls = []
+
+    class _FlakyTask:
+        def apply_async(self, args, countdown):
+            if args[0]["entry_name"] == "bad.pdf":
+                raise ConnectionError("broker unreachable")
+            calls.append(args)
+
+    monkeypatch.setattr("api.tasks.zip_import.process_zip_entry_task", _FlakyTask())
+
+    scheduled = documents_module.process_zip_entries(uuid.uuid4(), None, uuid.uuid4(), ["good-1.pdf", "bad.pdf", "good-2.pdf"], created_by=None)
 
     assert scheduled == 2
     assert len(calls) == 2

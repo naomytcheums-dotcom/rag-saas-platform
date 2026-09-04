@@ -368,6 +368,26 @@ class Settings(BaseSettings):
     def onedrive_include_patterns_list(self) -> list[str]:
         return [pattern.strip() for pattern in self.ONEDRIVE_INCLUDE_PATTERNS.split(",") if pattern.strip()]
 
+    # -- ZIP archive import (Partie 2.1.19) ----------------------------------
+    # Purely local -- no external API/credentials, unlike every import source
+    # since Partie 2.1.12 (see api/services/zip_extraction.py's own module
+    # docstring). Server-wide defaults, not per-request fields: this step
+    # reuses the plain POST /organizations/{org_id}/documents upload route
+    # (see api/config.py's own docstring on this file's Partie 2.1.19
+    # section) rather than getting its own dedicated import route the way
+    # every other source (2.1.10-2.1.18) did.
+    ZIP_INCLUDE_PATTERNS: str = ".pdf,.docx,.txt,.md,.html,.csv,.json,.xml,.epub"
+    ZIP_MAX_FILES: int = 100
+    # Real, individual per-entry size cap -- deliberately the SAME default
+    # as document_storage.py's own MAX_DOCUMENT_UPLOAD_BYTES: one real ZIP
+    # entry becomes one real Document, so the same real per-document limit
+    # applies.
+    ZIP_MAX_ENTRY_SIZE: int = 50 * 1024 * 1024  # 50 MB
+
+    @property
+    def zip_include_patterns_list(self) -> list[str]:
+        return [pattern.strip() for pattern in self.ZIP_INCLUDE_PATTERNS.split(",") if pattern.strip()]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

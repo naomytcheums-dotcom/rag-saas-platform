@@ -230,6 +230,19 @@ def _stub_out_onedrive_import_scheduling_by_default(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_out_zip_processing_scheduling_by_default(monkeypatch):
+    """Partie 2.1.19's own equivalent of the fixture above --
+    upload_document calls schedule_zip_processing for a real ZIP
+    upload, the SAME real Celery-dispatch problem for the SAME reason.
+    Verified directly in tests/test_documents.py, which monkeypatches
+    it back for itself."""
+    monkeypatch.setattr(
+        "api.security.documents.schedule_zip_processing",
+        lambda document_id, organization_id, workspace_id, created_by: None,
+    )
+
+
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)

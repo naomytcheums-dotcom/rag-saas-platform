@@ -118,6 +118,20 @@ exist" check (a spec-mandated, fixed-content file, not just a
 required-but-otherwise-arbitrary internal part), so EPUB needs no
 filename fallback either -- real content is recognized regardless of
 what it's named, exactly like PDF/DOCX/HTML/JSON/XML before it.
+
+**ZIP archives (Partie 2.1.19) are checked LAST among the real
+ZIP-family formats, after DOCX and EPUB** -- `_is_real_zip_archive`
+below matches the exact same real ZIP magic bytes as both, so a real
+DOCX or EPUB must be ruled out FIRST (already true by this function's
+own existing ordering) or it would be misclassified as a generic ZIP.
+A plain ZIP that merely opens successfully (a real `zipfile.BadZipFile`
+means the signature matched but the rest is truncated/corrupt, same
+"not real, usable content either way" treatment as `_is_real_docx`) is
+classified as `application/zip` here -- its own real member files are
+extracted and imported as SEPARATE Documents later
+(`api/services/zip_extraction.py`, `api/security/documents.py`'s
+`import_and_process_zip_archive`), never chunked/embedded as one
+document itself, unlike every other format this module detects.
 """
 
 import io
@@ -153,9 +167,11 @@ JSON_CONTENT_TYPE = "application/json"
 XML_CONTENT_TYPE = "application/xml"
 EPUB_CONTENT_TYPE = "application/epub+zip"
 _EPUB_MIMETYPE_ENTRY_CONTENT = b"application/epub+zip"
+ZIP_CONTENT_TYPE = "application/zip"
 ALLOWED_DOCUMENT_CONTENT_TYPES = (
     "application/pdf", DOCX_CONTENT_TYPE, TXT_CONTENT_TYPE, MARKDOWN_CONTENT_TYPE,
     HTML_CONTENT_TYPE, CSV_CONTENT_TYPE, JSON_CONTENT_TYPE, XML_CONTENT_TYPE, EPUB_CONTENT_TYPE,
+    ZIP_CONTENT_TYPE,
 )
 
 # Real content-based HTML detection -- see this module's own docstring
@@ -219,6 +235,25 @@ def _is_real_epub(content: bytes) -> bool:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             return archive.read("mimetype") == _EPUB_MIMETYPE_ENTRY_CONTENT
     except (zipfile.BadZipFile, KeyError):
+        return False
+
+
+def _is_real_zip_archive(content: bytes) -> bool:
+    """
+    A plain ZIP archive -- checked AFTER `_is_real_docx`/`_is_real_epub`
+    (both real ZIPs with their own more specific internal signature) so
+    a real DOCX/EPUB is never misclassified as a generic zip (see this
+    module's own docstring). Confirms the archive actually opens -- a
+    real `zipfile.BadZipFile` here means the ZIP signature matched but
+    the rest of the file is truncated/corrupt, same "not real, usable
+    content either way" treatment as `_is_real_docx`.
+    """
+    if not content.startswith(_ZIP_MAGIC_BYTES):
+        return False
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)):
+            return True
+    except zipfile.BadZipFile:
         return False
 
 
@@ -332,6 +367,8 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
         return DOCX_CONTENT_TYPE
     if _is_real_epub(content):
         return EPUB_CONTENT_TYPE
+    if _is_real_zip_archive(content):
+        return ZIP_CONTENT_TYPE
     if _has_xml_declaration(content) and _is_real_xml(content):
         return XML_CONTENT_TYPE
     if _is_real_html(content):
@@ -342,7 +379,7 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
         return XML_CONTENT_TYPE
     if not is_valid_text(content):
         raise ValueError(
-            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, or EPUB (checked by its actual content, not the declared type) -- "
+            "file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, EPUB, or ZIP (checked by its actual content, not the declared type) -- "
             f"supported types: {', '.join(ALLOWED_DOCUMENT_CONTENT_TYPES)}"
         )
     if filename.lower().endswith(_MARKDOWN_EXTENSIONS):
