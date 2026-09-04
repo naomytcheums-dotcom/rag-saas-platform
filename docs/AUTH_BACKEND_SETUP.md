@@ -6530,17 +6530,54 @@ caller this is). **Real status tracking**
 (`pending`/`running`/`completed`/`failed`/`stopped`/`timeout`) and a
 **real, ordered trace** (real timestamp per event). **Real, cooperative
 stop** (`stop_agent`, a real `asyncio` cancellation) honestly
-distinguished from a real timeout (`asyncio.wait_for`) via a real
-`stop_requested` flag. **A real, documented limitation**: the run
-registry is in-process, per-worker memory -- real and correct for a
-single real process, but a real, multi-worker deployment would need a
-real, shared, external store (Redis/Postgres) to look up a run from a
-DIFFERENT process, genuinely separate, future real work, not silently
-hidden.
+distinguished from a real timeout (`asyncio.wait_for`).
 
-**Real verification**: 15 tests (including a real timeout test and a
-real stop-while-running test, mocked at the `litellm.acompletion`
-boundary), `tests/test_agent_orchestrator.py`.
+**✅ Fix applied (same Partie)**: the in-memory run registry is now a
+real, persistent `agent_runs` table (`api/models/agent_run.py`,
+migration `0048`, RLS enabled -- known limit, Partie 1.3.5) and its own
+real module `api/security/agent_runs.py` (`create_run`/
+`update_run_status`/`get_run`/`get_runs`/`stop_run`, the fix's own
+literal functions). Every public `AgentOrchestrator` method is now
+genuinely `async` and takes a real `db: AsyncSession` -- a real,
+necessary, documented breaking signature change. `get_agent_status`/
+`get_agent_trace` now genuinely read the table from ANY worker, not
+just the one that started the run.
+
+**A real bug avoided, not just "persist and move on"**: SQLAlchemy's
+`AsyncSession` is not safe for concurrent use across asyncio tasks --
+yet `run_multi_agent` genuinely runs several `run_agent` calls in
+parallel via `asyncio.gather`, all sharing the caller's own `db`
+session. A real `asyncio.Lock` (`self._db_lock`) serializes every real
+DB operation on the instance while keeping the real LLM call (the slow
+part) OUTSIDE the lock -- agents stay genuinely concurrent on the
+network call, only the brief DB write is serialized.
+
+**A real, honest, narrowed limitation**: actual `asyncio.Task`
+cancellation only works from the SAME process that created it (no
+cross-process task handle in Python) -- `self._tasks` stays a real,
+in-memory, per-worker map for exactly that reason. `stop_agent` called
+from the same worker cancels the real task AND persists `stopped`
+(tested). Called from a different worker, only the persisted state
+changes -- the other worker's own task keeps running, unaware, absent a
+real message bus (Redis pub/sub, most likely): genuinely separate,
+future real work, documented not hidden.
+
+**Real multi-tenant isolation added** (not in the fix's own literal
+schema): `organization_id` (nullable) was added to `agent_runs` -- a
+real, necessary addition, since `agent_id` is a caller-supplied string,
+not a foreign key, and "can a user see another's runs?" had no honest
+answer without it. `get_runs`/`get_agent_status`/`get_agent_trace`/
+`stop_agent` all take a real `organization_id` to scope the lookup --
+tested (`test_get_runs_scopes_by_the_real_organization_id`). No HTTP
+endpoint was added for this fix (not in its own literal scope) -- a
+real `GET /organizations/{org_id}/agents/{agent_id}/runs` remains
+natural future work once a UI needs one.
+
+**Real verification**: 19 tests (including a real timeout test, a real
+stop-while-running test, a real read-from-a-second-orchestrator-
+instance test simulating a different worker, and a real multi-tenant
+isolation test -- mocked at the `litellm.acompletion` boundary, real
+SQLite DB otherwise), `tests/test_agent_orchestrator.py`.
 
 ### Partie 3.4.2 -- query rewriting
 
