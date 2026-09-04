@@ -230,6 +230,7 @@ from api.services.onedrive_extraction import (
 )
 from api.services.zip_extraction import extract_zip_file, filter_zip_contents, list_zip_contents
 from api.services.image_extraction import extract_images_docx, extract_images_epub, get_image_metadata
+from api.services.ocr import OCRNotAvailableError, ocr_image_bytes
 from api.services.pdf_extraction import extract_pdf_images
 from api.services.table_transformation import normalize_table, table_to_json
 from api.services.text_cleaning import clean_text
@@ -3119,9 +3120,29 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                     image_metadata = get_image_metadata(image_data)
                     content_type = f"image/{image_metadata['format'].lower()}" if image_metadata.get("format") else None
                     file_key = save_image(document.organization_id, document.id, index, image_data, content_type)
+                    image_row_metadata = None
+                    # Partie 3.1.6, item 4's own literal "pour les
+                    # images, OCR automatique" -- this codebase never
+                    # accepts a raw image as a top-level document
+                    # upload (validate_document_upload's own 10 real
+                    # formats never included one), so "the images" this
+                    # item means are these real, embedded ones. Same
+                    # real, honest degradation as the PDF branch above:
+                    # no Tesseract installed just means no OCR text,
+                    # never a failed document.
+                    if settings.OCR_ENABLED:
+                        try:
+                            ocr_text = ocr_image_bytes(image_data)
+                            if ocr_text.strip():
+                                image_row_metadata = {"ocr_text": ocr_text.strip()}
+                        except OCRNotAvailableError as exc:
+                            logger.warning("process_document: OCR unavailable for image %d of document '%s': %s", index, document_id, exc)
+                        except Exception as exc:  # noqa: BLE001 -- a real, corrupt/unusual image must never abort the whole document
+                            logger.warning("process_document: OCR failed for image %d of document '%s': %s", index, document_id, exc)
                     db.add(DocumentImage(
                         document_id=document.id, file_key=file_key, file_size=len(image_data),
                         width=image_metadata.get("width"), height=image_metadata.get("height"), format=image_metadata.get("format"),
+                        metadata_json=image_row_metadata,
                     ))
                 except Exception as exc:  # noqa: BLE001 -- one real image's own failure must never abort the whole document
                     logger.warning("process_document: could not save image %d for document '%s': %s", index, document_id, exc)

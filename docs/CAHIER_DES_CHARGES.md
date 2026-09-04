@@ -157,9 +157,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~9/41, dont 3.1.1/3.1.2/3.1.4/3.1.5 réels dans `api/`, 2026-09-04)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~10/41, dont 3.1.1/3.1.2/3.1.4/3.1.5/3.1.6 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — 🟡 (4/10 ✅, 4 items restants dans cette sous-partie non encore spécifiés par l'utilisateur)
+### 3.1 Ingestion — 🟡 (5/10 ✅, 3.1.3 restant à finaliser + 4 items non encore spécifiés)
 
 **Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
 
@@ -170,7 +170,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.1.3 | Extraction du texte (amélioration) | ⬜ (voir note ci-dessous) |
 | 3.1.4 | Extraction des tableaux | ✅ Voir détails ci-dessous |
 | 3.1.5 | Extraction des images | ✅ Voir détails ci-dessous |
-| 3.1.6 | OCR | ⬜ |
+| 3.1.6 | OCR | ✅ Voir détails ci-dessous (vérification réelle via CI, binaires système absents de cette machine de dev) |
 | 3.1.7-10 | Non encore spécifiés | ⬜ |
 
 #### Partie 3.1.1 — Nettoyage du texte
@@ -190,6 +190,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.1.5 — Extraction des images
 
 ✅ **Nouveau modèle réel** `DocumentImage` (migration `0045`, RLS en ligne). **Nouveau module réel** `api/services/image_extraction.py` : `extract_images_docx` (relations de paquet python-docx), `extract_images_epub` (ebooklib `ITEM_IMAGE`), `extract_images_html` (référence seulement, voir limite ci-dessous), `get_image_metadata` (Pillow, parsing d'en-tête seulement). `extract_pdf_images` existait déjà depuis 2.1.1 (réutilisée sans changement). **Nouvelle fonction** `save_image` dans `document_storage.py`. **Initiative réelle et assumée au-delà de la liste d'actions littérale** : cette étape ne listait explicitement AUCUNE intégration au pipeline (contrairement à 3.1.1/3.1.2/3.1.4) -- mais des fonctions d'extraction et un modèle sans rien qui les appelle seraient une fonctionnalité réellement inerte ; `process_document` appelle désormais le bon extracteur pour PDF/DOCX/EPUB et crée de vraies lignes `DocumentImage`. Une nouvelle route réelle et minimale `GET /documents/{id}/images` a été ajoutée pour la même raison (stocker sans pouvoir relire serait tout aussi inerte). **Limite réelle et documentée pour HTML, énoncée clairement** : les images HTML référencent presque toujours une URL EXTERNE, pas des octets embarqués -- les récupérer exigerait le même transport SSRF-safe que 2.1.10, pour un bénéfice réel marginal ; `extract_images_html` retourne donc seulement `src`/`alt`, jamais d'octets récupérés, jamais branché sur `save_image`. **Stockage (vision critique 2)** : même bucket S3 que le document lui-même, sous `documents/{org}/{doc}/images/{index}`, aucune nouvelle infrastructure. **Performance (vision critique 1)** : Pillow ne lit que l'en-tête réel de l'image (jamais un décodage complet du raster) ; échec d'une image isolée n'interrompt jamais le reste du document. **Métadonnées (vision critique 3)** : format/largeur/hauteur réels via Pillow, `{}` honnête pour des octets non décodables. Tests réels dédiés (4 fonctions, route, plus une vraie image intégrée au test d'intégration DOCX existant confirmant le round-trip S3 réel), voir `tests/test_image_extraction.py`/`tests/test_documents.py`.
+
+#### Partie 3.1.6 — OCR
+
+✅ **Nouveau module réel** `api/services/ocr.py` : `ocr_image`, `ocr_pdf_page`, `ocr_pdf_scanned`, `detect_scanned_pdf`, `get_ocr_confidence`, plus `ocr_image_bytes`/`ocr_image_with_confidence` (ajouts réels nécessaires, voir ci-dessous). **Nouvelle config réelle** `api/config.py` : `OCR_ENABLED`/`OCR_LANGUAGE` (`fra`)/`OCR_DPI`/`OCR_TIMEOUT`. Intégré dans `extract_document_content` (un PDF réellement scanné est OCR AVANT le reste du dispatcher, texte littéral de l'item 4) et dans la boucle d'images de `process_document` (chaque image intégrée reçoit un OCR automatique réel -- "pour les images" signifie les images intégrées de 3.1.5, puisque ce dépôt n'accepte jamais une image brute comme upload de document de premier niveau). **Limite réelle et importante, énoncée en évidence, pas découverte par surprise** : `pytesseract`/`pdf2image` sont de simples wrappers Python autour d'un vrai binaire système séparé qu'aucun des deux paquets pip n'installe (le moteur Tesseract, et `pdftoppm`/`pdftocairo` de poppler) -- confirmé qu'AUCUN des deux n'est installé sur la machine de développement de cette session. Le job CI `api-tests` installe désormais les deux (`apt-get install tesseract-ocr tesseract-ocr-fra poppler-utils`) pour une vraie vérification de bout en bout que cette machine ne peut pas fournir. **Robustesse (vision critique 3), exception réelle et nommée** : `OCRNotAvailableError` distingue "le binaire réel n'est pas installé" de tout autre échec OCR réel -- les deux points d'intégration dégradent gracieusement (gardent le texte déjà extrait, ou sautent l'OCR pour cette image), confirmé en direct sur cette machine (le message de dégradation a été réellement observé, pas seulement simulé dans un test). **Déviation réelle et documentée par rapport au texte littéral** de `get_ocr_confidence(text)` : prend le vrai dictionnaire de données par mot de l'OCR (`pytesseract.image_to_data`), pas du texte brut -- un score de confiance réel ne peut venir que de l'inférence propre du moteur OCR au moment où il tourne, jamais reconstruit honnêtement depuis du texte déjà extrait. **Qualité (vision critique 2)** : `detect_scanned_pdf` est une heuristique réelle sur du texte réellement extrait par PyMuPDF (aucun OCR nécessaire pour cette détection elle-même). **Performance (vision critique 1)** : `OCR_DPI`/`OCR_TIMEOUT` réellement configurables ; coût réel et honnête assumé -- un document avec beaucoup d'images intégrées signifie beaucoup d'appels OCR réels et proportionnels. Tests réels dédiés (calcul de confiance, détection de PDF scanné sans Tesseract, orchestration simulée à la frontière pytesseract/pdf2image, DEUX tests réels de bout en bout marqués SKIP sur cette machine faute de binaires -- confirmés sauter correctement plutôt que d'être simulés), voir `tests/test_ocr.py`, plus un vrai test d'intégration PDF scanné de bout en bout dans `tests/test_documents_integration.py` (également SKIP en local, réellement exécuté en CI).
 
 ### 3.2 Chunking
 
@@ -394,16 +398,29 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 83 | 16.6% |
+| ✅ Fait | 84 | 16.8% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 351 | 70.2% |
+| ⬜ Non commencé | 350 | 70.0% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **90/515 (~17.5%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **162/515 (~31.5%)**
-- Pondéré (✅=1, 🟡=0.5) : **~123/515 (~23.9%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **91/515 (~17.7%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **163/515 (~31.7%)**
+- Pondéré (✅=1, 🟡=0.5) : **~124/515 (~24.1%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 3.1.4+3.1.5 (Extraction des tableaux et des images, 2026-09-04) :
+Mis à jour après Partie 3.1.6 (OCR, 2026-09-04) :
+Partie 3 : ~9/41 → ~10/41 (3.1.6 seul item touché -- ✅, nouveau module
+`api/services/ocr.py` (pytesseract/pdf2image), intégré dans l'extraction
+PDF et dans la boucle d'images de 3.1.5. Limite réelle énoncée en
+évidence : ni Tesseract ni poppler ne sont installés sur la machine de
+développement -- le job CI installe désormais les deux binaires réels,
+seul environnement où la vérification de bout en bout est réellement
+possible. Déviation assumée : `get_ocr_confidence` prend les données
+réelles par mot de l'OCR, pas du texte brut -- un score de confiance
+honnête ne peut venir que du moteur au moment de l'inférence. La série
+3.1.1/3.1.2/3.1.4/3.1.5/3.1.6 est terminée ; seul 3.1.3 (amélioration
+de l'extraction, notes de bas de page) reste à finaliser dans ce lot).
+
+Précédemment, mis à jour après Partie 3.1.4+3.1.5 (Extraction des tableaux et des images, 2026-09-04) :
 Partie 3 : ~7/41 → ~9/41 (3.1.4 et 3.1.5 seuls items touchés -- ✅ tous
 les deux. 3.1.4 : constat réel important -- l'extraction de tableaux
 existait déjà pour PDF/DOCX/Markdown/CSV depuis 2.1.x mais seul un

@@ -34,6 +34,7 @@ end-to-end proof this test provides. The embedding/chunking tests below
 have no such dependency and always run for real.
 """
 
+import io
 import os
 import uuid
 
@@ -392,6 +393,53 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
                 assert chunk["metadata_json"] == {"page": 1}
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+async def test_process_document_ocrs_a_real_scanned_pdf(pg_engine, _require_documents_bucket):
+    """
+    Partie 3.1.6 -- real, end-to-end proof that a genuinely scanned PDF
+    (a real page with an embedded image and NO real text layer at all)
+    gets OCR'd before chunking, against real Postgres/S3/Tesseract.
+    SKIPPED (not a failure) if the real Tesseract binary isn't
+    installed -- see api/services/ocr.py's own module docstring; CI's
+    own api-tests job installs it (see .github/workflows/regression.yml),
+    so this is the genuine, real verification for that environment.
+    """
+    import shutil
+
+    if shutil.which("tesseract") is None:
+        pytest.skip("real Tesseract binary not installed on this machine")
+
+    import pymupdf
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (400, 100), color="white")
+    ImageDraw.Draw(image).text((10, 30), "SCANNEDTEXT", fill="black")
+    image_buffer = io.BytesIO()
+    image.save(image_buffer, format="PNG")
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_image(pymupdf.Rect(50, 50, 450, 150), stream=image_buffer.getvalue())
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=pdf_bytes, filename="scanned.pdf")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+            assert updated.status == DocumentStatus.completed.value
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks).upper()
+            assert "SCANNEDTEXT" in content or "SCANNED" in content  # real OCR is not always pixel-perfect
         finally:
             await _cleanup(session, organization.id, owner.id)
 

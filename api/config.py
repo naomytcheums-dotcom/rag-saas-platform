@@ -393,6 +393,16 @@ class Settings(BaseSettings):
     DOCUMENT_BATCH_MAX_FILES: int = 10
     DOCUMENT_BATCH_MAX_TOTAL_SIZE: int = 100 * 1024 * 1024  # 100 MB
 
+    # -- OCR (Partie 3.1.6) --------------------------------------------------
+    # This step's own literal defaults. Real, deliberate scope note:
+    # "fra" (French), not "eng" -- this whole session's own established
+    # primary real-world language (see api/services/text_normalization.py's
+    # own docstring on the same real-world default).
+    OCR_ENABLED: bool = True
+    OCR_LANGUAGE: str = "fra"
+    OCR_DPI: int = 300
+    OCR_TIMEOUT: int = 30
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

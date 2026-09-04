@@ -82,6 +82,9 @@ function (a single flat string), exactly like `extract_markdown_text`
 does alongside `extract_markdown_sections`.
 """
 
+import logging
+
+from api.config import settings
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
 from api.services.docx_extraction import extract_docx_metadata, extract_docx_tables, extract_docx_text
 from api.services.epub_extraction import extract_epub_chapters, extract_epub_metadata, extract_epub_toc
@@ -92,6 +95,7 @@ from api.services.markdown_extraction import (
     extract_markdown_sections,
     extract_markdown_tables,
 )
+from api.services.ocr import OCRNotAvailableError, detect_scanned_pdf, ocr_pdf_scanned
 from api.services.pdf_extraction import extract_pdf_images, extract_pdf_metadata, extract_pdf_pages_text, extract_pdf_tables
 from api.services.txt_extraction import detect_encoding, extract_txt_text
 from api.services.xml_extraction import extract_xml_metadata, extract_xml_structure, extract_xml_text
@@ -106,6 +110,8 @@ JSON_CONTENT_TYPE = "application/json"
 XML_CONTENT_TYPE = "application/xml"
 EPUB_CONTENT_TYPE = "application/epub+zip"
 
+logger = logging.getLogger(__name__)
+
 
 def extract_document_content(file_path: str, file_type: str) -> dict:
     """Item 3's literal function. Raises ValueError for a file_type
@@ -115,9 +121,24 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
     these same nine types at upload time), not a recoverable
     per-document failure."""
     if file_type == PDF_CONTENT_TYPE:
+        pages_text = extract_pdf_pages_text(file_path)
+        # Partie 3.1.6, item 4 -- for a real scanned PDF (no real,
+        # usable text layer -- see detect_scanned_pdf's own docstring),
+        # OCR replaces the real, otherwise near-empty per-page text
+        # BEFORE the rest of this dispatcher runs, exactly this étape's
+        # own literal "OCR avant l'extraction de texte" wording.
+        # Real, honest degradation (vision critique 3): a machine with
+        # no real Tesseract/poppler installed (confirmed true for this
+        # session's own dev machine) just keeps the real, near-empty
+        # text already extracted -- never crashes the whole document.
+        if settings.OCR_ENABLED and detect_scanned_pdf(file_path):
+            try:
+                pages_text = ocr_pdf_scanned(file_path)
+            except OCRNotAvailableError as exc:
+                logger.warning("extract_document_content: OCR unavailable for a real scanned PDF '%s': %s", file_path, exc)
         return {
             "metadata": extract_pdf_metadata(file_path),
-            "sections": [{"text": text, "metadata": {"page": i}} for i, text in enumerate(extract_pdf_pages_text(file_path), start=1)],
+            "sections": [{"text": text, "metadata": {"page": i}} for i, text in enumerate(pages_text, start=1)],
             "tables": extract_pdf_tables(file_path),
             "image_count": len(extract_pdf_images(file_path)),
         }
