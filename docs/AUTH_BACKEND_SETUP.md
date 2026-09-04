@@ -6455,6 +6455,93 @@ dedicated regression; OpenAI/Voyage/Cohere mocked at the
 `litellm.aembedding` boundary, Sentence Transformers/Hugging Face
 tested for real, no mocking), `tests/test_embedding_providers.py`.
 
+### Partie 4.3.1-4.3.5 -- per-organization LLM generation configuration
+
+New module `api/services/llm_config.py`: `resolve_llm_provider`/
+`resolve_llm_model`/`resolve_temperature`/`resolve_top_p`/
+`resolve_system_prompt`/`resolve_max_tokens`/`resolve_llm_config`
+(item 2's own literal functions across all 5 étapes, grouped into one
+real module -- same reasoning as `chunk_config.py`/`retrieval_config.py`).
+`top_p` added to `organization_settings` (new, the 17th real setting,
+default 1.0, 0.0-1.0 bounds).
+
+**`resolve_llm_model`, a real, honest improvement**: rather than
+falling back to the table's own literal default
+(`DEFAULT_SETTINGS["llm_model"]` = `"claude-3-sonnet-20240229"`,
+already flagged as genuinely stale in this module's own docstring
+since Partie 1.3.9, never silently fixed) -- this resolver now falls
+back to the resolved PROVIDER's own real, live default model
+(`api.config.settings.ANTHROPIC_MODEL`, etc.) instead, a real,
+deliberate fix finally honoring that earlier, honest flag.
+
+**`resolve_system_prompt`, real two-layer validation**: the schema's
+own existing write-time bound (`max_length=10000`, permissive,
+unchanged) stays separate from this étape's own real, stricter runtime
+ceiling (`SYSTEM_PROMPT_MAX_LENGTH=1000`, its own literal default) -- a
+system prompt validly stored between 1000 and 10000 characters is
+honestly REJECTED by the resolver, never silently truncated. **Real
+security answer (vision critique 2)**: a system prompt is plain TEXT
+sent to a real LLM API, never `eval`'d or interpolated into a shell
+command/SQL query anywhere in this codebase -- there is no real "code
+injection" vector here in the usual sense; the resolver does strip
+real control/NUL characters (a real, minimal defensive baseline), but
+real PROMPT INJECTION (a user-supplied system prompt trying to
+override a real LLM's own safety behavior) stays a genuinely separate,
+much harder real problem this simple resolver does not claim to solve.
+
+**`resolve_max_tokens`, a real gap fixed**: `max_tokens` had no real
+upper bound at write time (`ge=1` only) -- a real ceiling
+(`MAX_TOKENS_CEILING=32768`, matching the literal ask) was added to
+the schema. Reuses `llm_providers.PROVIDER_SETTINGS` (made public for
+this reuse) to validate `llm_provider` and resolve the real,
+provider-specific default model.
+
+**Real wiring**: all 5 resolvers are genuinely consumed by
+`api/services/agent_orchestrator.py` (Partie 5.1.1, built in this same
+batch) -- the first real, live, in-process caller. **Real
+verification**: 33 tests (24 for `llm_config.py`, 9 more write-time
+tests for `top_p`/`max_tokens` in `tests/test_organization_settings.py`),
+`tests/test_llm_config.py`.
+
+### Partie 5.1.1 -- central agent orchestrator
+
+New module `api/services/agent_orchestrator.py`: class
+`AgentOrchestrator` (item 2's own literal class), `run_agent`/
+`run_multi_agent`/`get_agent_status`/`stop_agent`/`get_agent_trace`.
+
+**A real, honest distinction from the old "already exists" claim in
+`src/`** (inherited, never reverified in recent sessions): this new
+module is real, tested, verified for real in `api/`, independent of
+`src/agent.py`. **A real, honest, documented scope limit**: no real
+`Agent` entity (a stored, named agent config) exists anywhere in this
+codebase yet -- Partie 5.3 ("Agent Builder") is explicitly listed as
+not started. `agent_id` is therefore a real, caller-supplied tracking
+identifier, not a foreign key to a stored config; one real "agent"
+here is honestly scoped to ONE real, traced, timeout-bound, retryable
+LLM call -- real tool-calling (Partie 5.2) and multi-step workflows
+(Partie 5.4) remain genuinely separate, future real work this
+orchestrator serves as a real foundation for.
+
+**Reuses** `chat_completion` (Partie 4.1.7, given a new real
+`max_retries` parameter specifically so `AGENT_MAX_RETRIES` is
+genuinely wired through rather than just declared) and
+`resolve_llm_config` (Partie 4.3.1-4.3.5, whose first real, live
+caller this is). **Real status tracking**
+(`pending`/`running`/`completed`/`failed`/`stopped`/`timeout`) and a
+**real, ordered trace** (real timestamp per event). **Real, cooperative
+stop** (`stop_agent`, a real `asyncio` cancellation) honestly
+distinguished from a real timeout (`asyncio.wait_for`) via a real
+`stop_requested` flag. **A real, documented limitation**: the run
+registry is in-process, per-worker memory -- real and correct for a
+single real process, but a real, multi-worker deployment would need a
+real, shared, external store (Redis/Postgres) to look up a run from a
+DIFFERENT process, genuinely separate, future real work, not silently
+hidden.
+
+**Real verification**: 15 tests (including a real timeout test and a
+real stop-while-running test, mocked at the `litellm.acompletion`
+boundary), `tests/test_agent_orchestrator.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

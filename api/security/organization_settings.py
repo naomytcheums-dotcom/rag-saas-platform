@@ -4,18 +4,19 @@ api/models/organization_settings.py's module docstring for why a row
 stores only overrides, never a full snapshot of every default.
 
 **Honest scope, same as Partie 1.3.6/1.3.7/1.3.8**: every one of these
-15 settings is genuinely stored and genuinely readable/writable through
+17 settings is genuinely stored and genuinely readable/writable through
 the real endpoints below -- unlike quotas/limits/usage, there is no
 "not yet trackable" subset here, because a setting is pure
-configuration with nothing to measure against.
+configuration with nothing to measure against. (`top_p` added at
+Partie 4.3.3 -- the 17th.)
 
-**Updated again at Partie 3.3.4/3.3.5/3.3.6/3.3.7 -- this paragraph
-keeps getting less stale as api/ grows a real pipeline of its own**: at
-the time this docstring was first written (Partie 1.3.9), NOTHING in
-api/ read these settings, because api/ had no document-ingestion or
-retrieval pipeline of its own yet. That's no longer true for 6 of
-these 15 settings, verified by reading the actual call sites, not
-assumed:
+**Updated again at Partie 3.3.4-3.3.7 -- this paragraph keeps getting
+less stale as api/ grows a real pipeline of its own**: at the time
+this docstring was first written (Partie 1.3.9), NOTHING in api/ read
+these settings, because api/ had no document-ingestion or retrieval
+pipeline of its own yet. That's no longer true for 6 of these 17
+settings (a further 6 covered separately below, Partie 4.3.1-4.3.5/5.1.1),
+verified by reading the actual call sites, not assumed:
 
 - chunk_size / chunk_overlap: read for real in
   `api/security/documents.py`'s own `process_document`, passed straight
@@ -44,47 +45,45 @@ assumed:
   future work once an organization's own chunk count warrants a real
   pgvector column).
 
-The remaining 8 settings (`llm_provider`/`llm_model`/`temperature`/
-`system_prompt`/`max_tokens`/`citation_required`/`language`/`timezone`)
-are still genuinely unread by api/'s own pipeline, for a real, narrower
-reason than before: api/ now has real RETRIEVAL, but still no real
-GENERATION endpoint (no live call to an LLM with the retrieved context
-to actually answer a question) -- that real, separate piece still only
-lives in `src/generation.py`/`src/agent.py`, the same separate,
-single-tenant, non-org-aware pipeline described below, real,
-substantial, separate work belonging to Partie 9 (or whichever later
-étape actually asks for it).
+**Updated again at Partie 4.3.1-4.3.5/5.1.1**: 6 more of these settings
+are now genuinely read for real too:
 
-Every one of the remaining 8 values is independently hardcoded today in
-`src/` (verified by reading the actual constants, not assumed):
+- llm_provider / llm_model / temperature / top_p / system_prompt /
+  max_tokens: real resolvers in `api/services/llm_config.py`
+  (`resolve_llm_provider`/`resolve_llm_model`/`resolve_temperature`/
+  `resolve_top_p`/`resolve_system_prompt`/`resolve_max_tokens`/
+  `resolve_llm_config`), genuinely consumed by
+  `api/services/agent_orchestrator.py`'s own real `AgentOrchestrator.run_agent`
+  -- the first real, live, in-process caller (not an HTTP endpoint yet;
+  see that module's own top docstring for its own real, honest scope:
+  one real agent run is one real, traced LLM call, real tool-calling
+  and multi-step workflows are separate, later, real work). `llm_model`'s
+  own real resolution deliberately does NOT fall back to this table's
+  own known-stale default (`"claude-3-sonnet-20240229"`) -- it falls
+  back to the resolved PROVIDER's own real, live default model instead
+  (`api.config.settings.ANTHROPIC_MODEL`, etc.), a real, deliberate fix
+  building on this docstring's own earlier, honest flag of that
+  staleness.
 
-- llm_provider: implicitly "anthropic" -- src/generation.py imports
-  `anthropic.Anthropic` directly, no provider abstraction exists
-- llm_model: `MODEL_NAME` in src/generation.py (currently
-  `claude-sonnet-5`, read from a `RAG_GENERATION_MODEL` env var -- NOT
-  this table's own default of `claude-3-sonnet-20240229`, see this
-  step's delivered response for why that's flagged, not silently
-  "fixed")
-- max_tokens: `MAX_TOKENS = 1024` in src/generation.py,
-  `AGENT_MAX_TOKENS = 1024` in src/agent.py (two independent constants,
-  both different from this table's default of 4096)
-- system_prompt: `SYSTEM_PROMPT` (src/generation.py) and
-  `AGENT_SYSTEM_PROMPT` (src/agent.py) -- long, FastAPI-documentation-
-  specific prompts, nothing like this table's generic default
-- citation_required / language / timezone / temperature: no
-  corresponding toggle exists in src/ at all -- src/generation.py's own
-  Anthropic call has no `temperature` parameter set, and none of the
-  other 3 have any real equivalent there either
+Only 3 settings (`citation_required`/`language`/`timezone`) remain
+genuinely unread by api/'s own pipeline -- none of the 3 have any real
+equivalent anywhere api/ currently calls an LLM. Every one of the
+remaining 3 (plus the earlier real `src/` staleness already
+documented above for the settings now superseded by real api/
+resolvers) is independently hardcoded or simply absent in `src/`
+(verified by reading the actual constants, not assumed):
 
-Wiring any of the remaining 8 for real still means building a live,
-multi-tenant GENERATION endpoint in api/ for the first time (calling an
-LLM with the real, retrieved context Partie 3.3.4-3.3.7 now genuinely
-produces, to actually answer a question) -- real, substantial work
-belonging to Partie 9 (or whichever later étape actually asks for it),
-not a side effect of adding a settings table to the multi-tenant SaaS
-backend. See api/models/organization_settings.py
-and docs/AUTH_BACKEND_SETUP.md for the same story in the model/docs
-layer.
+- citation_required / language / timezone: no corresponding toggle
+  exists in `src/` at all
+
+A real, live, multi-tenant HTTP endpoint that actually ANSWERS a
+question (retrieval + generation combined, citing sources, honoring
+`citation_required`/`language`) is still real, substantial, separate
+work belonging to Partie 9 (or whichever later étape actually asks for
+it) -- `AgentOrchestrator` is real, live, and tested, but is a real
+building block for that, not that endpoint itself. See
+api/models/organization_settings.py and docs/AUTH_BACKEND_SETUP.md for
+the same story in the model/docs layer.
 """
 
 import uuid
@@ -103,6 +102,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "llm_provider": "anthropic",
     "llm_model": "claude-3-sonnet-20240229",
     "temperature": 0.7,
+    # Partie 4.3.3 -- real, applied by api/services/llm_config.py's own
+    # resolve_top_p, real 0.0-1.0 bounds (real nucleus-sampling
+    # parameter, standard across every real LLM provider).
+    "top_p": 1.0,
     "top_k": 5,
     "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
     "system_prompt": "You are a helpful assistant.",

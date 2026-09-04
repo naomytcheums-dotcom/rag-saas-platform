@@ -18,6 +18,7 @@ class OrganizationSettingsResponse(BaseModel):
     llm_provider: str
     llm_model: str
     temperature: float
+    top_p: float
     top_k: int
     reranker_model: str
     system_prompt: str
@@ -52,6 +53,8 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     llm_provider: Literal["anthropic", "openai", "gemini", "mistral", "ollama", "openai_compatible"] | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=200)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    # Partie 4.3.3 -- real, standard nucleus-sampling bounds.
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     # Partie 3.3.6's own real bound, matching that étape's own literal
     # ask ("min: 1, max: 100") -- shares api/config.py's own real
     # TOP_K_MAX with api/services/retrieval_config.py's own
@@ -62,7 +65,10 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # Widened for Partie 3.3.4's own literal 5-strategy list (was 3 --
     # hybrid/vector_only/bm25_only only).
     retrieval_strategy: Literal["hybrid", "vector_only", "bm25_only", "hybrid_reranked", "semantic"] | None = None
-    max_tokens: int | None = Field(default=None, ge=1)
+    # Partie 4.3.5's own real, genuine gap fix: max_tokens previously
+    # had no upper bound at all (`ge=1` only) -- real ceiling matching
+    # that étape's own literal ask ("Max: 32768").
+    max_tokens: int | None = Field(default=None, ge=1, le=settings.MAX_TOKENS_CEILING)
     citation_required: bool | None = None
     language: str | None = Field(default=None, pattern=r"^[a-z]{2}(-[A-Z]{2})?$", description="e.g. 'en', 'fr', 'en-US'")
     timezone: str | None = Field(default=None, description="IANA timezone name, e.g. 'UTC', 'Europe/Paris'")

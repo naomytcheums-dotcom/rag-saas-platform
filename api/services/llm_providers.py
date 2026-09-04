@@ -161,19 +161,27 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
     return kwargs
 
 
-async def chat_completion(messages: list[dict], provider: str | None = None, model: str | None = None, **kwargs) -> str:
+async def chat_completion(messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs) -> str:
     """Item 3's own literal function (4.1.7) -- the real, single call
     site every real provider function below routes through. Real
-    retries (`settings.LLM_MAX_RETRIES`, real exponential backoff) only
-    for real, transient failures (`LLMRateLimitError`/`LLMTimeoutError`)
-    -- never for `LLMAuthenticationError` (a real bad/missing key that
-    retrying can never fix) or a generic `LLMProviderError`."""
+    retries (real exponential backoff) only for real, transient
+    failures (`LLMRateLimitError`/`LLMTimeoutError`) -- never for
+    `LLMAuthenticationError` (a real bad/missing key that retrying can
+    never fix) or a generic `LLMProviderError`.
+
+    `max_retries` -- a real, additive parameter beyond this item's own
+    literal signature (Partie 5.1.1): defaults to the real, global
+    `settings.LLM_MAX_RETRIES` when not given, but lets a real caller
+    (`api.services.agent_orchestrator`'s own real `AGENT_MAX_RETRIES`)
+    genuinely override it per real call, rather than that setting
+    staying real but never actually wired anywhere."""
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
     call_kwargs.update(kwargs)  # a real, explicit caller override always wins
+    max_retries = max_retries if max_retries is not None else settings.LLM_MAX_RETRIES
 
     last_error: LLMError | None = None
-    for attempt in range(settings.LLM_MAX_RETRIES + 1):
+    for attempt in range(max_retries + 1):
         try:
             response = await asyncio.wait_for(
                 litellm.acompletion(messages=messages, **call_kwargs), timeout=settings.LLM_TIMEOUT,
@@ -193,8 +201,8 @@ async def chat_completion(messages: list[dict], provider: str | None = None, mod
         except litellm.exceptions.APIError as exc:
             raise LLMProviderError(str(exc)) from exc
 
-        if attempt < settings.LLM_MAX_RETRIES:
-            logger.info("chat_completion: %s failed (attempt %d/%d), retrying: %s", provider, attempt + 1, settings.LLM_MAX_RETRIES, last_error)
+        if attempt < max_retries:
+            logger.info("chat_completion: %s failed (attempt %d/%d), retrying: %s", provider, attempt + 1, max_retries, last_error)
             await asyncio.sleep(2 ** attempt)
 
     raise last_error

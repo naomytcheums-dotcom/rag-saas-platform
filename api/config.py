@@ -593,6 +593,11 @@ class Settings(BaseSettings):
     SYSTEM_PROMPT_MAX_LENGTH: int = 1000
     MAX_TOKENS_CEILING: int = 32768
 
+    # -- Agent orchestrator (Partie 5.1.1) -------------------------------------
+    AGENT_TIMEOUT: int = 60
+    AGENT_MAX_RETRIES: int = 3
+    AGENT_MAX_TOKENS: int = 4096
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

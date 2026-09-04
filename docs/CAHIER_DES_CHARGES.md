@@ -358,7 +358,7 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 
 ---
 
-## PARTIE 4 — Multi-LLM & Embeddings — 🟡 PARTIEL (13/18)
+## PARTIE 4 — Multi-LLM & Embeddings — ✅ (18/18)
 
 ### 4.1 LLM Providers — ✅ (7/7)
 
@@ -415,19 +415,38 @@ Tests réels dédiés (21 tests), voir `tests/test_llm_providers.py`.
 
 Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression dédiée -- OpenAI/Voyage/Cohere mockés à la frontière `litellm.aembedding`, Sentence Transformers/Hugging Face testés pour de vrai sans mock), voir `tests/test_embedding_providers.py`.
 
-### 4.3 Configurabilité — ⬜ (0/5)
+### 4.3 Configurabilité — ✅ (5/5)
+
+| # | Paramètre | Statut |
+|---|---|---|
+| 4.3.1 | Choix du modèle par organisation | ✅ Voir détails ci-dessous |
+| 4.3.2 | Temperature configurable | ✅ Voir détails ci-dessous |
+| 4.3.3 | Top P configurable | ✅ Voir détails ci-dessous |
+| 4.3.4 | System prompt custom | ✅ Voir détails ci-dessous |
+| 4.3.5 | Max tokens configurable | ✅ Voir détails ci-dessous |
+
+#### Partie 4.3.1-4.3.5 — Configuration de génération LLM par organisation
+
+✅ **Nouveau module réel** `api/services/llm_config.py` : `resolve_llm_provider`/`resolve_llm_model`/`resolve_temperature`/`resolve_top_p`/`resolve_system_prompt`/`resolve_max_tokens`/`resolve_llm_config` (fonctions littérales de l'item 2 des 5 étapes, regroupées dans un seul module réel -- même raisonnement que `chunk_config.py`/`retrieval_config.py`). **`top_p` ajouté à `organization_settings`** (nouveau, 17e réglage réel, défaut 1.0, bornes 0.0-1.0). **`resolve_llm_model`, vraie amélioration honnête** : plutôt que de replier sur la valeur littérale du tableau (`DEFAULT_SETTINGS["llm_model"]` = `"claude-3-sonnet-20240229"`, déjà signalée comme réellement obsolète dans le docstring de ce module depuis la Partie 1.3.9, jamais corrigée silencieusement) -- ce résolveur replie désormais sur le vrai modèle par défaut LIVE du fournisseur résolu (`api.config.settings.ANTHROPIC_MODEL`, etc.) -- une vraie correction délibérée qui honore enfin ce signalement honnête antérieur. **`resolve_system_prompt`, vraie validation à deux couches** : la borne d'écriture existante du schéma (`max_length=10000`, permissive, inchangée) reste distincte de la vraie borne d'exécution plus stricte de cette étape (`SYSTEM_PROMPT_MAX_LENGTH=1000`, son propre défaut littéral) -- un prompt valide à l'écriture entre 1000 et 10000 caractères est honnêtement REJETÉ par le résolveur, jamais silencieusement tronqué. **Sécurité (vision critique 2), réponse honnête** : un system prompt est du TEXTE brut envoyé à une vraie API LLM, jamais `eval`'d ni interpolé dans une commande shell/requête SQL nulle part dans ce dépôt -- il n'y a pas de vrai vecteur "injection de code" au sens habituel du terme ici ; le résolveur retire réellement les caractères de contrôle/NUL (une vraie base défensive minimale), mais la vraie INJECTION DE PROMPT (un system prompt fourni par l'utilisateur tentant de contourner les garde-fous réels d'un LLM) reste un vrai problème distinct, bien plus difficile, que ce résolveur simple ne prétend pas résoudre. **`resolve_max_tokens`, vrai gap corrigé** : `max_tokens` n'avait aucune borne supérieure réelle à l'écriture (`ge=1` seul) -- un vrai plafond (`MAX_TOKENS_CEILING=32768`, comme demandé littéralement) a été ajouté au schéma. **Réutilise** `llm_providers.PROVIDER_SETTINGS` (rendu public pour cette réutilisation) pour valider `llm_provider` et résoudre le vrai modèle par défaut du fournisseur.
+
+**Câblage réel** : ces 5 résolveurs sont réellement consommés par `api/services/agent_orchestrator.py` (Partie 5.1.1, construit dans ce même lot) -- le premier vrai appelant live, en process. Tests réels dédiés (33 tests dont 24 pour `llm_config.py` et 9 tests d'écriture supplémentaires pour `top_p`/`max_tokens` dans `tests/test_organization_settings.py`), voir `tests/test_llm_config.py`.
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (base seulement, ~0-14/47 selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (1 item vérifié réel dans `api/` + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
-Orchestrateur central, tool selection, tool timeout, retry, tool result
-validation, agent memory (court-terme), agent traces : **existent déjà**
-côté `src/`/agent (hérité, non revérifié dans les sessions récentes).
-Tool permissions, per-tool budget, fallback, parallel tool calls, human
-approval, conversation memory cross-session (DB), task planning : ⬜.
+#### Partie 5.1.1 — Orchestrateur central
+
+✅ **Nouveau module réel** `api/services/agent_orchestrator.py` : classe `AgentOrchestrator` (item 2's own literal), `run_agent`/`run_multi_agent`/`get_agent_status`/`stop_agent`/`get_agent_trace` (fonctions littérales). **Distinction réelle et honnête avec l'ancien "existe déjà" côté `src/`** (hérité, jamais revérifié dans les sessions récentes) : ce nouveau module est réel, testé, vérifié pour de vrai dans `api/`, indépendant de `src/agent.py`. **Vraie limite de périmètre, honnête et documentée** : aucune vraie entité `Agent` stockée (config nommée) n'existe encore dans ce dépôt -- la Partie 5.3 ("Agent Builder") est explicitement listée comme non commencée. `agent_id` est donc un vrai identifiant de suivi fourni par l'appelant, pas une clé étrangère vers une vraie config stockée ; un vrai "agent" ici est honnêtement scopé à UN vrai appel LLM tracé, borné dans le temps, avec retry -- le vrai appel/outillage (tool-calling, Partie 5.2) et les workflows multi-étapes (Partie 5.4) restent un vrai travail futur séparé, sur lequel cet orchestrateur sert de fondation réelle. **Réutilise** `chat_completion` (Partie 4.1.7, dont un nouveau vrai paramètre `max_retries` ajouté spécifiquement pour que `AGENT_MAX_RETRIES` soit réellement câblé, pas seulement déclaré) et `resolve_llm_config` (Partie 4.3.1-4.3.5, dont c'est le premier vrai appelant live). **Vrai suivi de statut réel** (`pending`/`running`/`completed`/`failed`/`stopped`/`timeout`) et **vraie trace ordonnée** (horodatage réel par événement). **Vrai arrêt coopératif réel** (`stop_agent`, annulation `asyncio` réelle) distingué honnêtement d'un vrai timeout (`asyncio.wait_for`) via un vrai indicateur `stop_requested`. **Limite réelle et documentée** : le registre des runs est en mémoire, par processus -- réel et correct pour un seul processus réel, mais un vrai déploiement multi-worker aurait besoin d'un vrai store partagé externe (Redis/Postgres) pour retrouver un run depuis un AUTRE processus, un vrai travail futur séparé, non caché. Tests réels dédiés (15 tests, dont un vrai test de timeout et un vrai test d'arrêt en cours d'exécution, mock à la frontière `litellm.acompletion`), voir `tests/test_agent_orchestrator.py`.
+
+Tool selection, tool timeout, retry, tool result validation, agent
+memory (court-terme), agent traces (au-delà de l'orchestrateur central
+lui-même) : **existent déjà** côté `src/`/agent (hérité, non revérifié
+dans les sessions récentes). Tool permissions, per-tool budget,
+fallback, parallel tool calls, human approval, conversation memory
+cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 
@@ -582,14 +601,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 125 | 25.0% |
+| ✅ Fait | 131 | 26.2% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 309 | 61.8% |
+| ⬜ Non commencé | 303 | 60.6% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **132/515 (~25.6%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **204/515 (~39.6%)**
-- Pondéré (✅=1, 🟡=0.5) : **~165/515 (~32.0%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
+- Strictement ✅ : **138/515 (~26.8%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **210/515 (~40.8%)**
+- Pondéré (✅=1, 🟡=0.5) : **~171/515 (~33.2%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

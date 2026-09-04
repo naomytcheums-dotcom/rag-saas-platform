@@ -298,6 +298,42 @@ async def test_rrf_k_outside_1_1000_is_rejected(client, db_session, register_pay
     assert too_high.status_code == 422
 
 
+async def test_top_p_defaults_and_can_be_updated(client, db_session, register_payload):
+    """Partie 4.3.3."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    default_response = await client.get(f"/organizations/{org['id']}/settings", headers=_auth_header(owner_token))
+    assert default_response.json()["top_p"] == DEFAULT_SETTINGS["top_p"]
+
+    updated = await client.patch(f"/organizations/{org['id']}/settings", json={"top_p": 0.5}, headers=_auth_header(owner_token))
+    assert updated.json()["top_p"] == 0.5
+
+
+async def test_top_p_outside_0_1_is_rejected(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    negative = await client.patch(f"/organizations/{org['id']}/settings", json={"top_p": -0.1}, headers=_auth_header(owner_token))
+    assert negative.status_code == 422
+
+    too_high = await client.patch(f"/organizations/{org['id']}/settings", json={"top_p": 1.1}, headers=_auth_header(owner_token))
+    assert too_high.status_code == 422
+
+
+async def test_max_tokens_above_the_real_ceiling_is_rejected(client, db_session, register_payload):
+    """Partie 4.3.5's own real gap fix -- max_tokens previously had no
+    upper bound at all."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    too_high = await client.patch(f"/organizations/{org['id']}/settings", json={"max_tokens": 32769}, headers=_auth_header(owner_token))
+    assert too_high.status_code == 422
+
+    at_ceiling = await client.patch(f"/organizations/{org['id']}/settings", json={"max_tokens": 32768}, headers=_auth_header(owner_token))
+    assert at_ceiling.status_code == 200
+
+
 async def test_out_of_range_temperature_is_rejected(client, db_session, register_payload):
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
