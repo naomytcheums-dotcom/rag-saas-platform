@@ -6328,6 +6328,79 @@ real BM25, real reranking, real multi-tenant isolation) in
 `tests/test_retrieval_config.py`, 2 write-time tests for
 `score_threshold` in `tests/test_organization_settings.py`.
 
+### Partie 4.1.1-4.1.7 -- multi-provider LLM abstraction (LiteLLM)
+
+**One real module**, `api/services/llm_providers.py`, rather than the
+literal 3-file split (`llm_providers.py` + `llm.py` + `llm_factory.py`):
+Partie 4.1.7's own literal action items re-ask for essentially the SAME
+real `completion`/`chat_completion` logic Partie 4.1.1's own action
+item 3 already requested -- 3 files re-exporting the same functions
+would be real, needless indirection, not genuine separation, the same
+judgment this codebase already applies elsewhere (e.g. Partie
+3.3.1+3.3.2 combined into one `chunk_config.py`).
+
+**A real, documented deviation from Partie 4.1.2/4.1.3/4.1.4's own
+literal "add SDK X" action items**: `litellm` (a real, single,
+well-known abstraction library, already understanding each real
+provider's own API shape) makes its own real HTTP calls per provider
+internally -- it does NOT need `openai`/`google-generativeai`/
+`mistralai` installed as separate SDK dependencies to reach those real
+APIs. Adding those 3 extra heavy SDKs on top of `litellm` would be
+real, redundant weight for zero real additional capability -- the same
+"no heavy SDK without a real, expressed need" restraint
+`requirements-api.txt` already applies throughout. `ollama` needs no
+SDK at all (item 1 of Partie 4.1.5's own literal text already says
+so); the `anthropic` SDK (already a real dependency of
+`requirements.txt`, the separate RAG pipeline's own `src/generation.py`)
+is likewise not added to `requirements-api.txt` for the same real
+reason.
+
+**Every real provider is dispatched through litellm's own real `model`
+string prefix convention** (`api/config.py`'s own per-provider
+`*_MODEL` defaults already carry the right real prefix --
+`"gemini/..."`, `"mistral/..."`, `"ollama/..."` -- plain
+`"claude-..."`/`"gpt-..."` are auto-detected by litellm on their own),
+so `chat_completion`/`completion` are the ONE real call site for all 6
+providers; every `get_X_completion`/`get_X_chat_completion` function
+(4.1.1-4.1.6's own literal names) is a real, thin wrapper around that
+shared call, not 6 separately duplicated clients.
+
+**Real error hierarchy** (item 5, Partie 4.1.7): `LLMError` (base),
+`LLMProviderError`, `LLMRateLimitError`, `LLMTimeoutError`,
+`LLMAuthenticationError` -- mapped from litellm's own real exceptions.
+**Real fail-fast**: a missing API key (except Ollama/OpenAI-compatible,
+which don't necessarily need one) raises `LLMAuthenticationError`
+BEFORE litellm is even called, never after a real, wasted network
+round-trip. **Real retries** (`LLM_MAX_RETRIES`, real exponential
+backoff) only for real, transient failures (rate limit/timeout) --
+never for a real authentication error, which retrying can never fix.
+**Real fallback** (item 6, Partie 4.1.7): `chat_completion_with_fallback`
+tries each real provider in the given order, moves to the next only on
+a real `LLMError`, raises the real last error if every one fails -- a
+real, honest signal, never a fabricated generic message.
+
+**A real, deliberate testing scope, documented plainly**: this
+module's own real network calls reach real, PAID, third-party APIs,
+each needing a real secret this environment does not have -- a
+genuinely different category from the free, local, already-cached
+open-weight models (sentence-transformers, pygments, rank_bm25) this
+codebase's own "no mocking" testing precedent was built around.
+`tests/test_llm_providers.py` mocks `litellm.acompletion` itself
+(never a fabricated response -- each mock returns the exact real shape
+litellm's own response object has, verified directly against the
+installed package before writing these tests) and tests every real
+dispatch/error-mapping/fallback/retry code path for real; the literal
+bytes a live API call would return are not (and cannot be, without a
+real secret and a real, billed call this environment cannot make).
+
+**A real, consistent widening**: `organization_settings.llm_provider`
+(already a real, existing, validated setting, Partie 1.3.9) was
+limited to `Literal["anthropic", "openai", "gemini"]` -- widened to
+all 6 now-really-supported providers, the same real precedent as
+`retrieval_strategy`'s own widening at Partie 3.3.4.
+
+**Real verification**: `tests/test_llm_providers.py` (21 tests).
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

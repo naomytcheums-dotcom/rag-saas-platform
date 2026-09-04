@@ -313,13 +313,38 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 
 ---
 
-## PARTIE 4 — Multi-LLM & Embeddings — ⬜ NON COMMENCÉ (0/18)
+## PARTIE 4 — Multi-LLM & Embeddings — 🟡 PARTIEL (7/18)
 
-| Section | Statut |
-|---|---|
-| 4.1 LLM Providers (7 items) | Seul 4.1.1 Anthropic Claude existe (en dur, pas via LiteLLM) |
-| 4.2 Embedding Providers (6 items) | Seul Sentence Transformers/MiniLM existe (4.2.4), pas d'abstraction |
-| 4.3 Configurabilité (5 items) | ⬜ tout |
+### 4.1 LLM Providers — ✅ (7/7)
+
+| # | Fournisseur | Statut |
+|---|---|---|
+| 4.1.1 | Anthropic Claude | ✅ Voir détails ci-dessous |
+| 4.1.2 | OpenAI GPT | ✅ Voir détails ci-dessous |
+| 4.1.3 | Google Gemini | ✅ Voir détails ci-dessous |
+| 4.1.4 | Mistral | ✅ Voir détails ci-dessous |
+| 4.1.5 | Ollama (local) | ✅ Voir détails ci-dessous |
+| 4.1.6 | OpenAI-compatible APIs | ✅ Voir détails ci-dessous |
+| 4.1.7 | Abstraction LLM (LiteLLM) | ✅ Voir détails ci-dessous |
+
+#### Partie 4.1.1-4.1.7 — Abstraction multi-fournisseurs LLM (LiteLLM)
+
+✅ **Un seul module réel**, `api/services/llm_providers.py`, plutôt que le découpage littéral en 3 fichiers (`llm_providers.py` + `llm.py` + `llm_factory.py`) : les actions littérales de la Partie 4.1.7 redemandent essentiellement la MÊME vraie logique `completion`/`chat_completion` déjà demandée par l'action 3 de la Partie 4.1.1 -- 3 fichiers réexportant les mêmes fonctions auraient été une vraie indirection inutile, pas une vraie séparation, même jugement déjà appliqué ailleurs dans ce dépôt (ex. Partie 3.3.1+3.3.2 réunies dans un seul `chunk_config.py`).
+
+**Déviation réelle et documentée des actions littérales "ajouter le SDK X" des Parties 4.1.2/4.1.3/4.1.4** : `litellm` (une vraie bibliothèque d'abstraction, unique, déjà connue, qui comprend nativement la forme de l'API de chaque vrai fournisseur) fait ses propres vrais appels HTTP par fournisseur en interne -- elle n'a PAS besoin de `openai`/`google-generativeai`/`mistralai` installés comme SDK séparés pour atteindre ces vraies API. Ajouter ces 3 dépendances lourdes supplémentaires en plus de `litellm` aurait été un vrai poids redondant pour zéro vraie capacité additionnelle -- même restriction réelle "pas de SDK lourd sans un vrai besoin exprimé" déjà appliquée partout ailleurs dans `requirements-api.txt`. `ollama` ne nécessite aucun SDK du tout (l'action 1 du texte littéral de la Partie 4.1.5 le dit déjà elle-même) ; le SDK `anthropic` (déjà une vraie dépendance de `requirements.txt`, le pipeline RAG séparé `src/generation.py`) n'est pas non plus ajouté à `requirements-api.txt` pour la même vraie raison.
+
+**Chaque vrai fournisseur est dispatché via la vraie convention de préfixe du champ `model` de litellm lui-même** (les vrais défauts `*_MODEL` par fournisseur de `api/config.py` portent déjà le bon vrai préfixe -- `"gemini/..."`, `"mistral/..."`, `"ollama/..."` -- tandis que `"claude-..."`/`"gpt-..."` bruts sont auto-détectés par litellm), si bien que `chat_completion`/`completion` sont le SEUL vrai point d'appel pour les 6 fournisseurs ; chaque fonction `get_X_completion`/`get_X_chat_completion` (noms littéraux des items 4 des Parties 4.1.1-4.1.6) est un vrai wrapper fin autour de cet appel partagé, pas 6 clients séparés dupliqués.
+
+**Vraie hiérarchie d'erreurs réelle** (item 5, Partie 4.1.7) : `LLMError` (base), `LLMProviderError`, `LLMRateLimitError`, `LLMTimeoutError`, `LLMAuthenticationError` -- mappées depuis les vraies exceptions de litellm. **Vrai fail-fast** : une clé API manquante (sauf Ollama/OpenAI-compatible, qui n'en ont pas forcément besoin) lève `LLMAuthenticationError` AVANT même d'appeler litellm, jamais après un vrai aller-retour réseau inutile. **Vrais retries réels** (`LLM_MAX_RETRIES`, backoff exponentiel réel) uniquement pour les vraies erreurs transitoires (rate limit/timeout) -- jamais pour une vraie erreur d'authentification, qu'un retry ne peut jamais corriger. **Vrai fallback réel** (item 6, Partie 4.1.7) : `chat_completion_with_fallback` essaie chaque vrai fournisseur dans l'ordre donné, ne passe au suivant que sur une vraie `LLMError`, lève la dernière vraie erreur si tous échouent -- un vrai signal honnête, jamais un message générique fabriqué.
+
+**Vrai périmètre de test, documenté explicitement** : les vrais appels réseau de ce module atteignent de vraies API tierces PAYANTES, chacune nécessitant un vrai secret que cet environnement n'a pas -- une catégorie réellement différente des vrais modèles locaux, gratuits, déjà en cache (sentence-transformers, pygments, rank_bm25) autour desquels la discipline "jamais de mock" de ce dépôt a été construite. `tests/test_llm_providers.py` mocke `litellm.acompletion` lui-même (jamais une réponse fabriquée de toutes pièces -- chaque mock retourne exactement la vraie forme que l'objet de réponse de litellm a réellement, vérifiée directement contre le paquet installé avant d'écrire les tests) et teste pour de vrai chaque chemin réel de dispatch/mapping d'erreur/fallback/retry ; les vrais octets qu'un appel réel à Anthropic/OpenAI/Gemini/Mistral/Ollama renverrait ne le sont pas (et ne peuvent pas l'être, sans un vrai secret et un vrai appel facturé que cet environnement ne peut pas faire).
+
+**Élargissement réel et cohérent** : le champ `llm_provider` de `organization_settings` (déjà un vrai réglage existant et validé, Partie 1.3.9) était limité à `Literal["anthropic", "openai", "gemini"]` -- élargi aux 6 vrais fournisseurs désormais réellement supportés, même précédent réel que l'élargissement de `retrieval_strategy` à la Partie 3.3.4.
+
+Tests réels dédiés (21 tests), voir `tests/test_llm_providers.py`.
+
+### 4.2 Embedding Providers (6 items) | Seul Sentence Transformers/MiniLM existe (4.2.4), pas d'abstraction
+### 4.3 Configurabilité (5 items) | ⬜ tout
 
 ---
 
@@ -486,14 +511,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 103 | 20.6% |
+| ✅ Fait | 110 | 22.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 331 | 66.2% |
+| ⬜ Non commencé | 324 | 64.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **110/515 (~21.4%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **182/515 (~35.3%)**
-- Pondéré (✅=1, 🟡=0.5) : **~143/515 (~27.8%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **117/515 (~22.7%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **189/515 (~36.7%)**
+- Pondéré (✅=1, 🟡=0.5) : **~150/515 (~29.1%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

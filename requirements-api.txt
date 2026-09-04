@@ -318,6 +318,20 @@ pygments==2.21.0
 # expressed need" restraint as every prior import step's own library
 # choice (no Playwright, no git clone, no Search API).
 
+# -- Multi-provider LLM abstraction (Partie 4.1.1-4.1.7) -----------------------
+# A single real library covering all 6 real providers this batch of
+# étapes asks for (Anthropic, OpenAI, Gemini, Mistral, Ollama, any
+# OpenAI-compatible endpoint) -- litellm makes its own real HTTP calls
+# per provider internally, so it deliberately does NOT need
+# google-generativeai/mistralai/openai as SEPARATE SDK dependencies
+# each individual étape's own literal text names; the SAME "no heavy
+# SDK without a real, expressed need" restraint every other import step
+# in this file already applies (see e.g. the Google Drive section
+# above). `anthropic` (already a real dependency of requirements.txt,
+# the RAG pipeline's own src/generation.py) is likewise not needed here
+# for the same real reason.
+litellm==1.99.0
+
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0

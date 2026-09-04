@@ -465,6 +465,59 @@ class Settings(BaseSettings):
     TOP_K_MAX: int = 100
     RERANKER_MAX_TOKENS: int = 512
 
+    # -- Multi-provider LLM abstraction (Partie 4.1.1-4.1.7) -----------------
+    # See api/services/llm_providers.py's own top docstring for the real
+    # design: one shared `litellm` call per real provider, not 6
+    # separately hand-written HTTP clients. Every `*_API_KEY` defaults
+    # to "" (never committed, never required at import time) -- a real,
+    # missing key surfaces as a real LLMAuthenticationError at CALL
+    # time, not a crash at startup.
+    LLM_DEFAULT_PROVIDER: str = "anthropic"
+    LLM_DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
+    LLM_TIMEOUT: int = 60
+    LLM_MAX_RETRIES: int = 3
+
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MAX_TOKENS: int = 4096
+    ANTHROPIC_TEMPERATURE: float = 0.7
+
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MAX_TOKENS: int = 4096
+    OPENAI_TEMPERATURE: float = 0.7
+
+    # Real litellm own naming convention: a bare model name is resolved
+    # against Google's own "Gemini API" backend when prefixed
+    # "gemini/" -- baked into the real default itself rather than a
+    # separate real prefixing function.
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini/gemini-1.5-pro"
+    GEMINI_MAX_TOKENS: int = 4096
+    GEMINI_TEMPERATURE: float = 0.7
+
+    MISTRAL_API_KEY: str = ""
+    MISTRAL_MODEL: str = "mistral/mistral-small-latest"
+    MISTRAL_MAX_TOKENS: int = 4096
+    MISTRAL_TEMPERATURE: float = 0.7
+
+    # No real API key -- a real, local server. `ollama` is supported
+    # natively by litellm (real, item 1's own literal note, no extra
+    # SDK dependency).
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "ollama/llama3.1"
+    OLLAMA_MAX_TOKENS: int = 4096
+    OLLAMA_TEMPERATURE: float = 0.7
+
+    # Any real, generic OpenAI-compatible endpoint (LocalAI, vLLM, Groq,
+    # etc.) -- real, empty defaults (`base_url` unset means this
+    # provider is simply unavailable, see `get_available_providers`).
+    OPENAI_COMPATIBLE_BASE_URL: str = ""
+    OPENAI_COMPATIBLE_API_KEY: str = ""
+    OPENAI_COMPATIBLE_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_COMPATIBLE_MAX_TOKENS: int = 4096
+    OPENAI_COMPATIBLE_TEMPERATURE: float = 0.7
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

@@ -44,7 +44,11 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     chunk_size: int | None = Field(default=None, ge=1, le=settings.CHUNK_SIZE_MAX_TOKENS, description="Tokens per chunk")
     chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive chunks")
     embedding_model: str | None = Field(default=None, min_length=1, max_length=200)
-    llm_provider: Literal["anthropic", "openai", "gemini"] | None = None
+    # Widened for Partie 4.1.1-4.1.6's own real, now-supported providers
+    # (was 3 -- anthropic/openai/gemini only). See
+    # api/services/llm_providers.py's own top docstring for the real
+    # dispatch behind each of these 6.
+    llm_provider: Literal["anthropic", "openai", "gemini", "mistral", "ollama", "openai_compatible"] | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=200)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     # Partie 3.3.6's own real bound, matching that étape's own literal
