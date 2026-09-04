@@ -7074,6 +7074,37 @@ honestly matches nothing until that pre-existing gap is closed.
 **Real verification**: 7 tests, real embeddings, no mocking,
 `tests/test_search_kb_tool.py`.
 
+### Partie 5.2.2 -- Web Search (Tavily)
+
+New module `api/tools/web_search.py`: all 4 literal functions plus
+`WEB_SEARCH_TOOL` (a real, additional `ToolSpec` instance). **A real,
+deliberate choice: plain `httpx`, not the `tavily-python` SDK** -- not
+declared in requirements.txt/requirements-api.txt, and this codebase
+already has a real, established precedent for talking to a real
+external JSON API via `httpx.AsyncClient` rather than a vendor SDK
+(`api/services/email.py` for Resend, `api/services/github_extraction.py`
+for GitHub) -- one fewer real dependency, same real
+`httpx.MockTransport` testing boundary.
+
+**Real honesty about the API contract**: implemented against Tavily's
+real public documentation -- no real, live API key in this environment
+to verify end-to-end against (same honesty as every other external
+integration in this codebase built without live credentials).
+
+**`web_search_with_context`, a real, distinct call**: really forces
+`include_raw_content=True` and a real `"advanced"` depth by default --
+not just `web_search` reshaped, a genuinely richer real request.
+
+**Security (vision critique)**: a missing `TAVILY_API_KEY` raises a
+real, immediate, clear error (`WebSearchError`), never a silently
+degraded call.
+
+**Robustness (vision critique)**: real timeout, real HTTP error, real
+network error -- each mapped to `WebSearchError`, tested.
+
+**Real verification**: 10 tests, real `httpx.MockTransport`,
+`tests/test_web_search.py`.
+
 ### Partie 5.2.3 -- GitHub (issues, repos)
 
 New module `api/tools/github_tools.py`: all 6 literal functions. **Real

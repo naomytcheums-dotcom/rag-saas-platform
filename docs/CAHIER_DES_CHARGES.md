@@ -664,6 +664,20 @@ Tests réels dédiés (16 tests fonction+endpoint + 1 test d'intégration orches
 
 Tests réels dédiés (7 tests, embeddings réels, pas de mock), voir `tests/test_search_kb_tool.py`.
 
+#### Partie 5.2.2 — Web Search (Tavily)
+
+✅ **Nouveau module réel** `api/tools/web_search.py` : les 4 fonctions littérales + `WEB_SEARCH_TOOL` (instance `ToolSpec` réelle supplémentaire). **Décision réelle et délibérée : `httpx` brut, pas le SDK `tavily-python`** -- non déclaré dans `requirements.txt`/`requirements-api.txt`, et ce dépôt a déjà un vrai précédent établi pour parler à une vraie API JSON externe via `httpx.AsyncClient` plutôt qu'un SDK vendeur (`api/services/email.py` pour Resend, `api/services/github_extraction.py` pour GitHub) -- une dépendance réelle de moins, même vraie frontière de test `httpx.MockTransport`.
+
+**Honnêteté réelle sur le contrat d'API** : implémenté contre la documentation publique réelle de Tavily -- aucune vraie clé API vivante dans cet environnement pour vérifier de bout en bout (même honnêteté que chaque autre intégration externe construite sans identifiants réels dans ce dépôt).
+
+✅ **`web_search_with_context`, un vrai appel distinct** : force réellement `include_raw_content=True` et une vraie profondeur `"advanced"` par défaut -- pas juste `web_search` reformaté, un vrai appel plus riche.
+
+**Sécurité (vision critique)** : `TAVILY_API_KEY` manquante lève une vraie erreur claire et immédiate (`WebSearchError`), jamais un appel silencieusement dégradé.
+
+**Robustesse (vision critique)** : timeout réel, erreur HTTP réelle, erreur réseau réelle -- chacune mappée sur `WebSearchError`, testé.
+
+Tests réels dédiés (10 tests, `httpx.MockTransport` réel), voir `tests/test_web_search.py`.
+
 #### Partie 5.2.3 — GitHub (issues, repos)
 
 ✅ **Nouveau module réel** `api/tools/github_tools.py` : les 6 fonctions littérales. **Réutilisation réelle, pas duplication** : `github_get_repo`/`github_list_issues` sont de vrais wrappers fins autour de `api/services/github_extraction.py`'s déjà réels `fetch_github_repo`/`fetch_github_issues` (Partie 2.1.12/2.1.13) -- même vraie logique HTTP, même vraie distinction PR-vs-issue déjà vérifiée contre la vraie API GitHub.
@@ -679,8 +693,8 @@ Tests réels dédiés (7 tests, embeddings réels, pas de mock), voir `tests/tes
 Tests réels dédiés (9 tests, `httpx.MockTransport` réel -- vrai parsing requête/réponse, faux transport réseau, même précédent que `tests/test_github_extraction.py`), voir `tests/test_github_tools.py`.
 
 Human Escalation : existe déjà côté `src/`, non revérifié.
-Web Search (Tavily), Database (SQL), Calculator étendu, URL Reader,
-Calendar complet, Email, Custom Tools (webhooks) : ⬜.
+Database (SQL), Calculator étendu, URL Reader, Calendar complet,
+Email, Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
