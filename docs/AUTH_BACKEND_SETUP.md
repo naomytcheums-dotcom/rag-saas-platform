@@ -4841,6 +4841,129 @@ advancing `last_checked`, 404 for a nonexistent document, a real
 outdated document correctly listed, a never-checked one correctly
 excluded).
 
+### Partie 2.2.14 -- automatic sync of external sources
+
+A new real table, `external_sources` (migration `0042`, RLS enabled
+inline from the start). New model `api/models/external_source.py`
+(`ExternalSourceType`/`ExternalSourceSyncStatus`, fixed vocabularies).
+New module `api/security/external_sources.py` -- CRUD, plus
+`detect_source_changes`/`sync_external_source`/`sync_all_sources`
+(item 2's own literal functions). New Celery tasks,
+`api/tasks/external_source_sync.py`'s `sync_source_task`/
+`sync_all_sources_task`/`sync_all_sources_periodic_task` (item 3's own
+literal Beat task). New, dedicated router,
+`api/routers/external_sources.py` (registered in `api/main.py`
+alongside `documents.router` -- a genuinely distinct resource, not a
+document sub-resource, matching this étape's own literal
+`/organizations/{org_id}/sources`/`/sources/{source_id}` paths, neither
+of which lives under `/documents`).
+
+**The single strongest "reuse the pipeline" answer in this whole
+Partie 2.2 batch**: `sync_external_source` implements ZERO new logic
+for talking to GitHub/Drive/Notion/Confluence/OneDrive -- it dispatches
+by `source_type` directly to the SAME real, unchanged, already-tested
+container-level functions Partie 2.1.12-2.1.18 already built
+(`process_github_repo`/`process_google_drive`/`process_notion_database`/
+`process_confluence_space`/`process_onedrive`), using the
+`ExternalSource`'s own `source_id`/`config` in place of what a live
+HTTP request would otherwise have supplied. `source_id` deliberately
+always means the CONTAINER (a repo URL, a Drive folder id, a Notion
+DATABASE id, a Confluence space key, a OneDrive folder id) -- this
+étape's own literal docstring already says "dossier Drive, base
+Notion, etc.", matching a recurring sync's own real semantics; a
+single standalone page/file (Notion's OWN alternate "page" import kind)
+has no comparable "periodic new content" meaning and stays served,
+unchanged, by the existing single-item import routes.
+
+**Sécurité, a real, deliberate, DOCUMENTED deviation from this étape's
+own literal "config (JSONB)" column**: `config_encrypted`, an OPAQUE
+Fernet-encrypted blob (`api/security/secret_encryption.py`, the SAME
+shared encryption-at-rest this codebase already uses for JWT signing
+keys and enterprise SSO client secrets) stored as `TEXT`, not raw,
+queryable JSONB. Every one of this étape's own 5 real source types
+authenticates via a token/refresh-token this codebase already treats
+as a real secret (`GITHUB_API_TOKEN`/`GOOGLE_DRIVE_REFRESH_TOKEN`/
+`NOTION_API_TOKEN`/`CONFLUENCE_API_TOKEN`/`ONEDRIVE_REFRESH_TOKEN`) --
+treating the WHOLE config blob as sensitive by default is safer than
+trusting every future caller to remember which individual sub-key
+needs encrypting. Confirmed for real: `config` is never echoed back by
+any route response (`ExternalSourceResponse` has no such field at
+all -- write-only).
+
+**A real, honest architectural finding, stated plainly rather than
+silently worked around**: every one of those 5 existing pipelines
+already reads its OWN credential from a single, SERVER-WIDE setting
+(confirmed by reading each one's own real source) -- there is no
+existing, wireable per-organization/per-source token parameter to feed
+from `config` at all today. Building genuine per-organization
+credential management for 5 different OAuth/token providers is a real,
+substantial, separately-scoped undertaking this étape's own literal
+spec does not ask for -- `config` still stores real, non-secret sync
+parameters (`patterns`, `max_files`/`max_pages`) that DO feed the
+existing pipelines today, and stays encrypted-at-rest by default so a
+future per-source token, once that separate work exists, has
+nowhere insecure to land.
+
+**A real, honest, and important limitation about sync itself, stated
+prominently rather than glossed over**: none of the 5 existing import
+pipelines check whether a Document for a given real item already
+exists before creating one -- they were built for Partie 2.1.12-
+2.1.18's own real, ONE-TIME import scope. Re-running them on a
+schedule therefore re-imports every item in the container EACH TIME a
+sync actually proceeds. `detect_source_changes` (below) exists
+specifically to make that the uncommon case, not to eliminate it --
+real, per-item incremental dedup for these pipelines (extending Partie
+2.2.12's own content-hash mechanism, currently applied only to direct
+uploads, to cover import pipelines too) is real, valuable, clearly
+separately-scoped follow-up work, named explicitly here rather than
+silently shipped as if already solved.
+
+**Performance (vision critique 1) -- an honest, two-tier
+real answer for `detect_source_changes`**: for `github`, a REAL, free,
+already-established signal -- `fetch_github_repo` (the SAME real call
+`process_github_repo` itself already makes as its own first step)
+returns the repo's own real `pushed_at`, compared against
+`last_sync_at`. For the other 4 real source types, no comparably cheap
+CONTAINER-level "last modified" signal exists in their own REST APIs
+without a real, separate per-item listing call this étape's own scope
+does not build -- so they honestly always report a possible change,
+throttled to a real minimum re-sync interval (`_MIN_RESYNC_INTERVAL`,
+12h) rather than re-checking on every single Beat tick. A source that
+has never synced always reports a real change.
+
+**Robustesse (vision critique 2)**: `sync_all_sources`/the periodic
+sweep both share the SAME real "one source's own failure never blocks
+the rest" resilience as every other bulk operation in this codebase --
+confirmed by a real test where one of three GitHub sources fails and
+the other two still sync. The periodic sweep commits per-source, not
+once at the end -- the exact same real bug already caught and fixed in
+Partie 2.2.13's own `check_modified_documents_task` (a rollback on one
+source must never undo every other source already synced earlier in
+the same run).
+
+**Gestion des conflits (vision critique 3)**: a real, stated scope
+limitation, consistent with the "no per-item dedup yet" finding above
+-- since sync only ever ADDS new Document rows via the existing
+pipelines (never edits or replaces one it finds), there is no real
+local-vs-source conflict to resolve YET; the moment real per-item
+incremental sync exists (this section's own stated follow-up), a
+genuine local-edit-vs-source-changed conflict becomes possible and
+would need a real resolution policy then -- not fabricated ahead of
+having the mechanism that could actually cause it.
+
+**Real verification**: `tests/test_external_sources.py` (new, fast, no
+real infra, mocked at each real `process_X` call boundary) covers CRUD
+(type validation, cross-tenant workspace guard, real config encryption
+at rest, partial updates), `detect_source_changes`'s own real GitHub
+signal and honest non-GitHub fallback/throttle, `sync_external_source`
+dispatching to the correct real pipeline per `source_type` (all 5),
+real status transitions (idle→syncing→idle/failed), a disabled source
+rejected, and `sync_all_sources`'s own real resilience. Route tests
+cover Manager+ permissions on all 5 endpoints (Member correctly
+rejected, Manager correctly allowed), the anti-enumeration 404 for a
+source in another organization, and that `config` is never present in
+any real response body.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

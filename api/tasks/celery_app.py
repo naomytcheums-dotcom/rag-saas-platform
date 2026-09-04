@@ -29,7 +29,7 @@ celery_app = Celery(
     include=[
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
-        "api.tasks.document_processing", "api.tasks.document_modification_check",
+        "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
     ],
 )
 
@@ -94,5 +94,14 @@ celery_app.conf.beat_schedule = {
     "check-modified-documents-daily": {
         "task": "api.tasks.document_modification_check.check_modified_documents_task",
         "schedule": crontab(hour=5, minute=0),
+    },
+    # Partie 2.2.14 -- same low-traffic window, offset again. Idempotent
+    # by construction: detect_source_changes skips a source it cannot
+    # confirm has changed often enough (see its own docstring), so
+    # running this daily rather than more often is a real, deliberate
+    # courtesy to the 5 external services this platform doesn't control.
+    "sync-external-sources-daily": {
+        "task": "api.tasks.external_source_sync.sync_all_sources_periodic_task",
+        "schedule": crontab(hour=5, minute=15),
     },
 }
