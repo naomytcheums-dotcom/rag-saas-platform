@@ -97,7 +97,9 @@ def _real_epub_bytes() -> bytes:
 
 
 def _stub_s3(monkeypatch):
-    monkeypatch.setattr("api.security.documents.upload_document_file", lambda org_id, doc_id, filename, content, content_type: f"documents/{org_id}/{doc_id}/{filename}")
+    fake_upload = lambda org_id, doc_id, filename, content, content_type: f"documents/{org_id}/{doc_id}/{filename}"
+    monkeypatch.setattr("api.security.documents.upload_document_file", fake_upload)
+    monkeypatch.setattr("api.security.document_versions.upload_document_file", fake_upload)
 
 
 async def _upload(client, org_id: str, token: str, filename="report.pdf", content=_REAL_PDF_MAGIC, workspace_id=None, declared_content_type="application/pdf"):
@@ -2913,3 +2915,378 @@ async def test_schedule_upload_batch_processing_does_not_raise_when_the_broker_i
 
     monkeypatch.setattr("api.tasks.document_batch_processing.process_upload_batch_task.delay", _boom)
     schedule_upload_batch_processing(uuid.uuid4(), None, uuid.uuid4(), [{"filename": "a.pdf", "content": _REAL_PDF_MAGIC, "content_type": "application/pdf"}])  # must not raise
+
+
+# ------------------------------------------------------------------- tags --
+
+async def test_member_can_create_a_tag(client, db_session, register_payload):
+    """Validation criterion (2.2.6): un membre peut créer un tag."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance", "color": "#2563eb"}, headers=_auth_header(owner_token))
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "finance"
+    assert body["color"] == "#2563eb"
+    assert body["created_by"] == str(owner.id)
+
+
+async def test_viewer_cannot_create_a_tag(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    viewer_token, viewer = await _register(client, db_session, "tagviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(viewer_token))
+    assert response.status_code == 403
+
+
+async def test_creating_a_duplicate_tag_name_in_the_same_organization_is_rejected(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))
+
+    response = await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))
+    assert response.status_code == 409
+
+
+async def test_viewer_can_list_organization_tags(client, db_session, register_payload):
+    """Vision critique 1 / deliberate deviation: la lecture reste
+    ouverte au Viewer, comme chaque autre route GET de ce routeur."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))
+    viewer_token, viewer = await _register(client, db_session, "tagslistviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.get(f"/organizations/{org['id']}/tags", headers=_auth_header(viewer_token))
+    assert response.status_code == 200
+    assert [t["name"] for t in response.json()] == ["finance"]
+
+
+async def test_creator_can_update_their_own_tag(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+
+    response = await client.patch(f"/tags/{tag['id']}", json={"color": "#f97316"}, headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json()["color"] == "#f97316"
+
+
+async def test_member_cannot_update_a_tag_created_by_another_member(client, db_session, register_payload):
+    """Validation criterion / vision critique 3: un membre ne peut pas
+    modifier un tag créé par un autre."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+
+    other_member_token, other_member = await _register(client, db_session, "tagothermember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.patch(f"/tags/{tag['id']}", json={"color": "#000000"}, headers=_auth_header(other_member_token))
+    assert response.status_code == 403
+
+
+async def test_admin_can_update_a_tag_created_by_another_member(client, db_session, register_payload):
+    """Real admin override, same shape as DELETE /documents/{id}."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+
+    admin_token, admin = await _register(client, db_session, "tagadmin@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), admin.id, OrganizationRole.admin, invited_by=owner.id)
+
+    response = await client.patch(f"/tags/{tag['id']}", json={"color": "#000000"}, headers=_auth_header(admin_token))
+    assert response.status_code == 200
+
+
+async def test_member_cannot_delete_a_tag_created_by_another_member(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+
+    other_member_token, other_member = await _register(client, db_session, "tagdeleteother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.delete(f"/tags/{tag['id']}", headers=_auth_header(other_member_token))
+    assert response.status_code == 403
+
+
+async def test_creator_can_delete_their_own_tag(client, db_session, register_payload):
+    """Validation criterion: un membre peut retirer/supprimer un tag."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+
+    response = await client.delete(f"/tags/{tag['id']}", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+
+    listing = await client.get(f"/organizations/{org['id']}/tags", headers=_auth_header(owner_token))
+    assert listing.json() == []
+
+
+async def test_patch_for_a_nonexistent_tag_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.patch(f"/tags/{uuid.uuid4()}", json={"color": "#000"}, headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_owner_can_add_a_tag_to_their_own_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: un membre peut ajouter un tag à un
+    document."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.post(f"/documents/{document_id}/tags", json={"tag_id": tag["id"]}, headers=_auth_header(owner_token))
+    assert response.status_code == 201
+
+    listing = await client.get(f"/documents/{document_id}/tags", headers=_auth_header(owner_token))
+    assert [t["name"] for t in listing.json()] == ["finance"]
+
+
+async def test_member_cannot_tag_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    other_member_token, other_member = await _register(client, db_session, "tagdocother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(f"/documents/{document_id}/tags", json={"tag_id": tag["id"]}, headers=_auth_header(other_member_token))
+    assert response.status_code == 403
+
+
+async def test_assigning_a_tag_from_another_organization_is_rejected(client, db_session, register_payload, monkeypatch):
+    """Vision critique 1 -- un tag n'est partagé qu'au sein de sa
+    propre organisation."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    other_owner_token, other_owner = await _register(client, db_session, "tagotherorgowner@example.com")
+    other_org = await _create_org(client, other_owner_token, "Other Co")
+    other_tag = (await client.post(f"/organizations/{other_org['id']}/tags", json={"name": "finance"}, headers=_auth_header(other_owner_token))).json()
+
+    response = await client.post(f"/documents/{document_id}/tags", json={"tag_id": other_tag["id"]}, headers=_auth_header(owner_token))
+    assert response.status_code == 400
+
+
+async def test_assigning_the_same_tag_twice_is_rejected(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/tags", json={"tag_id": tag["id"]}, headers=_auth_header(owner_token))
+
+    response = await client.post(f"/documents/{document_id}/tags", json={"tag_id": tag["id"]}, headers=_auth_header(owner_token))
+    assert response.status_code == 400
+
+
+async def test_owner_can_remove_a_tag_from_their_own_document(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: un membre peut retirer un tag d'un
+    document."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    tag = (await client.post(f"/organizations/{org['id']}/tags", json={"name": "finance"}, headers=_auth_header(owner_token))).json()
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/tags", json={"tag_id": tag["id"]}, headers=_auth_header(owner_token))
+
+    response = await client.delete(f"/documents/{document_id}/tags/{tag['id']}", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+
+    listing = await client.get(f"/documents/{document_id}/tags", headers=_auth_header(owner_token))
+    assert listing.json() == []
+
+
+async def test_viewer_can_list_a_documents_tags(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    viewer_token, viewer = await _register(client, db_session, "tagdocviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    response = await client.get(f"/documents/{document_id}/tags", headers=_auth_header(viewer_token))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# --------------------------------------------------------------- versions --
+
+_REAL_PDF_MAGIC_V2 = b"%PDF-1.4\n%a real, different second version of the same document\n"
+
+
+async def test_a_freshly_uploaded_document_has_no_versions_yet(client, db_session, register_payload, monkeypatch):
+    """Validation criterion / vision critique -- limite honnête assumée
+    : l'upload original n'est pas rétroactivement versionné."""
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/versions", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_owner_can_create_a_new_document_version(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: une nouvelle version est créée ; les
+    versions sont numérotées automatiquement."""
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.post(
+        f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 201
+    assert response.json()["version_number"] == 1
+
+    second = await client.post(
+        f"/documents/{document_id}/versions", files={"file": ("v3.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token),
+    )
+    assert second.json()["version_number"] == 2
+
+    listing = await client.get(f"/documents/{document_id}/versions", headers=_auth_header(owner_token))
+    assert [v["version_number"] for v in listing.json()] == [2, 1]  # most recent first
+
+
+async def test_member_cannot_create_a_version_of_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    other_member_token, other_member = await _register(client, db_session, "versionother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(
+        f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(other_member_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_admin_can_create_a_version_of_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    admin_token, admin = await _register(client, db_session, "versionadmin@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), admin.id, OrganizationRole.admin, invited_by=owner.id)
+
+    response = await client.post(
+        f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(admin_token),
+    )
+    assert response.status_code == 201
+
+
+async def test_get_a_specific_document_version(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token))
+
+    response = await client.get(f"/documents/{document_id}/versions/1", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json()["version_number"] == 1
+
+
+async def test_get_a_nonexistent_document_version_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.get(f"/documents/{document_id}/versions/99", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_owner_can_restore_a_previous_document_version(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la restauration fonctionne."""
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token))
+    await client.post(f"/documents/{document_id}/versions", files={"file": ("v3.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token))
+
+    response = await client.post(f"/documents/{document_id}/versions/restore", json={"version_number": 1}, headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    assert response.json()["version_number"] == 3  # a real NEW version, not a rewind
+
+    listing = await client.get(f"/documents/{document_id}/versions", headers=_auth_header(owner_token))
+    assert [v["version_number"] for v in listing.json()] == [3, 2, 1]
+
+
+async def test_restoring_a_nonexistent_version_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    response = await client.post(f"/documents/{document_id}/versions/restore", json={"version_number": 99}, headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_member_cannot_restore_a_version_of_a_document_they_do_not_own(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token))
+
+    other_member_token, other_member = await _register(client, db_session, "versionrestoreother@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), other_member.id, OrganizationRole.member, invited_by=owner.id)
+
+    response = await client.post(f"/documents/{document_id}/versions/restore", json={"version_number": 1}, headers=_auth_header(other_member_token))
+    assert response.status_code == 403
+
+
+async def test_viewer_can_list_and_view_document_versions(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    monkeypatch.setattr("api.security.documents.schedule_document_processing", lambda document_id: None)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    await client.post(f"/documents/{document_id}/versions", files={"file": ("v2.pdf", _REAL_PDF_MAGIC_V2, "application/pdf")}, headers=_auth_header(owner_token))
+    viewer_token, viewer = await _register(client, db_session, "versionviewer@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), viewer.id, OrganizationRole.viewer, invited_by=owner.id)
+
+    listing = await client.get(f"/documents/{document_id}/versions", headers=_auth_header(viewer_token))
+    assert listing.status_code == 200
+    detail = await client.get(f"/documents/{document_id}/versions/1", headers=_auth_header(viewer_token))
+    assert detail.status_code == 200

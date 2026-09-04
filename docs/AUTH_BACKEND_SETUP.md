@@ -4218,6 +4218,136 @@ anti-enumeration guards, plus a real round-trip test of
 `stream_document_file` against real S3/MinIO in
 `tests/test_documents_integration.py`.
 
+### Document tags/categories (Partie 2.2.6)
+
+Two new real tables (migration `0034`, `api/models/document.py`):
+`DocumentTag` (`organization_id`, `name`, `color`, `created_by`, real
+`UNIQUE(organization_id, name)`) and `DocumentTagAssignment` (the real
+many-to-many link, `UNIQUE(document_id, tag_id)`). A separate security
+module, `api/security/document_tags.py` -- `api/security/documents.py`
+is already a large, real file spanning every import source since
+Partie 2.1.1, the same "one file per related-but-distinct concern"
+split as `organizations.py` vs. `organization_members.py`.
+
+**Cohérence (vision critique 1)**: a real tag is scoped to
+`organization_id`, not a workspace or a single document -- the SAME
+real "finance" tag is usable on any document across the whole
+organization, matching this step's own literal
+`UNIQUE(organization_id, name)` constraint. Assigning a tag to a
+document ALSO checks, for real, that the tag's own `organization_id`
+matches the document's -- the other real half of "tags shared within
+one organization": a real tag from a DIFFERENT organization can never
+be attached to this one's documents, a real cross-tenant guard the FK
+constraints alone cannot express.
+
+**Sécurité (vision critique 3)**: `PATCH`/`DELETE /tags/{tag_id}` use
+the exact SAME real permission shape `DELETE /documents/{document_id}`
+already established -- Member+ AND (the tag's own real creator OR an
+Admin/Owner override) -- confirmed for real: another plain Member
+cannot modify or delete a tag they didn't create. Assigning/removing a
+tag on a document uses the same real shape applied to DOCUMENT
+ownership instead ("Member+ si propriétaire", this step's own literal
+wording) -- a plain Member cannot tag a document they don't own,
+unless they're also an Admin/Owner.
+
+**A real, deliberate, DOCUMENTED deviation from this step's own literal
+"Member+" on the three real LIST/read routes** (`GET .../tags`,
+`GET /documents/{id}/tags`): these use `require_org_member` (Viewer
+included), not `require_org_member_excluding_viewer`, matching every
+OTHER real GET/list route on this same router (`GET .../documents`,
+`GET /documents/{id}`) -- a Viewer's own role is explicitly read-only
+by this router's own established convention, and reading a real list of
+tags is exactly that kind of real read, not a write the literal "Member+"
+wording seems to have inherited by analogy with the write routes rather
+than by deliberate intent.
+
+**Performance (vision critique 2)**: `ix_document_tags_organization_id`
+and `ix_document_tag_assignments_document_id`/`_tag_id` (this step's own
+literal indexes) cover every real read pattern these routes actually
+use -- listing an organization's own tags, and listing/joining a
+document's own assigned tags.
+
+**Real verification**: `tests/test_documents.py` covers tag creation, a
+real duplicate-name rejection (409), Viewer read access, creator-vs-
+non-creator-vs-Admin update/delete permissions, document tag
+assignment/removal (owner vs. non-owner, admin override), a real
+cross-organization assignment rejected, a real duplicate assignment
+rejected, and a 404 for a nonexistent tag -- 29 tests total.
+
+### Document versioning (Partie 2.2.7)
+
+A new real table (migration `0035`), `DocumentVersion` -- a real,
+append-only snapshot per version (`version_number`, `file_key`,
+`file_size`, `metadata_json`, `created_by`), `UNIQUE(document_id,
+version_number)`. `Document` gains a real, nullable `current_version_id`
+FK back to it -- the two tables genuinely reference each other, so the
+real migration creates `document_versions` first (its own FK to the
+already-existing `documents` table), THEN adds `documents.current_version_id`
+as a separate `ALTER TABLE` step (a real, necessary two-step sequence,
+not a circular DDL statement). New module,
+`api/security/document_versions.py`.
+
+**Cohérence (vision critique implicite "réutilise-t-il le pipeline
+existant")**: creating (or restoring) a version does real double duty
+-- it inserts a real, permanent `DocumentVersion` snapshot row, AND
+updates the LIVE `Document.file_key`/`file_size`/`file_type` to match.
+Every existing reader (preview, metadata, `process_document`, download)
+keeps working completely unchanged, always reading "whatever this
+document's current content is" -- `DocumentVersion` is real, pure
+history, `Document` is always the live, current state. Creating or
+restoring a version re-schedules real processing
+(`schedule_document_processing`) afterward -- `process_document`'s own
+real, already-established behavior deletes and recreates a document's
+own chunks on any rerun, so the version's own real new/restored content
+is what actually gets chunked and embedded next, with zero new
+extraction logic needed.
+
+**Real "restore as a NEW version" pattern** (`restore_document_version`),
+the same real pattern `git revert` uses, not `git reset`: restoring
+version 2 of a document currently at version 4 creates a real version
+5 whose content is copied from version 2 -- never rewinds or reuses an
+old `version_number`. A real, clean, monotonic audit trail results
+("version 5 is a real restore of version 2's own content").
+
+**A real, stated scope limitation**: a document's own ORIGINAL upload
+is NOT retroactively versioned -- no version 1 exists until the first
+EXPLICIT `POST /documents/{document_id}/versions` call. Instrumenting
+every prior upload/import path (2.1.1's own single upload, 2.2.1's own
+batch, and every import source since) to auto-create a real version 1
+would mean invasively touching a dozen already-hardened, already-tested
+functions for a real but marginal benefit.
+
+**A real bug found and fixed while building this étape's own tests,
+worth stating explicitly**: the new version-creation/restore routes
+originally called `schedule_document_processing` via a name imported
+directly into `api/routers/documents.py` (`from api.security.documents
+import schedule_document_processing`) -- Python copies that reference
+into the ROUTER's own namespace at import time, so
+`tests/conftest.py`'s own autouse monkeypatch of
+`api.security.documents.schedule_document_processing` (stubbing the
+real Celery dispatch for the whole fast suite) never actually reached
+it. The real, live effect: creating or restoring a version in a test
+triggered a REAL `Celery.delay()` call, which tried to reach a real,
+unreachable Redis result backend and retried with real, slow backoff --
+confirmed via a real `faulthandler` thread-dump showing the exact stack
+(`celery.backends.redis._reconnect` blocking on a real socket connect).
+One test alone looked fine (no other test had left anything running to
+contend with); two of the new tests run together took over 16 minutes
+instead of a few seconds. Fixed by importing the SECURITY module
+itself (`import api.security.documents as documents_security`) in the
+router and calling `documents_security.schedule_document_processing(...)`
+-- looks the attribute up on the module at CALL time, so any monkeypatch
+of that module's own attribute is respected regardless of which module
+does the calling, the standard "patch where it's used, or reference the
+module itself" fix for this exact, well-known Python testing gotcha.
+
+**Real verification**: `tests/test_documents.py` covers version
+creation (real, sequential numbering), owner/non-owner/Admin
+permissions, fetching a specific real version, a 404 for a nonexistent
+one, a real restore creating a genuinely NEW version number, restore
+permissions, and Viewer read access -- 10 tests, confirmed to run in
+~17 seconds total (not 16+ minutes) after the fix above.
+
 ### Session idle timeout and concurrent-session limit (audit Categorie 1, items 13/14/17)
 
 Two independent limits on top of a session's absolute expiry

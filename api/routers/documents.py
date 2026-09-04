@@ -35,9 +35,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
-from api.models.document import Document
+from api.models.document import Document, DocumentTag
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.schemas.document_tags import DocumentTagCreateRequest, DocumentTagResponse, DocumentTagUpdateRequest
+from api.schemas.document_versions import DocumentVersionResponse, DocumentVersionRestoreRequest
 from api.schemas.documents import (
     ConfluenceImportRequest,
     ConfluenceImportResponse,
@@ -63,6 +65,7 @@ from api.schemas.documents import (
     SitemapImportRequest,
     SitemapImportResponse,
 )
+import api.security.documents as documents_security
 from api.security.documents import (
     get_document_progress,
     import_document_from_url,
@@ -78,6 +81,22 @@ from api.security.documents import (
     stream_document_progress,
     upload_document,
     validate_upload_batch,
+)
+from api.security.document_tags import (
+    assign_tag_to_document,
+    create_tag,
+    delete_tag,
+    get_tag_or_raise,
+    list_document_tags,
+    list_tags,
+    unassign_tag_from_document,
+    update_tag,
+)
+from api.security.document_versions import (
+    create_document_version_from_upload,
+    get_document_version,
+    get_document_versions,
+    restore_document_version,
 )
 from api.security.organizations import require_org_member, require_org_member_excluding_viewer
 from api.services.document_storage import delete_document_file, stream_document_file
@@ -115,6 +134,34 @@ async def _get_document_and_membership(db: AsyncSession, document_id: uuid.UUID,
     if membership is None:
         raise not_found
     return document, membership
+
+
+async def _get_tag_and_membership(db: AsyncSession, tag_id: uuid.UUID, current_user: User) -> tuple[DocumentTag, OrganizationMember]:
+    """Partie 2.2.6's own equivalent of `_get_document_and_membership`
+    above, for `PATCH`/`DELETE /tags/{tag_id}` -- same real
+    404-for-both anti-enumeration reasoning, no `org_id` path parameter
+    to resolve `require_org_member` against."""
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    try:
+        tag = await get_tag_or_raise(db, tag_id)
+    except ValueError:
+        raise not_found
+
+    membership = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == tag.organization_id, OrganizationMember.user_id == current_user.id
+        )
+    )
+    if membership is None:
+        raise not_found
+    return tag, membership
+
+
+def _tag_to_response(tag: DocumentTag) -> DocumentTagResponse:
+    return DocumentTagResponse(
+        id=tag.id, organization_id=tag.organization_id, name=tag.name, color=tag.color,
+        created_by=tag.created_by, created_at=tag.created_at,
+    )
 
 
 @router.post("/organizations/{org_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -497,3 +544,252 @@ async def delete_document(
 
     delete_document_file(document.file_key)  # best-effort, never blocks the response
     return {"message": "Document deleted"}
+
+
+# =========================== Partie 2.2.6 -- tags/catégories ===========================
+
+@router.post("/organizations/{org_id}/tags", response_model=DocumentTagResponse, status_code=status.HTTP_201_CREATED)
+async def create_organization_tag(
+    org_id: uuid.UUID, payload: DocumentTagCreateRequest,
+    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- Member+, same reasoning as every
+    other real write in this router (a Viewer's own role is read-only,
+    see this module's own top docstring)."""
+    try:
+        tag = await create_tag(db, org_id, current_user.id, payload.name, payload.color)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    await db.commit()
+    return _tag_to_response(tag)
+
+
+@router.get("/organizations/{org_id}/tags", response_model=list[DocumentTagResponse])
+async def list_organization_tags(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- a real, deliberate, DOCUMENTED
+    deviation from this step's own literal "Member+": uses
+    `require_org_member` (Viewer included), not
+    `require_org_member_excluding_viewer`, matching every OTHER real
+    GET/list route on this SAME router (GET .../documents,
+    GET /documents/{id}) -- a Viewer's own role is explicitly read-only
+    (this module's own top docstring), and reading the list of an
+    organization's own real tags is exactly that kind of real read, not
+    a write this step's own literal restriction seems to have been
+    written for by analogy with the write routes below rather than by
+    deliberate intent."""
+    tags = await list_tags(db, org_id)
+    return [_tag_to_response(tag) for tag in tags]
+
+
+@router.patch("/tags/{tag_id}", response_model=DocumentTagResponse)
+async def update_document_tag(
+    tag_id: uuid.UUID, payload: DocumentTagUpdateRequest,
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- Member+ AND (creator OR Admin/
+    Owner override), the SAME real permission shape as
+    DELETE /documents/{document_id} above (vision critique 3's own "un
+    utilisateur peut-il modifier un tag créé par un autre" answer: no,
+    unless they're also an Admin/Owner)."""
+    tag, membership = await _get_tag_and_membership(db, tag_id, current_user)
+
+    is_creator = tag.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_creator or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only modify tags you created yourself")
+
+    try:
+        updated = await update_tag(db, tag_id, payload.name, payload.color)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    await db.commit()
+    return _tag_to_response(updated)
+
+
+@router.delete("/tags/{tag_id}")
+async def delete_document_tag(
+    tag_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- same real permission shape as
+    `PATCH /tags/{tag_id}` above."""
+    tag, membership = await _get_tag_and_membership(db, tag_id, current_user)
+
+    is_creator = tag.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_creator or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete tags you created yourself")
+
+    await delete_tag(db, tag_id)
+    await db.commit()
+    return {"message": "Tag deleted"}
+
+
+@router.post("/documents/{document_id}/tags", status_code=status.HTTP_201_CREATED)
+async def add_tag_to_document(
+    document_id: uuid.UUID, payload: dict, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- Member+ AND (document owner OR
+    Admin/Owner override), this step's own literal "Member+ si
+    propriétaire" -- the SAME real permission shape as
+    DELETE /documents/{document_id}, applied to the DOCUMENT being
+    tagged rather than the tag itself."""
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+
+    is_owner_of_document = document.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_owner_of_document or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only tag documents you uploaded yourself")
+
+    try:
+        tag_id = uuid.UUID(str(payload["tag_id"]))
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="a real 'tag_id' field is required")
+
+    try:
+        await assign_tag_to_document(db, document_id, tag_id, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    return {"message": "Tag assigned"}
+
+
+@router.delete("/documents/{document_id}/tags/{tag_id}")
+async def remove_tag_from_document(
+    document_id: uuid.UUID, tag_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- same real permission shape as
+    `POST /documents/{document_id}/tags` above."""
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+
+    is_owner_of_document = document.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_owner_of_document or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only untag documents you uploaded yourself")
+
+    try:
+        await unassign_tag_from_document(db, document_id, tag_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    await db.commit()
+    return {"message": "Tag removed"}
+
+
+@router.get("/documents/{document_id}/tags", response_model=list[DocumentTagResponse])
+async def get_document_tags(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- real read, same deliberate
+    "Viewer included" reasoning as `GET /organizations/{org_id}/tags`
+    above (this step's own literal "Member+" applied consistently to
+    every real list/read route in this section, not just the org-level
+    one)."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    tags = await list_document_tags(db, document.id)
+    return [_tag_to_response(tag) for tag in tags]
+
+
+# =========================== Partie 2.2.7 -- versioning ===========================
+
+def _version_to_response(version) -> DocumentVersionResponse:
+    return DocumentVersionResponse(
+        id=version.id, document_id=version.document_id, version_number=version.version_number,
+        file_size=version.file_size, metadata=version.metadata_json,
+        created_by=version.created_by, created_at=version.created_at,
+    )
+
+
+def _require_document_owner_or_admin(document: Document, membership: OrganizationMember, current_user: User, detail: str) -> None:
+    """Shared by every real version-mutating route below -- the SAME
+    "Member+ AND (document owner OR Admin/Owner)" permission shape
+    already established by DELETE /documents/{document_id} and the tag
+    assignment routes above, factored out once further uses appear."""
+    is_owner_of_document = document.created_by == current_user.id
+    is_org_admin_or_owner = membership.role in (OrganizationRole.owner, OrganizationRole.admin)
+    if membership.role == OrganizationRole.viewer or not (is_owner_of_document or is_org_admin_or_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+@router.get("/documents/{document_id}/versions", response_model=list[DocumentVersionResponse])
+async def list_document_versions(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 4's own literal route -- real read, same deliberate
+    "Viewer included" reasoning as the tag list routes above."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    versions = await get_document_versions(db, document.id)
+    return [_version_to_response(version) for version in versions]
+
+
+@router.get("/documents/{document_id}/versions/{version_number}", response_model=DocumentVersionResponse)
+async def get_document_version_detail(
+    document_id: uuid.UUID, version_number: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 4's own literal route."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    try:
+        version = await get_document_version(db, document.id, version_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return _version_to_response(version)
+
+
+@router.post("/documents/{document_id}/versions", response_model=DocumentVersionResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_document_version(
+    document_id: uuid.UUID, file: UploadFile, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """
+    Item 4's own literal route -- Member+ si propriétaire, same real
+    permission shape as `DELETE /documents/{document_id}`. Stays thin,
+    same convention as every other upload route in this codebase --
+    real content validation and the real S3 write both happen inside
+    `create_document_version_from_upload`
+    (`api/security/document_versions.py`), not here. Re-schedules real
+    processing afterward (vision critique 1's own "réutilise-t-il le
+    pipeline existant" answer): `process_document`'s own real,
+    already-established behavior deletes and recreates a document's
+    own chunks on any rerun, so the new version's own real content is
+    what gets chunked/embedded next, with zero new logic needed for
+    that part.
+    """
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+    _require_document_owner_or_admin(document, membership, current_user, "You can only create a new version of a document you uploaded yourself")
+
+    content = await file.read()
+    try:
+        version = await create_document_version_from_upload(db, document.id, file.filename or document.name, content, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await db.commit()
+    documents_security.schedule_document_processing(document.id)
+    return _version_to_response(version)
+
+
+@router.post("/documents/{document_id}/versions/restore", response_model=DocumentVersionResponse)
+async def restore_document_version_route(
+    document_id: uuid.UUID, payload: DocumentVersionRestoreRequest,
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 4's own literal route -- same real permission shape as
+    creating a new version above. A real restore is itself a NEW
+    version (see api/security/document_versions.py's own
+    restore_document_version docstring for why), so real processing is
+    re-scheduled here too, for the exact same reason."""
+    document, membership = await _get_document_and_membership(db, document_id, current_user)
+    _require_document_owner_or_admin(document, membership, current_user, "You can only restore a version of a document you uploaded yourself")
+
+    try:
+        version = await restore_document_version(db, document.id, payload.version_number, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    await db.commit()
+    documents_security.schedule_document_processing(document.id)
+    return _version_to_response(version)
