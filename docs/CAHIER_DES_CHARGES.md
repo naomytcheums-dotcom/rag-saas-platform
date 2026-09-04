@@ -616,9 +616,23 @@ Tests réels dédiés (13 tests fonction + 1 test d'intégration orchestrateur =
 
 Tests réels dédiés (13 tests fonction+endpoint + 2 tests d'intégration orchestrateur = 15), voir `tests/test_conversations.py`.
 
+#### Partie 5.1.13 — Planification de tâches
+
+✅ **Nouveaux modèles réels** `api/models/task_plan.py` (`TaskPlan`, `TaskStep`, migration `0055`, RLS activée). `sequence`, pas `order` (mot-clé SQL réservé -- même choix déjà fait pour `BatchJobItem.sequence`).
+
+✅ **Nouveau module réel** `api/services/task_planning.py` : les 6 fonctions littérales + `get_plan_steps` (aide réelle supplémentaire). `decompose_task` réutilise `chat_completion` pour un vrai découpage réel en JSON, avec repli honnête sur un plan à une seule étape en cas de réponse malformée -- jamais d'exception, jamais de structure fabriquée. `validate_plan` détecte réellement les dépendances invalides, l'auto-dépendance, et un vrai cycle (via un vrai tri topologique de Kahn), testé.
+
+✅ **`execute_plan`, ordre topologique réel, délibérément séquentiel** : chaque étape prête (dépendances satisfaites) s'exécute réellement dans l'ordre des dépendances -- mais pas en parallèle au sein d'un même "round". **Décision réelle et documentée** : un vrai parallélisme par round réintroduirait exactement le même risque de concurrence sur `AsyncSession` déjà résolu pour `run_multi_agent` (Partie 5.1.1) -- le texte littéral de cette étape demande de "respecter les dépendances", pas de paralléliser (déjà couvert, séparément, par la Partie 5.1.8).
+
+**Robustesse (vision critique)** : une vraie étape en échec marque `failed`, et chaque étape en dépendant (transitivement) est marquée `skipped` -- les étapes indépendantes continuent normalement, testé (`test_execute_plan_skips_steps_depending_on_a_real_failure`).
+
+✅ **Intégration réelle et opt-in dans l'orchestrateur** : `run_agent` accepte `plan_first` (défaut `False`, comportement inchangé pour tout appelant existant) -- un vrai plan est créé, tracé (`"plan_created"`), et ses étapes sont injectées dans le system prompt comme guide pour le LLM. **Ne délègue PAS l'exécution à `execute_plan`** (qui passe par ses propres appels `chat_completion`, hors du vrai mécanisme de timeout/retry/persistance du run) -- fusionner les deux flux de contrôle aurait été une réécriture plus large et plus risquée que ce que le texte littéral demande.
+
+Tests réels dédiés (18 tests module + 2 tests d'intégration orchestrateur = 20), voir `tests/test_task_planning.py`.
+
 Agent traces (au-delà de l'orchestrateur central lui-même) : **existent
 déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
-récentes). Task planning : ⬜.
+récentes).
 
 ### 5.2 Outils intégrés
 

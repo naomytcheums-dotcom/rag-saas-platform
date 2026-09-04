@@ -6951,6 +6951,45 @@ such.
 **Real verification**: 15 tests (13 function/endpoint tests, 2
 orchestrator integration tests), `tests/test_conversations.py`.
 
+### Partie 5.1.13 -- task planning
+
+New real models `api/models/task_plan.py` (`TaskPlan`, `TaskStep`,
+migration `0055`, RLS enabled). `sequence`, not `order` (a reserved SQL
+keyword -- same real choice already made for `BatchJobItem.sequence`).
+
+New module `api/services/task_planning.py`: all 6 literal functions
+plus `get_plan_steps` (a real, additional helper). `decompose_task`
+reuses `chat_completion` for real JSON decomposition, with a real,
+honest fallback to a single-step plan on a malformed response -- never
+raises, never fabricates structure. `validate_plan` really detects
+invalid dependencies, self-dependency, and a real cycle (via a real
+Kahn's-algorithm topological sort), tested.
+
+**`execute_plan`, real topological ordering, deliberately
+sequential**: each ready step (dependencies satisfied) runs in real
+dependency order -- but not in parallel within one round. **A real,
+documented decision**: real per-round parallelism would reintroduce
+the exact `AsyncSession`-concurrency risk already solved for
+`run_multi_agent` (Partie 5.1.1) -- this étape's own literal text asks
+to "respect dependencies," not to parallelize (already covered,
+separately, by Partie 5.1.8).
+
+**Robustness (vision critique)**: a real failed step marks `failed`,
+and every step that (transitively) depends on it is marked `skipped`
+-- independent steps keep running normally, tested.
+
+**Real, opt-in orchestrator integration**: `run_agent` takes
+`plan_first` (default `False`, unchanged behavior for every existing
+caller) -- a real plan is created, traced (`"plan_created"`), and its
+steps are injected into the system prompt as guidance for the LLM.
+**Does NOT hand off execution to `execute_plan`** (which runs through
+its own separate `chat_completion` calls, outside this run's own real
+timeout/retry/persistence machinery) -- merging the two control flows
+would be a larger, riskier rewrite than the literal ask requires.
+
+**Real verification**: 20 tests (18 module tests, 2 orchestrator
+integration tests), `tests/test_task_planning.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

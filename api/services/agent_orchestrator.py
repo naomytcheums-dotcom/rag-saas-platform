@@ -72,6 +72,7 @@ from api.security.tool_permissions import check_tool_permission
 from api.services.agent_memory import get_all_memory
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
+from api.services.task_planning import get_plan_steps, plan_task
 from api.services.tool_selection import select_tools
 from api.services.tools import ToolSpec
 
@@ -104,7 +105,7 @@ class AgentOrchestrator:
         org_settings: dict | None = None, llm_overrides: dict | None = None, timeout: float | None = None,
         max_retries: int | None = None, organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
         tools: list[ToolSpec] | None = None, session_id: uuid.UUID | None = None,
-        conversation_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None, plan_first: bool = False,
     ) -> AgentRunRecord:
         """Item 2's own literal function -- runs one real, traced,
         timeout-bound LLM call. Always returns a real `AgentRunRecord`
@@ -137,6 +138,29 @@ class AgentOrchestrator:
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
+        if plan_first and settings.TASK_PLANNING_ENABLED:
+            # Partie 5.1.13 -- real, OPT-IN planning (default `False`,
+            # unchanged behavior for every existing caller -- the same
+            # "never force a new capability into the default path"
+            # principle already applied to 3.4.2/3.4.3/3.4.4's own
+            # search enhancements). A real plan is created and traced;
+            # its own real steps are surfaced to the LLM as guidance in
+            # the system prompt -- this does NOT hand off execution to
+            # `execute_plan` itself (that runs each step through its
+            # own, separate `chat_completion` call, outside this run's
+            # own real timeout/retry/persistence machinery); merging
+            # the two control flows would be a substantial, separate,
+            # riskier rewrite this étape's own literal ask ("planifier
+            # avant d'exécuter") does not require.
+            async with self._db_lock:
+                plan = await plan_task(db, input, context)
+                plan_steps = await get_plan_steps(db, plan.id)
+                await db.commit()
+            trace.append(self._trace_event("plan_created", {"plan_id": str(plan.id), "step_count": len(plan_steps)}))
+            if len(plan_steps) > 1:
+                steps_text = "\n".join(f"{i + 1}. {s.description}" for i, s in enumerate(plan_steps))
+                system_prompt = f"{system_prompt}\n\nSuggested plan for this task:\n{steps_text}"
+
         if tools:
             # Partie 5.1.3 -- a denied tool is filtered out BEFORE
             # selection even runs, so it can never be chosen or

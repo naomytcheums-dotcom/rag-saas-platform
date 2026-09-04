@@ -259,6 +259,38 @@ async def test_run_agent_replays_real_prior_conversation_turns(monkeypatch, db_s
     assert "hi Ada" in contents
 
 
+# ------------------------------------- planning (Partie 5.1.13 integration) -------------------------------------
+
+
+async def test_run_agent_with_plan_first_creates_and_surfaces_a_real_plan(monkeypatch, db_session):
+    """Validation criterion: cohérence -- la planification est
+    intégrée dans l'orchestrateur, en opt-in."""
+    import json
+
+    plan_json = json.dumps([{"description": "research", "depends_on": []}, {"description": "write", "depends_on": [0]}])
+    mock_acompletion = AsyncMock(side_effect=[_real_response(plan_json), _real_response("final answer")])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "write a report", db=db_session, plan_first=True)
+
+    assert run.status == "completed"
+    assert any(e["event"] == "plan_created" for e in run.trace)
+    system_message = mock_acompletion.call_args.kwargs["messages"][0]["content"]
+    assert "research" in system_message and "write" in system_message
+
+
+async def test_run_agent_without_plan_first_never_plans(monkeypatch, db_session):
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "hi", db=db_session)
+
+    assert not any(e["event"] == "plan_created" for e in run.trace)
+    assert mock_acompletion.call_count == 1
+
+
 async def test_run_agent_excludes_a_real_denied_tool(monkeypatch, db_session):
     """Validation criterion: sécurité (Partie 5.1.3) -- si l'utilisateur
     n'a pas la permission, l'outil est désactivé (jamais sélectionné,

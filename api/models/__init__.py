@@ -27,6 +27,7 @@ from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
 from api.models.team import Team, TeamMember
 from api.models.token import EmailVerificationToken, PasswordResetToken
+from api.models.task_plan import TaskPlan, TaskStep
 from api.models.tool_config import ToolBudget, ToolTimeoutOverride
 from api.models.tool_fallback import LlmFallback, ToolFallback
 from api.models.tool_permission import ToolPermission
@@ -42,4 +43,5 @@ __all__ = [
     "ResourcePermission", "Team", "TeamMember", "Invitation", "OrganizationQuota",
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
+    "TaskPlan", "TaskStep",
 ]
