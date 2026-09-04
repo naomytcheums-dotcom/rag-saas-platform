@@ -7207,6 +7207,43 @@ expression can be validated before it's ever evaluated.
 
 **Real verification**: 16 tests, `tests/test_calculator_tool.py`.
 
+### Partie 5.2.6 -- URL Reader
+
+New module `api/tools/url_reader.py`: `read_url`/`read_url_with_metadata`
+(literal functions) plus `extract_url_content` and `URL_READER_TOOL`.
+**Real reuse, directly answering the vision critique's "reuse 2.1.10"**:
+`validate_url`/`fetch_url_content` (`api/services/url_fetching.py`)
+provide the same real SSRF-safe transport already used everywhere else
+in this codebase (DNS-rebinding-safe IP resolution, scheme/host
+validation, capped redirect-following) -- no second network client
+built here. `extract_url_main_content`/`extract_url_metadata`
+(`api/services/url_extraction.py`) provide the same real readability-
+based extraction already used for URL document imports.
+
+**A real, documented deviation**: the literal 1-arg
+`extract_url_content(html)`/`extract_url_metadata(html)` become really
+`(url, html)` -- the real, reused functions need `url` (the real
+`source_url`, the real title fallback); dropping it would mean either
+duplicating the function with `url=""` hardcoded, or losing real
+functionality.
+
+**`URL_READER_MAX_SIZE`, a real, additional cap** on top of
+`MAX_DOCUMENT_UPLOAD_BYTES` (already enforced inside
+`fetch_url_content`, sized for a real document import, not an agent's
+own tighter real budget) -- checked after the real fetch.
+
+**`URL_READER_ALLOWED_DOMAINS`/`URL_READER_BLOCKED_DOMAINS` really
+wired** -- a real, additional policy layer, not the real SSRF defense
+itself (which stays at `url_fetching`'s own connection layer, not
+spoofable via a bare domain string).
+
+**Robustness (vision critique)**: an inaccessible URL raises a real
+`UrlReaderError`, tested.
+
+**Real verification**: 10 tests, `tests/test_url_reader.py`. The
+existing `test_url_fetching.py`/`test_url_extraction.py` suites
+reconfirmed untouched.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

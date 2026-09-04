@@ -716,8 +716,22 @@ Tests réels dédiés (23 tests, exécution SQLite réelle pour `execute_sql_que
 
 Tests réels dédiés (16 tests), voir `tests/test_calculator_tool.py`.
 
+#### Partie 5.2.6 — URL Reader
+
+✅ **Nouveau module réel** `api/tools/url_reader.py` : `read_url`/`read_url_with_metadata` (fonctions littérales) + `extract_url_content` + `URL_READER_TOOL`. **Vraie réutilisation, réponse directe à la vision critique "réutiliser 2.1.10"** : `validate_url`/`fetch_url_content` (`api/services/url_fetching.py`) fournissent le même vrai transport SSRF-safe déjà utilisé partout ailleurs dans ce dépôt (résolution IP sûre contre le DNS-rebinding, validation schéma/hôte, suivi de redirection plafonné) -- aucun second client réseau construit ici. `extract_url_main_content`/`extract_url_metadata` (`api/services/url_extraction.py`) fournissent la même vraie extraction par lisibilité déjà utilisée pour l'import de documents depuis une URL.
+
+**Déviation réelle documentée** : les fonctions littérales `extract_url_content(html)`/`extract_url_metadata(html)` (1 argument) deviennent réellement `(url, html)` -- les vraies fonctions réutilisées ont besoin de `url` (le vrai `source_url`, le vrai repli de titre) ; le perdre aurait signifié dupliquer la fonction avec `url=""` en dur, ou perdre une vraie fonctionnalité.
+
+✅ **`URL_READER_MAX_SIZE`, vrai plafond supplémentaire** au-dessus de `MAX_DOCUMENT_UPLOAD_BYTES` (déjà appliqué à l'intérieur de `fetch_url_content`, dimensionné pour un vrai import de document, pas le vrai budget plus strict d'un agent) -- vérifié après le vrai fetch.
+
+✅ **`URL_READER_ALLOWED_DOMAINS`/`URL_READER_BLOCKED_DOMAINS` réellement câblés** -- une vraie couche de politique supplémentaire, pas la vraie défense SSRF elle-même (qui reste à la couche connexion de `url_fetching`, non contournable par un simple nom de domaine).
+
+**Robustesse (vision critique)** : URL inaccessible → vraie `UrlReaderError`, testé.
+
+Tests réels dédiés (10 tests), voir `tests/test_url_reader.py`. Suite `test_url_fetching.py`/`test_url_extraction.py` reconfirmée intacte.
+
 Human Escalation : existe déjà côté `src/`, non revérifié.
-URL Reader, Calendar complet, Email, Custom Tools (webhooks) : ⬜.
+Calendar complet, Email, Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
