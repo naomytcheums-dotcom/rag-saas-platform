@@ -5956,6 +5956,55 @@ splitting).
 scope limit as Partie 3.2.2 -- standalone capability, not yet wired
 into the real ingestion pipeline.
 
+### Partie 3.2.4 -- Markdown-aware chunking
+
+New module `api/services/markdown_chunking.py`: `parse_markdown_structure`/
+`chunk_markdown_by_headings`/`chunk_markdown_by_sections`/
+`chunk_markdown_code_blocks`/`chunk_markdown_tables`/
+`chunk_markdown_lists` (item 2's own literal functions). Unlike Partie
+3.2.2's own generic `chunk_recursive_markdown` (character-count
+splitting with Markdown-flavored separator priority), every function
+here understands real Markdown STRUCTURE (real headings, real fenced
+code blocks, real pipe tables, real lists) and chunks along those real
+boundaries instead of a blind character count.
+
+**Reuses Partie 3.1.9's own real heading/section extraction**
+(`extract_headings_markdown`/`build_section_hierarchy`/
+`split_by_headings`) rather than a second, duplicate Markdown
+structure parser, and **Partie 3.2.2's own real recursive splitter**
+(`chunk_recursive_markdown`/`chunk_recursive_text`) for oversized
+pieces. **A real, deliberate refactor**: Partie 3.2.2's own small-chunk
+merge (`_merge_small_chunks`, already fixed in Partie 3.2.3 to respect
+`max_size`) is made public as `merge_small_text_chunks` in
+`api/services/chunking.py`, reused as-is here rather than a third,
+duplicate implementation carrying the same bug risk.
+
+**`chunk_markdown_by_headings`**: splits only at real TOP-LEVEL
+headings (`level <= MARKDOWN_CHUNK_MIN_HEADING_LEVEL`, real H1/H2 by
+default), leaving deeper real subsections inside their own parent
+chunk. **`chunk_markdown_by_sections`**, the finer alternative: reuses
+`build_section_hierarchy` so EVERY real heading level becomes its own
+chunk, each prefixed with a real breadcrumb path to keep the real
+hierarchical context once split apart from the rest of the document.
+
+**Real code-block preservation** (`MARKDOWN_CHUNK_PRESERVE_CODE_BLOCKS`):
+a real fenced code block stays one atomic chunk, never split mid-block,
+even past `max_chunk_size` -- a real, honest, documented deviation,
+since splitting inside a real fenced block would produce
+syntactically broken pieces. **`chunk_markdown_tables`**: detects real,
+contiguous Markdown pipe tables (a real header row, a real
+`|---|---|`-style separator row, then real body rows). **`chunk_markdown_lists`**:
+groups real, contiguous bulleted/numbered list blocks -- a real,
+honest, documented limitation: two real lists separated by only a
+single blank line (no other content between them) merge into one real
+block, since Markdown itself doesn't strictly require a blank line to
+end a list and there is no fully reliable, dependency-free signal to
+tell them apart in that case.
+
+**Real verification**: `tests/test_markdown_chunking.py` (17 tests),
+including a direct regression check that a real fenced code block
+never gets split even with a deliberately tiny `max_chunk_size`.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

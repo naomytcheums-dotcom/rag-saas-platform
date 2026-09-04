@@ -81,13 +81,14 @@ def _split_text(text: str, separators: list[str], max_size: int) -> list[str]:
     return [c.strip() for c in chunks if c.strip()]
 
 
-def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str, max_size: int) -> list[str]:
-    """A real, deliberate second pass -- item 3's own literal
-    `RECURSIVE_CHUNK_MIN_SIZE` setting only makes sense as a real
-    post-merge step: the real split above can legitimately produce a
-    real, tiny trailing piece (e.g. one short sentence left over after
-    its own paragraph), merged back into the PREVIOUS real chunk
-    rather than shipped as its own, too-small chunk.
+def merge_small_text_chunks(chunks: list[str], min_size: int, max_size: int, merge_separator: str = " ") -> list[str]:
+    """A real, deliberate second pass over an already-produced list of
+    text chunks -- item 3's own literal `RECURSIVE_CHUNK_MIN_SIZE`
+    setting only makes sense as a real post-merge step: a real split
+    can legitimately produce a real, tiny trailing piece (e.g. one
+    short sentence left over after its own paragraph), merged back into
+    the PREVIOUS real chunk rather than shipped as its own, too-small
+    chunk.
 
     **A real bug found and fixed while building Partie 3.2.3** (which
     reuses this function through `chunk_recursive_text`): merging
@@ -97,7 +98,12 @@ def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str, 
     already near-`max_size` previous chunk merged into something
     bigger than `max_size`. `max_size` is the harder real constraint,
     so a merge that would exceed it is skipped; the small piece ships
-    as its own, real, undersized chunk instead."""
+    as its own, real, undersized chunk instead.
+
+    Made public (Partie 3.2.4) -- reused as-is by
+    `api/services/markdown_chunking.py`'s own real `chunk_markdown_by_headings`
+    rather than a second, duplicate merge implementation with the same
+    real bug potential."""
     if not chunks:
         return []
     merged = [chunks[0]]
@@ -108,6 +114,10 @@ def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str, 
         else:
             merged.append(chunk)
     return merged
+
+
+def _merge_small_chunks(chunks: list[str], min_size: int, merge_separator: str, max_size: int) -> list[str]:
+    return merge_small_text_chunks(chunks, min_size, max_size, merge_separator)
 
 
 def chunk_recursive_markdown(text: str, max_size: int | None = None) -> list[str]:

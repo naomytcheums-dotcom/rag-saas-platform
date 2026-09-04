@@ -227,7 +227,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.2.1 | Fixed-size (512 tokens, overlap 50) | ✅ Existe déjà (`chunk_text`, `api/security/documents.py`, tokens réels via le tokenizer du modèle d'embedding, `chunk_size`/`chunk_overlap` réels par organisation) |
 | 3.2.2 | Recursive | ✅ Voir détails ci-dessous |
 | 3.2.3 | Semantic chunking | ✅ Voir détails ci-dessous |
-| 3.2.4 | Markdown-aware | ⬜ |
+| 3.2.4 | Markdown-aware | ✅ Voir détails ci-dessous |
 | 3.2.5 | Code-aware (tree-sitter) | ⬜ |
 | 3.2.6 | Sentence-based | ⬜ |
 | 3.2.7 | Paragraph-based | ⬜ |
@@ -240,6 +240,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.2.3 — Chunking sémantique
 
 ✅ **Nouveau module réel** `api/services/semantic_chunking.py` : `compute_sentence_embeddings`/`compute_semantic_similarity`/`find_breakpoints`/`chunk_by_semantic_similarity`/`merge_semantic_chunks` (fonctions littérales de l'item 2). **Réutilise l'infrastructure d'embeddings réelle déjà existante** (`generate_embeddings`, `api/security/documents.py`, le même vrai modèle sentence-transformers utilisé depuis la Partie 2.1.1 pour le pipeline RAG lui-même) plutôt que de construire une nouvelle infrastructure d'embeddings -- valeur par défaut réelle : `DEFAULT_SETTINGS["embedding_model"]` (`api/security/organization_settings.py`) quand aucun contexte d'organisation n'est fourni, puisque ces 5 fonctions sont une capacité autonome, non encore câblée dans `process_document` (même raisonnement que la Partie 3.2.2). **Réutilise aussi** le séparateur de phrases réel de la Partie 3.1.10 (`split_sentences`, rendu public dans `api/services/metadata_enrichment.py` -- renommé depuis `_split_sentences` précisément pour cette réutilisation, `tests/test_metadata_enrichment.py` mis à jour en conséquence) et le découpeur récursif réel de la Partie 3.2.2 (`chunk_recursive_text`) comme filet de sécurité pour le rare chunk sémantique encore trop grand après regroupement (une seule phrase plus longue que `SEMANTIC_CHUNK_MAX_SIZE`). **Vrai algorithme** : un vrai point de rupture sémantique est placé entre deux phrases réelles CONSÉCUTIVES dont la similarité cosinus réelle tombe sous `SEMANTIC_CHUNK_THRESHOLD` (0.7 par défaut) -- les phrases sémantiquement proches restent dans le même chunk, une vraie rupture de sujet en crée un nouveau. **Vrai bug trouvé et corrigé en testant** (dans `_merge_small_chunks`, réutilisé depuis la Partie 3.2.2 via `chunk_recursive_text`, appelé par `merge_semantic_chunks`) : la fusion d'un petit morceau final réel dans le chunk précédent ne vérifiait jamais que le résultat réel respectait toujours `max_size` -- un vrai petit reliquat pouvait faire dépasser un chunk déjà proche de `max_size`, cassant silencieusement la garantie fondamentale du module entier ("aucun chunk ne dépasse jamais `max_size`"). Corrigé en ne fusionnant que si le résultat réel tient toujours dans `max_size`, sinon le petit morceau reste son propre chunk réel, trop petit mais honnête -- confirmé par un vrai test de régression dédié dans `tests/test_chunking.py` ET par la découverte initiale du bug via un vrai test de `tests/test_semantic_chunking.py`. **Tests réels** : `tests/test_semantic_chunking.py` (15 tests), utilisant le vrai modèle d'embedding réel (pas de mock -- même précédent réel que `tests/test_documents_integration.py`), avec deux vrais sujets distincts (cuisine vs astronomie) pour vérifier une vraie séparation sémantique, plus tous les cas limites réels (entrée vide, une seule phrase, vecteurs orthogonaux/opposés/nuls, fusion et découpage dur réels).
+
+#### Partie 3.2.4 — Chunking sensible au Markdown
+
+✅ **Nouveau module réel** `api/services/markdown_chunking.py` : `parse_markdown_structure`/`chunk_markdown_by_headings`/`chunk_markdown_by_sections`/`chunk_markdown_code_blocks`/`chunk_markdown_tables`/`chunk_markdown_lists` (fonctions littérales de l'item 2). Contrairement au `chunk_recursive_markdown` générique de la Partie 3.2.2 (découpage par nombre de caractères avec des séparateurs à saveur Markdown), chaque fonction ici comprend la vraie STRUCTURE Markdown (vrais titres, vrais blocs de code, vrais tableaux, vraies listes) et découpe le long de ces vraies limites plutôt qu'un simple comptage de caractères aveugle. **Réutilise l'extraction de titres/sections réelle de la Partie 3.1.9** (`extract_headings_markdown`/`build_section_hierarchy`/`split_by_headings`) plutôt qu'un second analyseur de structure dupliqué, et **le découpeur récursif réel de la Partie 3.2.2** (`chunk_recursive_markdown`/`chunk_recursive_text`) pour les morceaux trop grands. **Refactorisation réelle et délibérée** : la fusion des petits morceaux de la Partie 3.2.2 (`_merge_small_chunks`, déjà corrigée à la Partie 3.2.3 pour respecter `max_size`) est rendue publique sous le nom `merge_small_text_chunks` dans `api/services/chunking.py`, réutilisée telle quelle ici plutôt qu'une troisième implémentation dupliquée avec le même risque de bug. **`chunk_markdown_by_headings`** : découpe uniquement aux vrais titres de NIVEAU SUPÉRIEUR (`level <= MARKDOWN_CHUNK_MIN_HEADING_LEVEL`, H1/H2 réels par défaut), laissant les vraies sous-sections plus profondes à l'intérieur de leur propre chunk parent. **`chunk_markdown_by_sections`**, alternative plus fine : réutilise `build_section_hierarchy` pour que CHAQUE niveau de titre réel devienne son propre chunk, préfixé d'un vrai fil d'Ariane (breadcrumb) réel pour garder le contexte hiérarchique une fois séparé du reste du document. **Préservation réelle des blocs de code** (`MARKDOWN_CHUNK_PRESERVE_CODE_BLOCKS`) : un vrai bloc de code entre ``` ``` ``` reste un chunk atomique, jamais coupé au milieu, même s'il dépasse `max_chunk_size` -- une vraie déviation honnête et documentée, car découper un bloc de code réel produirait des morceaux syntaxiquement cassés. **`chunk_markdown_tables`** : détecte les vrais tableaux Markdown contigus (ligne d'en-tête + ligne de séparation `|---|---|` + lignes de corps). **`chunk_markdown_lists`** : regroupe les vraies listes à puces/numérotées contiguës, limite réelle et documentée -- deux vraies listes séparées par une seule ligne vide (sans autre contenu entre elles) sont fusionnées en un seul bloc, faute de signal fiable sans dépendance pour les distinguer. Tests réels dédiés (17 tests, y compris la non-coupure d'un bloc de code réel même avec un `max_chunk_size` minuscule), voir `tests/test_markdown_chunking.py`.
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -431,14 +435,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 91 | 18.2% |
+| ✅ Fait | 92 | 18.4% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 343 | 68.6% |
+| ⬜ Non commencé | 342 | 68.4% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **98/515 (~19.0%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **170/515 (~33.0%)**
-- Pondéré (✅=1, 🟡=0.5) : **~131/515 (~25.4%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **99/515 (~19.2%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **171/515 (~33.2%)**
+- Pondéré (✅=1, 🟡=0.5) : **~132/515 (~25.6%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
