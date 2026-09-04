@@ -664,7 +664,21 @@ Tests réels dédiés (16 tests fonction+endpoint + 1 test d'intégration orches
 
 Tests réels dédiés (7 tests, embeddings réels, pas de mock), voir `tests/test_search_kb_tool.py`.
 
-GitHub, Human Escalation : existent déjà côté `src/`, non revérifiés.
+#### Partie 5.2.3 — GitHub (issues, repos)
+
+✅ **Nouveau module réel** `api/tools/github_tools.py` : les 6 fonctions littérales. **Réutilisation réelle, pas duplication** : `github_get_repo`/`github_list_issues` sont de vrais wrappers fins autour de `api/services/github_extraction.py`'s déjà réels `fetch_github_repo`/`fetch_github_issues` (Partie 2.1.12/2.1.13) -- même vraie logique HTTP, même vraie distinction PR-vs-issue déjà vérifiée contre la vraie API GitHub.
+
+**Décision réelle et délibérée : PAS de renommage des helpers privés** `_client`/`_headers`/`_raise_for_github_response` de `github_extraction.py` en publics -- tenté une fois, annulé : `async with _client() as client:` apparaît à chaque site d'appel réel de ce module, et un renommage aveugle de `_client` en `client` masque silencieusement la fonction fabrique du même nom par la variable locale de la boucle (toujours du Python valide, mais un vrai risque inutile pour un module déjà testé). Ce module construit son propre petit client HTTP réel et équivalent à la place, pour les vrais NOUVEAUX endpoints (issue unique, pull requests, recherche de code) que `github_extraction.py` ne couvre pas encore.
+
+✅ **Vraie réutilisation du token** : `settings.GITHUB_API_TOKEN`, le même réglage réel déjà utilisé par la Partie 2.1.12 -- aucun second réglage déclaré.
+
+✅ **`github_search_code`, contrainte réelle honnête** : l'API réelle de recherche de code GitHub exige un token authentifié -- rejette explicitement (erreur réelle claire) sans token, plutôt que de laisser GitHub renvoyer une erreur opaque.
+
+**Robustesse (vision critique)** : erreurs API réelles mappées (404/401/403 rate-limit), testé, même précédent que `github_extraction.py`.
+
+Tests réels dédiés (9 tests, `httpx.MockTransport` réel -- vrai parsing requête/réponse, faux transport réseau, même précédent que `tests/test_github_extraction.py`), voir `tests/test_github_tools.py`.
+
+Human Escalation : existe déjà côté `src/`, non revérifié.
 Web Search (Tavily), Database (SQL), Calculator étendu, URL Reader,
 Calendar complet, Email, Custom Tools (webhooks) : ⬜.
 

@@ -7074,6 +7074,41 @@ honestly matches nothing until that pre-existing gap is closed.
 **Real verification**: 7 tests, real embeddings, no mocking,
 `tests/test_search_kb_tool.py`.
 
+### Partie 5.2.3 -- GitHub (issues, repos)
+
+New module `api/tools/github_tools.py`: all 6 literal functions. **Real
+reuse, not duplication**: `github_get_repo`/`github_list_issues` are
+real, thin wrappers around `api/services/github_extraction.py`'s
+already-real `fetch_github_repo`/`fetch_github_issues` (Partie
+2.1.12/2.1.13) -- the same real HTTP logic, the same real PR-vs-issue
+distinction already verified against the real GitHub API.
+
+**A real, deliberate choice NOT to rename** that module's own private
+`_client`/`_headers`/`_raise_for_github_response` helpers to public --
+attempted once, reverted: `async with _client() as client:` appears at
+every one of that module's own real call sites, and a blind rename of
+`_client` to `client` silently shadows the module-level factory
+function with the loop's own local variable of the same name (still
+valid Python, but a real, needless risk to an already-tested module).
+This module builds its own small, real, equivalent HTTP setup instead,
+for the genuinely NEW real endpoints (single issue, pull requests,
+code search) `github_extraction.py` doesn't cover yet.
+
+**Real token reuse**: `settings.GITHUB_API_TOKEN`, the same real
+setting Partie 2.1.12 already uses -- no second setting declared.
+
+**`github_search_code`, a real, honest constraint**: GitHub's real Code
+Search API requires an authenticated token -- this rejects explicitly
+(a real, clear error) without one, rather than letting GitHub return an
+opaque failure.
+
+**Robustness (vision critique)**: real API errors mapped (404/401/403
+rate-limit), tested, same precedent as `github_extraction.py`.
+
+**Real verification**: 9 tests, real `httpx.MockTransport` (real
+request/response parsing, fake network transport, same precedent as
+`tests/test_github_extraction.py`), `tests/test_github_tools.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
