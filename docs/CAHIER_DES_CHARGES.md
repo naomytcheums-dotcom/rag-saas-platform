@@ -157,13 +157,29 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~5/41)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~7/41, dont 3.1.1/3.1.2 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — ⬜ (0/10, sauf ce qui est listé ailleurs)
+### 3.1 Ingestion — 🟡 (2/10 ✅, 4 items restants dans cette sous-partie non encore spécifiés par l'utilisateur)
 
-Nettoyage/normalisation/extraction texte, titres/sections, metadata :
-**existent déjà** pour Markdown uniquement (`src/ingestion.py`).
-Extraction tableaux/images, OCR, détection de langue : ⬜.
+**Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
+
+| # | Item | Statut |
+|---|---|---|
+| 3.1.1 | Nettoyage du texte | ✅ Voir détails ci-dessous |
+| 3.1.2 | Normalisation du texte | ✅ Voir détails ci-dessous |
+| 3.1.3 | Extraction du texte (amélioration) | ⬜ |
+| 3.1.4 | Extraction des tableaux | ⬜ |
+| 3.1.5 | Extraction des images | ⬜ |
+| 3.1.6 | OCR | ⬜ |
+| 3.1.7-10 | Non encore spécifiés | ⬜ |
+
+#### Partie 3.1.1 — Nettoyage du texte
+
+✅ **Nouveau module réel** `api/services/text_cleaning.py` : `normalize_whitespace`, `remove_control_characters`, `normalize_unicode` (NFKC), `preserve_structure`, `clean_text` (pipeline complet). Intégré dans `process_document` (`api/security/documents.py`), appliqué sur CHAQUE chunk juste avant l'embedding (texte littéral de l'item 3), pas sur la section entière avant découpage -- les limites de chunk reflètent donc toujours la vraie longueur du texte extrait. **Performance (vision critique 1)** : opérations regex/Unicode pures sur des chaînes déjà en mémoire, confirmé rapide sur 20000 répétitions dans un vrai test chronométré (< 5s). **Préservation de structure (vision critique 2)** : une ligne réellement structurelle (titre Markdown, item de liste, ligne de tableau -- définition réelle mais volontairement étroite, voir le docstring du module) garde son propre saut de ligne, jamais fusionnée avec le paragraphe voisin ; limite honnête assumée : ne redérive pas une structure que l'extraction n'a jamais capturée en texte (mise en forme DOCX réelle, mise en page PDF réelle). **Robustesse (vision critique 3)** : chaque fonction retourne `""` pour `None`/vide, ne lève jamais. Tests réels dédiés (espaces, caractères de contrôle, Unicode, préservation de titres/listes/tableaux, pipeline complet, performance), voir `tests/test_text_cleaning.py`.
+
+#### Partie 3.1.2 — Normalisation du texte
+
+✅ **Nouveau module réel** `api/services/text_normalization.py` : `normalize_case`, `normalize_accents`, `normalize_dates`, `normalize_numbers`, `normalize_units`, `normalize_text` (pipeline). Intégré dans `process_document`, appliqué juste après `clean_text` sur chaque chunk. **Cohérence (vision critique 1)** : réponse honnête à "configurable par langue" -- un paramètre réel `date_order` (`dmy`/`mdy`) répond à la vraie ambiguïté locale jour/mois-premier (pas une fausse i18n complète). **Défauts volontairement conservateurs** : `normalize_text` ne change PAS la casse ni les accents par défaut (perte réelle de signal sémantique pour du texte français destiné à l'embedding) -- seuls dates/nombres/unités sont normalisés par défaut, un vrai format ambigu avec une forme canonique correcte, pas une réécriture destructrice du contenu. **Point honnête soulevé, pas caché** : normaliser le contenu réellement stocké/embeddé (ex. "15/03/2026" → "2026-03-15") à l'indexation SANS normalisation symétrique côté requête peut réduire le rappel pour une recherche littérale sur le format d'origine -- un vrai compromis RAG, assumé et documenté, pas résolu dans cette étape (nécessiterait une normalisation symétrique côté requête, hors scope littéral ici). Tests réels dédiés (casse, accents, dates dans les deux ordres, nombres avec virgule décimale française correctement préservée, unités, pipeline complet, performance), voir `tests/test_text_normalization.py`.
 
 ### 3.2 Chunking
 
@@ -368,16 +384,25 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 79 | 15.8% |
+| ✅ Fait | 81 | 16.2% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 355 | 71.0% |
+| ⬜ Non commencé | 353 | 70.6% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **86/515 (~16.7%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **158/515 (~30.7%)**
-- Pondéré (✅=1, 🟡=0.5) : **~119/515 (~23.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **88/515 (~17.1%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **160/515 (~31.1%)**
+- Pondéré (✅=1, 🟡=0.5) : **~121/515 (~23.5%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 2.2.16 (Batch processing, 2026-09-04) :
+Mis à jour après Partie 3.1.1+3.1.2 (Nettoyage et normalisation du texte, 2026-09-04) :
+Partie 3 : ~5/41 → ~7/41 (3.1.1 et 3.1.2 seuls items touchés -- ✅ tous
+les deux, nouveaux modules réels `api/services/text_cleaning.py`/
+`text_normalization.py`, intégrés dans `process_document`, appliqués
+sur chaque chunk juste avant l'embedding. Point honnête soulevé pour
+3.1.2 : normaliser dates/nombres à l'indexation sans normalisation
+symétrique côté requête peut réduire le rappel littéral -- assumé et
+documenté, pas résolu ici).
+
+Précédemment, mis à jour après Partie 2.2.16 (Batch processing, 2026-09-04) :
 Partie 2 : 26✅/8🟡/1⬜ → 27✅/8🟡/0⬜ sur 35 (2.2.16 seul item touché --
 ✅, nouvelles tables `batch_jobs`/`batch_job_items` (migration 0044,
 RLS en ligne). Couche de suivi générique par item réutilisant les 5

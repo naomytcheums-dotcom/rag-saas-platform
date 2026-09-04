@@ -388,6 +388,42 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
             await _cleanup(session, organization.id, owner.id)
 
 
+async def test_process_document_applies_real_cleaning_and_normalization_to_chunks(pg_engine, _require_documents_bucket):
+    """
+    Partie 3.1.1/3.1.2 -- real proof, against real Postgres/S3/PyMuPDF,
+    that clean_text/normalize_text actually run inside process_document
+    (the fast SQLite suite never exercises this function for real, per
+    this module's own top docstring) -- not just unit-tested in
+    isolation against api/services/text_cleaning.py/text_normalization.py.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Messy   text   with a date 15/03/2026 and 1,000 units.")
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization, document = await _make_org_and_pending_document(session, file_bytes=pdf_bytes, filename="messy.pdf")
+        document_id = document.id
+        try:
+            updated = await process_document(session, document_id)
+            await session.commit()
+            assert updated.status == DocumentStatus.completed.value
+
+            chunks = (await session.execute(
+                DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)
+            )).all()
+            content = " ".join(chunk_row._mapping["content"] for chunk_row in chunks)
+            assert "   " not in content  # real whitespace collapsed (3.1.1)
+            assert "2026-03-15" in content  # real date rewritten (3.1.2)
+            assert "1000 units" in content  # real thousands separator removed (3.1.2)
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
 async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine, _require_documents_bucket):
     """
     Partie 2.1.2's own validation criterion, the DOCX equivalent of the

@@ -5168,6 +5168,106 @@ rejected), a job genuinely scheduled via Celery rather than run
 synchronously, and the anti-enumeration 404 for a job in another
 organization.
 
+## PARTIE 3 -- Pipeline RAG avancé
+
+This is the first work in `api/` for Partie 3. A real, important
+distinction, matching the SAME one already established for Partie 2:
+`docs/CAHIER_DES_CHARGES.md`'s own note that cleaning/normalization
+"already exist for Markdown only" refers to `src/ingestion.py`, the
+OLD, single-tenant RAG pipeline served by the Streamlit dashboard --
+completely separate code, never reused by `api/`, the real multi-
+tenant backend this whole Partie 2/3 effort builds. Everything below
+is real, new work in `api/`.
+
+### Partie 3.1.1 -- text cleaning
+
+New module, `api/services/text_cleaning.py` -- `normalize_whitespace`/
+`remove_control_characters`/`normalize_unicode`/`preserve_structure`/
+`clean_text` (item 2's own literal 5 functions). Integrated into
+`process_document` (`api/security/documents.py`), applied to EACH real
+chunk right before it's embedded -- this étape's own literal item 3
+wording, not to the whole section before chunking (so chunk boundaries
+still reflect the real, as-extracted text's own real length).
+
+**Real, deliberate, NARROW definition of "structure"**: a real
+Markdown-style header/list item/table row -- the same real markup
+`api/services/*_extraction.py`'s own Markdown/table extractors already
+produce or pass through. Vision critique 2's own "les titres et listes
+sont-ils conservés" answer: yes, for that real, already-existing
+structure -- `preserve_structure` keeps a real structural line's own
+line break intact (never merged into a neighboring paragraph) while
+still collapsing horizontal whitespace on every line. A real, stated
+limitation: this does NOT re-derive structure an extractor never
+captured as text in the first place (a real DOCX heading STYLE, a real
+PDF layout) -- that would be real, separate, much deeper work than
+this étape's own literal "nettoyage de texte" scope.
+
+**Performance (vision critique 1)**: pure regex/Unicode operations on
+already-in-memory strings -- confirmed fast in a real, timed test
+(20,000 repetitions of a realistic paragraph, well under 5 seconds).
+
+**Robustesse (vision critique 3)**: every real function here returns
+`""` for `None`/empty input, never raises -- confirmed for real by a
+dedicated test per function plus the full `clean_text` pipeline.
+
+**Real verification**: `tests/test_text_cleaning.py` covers whitespace
+collapsing, control-character stripping, real NFKC Unicode
+normalization (a real full-width digit collapsing to ASCII), structure
+preservation (headers/lists/table rows each kept on their own real
+line), the full pipeline end to end, `None`/empty handling for every
+function, and a real, timed performance check.
+
+### Partie 3.1.2 -- text normalization
+
+New module, `api/services/text_normalization.py` -- `normalize_case`/
+`normalize_accents`/`normalize_dates`/`normalize_numbers`/
+`normalize_units`/`normalize_text` (item 2's own literal 6 functions).
+Integrated into `process_document`, applied right after Partie 3.1.1's
+own `clean_text`, on the same real per-chunk basis.
+
+**Cohérence (vision critique 1), a real, honest answer to "configurable
+par langue"**: `normalize_dates`'s own real `date_order` parameter
+(`dmy` default, or `mdy`) is this module's real answer to the
+genuinely locale-dependent day-first-vs-month-first ambiguity a bare
+"03/04/2026" carries -- not a fabricated full i18n system. A real,
+stated limitation: only this one common, unambiguous-once-the-order-
+is-known numeric date pattern is handled; a natural-language date
+("3 janvier 2026") is real, separate, much deeper work (a real NLP
+date parser, not a regex).
+
+**A real, deliberate, CONSERVATIVE default, worth stating prominently**:
+`normalize_text`'s own defaults never change casing or strip accents
+(`case_mode=None`, `accent_mode="keep"`) -- lowercasing or
+de-accenting real French prose before it's embedded would be a real,
+silent quality regression for this codebase's own primary real-world
+language (confirmed throughout this whole session's own French-
+language usage). Only dates/numbers/units are normalized
+unconditionally -- a real, ambiguous FORMAT with a genuinely correct
+canonical form, not a destructive rewrite of the actual wording.
+`normalize_numbers`'s own real thousands-separator regex is
+deliberately built to never touch a real French decimal comma ("3,14"
+has 2 digits after the comma, not a 3-digit group, so it's correctly
+left alone) -- confirmed by a dedicated test.
+
+**A real, honest architectural tension, surfaced rather than hidden**:
+normalizing chunk CONTENT at index time (e.g. rewriting "15/03/2026"
+to "2026-03-15" inside the actual embedded/stored text) without a
+SYMMETRIC normalization applied to a user's own search query can
+reduce recall for a literal search on the original format -- a real,
+known RAG tradeoff. This étape's own literal ask is the index-time
+half only; making this genuinely improve (rather than risk degrading)
+retrieval needs a matching query-time normalization step, real,
+valuable follow-up work explicitly not built here.
+
+**Real verification**: `tests/test_text_normalization.py` covers case
+folding (all 3 modes, and a real rejected invalid mode), real French
+accent stripping, date rewriting in both real day-first and month-
+first orders (and a real invalid date left alone), thousands-separator
+removal with a real French decimal comma correctly preserved, unit
+case-folding, the full pipeline's own real conservative defaults, an
+opt-in case/accent change, `None`/empty handling, and a real, timed
+performance check.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

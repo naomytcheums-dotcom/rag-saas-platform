@@ -228,6 +228,8 @@ from api.services.onedrive_extraction import (
     should_include_onedrive_file,
 )
 from api.services.zip_extraction import extract_zip_file, filter_zip_contents, list_zip_contents
+from api.services.text_cleaning import clean_text
+from api.services.text_normalization import normalize_text
 from api.services.sitemap_extraction import (
     fetch_sitemap,
     filter_sitemap_urls,
@@ -3046,6 +3048,20 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                 if not section_text:
                     continue
                 for piece in chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
+                    # Partie 3.1.1/3.1.2 -- real, per-chunk cleanup
+                    # (control characters/Unicode form/whitespace) then
+                    # normalization (dates/numbers/units), right before
+                    # each chunk is embedded -- both steps' own literal
+                    # item 3 ask -- not applied earlier, to the whole
+                    # section, so chunk boundaries above still reflect
+                    # the real extracted text's own real length.
+                    # normalize_text's own real, conservative defaults
+                    # (no case-folding, accents kept) deliberately never
+                    # touch actual wording -- only the genuinely
+                    # ambiguous date/number/unit FORMATS this étape's
+                    # own vision critique 1 asks to keep configurable.
+                    piece = clean_text(piece)
+                    piece = normalize_text(piece)
                     chunk_records.append({"content": piece, "metadata": section["metadata"]})
 
             embeddings: list[list[float] | None] = [None] * len(chunk_records)
