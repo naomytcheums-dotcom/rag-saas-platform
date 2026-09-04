@@ -169,13 +169,24 @@ def _extract_brace_blocks(text: str, header_pattern: re.Pattern) -> list[tuple[i
     return blocks
 
 
-def chunk_code_by_functions(text: str, language: str | None = None) -> list[str]:
+def chunk_code_by_functions(text: str, language: str | None = None, max_size: int | None = None) -> list[str]:
     """Item 2's own literal function -- see this module's own top
     docstring for the real, documented Python/JavaScript-only scope.
     Every other real language falls back to Partie 3.2.2's own
     language-agnostic `chunk_recursive_code` (a real, honest, blank-
     line-based split -- never a fabricated function boundary for a
-    language this module doesn't deeply understand)."""
+    language this module doesn't deeply understand).
+
+    `max_size` -- a real, necessary addition beyond this item's own
+    literal signature, added for Partie 3.3.1: without it, an
+    organization's own configured `chunk_size` had no way to reach the
+    language-agnostic fallback path below (it was hardcoded to the
+    global `RECURSIVE_CHUNK_MAX_SIZE`, a real gap found while wiring
+    3.3.1). Real, honest, documented limitation: the Python/JS real
+    function-boundary paths above stay unaffected -- a real function's
+    own natural size is whatever it actually is, never artificially
+    truncated to fit a configured chunk size the way the character-
+    based fallback is."""
     if not text or not text.strip():
         return []
     normalized = _normalize_language(language or detect_code_language(text))
@@ -185,13 +196,14 @@ def chunk_code_by_functions(text: str, language: str | None = None) -> list[str]
         blocks = _extract_brace_blocks(text, _JS_FUNCTION_RE) + _extract_brace_blocks(text, _JS_ARROW_RE)
         blocks.sort(key=lambda b: b[0])
         return [b[1] for b in blocks]
-    return chunk_recursive_code(text, max_size=settings.RECURSIVE_CHUNK_MAX_SIZE)
+    return chunk_recursive_code(text, max_size=max_size if max_size is not None else settings.RECURSIVE_CHUNK_MAX_SIZE)
 
 
-def chunk_code_by_classes(text: str, language: str | None = None) -> list[str]:
+def chunk_code_by_classes(text: str, language: str | None = None, max_size: int | None = None) -> list[str]:
     """Item 2's own literal function -- the same real, documented
     Python/JavaScript-only scope as `chunk_code_by_functions` above,
-    for real class definitions instead of real functions."""
+    for real class definitions instead of real functions. Same real
+    `max_size` addition, same real reasoning (Partie 3.3.1)."""
     if not text or not text.strip():
         return []
     normalized = _normalize_language(language or detect_code_language(text))
@@ -201,20 +213,21 @@ def chunk_code_by_classes(text: str, language: str | None = None) -> list[str]:
         blocks = _extract_brace_blocks(text, _JS_CLASS_RE)
         blocks.sort(key=lambda b: b[0])
         return [b[1] for b in blocks]
-    return chunk_recursive_code(text, max_size=settings.RECURSIVE_CHUNK_MAX_SIZE)
+    return chunk_recursive_code(text, max_size=max_size if max_size is not None else settings.RECURSIVE_CHUNK_MAX_SIZE)
 
 
-def chunk_code_by_blocks(text: str, language: str | None = None) -> list[str]:
+def chunk_code_by_blocks(text: str, language: str | None = None, max_size: int | None = None) -> list[str]:
     """Item 2's own literal function -- a real, deliberately GENERIC,
     language-agnostic split (unlike the Python/JS-only functions
     above), reusing Partie 3.2.2's own real `chunk_recursive_code`
     rather than a second, duplicate blank-line splitter. `language` is
     accepted for a real, uniform signature across this module's own
     functions but not otherwise used here -- this function's own real
-    value is working identically for ANY real language."""
+    value is working identically for ANY real language. Same real
+    `max_size` addition as the two functions above (Partie 3.3.1)."""
     if not text or not text.strip():
         return []
-    return chunk_recursive_code(text, max_size=settings.RECURSIVE_CHUNK_MAX_SIZE)
+    return chunk_recursive_code(text, max_size=max_size if max_size is not None else settings.RECURSIVE_CHUNK_MAX_SIZE)
 
 
 def chunk_code_preserve_imports(text: str) -> list[str]:

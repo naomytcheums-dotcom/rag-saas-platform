@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from api.config import settings
 from api.security.organization_settings import is_valid_timezone
 
 
@@ -36,16 +37,25 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     but real -- each one rejects a value that could never be sensible,
     not just a placeholder `...: int | None = None`."""
 
-    chunk_size: int | None = Field(default=None, ge=1, description="Tokens per chunk")
+    # Partie 3.3.1's own real, genuine gap fix: chunk_size previously had
+    # no upper bound at all (`ge=1` only) -- see api/config.py's own
+    # CHUNK_SIZE_MAX_TOKENS docstring for why.
+    chunk_size: int | None = Field(default=None, ge=1, le=settings.CHUNK_SIZE_MAX_TOKENS, description="Tokens per chunk")
     chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive chunks")
     embedding_model: str | None = Field(default=None, min_length=1, max_length=200)
     llm_provider: Literal["anthropic", "openai", "gemini"] | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=200)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    top_k: int | None = Field(default=None, ge=1)
+    # Partie 3.3.6's own real bound, matching that étape's own literal
+    # ask ("min: 1, max: 100") -- shares api/config.py's own real
+    # TOP_K_MAX with api/services/retrieval_config.py's own
+    # resolve_top_k, rather than 2 independently hardcoded "100"s.
+    top_k: int | None = Field(default=None, ge=1, le=settings.TOP_K_MAX)
     reranker_model: str | None = Field(default=None, min_length=1, max_length=200)
     system_prompt: str | None = Field(default=None, min_length=1, max_length=10_000)
-    retrieval_strategy: Literal["hybrid", "vector_only", "bm25_only"] | None = None
+    # Widened for Partie 3.3.4's own literal 5-strategy list (was 3 --
+    # hybrid/vector_only/bm25_only only).
+    retrieval_strategy: Literal["hybrid", "vector_only", "bm25_only", "hybrid_reranked", "semantic"] | None = None
     max_tokens: int | None = Field(default=None, ge=1)
     citation_required: bool | None = None
     language: str | None = Field(default=None, pattern=r"^[a-z]{2}(-[A-Z]{2})?$", description="e.g. 'en', 'fr', 'en-US'")

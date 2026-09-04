@@ -7,18 +7,43 @@ stores only overrides, never a full snapshot of every default.
 14 settings is genuinely stored and genuinely readable/writable through
 the real endpoints below -- unlike quotas/limits/usage, there is no
 "not yet trackable" subset here, because a setting is pure
-configuration with nothing to measure against. What IS still true,
-though, is that nothing in api/ currently READS these settings to
-change its own behavior, because api/ has zero import dependency on
-src/ (the actual RAG pipeline -- chunking, embedding, retrieval,
-generation) and src/ has zero concept of an organization. Every one of
-these 14 values is independently hardcoded today in src/ (verified by
-reading the actual constants, not assumed):
+configuration with nothing to measure against.
 
-- chunk_size / chunk_overlap: `CHUNK_SIZE_TOKENS = 512` /
-  `CHUNK_OVERLAP_TOKENS` in src/indexing.py
-- embedding_model: `EMBEDDING_MODEL_NAME` in src/indexing.py and
-  src/retrieval.py (both hardcode the same literal string independently)
+**Updated at Partie 3.3.1/3.3.2/3.3.3 -- this paragraph was stale**: at
+the time this docstring was first written (Partie 1.3.9), NOTHING in
+api/ read these settings, because api/'s own document-ingestion
+pipeline (api/security/documents.py) didn't exist yet. That's no
+longer true for 3 of these 14 settings, verified by reading the actual
+call sites, not assumed:
+
+- chunk_size / chunk_overlap: read for real in
+  `api/security/documents.py`'s own `process_document`, passed straight
+  into `chunk_text` (Partie 3.2.1) -- real, live, per-organization
+  chunking. `api/services/chunk_config.py` (Partie 3.3.1/3.3.2) adds a
+  real, reusable `resolve_chunk_size`/`resolve_chunk_overlap` pair on
+  top, for the 7 newer, standalone chunking strategies from Partie
+  3.2.2-3.2.8 (still not wired into `process_document` itself -- see
+  each one's own module for why).
+- embedding_model: read for real in the same `process_document`,
+  passed into `generate_embeddings`/`_get_embedder` -- real, live,
+  per-organization embedding model selection.
+  `api/services/embedding_config.py` (Partie 3.3.3) adds real
+  validation against a known, documented model allowlist.
+
+The remaining 11 settings are still genuinely unread by api/'s own
+pipeline, for the SAME real reason as before -- api/ has no live,
+multi-tenant retrieval/reranking/generation endpoint yet (that
+subsystem still lives only in the separate, single-tenant `src/`
+pipeline described below, which has zero concept of an organization).
+`api/services/retrieval_config.py` (Partie 3.3.4/3.3.5/3.3.6) adds
+real, tested, standalone resolvers for retrieval_strategy/reranker_model/
+top_k -- honestly NOT yet wired into a live retrieval call, because no
+such call exists in api/ to wire into; see that module's own top
+docstring for the full, explicit story.
+
+Every one of the remaining values is independently hardcoded today in
+`src/` (verified by reading the actual constants, not assumed):
+
 - reranker_model: `CROSS_ENCODER_MODEL_NAME` in src/retrieval.py
 - top_k: `FINAL_TOP_K = 5` in src/retrieval.py
 - llm_provider: implicitly "anthropic" -- src/generation.py imports
@@ -39,13 +64,14 @@ reading the actual constants, not assumed):
   src/retrieval.py always does the same hybrid dense+rerank retrieval,
   src/generation.py's Anthropic call has no `temperature` parameter set
 
-Wiring any of this for real means making src/ organization-aware for
-the first time (reading a settings dict as a parameter instead of a
-module-level constant) -- real, substantial work belonging to Parties
-3/4/9 once those pipelines are actually exposed through api/, not a
-side effect of adding a settings table to the multi-tenant SaaS
-backend. See api/models/organization_settings.py and
-docs/AUTH_BACKEND_SETUP.md for the same story in the model/docs layer.
+Wiring any of the remaining 11 for real still means building a live,
+multi-tenant retrieval/reranking/generation endpoint in api/ for the
+first time (src/'s own single-tenant, non-org-aware pipeline is not a
+coherent thing to make "per organization") -- real, substantial work
+belonging to Parties 3/4/9, not a side effect of adding a settings
+table to the multi-tenant SaaS backend. See api/models/organization_settings.py
+and docs/AUTH_BACKEND_SETUP.md for the same story in the model/docs
+layer.
 """
 
 import uuid

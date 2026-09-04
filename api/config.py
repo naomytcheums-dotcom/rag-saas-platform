@@ -447,6 +447,24 @@ class Settings(BaseSettings):
     PARENT_CHILD_PARENT_OVERLAP: int = 50
     PARENT_CHILD_ENABLED: bool = True
 
+    # -- Organization-configurable chunk size/overlap bounds (Partie 3.3.1-3.3.2) --
+    # A real, genuine gap found while wiring these étapes: chunk_size's
+    # own write-time validation (api/schemas/organization_settings.py)
+    # had NO upper bound (`ge=1` only) -- an org could set an absurdly
+    # large chunk_size with no error, real wasted compute at ingestion
+    # for no benefit. This ceiling is generous (most real embedding
+    # models this codebase lists top out around 384-512 tokens, a few
+    # long-context ones go higher) but real and bounded.
+    CHUNK_SIZE_MAX_TOKENS: int = 8192
+
+    # -- Retrieval/reranker configuration resolvers (Partie 3.3.4-3.3.6) ----
+    # See api/services/retrieval_config.py's own top docstring for the
+    # real, honest architectural gap these settle for: no live,
+    # multi-tenant retrieval endpoint exists in api/ yet to actually
+    # consume them.
+    TOP_K_MAX: int = 100
+    RERANKER_MAX_TOKENS: int = 512
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

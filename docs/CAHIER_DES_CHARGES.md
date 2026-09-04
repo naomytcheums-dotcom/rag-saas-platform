@@ -261,10 +261,34 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ✅ **Nouveau module réel** `api/services/parent_child_chunking.py` : `create_parent_chunks`/`create_child_chunks`/`link_child_to_parent`/`get_parent_context`/`chunk_parent_child` (fonctions littérales de l'item 2). Pattern RAG réel et standard : de petits chunks ENFANTS précis portent le vrai signal de recherche (indexés/embeddés pour la récupération), tandis que leur propre chunk PARENT, plus grand, fournit un vrai contexte plus large au LLM une fois un enfant trouvé -- utile quand un chunk assez petit pour être une correspondance précise et non ambiguë est trop petit, seul, pour donner au LLM assez de vrai contexte pour répondre. **Réutilise 3 stratégies de chunking déjà construites comme implémentations `strategy` réelles, interchangeables**, plutôt qu'un quatrième découpeur dupliqué : `chunk_by_sentence_tokens` (Partie 3.2.6, stratégie "sentence", le vrai DÉFAUT ici -- les défauts littéraux de `PARENT_CHILD_*_SIZE`, 512/128, correspondent à la convention réelle déjà établie "taille = tokens" de la Partie 3.2.1), `chunk_by_paragraph_tokens` (Partie 3.2.7, stratégie "paragraph"), et `chunk_recursive_text` (Partie 3.2.2, stratégie "recursive", limite réelle et documentée : cette stratégie n'a pas de vrai concept de chevauchement propre). **Suivi de position réel** : les chunks enfants sont produits en relançant la vraie stratégie choisie sur le texte de CHAQUE PARENT lui-même (jamais sur le document entier indépendamment) -- une vraie garantie structurelle que chaque enfant est un vrai sous-segment de son propre parent, plutôt qu'une vraie recherche-et-correspondance séparée sur tout le document pour retrouver les positions après coup. `_locate_chunks` : un vrai scan séquentiel `text.find` (recherche vers l'avant depuis la fin de la correspondance précédente, pour que du texte réel dupliqué se résolve quand même dans le bon ordre document), avec repli honnête et documenté sur le curseur courant si un chunk reconstruit ne réapparaît plus littéralement. `PARENT_CHILD_ENABLED=False` est un vrai interrupteur d'arrêt délibéré (résultat honnête `{"parents": [], "children": []}`, jamais une exception -- même convention réelle que `LANGUAGE_DETECTION_ENABLED`, Partie 3.1.7). Tests réels dédiés (13 tests, petits et gros documents, les 3 stratégies, l'interrupteur d'arrêt, une stratégie inconnue rejetée), voir `tests/test_parent_child_chunking.py`.
 
-### 3.3 Paramètres configurables — ⬜ (0/7)
+### 3.3 Paramètres configurables — 🟡 (6/7)
 
-Tout est en constantes fixes dans le code (`SEMANTIC_CANDIDATES`,
-`FINAL_TOP_K`, etc.), rien n'est configurable par organisation.
+| # | Paramètre | Statut |
+|---|---|---|
+| 3.3.1 | Chunk size configurable | ✅ Voir détails ci-dessous |
+| 3.3.2 | Chunk overlap configurable | ✅ Voir détails ci-dessous |
+| 3.3.3 | Embedding model configurable | ✅ Voir détails ci-dessous |
+| 3.3.4 | Retrieval strategy configurable | 🟡 Résolveur réel testé, non câblé à un vrai endpoint de recherche (voir détails) |
+| 3.3.5 | Reranker configurable | 🟡 Résolveur réel testé, non câblé à un vrai endpoint de recherche (voir détails) |
+| 3.3.6 | Top-K configurable | 🟡 Résolveur réel testé, non câblé à un vrai endpoint de recherche (voir détails) |
+| 3.3.7 | (non précisé -- texte jamais reçu) | ⬜ |
+
+`src/retrieval.py`'s own fixed constants (`SEMANTIC_CANDIDATES`,
+`FINAL_TOP_K`, etc.) remain unchanged -- voir la Partie 3.3.4 ci-dessous
+pour l'explication complète et honnête de pourquoi (aucun endpoint de
+recherche multi-tenant réel n'existe encore dans `api/`).
+
+#### Partie 3.3.1 — Chunk size configurable & Partie 3.3.2 — Chunk overlap configurable
+
+✅ **Vérification de l'existant (action 1 des deux étapes)** : `chunk_size`/`chunk_overlap` sont DÉJÀ des vrais réglages par organisation, réellement lus dans le pipeline -- `api/security/documents.py`'s own `process_document` transmet déjà `settings_dict["chunk_size"]`/`settings_dict["chunk_overlap"]` à `chunk_text` (Partie 3.2.1), et sont déjà validés à l'écriture (`api/schemas/organization_settings.py` : `chunk_size` `ge=1`, `chunk_overlap` `ge=0`, PLUS une vraie vérification croisée déjà existante dans `api/routers/organization_settings.py`'s own PATCH endpoint : `chunk_overlap` doit être strictement inférieur à `chunk_size`, HTTP 400 sinon -- déjà testé par `tests/test_organization_settings.py`). **Bug de documentation réel trouvé et corrigé** : le docstring du module `api/security/organization_settings.py` (écrit à la Partie 1.3.9, avant que `api/security/documents.py` existe) affirmait à tort que "rien dans api/ ne lit ces réglages" -- corrigé pour refléter l'état réel actuel (3 des 14 réglages SONT lus réellement aujourd'hui : `chunk_size`, `chunk_overlap`, `embedding_model`). **Nouveau module réel** `api/services/chunk_config.py` : `resolve_chunk_size`/`resolve_chunk_overlap` (fonctions littérales de l'item 2 des deux étapes) -- précédence réelle `override > organization_settings > valeur par défaut`, avec une vraie validation défensive (négatif/zéro rejeté, `overlap >= chunk_size` rejeté, même règle réelle que le endpoint PATCH). **Vrai gap trouvé et corrigé** : `chunk_size` n'avait AUCUNE borne supérieure à l'écriture (`ge=1` seul) -- un(e) plafond réel et généreux (`CHUNK_SIZE_MAX_TOKENS = 8192`, `api/config.py`) a été ajouté au schéma. **Vérification réelle de l'action 3 (les 7 stratégies acceptent chunk_size/overlap en paramètre)** : déjà vrai par construction pour les 4 fonctions `chunk_recursive_*`/`merge_semantic_chunks`/toutes les fonctions `chunk_markdown_*`/`chunk_by_sentence*`/`chunk_by_paragraph*`/`chunk_parent_child` (chacune a déjà son propre paramètre `max_size`/`max_chunk_size`/`max_tokens`/`*_size`) -- **sauf un vrai gap réel trouvé en vérifiant** : `chunk_code_by_functions`/`chunk_code_by_classes`/`chunk_code_by_blocks` (Partie 3.2.5) n'avaient AUCUN moyen de recevoir une taille -- corrigé en ajoutant un paramètre `max_size` réel aux 3 fonctions. Tests réels dédiés (18 tests), dont une vraie vérification d'intégration confirmant que les 7 stratégies honorent bien une taille résolue depuis `organization_settings`, voir `tests/test_chunk_config.py`.
+
+#### Partie 3.3.3 — Embedding model configurable
+
+✅ **Vérification de l'existant (action 1)** : `embedding_model` est DÉJÀ un vrai réglage par organisation, réellement lu dans `process_document` et transmis à `generate_embeddings`/`_get_embedder`. **Nouveau module réel** `api/services/embedding_config.py` : `EMBEDDING_MODELS`/`EMBEDDING_DIMENSIONS`/`resolve_embedding_model`/`get_embedding_dimension` (items littéraux 3-5). **Choix de conception réel et délibéré** : `resolve_embedding_model` est une vraie LISTE NOIRE (seuls les 2 modèles connus pour ne pas fonctionner sont refusés), jamais une liste blanche -- une organisation reste libre de configurer tout autre vrai modèle HuggingFace légitime non catalogué ici, le même comportement réel déjà existant de `_get_embedder`. **Déviation réelle et documentée de la liste littérale de l'étape** : les 2 modèles basés sur une API externe (`OpenAI/text-embedding-ada-002`, `Cohere/embed-english-v3.0`, tous deux couverts par la clause "si clé API configurée" du texte littéral) ne sont PAS des options réellement utilisables aujourd'hui -- ce dépôt n'a AUCUNE intégration OpenAI/Cohere nulle part (vérifié : aucun réglage de clé API, aucune dépendance SDK) ; listés avec `available=False` et une vraie raison explicite, jamais silencieusement retirés. Tests réels dédiés (10 tests), dont une vraie vérification d'intégration confirmant que le modèle par défaut réel produit effectivement des vecteurs de la dimension annoncée (384, sans mock, même précédent que `tests/test_documents_integration.py`), voir `tests/test_embedding_config.py`.
+
+#### Partie 3.3.4 — Retrieval strategy configurable, Partie 3.3.5 — Reranker configurable & Partie 3.3.6 — Top-K configurable
+
+🟡 **Fait réel, honnête et documenté avec un vrai écart architectural explicite** : `api/` n'a ENCORE AUCUN endpoint de recherche/reranking multi-tenant réel (la Partie 4 -- recherche -- du cahier des charges maître n'a pas été construite). Le seul vrai code de recherche/reranking de ce dépôt est `src/retrieval.py`, un script CLI/d'évaluation SÉPARÉ, mono-tenant -- sa propre classe `Retriever` charge un unique `chunks.json` global fixe et une unique collection Chroma fixe (`"fastapi_docs"`), sans aucune notion d'organisation. `api/security/organization_settings.py`'s own module docstring documentait déjà honnêtement cet écart avant cette étape (Partie 1.3.9) -- ce travail ne le change pas : câbler `retrieval_strategy`/`reranker_model`/`top_k` dans un vrai appel LIVE nécessite toujours un vrai endpoint de recherche multi-tenant dans `api/`, un vrai travail substantiel séparé (Parties 4/9), hors du périmètre de ces 3 étapes de configuration. **Ce que ces étapes livrent réellement à la place** : `api/services/retrieval_config.py`, de vrais résolveurs autonomes et testés -- `resolve_retrieval_strategy` (5 stratégies littérales réelles, le schéma `retrieval_strategy` élargi de 3 à 5 valeurs pour matcher), `resolve_reranker_model`/`RERANKER_MODELS` (même conception en liste noire que les embeddings ; **un vrai id de modèle malformé signalé** : `cross-encoder/microsoft/deberta-v3-base`, du texte littéral de l'étape, mélange deux vrais espaces de noms HuggingFace différents et ne correspond à aucun vrai modèle -- marqué indisponible avec une raison explicite plutôt que silencieusement accepté ; Cohere refusé pour la même raison réelle que les embeddings), `resolve_top_k` (bornes réelles 1-100, même plafond partagé que le schéma HTTP), et `resolve_reranker_top_k` (RERANKER_TOP_K raffiné en un vrai résolveur dynamique `top_k * 10`, comme demandé par la Partie 3.3.6 -- une vraie évolution documentée par rapport au réglage fixe initial de la Partie 3.3.5). Tests réels dédiés (18 tests), voir `tests/test_retrieval_config.py`.
 
 ### 3.4 Recherche hybride avancée
 
@@ -451,14 +475,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 96 | 19.2% |
-| 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 338 | 67.6% |
+| ✅ Fait | 99 | 19.8% |
+| 🟡 Partiel | 69 | 13.8% |
+| ⬜ Non commencé | 332 | 66.4% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **103/515 (~20.0%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **175/515 (~34.0%)**
-- Pondéré (✅=1, 🟡=0.5) : **~136/515 (~26.4%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **106/515 (~20.6%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **181/515 (~35.1%)**
+- Pondéré (✅=1, 🟡=0.5) : **~140.5/515 (~27.3%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

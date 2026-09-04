@@ -6165,6 +6165,115 @@ already established).
 tests: small and large documents, all 3 strategies, the kill switch,
 an unknown strategy rejected).
 
+### Partie 3.3.1 -- chunk size configurable & Partie 3.3.2 -- chunk overlap configurable
+
+**Verified the existing state (action 1 of both étapes)**: `chunk_size`/
+`chunk_overlap` are ALREADY real, live, per-organization settings --
+`api/security/documents.py`'s own `process_document` already passes
+`settings_dict["chunk_size"]`/`settings_dict["chunk_overlap"]` into
+`chunk_text` (Partie 3.2.1), and both are already validated at write
+time (`api/schemas/organization_settings.py`: `chunk_size` `ge=1`,
+`chunk_overlap` `ge=0`, PLUS a real, already-existing cross-field
+check in `api/routers/organization_settings.py`'s own PATCH endpoint:
+`chunk_overlap` must be strictly less than `chunk_size`, HTTP 400
+otherwise -- already covered by `tests/test_organization_settings.py`).
+
+**A real documentation bug found and fixed**: `api/security/organization_settings.py`'s
+own module docstring (written at Partie 1.3.9, before
+`api/security/documents.py` existed) incorrectly claimed "nothing in
+api/ reads these settings" -- corrected to reflect the real, current
+state (3 of the 14 settings ARE genuinely read today: `chunk_size`,
+`chunk_overlap`, `embedding_model`).
+
+New module `api/services/chunk_config.py`: `resolve_chunk_size`/
+`resolve_chunk_overlap` (item 2's own literal functions for both
+étapes) -- real `override > organization_settings > default`
+precedence, with real, defensive validation (negative/zero rejected,
+`overlap >= chunk_size` rejected, the same real rule the PATCH
+endpoint already enforces). **A real gap found and fixed**: `chunk_size`
+had NO real upper bound at write time (`ge=1` only) -- a real,
+generous ceiling (`CHUNK_SIZE_MAX_TOKENS = 8192`, `api/config.py`) was
+added to the schema.
+
+**Real verification of action 3 (the 7 strategies accept chunk_size/
+overlap as a parameter)**: already true by construction for the 4
+`chunk_recursive_*` functions, `merge_semantic_chunks`, every
+`chunk_markdown_*` function, `chunk_by_sentence*`/`chunk_by_paragraph*`,
+and `chunk_parent_child` (each already has its own `max_size`/
+`max_chunk_size`/`max_tokens`/`*_size` parameter) -- **except a real
+gap found while verifying**: `chunk_code_by_functions`/
+`chunk_code_by_classes`/`chunk_code_by_blocks` (Partie 3.2.5) had NO
+way to receive a size at all -- fixed by adding a real `max_size`
+parameter to all 3.
+
+**Real verification**: `tests/test_chunk_config.py` (18 tests),
+including a real integration check that all 7 strategies genuinely
+honor a size resolved from `organization_settings`.
+
+### Partie 3.3.3 -- embedding model configurable
+
+**Verified the existing state (action 1)**: `embedding_model` is
+ALREADY a real, live, per-organization setting, already read in
+`process_document` and passed into `generate_embeddings`/`_get_embedder`.
+
+New module `api/services/embedding_config.py`: `EMBEDDING_MODELS`/
+`EMBEDDING_DIMENSIONS`/`resolve_embedding_model`/`get_embedding_dimension`
+(items 3-5's own literal names). **A real, deliberate design choice**:
+`resolve_embedding_model` is a real BLOCKLIST (only the 2 models known
+not to work are refused), never an allowlist -- an organization stays
+free to configure any other real, legitimate HuggingFace model not
+catalogued here, the same real behavior `_get_embedder` already has.
+**A real, documented deviation from the étape's own literal model
+list**: the 2 API-based models it names
+(`OpenAI/text-embedding-ada-002`, `Cohere/embed-english-v3.0`, both
+hedged "if an API key is configured" in the literal spec) are NOT
+real, usable options today -- this codebase has ZERO OpenAI/Cohere
+integration anywhere (verified: no API key setting, no SDK
+dependency); listed with `available=False` and a real, explicit
+reason, never silently dropped.
+
+**Real verification**: `tests/test_embedding_config.py` (10 tests),
+including a real integration check that the real default model
+genuinely produces vectors of the claimed dimension (384, no mocking,
+the same precedent `tests/test_documents_integration.py` already
+established).
+
+### Partie 3.3.4 -- retrieval strategy configurable, Partie 3.3.5 -- reranker configurable & Partie 3.3.6 -- top-K configurable
+
+**A real, honest, explicitly documented architectural gap**: `api/`
+has NO live, multi-tenant retrieval/reranking endpoint yet -- Partie 4
+(search) of the master cahier des charges has not been built. The only
+real retrieval/reranking code in this repository is `src/retrieval.py`,
+a SEPARATE, single-tenant CLI/evaluation script -- its own `Retriever`
+class loads one fixed, global `chunks.json` and one fixed Chroma
+collection (`"fastapi_docs"`), with no per-organization data at all.
+`api/security/organization_settings.py`'s own module docstring already
+documented this gap honestly before this étape (Partie 1.3.9) -- this
+work does not change that real fact: wiring `retrieval_strategy`/
+`reranker_model`/`top_k` into a LIVE call still needs a real, live,
+multi-tenant retrieval endpoint in api/ to exist first (Parties 4/9),
+genuinely substantial, separate work outside these 3 configuration
+étapes' own real scope.
+
+**What these étapes honestly, actually deliver instead**: new module
+`api/services/retrieval_config.py`, real, tested, standalone resolvers
+-- `resolve_retrieval_strategy` (5 real, literal strategies; the
+`retrieval_strategy` schema field was widened from 3 to 5 values to
+match), `resolve_reranker_model`/`RERANKER_MODELS` (the same real
+blocklist design as the embedding resolver; **a real, malformed model
+id flagged**: `cross-encoder/microsoft/deberta-v3-base`, from the
+étape's own literal spec text, mixes two different real HuggingFace
+namespaces and doesn't match any real model -- marked unavailable with
+an explicit reason rather than silently trusted; Cohere refused for
+the same real reason as the embedding resolver), `resolve_top_k` (real
+1-100 bounds, sharing the same real ceiling with the HTTP schema), and
+`resolve_reranker_top_k` (RERANKER_TOP_K refined into a real, dynamic
+`top_k * 10` resolver as Partie 3.3.6 itself asks for -- a real,
+documented evolution from Partie 3.3.5's own original static-constant
+idea, not a silent contradiction of it).
+
+**Real verification**: `tests/test_retrieval_config.py` (18 tests).
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the
