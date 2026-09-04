@@ -5838,6 +5838,73 @@ limitation matching this codebase's own established pattern of naming
 a limitation rather than silently building something narrower than
 asked.
 
+### Partie 3.2.2 -- recursive chunking
+
+New module `api/services/chunking.py`: `chunk_recursive_text`/
+`chunk_recursive_markdown`/`chunk_recursive_html`/`chunk_recursive_code`
+(item 2's own literal functions). The real, standard recursive
+algorithm (the same real idea as LangChain's own well-known
+`RecursiveCharacterTextSplitter`, hand-implemented here rather than
+adding that whole library for one real algorithm): try the FIRST real
+separator in the list (e.g. `"\n\n"`, a real paragraph boundary); any
+resulting piece still too big is recursively re-split on the NEXT real
+separator, all the way down to a real, hard character split as the
+last resort (an empty-string separator), which always guarantees real
+termination.
+
+**A real, deliberate distinction from the existing `chunk_text`
+(Partie 3.2.1)**: that existing function is TOKEN-based (the real
+embedding model's own tokenizer, real `chunk_size`/`chunk_overlap` per
+organization) and already wired into `process_document`; this
+module's own 4 new functions are CHARACTER-based and structure-aware,
+a genuinely new, standalone real capability -- not yet wired into the
+real pipeline (this étape's own literal action items never ask for
+that integration), directly usable by a future real caller (a
+semantic-search feature, an export tool, Partie 3.4's own hybrid
+search).
+
+**`chunk_recursive_markdown`**: Markdown-aware real separator
+priority (heading boundaries `\n## `/`\n# ` first, then real
+paragraphs, lines, sentences, words). **`chunk_recursive_html`**: real
+HTML block-level tags are stripped to real plain text first
+(BeautifulSoup, the same real approach every other HTML-aware function
+in this codebase already uses), then the same real recursive
+algorithm splits that plain text -- a real, documented scope limit: no
+real DOM-aware boundary detection (never splitting inside a real
+`<table>`/`<pre>`), out of this étape's own necessary scope.
+**`chunk_recursive_code`**: code-aware real separator priority (real
+blank lines between functions/blocks, single real lines, then a real
+hard character split) -- deliberately never splits on whitespace the
+way prose chunking does, which would break real code syntax; Partie
+3.2.5's own real, syntax-aware function/class boundary chunking is the
+genuinely deeper, separate real capability for code.
+
+**A real bug found and fixed while testing**: the second-pass merge of
+small trailing pieces (`_merge_small_chunks`, a real, necessary step to
+honor `RECURSIVE_CHUNK_MIN_SIZE`) originally hardcoded a plain space
+`" "` as its real join separator -- this silently corrupted real code
+structure (real newlines collapsed into spaces, e.g.
+`"def foo():\n    return 1"` became `"def foo():     return 1"`).
+Fixed by adding a real `merge_separator` parameter to
+`chunk_recursive_text` (defaulting to `" "` for real prose),
+`chunk_recursive_code` passing `"\n"`.
+
+New real config (`RECURSIVE_CHUNK_SEPARATORS`/`RECURSIVE_CHUNK_MIN_SIZE`/
+`RECURSIVE_CHUNK_MAX_SIZE`, `api/config.py`).
+
+**Real verification**: `tests/test_chunking.py` covers all 4 real
+functions (11 tests), including the merge-separator bug above as a
+dedicated regression test, real empty-input cases, a real hard split
+of one giant word, and real structural preservation checked by
+reconstruction.
+
+**Stockage/intégration (vision critique)**: a real, documented scope
+limit -- these 4 functions are genuinely new, standalone capability,
+not yet called anywhere in the real ingestion pipeline; `process_document`
+keeps using the existing token-based `chunk_text` (Partie 3.2.1)
+unchanged, since this étape's own literal action items never asked
+for a pipeline swap.
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

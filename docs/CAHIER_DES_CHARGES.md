@@ -224,14 +224,18 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 | # | Stratégie | Statut |
 |---|---|---|
-| 3.2.1 | Fixed-size (512 tokens, overlap 50) | ✅ Existe déjà |
-| 3.2.2 | Recursive | ⬜ |
+| 3.2.1 | Fixed-size (512 tokens, overlap 50) | ✅ Existe déjà (`chunk_text`, `api/security/documents.py`, tokens réels via le tokenizer du modèle d'embedding, `chunk_size`/`chunk_overlap` réels par organisation) |
+| 3.2.2 | Recursive | ✅ Voir détails ci-dessous |
 | 3.2.3 | Semantic chunking | ⬜ |
 | 3.2.4 | Markdown-aware | ⬜ |
 | 3.2.5 | Code-aware (tree-sitter) | ⬜ |
 | 3.2.6 | Sentence-based | ⬜ |
 | 3.2.7 | Paragraph-based | ⬜ |
 | 3.2.8 | Parent-child chunks | ⬜ |
+
+#### Partie 3.2.2 — Chunking récursif
+
+✅ **Nouveau module réel** `api/services/chunking.py` : `chunk_recursive_text`/`chunk_recursive_markdown`/`chunk_recursive_html`/`chunk_recursive_code` (fonctions littérales de l'item 2). Vrai algorithme récursif standard (même idée que `RecursiveCharacterTextSplitter` de LangChain, écrit à la main plutôt que d'ajouter toute cette bibliothèque pour un seul algorithme réel) : essaie d'abord le PREMIER séparateur réel de la liste (ex. `"\n\n"`, une vraie limite de paragraphe) ; tout morceau résultant encore trop grand est re-découpé récursivement sur le séparateur SUIVANT, jusqu'à un vrai découpage par caractère en dernier recours (séparateur `""`) qui garantit toujours la terminaison. **Distinction réelle et délibérée avec `chunk_text` existant (3.2.1)** : cette fonction existante est basée sur les TOKENS (le vrai tokenizer du modèle d'embedding, `chunk_size`/`chunk_overlap` réels par organisation) et déjà câblée dans `process_document` ; les 4 nouvelles fonctions de ce module sont basées sur les CARACTÈRES et sensibles à la structure, une vraie capacité nouvelle et autonome -- non câblée dans le pipeline réel (les actions littérales de cette étape ne demandent jamais cette intégration), directement utilisable par un futur appelant réel (une fonctionnalité de recherche sémantique, un outil d'export, la recherche hybride de la Partie 3.4). **`chunk_recursive_markdown`** : séparateurs adaptés au Markdown (limites de titre `\n## `/`\n# ` en priorité, puis paragraphes, lignes, phrases, mots). **`chunk_recursive_html`** : les balises HTML sont d'abord réellement supprimées via BeautifulSoup (même approche que toutes les autres fonctions HTML de ce dépôt), puis le même algorithme récursif découpe le texte brut résultant -- limite réelle et documentée : pas de détection de limite consciente du DOM (ne jamais découper dans un vrai `<table>`/`<pre>`), complexité supplémentaire hors du périmètre nécessaire de cette étape. **`chunk_recursive_code`** : séparateurs adaptés au code (lignes vides entre fonctions/blocs, puis lignes seules, puis découpage dur par caractère) -- ne découpe jamais sur les espaces comme le texte normal le ferait, ce qui casserait la syntaxe réelle ; le découpage syntaxique réel par fonction/classe (Partie 3.2.5) est la capacité plus profonde et distincte pour le code. **Vrai bug trouvé et corrigé en testant** : la fusion des petits morceaux restants (`_merge_small_chunks`, second passage nécessaire pour respecter `RECURSIVE_CHUNK_MIN_SIZE`) utilisait initialement un espace `" "` codé en dur comme séparateur de fusion -- ceci corrompait silencieusement la structure du code réel (de vrais retours à la ligne collés en espaces, ex. `"def foo():\n    return 1"` devenait `"def foo():     return 1"`). Corrigé en ajoutant un paramètre `merge_separator` réel à `chunk_recursive_text` (par défaut `" "` pour la prose), `chunk_recursive_code` passant `"\n"`. Nouvelle configuration réelle (`RECURSIVE_CHUNK_SEPARATORS`/`RECURSIVE_CHUNK_MIN_SIZE`/`RECURSIVE_CHUNK_MAX_SIZE`, `api/config.py`). Tests réels dédiés (11 tests, dont le bug de fusion ci-dessus en régression dédiée, cas vides, découpage dur d'un mot géant, préservation de la structure par reconstruction), voir `tests/test_chunking.py`.
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -423,14 +427,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 89 | 17.8% |
+| ✅ Fait | 90 | 18.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 345 | 69.0% |
+| ⬜ Non commencé | 344 | 68.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **96/515 (~18.6%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **168/515 (~32.6%)**
-- Pondéré (✅=1, 🟡=0.5) : **~129/515 (~25.0%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **97/515 (~18.8%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **169/515 (~32.8%)**
+- Pondéré (✅=1, 🟡=0.5) : **~130/515 (~25.2%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

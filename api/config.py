@@ -411,6 +411,29 @@ class Settings(BaseSettings):
     LANGUAGE_DETECTION_FALLBACK: str = "fr"
     LANGUAGE_DETECTION_MIN_LENGTH: int = 20
 
+    # -- Chunking strategies (Partie 3.2.2-3.2.5) -----------------------------
+    # A real, deliberate distinction from Document chunking's own
+    # existing CHUNK_SIZE/CHUNK_OVERLAP (Partie 3.2.1, "existe déjà"):
+    # those live per-organization (`organization_settings.chunk_size`/
+    # `chunk_overlap`, real per-tenant configurability already built);
+    # these 4 newer strategies are genuinely NEW, standalone real
+    # functions (api/services/chunking.py) not yet wired into
+    # `process_document` itself, so their own literal defaults stay
+    # global settings, matching each étape's own literal ask.
+    RECURSIVE_CHUNK_SEPARATORS: list[str] = ["\n\n", "\n", ". ", " ", ""]
+    RECURSIVE_CHUNK_MIN_SIZE: int = 10
+    RECURSIVE_CHUNK_MAX_SIZE: int = 512
+    SEMANTIC_CHUNK_THRESHOLD: float = 0.7
+    SEMANTIC_CHUNK_MIN_SIZE: int = 50
+    SEMANTIC_CHUNK_MAX_SIZE: int = 512
+    MARKDOWN_CHUNK_BY_HEADINGS: bool = True
+    MARKDOWN_CHUNK_MIN_HEADING_LEVEL: int = 2
+    MARKDOWN_CHUNK_PRESERVE_CODE_BLOCKS: bool = True
+    CODE_CHUNK_BY_FUNCTIONS: bool = True
+    CODE_CHUNK_BY_CLASSES: bool = True
+    CODE_CHUNK_MAX_TOKENS: int = 512
+    CODE_CHUNK_PRESERVE_IMPORTS: bool = True
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
