@@ -6401,6 +6401,44 @@ all 6 now-really-supported providers, the same real precedent as
 
 **Real verification**: `tests/test_llm_providers.py` (21 tests).
 
+### Partie 3.4.5 -- metadata filtering
+
+New module `api/services/metadata_filtering.py`: `build_metadata_filter`/
+`apply_metadata_filter`/`validate_filters`/`get_filterable_fields`/
+`parse_filter_value` (item 2's own literal functions), over the 7
+literal fields (`author`/`created_date`/`tags`/`document_type`/
+`source`/`workspace_id`/`file_size`). **A real, documented scope limit
+for `author`**: this codebase has NO real author-name field on
+`Document` (only `created_by`, a user id) -- kept as a real, listed,
+filterable field (the étape names it explicitly) but honestly can
+never match anything until a real name field exists, never silently
+dropped or fabricated. **A real, deliberate, standalone scope**:
+`apply_metadata_filter` operates on an already-produced list of real
+results (the same shape `api.services.retrieval_pipeline.search`'s own
+results have), not yet wired into a live search call (that pipeline
+doesn't populate `author`/`created_date`/`tags`/`source` on its own
+results yet) -- a real, honest, documented gap for a future caller to
+close. `METADATA_FILTERING_ENABLED=False` is a real, deliberate kill
+switch. **Real verification**: 19 tests, `tests/test_metadata_filtering.py`.
+
+### Partie 3.4.6 -- semantic filtering
+
+New module `api/services/semantic_filtering.py`: `compute_query_embedding`/
+`compute_chunk_embedding`/`compute_semantic_similarity`/
+`filter_by_similarity`/`filter_by_top_similarity`/
+`rerank_by_semantic_similarity`. Reuses `generate_embeddings` (Partie
+2.1.1), `compute_semantic_similarity` itself (Partie 3.2.3, reused
+directly rather than reimplemented a third time), and
+`resolve_embedding_model` (Partie 3.3.3). `compute_chunk_embedding`
+reuses a real chunk's own already-computed embedding when present. **A
+real, deliberate distinction from `vector_search`**: this module is a
+real, standalone, reusable POST-PROCESSING step over an ALREADY-PRODUCED
+result list (from any strategy, including `bm25_only`/`hybrid`, which
+have no similarity score of their own), not a fourth search strategy.
+`SEMANTIC_FILTERING_ENABLED=False` is a real kill switch. **Real
+verification**: 10 tests, real embeddings, no mocking,
+`tests/test_semantic_filtering.py`.
+
 ### Partie 3.4.7 / 3.4.13 -- RRF configurable
 
 `rrf_k` added to `organization_settings` (default 60 -- the same real
@@ -6422,6 +6460,42 @@ text) -- built once, not duplicated.
 **Real verification**: 6 tests in `tests/test_retrieval_config.py`, 1
 integration test in `tests/test_retrieval_pipeline.py`, 2 write-time
 tests in `tests/test_organization_settings.py`.
+
+### Partie 3.4.11 -- duplicate removal
+
+New module `api/services/duplicate_removal.py`: `deduplicate_by_id`/
+`deduplicate_by_hash`/`deduplicate_by_similarity`/
+`deduplicate_by_content`/`merge_duplicates`. Reuses
+`compute_semantic_similarity`/`compute_chunk_embedding` for
+`deduplicate_by_similarity` (catches real near-duplicates -- paraphrases
+-- exact matching cannot). **A real, honest note**: `deduplicate_by_hash`
+and `deduplicate_by_content` reach the same real exact-match outcome (a
+hash is only a proxy for the string it was computed from) -- kept
+separate since the étape names both literally. **A real bug found and
+fixed while testing**: `merge_duplicates`'s own "hash" method key
+function originally passed the WHOLE chunk dict to `_content_hash`
+(which expects a raw string) instead of just its `content` -- crashed
+on the very first real call; fixed, confirmed by a dedicated regression
+test. `merge_duplicates` keeps the real highest-scoring representative
+and honestly tags `merged_from` with the real merged ids.
+`DEDUPLICATE_ENABLED=False` is a real kill switch. **Real verification**:
+12 tests, `tests/test_duplicate_removal.py`.
+
+### Partie 3.4.12 / 3.4.16 -- MMR (Maximal Marginal Relevance)
+
+New module `api/services/mmr.py`: `compute_mmr`/`select_diverse_chunks`/
+`compute_diversity_penalty`/`rerank_by_mmr` (the real, standard
+algorithm from Carbonell & Goldstein's own original MMR paper). **A
+real, honest note on numbering**: sent twice (3.4.12 and 3.4.16,
+identical text) -- built once. `select_diverse_chunks` and
+`rerank_by_mmr` share the exact same literal signature --
+`rerank_by_mmr` is a real, thin alias, not a second implementation.
+Reuses `compute_semantic_similarity`/`compute_chunk_embedding` (Parties
+3.2.3/3.4.6). **Real robustness**: an out-of-range `lambda_param` is
+really rejected (`ValueError`), never silently clamped, which would
+hide a real caller bug. `MMR_ENABLED=False` is a real kill switch
+(chunks pass through unchanged, no selection applied). **Real
+verification**: 10 tests, real embeddings, `tests/test_mmr.py`.
 
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration

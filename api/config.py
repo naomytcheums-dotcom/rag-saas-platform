@@ -518,6 +518,25 @@ class Settings(BaseSettings):
     OPENAI_COMPATIBLE_MAX_TOKENS: int = 4096
     OPENAI_COMPATIBLE_TEMPERATURE: float = 0.7
 
+    # -- Metadata filtering (Partie 3.4.5) -----------------------------------
+    METADATA_FILTERING_ENABLED: bool = True
+    METADATA_FILTER_MAX_OPERATORS: int = 5
+
+    # -- Semantic filtering (Partie 3.4.6) ------------------------------------
+    SEMANTIC_FILTERING_ENABLED: bool = True
+    SEMANTIC_FILTERING_THRESHOLD: float = 0.7
+    SEMANTIC_FILTERING_TOP_K: int = 20
+
+    # -- Duplicate removal (Partie 3.4.11) ------------------------------------
+    DEDUPLICATE_ENABLED: bool = True
+    DEDUPLICATE_METHOD: str = "hash"
+    DEDUPLICATE_SIMILARITY_THRESHOLD: float = 0.95
+
+    # -- MMR (Partie 3.4.12/3.4.16) --------------------------------------------
+    MMR_ENABLED: bool = True
+    MMR_LAMBDA: float = 0.7
+    MMR_TOP_K: int = 5
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

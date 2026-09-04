@@ -301,7 +301,7 @@ du nouveau, vrai pipeline multi-tenant construit dans `api/`.
 
 Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 réel, reranking réel, isolation multi-tenant) dans `tests/test_retrieval_pipeline.py`, 7 tests HTTP de bout en bout (permissions, isolation, application de la config) dans `tests/test_search.py`, 7 tests supplémentaires pour `resolve_score_threshold` dans `tests/test_retrieval_config.py`, 2 tests d'écriture pour `score_threshold` dans `tests/test_organization_settings.py`.
 
-### 3.4 Recherche hybride avancée — 🟡 (4/16 construits dans ce lot + 4 doublons littéraux dédupliqués)
+### 3.4 Recherche hybride avancée — 🟡 (8/12 concepts réels distincts, hors doublons littéraux 3.4.13-3.4.16)
 
 **Note réelle sur la numérotation** : le tableau original de ce document numérotait 3.4.1-3.4.4 comme BM25/Vector Search/RRF/Cross-encoder reranking ("existe déjà", en référence au pipeline `src/retrieval.py`). Les prompts détaillés reçus ensuite renumérotent 3.4.2/3.4.3 différemment (Query rewriting/HyDE). Le tableau ci-dessous suit la numérotation des prompts détaillés reçus (la source la plus récente et la plus précise), 3.4.1 gardé tel quel. **Vrais doublons littéraux trouvés dans le batch reçu** : 3.4.7≡3.4.13 (RRF configurable), 3.4.8≡3.4.14 (Reranker configurable), 3.4.9≡3.4.15 (Top-K configurable), 3.4.12≡3.4.16 (MMR) -- chacun construit UNE SEULE fois, jamais dupliqué en double travail.
 
@@ -311,18 +311,34 @@ Tests réels dédiés : 14 tests d'intégration réels (embeddings réels, BM25 
 | 3.4.2 | Query rewriting | ⬜ |
 | 3.4.3 | HyDE | ⬜ |
 | 3.4.4 | Multi-query retrieval | ⬜ |
-| 3.4.5 | Metadata filtering | ⬜ |
-| 3.4.6 | Semantic filtering | ⬜ |
+| 3.4.5 | Metadata filtering | ✅ Voir détails ci-dessous |
+| 3.4.6 | Semantic filtering | ✅ Voir détails ci-dessous |
 | 3.4.7 / 3.4.13 | RRF configurable (rrf_k) | ✅ Voir détails ci-dessous |
 | 3.4.8 / 3.4.14 | Reranker configurable | ✅ Déjà fait, voir Partie 3.3.5 |
 | 3.4.9 / 3.4.15 | Top-K configurable | ✅ Déjà fait, voir Partie 3.3.6 |
 | 3.4.10 | Context compression | ⬜ |
-| 3.4.11 | Duplicate removal | ⬜ |
-| 3.4.12 / 3.4.16 | MMR | ⬜ |
+| 3.4.11 | Duplicate removal | ✅ Voir détails ci-dessous |
+| 3.4.12 / 3.4.16 | MMR | ✅ Voir détails ci-dessous |
+
+#### Partie 3.4.5 — Metadata filtering
+
+✅ **Nouveau module réel** `api/services/metadata_filtering.py` : `build_metadata_filter`/`apply_metadata_filter`/`validate_filters`/`get_filterable_fields`/`parse_filter_value` (fonctions littérales de l'item 2), sur les 7 champs littéraux (`author`/`created_date`/`tags`/`document_type`/`source`/`workspace_id`/`file_size`). **Limite réelle et documentée pour `author`** : ce dépôt n'a AUCUN vrai champ nom d'auteur sur `Document` (seulement `created_by`, un id utilisateur) -- le champ reste réellement listé et filtrable (l'étape le nomme explicitement) mais ne correspondra honnêtement jamais à rien tant qu'aucun vrai champ nom n'existe, jamais silencieusement retiré ni fabriqué. **Portée réelle et délibérée, autonome** : `apply_metadata_filter` opère sur une liste déjà produite de vrais résultats (la même vraie forme que les résultats de `api.services.retrieval_pipeline.search`), pas encore câblée dans un vrai appel de recherche live (ce pipeline ne peuple pas encore `author`/`created_date`/`tags`/`source` sur ses propres résultats) -- un vrai écart honnête et documenté, pour un futur appelant à combler en enrichissant ces résultats, pas la responsabilité de ce module. `METADATA_FILTERING_ENABLED=False` est un vrai interrupteur d'arrêt délibéré. Tests réels dédiés (19 tests), voir `tests/test_metadata_filtering.py`.
+
+#### Partie 3.4.6 — Semantic filtering
+
+✅ **Nouveau module réel** `api/services/semantic_filtering.py` : `compute_query_embedding`/`compute_chunk_embedding`/`compute_semantic_similarity`/`filter_by_similarity`/`filter_by_top_similarity`/`rerank_by_semantic_similarity` (fonctions littérales de l'item 2). **Réutilise** `generate_embeddings` (Partie 2.1.1), `compute_semantic_similarity` lui-même (Partie 3.2.3, réutilisé directement plutôt que réimplémenté une troisième fois) et `resolve_embedding_model` (Partie 3.3.3). **`compute_chunk_embedding`** réutilise l'embedding déjà calculé d'un vrai chunk quand il est présent (chaque vrai résultat de `retrieval_pipeline` en porte déjà un) plutôt que de payer un second appel d'embedding redondant. **Distinction réelle et délibérée** avec `vector_search` : ce module est un vrai post-traitement autonome et réutilisable (filtrage/reranking d'une liste DÉJÀ PRODUITE de résultats, de N'IMPORTE QUELLE stratégie, y compris `bm25_only`/`hybrid` qui n'ont pas leur propre score de similarité), pas une quatrième stratégie de recherche. `SEMANTIC_FILTERING_ENABLED=False` est un vrai interrupteur d'arrêt délibéré. Tests réels dédiés (10 tests, embeddings réels, sans mock), voir `tests/test_semantic_filtering.py`.
 
 #### Partie 3.4.7 / 3.4.13 — RRF configurable
 
 ✅ `rrf_k` ajouté à `organization_settings` (défaut 60 -- la même vraie constante standard de l'article RRF original que `src/retrieval.py`'s own `RRF_K` utilise déjà, bornes réelles 1-1000 comme demandé littéralement). **Nouveau résolveur réel** `resolve_rrf_k` (`api/services/retrieval_config.py`), même précédence réelle `override > organization_settings > défaut` que les 6 autres résolveurs. **Câblé pour de vrai** dans `hybrid_search` (`api/services/retrieval_pipeline.py`) -- remplace le `k=60` auparavant codé en dur dans `_reciprocal_rank_fusion`. Vérifié par un vrai test d'intégration confirmant qu'un `rrf_k` différent change réellement le score de fusion (`1 / (k + rang + 1)`) tout en gardant le même vrai meilleur résultat. Tests réels dédiés (6 tests dans `tests/test_retrieval_config.py`, 1 test d'intégration dans `tests/test_retrieval_pipeline.py`, 2 tests d'écriture dans `tests/test_organization_settings.py`).
+
+#### Partie 3.4.11 — Duplicate removal
+
+✅ **Nouveau module réel** `api/services/duplicate_removal.py` : `deduplicate_by_id`/`deduplicate_by_hash`/`deduplicate_by_similarity`/`deduplicate_by_content`/`merge_duplicates` (fonctions littérales de l'item 2). **Réutilise** `compute_semantic_similarity`/`compute_chunk_embedding` pour `deduplicate_by_similarity` (détecte les vrais quasi-doublons -- reformulations -- qu'une correspondance exacte ne peut pas voir). **Note réelle et honnête** sur `deduplicate_by_hash` vs `deduplicate_by_content` : les deux atteignent le même vrai résultat exact (un hash SHA-256 n'est qu'un vrai proxy de la chaîne dont il est calculé) -- gardés séparés car l'étape les nomme littéralement l'un et l'autre. **Vrai bug trouvé et corrigé en testant** : `merge_duplicates`'s own méthode "hash" passait le DICT entier du chunk à `_content_hash` (qui attend une vraie chaîne) au lieu de son seul `content` -- plantait dès le premier vrai appel ; corrigé, confirmé par un vrai test de régression dédié. `merge_duplicates` conserve le vrai représentant au score le plus élevé et tague honnêtement `merged_from` avec les ids réels fusionnés. `DEDUPLICATE_ENABLED=False` est un vrai interrupteur d'arrêt délibéré. Tests réels dédiés (12 tests), voir `tests/test_duplicate_removal.py`.
+
+#### Partie 3.4.12 / 3.4.16 — MMR (Maximal Marginal Relevance)
+
+✅ **Nouveau module réel** `api/services/mmr.py` : `compute_mmr`/`select_diverse_chunks`/`compute_diversity_penalty`/`rerank_by_mmr` (fonctions littérales de l'item 2, le vrai algorithme standard de l'article original MMR de Carbonell & Goldstein). **Note réelle et honnête** : `select_diverse_chunks` et `rerank_by_mmr` partagent exactement la même vraie signature littérale -- `rerank_by_mmr` est un vrai alias fin, pas une seconde implémentation. **Réutilise** `compute_semantic_similarity`/`compute_chunk_embedding` (Parties 3.2.3/3.4.6). **Vraie robustesse** : un `lambda_param` hors `[0, 1]` est réellement rejeté (`ValueError`) plutôt que silencieusement écrêté -- écrêter cacherait un vrai bug appelant. `MMR_ENABLED=False` est un vrai interrupteur d'arrêt délibéré (chunks inchangés, aucune sélection appliquée). Tests réels dédiés (10 tests, embeddings réels), voir `tests/test_mmr.py`.
 
 ---
 
@@ -524,14 +540,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 111 | 22.2% |
+| ✅ Fait | 115 | 23.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 323 | 64.6% |
+| ⬜ Non commencé | 319 | 63.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **118/515 (~22.9%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **190/515 (~36.9%)**
-- Pondéré (✅=1, 🟡=0.5) : **~151/515 (~29.3%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9/3.4.12 et leurs doublons littéraux (3.4.13-3.4.16) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe déjà, sous d'autres numéros) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
+- Strictement ✅ : **122/515 (~23.7%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **194/515 (~37.7%)**
+- Pondéré (✅=1, 🟡=0.5) : **~155/515 (~30.1%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
