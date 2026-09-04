@@ -413,16 +413,24 @@ async def test_process_document_ocrs_a_real_scanned_pdf(pg_engine, _require_docu
         pytest.skip("real Tesseract binary not installed on this machine")
 
     import pymupdf
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFont
 
-    image = Image.new("RGB", (400, 100), color="white")
-    ImageDraw.Draw(image).text((10, 30), "SCANNEDTEXT", fill="black")
+    # A real, deliberately large, high-contrast rendering -- PIL's own
+    # tiny default bitmap font at a small canvas size (this test's own
+    # first version) produced real, genuine OCR noise ("SCANNEDTEXT"
+    # read back as "SC ANNECTEXT" by the real Tesseract engine in CI),
+    # a real, honest OCR-accuracy characteristic, not a bug in this
+    # module's own orchestration -- a bigger, clearer font is the real
+    # fix, not a looser assertion papering over genuinely bad input.
+    image = Image.new("RGB", (1200, 300), color="white")
+    font = ImageFont.load_default(size=100)
+    ImageDraw.Draw(image).text((20, 80), "SCANNEDTEXT", fill="black", font=font)
     image_buffer = io.BytesIO()
     image.save(image_buffer, format="PNG")
 
     doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_image(pymupdf.Rect(50, 50, 450, 150), stream=image_buffer.getvalue())
+    page.insert_image(pymupdf.Rect(50, 50, 1250, 350), stream=image_buffer.getvalue())
     pdf_bytes = doc.tobytes()
     doc.close()
 
