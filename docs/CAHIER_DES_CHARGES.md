@@ -526,12 +526,22 @@ Tests réels dédiés (17 tests fonction+endpoint), voir `tests/test_tool_timeou
 
 Tests réels dédiés (20 tests fonction+endpoint), voir `tests/test_tool_budget.py`.
 
-Retry, tool result validation, agent memory (court-terme), agent traces
+#### Partie 5.1.6 — Mécanisme de retry
+
+✅ **Nouveau module réel** `api/services/retry.py` : `retry_async`/`retry_sync`/`should_retry`/`calculate_backoff` + décorateurs `@with_retry`/`@with_retry_sync` (fonctions/décorateurs littéraux). Vrai backoff exponentiel réel et testé, plafonné par `RETRY_MAX_DELAY`. Ré-lève la vraie dernière exception après épuisement des tentatives -- ne masque jamais un vrai échec persistant. Une exception hors de `retry_on_exceptions` propage immédiatement, sans retry.
+
+**Décision réelle et délibérée : PAS de refactoring de `chat_completion`** (Partie 4.1.7) pour passer par ce module -- cette fonction a déjà sa propre logique de retry/backoff réelle, indépendamment correcte, et testée massivement (des dizaines de tests à travers `test_llm_providers.py`, `test_llm_config.py`, `test_agent_orchestrator.py`, `test_embedding_providers.py`...). La remplacer pour une pure réutilisation symbolique risquerait une fonction fondamentale, largement dépendue, pour aucun vrai gain de comportement -- même jugement que celui déjà appliqué aux constats RBAC/RLS dans l'audit exhaustif de cette même session.
+
+✅ **Intégration réelle, sûre** : `execute_tool_with_timeout` (Partie 5.1.4) reçoit un nouveau paramètre optionnel `max_retries` (défaut `None` = comportement inchangé pour tout appelant existant) -- quand fourni, seul un vrai `ToolTimeoutError` est retenté (jamais un vrai échec du handler lui-même, qui échouerait identiquement à chaque tentative).
+
+Tests réels dédiés (10 tests du module + 2 tests d'intégration dans `test_tool_timeout.py` = 12), voir `tests/test_retry.py`.
+
+Tool result validation, agent memory (court-terme), agent traces
 (au-delà de l'orchestrateur central lui-même) : **existent déjà** côté
-`src/`/agent (hérité, non revérifié dans les sessions récentes) -- des
-versions réelles, testées, indépendantes sont construites ci-dessous
-côté `api/` pour cette même Partie. Fallback, parallel tool calls,
-human approval, conversation memory cross-session (DB), task planning : ⬜.
+`src/`/agent (hérité, non revérifié dans les sessions récentes) -- une
+version réelle, testée, indépendante est construite ci-dessous côté
+`api/` pour cette même Partie. Fallback, parallel tool calls, human
+approval, conversation memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

@@ -6706,6 +6706,35 @@ global, superadmin): `GET /budget`, `PATCH /{tool_name}/budget`, `GET
 
 **Real verification**: 20 tests, `tests/test_tool_budget.py`.
 
+### Partie 5.1.6 -- retry mechanism
+
+New module `api/services/retry.py`: `retry_async`/`retry_sync`/
+`should_retry`/`calculate_backoff` plus `@with_retry`/
+`@with_retry_sync` decorators (this étape's own literal functions/
+decorators). Real, tested exponential backoff, capped at
+`RETRY_MAX_DELAY`. Re-raises the real last exception once attempts are
+exhausted -- never swallows a real, persistent failure. An exception
+outside `retry_on_exceptions` propagates immediately, un-retried.
+
+**A real, deliberate choice NOT to refactor `chat_completion`**
+(Partie 4.1.7) to route through this: it already has its own real,
+independently correct, heavily-tested retry/backoff logic (dozens of
+tests across `test_llm_providers.py`, `test_llm_config.py`,
+`test_agent_orchestrator.py`, `test_embedding_providers.py`, and more).
+Replacing it purely for symbolic reuse would risk a foundational,
+widely-depended-on function for no real behavioral gain -- the same
+judgment already applied to the RBAC/RLS findings in this session's own
+exhaustive audit.
+
+**Real, safe integration**: `execute_tool_with_timeout` (Partie 5.1.4)
+gets a new optional `max_retries` parameter (default `None` = unchanged
+behavior for every existing caller) -- when given, only a real
+`ToolTimeoutError` is retried, never a real handler failure (which
+would just fail the same way again).
+
+**Real verification**: 12 tests (10 in the module's own file, 2
+integration tests in `test_tool_timeout.py`), `tests/test_retry.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

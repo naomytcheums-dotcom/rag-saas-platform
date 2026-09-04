@@ -60,6 +60,40 @@ async def test_execute_tool_with_timeout_uses_the_real_default_when_unset():
     assert get_default_timeout() == 30.0
 
 
+async def test_execute_tool_with_timeout_retries_a_real_timeout_when_configured(monkeypatch):
+    """Validation criterion (Partie 5.1.6 integration): un vrai timeout
+    peut être retenté."""
+    monkeypatch.setattr("asyncio.sleep", lambda *_a, **_k: _noop())
+
+    calls = {"count": 0}
+
+    async def _flaky_then_fast(**kwargs) -> str:
+        calls["count"] += 1
+        if calls["count"] < 2:
+            await asyncio.Event().wait()
+        return "ok"
+
+    flaky_tool = ToolSpec(name="flaky", description="", parameters={}, capability_tags=(), handler=_flaky_then_fast)
+    result = await execute_tool_with_timeout(flaky_tool, {}, timeout=0.05, max_retries=2)
+    assert result == "ok"
+    assert calls["count"] == 2
+
+
+async def test_execute_tool_with_timeout_does_not_retry_a_real_handler_error():
+    """A real handler failure (not a timeout) must never be blindly
+    retried."""
+    async def _always_bad(**kwargs) -> str:
+        raise ValueError("bad input")
+
+    bad_tool = ToolSpec(name="bad", description="", parameters={}, capability_tags=(), handler=_always_bad)
+    with pytest.raises(ValueError):
+        await execute_tool_with_timeout(bad_tool, {}, timeout=5, max_retries=3)
+
+
+async def _noop():
+    return None
+
+
 # --------------------------------------- get/set_tool_timeout --
 
 

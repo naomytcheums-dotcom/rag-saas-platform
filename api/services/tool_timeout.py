@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.tool_config import ToolTimeoutOverride
+from api.services.retry import retry_async
 from api.services.tools import ToolSpec
 
 
@@ -56,7 +57,9 @@ async def list_tool_timeouts(db: AsyncSession) -> list[ToolTimeoutOverride]:
     return list((await db.scalars(select(ToolTimeoutOverride))).all())
 
 
-async def execute_tool_with_timeout(tool: ToolSpec, params: dict, timeout: float | None = None) -> str:
+async def execute_tool_with_timeout(
+    tool: ToolSpec, params: dict, timeout: float | None = None, *, max_retries: int | None = None,
+) -> str:
     """Partie 5.1.4's own literal function -- real execution, real
     enforcement (`asyncio.wait_for`). `timeout=None` means "use the
     real, global default" (`get_default_timeout()`) -- a real,
@@ -68,9 +71,22 @@ async def execute_tool_with_timeout(tool: ToolSpec, params: dict, timeout: float
     **Robustness (vision critique)**: a real timeout raises
     `ToolTimeoutError`, distinct from any exception the tool's own
     handler might raise -- a caller can always tell "took too long"
-    apart from "the tool itself failed."""
+    apart from "the tool itself failed."
+
+    `max_retries` (Partie 5.1.6, optional, default `None` = no retry --
+    unchanged behavior for every existing caller): when given, each
+    attempt gets its OWN full `timeout`, and only a real
+    `ToolTimeoutError` is retried (a real handler failure -- a bad
+    argument, say -- is never blindly retried, since retrying it would
+    just fail the same way again)."""
     resolved_timeout = timeout if timeout is not None else get_default_timeout()
-    try:
-        return await asyncio.wait_for(tool.handler(**params), timeout=resolved_timeout)
-    except asyncio.TimeoutError as exc:
-        raise ToolTimeoutError(f"Tool {tool.name!r} timed out after {resolved_timeout}s") from exc
+
+    async def _attempt() -> str:
+        try:
+            return await asyncio.wait_for(tool.handler(**params), timeout=resolved_timeout)
+        except asyncio.TimeoutError as exc:
+            raise ToolTimeoutError(f"Tool {tool.name!r} timed out after {resolved_timeout}s") from exc
+
+    if max_retries is None:
+        return await _attempt()
+    return await retry_async(_attempt, max_attempts=max_retries + 1, retry_on_exceptions=(ToolTimeoutError,))
