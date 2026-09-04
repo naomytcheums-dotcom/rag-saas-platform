@@ -68,6 +68,7 @@ from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
 from api.security.tool_permissions import check_tool_permission
+from api.services.agent_memory import get_all_memory
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
 from api.services.tool_selection import select_tools
@@ -101,7 +102,7 @@ class AgentOrchestrator:
         self, agent_id: str, input: str, *, db: AsyncSession, context: str | None = None,
         org_settings: dict | None = None, llm_overrides: dict | None = None, timeout: float | None = None,
         max_retries: int | None = None, organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
-        tools: list[ToolSpec] | None = None,
+        tools: list[ToolSpec] | None = None, session_id: uuid.UUID | None = None,
     ) -> AgentRunRecord:
         """Item 2's own literal function -- runs one real, traced,
         timeout-bound LLM call. Always returns a real `AgentRunRecord`
@@ -152,6 +153,21 @@ class AgentOrchestrator:
             if selected_tools:
                 catalog = "\n".join(f"- {t.name}: {t.description}" for t in selected_tools)
                 system_prompt = f"{system_prompt}\n\nAvailable tools:\n{catalog}"
+
+        if session_id is not None and settings.AGENT_MEMORY_ENABLED:
+            # Partie 5.1.11 -- real, additive: short-term memory is
+            # surfaced to the LLM as extra system-prompt context, the
+            # same light-touch pattern as tools above. Writing new
+            # memory back is the CALLER's own job (add_to_memory/
+            # update_memory, called directly) -- this orchestrator only
+            # ever READS memory today, since it has no real place to
+            # decide what the LLM's own reply is worth remembering
+            # without a real, separate summarization step (future work).
+            async with self._db_lock:
+                memory = await get_all_memory(db, session_id)
+            if memory:
+                trace.append(self._trace_event("memory_loaded", {"keys": list(memory.keys())}))
+                system_prompt = f"{system_prompt}\n\nRemembered context from this session:\n{memory}"
 
         messages = [{"role": "system", "content": system_prompt}]
         if context:

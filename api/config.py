@@ -639,6 +639,77 @@ class Settings(BaseSettings):
     HUMAN_APPROVAL_EXPIRY: int = 3600
     HUMAN_APPROVAL_REQUIRED_TOOLS: list[str] = ["send_email", "delete_data", "execute_code", "make_payment", "update_database"]
 
+    # -- Agent memory, short-term (Partie 5.1.11) --------------------------------
+    AGENT_MEMORY_SIZE: int = 100
+    AGENT_MEMORY_TTL: int = 3600
+    AGENT_MEMORY_ENABLED: bool = True
+
+    # -- Task planning (Partie 5.1.13) -------------------------------------------
+    TASK_PLANNING_ENABLED: bool = True
+    TASK_PLANNING_MAX_STEPS: int = 20
+    TASK_PLANNING_TIMEOUT: int = 300
+
+    # -- Agent traces (Partie 5.1.14) --------------------------------------------
+    AGENT_TRACES_ENABLED: bool = True
+    AGENT_TRACES_MAX_STEPS: int = 100
+    AGENT_TRACES_RETENTION_DAYS: int = 30
+    AGENT_TRACES_EXPORT_FORMATS: list[str] = ["json", "html"]
+
+    # -- Knowledge base search tool (Partie 5.2.1) -------------------------------
+    KB_SEARCH_TOP_K: int = 5
+    KB_SEARCH_RERANK_ENABLED: bool = True
+    KB_SEARCH_MAX_TOKENS: int = 512
+
+    # -- Web search tool, Tavily (Partie 5.2.2) ----------------------------------
+    TAVILY_API_KEY: str = ""
+    TAVILY_SEARCH_DEPTH: str = "basic"
+    TAVILY_MAX_RESULTS: int = 5
+    TAVILY_INCLUDE_RAW_CONTENT: bool = True
+    TAVILY_INCLUDE_DOMAINS: list[str] = []
+    TAVILY_EXCLUDE_DOMAINS: list[str] = []
+
+    # -- GitHub tools (Partie 5.2.3) ----------------------------------------------
+    GITHUB_API_BASE_URL: str = "https://api.github.com"
+
+    # -- SQL tool (Partie 5.2.4) ----------------------------------------------------
+    SQL_TOOL_ENABLED: bool = True
+    SQL_TOOL_MAX_ROWS: int = 100
+    SQL_TOOL_MAX_QUERY_LENGTH: int = 5000
+    SQL_TOOL_ALLOWED_TABLES: list[str] = ["documents", "document_chunks", "conversations", "conversation_messages"]
+    SQL_TOOL_READ_ONLY: bool = True
+
+    # -- URL reader tool (Partie 5.2.6) --------------------------------------------
+    URL_READER_TIMEOUT: int = 10
+    URL_READER_MAX_SIZE: int = 2 * 1024 * 1024
+    URL_READER_USER_AGENT: str = "rag-saas-platform-agent/1.0"
+    URL_READER_ALLOWED_DOMAINS: list[str] = []
+    URL_READER_BLOCKED_DOMAINS: list[str] = []
+
+    # -- Calendar tools (Partie 5.2.7) ---------------------------------------------
+    GOOGLE_CALENDAR_CLIENT_ID: str = ""
+    GOOGLE_CALENDAR_CLIENT_SECRET: str = ""
+    GOOGLE_CALENDAR_REFRESH_TOKEN: str = ""
+    OUTLOOK_CALENDAR_CLIENT_ID: str = ""
+    OUTLOOK_CALENDAR_CLIENT_SECRET: str = ""
+    OUTLOOK_CALENDAR_REFRESH_TOKEN: str = ""
+
+    # -- Email tools (Partie 5.2.8) -------------------------------------------------
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REFRESH_TOKEN: str = ""
+    OUTLOOK_EMAIL_CLIENT_ID: str = ""
+    OUTLOOK_EMAIL_CLIENT_SECRET: str = ""
+    OUTLOOK_EMAIL_REFRESH_TOKEN: str = ""
+    AGENT_SMTP_HOST: str = ""
+    AGENT_SMTP_PORT: int = 587
+    AGENT_SMTP_USERNAME: str = ""
+    AGENT_SMTP_PASSWORD: str = ""
+    AGENT_SMTP_FROM_EMAIL: str = ""
+
+    # -- Human escalation tool (Partie 5.2.9) ---------------------------------------
+    HUMAN_ESCALATION_ENABLED: bool = True
+    HUMAN_ESCALATION_NOTIFICATION_CHANNELS: list[str] = ["email"]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

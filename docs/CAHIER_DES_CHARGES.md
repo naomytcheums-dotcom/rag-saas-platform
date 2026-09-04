@@ -586,10 +586,21 @@ Tests réels dédiés (19 tests), voir `tests/test_tool_validation.py`.
 
 Tests réels dédiés (18 tests fonction+endpoint), voir `tests/test_human_approval.py`.
 
-Agent memory (court-terme), agent traces (au-delà de l'orchestrateur
-central lui-même) : **existent déjà** côté `src/`/agent (hérité, non
-revérifié dans les sessions récentes). Conversation memory
-cross-session (DB), task planning : ⬜.
+#### Partie 5.1.11 — Mémoire court-terme
+
+✅ **Nouveaux modèles réels** `api/models/agent_memory.py` (`AgentSession`, `AgentMemoryItem`, migration `0053`, RLS activée). `UniqueConstraint(session_id, key)` fait de ce store un vrai dict indexé par (session, clé).
+
+✅ **Nouveau module réel** `api/services/agent_memory.py` : `create_session`/`add_to_memory`/`get_from_memory`/`get_all_memory`/`clear_memory`/`update_memory` (fonctions littérales). **Expiration réelle et paresseuse** (même schéma que 5.1.10). **Robustesse (vision critique)** : `add_to_memory` sur une session pleine (`AGENT_MEMORY_SIZE`) évince réellement l'élément le plus ancien (FIFO), testé -- jamais de perte silencieuse sans comportement défini. `update_memory` échoue proprement (no-op réel, `None`) sur une clé inexistante -- distinct d'`add_to_memory` qui fait un vrai upsert.
+
+✅ **Intégration réelle dans l'orchestrateur** : `run_agent` accepte un paramètre optionnel `session_id` -- quand fourni, la mémoire réelle est chargée et injectée dans le system prompt, tracée (`"memory_loaded"`). **Cohérence (vision critique)** : la mémoire est bien partagée entre appels successifs sur la même session (testé). L'écriture reste la responsabilité de l'appelant (`add_to_memory` appelé directement) -- l'orchestrateur ne décide pas seul ce qui mérite d'être retenu, ça exigerait une vraie étape de résumé séparée, non demandée ici.
+
+**Performance (vision critique)** : accès indexés réels via la contrainte unique `(session_id, key)`.
+
+Tests réels dédiés (13 tests fonction + 1 test d'intégration orchestrateur = 14), voir `tests/test_agent_memory.py`.
+
+Agent traces (au-delà de l'orchestrateur central lui-même) : **existent
+déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
+récentes). Conversation memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

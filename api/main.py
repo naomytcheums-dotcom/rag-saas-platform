@@ -15,6 +15,14 @@ from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
+import api.models  # noqa: F401 -- real, necessary: guarantees every model in
+# api/models/__init__.py's own registry is imported (and its table
+# registered on Base.metadata) before any router or the test suite's
+# own Base.metadata.create_all() runs. Without this, a model reachable
+# by NO router (e.g. api/models/agent_run.py -- no real HTTP "agents"
+# endpoint exists) can go unregistered, breaking FK resolution for any
+# OTHER model that references it (the real bug found and fixed while
+# building Partie 5.1.10's human_approvals table).
 from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware

@@ -6878,6 +6878,36 @@ loop in the orchestrator).
 
 **Real verification**: 18 tests, `tests/test_human_approval.py`.
 
+### Partie 5.1.11 -- short-term agent memory
+
+New real models `api/models/agent_memory.py` (`AgentSession`,
+`AgentMemoryItem`, migration `0053`, RLS enabled). A real
+`UniqueConstraint(session_id, key)` makes this a real dict indexed by
+(session, key).
+
+New module `api/services/agent_memory.py`: `create_session`/
+`add_to_memory`/`get_from_memory`/`get_all_memory`/`clear_memory`/
+`update_memory` (this étape's own literal functions). Real, lazy
+expiry (same pattern as 5.1.10). **Robustness (vision critique)**:
+`add_to_memory` on a full session (`AGENT_MEMORY_SIZE`) really evicts
+the oldest item (FIFO), tested -- never silent, undefined data loss.
+`update_memory` cleanly no-ops (`None`) on a missing key, distinct from
+`add_to_memory`'s real upsert.
+
+**Real orchestrator integration**: `run_agent` takes an optional
+`session_id` -- when given, real memory loads into the system prompt,
+traced (`"memory_loaded"`). **Consistency (vision critique)**: memory
+really is shared across successive calls on the same session (tested).
+Writing stays the caller's own job (`add_to_memory` called directly) --
+the orchestrator doesn't decide alone what's worth remembering, which
+would need a real, separate summarization step, not asked for here.
+
+**Performance (vision critique)**: real indexed access via the
+`(session_id, key)` unique constraint.
+
+**Real verification**: 14 tests (13 function tests, 1 orchestrator
+integration test), `tests/test_agent_memory.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -191,6 +191,30 @@ async def test_run_agent_with_no_relevant_tools_still_completes(monkeypatch, db_
     assert trace_event["tools"] == []
 
 
+# ------------------------------------- memory (Partie 5.1.11 integration) -------------------------------------
+
+
+async def test_run_agent_loads_real_memory_into_the_system_prompt(monkeypatch, db_session):
+    """Validation criterion: cohérence -- la mémoire est partagée entre
+    les appels (chargée dans le prompt de l'appel suivant)."""
+    from api.services.agent_memory import add_to_memory, create_session
+
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    session = await create_session(db_session, "agent-1")
+    await add_to_memory(db_session, session.id, "favorite_color", "blue")
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "what do I like?", db=db_session, session_id=session.id)
+
+    assert run.status == "completed"
+    system_message = mock_acompletion.call_args.kwargs["messages"][0]["content"]
+    assert "blue" in system_message
+    assert any(e["event"] == "memory_loaded" for e in run.trace)
+
+
 async def test_run_agent_excludes_a_real_denied_tool(monkeypatch, db_session):
     """Validation criterion: sécurité (Partie 5.1.3) -- si l'utilisateur
     n'a pas la permission, l'outil est désactivé (jamais sélectionné,

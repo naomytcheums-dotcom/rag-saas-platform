@@ -6,6 +6,7 @@ registers its table).
 """
 
 from api.database import Base
+from api.models.agent_memory import AgentMemoryItem, AgentSession
 from api.models.agent_run import AgentRunRecord
 from api.models.audit_log import AuditLog
 from api.models.consent_reactivation_token import ConsentReactivationToken
@@ -39,5 +40,5 @@ __all__ = [
     "EnterpriseSSOConnection", "EnterpriseSSOAccount", "Organization", "OrganizationMember", "Workspace",
     "ResourcePermission", "Team", "TeamMember", "Invitation", "OrganizationQuota",
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
-    "HumanApproval",
+    "HumanApproval", "AgentSession", "AgentMemoryItem",
 ]
