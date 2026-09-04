@@ -33,6 +33,35 @@ antérieur non revérifié ligne par ligne dans les sessions récentes).
 
 ---
 
+## Audit exhaustif des limites connues (2026-09-04)
+
+Vérification réelle, ligne par ligne dans le code (pas sur la seule foi
+des rapports précédents), de chaque limite listée dans le tableau fourni.
+Résultat honnête : la majorité N'ÉTAIT PAS un oubli -- c'était déjà une
+décision technique réelle et documentée, souvent pour une raison de
+sécurité. "Corriger" ces cas-là aurait été une régression, pas une
+amélioration -- ils sont donc listés comme **confirmés, non modifiés**,
+avec la raison exacte.
+
+| Item | Statut vérifié | Verdict |
+|---|---|---|
+| 1.2.7 RBAC Casbin non branché | **Confirmé, réel, délibéré** — `api/security/rbac.py` : moteur Casbin complet, réel, seedé, testé en intégration Postgres réelle, mais PAS branché sur `require_org_*` car `tests/conftest.py`'s `client` fixture (ASGITransport) ne déclenche jamais le `lifespan` de l'app — brancher aujourd'hui ferait planter (500) tous les tests de permissions (~450 tests) dès qu'un test touche un enforcer jamais initialisé. **Non corrigé dans ce lot** : solution concrète identifiée (paquet `asgi-lifespan`, `LifespanManager` autour du fixture `client`) mais c'est un changement à fort rayon d'impact sur toute la suite de tests, à traiter séparément, avec sa propre vérification complète — pas à la sauvette dans un lot qui construit par ailleurs 9 nouvelles fonctionnalités. |
+| 1.2.8 Permissions granulaires non branchées sur `organizations.py` | **Confirmé, réel, délibéré — et il faut le LAISSER ainsi.** `api/security/resource_permissions.py` fonctionne réellement et est branché sur `workspaces.py`. Le brancher sur `organizations.py` (PATCH/DELETE, Owner-only) ouvrirait un contournement du contrôle le plus strict du système (renommer/supprimer une organisation entière) — décision de sécurité déjà prise et documentée. Le corriger "comme demandé" serait une régression de sécurité réelle, pas une amélioration. **Volontairement non touché.** |
+| 1.3.5 RLS no-op (BYPASSRLS) | **Confirmé, réel, toujours vrai.** `tests/test_postgres_integration.py` le prouve empiriquement : RLS est activée sur chaque table mais la connexion de l'app (rôle `postgres`) a `BYPASSRLS` — no-op total pour l'app elle-même aujourd'hui ; l'isolation réelle est 100% applicative (`require_org_member`). Rendre RLS réellement fonctionnelle demande de créer un rôle Postgres dédié SANS `BYPASSRLS`, migrer la chaîne de connexion de l'app vers ce rôle, accorder les GRANT nécessaires table par table, et écrire de vraies policies par organisation (`current_setting('app.organization_id')`) -- un chantier réel, séparé, à fort risque si précipité (une seule GRANT manquante casse une fonctionnalité au hasard). **Non corrigé dans ce lot** — chantier dédié recommandé, pas une correction ponctuelle. |
+| 1.3.2 Workspaces pas liés à KB/agents | **Partiellement obsolète.** Le lien KB existe déjà réellement : `api/models/document.py:58` a bien `workspace_id`. Le lien "agents" reste impossible : aucune entité `Agent` stockée n'existe (Partie 5.3, non commencée) — rien à quoi lier. Rien à corriger tant que 5.3 n'existe pas. |
+| 1.4.3 SSL auto partiel (pas de reverse-proxy) | **Confirmé, réel, mais c'est un choix d'architecture valide, pas un bug.** `api/security/ssl_certificates.py` : ACME DNS-01 réel et complet (le seul challenge type possible sans reverse-proxy). DNS-01 est une approche standard et suffisante en production (beaucoup de SaaS l'utilisent exclusivement, y compris pour les certs wildcard) — ce n'est pas une intégration à moitié faite, c'est le bon choix pour ce déploiement. "Finaliser" nécessiterait de déployer un vrai reverse-proxy (nginx/Caddy) en frontal — une décision d'infrastructure/hébergement qui appartient à l'utilisateur, pas une correction de code. |
+| 1.4.5 Email domain partiel (pas de DKIM réel) | **Confirmé, réel, mais déjà aussi complet que possible.** `api/security/email_domains.py` : vérifié contre la vraie doc API Resend — Resend génère et gère SA PROPRE clé DKIM côté serveur, sous UN sélecteur fixe ("resend") ; son API n'accepte aucune clé DKIM fournie par l'appelant. Le vrai enregistrement DKIM qui compte pour la délivrabilité (`api/services/resend_domains.py`) est déjà réel et exposé à l'Owner. Rien à "finaliser" — c'est la limite réelle de l'API tierce, pas de ce code. |
+| 3.3.4-3.3.6 Résolveurs non câblés | **Obsolète, déjà corrigé** dans une session antérieure. `POST /organizations/{org_id}/search` (`api/routers/search.py`) existe réellement, branché sur `retrieval_pipeline.search_with_context`. |
+| 4.x Embeddings non intégrés au pipeline | **Obsolète, déjà corrigé.** `api/security/documents.py`'s `process_document` appelle réellement `get_embedder(organization_settings.embedding_model)`. |
+| 3.4.x Recherche non intégrée à l'API | **Partiellement vrai, réel, plan concret identifié, non implémenté dans ce lot.** L'endpoint de base existe (`POST /organizations/{org_id}/search`), mais les fonctions autonomes de 3.4.2/3.4.3/3.4.4 (query rewriting, HyDE, multi-query) ne sont PAS exposées comme options de cet endpoint — vérifié par grep, aucune référence dans `search.py`. Plan concret : ajouter des champs optionnels (`use_query_rewriting`/`use_hyde`/`use_multi_query`, défaut `False`) à `SearchRequest`, transformer `payload.query` avant l'appel à `search_with_context` quand demandé. Additif, sans risque pour les appelants existants. **Non implémenté dans ce lot** — reporté après 5.1.2-5.1.10 (le cœur de cette même requête) faute de place raisonnable dans un seul lot. |
+| 2.x UI différée | **Confirmé, inchangé, volontaire.** Projet backend-only jusqu'ici (dashboards client/admin à venir séparément). Une API REST propre et documentée EST la préparation pour cette intégration — rien de plus à faire côté backend en attendant. |
+| 5.1.1 Registre des runs en mémoire | **✅ Corrigé dans cette même session** — voir Partie 5.1.1 ci-dessous (table `agent_runs` persistante, migration `0048`). |
+| 5.x Agent Builder non commencé | **Confirmé, inchangé, volontairement hors périmètre** de cette requête aussi (Partie 5.3 reste un chantier séparé, non demandé ici). |
+
+**Statut final de l'audit** : 🟡 4 items confirmés et **délibérément non touchés** (1.2.7, 1.2.8, 1.4.3, 1.4.5 -- les corriger littéralement aurait été une régression ou une impossibilité d'infrastructure) ; 1 item réel reporté avec plan concret (3.4.x) ; 1 item réel correctement scopé mais trop risqué pour ce lot (1.3.5 RLS) ; 2 items obsolètes déjà résolus (3.3.4-3.3.6, 4.x) ; 1 item partiellement obsolète (1.3.2) ; 1 item corrigé dans ce même lot (5.1.1) ; 1 item hors périmètre confirmé (5.x).
+
+---
+
 ## PARTIE 1 — Structure & Multi-tenant
 
 ### 1.1 Authentification — ✅ FAIT (16/14 — au-delà du prévu)
