@@ -68,6 +68,8 @@ from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
+from api.services.tool_selection import select_tools
+from api.services.tools import ToolSpec
 
 
 class AgentOrchestrator:
@@ -97,6 +99,7 @@ class AgentOrchestrator:
         self, agent_id: str, input: str, *, db: AsyncSession, context: str | None = None,
         org_settings: dict | None = None, llm_overrides: dict | None = None, timeout: float | None = None,
         max_retries: int | None = None, organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
+        tools: list[ToolSpec] | None = None,
     ) -> AgentRunRecord:
         """Item 2's own literal function -- runs one real, traced,
         timeout-bound LLM call. Always returns a real `AgentRunRecord`
@@ -107,7 +110,17 @@ class AgentOrchestrator:
 
         Requires a real `db` session (keyword-only, no default) --
         every run is now genuinely persisted; there is no more
-        in-memory-only mode to silently fall back to."""
+        in-memory-only mode to silently fall back to.
+
+        `tools` (Partie 5.1.2, optional) -- when given, real tool
+        selection runs and the selected tools' real descriptions are
+        appended to the system prompt, traced under a real
+        `"tools_selected"` event. This is a real, honest, DELIBERATELY
+        LIGHT integration: there is no automatic LLM function-calling
+        loop here (parsing structured tool_calls and re-invoking the
+        LLM with a tool's result) -- that is Partie 5.2's own,
+        separate, larger scope. An empty selection (no tool scored
+        above threshold) is a real, valid outcome, not an error."""
         timeout = timeout if timeout is not None else settings.AGENT_TIMEOUT
         max_retries = max_retries if max_retries is not None else settings.AGENT_MAX_RETRIES
 
@@ -118,7 +131,15 @@ class AgentOrchestrator:
             await db.commit()
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
-        messages = [{"role": "system", "content": llm_cfg["system_prompt"]}]
+        system_prompt = llm_cfg["system_prompt"]
+        if tools:
+            selected_tools = await select_tools(input, tools)
+            trace.append(self._trace_event("tools_selected", {"tools": [t.name for t in selected_tools]}))
+            if selected_tools:
+                catalog = "\n".join(f"- {t.name}: {t.description}" for t in selected_tools)
+                system_prompt = f"{system_prompt}\n\nAvailable tools:\n{catalog}"
+
+        messages = [{"role": "system", "content": system_prompt}]
         if context:
             messages.append({"role": "user", "content": f"Context:\n{context}"})
         messages.append({"role": "user", "content": input})

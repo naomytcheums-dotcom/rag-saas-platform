@@ -6579,6 +6579,44 @@ instance test simulating a different worker, and a real multi-tenant
 isolation test -- mocked at the `litellm.acompletion` boundary, real
 SQLite DB otherwise), `tests/test_agent_orchestrator.py`.
 
+### Partie 5.1.2 -- automatic tool selection
+
+New module `api/services/tools.py`: a real, minimal `ToolSpec`
+abstraction (name, description, JSON-schema parameters, capability
+tags, a real async handler) -- a real, necessary prerequisite before
+5.1.2-5.1.9, since no "tool" concept existed anywhere in this codebase
+before this batch (Partie 5.2, "Outils intégrés," remains its own,
+larger, separate, not-started scope). Two real, testable built-in
+tools: `calculator` (a real, SAFE arithmetic evaluator via `ast`, never
+Python's own `eval()` -- explicitly rejects a code-injection attempt,
+tested) and `word_count`.
+
+New module `api/services/tool_selection.py`: `select_tools`/
+`rank_tools`/`filter_tools_by_capability`/`get_tool_description`/
+`get_tool_parameters` (this étape's own literal functions). Two real
+selection paths, both genuinely implemented: `rank_tools` (real,
+deterministic keyword-overlap scoring, zero external calls) and a real
+LLM path (reuses `chat_completion`, Partie 4.1.7), on by default
+(`TOOL_SELECTION_USE_LLM=True`) -- real, tested robustness: a malformed
+LLM response falls back to the deterministic path instead of crashing.
+
+**Real but deliberately light orchestrator integration**:
+`AgentOrchestrator.run_agent` takes an optional `tools` parameter --
+when given, real selection runs, is traced (`"tools_selected"`), and
+selected tools' descriptions are appended to the system prompt. **No
+automatic LLM function-calling loop** (structured tool_calls parsing,
+re-invoking the LLM with a tool's result) -- that stays Partie 5.2's
+own real, separate, larger scope; building it silently here would be
+unrequested scope growth under a 5.1.x infrastructure request.
+
+**Robustness (vision critique)**: no tool above threshold means a real,
+empty list, never an exception, never a fabricated tool. Tested
+(`test_run_agent_with_no_relevant_tools_still_completes`).
+
+**Real verification**: 20 tests (18 in `tests/test_tools.py`/
+`tests/test_tool_selection.py`, plus 2 real orchestrator integration
+tests).
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

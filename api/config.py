@@ -598,6 +598,47 @@ class Settings(BaseSettings):
     AGENT_MAX_RETRIES: int = 3
     AGENT_MAX_TOKENS: int = 4096
 
+    # -- Tool selection (Partie 5.1.2) ---------------------------------------
+    TOOL_SELECTION_TOP_K: int = 5
+    TOOL_SELECTION_THRESHOLD: float = 0.5
+    TOOL_SELECTION_USE_LLM: bool = True
+
+    # -- Tool timeout (Partie 5.1.4) ------------------------------------------
+    TOOL_TIMEOUT_DEFAULT: int = 30
+    TOOL_TIMEOUT_MAX: int = 120
+    TOOL_TIMEOUT_MIN: int = 5
+
+    # -- Per-tool token budget (Partie 5.1.5) ---------------------------------
+    TOOL_BUDGET_DEFAULT: int = 1000
+    TOOL_BUDGET_MAX: int = 10000
+    TOOL_BUDGET_MIN: int = 100
+    TOOL_BUDGET_TRACKING_ENABLED: bool = True
+
+    # -- Retry mechanism (Partie 5.1.6) ---------------------------------------
+    RETRY_MAX_ATTEMPTS: int = 3
+    RETRY_BASE_DELAY: float = 1.0
+    RETRY_MAX_DELAY: float = 30.0
+    RETRY_BACKOFF_FACTOR: float = 2.0
+    RETRY_ON_STATUS_CODES: list[int] = [429, 500, 502, 503, 504]
+
+    # -- Fallback (Partie 5.1.7) -----------------------------------------------
+    FALLBACK_ENABLED: bool = True
+    FALLBACK_MAX_CHAIN: int = 3
+
+    # -- Parallel tool calls (Partie 5.1.8) -------------------------------------
+    PARALLEL_TOOL_CALLS_ENABLED: bool = True
+    PARALLEL_TOOL_CALLS_MAX: int = 5
+    PARALLEL_TOOL_CALLS_TIMEOUT: int = 30
+
+    # -- Tool result validation (Partie 5.1.9) ----------------------------------
+    TOOL_VALIDATION_ENABLED: bool = True
+    TOOL_VALIDATION_STRICT: bool = False
+
+    # -- Human approval (Partie 5.1.10) ------------------------------------------
+    HUMAN_APPROVAL_ENABLED: bool = True
+    HUMAN_APPROVAL_EXPIRY: int = 3600
+    HUMAN_APPROVAL_REQUIRED_TOOLS: list[str] = ["send_email", "delete_data", "execute_code", "make_payment", "update_database"]
+
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"

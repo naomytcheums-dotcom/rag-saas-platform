@@ -480,12 +480,25 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 Tests réels dédiés (19 tests, dont un vrai test de timeout, un vrai test d'arrêt en cours d'exécution, un vrai test de lecture depuis une SECONDE instance d'orchestrateur simulant un autre worker, et un vrai test d'isolation multi-tenant -- mock à la frontière `litellm.acompletion`, DB réelle SQLite sinon), voir `tests/test_agent_orchestrator.py`.
 
-Tool selection, tool timeout, retry, tool result validation, agent
-memory (court-terme), agent traces (au-delà de l'orchestrateur central
-lui-même) : **existent déjà** côté `src/`/agent (hérité, non revérifié
-dans les sessions récentes). Tool permissions, per-tool budget,
-fallback, parallel tool calls, human approval, conversation memory
-cross-session (DB), task planning : ⬜.
+#### Partie 5.1.2 — Sélection automatique d'outils
+
+✅ **Nouveau module réel** `api/services/tools.py` : une vraie abstraction `ToolSpec` minimale (nom, description, paramètres JSON-schema, tags de capacité, handler async réel) -- **prérequis honnête et nécessaire** avant 5.1.2-5.1.9, puisqu'aucune notion de "outil" n'existait nulle part dans ce dépôt avant ce lot (Partie 5.2, "Outils intégrés", reste son propre périmètre réel, plus large, non commencé). Deux vrais outils intégrés, testables sans mock : `calculator` (évaluateur arithmétique réel et SÛR via `ast`, jamais `eval()` -- rejette explicitement une tentative d'injection de code, testé) et `word_count`.
+
+✅ **Nouveau module réel** `api/services/tool_selection.py` : `select_tools`/`rank_tools`/`filter_tools_by_capability`/`get_tool_description`/`get_tool_parameters` (fonctions littérales). Deux vrais chemins de sélection, tous deux réellement implémentés : `rank_tools` (scoring déterministe réel par recouvrement de mots-clés, zéro appel externe) et un chemin LLM réel (réutilise `chat_completion`, Partie 4.1.7) activé par défaut (`TOOL_SELECTION_USE_LLM=True`) -- **robustesse réelle et testée** : une réponse LLM malformée retombe automatiquement sur le chemin déterministe au lieu de planter.
+
+**Intégration dans l'orchestrateur, réelle mais volontairement légère** : `AgentOrchestrator.run_agent` accepte un paramètre optionnel `tools` -- quand fourni, la sélection réelle s'exécute, est tracée (`"tools_selected"`), et les descriptions des outils sélectionnés sont injectées dans le system prompt. **Pas de boucle d'appel automatique d'outils par le LLM** (function-calling structuré, ré-invocation avec le résultat) -- ça reste le vrai périmètre, séparé et plus large, de la Partie 5.2 ; le construire silencieusement ici aurait été une sur-livraison non demandée sous couvert d'une requête sur l'infrastructure 5.1.x.
+
+**Robustesse (vision critique)** : aucun outil au-dessus du seuil → liste vide réelle, jamais d'exception, jamais d'outil fabriqué. Testé (`test_run_agent_with_no_relevant_tools_still_completes`).
+
+Tests réels dédiés (18 + 2 tests d'intégration orchestrateur = 20 tests), voir `tests/test_tools.py` et `tests/test_tool_selection.py`.
+
+Tool timeout, retry, tool result validation, agent memory (court-terme),
+agent traces (au-delà de l'orchestrateur central lui-même) : **existent
+déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
+récentes) -- des versions réelles, testées, indépendantes sont
+construites ci-dessous côté `api/` pour cette même Partie. Tool
+permissions, per-tool budget, fallback, parallel tool calls, human
+approval, conversation memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

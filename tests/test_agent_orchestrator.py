@@ -20,6 +20,7 @@ from api.config import settings
 from api.models.agent_run import AgentRunRecord
 from api.security.agent_runs import get_run, get_runs
 from api.services.agent_orchestrator import AgentOrchestrator
+from api.services.tools import CALCULATOR_TOOL, WORD_COUNT_TOOL
 
 
 def _real_response(text: str) -> ModelResponse:
@@ -149,6 +150,44 @@ async def test_run_agent_times_out(monkeypatch, db_session):
 
     assert run.status == "timeout"
     assert await orchestrator.get_agent_status("agent-1", db_session) == "timeout"
+
+
+# ------------------------------------- tools (Partie 5.1.2 integration) -------------------------------------
+
+
+async def test_run_agent_selects_and_traces_real_tools(monkeypatch, db_session):
+    """Validation criterion: cohérence -- la sélection d'outils est
+    intégrée dans l'orchestrateur (Partie 5.1.2)."""
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(
+        "agent-1", "calculator math", db=db_session,
+        tools=[CALCULATOR_TOOL, WORD_COUNT_TOOL],
+    )
+
+    trace_event = next(e for e in run.trace if e["event"] == "tools_selected")
+    assert "calculator" in trace_event["tools"]
+    system_message = mock_acompletion.call_args.kwargs["messages"][0]["content"]
+    assert "calculator" in system_message
+
+
+async def test_run_agent_with_no_relevant_tools_still_completes(monkeypatch, db_session):
+    """Validation criterion: robustesse -- que se passe-t-il si aucun
+    outil n'est sélectionné."""
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(
+        "agent-1", "completely unrelated xyz topic", db=db_session,
+        tools=[CALCULATOR_TOOL],
+    )
+
+    assert run.status == "completed"
+    trace_event = next(e for e in run.trace if e["event"] == "tools_selected")
+    assert trace_event["tools"] == []
 
 
 # ------------------------------------- persistence (fix) -------------------------------------
