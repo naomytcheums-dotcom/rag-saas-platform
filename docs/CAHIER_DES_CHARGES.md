@@ -548,12 +548,22 @@ Tests réels dédiés (10 tests du module + 2 tests d'intégration dans `test_to
 
 Tests réels dédiés (14 tests fonction+endpoint), voir `tests/test_fallback.py`.
 
+#### Partie 5.1.8 — Appels d'outils parallèles
+
+✅ **Nouveau module réel** `api/services/parallel_tools.py` : `execute_tools_parallel`/`execute_tool_with_semaphore`/`aggregate_parallel_results`/`merge_parallel_contexts` + `Strategy.BATCH`/`Strategy.ALL`/`Strategy.CHAINED` (fonctions/enum littéraux). **Déviation réelle documentée du signature littéral** : `execute_tools_parallel(tools, params, ...)` avec un seul `params` partagé n'a pas de sens réel entre des outils différents aux paramètres différents -- prend `calls: list[tuple[ToolSpec, dict]]`, un vrai dict de paramètres par outil.
+
+**Simplification honnête de `CHAINED`** : la description littérale ("parallèle sur les dépendances") suppose un vrai graphe de dépendances -- rien dans ce lot ne définit ce qu'une dépendance entre deux appels d'outils signifierait. Plutôt que fabriquer un faux ordonnanceur de dépendances, `CHAINED` signifie honnêtement "un vrai appel à la fois, dans l'ordre donné" -- l'interprétation minimale et réelle en l'absence d'une vraie spécification de dépendance.
+
+**Robustesse (vision critique)** : un échec individuel dans un lot parallèle n'arrête jamais les autres (`asyncio.gather(..., return_exceptions=True)`, agrégé proprement). `PARALLEL_TOOL_CALLS_ENABLED=False` retombe sur `CHAINED` (réel, séquentiel, sûr) plutôt que d'ignorer silencieusement le réglage. Vrai timeout GLOBAL sur le lot entier (`asyncio.wait_for`), testé.
+
+Tests réels dédiés (10 tests), voir `tests/test_parallel_tools.py`.
+
 Tool result validation, agent memory (court-terme), agent traces
 (au-delà de l'orchestrateur central lui-même) : **existent déjà** côté
 `src/`/agent (hérité, non revérifié dans les sessions récentes) -- une
 version réelle, testée, indépendante est construite ci-dessous côté
-`api/` pour cette même Partie. Parallel tool calls, human approval,
-conversation memory cross-session (DB), task planning : ⬜.
+`api/` pour cette même Partie. Human approval, conversation memory
+cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

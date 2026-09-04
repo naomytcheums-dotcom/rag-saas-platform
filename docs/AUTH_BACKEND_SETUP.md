@@ -6764,6 +6764,35 @@ tool today.
 
 **Real verification**: 14 tests, `tests/test_fallback.py`.
 
+### Partie 5.1.8 -- parallel tool calls
+
+New module `api/services/parallel_tools.py`: `execute_tools_parallel`/
+`execute_tool_with_semaphore`/`aggregate_parallel_results`/
+`merge_parallel_contexts` plus `Strategy.BATCH`/`Strategy.ALL`/
+`Strategy.CHAINED` (this étape's own literal functions/enum). **A real,
+documented deviation from the literal signature**:
+`execute_tools_parallel(tools, params, ...)` with one shared `params`
+makes little real sense across different tools with different real
+parameter shapes -- takes `calls: list[tuple[ToolSpec, dict]]`, one
+real params dict per tool, instead.
+
+**An honest simplification of `CHAINED`**: the literal description
+("parallel over dependencies") implies a real dependency graph --
+nothing in this batch defines what a dependency between two tool calls
+would even mean. Rather than fabricate a fake dependency scheduler,
+`CHAINED` here honestly means "one real call at a time, in the given
+order" -- the minimal, real interpretation absent an actual dependency
+spec.
+
+**Robustness (vision critique)**: one real individual failure in a
+parallel batch never stops the others (`asyncio.gather(...,
+return_exceptions=True)`, cleanly aggregated).
+`PARALLEL_TOOL_CALLS_ENABLED=False` falls back to `CHAINED` (real,
+sequential, safe) rather than silently ignoring the setting. A real,
+GLOBAL timeout covers the whole batch (`asyncio.wait_for`), tested.
+
+**Real verification**: 10 tests, `tests/test_parallel_tools.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
