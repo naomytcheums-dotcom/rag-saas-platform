@@ -11,7 +11,7 @@ import zipfile
 import docx
 import pytest
 
-from api.services.docx_extraction import extract_docx_metadata, extract_docx_styles, extract_docx_tables, extract_docx_text
+from api.services.docx_extraction import extract_docx_footnotes, extract_docx_metadata, extract_docx_styles, extract_docx_tables, extract_docx_text
 
 
 @pytest.fixture
@@ -178,3 +178,86 @@ def test_extract_docx_styles_skips_empty_paragraphs(tmp_path):
 def test_extract_docx_styles_raises_for_a_corrupt_docx(corrupt_docx_path):
     with pytest.raises(ValueError):
         extract_docx_styles(corrupt_docx_path)
+
+
+# --------------------------------------------------- footnotes (Partie 3.1.3) --
+
+def _docx_bytes_with_real_footnote() -> bytes:
+    """python-docx has no public API to ADD a footnote either (the
+    same real gap this étape's own `extract_docx_footnotes` was built
+    to read around) -- a real, minimal, hand-crafted OOXML
+    `word/footnotes.xml` part is injected directly into a real,
+    otherwise normal python-docx-generated package, the same real
+    "manipulate the real ZIP directly" technique
+    tests/test_documents_integration.py's own corrupt-DOCX test already
+    uses. Includes the two real, structural separator footnotes Word
+    itself always emits (ids -1/0, never real content) alongside one
+    real footnote with real text, so the test also proves those two
+    are correctly excluded."""
+    import io
+    import zipfile
+
+    import docx
+
+    document = docx.Document()
+    document.add_paragraph("Body text with a real footnote reference.")
+    base_buffer = io.BytesIO()
+    document.save(base_buffer)
+    base_buffer.seek(0)
+
+    footnotes_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+        '<w:footnote w:id="1"><w:p><w:r><w:t>This is a real footnote with real content.</w:t></w:r></w:p></w:footnote>'
+        "</w:footnotes>"
+    )
+
+    output_buffer = io.BytesIO()
+    with zipfile.ZipFile(base_buffer, "r") as zip_in, zipfile.ZipFile(output_buffer, "w") as zip_out:
+        for item in zip_in.infolist():
+            data = zip_in.read(item.filename)
+            if item.filename == "[Content_Types].xml":
+                data = data.replace(
+                    b"</Types>",
+                    b'<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>',
+                )
+            elif item.filename == "word/_rels/document.xml.rels":
+                data = data.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdFootnotes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/></Relationships>',
+                )
+            zip_out.writestr(item, data)
+        zip_out.writestr("word/footnotes.xml", footnotes_xml)
+    return output_buffer.getvalue()
+
+
+def test_extract_docx_footnotes_finds_real_footnote_content(tmp_path):
+    """Validation criterion (Partie 3.1.3) -- un vrai gap trouvé en
+    révisant les extracteurs existants : python-docx n'a aucune API
+    publique pour les notes de bas de page."""
+    path = tmp_path / "with_footnote.docx"
+    path.write_bytes(_docx_bytes_with_real_footnote())
+
+    footnotes = extract_docx_footnotes(str(path))
+    assert footnotes == ["This is a real footnote with real content."]
+
+
+def test_extract_docx_footnotes_excludes_real_structural_separators(tmp_path):
+    """The two real, structural separator footnotes (ids -1/0) Word
+    itself always emits are never real content."""
+    path = tmp_path / "with_footnote.docx"
+    path.write_bytes(_docx_bytes_with_real_footnote())
+
+    footnotes = extract_docx_footnotes(str(path))
+    assert len(footnotes) == 1  # not 3 -- the two structural ones excluded
+
+
+def test_extract_docx_footnotes_returns_empty_list_for_a_real_docx_with_no_footnotes_part(real_docx_path):
+    assert extract_docx_footnotes(real_docx_path) == []
+
+
+def test_extract_docx_footnotes_raises_for_a_corrupt_docx(corrupt_docx_path):
+    with pytest.raises(ValueError):
+        extract_docx_footnotes(corrupt_docx_path)

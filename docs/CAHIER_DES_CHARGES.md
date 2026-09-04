@@ -157,9 +157,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~10/41, dont 3.1.1/3.1.2/3.1.4/3.1.5/3.1.6 réels dans `api/`, 2026-09-04)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~11/41, dont 3.1.1/3.1.2/3.1.3/3.1.4/3.1.5/3.1.6 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — 🟡 (5/10 ✅, 3.1.3 restant à finaliser + 4 items non encore spécifiés)
+### 3.1 Ingestion — 🟡 (6/10 ✅, 4 items non encore spécifiés par l'utilisateur)
 
 **Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
 
@@ -167,7 +167,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 |---|---|---|
 | 3.1.1 | Nettoyage du texte | ✅ Voir détails ci-dessous |
 | 3.1.2 | Normalisation du texte | ✅ Voir détails ci-dessous |
-| 3.1.3 | Extraction du texte (amélioration) | ⬜ (voir note ci-dessous) |
+| 3.1.3 | Extraction du texte (amélioration) | ✅ Voir détails ci-dessous |
 | 3.1.4 | Extraction des tableaux | ✅ Voir détails ci-dessous |
 | 3.1.5 | Extraction des images | ✅ Voir détails ci-dessous |
 | 3.1.6 | OCR | ✅ Voir détails ci-dessous (vérification réelle via CI, binaires système absents de cette machine de dev) |
@@ -194,6 +194,12 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.1.6 — OCR
 
 ✅ **Nouveau module réel** `api/services/ocr.py` : `ocr_image`, `ocr_pdf_page`, `ocr_pdf_scanned`, `detect_scanned_pdf`, `get_ocr_confidence`, plus `ocr_image_bytes`/`ocr_image_with_confidence` (ajouts réels nécessaires, voir ci-dessous). **Nouvelle config réelle** `api/config.py` : `OCR_ENABLED`/`OCR_LANGUAGE` (`fra`)/`OCR_DPI`/`OCR_TIMEOUT`. Intégré dans `extract_document_content` (un PDF réellement scanné est OCR AVANT le reste du dispatcher, texte littéral de l'item 4) et dans la boucle d'images de `process_document` (chaque image intégrée reçoit un OCR automatique réel -- "pour les images" signifie les images intégrées de 3.1.5, puisque ce dépôt n'accepte jamais une image brute comme upload de document de premier niveau). **Limite réelle et importante, énoncée en évidence, pas découverte par surprise** : `pytesseract`/`pdf2image` sont de simples wrappers Python autour d'un vrai binaire système séparé qu'aucun des deux paquets pip n'installe (le moteur Tesseract, et `pdftoppm`/`pdftocairo` de poppler) -- confirmé qu'AUCUN des deux n'est installé sur la machine de développement de cette session. Le job CI `api-tests` installe désormais les deux (`apt-get install tesseract-ocr tesseract-ocr-fra poppler-utils`) pour une vraie vérification de bout en bout que cette machine ne peut pas fournir. **Robustesse (vision critique 3), exception réelle et nommée** : `OCRNotAvailableError` distingue "le binaire réel n'est pas installé" de tout autre échec OCR réel -- les deux points d'intégration dégradent gracieusement (gardent le texte déjà extrait, ou sautent l'OCR pour cette image), confirmé en direct sur cette machine (le message de dégradation a été réellement observé, pas seulement simulé dans un test). **Déviation réelle et documentée par rapport au texte littéral** de `get_ocr_confidence(text)` : prend le vrai dictionnaire de données par mot de l'OCR (`pytesseract.image_to_data`), pas du texte brut -- un score de confiance réel ne peut venir que de l'inférence propre du moteur OCR au moment où il tourne, jamais reconstruit honnêtement depuis du texte déjà extrait. **Qualité (vision critique 2)** : `detect_scanned_pdf` est une heuristique réelle sur du texte réellement extrait par PyMuPDF (aucun OCR nécessaire pour cette détection elle-même). **Performance (vision critique 1)** : `OCR_DPI`/`OCR_TIMEOUT` réellement configurables ; coût réel et honnête assumé -- un document avec beaucoup d'images intégrées signifie beaucoup d'appels OCR réels et proportionnels. Tests réels dédiés (calcul de confiance, détection de PDF scanné sans Tesseract, orchestration simulée à la frontière pytesseract/pdf2image, DEUX tests réels de bout en bout marqués SKIP sur cette machine faute de binaires -- confirmés sauter correctement plutôt que d'être simulés), voir `tests/test_ocr.py`, plus un vrai test d'intégration PDF scanné de bout en bout dans `tests/test_documents_integration.py` (également SKIP en local, réellement exécuté en CI).
+
+#### Partie 3.1.3 — Extraction du texte (amélioration)
+
+✅ **Construite délibérément EN DERNIER dans ce lot de 6, pas dans l'ordre numérique** -- l'item 2 de cette étape nomme `extract_text_image` ("OCR via Tesseract, optionnel"), exactement ce que 3.1.6 construit déjà en profondeur ; faire 3.1.6 d'abord évite de construire l'OCR deux fois. Le vrai périmètre restant, une fois cette redite et le travail déjà livré par 3.1.4/3.1.5 pris en compte, est étroit : **un seul vrai manque, trouvé en révisant réellement chaque extracteur existant** (item 1 littéral), pas du travail fabriqué. **Le vrai manque : les notes de bas de page DOCX.** `extract_docx_text` (2.1.2) parcourt `document.paragraphs` -- confirmé que python-docx n'a AUCUNE API publique pour les notes de bas de page (ni lecture ni écriture) : elles vivent dans une vraie partie OOXML séparée, `word/footnotes.xml`, que `document.paragraphs` ne touche jamais. Nouvelle fonction `extract_docx_footnotes`, trouvant cette vraie partie via `part.package.parts` (filtré par le vrai type de contenu OOXML standard), parsée avec le même vrai parcours `w:p`/`w:t` que python-docx utilise en interne. Les vraies notes structurelles de séparation (ids `-1`/`0`, jamais du vrai contenu) sont correctement exclues. Intégré dans `extract_document_content` comme une vraie section DISTINCTE (`metadata={"footnotes": True}`), jamais fusionnée silencieusement dans le texte du corps. **Complétude (vision critique 1), constat honnête pour les 3 autres formats** : PDF (`page.get_text()`) et EPUB (`get_text()` sur le HTML complet d'un chapitre) capturent DÉJÀ le texte des notes de bas de page comme partie normale et non différenciée de leur extraction existante -- aucun des deux formats ne sépare ce texte dans une vraie structure de données distincte comme le fait OOXML pour DOCX, donc aucun vrai manque caché à corriger pour l'un ou l'autre. Nuance réelle et honnête pour HTML spécifiquement : l'heuristique d'extraction d'article de `readability` (2.1.5) est basée sur un score, pas garantie -- un bloc de notes structurellement séparé du flux principal de l'article pourrait en principe être exclu comme "boilerplate" ; non vérifié spécifiquement dans un sens ou l'autre ici. **Non-duplication réelle et assumée** : les noms littéraux `extract_text_pdf`/`extract_text_docx`/`extract_text_html`/`extract_text_epub` ne sont PAS construits comme de nouvelles fonctions séparées -- ce seraient des doublons exacts de `extract_pdf_pages_text`/`extract_docx_text`/`extract_html_content`/`extract_epub_chapters` déjà existants et déjà testés (2.1.x). `extract_text_image` est entièrement couvert par le vrai `ocr_image` de 3.1.6. **Performance (vision critique 2)** : une seule partie XML supplémentaire, typiquement petite, lue -- coût réel négligeable. **Robustesse (vision critique 3)** : même vraie erreur `ValueError` partagée avec `extract_docx_text` pour un DOCX corrompu ; une liste vide honnête (pas une erreur) pour l'immense majorité des vrais documents sans partie footnotes. Tests réels dédiés (notes de bas de page réelles trouvées via un DOCX construit à la main -- python-docx ne peut pas non plus AJOUTER une note via son API publique --, séparateurs structurels exclus, liste vide pour un DOCX réel sans notes, erreur claire pour un DOCX corrompu, dispatcher confirmé ajoutant une vraie section distincte), voir `tests/test_docx_extraction.py`/`tests/test_document_extraction.py`.
+
+**Avec 3.1.3, la série complète 3.1.1 à 3.1.6 de ce lot est terminée.**
 
 ### 3.2 Chunking
 
@@ -398,16 +404,24 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 84 | 16.8% |
+| ✅ Fait | 85 | 17.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 350 | 70.0% |
+| ⬜ Non commencé | 349 | 69.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **91/515 (~17.7%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **163/515 (~31.7%)**
-- Pondéré (✅=1, 🟡=0.5) : **~124/515 (~24.1%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **92/515 (~17.9%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **164/515 (~31.8%)**
+- Pondéré (✅=1, 🟡=0.5) : **~125/515 (~24.3%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 3.1.6 (OCR, 2026-09-04) :
+Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
+Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
+manque trouvé en révisant réellement chaque extracteur existant : les
+notes de bas de page DOCX (python-docx n'a aucune API publique pour
+elles). PDF/EPUB capturaient déjà ce texte sans changement de code ;
+`extract_text_image` déjà couvert par 3.1.6. La série complète 3.1.1 à
+3.1.6 de ce lot est maintenant terminée).
+
+Précédemment, mis à jour après Partie 3.1.6 (OCR, 2026-09-04) :
 Partie 3 : ~9/41 → ~10/41 (3.1.6 seul item touché -- ✅, nouveau module
 `api/services/ocr.py` (pytesseract/pdf2image), intégré dans l'extraction
 PDF et dans la boucle d'images de 3.1.5. Limite réelle énoncée en

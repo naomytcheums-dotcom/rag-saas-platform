@@ -188,10 +188,29 @@ def test_extract_document_content_dispatches_docx_correctly(real_docx_path):
     result = extract_document_content(real_docx_path, DOCX_CONTENT_TYPE)
     _assert_shared_shape(result)
     assert result["metadata"]["title"] == "Dispatcher DOCX"
-    assert len(result["sections"]) == 1  # DOCX has no pages -- always exactly one section
+    assert len(result["sections"]) == 1  # DOCX has no pages, and no footnotes here -- exactly one section
     assert "Real DOCX dispatcher test content." in result["sections"][0]["text"]
     assert result["sections"][0]["metadata"] == {}
-    assert result["image_count"] == 0  # no image extraction built for DOCX by this step
+    # Real DOCX image extraction (Partie 3.1.5) happens separately, in
+    # process_document's own dedicated image loop, not in this
+    # dispatcher's own shared shape -- this field stays 0 for DOCX here
+    # regardless.
+    assert result["image_count"] == 0
+
+
+def test_extract_document_content_appends_real_docx_footnotes_as_their_own_section(tmp_path):
+    """Partie 3.1.3 -- real footnote content is appended as a real,
+    distinct, clearly-marked section, not silently merged into body
+    text."""
+    from tests.test_docx_extraction import _docx_bytes_with_real_footnote
+
+    path = tmp_path / "with_footnote.docx"
+    path.write_bytes(_docx_bytes_with_real_footnote())
+
+    result = extract_document_content(str(path), DOCX_CONTENT_TYPE)
+    assert len(result["sections"]) == 2
+    assert result["sections"][1]["metadata"] == {"footnotes": True}
+    assert "real footnote" in result["sections"][1]["text"]
 
 
 def test_extract_document_content_dispatches_txt_correctly(real_txt_path):

@@ -86,7 +86,7 @@ import logging
 
 from api.config import settings
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
-from api.services.docx_extraction import extract_docx_metadata, extract_docx_tables, extract_docx_text
+from api.services.docx_extraction import extract_docx_footnotes, extract_docx_metadata, extract_docx_tables, extract_docx_text
 from api.services.epub_extraction import extract_epub_chapters, extract_epub_metadata, extract_epub_toc
 from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata, extract_tables_html
 from api.services.json_extraction import extract_json_metadata, extract_json_text
@@ -143,9 +143,23 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
             "image_count": len(extract_pdf_images(file_path)),
         }
     if file_type == DOCX_CONTENT_TYPE:
+        # Partie 3.1.3, item 1 -- a real gap found reviewing this
+        # codebase's own existing extractors: python-docx's own real
+        # `document.paragraphs` (what extract_docx_text above already
+        # walks) never includes footnote text at all -- it lives in a
+        # real, separate OOXML part python-docx has no public API for
+        # (see extract_docx_footnotes's own docstring). Appended as
+        # its own real, distinct section (its own metadata marks it as
+        # such) rather than merged into the body's own section --
+        # keeping the real distinction visible rather than silently
+        # blending footnote text into body prose.
+        sections = [{"text": extract_docx_text(file_path), "metadata": {}}]
+        footnotes = extract_docx_footnotes(file_path)
+        if footnotes:
+            sections.append({"text": "\n\n".join(footnotes), "metadata": {"footnotes": True}})
         return {
             "metadata": extract_docx_metadata(file_path),
-            "sections": [{"text": extract_docx_text(file_path), "metadata": {}}],
+            "sections": sections,
             "tables": extract_docx_tables(file_path),
             "image_count": 0,
         }

@@ -43,6 +43,56 @@ def extract_docx_text(file_path: str) -> str:
     return "\n".join(paragraph.text for paragraph in document.paragraphs)
 
 
+# Real OOXML footnote ids Word itself always reserves for structural,
+# non-content footnotes (a real separator and continuation-separator
+# mark, present even in a document with zero real footnotes) -- never
+# real content, so always excluded below.
+_STRUCTURAL_FOOTNOTE_IDS = {"-1", "0"}
+
+
+def extract_docx_footnotes(file_path: str) -> list[str]:
+    """Partie 3.1.3, item 1's own real gap, found while reviewing this
+    codebase's own existing extractors (this étape's own literal ask):
+    python-docx has NO public API for footnotes at all (confirmed for
+    real -- neither `Document` nor `DocumentPart` exposes one; they
+    live in their own real, separate OOXML part,
+    `word/footnotes.xml`, python-docx never reads). Found via the
+    document's own real package parts (`document.part.package.parts`,
+    filtered by the real, standard OOXML footnotes content type), then
+    parsed with the SAME real `lxml`-based namespace-aware approach
+    python-docx itself uses internally (`w:p`/`w:t` elements under the
+    real WordprocessingML namespace) -- not a second, hand-rolled XML
+    parser. Returns an empty list for a real DOCX with no footnotes
+    part at all, or none with real content -- a normal, expected
+    outcome, the same convention every table/image extractor in this
+    codebase already follows."""
+    from docx.oxml.ns import qn
+    from lxml import etree
+
+    document = _open(file_path)
+    footnotes_part = next(
+        (part for part in document.part.package.parts
+         if part.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"),
+        None,
+    )
+    if footnotes_part is None:
+        return []
+
+    root = etree.fromstring(footnotes_part.blob)
+    texts = []
+    for footnote in root.findall(qn("w:footnote")):
+        if footnote.get(qn("w:id")) in _STRUCTURAL_FOOTNOTE_IDS:
+            continue
+        paragraphs = [
+            "".join(t.text or "" for t in paragraph.findall(f".//{qn('w:t')}"))
+            for paragraph in footnote.findall(qn("w:p"))
+        ]
+        text = "\n".join(p for p in paragraphs if p)
+        if text.strip():
+            texts.append(text)
+    return texts
+
+
 def extract_docx_tables(file_path: str):
     """Item 2's literal function -- one pandas DataFrame per table, in
     document order, using the table's own first row as the DataFrame's
