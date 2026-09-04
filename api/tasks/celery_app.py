@@ -29,7 +29,7 @@ celery_app = Celery(
     include=[
         "api.tasks.account_purge", "api.tasks.token_blacklist_cleanup", "api.tasks.account_deletion_reminder",
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
-        "api.tasks.document_processing",
+        "api.tasks.document_processing", "api.tasks.document_modification_check",
     ],
 )
 
@@ -86,5 +86,13 @@ celery_app.conf.beat_schedule = {
     "check-pending-domain-verifications": {
         "task": "api.tasks.domain_verification.check_pending_domain_verifications",
         "schedule": timedelta(seconds=settings.DOMAIN_VERIFICATION_INTERVAL_SECONDS),
+    },
+    # Partie 2.2.13 -- same low-traffic window, offset again. A real
+    # HTTP HEAD request per document with a source_url is genuinely
+    # cheap, but daily (not more frequent) avoids hammering external
+    # sites this platform doesn't control.
+    "check-modified-documents-daily": {
+        "task": "api.tasks.document_modification_check.check_modified_documents_task",
+        "schedule": crontab(hour=5, minute=0),
     },
 }

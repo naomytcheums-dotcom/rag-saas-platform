@@ -8,7 +8,9 @@ of some other real site precisely so this test suite is never mistaken
 for a crawler hitting a real production service.
 """
 
-from api.services.url_fetching import fetch_url_content, validate_url_accessibility, validate_url_robots_txt
+import datetime as dt
+
+from api.services.url_fetching import fetch_url_content, get_url_last_modified, validate_url_accessibility, validate_url_robots_txt
 
 
 async def test_validate_url_accessibility_accepts_a_real_reachable_page():
@@ -31,3 +33,17 @@ async def test_validate_url_robots_txt_does_not_block_a_real_page_with_no_disall
     robots.txt disallowing this importer, confirmed for real, so this
     must not raise."""
     await validate_url_robots_txt("https://example.com/")
+
+
+async def test_get_url_last_modified_against_a_real_reachable_page():
+    """Partie 2.2.13 -- a real HEAD request against a real, stable
+    target. Deliberately does NOT assert whether example.com happens to
+    send a real Last-Modified header today (real CDN-served pages vary,
+    and can change this without notice -- the same honest "don't force
+    a flaky assertion on a fact this codebase doesn't control" reasoning
+    already established elsewhere, e.g. Partie 2.1.18's own OneDrive
+    integration test) -- only that a real request against a real,
+    reachable URL never raises, and that IF a value comes back, it's a
+    real, timezone-aware datetime."""
+    result = await get_url_last_modified("https://example.com")
+    assert result is None or isinstance(result, dt.datetime) and result.tzinfo is not None

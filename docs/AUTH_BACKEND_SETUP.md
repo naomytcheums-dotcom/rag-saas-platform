@@ -4745,6 +4745,102 @@ after the original was soft-deleted are correctly NOT duplicates,
 Admin-only deduplication actually removes a real pre-existing pair
 down to one document.
 
+### Partie 2.2.13 -- modified-source detection
+
+Two new real columns on `Document` (migration `0041`): `last_modified`/
+`last_checked`. `api/services/url_fetching.py`'s new
+`get_url_last_modified` -- a real HTTP HEAD request, through the SAME
+SSRF-safe transport every other real network call in that module
+already uses, reading the standard `Last-Modified` response header
+(parsed via the stdlib's own `email.utils.parsedate_to_datetime`).
+`api/security/documents.py`'s `get_file_modified_time`/
+`check_document_modified`/`mark_document_checked`/`get_outdated_documents`
+(item 2's own literal functions, plus the query backing item 3's list
+route).
+
+**Cohérence (vision critique 1) -- an honest, two-part answer**:
+`source_url` is actually set by EVERY real import source except a
+plain file upload (Partie 2.1.10's own URL import, GitHub files/
+issues, Google Drive/Docs, Notion, Confluence, OneDrive all set it),
+so this is at least ATTEMPTED broadly. But a real, honest limitation a
+purely generic, unauthenticated HTTP mechanism cannot get past: only a
+plain, publicly fetchable URL (2.1.10's own real scenario, and public
+GitHub blob pages) sends a trustworthy `Last-Modified` to an anonymous
+request -- Drive/Docs, Notion, and Confluence Cloud `source_url`
+values are real, but sit behind that source's OWN authentication, so
+an anonymous HEAD request cannot meaningfully answer "has this
+changed" for them. A real, PROPERLY authenticated, per-source check
+for those is exactly what Partie 2.2.14 (the very next étape in this
+batch), `ExternalSource`/`detect_source_changes`, builds -- not
+duplicated here first with a mechanism that couldn't work for them
+anyway. A plain upload with no `source_url` returns `None` from
+`get_file_modified_time` -- no independent external source exists to
+compare against; a real change to it goes through Partie 2.2.7/2.2.8's
+own explicit replace/version routes instead.
+
+**Performance (vision critique 2)**: the periodic, system-wide sweep
+(`check_modified_documents_task`) is real Celery, registered on Beat's
+own daily schedule (`api/tasks/celery_app.py`, same low-traffic-window
+convention as every other daily sweep already there) -- a daily
+cadence is a real, deliberate choice, not just "as often as possible":
+hammering external sites this platform doesn't control more frequently
+would be a real, unnecessary courtesy violation for a HEAD request
+whose own answer rarely changes minute to minute. The single-document
+`POST .../check-modified` route runs synchronously instead -- a real,
+deliberate distinction: one bounded, caller-triggered HEAD request is
+not the "gérée par Celery" concern vision critique 2 is actually
+asking about (that's the bulk sweep).
+
+**Robustesse (vision critique 3)**: `get_url_last_modified` has a
+"never raises" contract -- an unreachable source, a non-200 response,
+a missing or unparseable `Last-Modified` header, or even a REAL
+SSRF-blocked target (`source_url` was safe when the document was
+first imported, but DNS or a redirect chain can point somewhere unsafe
+later -- this module's own SSRF-safe transport raises a plain
+`ValueError` for that, not an `httpx`-specific one, caught explicitly
+here too) -- all resolve to an honest `None`, never a crash and never a
+false positive. `mark_document_checked` still stamps `last_checked` in
+every one of those cases (a real check attempt genuinely happened),
+kept as a real, separate timestamp from `last_modified` specifically
+so "never checked" and "checked, but inconclusive" stay distinguishable.
+In the periodic sweep, each document commits its own real result
+individually -- a real bug caught before it shipped: an earlier
+version rolled back the WHOLE transaction on one document's own
+failure, which would have silently undone every other document's own
+already-successful check earlier in the same sweep.
+
+**A real, deliberate "avoid a third source of truth" design, matching
+Partie 2.2.8/2.2.11's own established pattern**: no `is_outdated`
+boolean column. `GET /documents/outdated` (item 3's own literal route
+-- note its own literal path has NO `{org_id}`, unlike every other
+list route on this router; a real, deliberate interpretation: every
+organization the caller is a MEMBER of, not one) derives "outdated" by
+comparing the real `last_modified` against the existing, already-real
+`processed_at` -- a document never checked (`last_modified IS NULL`)
+is honestly excluded, since unknown is not the same as outdated.
+
+**Real verification**: `tests/test_url_fetching.py` covers
+`get_url_last_modified`'s own real header-parsing (a real httpx flow
+against a fake transport -- same "real library behavior, fake network"
+split as every other network dependency in this codebase), the missing/
+unparseable-header and non-200 cases, and confirms a real SSRF-blocked
+target resolves to `None` rather than raising (unlike
+`validate_url_accessibility`'s own deliberate opposite contract).
+`tests/test_url_fetching_integration.py` gained a real-network test
+against `example.com` that deliberately does not assert whether a
+`Last-Modified` header happens to be present today (a real, honest,
+non-flaky assertion, same reasoning as Partie 2.1.18's own OneDrive
+integration test). `tests/test_document_modification_check.py` (new,
+fast, no real infra, mocked at the `get_url_last_modified` call
+boundary) covers `check_document_modified`'s own real comparison logic
+(newer/unchanged/unreachable/first-ever-check) and `get_outdated_documents`'s
+own real derivation, org-membership scoping, and soft-delete exclusion.
+`tests/test_documents.py` covers both new routes end to end (a real
+detected modification, an unmodified/inconclusive check still
+advancing `last_checked`, 404 for a nonexistent document, a real
+outdated document correctly listed, a never-checked one correctly
+excluded).
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

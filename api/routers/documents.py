@@ -49,6 +49,7 @@ from api.schemas.documents import (
     DeduplicationResultResponse,
     DocumentListResponse,
     DocumentMetadataResponse,
+    DocumentModifiedCheckResponse,
     DocumentProgressResponse,
     DocumentResponse,
     DocumentStatusResponse,
@@ -72,10 +73,13 @@ from api.schemas.documents import (
 )
 import api.security.documents as documents_security
 from api.security.documents import (
+    check_document_modified,
     deduplicate_organization,
     get_document_progress,
+    get_outdated_documents,
     get_similar_documents,
     import_document_from_url,
+    mark_document_checked,
     permanent_delete_document,
     replace_document,
     soft_delete_document,
@@ -122,6 +126,7 @@ def _to_response(row: Document) -> DocumentResponse:
         file_size=row.file_size, file_type=row.file_type, status=row.status, metadata=row.metadata_json,
         source_url=row.source_url,
         created_by=row.created_by, created_at=row.created_at, updated_at=row.updated_at, processed_at=row.processed_at,
+        last_modified=row.last_modified, last_checked=row.last_checked,
     )
 
 
@@ -489,12 +494,51 @@ async def list_documents(
     return DocumentListResponse(items=[_to_response(row) for row in rows])
 
 
+# Partie 2.2.13 -- registered BEFORE GET /documents/{document_id}
+# below on purpose: Starlette matches routes in REGISTRATION order, not
+# by specificity, so "outdated" would otherwise be swallowed by
+# {document_id} first (and fail real UUID parsing with a 422) rather
+# than ever reaching this route.
+@router.get("/documents/outdated", response_model=DocumentListResponse)
+async def list_outdated_documents_route(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- no `{org_id}` in its own literal
+    path, unlike every other list route on this router; see
+    `get_outdated_documents`'s own docstring for the real, deliberate
+    interpretation this takes (every organization the caller is a
+    member of, not one)."""
+    rows = await get_outdated_documents(db, current_user.id)
+    return DocumentListResponse(items=[_to_response(row) for row in rows])
+
+
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     document, _membership = await _get_document_and_membership(db, document_id, current_user)
     return _to_response(document)
+
+
+@router.post("/documents/{document_id}/check-modified", response_model=DocumentModifiedCheckResponse)
+async def check_document_modified_route(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Item 3's own literal route -- Member+ (Viewer included, a real
+    read-triggered check, not a document mutation a Viewer's own
+    read-only role should be blocked from triggering), same real
+    `_get_document_and_membership` anti-enumeration guard. Runs
+    synchronously (a single real HTTP HEAD request, not the periodic
+    system-wide sweep below, which IS Celery -- vision critique 2's own
+    "gérée par Celery" question is about THAT bulk sweep, not this
+    single, caller-triggered, already-bounded real check)."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    modified = await check_document_modified(document)
+    mark_document_checked(document)
+    await db.commit()
+    return DocumentModifiedCheckResponse(
+        document_id=document.id, modified=modified, last_modified=document.last_modified, last_checked=document.last_checked,
+    )
 
 
 @router.get("/documents/{document_id}/metadata", response_model=DocumentMetadataResponse)

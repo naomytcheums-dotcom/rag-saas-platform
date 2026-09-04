@@ -18,8 +18,10 @@ tests/test_postgres_integration.py (SQLite doesn't enforce foreign
 keys).
 """
 
+import datetime as dt
 import itertools
 import uuid
+from unittest.mock import AsyncMock
 
 from sqlalchemy import select
 
@@ -3904,3 +3906,73 @@ async def test_member_cannot_deduplicate_an_organization(client, db_session, reg
 
     response = await client.post(f"/organizations/{org['id']}/documents/deduplicate", headers=_auth_header(member_token))
     assert response.status_code == 403
+
+
+# ------------------------------------------------------- 2.2.13 -- modified-source detection --
+
+async def test_owner_can_check_if_a_url_imported_document_was_modified(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: la détection de modification fonctionne."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    imported = await _import_url(client, org["id"], owner_token, "https://example.com/article")
+    document_id = imported.json()["id"]
+
+    fresh_time = dt.datetime(2026, 2, 1, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr("api.security.documents.get_url_last_modified", AsyncMock(return_value=fresh_time))
+
+    response = await client.post(f"/documents/{document_id}/check-modified", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["modified"] is True
+    assert body["last_modified"] is not None
+    assert body["last_checked"] is not None
+
+
+async def test_checking_an_unmodified_document_reports_not_modified(client, db_session, register_payload, monkeypatch):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    imported = await _import_url(client, org["id"], owner_token, "https://example.com/article")
+    document_id = imported.json()["id"]
+
+    monkeypatch.setattr("api.security.documents.get_url_last_modified", AsyncMock(return_value=None))
+
+    response = await client.post(f"/documents/{document_id}/check-modified", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["modified"] is False
+    assert body["last_checked"] is not None  # a real attempt still happened
+
+
+async def test_check_modified_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.post(f"/documents/{uuid.uuid4()}/check-modified", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_owner_can_list_outdated_documents(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: les documents modifiés sont listés."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    imported = await _import_url(client, org["id"], owner_token, "https://example.com/article")
+    document_id = imported.json()["id"]
+
+    # Real source now reports a modification time AFTER this document's
+    # own real processed_at -- genuinely outdated.
+    document = await db_session.get(Document, uuid.UUID(document_id))
+    document.processed_at = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    document.last_modified = dt.datetime(2026, 2, 1, tzinfo=dt.timezone.utc)
+    await db_session.commit()
+
+    response = await client.get("/documents/outdated", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()["items"]}
+    assert ids == {document_id}
+
+
+async def test_outdated_documents_excludes_a_document_never_checked(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    await _import_url(client, org["id"], owner_token, "https://example.com/article")
+
+    response = await client.get("/documents/outdated", headers=_auth_header(owner_token))
+    assert response.json()["items"] == []

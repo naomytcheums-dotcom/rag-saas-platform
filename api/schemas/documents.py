@@ -32,6 +32,11 @@ class DocumentResponse(BaseModel):
     created_at: dt.datetime
     updated_at: dt.datetime
     processed_at: dt.datetime | None
+    # Partie 2.2.13 -- both honestly `None` until a real check has ever
+    # run (or forever, for a document with no `source_url` at all --
+    # see Document.last_modified's own docstring).
+    last_modified: dt.datetime | None = None
+    last_checked: dt.datetime | None = None
 
 
 class DocumentListResponse(BaseModel):
@@ -47,6 +52,20 @@ class DocumentUploadResponse(DocumentResponse):
     content hash already matched."""
 
     is_duplicate: bool = False
+
+
+class DocumentModifiedCheckResponse(BaseModel):
+    """Partie 2.2.13, item 3's own literal `POST .../check-modified`
+    response -- `modified` is honestly `False` both for "confirmed
+    unchanged" AND "the source gave no trustworthy answer" (see
+    `check_document_modified`'s own docstring) -- `last_checked` always
+    advances regardless, so a caller can tell "checked, nothing to
+    report" apart from "never checked" by looking at that field."""
+
+    document_id: uuid.UUID
+    modified: bool
+    last_modified: dt.datetime | None
+    last_checked: dt.datetime | None
 
 
 class DeduplicationResultResponse(BaseModel):

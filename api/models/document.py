@@ -125,6 +125,25 @@ class Document(Base):
     # constraint below by both Postgres and SQLite, so this never
     # collides with itself across every document that doesn't have one.
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Partie 2.2.13 -- modified-source detection. `last_modified` is the
+    # most recent real modification time this platform has ever
+    # observed FROM `source_url` itself (an HTTP `Last-Modified`
+    # response header -- see api/services/url_fetching.py's own
+    # get_url_last_modified) -- NULL until the first real check ever
+    # runs, or forever for a document with no `source_url` at all (a
+    # plain upload has no independent external source to compare
+    # against -- see api/security/documents.py's own
+    # get_file_modified_time docstring for the full, honest scope of
+    # what this can and can't detect). `last_checked` is stamped every
+    # time a check is ATTEMPTED, whether or not it could reach a real
+    # answer -- so "never checked" and "checked, but the source is
+    # unreachable/gives no signal" stay honestly distinguishable.
+    # Deliberately NOT a third `is_outdated` boolean -- "outdated" is
+    # derived by comparing `last_modified` to the existing
+    # `processed_at` (the same "avoid a second, easily-desynced source
+    # of truth" reasoning as Partie 2.2.8/2.2.11).
+    last_modified: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_checked: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # The only read patterns this table serves (list_documents,

@@ -12,9 +12,12 @@ a mock of it. The real "happy path" tests that reach an actual external
 URL live in tests/test_url_fetching_integration.py instead.
 """
 
+import datetime as dt
+
+import httpx
 import pytest
 
-from api.services.url_fetching import fetch_url_content, validate_url, validate_url_accessibility
+from api.services.url_fetching import fetch_url_content, get_url_last_modified, validate_url, validate_url_accessibility
 
 
 # ------------------------------------------------------- validate_url --
@@ -80,3 +83,60 @@ async def test_fetch_url_content_blocks_private_targets_too():
     built client that could forget it."""
     with pytest.raises(ValueError):
         await fetch_url_content("http://127.0.0.1:1/")
+
+
+# ------------------------------------------------- get_url_last_modified --
+
+async def test_get_url_last_modified_never_raises_for_an_ssrf_blocked_target():
+    """Vision critique 3 (Partie 2.2.13) -- même une cible réellement
+    bloquée (SSRF) ne doit jamais faire planter un check périodique,
+    contrairement à validate_url_accessibility/fetch_url_content qui
+    lèvent délibérément ValueError -- cette fonction-ci a le contrat
+    inverse ("never raises"), donc ce même ValueError doit être
+    absorbé, pas laissé remonter."""
+    result = await get_url_last_modified("http://127.0.0.1:1/")
+    assert result is None
+
+
+async def test_get_url_last_modified_parses_a_real_last_modified_header(monkeypatch):
+    """Validation criterion -- le header HTTP standard est lu et
+    parsé correctement (real httpx flow, fake transport -- same "real
+    library behavior, fake network" split as every other real-network
+    dependency in this codebase)."""
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"Last-Modified": "Wed, 21 Oct 2015 07:28:00 GMT"})
+
+    monkeypatch.setattr("api.services.url_fetching._client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(_handler)))
+
+    result = await get_url_last_modified("https://example.com/report.pdf")
+    assert result == dt.datetime(2015, 10, 21, 7, 28, 0, tzinfo=dt.timezone.utc)
+
+
+async def test_get_url_last_modified_returns_none_when_the_header_is_absent(monkeypatch):
+    """Validation criterion -- un serveur qui n'envoie honnêtement pas
+    ce header (un cas réel et courant) ne doit jamais produire une
+    date fabriquée."""
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    monkeypatch.setattr("api.services.url_fetching._client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(_handler)))
+
+    assert await get_url_last_modified("https://example.com/") is None
+
+
+async def test_get_url_last_modified_returns_none_for_an_unparseable_header(monkeypatch):
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"Last-Modified": "not a real http-date"})
+
+    monkeypatch.setattr("api.services.url_fetching._client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(_handler)))
+
+    assert await get_url_last_modified("https://example.com/") is None
+
+
+async def test_get_url_last_modified_returns_none_for_a_non_200_response(monkeypatch):
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    monkeypatch.setattr("api.services.url_fetching._client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(_handler)))
+
+    assert await get_url_last_modified("https://example.com/gone.pdf") is None
