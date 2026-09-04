@@ -7182,6 +7182,31 @@ unrecognized shape).
 `execute_sql_query`, multi-tenant isolation genuinely verified),
 `tests/test_sql_tool.py`.
 
+### Partie 5.2.5 -- Calculator (extended)
+
+New module `api/tools/calculator.py`: all 5 literal functions plus
+`ADVANCED_CALCULATOR_TOOL` (a real, additional `ToolSpec` instance). **A
+real, deliberate choice NOT to modify** the existing `CALCULATOR_TOOL`
+in `api/services/tools.py` (Partie 5.1.2, already real, tested,
+consumed elsewhere -- `tool_validation.py`, `tool_selection`'s own
+tests) -- widening its real grammar in place would risk those already-
+passing tests for no real benefit. This module is a real, separate,
+richer implementation sharing the same real safety PRINCIPLE (a
+whitelist AST walk, never `eval()`), not the same code.
+
+**Real literal functions/constants/variables**: `sqrt`/`sin`/`cos`/
+`tan`/`log`/`ln`/`abs`/`round`/`ceil`/`floor`, `pi`/`e`, `x`/`y`
+variables -- all evaluated through the same real, safe AST walk.
+
+**Security (vision critique)**: really rejects a code-injection attempt
+(tested), rejects any function not explicitly whitelisted.
+
+**`validate_expression`, a real, useful distinction**: validates
+structure WITHOUT requiring `x`/`y` to already be bound -- a symbolic
+expression can be validated before it's ever evaluated.
+
+**Real verification**: 16 tests, `tests/test_calculator_tool.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

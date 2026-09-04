@@ -704,9 +704,20 @@ Tests réels dédiés (9 tests, `httpx.MockTransport` réel -- vrai parsing requ
 
 Tests réels dédiés (23 tests, exécution SQLite réelle pour `execute_sql_query`, isolation multi-tenant vérifiée pour de vrai), voir `tests/test_sql_tool.py`.
 
+#### Partie 5.2.5 — Calculator (étendu)
+
+✅ **Nouveau module réel** `api/tools/calculator.py` : les 5 fonctions littérales + `ADVANCED_CALCULATOR_TOOL` (instance `ToolSpec` supplémentaire). **Décision réelle : ne modifie PAS** le `CALCULATOR_TOOL` existant de `api/services/tools.py` (Partie 5.1.2, déjà réel, testé, consommé ailleurs -- `tool_validation.py`, tests de `tool_selection`) -- élargir sa grammaire en place risquerait ces tests déjà passants pour aucun vrai bénéfice. Ce module est une implémentation réelle, séparée, plus riche, qui partage le même vrai PRINCIPE de sécurité (parcours AST en liste blanche, jamais `eval()`), pas le même code.
+
+✅ **Fonctions/constantes/variables littérales réelles** : `sqrt`/`sin`/`cos`/`tan`/`log`/`ln`/`abs`/`round`/`ceil`/`floor`, `pi`/`e`, variables `x`/`y` -- tout évalué via le même vrai parcours AST sûr.
+
+**Sécurité (vision critique)** : rejette réellement une tentative d'injection de code (testé), rejette toute fonction non explicitement en liste blanche.
+
+**`validate_expression`, distinction réelle et utile** : valide la structure SANS exiger que `x`/`y` soient déjà liés -- une expression symbolique peut être validée avant d'être évaluée.
+
+Tests réels dédiés (16 tests), voir `tests/test_calculator_tool.py`.
+
 Human Escalation : existe déjà côté `src/`, non revérifié.
-Calculator étendu, URL Reader, Calendar complet, Email,
-Custom Tools (webhooks) : ⬜.
+URL Reader, Calendar complet, Email, Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
