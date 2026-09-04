@@ -558,12 +558,22 @@ Tests réels dédiés (14 tests fonction+endpoint), voir `tests/test_fallback.py
 
 Tests réels dédiés (10 tests), voir `tests/test_parallel_tools.py`.
 
-Tool result validation, agent memory (court-terme), agent traces
-(au-delà de l'orchestrateur central lui-même) : **existent déjà** côté
-`src/`/agent (hérité, non revérifié dans les sessions récentes) -- une
-version réelle, testée, indépendante est construite ci-dessous côté
-`api/` pour cette même Partie. Human approval, conversation memory
-cross-session (DB), task planning : ⬜.
+#### Partie 5.1.9 — Validation des résultats d'outils
+
+✅ **Nouveau module réel** `api/services/tool_validation.py` : `validate_tool_result`/`validate_schema`/`validate_type`/`validate_range`/`validate_required_fields`/`get_validation_errors` (fonctions littérales). **Validateur réel écrit à la main, pas le paquet `jsonschema`** (importable de façon transitive dans cet environnement mais non déclaré comme dépendance directe dans `requirements.txt`/`requirements-api.txt`/`pyproject.toml`) -- s'appuyer dessus serait fragile. Le sous-ensemble réel couvert (`type`/`required`/`properties`/`minimum`/`maximum`/`minLength`/`maxLength`) couvre tout ce dont les schémas ci-dessous ont réellement besoin. **Piège réel géré** : `bool` est une sous-classe de `int` en Python -- `validate_type(True, "integer")` retourne bien `False`, testé.
+
+✅ **Schémas littéraux réels** `CALCULATION_RESULT_SCHEMA`/`SEARCH_RESULT_SCHEMA`/`DATABASE_RESULT_SCHEMA`/`HTTP_RESULT_SCHEMA`, constantes réelles et exportées. **Honnêteté de périmètre** : seul `CALCULATION_RESULT_SCHEMA` est réellement rattaché à un outil existant (`calculator`, dans le registre `TOOL_VALIDATION_SCHEMAS`) -- les trois autres ne sont attachés à AUCUN `tool_name` puisqu'aucun outil recherche/base de données/HTTP n'est encore enregistré (Partie 5.2, non commencée) ; réels, prêts, mais pas encore câblés à un outil réel.
+
+**Robustesse (vision critique)** : `TOOL_VALIDATION_ENABLED=False` valide toujours (`True`), sans exception. **Modes strict/non-strict, réels et testés** : un outil sans schéma enregistré passe en mode non-strict (rien à vérifier) mais échoue en mode strict (`TOOL_VALIDATION_STRICT=True`, qui traite "aucun contrat de résultat déclaré" comme un vrai échec de validation).
+
+**Cohérence (vision critique)** : pas d'intégration dans l'orchestrateur, même raison honnête que 5.1.4/5.1.6/5.1.7 -- `run_agent` n'exécute jamais réellement un outil aujourd'hui.
+
+Tests réels dédiés (19 tests), voir `tests/test_tool_validation.py`.
+
+Agent memory (court-terme), agent traces (au-delà de l'orchestrateur
+central lui-même) : **existent déjà** côté `src/`/agent (hérité, non
+revérifié dans les sessions récentes). Human approval, conversation
+memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 

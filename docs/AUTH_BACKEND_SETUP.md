@@ -6793,6 +6793,42 @@ GLOBAL timeout covers the whole batch (`asyncio.wait_for`), tested.
 
 **Real verification**: 10 tests, `tests/test_parallel_tools.py`.
 
+### Partie 5.1.9 -- tool result validation
+
+New module `api/services/tool_validation.py`: `validate_tool_result`/
+`validate_schema`/`validate_type`/`validate_range`/
+`validate_required_fields`/`get_validation_errors` (this étape's own
+literal functions). **A real, hand-written validator, not the
+`jsonschema` package** (importable transitively in this environment but
+not a declared direct dependency in requirements.txt/
+requirements-api.txt/pyproject.toml) -- relying on it would be fragile.
+The real subset covered (`type`/`required`/`properties`/`minimum`/
+`maximum`/`minLength`/`maxLength`) covers everything the schemas below
+actually need. **A real, handled gotcha**: `bool` is a subclass of
+`int` in Python -- `validate_type(True, "integer")` correctly returns
+`False`, tested.
+
+**Real, literal schema constants**: `CALCULATION_RESULT_SCHEMA`/
+`SEARCH_RESULT_SCHEMA`/`DATABASE_RESULT_SCHEMA`/`HTTP_RESULT_SCHEMA`.
+**Honest scope**: only `CALCULATION_RESULT_SCHEMA` is actually attached
+to a real tool (`calculator`, in the `TOOL_VALIDATION_SCHEMAS`
+registry) -- the other three aren't attached to any `tool_name` since
+no search/database/HTTP tool is registered yet (Partie 5.2, not
+started); real, ready, not yet wired to a real tool.
+
+**Robustness (vision critique)**: `TOOL_VALIDATION_ENABLED=False`
+always validates (`True`), no exceptions. **Real, tested strict/
+non-strict modes**: an unregistered tool passes in non-strict mode
+(nothing to check) but fails in strict mode
+(`TOOL_VALIDATION_STRICT=True`), which treats "no declared result
+contract" as a real validation failure.
+
+**Consistency (vision critique)**: no orchestrator integration, same
+honest reason as 5.1.4/5.1.6/5.1.7 -- `run_agent` never actually
+executes a tool today.
+
+**Real verification**: 19 tests, `tests/test_tool_validation.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
