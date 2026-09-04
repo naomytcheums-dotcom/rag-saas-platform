@@ -230,7 +230,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.2.4 | Markdown-aware | ✅ Voir détails ci-dessous |
 | 3.2.5 | Code-aware (tree-sitter) | ✅ Voir détails ci-dessous (sans tree-sitter, voir raisons) |
 | 3.2.6 | Sentence-based | ✅ Voir détails ci-dessous |
-| 3.2.7 | Paragraph-based | ⬜ |
+| 3.2.7 | Paragraph-based | ✅ Voir détails ci-dessous |
 | 3.2.8 | Parent-child chunks | ⬜ |
 
 #### Partie 3.2.2 — Chunking récursif
@@ -252,6 +252,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.2.6 — Chunking par phrases
 
 ✅ **Nouveau module réel** `api/services/sentence_chunking.py` : `split_into_sentences`/`chunk_by_sentences`/`chunk_by_sentence_tokens`/`merge_sentences` (fonctions littérales de l'item 2). Contrairement au découpeur récursif générique de la Partie 3.2.2 (comptage de caractères, peut atterrir en plein milieu d'une vraie phrase), chaque limite de chunk ici tombe exactement sur une vraie limite de phrase. **Réutilise le séparateur de phrases réel de la Partie 3.1.10** (`split_sentences`) et **la détection de langue réelle de la Partie 3.1.7** (`detect_language`) pour l'auto-détection de `language` quand non fourni. **Vraie amélioration ciblée, sur ce module uniquement** : `split_sentences` documente déjà honnêtement une vraie faiblesse ("M. Dupont") -- plutôt que modifier cette fonction partagée déjà livrée et testée, `split_into_sentences` applique d'abord un vrai garde-fou par langue (abréviations anglaises et françaises courantes : Mr/Mrs/Dr/etc., M./Mme/Dr/etc.) qui protège réellement le point d'une abréviation avant la détection de fin de phrase -- une vraie réponse, testée, à la vision critique 3 ("les phrases sont-elles correctement identifiées dans différentes langues ?"), toujours honnêtement imparfaite pour toute abréviation hors de cette liste réelle et finie. **Comptage de tokens réel** (`chunk_by_sentence_tokens`/`merge_sentences`) via un vrai tokenizer HuggingFace mis en cache (même idée de cache que `_get_embedder`), sur le modèle d'embedding par défaut de ce dépôt -- même convention réelle "tokens = le vrai tokenizer du modèle d'embedding" déjà établie par `chunk_text` (Partie 3.2.1), appliquée ici au niveau PHRASE pour qu'une limite de chunk ne tombe jamais en plein milieu d'une vraie phrase. **Chevauchement réel** : chaque chunk après le premier est préfixé par autant de vraies phrases finales du chunk précédent que le budget `overlap_tokens` le permet. **Robustesse réelle** : un `overlap_sentences >= max_sentences` est plafonné pour garantir une vraie progression, jamais de boucle infinie. Tests réels dédiés (19 tests, dont les 2 vrais cas d'abréviation EN/FR en régression dédiée), voir `tests/test_sentence_chunking.py`.
+
+#### Partie 3.2.7 — Chunking par paragraphes
+
+✅ **Nouveau module réel** `api/services/paragraph_chunking.py` : `detect_paragraph_boundaries`/`split_into_paragraphs`/`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`/`merge_paragraphs` (fonctions littérales de l'item 2). **Réutilise le packer par budget de tokens réel et partagé de la Partie 3.2.6** (`pack_units_by_tokens`/`get_tokenizer`/`count_tokens`, rendus publics dans `api/services/sentence_chunking.py` précisément pour cette réutilisation) plutôt qu'un second cache de tokenizer/packer dupliqué. **`detect_paragraph_boundaries`** : vrais spans `{"start", "end"}` en position caractère dans le texte ORIGINAL, un par vrai paragraphe (limite réelle standard : une ou plusieurs vraies lignes vides), en ordre document -- `split_into_paragraphs` réutilise directement cette fonction plutôt qu'un second scan dupliqué. **Limite réelle et documentée** : un simple retour à la ligne réel sans ligne vide n'est PAS traité comme une limite de paragraphe -- même compromis réel accepté que les autres heuristiques structurelles de ce dépôt. **`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`** : même vrai design de fenêtre glissante que `chunk_by_sentences`/`chunk_by_sentence_tokens` (Partie 3.2.6), à la granularité PARAGRAPHE, jointure par un vrai `"\n\n"` plutôt qu'un espace, même vraie règle de fusion `MIN_PARAGRAPHS`, même vraie garde de robustesse contre un `overlap_paragraphs >= max_paragraphs`. Tests réels dédiés (14 tests), voir `tests/test_paragraph_chunking.py`.
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -443,14 +447,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 94 | 18.8% |
+| ✅ Fait | 95 | 19.0% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 340 | 68.0% |
+| ⬜ Non commencé | 339 | 67.8% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **101/515 (~19.6%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **173/515 (~33.6%)**
-- Pondéré (✅=1, 🟡=0.5) : **~134/515 (~26.0%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **102/515 (~19.8%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **174/515 (~33.8%)**
+- Pondéré (✅=1, 🟡=0.5) : **~135/515 (~26.2%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

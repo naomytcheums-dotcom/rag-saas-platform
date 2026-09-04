@@ -6103,6 +6103,32 @@ to guarantee real forward progress, never an infinite loop.
 including dedicated regression tests for both the English and French
 abbreviation-protection cases.
 
+### Partie 3.2.7 -- paragraph-based chunking
+
+New module `api/services/paragraph_chunking.py`: `detect_paragraph_boundaries`/
+`split_into_paragraphs`/`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`/
+`merge_paragraphs` (item 2's own literal functions). **Reuses Partie
+3.2.6's own real, shared token-budget packer** (`pack_units_by_tokens`/
+`get_tokenizer`/`count_tokens`, made public specifically for this
+reuse) rather than a second, duplicate tokenizer cache/packer.
+
+**`detect_paragraph_boundaries`**: real `{"start", "end"}`
+character-offset spans into the ORIGINAL text, one per real paragraph
+(a real, standard boundary: one or more blank lines) -- `split_into_paragraphs`
+reuses this directly. A real, documented limitation: a plain line
+break with no blank line is NOT treated as a paragraph break, the same
+trade-off this codebase's other regex-based structural heuristics
+already make.
+
+**`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`**: the same real
+sliding-window design as Partie 3.2.6's own `chunk_by_sentences`/
+`chunk_by_sentence_tokens`, at paragraph granularity, joined with a
+real `"\n\n"` instead of a space, the same real `MIN_PARAGRAPHS` merge
+rule, the same real robustness guard against `overlap_paragraphs >=
+max_paragraphs`.
+
+**Real verification**: `tests/test_paragraph_chunking.py` (14 tests).
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the
