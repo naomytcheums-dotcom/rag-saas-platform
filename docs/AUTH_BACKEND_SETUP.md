@@ -6660,6 +6660,52 @@ denied tool is never chosen, never described to the LLM. Tested
 **Real verification**: 15 tests (14 function/endpoint tests, 1
 orchestrator integration test), `tests/test_tool_permissions.py`.
 
+### Partie 5.1.4 -- per-tool timeout
+
+New module `api/services/tool_timeout.py`: `execute_tool_with_timeout`/
+`get_tool_timeout`/`set_tool_timeout`/`get_default_timeout` (this
+étape's own literal functions). Real execution via `asyncio.wait_for`,
+a real, dedicated `ToolTimeoutError` (distinct from a real handler
+failure -- answers "what happens when a tool exceeds its timeout?").
+
+New real model `api/models/tool_config.py` (`ToolTimeoutOverride`,
+migration `0050`, RLS enabled): a real, persistent per-tool override.
+**A deliberate scope**: global, NOT per-organization (nothing in this
+étape's own literal text asks for a per-organization timeout) --
+gated by `require_superadmin` under `/admin/tools/...` (this
+codebase's only real precedent for an admin surface with no
+organization scope, matching `api/routers/admin_users.py`), since the
+étape's own literal paths (`GET /tools/timeout`) carry no organization
+either.
+
+**Orchestrator integration: honestly NOT applicable today**, documented
+as such rather than faked -- `run_agent` never actually executes a tool
+(the same limit already documented at 5.1.2: no function-calling loop).
+`execute_tool_with_timeout` is a real, standalone, tested function,
+ready for a future real tool executor (Partie 5.2).
+
+**Real verification**: 17 tests, `tests/test_tool_timeout.py`.
+
+### Partie 5.1.5 -- per-tool token budget
+
+New real model `api/models/tool_config.py` (`ToolBudget`, same
+migration `0050`): a real, persistent `budget_limit` plus a real,
+cumulative `tokens_used`.
+
+New module `api/services/tool_budget.py`: `get_tool_budget`/
+`set_tool_budget`/`check_tool_budget`/`track_tool_usage`/
+`get_tool_usage`/`reset_tool_budget` (this étape's own literal
+functions). `track_tool_usage` creates a real row at the global default
+on first use -- tracking must work even for a tool nobody has
+explicitly budgeted yet. `check_tool_budget` honestly returns `True`
+(never blocks) when `TOOL_BUDGET_TRACKING_ENABLED` is off.
+
+**Real endpoints** under `/admin/tools/...` (same reasoning as 5.1.4 --
+global, superadmin): `GET /budget`, `PATCH /{tool_name}/budget`, `GET
+/usage`, `POST /{tool_name}/budget/reset`.
+
+**Real verification**: 20 tests, `tests/test_tool_budget.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

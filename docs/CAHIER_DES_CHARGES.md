@@ -506,13 +506,32 @@ Tests réels dédiés (18 + 2 tests d'intégration orchestrateur = 20 tests), vo
 
 Tests réels dédiés (14 tests fonction+endpoint, 1 test d'intégration orchestrateur = 15 tests), voir `tests/test_tool_permissions.py`.
 
-Tool timeout, retry, tool result validation, agent memory (court-terme),
-agent traces (au-delà de l'orchestrateur central lui-même) : **existent
-déjà** côté `src/`/agent (hérité, non revérifié dans les sessions
-récentes) -- des versions réelles, testées, indépendantes sont
-construites ci-dessous côté `api/` pour cette même Partie. Per-tool
-budget, fallback, parallel tool calls, human approval, conversation
-memory cross-session (DB), task planning : ⬜.
+#### Partie 5.1.4 — Timeout par outil
+
+✅ **Nouveau module réel** `api/services/tool_timeout.py` : `execute_tool_with_timeout`/`get_tool_timeout`/`set_tool_timeout`/`get_default_timeout` (fonctions littérales). Exécution réelle via `asyncio.wait_for`, exception dédiée réelle `ToolTimeoutError` (distincte d'un vrai échec du handler lui-même -- réponse à la vision critique "que se passe-t-il si un outil dépasse le timeout ?").
+
+✅ **Nouveau modèle réel** `api/models/tool_config.py` (`ToolTimeoutOverride`, migration `0050`, RLS activée) : un vrai override persistant par outil. **Périmètre délibéré** : global, PAS par organisation (rien dans le texte littéral de cette étape ne demande un timeout par organisation) -- gate `require_superadmin` sous `/admin/tools/...` (seul précédent réel de ce dépôt pour une surface admin non scopée à une organisation, cohérent avec `api/routers/admin_users.py`), puisque les chemins littéraux de l'étape (`GET /tools/timeout`) ne portent eux-mêmes aucune organisation.
+
+**Intégration dans l'orchestrateur : honnêtement NON applicable aujourd'hui**, et documenté comme tel plutôt que simulé -- `run_agent` n'exécute jamais réellement un outil (voir la limite déjà documentée en 5.1.2 : pas de boucle de function-calling). `execute_tool_with_timeout` est une fonction réelle, autonome, testée, prête pour un futur vrai exécuteur d'outils (Partie 5.2).
+
+Tests réels dédiés (17 tests fonction+endpoint), voir `tests/test_tool_timeout.py`.
+
+#### Partie 5.1.5 — Budget par outil (tokens)
+
+✅ **Nouveau modèle réel** `api/models/tool_config.py` (`ToolBudget`, même migration `0050`) : `budget_limit` + `tokens_used` cumulatif réel et persistant.
+
+✅ **Nouveau module réel** `api/services/tool_budget.py` : `get_tool_budget`/`set_tool_budget`/`check_tool_budget`/`track_tool_usage`/`get_tool_usage`/`reset_tool_budget` (fonctions littérales). `track_tool_usage` crée une vraie ligne au défaut global dès le premier usage (le suivi doit fonctionner même pour un outil jamais explicitement budgété). `check_tool_budget` retourne honnêtement `True` sans jamais bloquer quand `TOOL_BUDGET_TRACKING_ENABLED=False`.
+
+✅ **Endpoints réels** sous `/admin/tools/...` (même raisonnement que 5.1.4 -- global, superadmin) : `GET /budget`, `PATCH /{tool_name}/budget`, `GET /usage`, `POST /{tool_name}/budget/reset`.
+
+Tests réels dédiés (20 tests fonction+endpoint), voir `tests/test_tool_budget.py`.
+
+Retry, tool result validation, agent memory (court-terme), agent traces
+(au-delà de l'orchestrateur central lui-même) : **existent déjà** côté
+`src/`/agent (hérité, non revérifié dans les sessions récentes) -- des
+versions réelles, testées, indépendantes sont construites ci-dessous
+côté `api/` pour cette même Partie. Fallback, parallel tool calls,
+human approval, conversation memory cross-session (DB), task planning : ⬜.
 
 ### 5.2 Outils intégrés
 
