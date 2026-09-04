@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata
+from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata, extract_tables_html
 
 _REAL_ARTICLE_HTML = """<!DOCTYPE html>
 <html><head>
@@ -206,3 +206,34 @@ def test_extract_html_links_finds_every_distinct_real_link(article_path):
 
 def test_extract_html_links_returns_an_empty_list_when_there_are_none(empty_body_path):
     assert extract_html_links(empty_body_path) == []
+
+
+# ----------------------------------------------------------------- tables (Partie 3.1.4) --
+
+def test_extract_tables_html_finds_a_real_table(tmp_path):
+    """Validation criterion: l'extraction de tableaux HTML fonctionne."""
+    path = tmp_path / "table.html"
+    path.write_bytes(b"<html><body><table><tr><th>Name</th><th>Value</th></tr><tr><td>a</td><td>1</td></tr></table></body></html>")
+
+    tables = extract_tables_html(str(path))
+    assert len(tables) == 1
+    assert list(tables[0].columns) == ["Name", "Value"]
+    assert tables[0].iloc[0].tolist() == ["a", 1]
+
+
+def test_extract_tables_html_finds_every_real_table_in_document_order(tmp_path):
+    path = tmp_path / "tables.html"
+    path.write_bytes(
+        b"<html><body>"
+        b"<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"
+        b"<table><tr><th>B</th></tr><tr><td>2</td></tr></table>"
+        b"</body></html>"
+    )
+    tables = extract_tables_html(str(path))
+    assert len(tables) == 2
+    assert list(tables[0].columns) == ["A"]
+    assert list(tables[1].columns) == ["B"]
+
+
+def test_extract_tables_html_returns_an_empty_list_for_a_page_with_no_table(article_path):
+    assert extract_tables_html(article_path) == []

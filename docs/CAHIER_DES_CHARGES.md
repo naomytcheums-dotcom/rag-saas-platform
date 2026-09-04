@@ -157,9 +157,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~7/41, dont 3.1.1/3.1.2 réels dans `api/`, 2026-09-04)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~9/41, dont 3.1.1/3.1.2/3.1.4/3.1.5 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — 🟡 (2/10 ✅, 4 items restants dans cette sous-partie non encore spécifiés par l'utilisateur)
+### 3.1 Ingestion — 🟡 (4/10 ✅, 4 items restants dans cette sous-partie non encore spécifiés par l'utilisateur)
 
 **Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
 
@@ -167,9 +167,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 |---|---|---|
 | 3.1.1 | Nettoyage du texte | ✅ Voir détails ci-dessous |
 | 3.1.2 | Normalisation du texte | ✅ Voir détails ci-dessous |
-| 3.1.3 | Extraction du texte (amélioration) | ⬜ |
-| 3.1.4 | Extraction des tableaux | ⬜ |
-| 3.1.5 | Extraction des images | ⬜ |
+| 3.1.3 | Extraction du texte (amélioration) | ⬜ (voir note ci-dessous) |
+| 3.1.4 | Extraction des tableaux | ✅ Voir détails ci-dessous |
+| 3.1.5 | Extraction des images | ✅ Voir détails ci-dessous |
 | 3.1.6 | OCR | ⬜ |
 | 3.1.7-10 | Non encore spécifiés | ⬜ |
 
@@ -180,6 +180,16 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.1.2 — Normalisation du texte
 
 ✅ **Nouveau module réel** `api/services/text_normalization.py` : `normalize_case`, `normalize_accents`, `normalize_dates`, `normalize_numbers`, `normalize_units`, `normalize_text` (pipeline). Intégré dans `process_document`, appliqué juste après `clean_text` sur chaque chunk. **Cohérence (vision critique 1)** : réponse honnête à "configurable par langue" -- un paramètre réel `date_order` (`dmy`/`mdy`) répond à la vraie ambiguïté locale jour/mois-premier (pas une fausse i18n complète). **Défauts volontairement conservateurs** : `normalize_text` ne change PAS la casse ni les accents par défaut (perte réelle de signal sémantique pour du texte français destiné à l'embedding) -- seuls dates/nombres/unités sont normalisés par défaut, un vrai format ambigu avec une forme canonique correcte, pas une réécriture destructrice du contenu. **Point honnête soulevé, pas caché** : normaliser le contenu réellement stocké/embeddé (ex. "15/03/2026" → "2026-03-15") à l'indexation SANS normalisation symétrique côté requête peut réduire le rappel pour une recherche littérale sur le format d'origine -- un vrai compromis RAG, assumé et documenté, pas résolu dans cette étape (nécessiterait une normalisation symétrique côté requête, hors scope littéral ici). Tests réels dédiés (casse, accents, dates dans les deux ordres, nombres avec virgule décimale française correctement préservée, unités, pipeline complet, performance), voir `tests/test_text_normalization.py`.
+
+**Ordre de dépendance réel, pas l'ordre numérique littéral** : 3.1.4 (tableaux) et 3.1.5 (images) ont été traités AVANT 3.1.3 (amélioration de l'extraction), et 3.1.6 (OCR) sera traité avant 3.1.3 également -- 3.1.3 demande explicitement d'ajouter l'OCR pour les images (`extract_text_image`, "optionnel, via Tesseract"), exactement ce que 3.1.6 construit en profondeur ; traiter 3.1.6 en premier évite de construire l'OCR deux fois. 3.1.3 sera donc finalisé en dernier, une fois 3.1.4/3.1.5/3.1.6 en place, pour ne couvrir que ce qui reste réellement (notes de bas de page, revue des extracteurs existants).
+
+#### Partie 3.1.4 — Extraction des tableaux
+
+✅ **Constat réel important fait avant d'écrire quoi que ce soit** : l'extraction de tableaux existait DÉJÀ pour PDF/DOCX/Markdown/CSV depuis la Partie 2.1.x (chacune retournant déjà un vrai `pandas.DataFrame`) -- mais `process_document` ne stockait qu'un COMPTE (`table_count`), jamais les données structurées elles-mêmes. Le vrai périmètre honnête de cette étape : combler le seul vrai manque (HTML, `tables: []` codé en dur) et exposer le vrai contenu des tableaux, pas seulement un compte. **Nouvelle fonction** `extract_tables_html` (`pandas.read_html`, déjà appuyé sur `lxml`, aucune nouvelle dépendance). **Nouveau module réel** `api/services/table_transformation.py` : `table_to_markdown` (rendu Markdown écrit à la main, pas `to_markdown()` qui exigerait la dépendance optionnelle `tabulate`), `table_to_json`, `table_to_text`, `normalize_table`, `detect_table_headers`. `process_document` stocke désormais `metadata_json["tables"]` réel et structuré (borné à 100 lignes par tableau, limite réelle assumée). **Deux vrais bugs trouvés et corrigés en testant** : `table_to_json` ne produisait pas de vrai `None` pour une valeur numérique manquante (`.where(..., None)` revient silencieusement à `NaN` sur une colonne `float64`, un vrai piège pandas) -- corrigé via `DataFrame.to_json` ; `normalize_table` ne nettoyait pas les espaces car conditionné sur `dtype == object`, alors qu'un pandas moderne peut utiliser un dtype `str` natif -- corrigé en vérifiant le type de chaque valeur plutôt que le dtype de colonne. **Cohérence (vision critique 1)** : chaque fonction opère sur un DataFrame déjà extrait, comportement uniforme quel que soit le format d'origine. Tests réels dédiés (5 fonctions, tous formats de table extraction), voir `tests/test_table_transformation.py`/`tests/test_html_extraction.py`, plus assertions réelles ajoutées aux tests d'intégration DOCX/HTML existants.
+
+#### Partie 3.1.5 — Extraction des images
+
+✅ **Nouveau modèle réel** `DocumentImage` (migration `0045`, RLS en ligne). **Nouveau module réel** `api/services/image_extraction.py` : `extract_images_docx` (relations de paquet python-docx), `extract_images_epub` (ebooklib `ITEM_IMAGE`), `extract_images_html` (référence seulement, voir limite ci-dessous), `get_image_metadata` (Pillow, parsing d'en-tête seulement). `extract_pdf_images` existait déjà depuis 2.1.1 (réutilisée sans changement). **Nouvelle fonction** `save_image` dans `document_storage.py`. **Initiative réelle et assumée au-delà de la liste d'actions littérale** : cette étape ne listait explicitement AUCUNE intégration au pipeline (contrairement à 3.1.1/3.1.2/3.1.4) -- mais des fonctions d'extraction et un modèle sans rien qui les appelle seraient une fonctionnalité réellement inerte ; `process_document` appelle désormais le bon extracteur pour PDF/DOCX/EPUB et crée de vraies lignes `DocumentImage`. Une nouvelle route réelle et minimale `GET /documents/{id}/images` a été ajoutée pour la même raison (stocker sans pouvoir relire serait tout aussi inerte). **Limite réelle et documentée pour HTML, énoncée clairement** : les images HTML référencent presque toujours une URL EXTERNE, pas des octets embarqués -- les récupérer exigerait le même transport SSRF-safe que 2.1.10, pour un bénéfice réel marginal ; `extract_images_html` retourne donc seulement `src`/`alt`, jamais d'octets récupérés, jamais branché sur `save_image`. **Stockage (vision critique 2)** : même bucket S3 que le document lui-même, sous `documents/{org}/{doc}/images/{index}`, aucune nouvelle infrastructure. **Performance (vision critique 1)** : Pillow ne lit que l'en-tête réel de l'image (jamais un décodage complet du raster) ; échec d'une image isolée n'interrompt jamais le reste du document. **Métadonnées (vision critique 3)** : format/largeur/hauteur réels via Pillow, `{}` honnête pour des octets non décodables. Tests réels dédiés (4 fonctions, route, plus une vraie image intégrée au test d'intégration DOCX existant confirmant le round-trip S3 réel), voir `tests/test_image_extraction.py`/`tests/test_documents.py`.
 
 ### 3.2 Chunking
 
@@ -384,16 +394,30 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 81 | 16.2% |
+| ✅ Fait | 83 | 16.6% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 353 | 70.6% |
+| ⬜ Non commencé | 351 | 70.2% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **88/515 (~17.1%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **160/515 (~31.1%)**
-- Pondéré (✅=1, 🟡=0.5) : **~121/515 (~23.5%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **90/515 (~17.5%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **162/515 (~31.5%)**
+- Pondéré (✅=1, 🟡=0.5) : **~123/515 (~23.9%)** -- le chiffre le plus représentatif de l'avancement réel.
 
-Mis à jour après Partie 3.1.1+3.1.2 (Nettoyage et normalisation du texte, 2026-09-04) :
+Mis à jour après Partie 3.1.4+3.1.5 (Extraction des tableaux et des images, 2026-09-04) :
+Partie 3 : ~7/41 → ~9/41 (3.1.4 et 3.1.5 seuls items touchés -- ✅ tous
+les deux. 3.1.4 : constat réel important -- l'extraction de tableaux
+existait déjà pour PDF/DOCX/Markdown/CSV depuis 2.1.x mais seul un
+compte était stocké ; comble le vrai manque HTML et expose enfin les
+données structurées. Deux vrais bugs pandas trouvés et corrigés en
+testant. 3.1.5 : nouveau modèle `DocumentImage`, initiative réelle
+assumée pour intégrer l'extraction/stockage au pipeline (non demandé
+explicitement) et ajouter une route de lecture -- sinon la
+fonctionnalité serait restée inerte. Limite HTML honnêtement assumée
+(référence seulement, pas de fetch pour éviter une nouvelle surface
+SSRF). Ordre de dépendance réel : 3.1.6 (OCR) sera traité avant 3.1.3
+pour ne pas construire l'OCR deux fois).
+
+Précédemment, mis à jour après Partie 3.1.1+3.1.2 (Nettoyage et normalisation du texte, 2026-09-04) :
 Partie 3 : ~5/41 → ~7/41 (3.1.1 et 3.1.2 seuls items touchés -- ✅ tous
 les deux, nouveaux modules réels `api/services/text_cleaning.py`/
 `text_normalization.py`, intégrés dans `process_document`, appliqués

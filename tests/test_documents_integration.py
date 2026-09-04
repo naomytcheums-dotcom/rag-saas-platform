@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.models.document import Document, DocumentChunk, DocumentStatus
+from api.models.document_image import DocumentImage
 from api.models.organization import Organization, OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.security.documents import (
@@ -54,7 +55,7 @@ from api.security.documents import (
     process_document,
     process_url_document,
 )
-from api.services.document_storage import upload_document_file, validate_document_upload
+from api.services.document_storage import download_document_file, upload_document_file, validate_document_upload
 from api.services.github_extraction import build_github_contents_file_url, fetch_github_issue_comments, fetch_github_issues
 from api.services.google_drive_extraction import authenticate_drive, list_drive_files
 
@@ -203,6 +204,7 @@ def _real_test_docx_bytes() -> bytes:
     import io
 
     import docx
+    from PIL import Image
 
     document = docx.Document()
     document.core_properties.title = "Integration Test DOCX"
@@ -213,6 +215,10 @@ def _real_test_docx_bytes() -> bytes:
     for r in range(2):
         for c in range(2):
             table.cell(r, c).text = data[r][c]
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (12, 8), color="blue").save(image_buffer, format="PNG")
+    image_buffer.seek(0)
+    document.add_picture(image_buffer)
     buffer = io.BytesIO()
     document.save(buffer)
     return buffer.getvalue()
@@ -243,7 +249,9 @@ def _real_test_html_bytes() -> bytes:
         "pour que l'heuristique de readability le distingue clairement du menu de navigation.</p>"
         "<p>Deuxième paragraphe réel, pour renforcer encore le score de densité de texte de "
         "l'article face au court menu de navigation présent ailleurs sur la page.</p>"
-        "</article></body></html>"
+        "</article>"
+        "<table><tr><th>Name</th><th>Value</th></tr><tr><td>real</td><td>table</td></tr></table>"
+        "</body></html>"
     ).encode("utf-8")
 
 
@@ -446,6 +454,9 @@ async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine
             assert updated.metadata_json["title"] == "Integration Test DOCX"
             assert updated.metadata_json["author"] == "pytest"
             assert updated.metadata_json["table_count"] == 1
+            # Partie 3.1.4 -- real, structured table data in metadata,
+            # not just a count.
+            assert updated.metadata_json["tables"] == [[{"Name": "real", "Value": "table"}]]
             assert updated.processed_at is not None
 
             chunks = (await session.execute(
@@ -458,6 +469,20 @@ async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
                 assert chunk["metadata_json"] is None
+
+            # Partie 3.1.5 -- real, embedded image extracted and
+            # stored in S3, with a real DocumentImage row.
+            images = (await session.execute(
+                DocumentImage.__table__.select().where(DocumentImage.document_id == document_id)
+            )).all()
+            assert len(images) == 1
+            image = images[0]._mapping
+            assert image["width"] == 12
+            assert image["height"] == 8
+            assert image["format"] == "PNG"
+            assert image["file_size"] > 0
+            real_image_bytes = download_document_file(image["file_key"])
+            assert real_image_bytes.startswith(b"\x89PNG")
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -738,6 +763,10 @@ async def test_process_document_runs_the_real_html_pipeline_end_to_end(pg_engine
             assert updated.metadata_json["author"] == "pytest"
             assert updated.metadata_json["links"] == [{"href": "/", "text": "Home"}]
             assert updated.processed_at is not None
+            # Partie 3.1.4 -- real HTML table extraction, previously
+            # unsupported (tables was hardcoded to []).
+            assert updated.metadata_json["table_count"] == 1
+            assert updated.metadata_json["tables"] == [[{"Name": "real", "Value": "table"}]]
 
             chunks = (await session.execute(
                 DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)

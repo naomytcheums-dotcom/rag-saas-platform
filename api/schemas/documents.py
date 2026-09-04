@@ -335,6 +335,25 @@ class DocumentBatchUploadResponse(BaseModel):
     scheduled: int
 
 
+class DocumentImageResponse(BaseModel):
+    """Partie 3.1.5 -- real image metadata, never the raw bytes
+    themselves (those stay private in S3, same "never expose file_key"
+    reasoning as `DocumentResponse` itself) -- a real, deliberate,
+    small addition beyond this étape's own literal action list (which
+    named the extraction functions/model but never a read route; see
+    api/security/documents.py's own process_document docstring on
+    Partie 3.1.5 for why storing images with no way to read them back
+    would be a real, inert feature)."""
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    file_size: int
+    width: int | None
+    height: int | None
+    format: str | None
+    created_at: dt.datetime
+
+
 class DocumentMetadataResponse(BaseModel):
     """Partie 2.2.5, item 3's own literal endpoint response -- the real,
     common cross-format shape api/services/metadata_normalization.py's

@@ -164,3 +164,22 @@ def extract_html_links(file_path: str) -> list[dict]:
         seen.add(href)
         links.append({"href": href, "text": tag.get_text(strip=True)})
     return links
+
+
+def extract_tables_html(file_path: str) -> list:
+    """Partie 3.1.4, item 1's own literal function -- one real
+    `pandas.DataFrame` per real `<table>` element, in document order,
+    via `pandas.read_html` (already backed by `lxml`, already a real
+    dependency of this module -- no new one needed). Returns an empty
+    list for real markup with no table at all, the same "normal,
+    expected outcome, not an error" convention every other table
+    extractor in this codebase already follows (`extract_pdf_tables`/
+    `extract_docx_tables`/`extract_markdown_tables`)."""
+    import io
+
+    import pandas as pd
+
+    try:
+        return pd.read_html(io.StringIO(_read_html(file_path)), flavor="lxml")
+    except ValueError:
+        return []

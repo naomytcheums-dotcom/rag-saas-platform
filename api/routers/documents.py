@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.document import Document, DocumentTag
+from api.models.document_image import DocumentImage
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.schemas.document_audit import DocumentAuditLogResponse
@@ -48,6 +49,7 @@ from api.schemas.documents import (
     DocumentBatchUploadResult,
     DeduplicationResultResponse,
     DocumentListResponse,
+    DocumentImageResponse,
     DocumentMetadataResponse,
     DocumentModifiedCheckResponse,
     DocumentProgressResponse,
@@ -556,6 +558,26 @@ async def get_document_metadata(
     document, _membership = await _get_document_and_membership(db, document_id, current_user)
     normalized = normalize_document_metadata(document.metadata_json, document.file_type)
     return DocumentMetadataResponse(document_id=document.id, **normalized)
+
+
+@router.get("/documents/{document_id}/images", response_model=list[DocumentImageResponse])
+async def list_document_images_route(
+    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 3.1.5 -- a real, small, deliberate addition beyond this
+    étape's own literal action list (see `DocumentImageResponse`'s own
+    docstring for why). Same real `_get_document_and_membership`
+    anti-enumeration guard as every other document route -- never
+    returns a raw image's own bytes or its real S3 `file_key`, only
+    real, already-extracted metadata."""
+    document, _membership = await _get_document_and_membership(db, document_id, current_user)
+    images = (await db.scalars(
+        select(DocumentImage).where(DocumentImage.document_id == document.id).order_by(DocumentImage.created_at.asc())
+    )).all()
+    return [
+        DocumentImageResponse(id=i.id, document_id=i.document_id, file_size=i.file_size, width=i.width, height=i.height, format=i.format, created_at=i.created_at)
+        for i in images
+    ]
 
 
 @router.get("/documents/{document_id}/preview")

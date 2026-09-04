@@ -85,7 +85,7 @@ does alongside `extract_markdown_sections`.
 from api.services.csv_extraction import extract_csv_data, extract_csv_metadata, extract_csv_text
 from api.services.docx_extraction import extract_docx_metadata, extract_docx_tables, extract_docx_text
 from api.services.epub_extraction import extract_epub_chapters, extract_epub_metadata, extract_epub_toc
-from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata
+from api.services.html_extraction import extract_html_content, extract_html_links, extract_html_metadata, extract_tables_html
 from api.services.json_extraction import extract_json_metadata, extract_json_text
 from api.services.markdown_extraction import (
     extract_markdown_metadata,
@@ -152,7 +152,8 @@ def extract_document_content(file_path: str, file_type: str) -> dict:
         return {
             "metadata": metadata,
             "sections": [{"text": extract_html_content(file_path), "metadata": {}}],
-            "tables": [],
+            # Partie 3.1.4 -- real HTML table extraction, filling in
+            "tables": extract_tables_html(file_path),
             "image_count": 0,
         }
     if file_type == CSV_CONTENT_TYPE:

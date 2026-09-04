@@ -5268,6 +5268,149 @@ case-folding, the full pipeline's own real conservative defaults, an
 opt-in case/accent change, `None`/empty handling, and a real, timed
 performance check.
 
+### Partie 3.1.4 -- table extraction
+
+**A real, important finding, made before writing anything**: real table
+extraction ALREADY EXISTED for PDF/DOCX/Markdown/CSV since Partie
+2.1.x (`extract_pdf_tables`/`extract_docx_tables`/
+`extract_markdown_tables`/`extract_csv_data`, each already returning a
+real `pandas.DataFrame` per table) -- but `process_document` only ever
+stored a real COUNT (`table_count`) in `Document.metadata_json`, never
+the actual structured data. This étape's own real, honest scope is
+therefore: fill the one real gap (HTML, previously hardcoded to
+`tables: []`) and expose the REAL table content, not just a count.
+
+New function, `api/services/html_extraction.py`'s `extract_tables_html`
+-- `pandas.read_html` (already backed by `lxml`, already a real
+dependency of this module, no new one needed). New module,
+`api/services/table_transformation.py` -- `table_to_markdown`/
+`table_to_json`/`table_to_text`/`normalize_table`/
+`detect_table_headers` (item 2/3's own literal 5 functions), operating
+on the real `DataFrame`s every extractor (old and new) already
+produces. `process_document` now stores real, structured
+`metadata_json["tables"]` (each table normalized then converted via
+`table_to_json`), bounded to `_MAX_TABLE_ROWS_IN_METADATA` (100) rows
+per table -- a real, stated, deliberate limit against unbounded
+metadata growth for a genuinely huge table, the real complete table
+always re-derivable from the source file itself.
+
+**Cohérence (vision critique 1)**: every real function in
+`table_transformation.py` operates on an already-extracted
+`DataFrame`, never re-parses a file itself -- uniform behavior
+regardless of which of the now-5 supported formats a table came from.
+
+**A real, deliberate choice avoiding a new dependency**:
+`table_to_markdown` is a real, hand-written renderer, not
+`DataFrame.to_markdown()` (which needs the optional `tabulate` package
+this codebase does not otherwise depend on) -- simple enough to get
+right by hand.
+
+**Two real bugs found and fixed while testing, worth stating
+explicitly**: (1) `table_to_json`'s first implementation
+(`.where(pd.notna(table), None)`) silently failed to produce a real
+`None` for a missing numeric cell -- assigning `None` into a real
+`float64` column reverts to `NaN` again, a genuine pandas dtype-
+coercion gotcha; fixed by routing through `DataFrame.to_json` (already
+real, already-tested library behavior) instead of a hand-rolled NaN
+pass. (2) `normalize_table`'s whitespace-stripping was gated on
+`dtype == object`, which a modern pandas does NOT use for every real
+string column (a native `str` dtype backend is possible) -- the gate
+silently skipped stripping entirely; fixed by checking each real
+VALUE's own type instead of pre-filtering by column dtype.
+
+**Qualité (vision critique 2)**: `detect_table_headers` is a real,
+honest CONFIRMATION that a table already has real headers (every
+extractor already assigns them as `DataFrame.columns`), not a second
+detection algorithm -- returns `None` only for a genuinely
+auto-numbered `RangeIndex`, pandas' own real signal that no header row
+was ever supplied.
+
+**Real verification**: `tests/test_table_transformation.py` covers all
+5 functions (Markdown rendering including a real blank cell, JSON
+conversion including a real missing value correctly becoming `None`,
+text rendering, header detection for both a real headered and
+headerless table, whitespace stripping across real dtypes, dropping a
+real fully-empty row while never dropping a real column).
+`tests/test_html_extraction.py` gained real tests for
+`extract_tables_html` (a real single table, multiple real tables in
+document order, a real page with none). `tests/test_documents_integration.py`'s
+own existing real DOCX/HTML success tests gained real assertions
+proving `metadata_json["tables"]` now carries real, structured content,
+not just a count.
+
+### Partie 3.1.5 -- image extraction
+
+New model, `api/models/document_image.py`'s `DocumentImage` (item 3's
+own literal columns). New module, `api/services/image_extraction.py`
+-- `extract_images_docx`/`extract_images_epub`/`extract_images_html`/
+`get_image_metadata` (item 1/2's own literal functions; PDF's own
+`extract_pdf_images` already existed since Partie 2.1.1, reused
+unchanged -- its own docstring already, honestly, deferred exactly
+this real follow-up work). New `api/services/document_storage.py`'s
+`save_image` (item 2's own literal function, real, deliberate
+additions beyond its own literal 2-argument signature: `organization_id`
+for the same real per-org/per-document S3 key scheme
+`upload_document_file` already uses, and `image_index` since a
+document can have many real images).
+
+**A real, deliberate initiative beyond this étape's own literal action
+list, stated plainly**: this étape's own 5 action items never listed
+"intégrer dans le pipeline" (unlike 3.1.1/3.1.2/3.1.4, which explicitly
+did) -- but real extraction functions and a real model with nothing
+ever calling them would be a genuinely inert feature. `process_document`
+now calls the right real extractor for PDF/DOCX/EPUB, saves each real
+image via `save_image`, and creates a real `DocumentImage` row --
+matching this session's own standing "take initiative on what's
+missing" instruction. A new, small, real route,
+`GET /documents/{document_id}/images` (same real
+`_get_document_and_membership` anti-enumeration guard, never exposes a
+raw image's own bytes or its real S3 `file_key`), was added for the
+same reason -- storing images with no way to read them back would
+still be inert.
+
+**A real, deliberate, DOCUMENTED scope limitation for HTML, stated
+prominently**: a real HTML page's own `<img>` tags almost always
+reference EXTERNAL images by URL, not raw bytes embedded in the file
+the way DOCX/EPUB/PDF do. Actually fetching each one would need the
+SAME SSRF-safe transport `api/services/url_fetching.py` already built
+for Partie 2.1.10's own URL import (arbitrary attacker-controlled
+URLs, a real SSRF surface) for a real benefit most real pages don't
+even offer. `extract_images_html` therefore returns real, honest
+reference metadata only (`src`/`alt`) -- never fetches bytes, never
+gets wired to `save_image`/`DocumentImage`.
+
+**Performance (vision critique 1)**: `get_image_metadata` uses
+Pillow's own real header-only parsing (`Image.open` alone never fully
+decodes the raster into memory just to read its dimensions), and each
+real image's own save is wrapped in the SAME "one item's own failure
+never blocks the rest" resilience as every other bulk operation in
+this codebase -- a corrupt embedded image or a real S3 hiccup on ONE
+image never aborts the rest of the document's own real processing.
+
+**Stockage (vision critique 2)**: the SAME real S3 bucket the document
+itself already lives in (`settings.S3_DOCUMENTS_BUCKET_NAME`) -- no
+new infrastructure -- under a real, distinct
+`documents/{organization_id}/{document_id}/images/{index}` key, the
+same per-org/per-document collision-proofing `upload_document_file`
+already established for the document's own file.
+
+**Métadonnées (vision critique 3)**: real format/width/height via
+Pillow, an honest empty `{}` for real bytes Pillow cannot decode at
+all -- never a fabricated dimension.
+
+**Real verification**: `tests/test_image_extraction.py` covers all 4
+functions (a real embedded DOCX image found via python-docx's own
+package relationships, a real EPUB image via ebooklib's own
+`ITEM_IMAGE`, real HTML `<img>` reference extraction, real Pillow
+metadata for a valid image and an honest empty dict for undecodable
+bytes). `tests/test_documents.py` covers the new route (real metadata
+returned, `file_key` never present, 404 for a nonexistent or cross-
+organization document). `tests/test_documents_integration.py`'s own
+DOCX success test gained a real embedded image, with new assertions
+confirming a real `DocumentImage` row exists with the real, correct
+dimensions/format, and that the real image bytes are actually
+downloadable back out of S3.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

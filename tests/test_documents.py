@@ -3976,3 +3976,47 @@ async def test_outdated_documents_excludes_a_document_never_checked(client, db_s
 
     response = await client.get("/documents/outdated", headers=_auth_header(owner_token))
     assert response.json()["items"] == []
+
+
+# ------------------------------------------------------- 3.1.5 -- document images --
+
+async def test_owner_can_list_document_images(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: les images sont accessibles via l'API,
+    jamais leurs octets bruts ni leur file_key S3."""
+    from api.models.document_image import DocumentImage
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+
+    db_session.add(DocumentImage(document_id=uuid.UUID(document_id), file_key="documents/x/y/images/0", file_size=123, width=10, height=20, format="PNG"))
+    await db_session.commit()
+
+    response = await client.get(f"/documents/{document_id}/images", headers=_auth_header(owner_token))
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["width"] == 10
+    assert body[0]["height"] == 20
+    assert body[0]["format"] == "PNG"
+    assert "file_key" not in body[0]
+
+
+async def test_document_images_for_a_nonexistent_document_returns_404(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    response = await client.get(f"/documents/{uuid.uuid4()}/images", headers=_auth_header(owner_token))
+    assert response.status_code == 404
+
+
+async def test_document_images_belonging_to_another_organization_returns_404(client, db_session, register_payload, monkeypatch):
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await _upload(client, org["id"], owner_token)
+    document_id = created.json()["id"]
+    outsider_token, outsider = await _register(client, db_session, "imagesoutsider@example.com")
+
+    response = await client.get(f"/documents/{document_id}/images", headers=_auth_header(outsider_token))
+    assert response.status_code == 404

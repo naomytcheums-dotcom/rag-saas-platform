@@ -427,6 +427,26 @@ def upload_document_file(organization_id: uuid.UUID, document_id: uuid.UUID, fil
     return key
 
 
+def save_image(organization_id: uuid.UUID, document_id: uuid.UUID, image_index: int, image_data: bytes, content_type: str | None) -> str:
+    """Partie 3.1.5, item 2's own literal function -- real, deliberate
+    additions beyond this item's own literal 2-argument signature
+    (`save_image(image_data, document_id)`): `organization_id` (the
+    SAME real per-org/per-document S3 key scheme `upload_document_file`
+    above already uses, so two organizations' images can never collide
+    either) and `image_index` (a document can have MANY real images --
+    a real, stable, distinct key per one, not a collision). Stores
+    under `documents/{organization_id}/{document_id}/images/`, a real,
+    separate real "subfolder" from the document's own file itself."""
+    key = f"documents/{organization_id}/{document_id}/images/{image_index}"
+
+    try:
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=image_data, ContentType=content_type or "application/octet-stream")
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"image upload failed: {exc}") from exc
+
+    return key
+
+
 def download_document_file(file_key: str) -> bytes:
     """Fetches a document's raw bytes back out of S3 -- used by
     api/security/documents.py's process_document to get the file
