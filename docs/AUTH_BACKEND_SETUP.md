@@ -6129,6 +6129,42 @@ max_paragraphs`.
 
 **Real verification**: `tests/test_paragraph_chunking.py` (14 tests).
 
+### Partie 3.2.8 -- parent-child chunks
+
+New module `api/services/parent_child_chunking.py`: `create_parent_chunks`/
+`create_child_chunks`/`link_child_to_parent`/`get_parent_context`/
+`chunk_parent_child` (item 2's own literal functions). A real,
+standard RAG pattern: small, precise CHILD chunks carry the real
+search signal, while their own larger PARENT chunk supplies real,
+wider context to the LLM once a child is matched.
+
+**Reuses 3 already-built real chunking strategies as pluggable
+implementations** rather than a fourth, duplicate splitter: Partie
+3.2.6's own `chunk_by_sentence_tokens` (the real default -- the
+literal `PARENT_CHILD_*_SIZE` defaults, 512/128, match this codebase's
+own established "size = tokens" convention from Partie 3.2.1), Partie
+3.2.7's own `chunk_by_paragraph_tokens`, and Partie 3.2.2's own
+`chunk_recursive_text` (a real, documented limitation: that strategy
+has no real overlap concept of its own).
+
+**Real position tracking**: child chunks are produced by re-running
+the chosen strategy on EACH PARENT'S OWN text (never the whole
+document independently) -- a real, structural guarantee that every
+child is a genuine sub-span of its own parent, rather than a separate
+search-and-match step to recover positions afterward. `_locate_chunks`
+does a real, sequential `text.find` scan (searching forward from the
+end of the previous match, so real duplicate text still resolves in
+document order), with an honest, documented fallback to the running
+cursor if a reconstructed chunk no longer appears verbatim.
+`PARENT_CHILD_ENABLED=False` is a real, deliberate kill switch (an
+honest `{"parents": [], "children": []}`, never an exception -- the
+same convention Partie 3.1.7's own `LANGUAGE_DETECTION_ENABLED`
+already established).
+
+**Real verification**: `tests/test_parent_child_chunking.py` (13
+tests: small and large documents, all 3 strategies, the kill switch,
+an unknown strategy rejected).
+
 **Sécurité (vision critique 3)**: `GET /documents/{document_id}/history`
 uses the SAME real `_get_document_and_membership` anti-enumeration
 guard as every other document route -- only members of the

@@ -220,7 +220,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ✅ **Nouveau module réel** `api/services/metadata_enrichment.py` : `extract_keywords`/`extract_entities`/`extract_summary`/`extract_topics`/`extract_reading_time`/`extract_complexity_score` (fonctions littérales de l'item 2). **Nouvelles tables réelles** `document_keywords`/`document_entities` (migration `0046`, RLS en ligne sur les deux) -- les seules données extraites par item de toute la série 3.1.x à avoir leur propre table (même précédent réel que `DocumentTag`, 2.2.6), contrairement aux tableaux/structure (2.2.16/3.1.8) qui restent un bloc dans `metadata_json` puisqu'ils sont lus comme un tout, jamais filtrés par item. Intégré dans `process_document`. **Zéro nouvelle dépendance lourde** : ni spaCy (modèle entraîné séparé à télécharger rien que pour le NER) ni NLTK (téléchargements de corpus même pour les stopwords/la segmentation de phrases) -- tout est réel, écrit à la main, ou réutilise `sklearn` (déjà une dépendance réelle de ce dépôt). **`extract_keywords`** : vraie implémentation RAKE (Rapid Automatic Keyword Extraction) écrite à la main. **Vrai bug trouvé et corrigé en testant** : les limites de phrase candidate doivent être à la fois les stopwords ET la ponctuation -- sans la ponctuation, une suite de mots pleins traversant plusieurs vraies phrases sans stopword entre elles devenait une "phrase" absurdement longue et inutilisable ; corrigé en découpant d'abord sur la ponctuation réelle. **`extract_entities`, limite réelle et documentée** : vocabulaire fixe et basé sur des motifs (email/URL/date/montant/téléphone), jamais une fausse prétention de reconnaissance d'entités nommées complète -- les vrais noms de personnes/organisations/lieux ont besoin d'un vrai modèle entraîné (spaCy), une dépendance nouvelle et lourde que le périmètre de cette étape ne justifie pas. **`extract_topics`, limite réelle et documentée** : vrai LDA (`sklearn.decomposition.LatentDirichletAllocation`), mais appliqué sur les vraies phrases de CE document comme son propre petit corpus -- un vrai signal honnête (les groupes de termes dominants de ce document), plus étroit qu'une vraie modélisation de sujets inter-documents, mais réel et non fabriqué ; honnêtement vide si pas assez de signal réel pour ajuster un vrai modèle. **`extract_complexity_score`** : vrai score de Flesch Reading Ease standard, avec un vrai compteur de syllabes par comptage de groupes de voyelles (même approximation que `textstat`, non installé comme dépendance pour cette seule fonction). **Performance (vision critique 1)** : `extract_keywords`/`extract_summary`/`extract_topics` sont plafonnés à `_MAX_ENRICHMENT_INPUT_CHARS` (50 000 caractères) du texte extrait combiné -- un vrai choix de performance délibéré pour un gros document. **Robustesse, vrai bug trouvé et corrigé** : `extract_complexity_score(None)` levait une vraie `TypeError` (appelait `_WORD_RE.findall(None)` avant la vérification de vide) -- corrigé par une garde précoce, confirmé par un vrai test de régression. Tests réels dédiés (6 fonctions, dont le bug de limite de phrase et le bug de robustesse ci-dessus en régression dédiée, cas vides pour toutes), voir `tests/test_metadata_enrichment.py`, plus une vraie vérification d'intégration confirmant que des lignes `DocumentKeyword` sont réellement créées par le pipeline complet.
 
-### 3.2 Chunking
+### 3.2 Chunking — ✅ (8/8, la Partie 3.2 est désormais intégralement couverte, 3.2.5 sans tree-sitter -- voir sa propre section pour la déviation documentée)
 
 | # | Stratégie | Statut |
 |---|---|---|
@@ -231,7 +231,7 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.2.5 | Code-aware (tree-sitter) | ✅ Voir détails ci-dessous (sans tree-sitter, voir raisons) |
 | 3.2.6 | Sentence-based | ✅ Voir détails ci-dessous |
 | 3.2.7 | Paragraph-based | ✅ Voir détails ci-dessous |
-| 3.2.8 | Parent-child chunks | ⬜ |
+| 3.2.8 | Parent-child chunks | ✅ Voir détails ci-dessous |
 
 #### Partie 3.2.2 — Chunking récursif
 
@@ -256,6 +256,10 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.2.7 — Chunking par paragraphes
 
 ✅ **Nouveau module réel** `api/services/paragraph_chunking.py` : `detect_paragraph_boundaries`/`split_into_paragraphs`/`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`/`merge_paragraphs` (fonctions littérales de l'item 2). **Réutilise le packer par budget de tokens réel et partagé de la Partie 3.2.6** (`pack_units_by_tokens`/`get_tokenizer`/`count_tokens`, rendus publics dans `api/services/sentence_chunking.py` précisément pour cette réutilisation) plutôt qu'un second cache de tokenizer/packer dupliqué. **`detect_paragraph_boundaries`** : vrais spans `{"start", "end"}` en position caractère dans le texte ORIGINAL, un par vrai paragraphe (limite réelle standard : une ou plusieurs vraies lignes vides), en ordre document -- `split_into_paragraphs` réutilise directement cette fonction plutôt qu'un second scan dupliqué. **Limite réelle et documentée** : un simple retour à la ligne réel sans ligne vide n'est PAS traité comme une limite de paragraphe -- même compromis réel accepté que les autres heuristiques structurelles de ce dépôt. **`chunk_by_paragraphs`/`chunk_by_paragraph_tokens`** : même vrai design de fenêtre glissante que `chunk_by_sentences`/`chunk_by_sentence_tokens` (Partie 3.2.6), à la granularité PARAGRAPHE, jointure par un vrai `"\n\n"` plutôt qu'un espace, même vraie règle de fusion `MIN_PARAGRAPHS`, même vraie garde de robustesse contre un `overlap_paragraphs >= max_paragraphs`. Tests réels dédiés (14 tests), voir `tests/test_paragraph_chunking.py`.
+
+#### Partie 3.2.8 — Chunks parent-enfant
+
+✅ **Nouveau module réel** `api/services/parent_child_chunking.py` : `create_parent_chunks`/`create_child_chunks`/`link_child_to_parent`/`get_parent_context`/`chunk_parent_child` (fonctions littérales de l'item 2). Pattern RAG réel et standard : de petits chunks ENFANTS précis portent le vrai signal de recherche (indexés/embeddés pour la récupération), tandis que leur propre chunk PARENT, plus grand, fournit un vrai contexte plus large au LLM une fois un enfant trouvé -- utile quand un chunk assez petit pour être une correspondance précise et non ambiguë est trop petit, seul, pour donner au LLM assez de vrai contexte pour répondre. **Réutilise 3 stratégies de chunking déjà construites comme implémentations `strategy` réelles, interchangeables**, plutôt qu'un quatrième découpeur dupliqué : `chunk_by_sentence_tokens` (Partie 3.2.6, stratégie "sentence", le vrai DÉFAUT ici -- les défauts littéraux de `PARENT_CHILD_*_SIZE`, 512/128, correspondent à la convention réelle déjà établie "taille = tokens" de la Partie 3.2.1), `chunk_by_paragraph_tokens` (Partie 3.2.7, stratégie "paragraph"), et `chunk_recursive_text` (Partie 3.2.2, stratégie "recursive", limite réelle et documentée : cette stratégie n'a pas de vrai concept de chevauchement propre). **Suivi de position réel** : les chunks enfants sont produits en relançant la vraie stratégie choisie sur le texte de CHAQUE PARENT lui-même (jamais sur le document entier indépendamment) -- une vraie garantie structurelle que chaque enfant est un vrai sous-segment de son propre parent, plutôt qu'une vraie recherche-et-correspondance séparée sur tout le document pour retrouver les positions après coup. `_locate_chunks` : un vrai scan séquentiel `text.find` (recherche vers l'avant depuis la fin de la correspondance précédente, pour que du texte réel dupliqué se résolve quand même dans le bon ordre document), avec repli honnête et documenté sur le curseur courant si un chunk reconstruit ne réapparaît plus littéralement. `PARENT_CHILD_ENABLED=False` est un vrai interrupteur d'arrêt délibéré (résultat honnête `{"parents": [], "children": []}`, jamais une exception -- même convention réelle que `LANGUAGE_DETECTION_ENABLED`, Partie 3.1.7). Tests réels dédiés (13 tests, petits et gros documents, les 3 stratégies, l'interrupteur d'arrêt, une stratégie inconnue rejetée), voir `tests/test_parent_child_chunking.py`.
 
 ### 3.3 Paramètres configurables — ⬜ (0/7)
 
@@ -447,14 +451,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 95 | 19.0% |
+| ✅ Fait | 96 | 19.2% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 339 | 67.8% |
+| ⬜ Non commencé | 338 | 67.6% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **102/515 (~19.8%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **174/515 (~33.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~135/515 (~26.2%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **103/515 (~20.0%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **175/515 (~34.0%)**
+- Pondéré (✅=1, 🟡=0.5) : **~136/515 (~26.4%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
