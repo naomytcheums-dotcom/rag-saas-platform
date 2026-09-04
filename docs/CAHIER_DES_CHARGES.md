@@ -157,9 +157,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 
 ---
 
-## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~12/41, dont 3.1.1/3.1.2/3.1.3/3.1.4/3.1.5/3.1.6/3.1.7 réels dans `api/`, 2026-09-04)
+## PARTIE 3 — Pipeline RAG avancé — 🟡 PARTIEL (~14/41, dont 3.1.1-3.1.9 réels dans `api/`, 2026-09-04)
 
-### 3.1 Ingestion — 🟡 (7/10 ✅, 3 items non encore spécifiés par l'utilisateur)
+### 3.1 Ingestion — 🟡 (9/10 ✅, 1 item non encore spécifié par l'utilisateur)
 
 **Mise à jour 2026-09-04** : le nettoyage/normalisation "déjà existant pour Markdown uniquement" ci-dessous fait référence à `src/ingestion.py`, l'ANCIEN pipeline RAG mono-tenant (servi par le dashboard Streamlit) -- un code totalement distinct et non réutilisé par `api/`, le vrai backend multi-tenant que construit toute cette Partie 3, comme déjà établi pour la Partie 2. Les items 3.1.1/3.1.2 ci-dessous sont un vrai travail NEUF dans `api/`, pas une redécouverte de ce qui existe déjà dans `src/`.
 
@@ -172,7 +172,9 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 | 3.1.5 | Extraction des images | ✅ Voir détails ci-dessous |
 | 3.1.6 | OCR | ✅ Voir détails ci-dessous (vérification réelle via CI, binaires système absents de cette machine de dev) |
 | 3.1.7 | Détection de langue | ✅ Voir détails ci-dessous |
-| 3.1.8-10 | Non encore spécifiés | ⬜ |
+| 3.1.8 | Détection de structure documentaire | ✅ Voir détails ci-dessous |
+| 3.1.9 | Extraction des titres et sections | ✅ Voir détails ci-dessous |
+| 3.1.10 | Non encore spécifié | ⬜ |
 
 #### Partie 3.1.1 — Nettoyage du texte
 
@@ -205,6 +207,14 @@ IP de confiance. Voir `docs/AUTH_BACKEND_SETUP.md`.
 #### Partie 3.1.7 — Détection de langue
 
 ✅ **Nouveau module réel** `api/services/language_detection.py` : `detect_language`, `detect_language_batch`, `get_language_confidence`, `get_supported_languages`, `set_language_fallback` (fonctions littérales de l'item 3), via `langdetect` -- port pur Python de la bibliothèque de détection de langue de Google, choisi plutôt que `fasttext` (l'alternative littérale) précisément parce qu'il n'exige AUCUN binaire système ni téléchargement de modèle séparé (le modèle compressé de fasttext fait lui-même ~130 Mo) -- un choix réel, délibéré, à faible risque pour une fonctionnalité d'enrichissement de métadonnées. **Quirk réel géré d'entrée** : le classifieur Naive Bayes de `langdetect` est réellement non déterministe d'un run à l'autre sans seed -- `DetectorFactory.seed = 0` posé une fois à l'import du module, confirmé sur 20 appels répétés dans un vrai test. **Performance (vision critique 1), vrai choix d'intégration délibéré** : détecté UNE SEULE FOIS par document -- à partir d'un vrai échantillon de ses premiers chunks déjà nettoyés/normalisés (plafonné à 2000 caractères), jamais relancé par chunk -- puis appliqué à CHAQUE chunk (demande littérale de l'item 5 "à chaque chunk", satisfaite sans en payer le coût par chunk). Un vrai document est presque toujours dans une seule langue de bout en bout ; détecter une seule fois est à la fois moins cher ET plus cohérent qu'une détection par chunk, une vraie source connue de bruit sur des chunks courts et riches en chiffres pris isolément (confirmé réellement : le fixture d'intégration CSV de ce dépôt -- simples noms/nombres, aucun vrai contenu linguistique -- détecte de façon déterministe "en", un vrai exemple honnête de ce bruit, pas un bug à corriger). **Précision (vision critique 2)**, réponse honnête pour les textes courts : en dessous du vrai seuil configurable `LANGUAGE_DETECTION_MIN_LENGTH` (20 caractères), la détection est sautée entièrement plutôt que de prétendre qu'une classification marginale est fiable -- retour au vrai fallback configuré ; `get_language_confidence` expose la vraie distribution de probabilité sous-jacente pour tout appelant voulant juger lui-même de la fiabilité. **Cohérence (vision critique 3)** : stocké de façon uniforme dans la MÊME colonne `metadata_json` déjà portée par chaque chunk (un document sans autre métadonnée par format porte désormais `{"language": "xx"}` au lieu de `None` -- mise à jour réelle et nécessaire de plusieurs assertions `metadata_json is None` des tests d'intégration existants, puisque ce n'était plus vrai une fois cette étape livrée) et dans `Document.metadata_json["language"]` au niveau document. Tests réels dédiés (français/anglais, texte mixte, texte vide/None/trop court avec repli gracieux, fallback personnalisé, coupe-circuit désactivé, déterminisme sur 20 appels, détection en lot, distribution de confiance réelle, liste réelle des 55 langues), voir `tests/test_language_detection.py`, plus une langue attendue empiriquement confirmée ajoutée à l'assertion de métadonnées de chunk de chacun des 7 tests d'intégration par format existants (`tests/test_documents_integration.py`).
+
+#### Partie 3.1.9 — Extraction des titres et sections
+
+✅ **Construite AVANT 3.1.8 malgré l'ordre numérique** -- les signatures littérales `detect_structure_*` de 3.1.8 ont besoin d'une vraie détection de titres par format comme brique de base, et les fonctions littérales de cette étape sont exactement ça ; construire 3.1.8 en premier aurait signifié redériver deux fois la même logique. **Nouveau module réel** `api/services/headings_extraction.py` : les 5 fonctions littérales par format (`extract_headings_markdown/html/pdf/docx/generic`) plus `build_section_hierarchy`/`split_by_headings`/`get_section_context`/`get_section_path`. **Signaux réels par format, jamais fabriqués** : PDF -- vraie taille de police par span (PyMuPDF) ; DOCX -- vrai nom de style de paragraphe "Heading N" (convention Word standard) ; Markdown -- un vrai scan regex indépendant, conscient des blocs de code (ATX `#` uniquement, déviation réelle et documentée par rapport à la réutilisation du parser AST existant de 2.1.4, qui est basé sur un chemin de fichier alors que cette étape exige du texte brut) ; HTML -- vraies balises `<h1>`-`<h6>` via BeautifulSoup ; générique -- heuristique honnêtement étroite (plan numéroté "1."/"1.1.", lignes TOUT EN MAJUSCULES), aucun signal universel n'existant pour du texte brut sans balisage. **Deux vrais bugs trouvés et corrigés en testant** : (1) `position` doit pointer sur le vrai texte du titre, pas sur le début de la ligne entière (le préfixe `#`/`1.1` cassait tout appelant comparant le texte à cette position) ; (2) `split_by_headings` laissait fuir le préfixe du titre SUIVANT à la fin de chaque section -- corrigé en bornant chaque section au dernier vrai saut de ligne avant le titre suivant. Tests réels dédiés (5 extracteurs, dont un vrai PDF/DOCX construit avec PyMuPDF/python-docx, les deux bugs ci-dessus en régression dédiée, hiérarchie réelle sur 3 niveaux, contexte/chemin de section réels), voir `tests/test_headings_extraction.py`.
+
+#### Partie 3.1.8 — Détection de structure documentaire
+
+✅ **Nouveau module réel** `api/services/structure_detection.py` : les 5 fonctions littérales par format, `StructureElement`/`DocumentStructure`, `structure_to_json`/`structure_to_markdown`. Intégré dans `process_document`, stocké dans `Document.metadata_json["structure"]`, plafonné à 200 éléments (même raisonnement que le plafond de 3.1.4 sur les lignes de tableau). **Cohérence (vision critique 1), choix de portée réel et délibéré** : `DocumentStructure` reste une VRAIE LISTE PLATE, dans l'ordre du document -- `children` existe (champ littéral) mais reste vide ici par construction ; imbriquer les titres en arbre est exactement ce que `build_section_hierarchy` (3.1.9) fait déjà, dupliquer cette logique ici serait une complexité réelle non demandée par le texte littéral "DocumentStructure -> liste de StructureElement". **Un vrai bug d'intégration trouvé en branchant cette étape dans le pipeline réel** : pour Markdown ET HTML, `extracted["sections"]` a déjà sa vraie syntaxe dépouillée par le pipeline existant (texte inline réel pour Markdown, `readability`+`BeautifulSoup.get_text()` pour HTML) -- appeler la détection de structure sur ce texte déjà nettoyé n'aurait jamais rien trouvé, silencieusement. Corrigé en relisant le vrai fichier source BRUT pour ces deux formats spécifiquement. **Un deuxième vrai bug** : la référence "corps de texte" de `extract_headings_pdf` (3.1.9) utilisait initialement la médiane statistique -- sur un document à 2 tailles de police distinctes, la médiane par indice sélectionne la PLUS GRANDE taille (le titre lui-même) comme référence, rendant la détection impossible même sur un cas évident ; corrigé en pondérant par le nombre réel de caractères par taille, un signal honnête et robuste même sur un document court. Tests réels dédiés (5 détecteurs par format, rendu JSON/Markdown réel), voir `tests/test_structure_detection.py`, plus deux assertions réelles ajoutées aux tests d'intégration PDF/Markdown existants.
 
 ### 3.2 Chunking
 
@@ -409,14 +419,14 @@ au-delà de "15.1.1 Ticke...".
 
 | | Items (/500 connus) | % |
 |---|---|---|
-| ✅ Fait | 85 | 17.0% |
+| ✅ Fait | 88 | 17.6% |
 | 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 349 | 69.8% |
+| ⬜ Non commencé | 346 | 69.2% |
 
 **Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **92/515 (~17.9%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **164/515 (~31.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~125/515 (~24.3%)** -- le chiffre le plus représentatif de l'avancement réel.
+- Strictement ✅ : **95/515 (~18.4%)**
+- ✅ + 🟡 touchés d'une manière ou d'une autre : **167/515 (~32.4%)**
+- Pondéré (✅=1, 🟡=0.5) : **~128/515 (~24.9%)** -- le chiffre le plus représentatif de l'avancement réel.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai

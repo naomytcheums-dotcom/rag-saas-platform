@@ -5653,6 +5653,124 @@ empirically-confirmed expected language in their own chunk metadata
 assertion (English for the PDF/DOCX/CSV fixtures, French for the
 TXT/HTML/JSON/XML ones, matching each fixture's own real body text).
 
+### Partie 3.1.9 -- headings/sections extraction
+
+New module `api/services/headings_extraction.py`: `extract_headings_markdown`/
+`extract_headings_html`/`extract_headings_pdf`/`extract_headings_docx`/
+`extract_headings_generic` (item 2's own literal per-format functions),
+`build_section_hierarchy`/`split_by_headings`/`get_section_context`/
+`get_section_path` (item 3's own literal functions). Built BEFORE
+Partie 3.1.8 despite the numeric order -- 3.1.8's own literal
+`detect_structure_*` signatures need real, per-format heading detection
+as a building block, and this étape's own literal functions are
+exactly that; building 3.1.8 first would have meant re-deriving the
+same real per-format heading logic twice.
+
+**Real, per-format signals, never fabricated**: PDF -- a real, standard
+heuristic (PyMuPDF's own per-span font SIZE, `page.get_text("dict")`);
+DOCX -- python-docx's own real "Heading N" paragraph STYLE name, the
+standard Word convention, no heuristic guessing needed there at all;
+Markdown -- a real, independent, fence-aware regex scan (`#`-style ATX
+headings only; a real, deliberate, DOCUMENTED non-duplication of
+Partie 2.1.4's own richer, file-path-based `extract_markdown_structure`
+-- THIS étape's own literal signature is TEXT-based, matching what
+Partie 3.1.8 needs to call it with, so reusing that file-based parser
+would mean routing a string through a temp file just to reuse it); HTML
+-- real `<h1>`-`<h6>` tags via BeautifulSoup; generic (plain text, no
+markup at all) -- a real, honestly-narrow pattern heuristic (a numbered
+outline "1."/"1.1." for real, reliable relative depth, or an ALL-CAPS
+line for a real, common plain-text convention) -- stated plainly: no
+universal, unambiguous "this is a heading" signal exists for plain text
+the way the other 4 formats' own real markup provides.
+
+**Deux vrais bugs trouvés et corrigés en testant, avant toute
+livraison** : (1) `position` doit toujours pointer sur le début du
+VRAI texte du titre, jamais sur le début de la ligne entière -- pour
+Markdown/generic, la ligne porte un vrai préfixe (`# `, `1.1 `) avant
+le titre ; `position` pointait initialement sur la ligne, cassant tout
+appelant en aval qui compare `text[position:position+len(title)]` au
+titre lui-même (confirmé par un vrai test de régression dédié). (2)
+`split_by_headings` laissait fuir le vrai préfixe du titre SUIVANT
+(`##`, `1.1`) à la fin du contenu de CHAQUE section -- corrigé en
+bornant chaque section au dernier vrai saut de ligne avant le titre
+suivant, pas directement sur sa position (un no-op réel et inoffensif
+pour PDF/DOCX/HTML, dont la position ne porte déjà aucun préfixe).
+
+**Real verification**: `tests/test_headings_extraction.py` covers all
+5 real per-format extractors (including a real, hand-built PDF/DOCX via
+PyMuPDF/python-docx), the fence-awareness of the Markdown regex, both
+real bugs above (a dedicated regression test for each), real section
+hierarchy nesting (3 real levels deep), `split_by_headings`'s own real
+clean output (no leaked prefix), and `get_section_context`/
+`get_section_path`'s own real position-based lookups, including the
+real "a later sibling drops a stale deeper level" case.
+
+### Partie 3.1.8 -- structure detection
+
+New module `api/services/structure_detection.py`: `detect_structure_markdown`/
+`detect_structure_html`/`detect_structure_text`/`detect_structure_pdf`/
+`detect_structure_docx` (item 2's own literal functions), `StructureElement`/
+`DocumentStructure` (item 3's own literal types), `structure_to_json`/
+`structure_to_markdown` (item 3's own literal functions). Integrated
+into `process_document` (item 4's own literal ask), stored in
+`Document.metadata_json["structure"]`, bounded to
+`_MAX_STRUCTURE_ELEMENTS_IN_METADATA` (200) elements -- the same real,
+deliberate "avoid unbounded metadata growth" bound Partie 3.1.4's own
+`_MAX_TABLE_ROWS_IN_METADATA` already established.
+
+**Cohérence (vision critique 1), a real, deliberate scope choice**:
+`DocumentStructure` is a real, FLAT, document-ordered list --
+`StructureElement.children` exists (this étape's own literal field)
+but stays empty here by design. Nesting headings into a real tree is
+exactly what Partie 3.1.9's own `build_section_hierarchy` already does;
+duplicating that as a second, competing nesting implementation inside
+THIS module would be real, unneeded complexity this étape's own
+literal `DocumentStructure -> liste de StructureElement` wording
+doesn't actually ask for -- a caller wanting the nested tree combines
+this module's own flat headings with Partie 3.1.9 directly.
+
+**Un vrai bug d'intégration trouvé et corrigé en branchant cette étape
+dans le pipeline réel** : pour Markdown ET HTML, `extracted["sections"]`
+(le texte déjà produit par le pipeline existant) a DÉJÀ sa vraie
+syntaxe dépouillée (Markdown : `extract_markdown_sections` ne garde que
+le texte inline réel ; HTML : `readability` + `BeautifulSoup.get_text()`
+retire déjà toutes les balises) -- appeler `detect_structure_markdown`/
+`detect_structure_html` sur ce texte déjà nettoyé n'aurait jamais
+trouvé le moindre titre/liste/bloc de code réel, silencieusement.
+Corrigé en relisant le vrai fichier source BRUT (`extract_txt_text(tmp_path)`,
+la même vraie lecture avec détection d'encodage que
+`html_extraction.py`'s own `_read_html` utilise déjà en interne) pour
+ces deux formats spécifiquement -- PDF/DOCX n'ont jamais ce problème
+(leurs propres fonctions ouvrent directement le vrai fichier).
+
+**Un deuxième vrai bug trouvé en testant `detect_structure_pdf` sur un
+document réel mais court** : la base de référence "corps de texte" de
+`extract_headings_pdf` (Partie 3.1.9) utilisait initialement la
+médiane statistique des tailles de police -- sur un document à
+seulement 2 tailles distinctes, la médiane par indice de liste
+sélectionne la PLUS GRANDE taille (le vrai titre lui-même) comme
+référence, rendant la détection de titre impossible même sur un cas
+évident. Corrigé en pondérant par le nombre réel de CARACTÈRES par
+taille (pas le nombre de spans) -- le corps de texte réel couvre
+presque toujours beaucoup plus de caractères qu'un titre, même sur un
+document court, un signal honnête et robuste là où la médiane ne
+l'était pas.
+
+**Robustesse (vision critique 3)**: chaque fonction retourne une liste
+vide honnête pour un texte vide/sans structure détectable, ne lève
+jamais.
+
+**Real verification**: `tests/test_structure_detection.py` covers all
+5 real per-format detectors (headings/paragraphs/list items/code
+blocks/tables, each format's own real element mix), `structure_to_json`'s
+own real recursive shape, `structure_to_markdown`'s own real rendering.
+`tests/test_documents_integration.py`'s own real, end-to-end PDF test
+gained a real structure assertion (a single real paragraph, honestly
+no heading -- this fixture's own uniform font size), and the real
+Markdown test gained one confirming the real headings extracted from
+the RAW file match the document's own already-established
+`heading_count`/per-chunk heading metadata.
+
 **Stockage (vision critique 2)**: kept indefinitely -- no real
 retention/purge policy was asked for or built, a real, stated scope
 limitation matching this codebase's own established pattern of naming

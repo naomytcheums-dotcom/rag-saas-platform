@@ -378,6 +378,12 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
             assert updated.metadata_json["title"] == "Integration Test PDF"
             assert updated.metadata_json["page_count"] == 1
             assert updated.processed_at is not None
+            # Partie 3.1.8 -- a real structural outline; this fixture's
+            # own uniform font size means no real heading candidate, so
+            # a single real paragraph element is the honest outcome.
+            assert updated.metadata_json["structure"] == [
+                {"type": "paragraph", "level": None, "content": "Real integration test content for process_document.", "children": []},
+            ]
             # Partie 2.2.11 -- real proof of the success path: stamped
             # when this real run started, and no error left behind.
             assert updated.indexing_started_at is not None
@@ -621,6 +627,12 @@ async def test_process_document_runs_the_real_markdown_pipeline_end_to_end(pg_en
             assert updated.metadata_json["author"] == "pytest"
             assert updated.metadata_json["heading_count"] == 2
             assert updated.processed_at is not None
+            # Partie 3.1.8 -- a real structural outline, read from the
+            # real raw Markdown source (not the already-syntax-stripped
+            # extracted["sections"] text -- see process_document's own
+            # comment on why those two are genuinely different here).
+            structure_headings = [e for e in updated.metadata_json["structure"] if e["type"] == "heading"]
+            assert [(h["level"], h["content"]) for h in structure_headings] == [(1, "First Heading"), (2, "Second Heading")]
 
             chunks = (await session.execute(
                 DocumentChunk.__table__.select().where(DocumentChunk.document_id == document_id)

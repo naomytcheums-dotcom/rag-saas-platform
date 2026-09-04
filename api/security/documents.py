@@ -233,8 +233,17 @@ from api.services.image_extraction import extract_images_docx, extract_images_ep
 from api.services.ocr import OCRNotAvailableError, ocr_image_bytes
 from api.services.language_detection import detect_language
 from api.services.pdf_extraction import extract_pdf_images
+from api.services.structure_detection import (
+    detect_structure_docx,
+    detect_structure_html,
+    detect_structure_markdown,
+    detect_structure_pdf,
+    detect_structure_text,
+    structure_to_json,
+)
 from api.services.table_transformation import normalize_table, table_to_json
 from api.services.text_cleaning import clean_text
+from api.services.txt_extraction import extract_txt_text
 from api.services.text_normalization import normalize_text
 from api.services.sitemap_extraction import (
     fetch_sitemap,
@@ -270,6 +279,11 @@ logger = logging.getLogger(__name__)
 # huge table -- the real, complete table is always re-derivable from
 # the source file itself.
 _MAX_TABLE_ROWS_IN_METADATA = 100
+
+# Partie 3.1.8 -- same real, deliberate "avoid unbounded metadata
+# growth" bound as _MAX_TABLE_ROWS_IN_METADATA above, applied to a
+# document's own real structural outline instead of a table's own rows.
+_MAX_STRUCTURE_ELEMENTS_IN_METADATA = 200
 
 # Partie 2.2.3 -- reuses the SAME real Redis this codebase already runs
 # for rate limiting/geoip (api/security/rate_limit.py/geoip.py's own
@@ -3177,9 +3191,46 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             tables_for_metadata = [
                 table_to_json(normalize_table(table))[:_MAX_TABLE_ROWS_IN_METADATA] for table in extracted["tables"]
             ]
+
+            # Partie 3.1.8, item 4 -- a real structural outline in the
+            # document's own metadata. PDF/DOCX need the real file on
+            # disk (still real and present here, deleted only in this
+            # try's own `finally` below); Markdown/HTML/TXT work
+            # directly from the real extracted text instead. No real
+            # structural signal exists for CSV/JSON/XML/EPUB (EPUB
+            # already has its own real chapter-based sectioning,
+            # Partie 2.1.9) -- an honestly empty list, never fabricated.
+            if document.file_type == PDF_CONTENT_TYPE:
+                structure = detect_structure_pdf(tmp_path)
+            elif document.file_type == DOCX_CONTENT_TYPE:
+                structure = detect_structure_docx(tmp_path)
+            elif document.file_type == MARKDOWN_CONTENT_TYPE:
+                # Same real distinction as HTML below: extracted["sections"]'s
+                # own text already had its real Markdown syntax
+                # stripped (api/services/markdown_extraction.py's own
+                # extract_markdown_sections returns real, syntax-free
+                # inline text) -- detect_structure_markdown needs the
+                # real, original `#`/list/fence syntax instead.
+                structure = detect_structure_markdown(extract_txt_text(tmp_path))
+            elif document.file_type == HTML_CONTENT_TYPE:
+                # Real, necessary distinction from the other branches:
+                # extracted["sections"] for HTML is already real PLAIN
+                # TEXT (api/services/html_extraction.py's own
+                # readability-based extraction strips every tag before
+                # this pipeline ever sees it) -- detect_structure_html
+                # needs the real, original markup instead, so the raw
+                # file is re-read here the same real way
+                # html_extraction.py's own _read_html does internally.
+                structure = detect_structure_html(extract_txt_text(tmp_path))
+            elif document.file_type == TXT_CONTENT_TYPE:
+                structure = detect_structure_text("\n\n".join(s["text"] for s in extracted["sections"]))
+            else:
+                structure = []
+
             document.metadata_json = {
                 **extracted["metadata"], "table_count": len(extracted["tables"]), "tables": tables_for_metadata,
                 "image_count": extracted["image_count"], "chunk_count": len(chunk_records), "language": document_language,
+                "structure": structure_to_json(structure)[:_MAX_STRUCTURE_ELEMENTS_IN_METADATA],
             }
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)
