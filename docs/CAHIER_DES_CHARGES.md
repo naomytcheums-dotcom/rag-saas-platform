@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 1/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,10 +950,31 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (1/13)
 
-Pas encore d'UI (React Flow) -- backend uniquement, cohérent avec le
-reste de ce dépôt à ce stade.
+**Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
+
+#### Partie 5.4.1 — Interface visuelle (backend réel, React Flow hors périmètre)
+
+✅ **Nouveau modèle réel** `api/models/workflow.py` (`Workflow`, migration `0062`, RLS activée) : id, organization_id, workspace_id nullable, name, description, `nodes`/`edges` (JSON, la même forme littérale React Flow : `nodes=[{id,type,position,data}]`, `edges=[{id,source,target}]`), status (draft/active/archived), created_by, timestamps, deleted_at (soft delete réel).
+
+✅ **`BLOCK_TYPES`, les 11 types littéraux** déclarés sur le modèle : trigger, llm_call, rag_search, web_search, http_call, condition, code, human, email, calendar, database.
+
+✅ **Tables réelles déclarées ensemble pour tout le lot 5.4** (même approche "déclarer toute l'entité une fois, câbler chaque étape plus tard" que la Partie 5.3.1) : `WorkflowTrigger`/`WorkflowRun` (`api/models/workflow_run.py`, Partie 5.4.2) créées dans la MÊME migration `0062`, réelles mais inertes tant que 5.4.2 ne les consomme pas.
+
+✅ **Nouveau module réel** `api/services/workflows.py` : les 7 fonctions littérales (`add_node`, `add_edge`, `delete_node`, `update_node`, `validate_workflow`, `export_workflow`, `import_workflow` -- ce dernier dans `api/security/workflows.py` car il écrit réellement en base).
+
+✅ **Robustesse (vision critique 3) : intégrité en cascade réelle** -- `delete_node` retire aussi toute arête réelle qui le référençait (jamais d'arête en suspens). `validate_workflow` retourne la liste COMPLÈTE des erreurs réelles (jamais juste la première), utilisée à la fois par l'endpoint `/validate` et par `import_workflow`.
+
+✅ **Vraie faille de contournement corrigée à la conception** : `create_workflow`/`update_workflow` valident réellement `nodes`/`edges` (même discipline "pas de contournement via l'endpoint générique" que toutes les corrections précédentes de ce lot) -- jamais de graphe structurellement invalide persisté, y compris via l'endpoint générique.
+
+✅ **6 endpoints réels**, les 6 littéraux -- create/list org-scopés et Manager+ (déviation réelle du spec littéral : chemins `POST/GET /workflows` sans `{org_id}`, adaptés en `/organizations/{org_id}/workflows` même raisonnement que la Partie 5.3.1) ; get/update/delete/validate résolvent le workflow ET le rôle réel de l'appelant ensemble.
+
+**Cohérence (vision critique 1)** : chaque workflow est réellement lié à une organisation (`organization_id` NOT NULL) et optionnellement à un workspace.
+
+**Performance (vision critique 2)** : `nodes`/`edges` en JSON -- toujours lus/écrits en bloc (rendu, validation, export), jamais interrogés nœud par nœud ; même raisonnement que `AgentRunRecord.trace`. Pas de mesure réelle de fluidité d'un canvas qui n'existe pas encore côté frontend (honnête, cf. décision de périmètre ci-dessus).
+
+Tests réels dédiés (26 tests), voir `tests/test_workflows.py`.
 
 ---
 

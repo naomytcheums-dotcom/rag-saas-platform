@@ -32,7 +32,7 @@ from api.routers import (
     email_domains, enterprise_sso, external_sources, human_approval, invitations, oauth, organization_branding,
     organization_members, organization_settings, organizations, password, quotas, reindex_schedules,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, two_factor,
-    usage, user_limits, verify, webauthn, white_label, workspaces,
+    usage, user_limits, verify, webauthn, white_label, workflows, workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
@@ -165,6 +165,7 @@ app.include_router(admin_users.router)
 app.include_router(organizations.router)
 app.include_router(organization_members.router)
 app.include_router(workspaces.router)
+app.include_router(workflows.router)
 app.include_router(resource_permissions.router)
 app.include_router(teams.router)
 app.include_router(invitations.router)

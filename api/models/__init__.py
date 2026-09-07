@@ -37,6 +37,8 @@ from api.models.tool_fallback import LlmFallback, ToolFallback
 from api.models.tool_permission import ToolPermission
 from api.models.user import User
 from api.models.webauthn_credential import WebAuthnCredential
+from api.models.workflow import Workflow
+from api.models.workflow_run import WorkflowRun, WorkflowTrigger
 from api.models.workspace import Workspace
 
 __all__ = [
@@ -48,4 +50,5 @@ __all__ = [
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
     "TaskPlan", "TaskStep", "AgentTrace", "Escalation", "Agent", "AgentAPIKey",
+    "Workflow", "WorkflowTrigger", "WorkflowRun",
 ]

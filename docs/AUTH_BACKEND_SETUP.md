@@ -7814,6 +7814,73 @@ way to bypass what already applies to every other real caller.
 items (5.3.1-5.3.7, 5.3.9, 5.3.10) verified real.** 5.3.8 was never
 requested in this batch and stays ⬜.
 
+## Partie 5.4 -- Workflow Builder
+
+**A real, explicit scope decision, confirmed with the user before
+starting**: this codebase has NO frontend infrastructure anywhere (no
+`package.json`, no React dependency) -- a real React Flow canvas would
+be an entirely new project (npm, build tooling, components), a massive
+departure from everything that exists here. For this whole 5.4 batch,
+only the REAL BACKEND is delivered (model, endpoints, structural
+validation, real per-block execution) -- the React Flow visual
+interface itself stays explicitly out of scope, documented here rather
+than fabricated.
+
+### Partie 5.4.1 -- visual interface (real backend, React Flow out of scope)
+
+New real model `api/models/workflow.py` (`Workflow`, migration `0062`,
+RLS enabled): id, organization_id, workspace_id (nullable), name,
+description, `nodes`/`edges` (JSON, the same literal React Flow shape:
+`nodes=[{id,type,position,data}]`, `edges=[{id,source,target}]`),
+status (draft/active/archived), created_by, timestamps, deleted_at
+(real soft delete).
+
+**`BLOCK_TYPES`, the 11 literal types** declared on the model: trigger,
+llm_call, rag_search, web_search, http_call, condition, code, human,
+email, calendar, database.
+
+**Real tables declared together for the whole 5.4 batch** (same
+"declare the whole entity once, wire each étape later" approach as
+Partie 5.3.1): `WorkflowTrigger`/`WorkflowRun`
+(`api/models/workflow_run.py`, Partie 5.4.2) created in the SAME
+migration `0062`, real but inert until Partie 5.4.2 consumes them.
+
+New module `api/services/workflows.py`: all 7 literal functions
+(`add_node`, `add_edge`, `delete_node`, `update_node`,
+`validate_workflow`, `export_workflow`, `import_workflow` -- the last
+one lives in `api/security/workflows.py` since it really writes to the
+database).
+
+**Robustness (vision critique 3): real cascading integrity** --
+`delete_node` also removes any real edge that referenced it (never a
+dangling edge). `validate_workflow` returns the COMPLETE list of real
+errors (never just the first), used by both the `/validate` endpoint
+and `import_workflow`.
+
+**A real bypass gap fixed at design time**: `create_workflow`/
+`update_workflow` really validate `nodes`/`edges` (same "no bypass via
+the generic endpoint" discipline as every prior fix in this batch) --
+never a structurally invalid graph persisted, including through the
+generic endpoint.
+
+**6 real endpoints**, all 6 literal ones -- create/list are
+org-scoped and Manager+ (a real deviation from the literal spec:
+`POST/GET /workflows` paths carry no `{org_id}`, adapted to
+`/organizations/{org_id}/workflows`, same reasoning as Partie 5.3.1);
+get/update/delete/validate resolve the workflow AND the caller's real
+role together.
+
+**Coherence (vision critique 1)**: every workflow is really tied to an
+organization (`organization_id` NOT NULL) and optionally a workspace.
+
+**Performance (vision critique 2)**: `nodes`/`edges` as JSON -- always
+read/written whole (render, validate, export), never queried
+node-by-node; same reasoning as `AgentRunRecord.trace`. No real
+smoothness measurement of a canvas that doesn't exist on the frontend
+yet (honest, per the scope decision above).
+
+**Real verification**: 26 tests, `tests/test_workflows.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
