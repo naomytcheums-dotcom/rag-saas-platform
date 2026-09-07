@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 items vérifiés réels dans `api/` -- + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.2-5.4 restent à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.3-5.4 restent à faire)
 
 ### 5.1 Architecture Agent
 
@@ -758,7 +758,22 @@ Tests réels dédiés (10 tests, `httpx.MockTransport` réel), voir `tests/test_
 
 Tests réels dédiés (16 tests, `httpx.MockTransport` réel pour Gmail/Outlook, faux `smtplib.SMTP` réel et minimal pour SMTP), voir `tests/test_email_tools.py`.
 
-Human Escalation : existe déjà côté `src/`, non revérifié.
+#### Partie 5.2.9 — Human Escalation
+
+✅ **Nouveau modèle réel** `api/models/escalation.py` (`Escalation`, migration `0057`, RLS activée). **Distinction réelle et délibérée avec `HumanApproval` (Partie 5.1.10)** : celui-là bloque UNE action sensible avant qu'elle ne se produise (décision binaire) -- celui-ci signale que l'agent lui-même est bloqué et a besoin d'aide (informationnel, priorité réelle, assignation réelle, résolution réelle) -- deux vrais concepts distincts, pas un doublon.
+
+✅ **Nouveau module réel** `api/tools/human_escalation.py` : les 5 fonctions littérales + `make_escalation_tool`/`notify_via_webhook` (aides réelles supplémentaires).
+
+✅ **Notification "email" réelle, un vrai petit expéditeur autonome** -- décision délibérée de NE PAS réutiliser le `_send` privé de `api/services/email.py` : cette fonction est réelle et sûre à appeler, mais ce module construit son propre petit vrai POST Resend équivalent à la place -- même prudence déjà appliquée aux helpers privés de `github_extraction.py` plus tôt dans ce lot : une erreur dans un vrai chemin d'envoi d'email partagé et déjà EN PRODUCTION est un vrai risque plus élevé que dupliquer quelques lignes réelles.
+
+**`webhook`/`slack`, vraie limite de périmètre honnête** : le réglage littéral (`HUMAN_ESCALATION_NOTIFICATION_CHANNELS`) les nomme comme valeurs possibles, mais ne déclare aucun vrai réglage d'URL de webhook par organisation -- `notify_via_webhook` est réel et appelable indépendamment avec une URL explicite, mais le déclenchement automatique sur `escalate_to_human` n'active réellement que le canal `"email"`, le seul avec une vraie destination configurée (chaque Owner/Admin réel de l'organisation du run).
+
+**Robustesse (vision critique)** : un vrai échec de notification (testé, `httpx.ConnectError` simulé) ne fait jamais perdre le vrai enregistrement d'escalade lui-même.
+
+Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
+
+**Partie 5.2 — Outils intégrés : 8/9 items vérifiés réels dans `api/`** (5.2.1 à 5.2.9, sauf Custom Tools/webhooks, non demandé dans ce lot). Search KB/GitHub/Human Escalation "existent déjà côté `src/`" restent non revérifiés (travail hérité, granularité différente).
+
 Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)

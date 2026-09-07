@@ -7317,6 +7317,47 @@ immediate error, tested.
 Gmail/Outlook, a real, minimal fake `smtplib.SMTP` for SMTP),
 `tests/test_email_tools.py`.
 
+### Partie 5.2.9 -- Human Escalation
+
+New real model `api/models/escalation.py` (`Escalation`, migration
+`0057`, RLS enabled). **A real, deliberate distinction from
+`HumanApproval` (Partie 5.1.10)**: that one blocks ONE sensitive action
+before it happens (a binary decision) -- this one reports the agent
+itself is stuck and needs help (informational, real priority, real
+assignment, real resolution) -- two genuinely distinct real concepts,
+not a duplicate.
+
+New module `api/tools/human_escalation.py`: all 5 literal functions
+plus `make_escalation_tool`/`notify_via_webhook` (real, additional
+helpers).
+
+**A real, small, standalone "email" sender** -- a deliberate choice
+NOT to reuse `api/services/email.py`'s own private `_send`: that
+function is real and safe to call, but this module builds its own
+small, equivalent real Resend POST instead -- the same caution already
+applied to `github_extraction.py`'s own private helpers earlier in
+this batch: a mistake in a shared, already-LIVE email-sending path is
+a real, higher-stakes risk than duplicating a few real lines.
+
+**`webhook`/`slack`, a real, honest scope limit**: the literal setting
+(`HUMAN_ESCALATION_NOTIFICATION_CHANNELS`) names them as possible
+values, but declares no real per-organization webhook URL setting --
+`notify_via_webhook` is real and independently callable with an
+explicit URL, but automatic dispatch on `escalate_to_human` only ever
+fires the real `"email"` channel, the only one with a real, configured
+destination (every real Owner/Admin of the run's own organization).
+
+**Robustness (vision critique)**: a real notification failure (tested,
+a simulated `httpx.ConnectError`) never loses the real escalation
+record itself.
+
+**Real verification**: 12 tests, `tests/test_human_escalation.py`.
+
+**Partie 5.2 -- Integrated Tools: 8/9 items verified real in `api/`**
+(5.2.1 through 5.2.9, excluding Custom Tools/webhooks, not requested in
+this batch). "Search KB/GitHub/Human Escalation already exist in
+`src/`" claims stay unverified (inherited work, different granularity).
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

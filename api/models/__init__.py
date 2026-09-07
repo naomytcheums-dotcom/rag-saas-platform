@@ -12,6 +12,7 @@ from api.models.agent_trace import AgentTrace
 from api.models.audit_log import AuditLog
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.conversation import Conversation, ConversationMessage
+from api.models.escalation import Escalation
 from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection
 from api.models.human_approval import HumanApproval
 from api.models.invitation import Invitation
@@ -44,5 +45,5 @@ __all__ = [
     "ResourcePermission", "Team", "TeamMember", "Invitation", "OrganizationQuota",
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
-    "TaskPlan", "TaskStep", "AgentTrace",
+    "TaskPlan", "TaskStep", "AgentTrace", "Escalation",
 ]

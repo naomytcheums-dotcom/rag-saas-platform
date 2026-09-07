@@ -725,6 +725,7 @@ class Settings(BaseSettings):
 
     # -- Human escalation tool (Partie 5.2.9) ---------------------------------------
     HUMAN_ESCALATION_ENABLED: bool = True
+    HUMAN_ESCALATION_PRIORITY_LEVELS: list[str] = ["low", "medium", "high", "critical"]
     HUMAN_ESCALATION_NOTIFICATION_CHANNELS: list[str] = ["email"]
 
     # -- Celery -------------------------------------------------------------
