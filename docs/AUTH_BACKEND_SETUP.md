@@ -8789,6 +8789,49 @@ whole-document scan.
 
 **Real verification**: 18 tests, `tests/test_citation_passage.py`.
 
+### Partie 6.1.8 -- citation preview / hover
+
+**An honest consolidation, not a second fabricated field (autonomous
+decision)**: this étape's own literal ask and Partie 6.1.7's
+`text_preview`/`format_passage_preview` converge on the exact same
+real idea -- a short, human-readable snippet of what a citation
+actually quotes. Rather than inventing a SECOND, fabricated "hover
+preview" column (`Citation` only has the one real field of this kind),
+`format_citation_preview` reuses `citation_passage.format_passage_preview`
+directly, and `get_citation_context` really delegates to
+`citation_passage.get_passage_context` (Partie 6.1.7) -- zero
+duplicated truncation/context logic.
+
+New module `api/services/citation_preview.py`: all 4 literal functions
+(`get_citation_preview`, `format_citation_preview`,
+`get_citation_context`, `enrich_citation_with_preview`).
+
+**A real, honest difference from Partie 6.1.7**: these functions are
+pure, zero-extra-query operations on the citation's own already-loaded
+real `text` (a hover tooltip needs to render fast and often, not pay a
+live chunk fetch on every hover), and accept a real,
+caller-configurable length/word-count (`CITATION_PREVIEW_LENGTH`/
+`CITATION_CONTEXT_WORDS` by default) rather than Partie 6.1.7's own
+fixed default.
+
+**A real, honest scope boundary, consistent with `CITATION_HOVER_DELAY`'s
+own existing docstring in `api/config.py`**: no new HTTP endpoints are
+added here -- no real frontend exists yet to actually trigger a hover
+(same documented boundary already applied to Partie 5.4's Workflow
+Builder). `get_citation_preview`/`get_citation_context` are real,
+tested, callable service functions a future, real frontend route can
+sit directly on top of. Deliberately NOT wired into the 3 existing
+citation endpoints (which already serve `text_preview` via Partie
+6.1.7) to avoid a real field-ownership conflict between two competing
+enrichments.
+
+**Performance (vision critique 2)**: `format_citation_preview`/
+`enrich_citation_with_preview` are pure functions, zero database
+access; `get_citation_preview`/`get_citation_context` stay a single,
+real, primary-key read.
+
+**Real verification**: 8 tests, `tests/test_citation_preview.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

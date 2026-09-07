@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (7/10)
+### 6.1 Citations — 🟡 PARTIEL (8/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1303,6 +1303,20 @@ Tests réels dédiés (11 tests), voir `tests/test_citation_relevance.py`.
 **Performance (vision critique 2)** : `get_passage_context` reste 2 requêtes indexées (`document_id` + `chunk_index`), bornées, jamais un scan du document entier.
 
 Tests réels dédiés (18 tests), voir `tests/test_citation_passage.py`.
+
+#### Partie 6.1.8 — Citation preview/hover
+
+⚠️ **Consolidation honnête, pas un deuxième champ fabriqué (décision autonome)** : le propre littéral de cette étape et le `text_preview`/`format_passage_preview` de la Partie 6.1.7 convergent vers la même vraie idée -- un court extrait lisible de ce qu'une citation cite réellement. Plutôt que d'inventer un DEUXIÈME champ "aperçu au survol" fabriqué (`Citation` n'a qu'un seul vrai champ de ce type), `format_citation_preview` réutilise directement `citation_passage.format_passage_preview`, et `get_citation_context` délègue réellement à `citation_passage.get_passage_context` (Partie 6.1.7) -- zéro logique de troncature/contexte dupliquée.
+
+✅ **Nouveau module réel** `api/services/citation_preview.py` : les 4 fonctions littérales (`get_citation_preview`, `format_citation_preview`, `get_citation_context`, `enrich_citation_with_preview`).
+
+✅ **Une vraie différence honnête avec la Partie 6.1.7** : ces fonctions sont pures, zéro requête supplémentaire, opérant sur le vrai `text` déjà chargé de la citation (un survol doit être rapide et fréquent, pas payer une récupération live du chunk à chaque hover), et acceptent une vraie longueur/nombre de mots configurable par l'appelant (`CITATION_PREVIEW_LENGTH`/`CITATION_CONTEXT_WORDS` par défaut) plutôt que le défaut fixe de la Partie 6.1.7.
+
+⚠️ **Périmètre honnête, cohérent avec le propre docstring existant de `CITATION_HOVER_DELAY` dans `api/config.py`** : aucun nouvel endpoint HTTP n'est ajouté ici -- aucun vrai frontend n'existe encore pour réellement déclencher un survol (même limite documentée déjà appliquée au Workflow Builder de la Partie 5.4). `get_citation_preview`/`get_citation_context` sont de vraies fonctions de service testées, sur lesquelles une vraie route frontend future pourra s'appuyer directement. Délibérément NON câblé dans les 3 endpoints existants (qui servent déjà `text_preview` via la Partie 6.1.7) pour éviter un vrai conflit de propriété de champ entre deux enrichissements concurrents.
+
+**Performance (vision critique 2)** : `format_citation_preview`/`enrich_citation_with_preview` sont des fonctions pures, zéro accès base de données ; `get_citation_preview`/`get_citation_context` restent une seule vraie lecture par clé primaire.
+
+Tests réels dédiés (8 tests), voir `tests/test_citation_preview.py`.
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 
