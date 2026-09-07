@@ -18,8 +18,9 @@ from api.models.agent import Agent
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
-    AgentCreateRequest, AgentModelResponse, AgentModelUpdateRequest, AgentResponse, AgentUpdateRequest,
-    SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse,
+    AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentModelResponse,
+    AgentModelUpdateRequest, AgentResponse, AgentUpdateRequest, KnowledgeBaseOption, SystemPromptPreviewResponse,
+    SystemPromptUpdateRequest, SystemPromptVariablesResponse,
 )
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
@@ -27,6 +28,9 @@ from api.security.agents import (
 )
 from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
+from api.services.agent_knowledge_base import (
+    AgentKnowledgeBaseError, get_agent_kb_config, get_available_knowledge_bases, set_agent_knowledge_base,
+)
 from api.services.agent_models import (
     AgentModelError, get_agent_model, get_available_models, set_agent_model,
 )
@@ -41,7 +45,10 @@ async def create_agent_endpoint(
     caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
-    agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
+    try:
+        agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
+    except AgentKnowledgeBaseError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(agent)
     return agent
@@ -73,7 +80,10 @@ async def update_agent_endpoint(
     agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
 ):
     agent, _caller = agent_ctx
-    updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
+    try:
+        updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
+    except AgentKnowledgeBaseError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(updated)
     return updated
@@ -199,3 +209,53 @@ async def list_provider_models_endpoint(provider: str, _current_user: User = Dep
         return get_available_models(provider)
     except AgentModelError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+# ------------------------------------- Partie 5.3.4 -- knowledge base selection -------------------------------------
+
+
+@router.get("/agents/{agent_id}/knowledge-base", response_model=AgentKnowledgeBaseResponse)
+async def get_agent_knowledge_base_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    config = await get_agent_kb_config(db, agent.id)
+    return AgentKnowledgeBaseResponse(knowledge_base_id=agent.knowledge_base_id, config=config)
+
+
+@router.patch("/agents/{agent_id}/knowledge-base", response_model=AgentKnowledgeBaseResponse)
+async def update_agent_knowledge_base_endpoint(
+    payload: AgentKnowledgeBaseUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    # A real, given `knowledge_base_id` is honored (including an
+    # explicit `null` to unset it); an OMITTED one leaves the agent's
+    # current real value untouched (this étape's own PATCH can update
+    # just `config` alone).
+    fields_set = payload.model_fields_set
+    knowledge_base_id = payload.knowledge_base_id if "knowledge_base_id" in fields_set else agent.knowledge_base_id
+    try:
+        await set_agent_knowledge_base(db, agent.id, knowledge_base_id, payload.config)
+    except AgentKnowledgeBaseError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(agent)
+    config = await get_agent_kb_config(db, agent.id)
+    return AgentKnowledgeBaseResponse(knowledge_base_id=agent.knowledge_base_id, config=config)
+
+
+@router.get("/agents/{agent_id}/knowledge-base/config")
+async def get_agent_kb_config_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_agent_kb_config(db, agent.id)
+
+
+@router.get("/agents/{agent_id}/knowledge-base/options", response_model=list[KnowledgeBaseOption])
+async def list_agent_knowledge_base_options_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_available_knowledge_bases(db, agent.organization_id)

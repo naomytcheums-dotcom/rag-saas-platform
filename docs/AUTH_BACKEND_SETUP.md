@@ -7485,6 +7485,53 @@ membership check (impossible on this literal path).
 
 **Real verification**: 16 tests, `tests/test_agent_models.py`.
 
+### Partie 5.3.4 -- knowledge base selection
+
+New module `api/services/agent_knowledge_base.py`: all 5 literal
+functions (`get_agent_knowledge_base`, `set_agent_knowledge_base`,
+`validate_knowledge_base_access`, `get_agent_kb_config`,
+`get_available_knowledge_bases`).
+
+**A real security gap found and fixed while implementing this étape**:
+neither `create_agent` nor `update_agent` (Partie 5.3.1) previously
+checked that a given `knowledge_base_id` actually belonged to the SAME
+organization as the agent -- nothing stopped a manager from pointing
+an agent at another organization's real workspace (its `id`, a real
+UUID, guessable/leaked elsewhere, e.g. in a URL). `validate_knowledge_base_access`
+closes this real gap, and is now called from `create_agent` AND
+`update_agent` (`api/security/agents.py`), not just from the new
+dedicated endpoint. Tested explicitly.
+
+**`get_available_knowledge_bases`, real reuse, not a second concept**:
+lists the real `workspaces` in the organization -- this codebase has
+no dedicated `KnowledgeBase` table, a `Workspace` already IS the real
+document container (same reasoning as Partie 5.3.1).
+
+**`get_agent_kb_config` reuses the real, already-established defaults**
+(`DEFAULT_SETTINGS["top_k"]`/`["score_threshold"]` from Partie
+3.3.6/3.3.7) rather than a second, hardcoded set of values -- same
+pattern as `agent_models.get_default_model_config` (Partie 5.3.3).
+
+**4 real endpoints** -- `GET/PATCH /agents/{agent_id}/knowledge-base`
+(member reads, manager updates), `GET
+/agents/{agent_id}/knowledge-base/config` (effective config), `GET
+/agents/{agent_id}/knowledge-base/options` (real KBs available in the
+agent's own organization).
+
+**Robustness (vision critique)**: a PATCH carrying only `config` (no
+`knowledge_base_id`) does NOT clear an already-configured KB -- a real
+distinction between "field omitted" and "field explicitly set to
+`null`" via `payload.model_fields_set`, tested. An explicit
+`knowledge_base_id: null` remains a real way to unset an agent's KB
+(falls back to its own `workspace_id`'s documents).
+
+**Security (vision critique)**: cross-organization rejection tested at
+3 levels (the pure function, the dedicated endpoint, and the generic
+`create_agent`/`update_agent`). Manager-only writes (403 for a member,
+tested).
+
+**Real verification**: 18 tests, `tests/test_agent_knowledge_base.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

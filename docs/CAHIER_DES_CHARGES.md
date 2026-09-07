@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 3/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 4/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (3/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (4/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -831,6 +831,24 @@ Tests réels dédiés (15 tests), voir `tests/test_agent_prompts.py`.
 **Déviation réelle et documentée** : `GET /models`/`GET /models/{provider}` n'ont littéralement pas de `{org_id}` dans leur chemin -- gatés par `get_current_user` seul (tout utilisateur authentifié réel peut lire ce catalogue réel, statique, non secret), pas par une vérification d'appartenance à une organisation (impossible sur ce chemin littéral).
 
 Tests réels dédiés (16 tests), voir `tests/test_agent_models.py`.
+
+#### Partie 5.3.4 — Sélection de la Knowledge Base
+
+✅ **Nouveau module réel** `api/services/agent_knowledge_base.py` : les 5 fonctions littérales (`get_agent_knowledge_base`, `set_agent_knowledge_base`, `validate_knowledge_base_access`, `get_agent_kb_config`, `get_available_knowledge_bases`).
+
+✅ **Vraie faille de sécurité corrigée, découverte en implémentant cette étape** : ni `create_agent` ni `update_agent` (Partie 5.3.1) ne vérifiaient auparavant qu'un `knowledge_base_id` donné appartenait réellement à la MÊME organisation que l'agent -- rien n'empêchait un manager de pointer un agent vers le vrai workspace d'une AUTRE organisation (son `id`, un vrai UUID, pouvant être deviné/récupéré ailleurs, par ex. dans une URL). `validate_knowledge_base_access` ferme cet écart réel, et est maintenant appelée depuis `create_agent` ET `update_agent` (`api/security/agents.py`), pas seulement depuis le nouvel endpoint dédié. Testé explicitement (`test_set_agent_knowledge_base_rejects_a_workspace_from_another_org`, `test_create_agent_rejects_a_cross_org_knowledge_base_id`).
+
+✅ **`get_available_knowledge_bases`, vraie réutilisation, pas un second concept** : liste les vrais `workspaces` de l'organisation -- ce dépôt n'a pas de table `KnowledgeBase` dédiée, un `Workspace` EST déjà le vrai conteneur de documents (même raisonnement que Partie 5.3.1).
+
+✅ **`get_agent_kb_config` réutilise les vrais défauts déjà établis** (`DEFAULT_SETTINGS["top_k"]`/`["score_threshold"]` de la Partie 3.3.6/3.3.7) plutôt qu'un second jeu de valeurs codées en dur -- même schéma que `agent_models.get_default_model_config` (Partie 5.3.3).
+
+✅ **4 endpoints réels** -- `GET/PATCH /agents/{agent_id}/knowledge-base` (member lit, manager modifie), `GET /agents/{agent_id}/knowledge-base/config` (config effective), `GET /agents/{agent_id}/knowledge-base/options` (vraies KB disponibles dans l'organisation de l'agent).
+
+**Robustesse (vision critique)** : un PATCH ne portant que `config` (sans `knowledge_base_id`) ne réinitialise PAS la KB déjà configurée -- distinction réelle entre "champ omis" et "champ explicitement mis à `null`" via `payload.model_fields_set`, testé (`test_update_agent_knowledge_base_config_only_does_not_clear_the_kb`). `knowledge_base_id: null` explicite reste un vrai moyen de désactiver la KB d'un agent (repli sur les documents de son propre `workspace_id`).
+
+**Sécurité (vision critique)** : rejet cross-organisation testé à 3 niveaux (fonction pure, endpoint dédié, `create_agent`/`update_agent` génériques). Modification réservée aux managers (403 pour un member, testé).
+
+Tests réels dédiés (18 tests), voir `tests/test_agent_knowledge_base.py`.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

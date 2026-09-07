@@ -92,3 +92,22 @@ class AgentModelUpdateRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     top_p: float | None = None
+
+
+class AgentKnowledgeBaseResponse(BaseModel):
+    knowledge_base_id: uuid.UUID | None
+    config: dict
+
+
+class AgentKnowledgeBaseUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    knowledge_base_id: uuid.UUID | None = None
+    config: dict | None = None
+
+
+class KnowledgeBaseOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str

@@ -27,6 +27,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.agent import Agent, AgentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.services.agent_knowledge_base import validate_knowledge_base_access
 
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
@@ -64,7 +65,14 @@ async def require_agent_manager(
 
 
 async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict, created_by: uuid.UUID | None) -> Agent:
-    """Item 3's own literal function."""
+    """Item 3's own literal function.
+
+    Partie 5.3.4: a real, given `knowledge_base_id` is validated as
+    belonging to this SAME organization before the row is ever created
+    -- see `api/services/agent_knowledge_base.py`'s own module
+    docstring for the real cross-organization gap this closes."""
+    if data.get("knowledge_base_id") is not None:
+        await validate_knowledge_base_access(db, organization_id, data["knowledge_base_id"])
     agent = Agent(
         organization_id=organization_id, created_by=created_by,
         workspace_id=data.get("workspace_id"), name=data["name"], description=data.get("description"),
@@ -81,10 +89,16 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
 
 async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Agent | None:
     """Item 3's own literal function -- real, partial update (only
-    the real, given fields change)."""
+    the real, given fields change).
+
+    Partie 5.3.4: a real, given `knowledge_base_id` is validated as
+    belonging to this SAME organization before it's applied (see
+    `create_agent`'s own docstring above)."""
     agent = await db.get(Agent, agent_id)
     if agent is None or agent.deleted_at is not None:
         return None
+    if data.get("knowledge_base_id") is not None:
+        await validate_knowledge_base_access(db, agent.organization_id, data["knowledge_base_id"])
     for field in (
         "name", "description", "system_prompt", "system_prompt_template", "workspace_id", "memory_enabled",
         "memory_window_size", "guardrails_enabled", "human_approval_required", "knowledge_base_id",
