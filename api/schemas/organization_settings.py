@@ -25,6 +25,7 @@ class OrganizationSettingsResponse(BaseModel):
     retrieval_strategy: str
     max_tokens: int
     citation_required: bool
+    citation_count: int
     language: str
     timezone: str
     score_threshold: float
@@ -70,6 +71,10 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # that étape's own literal ask ("Max: 32768").
     max_tokens: int | None = Field(default=None, ge=1, le=settings.MAX_TOKENS_CEILING)
     citation_required: bool | None = None
+    # Partie 6.1.1 -- real bound shared with api.services.citations'
+    # own get_citation_count resolver (never a second, independently
+    # hardcoded ceiling).
+    citation_count: int | None = Field(default=None, ge=1, le=settings.CITATION_MAX_COUNT)
     language: str | None = Field(default=None, pattern=r"^[a-z]{2}(-[A-Z]{2})?$", description="e.g. 'en', 'fr', 'en-US'")
     timezone: str | None = Field(default=None, description="IANA timezone name, e.g. 'UTC', 'Europe/Paris'")
     # Partie 3.3.7 -- real, fixed 0.0-1.0 bounds (a real, normalized

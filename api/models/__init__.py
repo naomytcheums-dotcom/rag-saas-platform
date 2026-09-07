@@ -12,6 +12,7 @@ from api.models.agent_memory import AgentMemoryItem, AgentSession
 from api.models.agent_run import AgentRunRecord
 from api.models.agent_trace import AgentTrace
 from api.models.audit_log import AuditLog
+from api.models.citation import Citation
 from api.models.consent_reactivation_token import ConsentReactivationToken
 from api.models.conversation import Conversation, ConversationMessage
 from api.models.custom_tool import CustomTool
@@ -27,6 +28,7 @@ from api.models.organization_quota import OrganizationQuota
 from api.models.password_history import PasswordHistory
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.resource_permission import ResourcePermission
+from api.models.response import Response
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
@@ -54,4 +56,5 @@ __all__ = [
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
     "TaskPlan", "TaskStep", "AgentTrace", "Escalation", "Agent", "AgentAPIKey",
     "Workflow", "WorkflowTrigger", "WorkflowRun", "WorkflowHumanInput", "CustomTool", "WorkflowVersion",
+    "Response", "Citation",
 ]

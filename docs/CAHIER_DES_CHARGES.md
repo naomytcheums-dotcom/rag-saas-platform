@@ -1170,12 +1170,41 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ---
 
-## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL (~4/22)
+## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-| Section | Statut |
-|---|---|
-| 6.1 Citations (10 items) | Citations basiques + source document existent ; page/URL/chunk-id/preview/sources secondaires : ⬜ |
-| 6.2 Anti-hallucination (12 items) | Code écrit (`hallucination_detection.py`, `llm_judge.py`) mais **jamais validé en conditions réelles** — bloqué sur crédit API selon `README.md` |
+### 6.1 Citations — 🟡 PARTIEL (1/10)
+
+**Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
+
+#### Partie 6.1.1 — Citations cliquables
+
+✅ **Nouveaux modèles réels** : `api/models/response.py` (`Response`, la vraie fondation manquante) et `api/models/citation.py` (`Citation`), migration `0066`, RLS activée sur les deux. **Tous les champs des Parties 6.1.1 à 6.1.9 déclarés ensemble** (même approche "déclarer toute l'entité une fois, câbler chaque étape plus tard" que `Agent`/`Workflow`) : `document_name`/`document_type` (6.1.2), `source_section`/`source_heading` (6.1.3), `chunk_index` (6.1.5), `relevance_label` (6.1.6), `text_preview` (6.1.7), `is_primary` (6.1.9) sont réels mais inertes tant que leur propre étape ne les consomme pas.
+
+✅ **Robustesse (vision critique 3) : que se passe-t-il si la source est supprimée** -- `Citation.document_id`/`chunk_id` sont de vraies FK avec `ondelete="SET NULL"`, délibérément PAS `CASCADE` : une vraie citation est un enregistrement historique de ce qu'une vraie réponse a réellement cité AU MOMENT DE LA GÉNÉRATION ; un document ou chunk supprimé plus tard ne doit jamais supprimer silencieusement la citation qui le citait déjà. `document_name`/`source_title`/`text` sont de vraies copies DÉNORMALISÉES capturées au moment de la citation, pour cette même raison -- elles restent réelles et lisibles même après que `document_id`/`chunk_id` passent à `NULL`.
+
+✅ **Nouveau module réel** `api/services/citations.py` : les 6 fonctions littérales (`add_citations_to_response`, `select_top_citations`, `format_citation`, `get_citations_by_response`, `validate_citation`, `get_citation_count`) + `get_citations_by_document`/`get_citation` (plomberie réelle pour les endpoints).
+
+✅ **`select_top_citations`, robustesse honnête (vision critique 3)** : filtre par `CITATION_MIN_SCORE` même si cela laisse moins de `citation_count` résultats -- une vraie réponse construite à partir de sources faibles doit montrer moins de vraies citations, jamais un faux sentiment de cinq sources également fortes.
+
+✅ **Détection réelle et honnête des positions de citation** : `generate_response` demande au vrai LLM de citer ses sources en ligne via `[1]`/`[2]`/... -- quand la vraie réponse générée contient réellement ce marqueur, `position_start`/`position_end` le localisent ; sinon (un LLM réel n'est jamais garanti de suivre les instructions), les deux restent `None` plutôt qu'une supposition fabriquée.
+
+✅ **Nouveau module réel** `api/services/generation.py` (`generate_response`) : le vrai équivalent multi-tenant de `src/generation.py` -- vraie recherche RAG (`search_with_context`, Partie 3.4.x) alimentant un vrai appel LLM (`chat_completion`, Partie 4.1.7), persistant une vraie `Response` avec ses vraies citations attachées (5 par défaut). Délibérément séparé d'`AgentOrchestrator` (Partie 5.1.1) -- un `Response` est un simple enregistrement réel "question entrée, réponse citée sortie", sans les concepts propres à un agent (mémoire, sélection d'outils, planification) ; les deux réutilisent les MÊMES briques réelles (`resolve_llm_config`/`chat_completion`), aucune n'en réimplémente une seconde.
+
+✅ **`citation_count`, vraie intégration dans `organization_settings`** : `DEFAULT_SETTINGS["citation_count"] = 5`, réel champ typé et validé dans `OrganizationSettingsResponse`/`OrganizationSettingsUpdateRequest` (borné par `CITATION_MAX_COUNT`, même réutilisation de borne partagée que `top_k`/`TOP_K_MAX`). Ferme réellement l'un des "3 réglages jamais lus par le pipeline réel" honnêtement documentés depuis la Partie 1.3.9 (`citation_required`/`language`/`timezone`) -- il n'en reste maintenant réellement que 2 (`language`/`timezone`, hors périmètre de la Partie 6).
+
+✅ **Intégration réelle dans `AgentOrchestrator.run_agent`** : nouveau paramètre optionnel `citation_chunks` -- quand donné ET qu'un vrai `organization_id` est fourni (un `Response` a réellement besoin d'un vrai tenant), un run réussi persiste aussi une vraie `Response` + ses vraies `Citation`s, référencée en retour via le nouveau `AgentRunRecord.response_id` (migration `0067`, FK réelle `SET NULL`). Réel no-op rétrocompatible sinon -- aucun appelant existant n'est affecté (testé explicitement).
+
+✅ **`RAG_search` retourne déjà les sources, aucune modification nécessaire** : `search_with_context` (Partie 3.4.x) construit déjà `document_name`/`file_type`/`metadata`/`chunk_id`/`document_id` pour chaque résultat réel -- réutilisé tel quel, pas de capacité fabriquée là où l'existant suffisait déjà.
+
+**Cohérence (vision critique 1)** : chaque citation porte le vrai `chunk_id`/`document_id` directement depuis le résultat réel de recherche, jamais une seconde recherche indépendante.
+
+**Performance (vision critique 2)** : `get_citations_by_response` reste une seule requête indexée sur `response_id` (index réel + FK) ; `get_citations_by_document` de même sur `document_id`.
+
+Tests réels dédiés (24 tests `tests/test_citations.py` + 5 tests `tests/test_generation.py` + 3 tests d'intégration dans `tests/test_agent_orchestrator.py`).
+
+### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
+
+Code écrit (`hallucination_detection.py`, `llm_judge.py`) mais **jamais validé en conditions réelles** — bloqué sur crédit API selon `README.md`.
 
 ---
 

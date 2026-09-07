@@ -66,6 +66,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import settings
 from api.models.agent import Agent
 from api.models.agent_run import AgentRunRecord, AgentRunStatus
+from api.models.response import Response
 from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
 from api.security.conversations import add_message, get_conversation_messages
@@ -73,6 +74,7 @@ from api.security.tool_permissions import check_tool_permission
 from api.services.agent_guardrails import validate_guardrails
 from api.services.agent_memory import get_all_memory
 from api.services.agent_permissions import check_agent_permission
+from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
@@ -110,6 +112,7 @@ class AgentOrchestrator:
         max_retries: int | None = None, organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
         tools: list[ToolSpec] | None = None, session_id: uuid.UUID | None = None,
         conversation_id: uuid.UUID | None = None, plan_first: bool = False,
+        citation_chunks: list[dict] | None = None,
     ) -> AgentRunRecord:
         """Item 2's own literal function -- runs one real, traced,
         timeout-bound LLM call. Always returns a real `AgentRunRecord`
@@ -130,7 +133,18 @@ class AgentOrchestrator:
         loop here (parsing structured tool_calls and re-invoking the
         LLM with a tool's result) -- that is Partie 5.2's own,
         separate, larger scope. An empty selection (no tool scored
-        above threshold) is a real, valid outcome, not an error."""
+        above threshold) is a real, valid outcome, not an error.
+
+        `citation_chunks` (Partie 6.1.1, optional) -- when given
+        (already-real RAG search results, `search_with_context`-shaped)
+        AND `organization_id` is real (a real `Response` needs a real
+        tenant to belong to), a real, successful run additionally
+        persists a real `Response` (query=`input`, answer=the real
+        result) with its own real `Citation`s attached
+        (`add_citations_to_response`), cross-referenced back onto
+        `run.response_id`. A real, honest no-op otherwise -- same
+        backward-compatible reasoning as every other optional
+        integration point in this file."""
         timeout = timeout if timeout is not None else settings.AGENT_TIMEOUT
         max_retries = max_retries if max_retries is not None else settings.AGENT_MAX_RETRIES
 
@@ -328,6 +342,17 @@ class AgentOrchestrator:
                         await end_trace(db, llm_trace.id, output={"result": result}, status="completed")
                     if conversation_id is not None:
                         await add_message(db, conversation_id, "assistant", result)
+                    if citation_chunks is not None and organization_id is not None:
+                        # Partie 6.1.1 -- a real, additive Response +
+                        # Citations for this real, completed run. Real,
+                        # honest no-op above (organization_id is None)
+                        # since a Response always needs a real tenant.
+                        response_row = Response(organization_id=organization_id, query=input, answer=result, created_by=created_by)
+                        db.add(response_row)
+                        await db.flush()
+                        await add_citations_to_response(db, response_row, citation_chunks)
+                        run_row = await get_run(db, run.id)
+                        run_row.response_id = response_row.id
                     await db.commit()
 
         task = asyncio.create_task(_execute())

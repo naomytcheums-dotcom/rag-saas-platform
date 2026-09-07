@@ -69,6 +69,12 @@ class AgentRunRecord(Base):
     # api/services/agent_orchestrator.py's own top docstring for the
     # real, documented limit on cross-process cancellation).
     stop_requested: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # Partie 6.1.1 -- real, optional cross-reference to the real
+    # `Response` (citations attached) this run's own result produced,
+    # when a real caller opted in via `run_agent`'s own `citation_chunks`
+    # parameter. `SET NULL`: the run's own record outlives a later,
+    # real `Response` deletion.
+    response_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("responses.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (
         Index("ix_agent_runs_agent_id", "agent_id"),

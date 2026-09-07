@@ -603,3 +603,47 @@ async def test_run_agent_with_no_guardrail_violation_completes_normally(monkeypa
 
     assert run.status == "completed"
     assert run.result == "here is your answer"
+
+
+# ------------------------------------- Partie 6.1.1 -- citations -------------------------------------
+
+
+async def test_run_agent_attaches_real_citations_when_given_citation_chunks(monkeypatch, db_session):
+    """Validation criterion: cohérence -- l'orchestrateur peut ajouter
+    des citations à une réponse réelle."""
+    mock_acompletion = AsyncMock(return_value=_real_response("The sky is blue [1]."))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Real sky content", "score": 0.9, "document_name": "sky.pdf", "file_type": "application/pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    assert run.status == "completed"
+    assert run.response_id is not None
+
+    from api.services.citations import get_citations_by_response
+    citations = await get_citations_by_response(db_session, run.response_id)
+    assert len(citations) == 1
+    assert citations[0].position_start is not None
+
+
+async def test_run_agent_without_citation_chunks_never_creates_a_response(monkeypatch, db_session):
+    """Validation criterion: robustesse -- rétrocompatibilité, aucun changement pour les appelants existants."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("ok")))
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "hi", db=db_session)
+
+    assert run.response_id is None
+
+
+async def test_run_agent_with_citation_chunks_but_no_organization_id_is_a_real_no_op(monkeypatch, db_session):
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("ok")))
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "x", "score": 0.9, "document_name": "d.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "hi", db=db_session, citation_chunks=chunks)
+
+    assert run.response_id is None

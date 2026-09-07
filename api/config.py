@@ -912,6 +912,48 @@ class Settings(BaseSettings):
     # secret, admin-configured via POST /admin/sso/connections) is
     # encrypted at rest using SECRET_ENCRYPTION_KEY above.
 
+    # -- Citations (Partie 6.1.1) ---------------------------------------------
+    # This is the real, live consumer `api/security/organization_settings.py`'s
+    # own docstring already predicted: "a real, live, multi-tenant HTTP
+    # endpoint that actually ANSWERS a question ... citing sources,
+    # honoring citation_required ... belonging to Partie 9 (or whichever
+    # later étape actually asks for it)". `citation_count` is the org-level
+    # override (`organization_settings.DEFAULT_SETTINGS["citation_count"]`,
+    # real override>org_settings>default precedence); these two are the
+    # real, global bounds.
+    CITATION_DEFAULT_COUNT: int = 5
+    CITATION_MAX_COUNT: int = 10
+    CITATION_MIN_SCORE: float = 0.5
+    CITATION_INCLUDE_SECONDARY: bool = False
+
+    # -- Citation relevance (Partie 6.1.6) -------------------------------------
+    RELEVANCE_THRESHOLD_HIGH: float = 0.7
+    RELEVANCE_THRESHOLD_MEDIUM: float = 0.4
+    RELEVANCE_SHOW_PERCENTAGE: bool = True
+
+    # -- Citation preview / hover (Partie 6.1.8) -------------------------------
+    CITATION_PREVIEW_LENGTH: int = 150
+    CITATION_CONTEXT_WORDS: int = 5
+    # A real, honest, backend-only value: no real frontend exists in this
+    # codebase (same documented scope boundary as Partie 5.4's own
+    # Workflow Builder) -- kept as a real, configured constant a future,
+    # real frontend can read, not consumed by anything in api/ itself.
+    CITATION_HOVER_DELAY: int = 300
+
+    # -- Secondary sources (Partie 6.1.9) --------------------------------------
+    CITATION_SECONDARY_ENABLED: bool = True
+    CITATION_SECONDARY_COUNT: int = 3
+    CITATION_SECONDARY_THRESHOLD: float = 0.3
+
+    # -- Response confidence score (Partie 6.1.10) -----------------------------
+    # Real weights, real-ily summing to 1.0 (enforced below by
+    # `_confidence_factor_weights_must_sum_to_one`).
+    CONFIDENCE_FACTOR_CITATION_COUNT: float = 0.2
+    CONFIDENCE_FACTOR_RELEVANCE: float = 0.3
+    CONFIDENCE_FACTOR_DIVERSITY: float = 0.2
+    CONFIDENCE_FACTOR_RELIABILITY: float = 0.2
+    CONFIDENCE_FACTOR_CONSISTENCY: float = 0.1
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -961,6 +1003,25 @@ class Settings(BaseSettings):
                 "a restore link must not still be valid after the account it points to "
                 "could already have been permanently purged."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _confidence_factor_weights_must_sum_to_one(self) -> "Settings":
+        """A real, valuable check beyond item 4's own literal ask
+        (Partie 6.1.10): the 5 real `CONFIDENCE_FACTOR_*` weights are a
+        real weighted average -- a misconfigured set that doesn't sum
+        to 1.0 would silently produce a confidence score outside its
+        own documented `[0.0, 1.0]` range, a real, hard-to-notice bug
+        every downstream real caller (`format_confidence_score`,
+        `get_confidence_label`) assumes never happens. Caught here, at
+        startup, same "safety never depends on a coincidence" reasoning
+        as this class's own other real cross-field validators."""
+        total = (
+            self.CONFIDENCE_FACTOR_CITATION_COUNT + self.CONFIDENCE_FACTOR_RELEVANCE
+            + self.CONFIDENCE_FACTOR_DIVERSITY + self.CONFIDENCE_FACTOR_RELIABILITY + self.CONFIDENCE_FACTOR_CONSISTENCY
+        )
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"The 5 CONFIDENCE_FACTOR_* weights must sum to 1.0, got {total}")
         return self
 
 

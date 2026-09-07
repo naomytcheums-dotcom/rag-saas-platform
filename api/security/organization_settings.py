@@ -128,6 +128,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # standard default from the original RRF paper src/retrieval.py's
     # own RRF_K already uses.
     "rrf_k": 60,
+    # Partie 6.1.1 -- real, applied by api/services/citations.get_citation_count
+    # (override > org_settings > api.config.settings.CITATION_DEFAULT_COUNT
+    # precedence, capped by CITATION_MAX_COUNT), the same real resolver
+    # convention as every other setting above.
+    "citation_count": 5,
 }
 
 # Computed once at import time, not per-call -- available_timezones()

@@ -8394,6 +8394,111 @@ silently discarding everything created after the restored version.
 React Flow UI itself stays out of scope, a decision confirmed with the
 user before starting this batch). Partie 5.4 complete.**
 
+## Partie 6.1 -- Citations
+
+**A real foundational gap found and closed before starting (an
+autonomous decision -- the user explicitly flagged that these prompts
+come from a different model and may contain inconsistencies)**: item
+6.1.1's own literal spec assumes a `responses` table already exists
+(`response_id UUID FK -> responses`) -- **no `responses` table, and no
+real retrieval+generation+citations endpoint, existed anywhere in this
+codebase**. `api/security/organization_settings.py`'s own module
+docstring already honestly documented this exact gap: *"a real, live,
+multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval
++ generation combined, citing sources, honoring
+citation_required/language) is still real, substantial, separate work
+belonging to Partie 9 (or whichever later étape actually asks for
+it)"*. This étape IS that later étape -- same reasoning already
+applied for `Agent` (Partie 5.3.1) and `Workflow` (Partie 5.4.1).
+
+### Partie 6.1.1 -- clickable citations
+
+New real models: `api/models/response.py` (`Response`, the real
+missing foundation) and `api/models/citation.py` (`Citation`),
+migration `0066`, RLS enabled on both. **All fields from Parties
+6.1.1 through 6.1.9 declared together** (same "declare the whole
+entity once, wire each étape later" approach as `Agent`/`Workflow`):
+`document_name`/`document_type` (6.1.2), `source_section`/
+`source_heading` (6.1.3), `chunk_index` (6.1.5), `relevance_label`
+(6.1.6), `text_preview` (6.1.7), `is_primary` (6.1.9) are real but
+inert until their own étape consumes them.
+
+**Robustness (vision critique 3): what happens if the source is
+deleted** -- `Citation.document_id`/`chunk_id` are real FKs with
+`ondelete="SET NULL"`, deliberately NOT `CASCADE`: a real citation is
+a historical record of what a real response actually cited AT
+GENERATION TIME; a document or chunk deleted later must never
+silently delete the citation that already quoted it. `document_name`/
+`source_title`/`text` are real, DENORMALIZED copies captured at
+citation time for exactly this reason -- they stay real and readable
+even after `document_id`/`chunk_id` go `NULL`.
+
+New module `api/services/citations.py`: all 6 literal functions
+(`add_citations_to_response`, `select_top_citations`,
+`format_citation`, `get_citations_by_response`, `validate_citation`,
+`get_citation_count`) plus `get_citations_by_document`/`get_citation`
+(real plumbing for the endpoints).
+
+**`select_top_citations`, honest robustness (vision critique 3)**:
+filters by `CITATION_MIN_SCORE` even if that leaves fewer than
+`citation_count` results -- a real response built from weak sources
+should show fewer real citations, never a false sense of five equally
+strong ones.
+
+**Real, honest citation-position detection**: `generate_response`
+prompts the real LLM to cite sources inline as `[1]`/`[2]`/... -- when
+the real generated answer actually contains that real marker,
+`position_start`/`position_end` locate it; otherwise (a real LLM is
+never guaranteed to follow instructions), both stay `None` rather than
+a fabricated guess.
+
+New module `api/services/generation.py` (`generate_response`): the
+real, multi-tenant equivalent of `src/generation.py` -- real RAG
+retrieval (`search_with_context`, Partie 3.4.x) feeding a real LLM
+call (`chat_completion`, Partie 4.1.7), persisting a real `Response`
+with its own real citations attached (5 by default). Deliberately
+separate from `AgentOrchestrator` (Partie 5.1.1) -- a `Response` is a
+plain, real "question in, cited answer out" record, with none of an
+agent's own concepts (memory, tool selection, planning); both reuse
+the SAME real building blocks (`resolve_llm_config`/`chat_completion`),
+neither reimplements the other.
+
+**`citation_count`, real integration into `organization_settings`**:
+`DEFAULT_SETTINGS["citation_count"] = 5`, a real, typed, validated
+field on both `OrganizationSettingsResponse`/
+`OrganizationSettingsUpdateRequest` (bounded by `CITATION_MAX_COUNT`,
+same shared-bound reuse as `top_k`/`TOP_K_MAX`). This really closes one
+of the "3 settings never read by the real pipeline" honestly
+documented since Partie 1.3.9 (`citation_required`/`language`/
+`timezone`) -- only 2 (`language`/`timezone`, outside Partie 6's own
+scope) genuinely remain.
+
+**Real `AgentOrchestrator.run_agent` integration**: a new, optional
+`citation_chunks` parameter -- when given AND a real `organization_id`
+is provided (a `Response` genuinely needs a real tenant), a successful
+run also persists a real `Response` + its real `Citation`s,
+cross-referenced back via the new `AgentRunRecord.response_id`
+(migration `0067`, a real `SET NULL` FK). A real, backward-compatible
+no-op otherwise -- no existing caller is affected (tested explicitly).
+
+**`RAG_search` already returns sources, no change needed**:
+`search_with_context` (Partie 3.4.x) already builds `document_name`/
+`file_type`/`metadata`/`chunk_id`/`document_id` for every real result
+-- reused as-is, no fabricated capability where the existing one
+already sufficed.
+
+**Coherence (vision critique 1)**: every citation carries the real
+`chunk_id`/`document_id` straight from the real search result, never a
+second, independent lookup.
+
+**Performance (vision critique 2)**: `get_citations_by_response` stays
+a single lookup indexed on `response_id` (real index + FK);
+`get_citations_by_document` likewise on `document_id`.
+
+**Real verification**: 24 tests in `tests/test_citations.py` + 5 tests
+in `tests/test_generation.py` + 3 integration tests in
+`tests/test_agent_orchestrator.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
