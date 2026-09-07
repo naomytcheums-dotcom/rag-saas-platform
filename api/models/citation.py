@@ -56,9 +56,10 @@ class Citation(Base):
     # api/services/document_extraction.py's own real per-format shape).
     source_section: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_heading: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    # Partie 6.1.5 -- real, best-effort (no persisted ordinal exists on
-    # DocumentChunk itself -- see api/services/citations.py's own
-    # extract_chunk_info docstring for the real, honest reasoning).
+    # Partie 6.1.5 -- real, 1-based, straight from DocumentChunk's own
+    # real, persisted chunk_index column (migration 0068) -- see
+    # api/services/citation_chunk.py's own docstring for why this is a
+    # real column rather than a derived approximation.
     chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Partie 6.1.6 -- "high"/"medium"/"low", real, computed from
     # relevance_score against RELEVANCE_THRESHOLD_HIGH/MEDIUM.

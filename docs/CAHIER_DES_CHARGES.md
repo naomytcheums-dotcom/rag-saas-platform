@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (6/10)
+### 6.1 Citations — 🟡 PARTIEL (7/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1285,6 +1285,24 @@ Tests réels dédiés (15 tests, `tests/test_citation_chunk.py`) + `tests/test_d
 **Performance (vision critique 2)** : zéro accès base de données -- une fonction pure en mémoire.
 
 Tests réels dédiés (11 tests), voir `tests/test_citation_relevance.py`.
+
+#### Partie 6.1.7 — Passage exact
+
+⚠️ **Réconciliation honnête d'un espace de coordonnées, pas un bug (décision autonome)** : `Citation.position_start`/`position_end` (Partie 6.1.1) localisent le vrai marqueur `[N]` DANS le texte de la RÉPONSE elle-même (`_find_marker_position`) -- un espace de coordonnées réellement différent d'un décalage à l'intérieur du contenu d'un CHUNK. Les paramètres `position_start`/`position_end` de `extract_passage_from_chunk` sont délibérément des décalages réels, indépendants, fournis par l'appelant -- jamais `Citation.position_start`/`position_end` : les réutiliser ici aurait silencieusement découpé le mauvais texte. `enrich_citation_with_passage` ne les transmet donc jamais : sans réelle sous-portion spécifique à extraire, le choix honnête est le contenu réel COMPLET du chunk (puis raccourci par `format_passage_preview`), jamais une slice fausse ou fabriquée.
+
+✅ **Nouveau module réel** `api/services/citation_passage.py` : les 5 fonctions littérales (`extract_passage_from_chunk`, `format_passage_preview`, `highlight_passage`, `enrich_citation_with_passage`, `get_passage_context`) + `enrich_citations_with_passage` (plomberie réelle).
+
+✅ **`get_passage_context`, un vrai périmètre honnête, permis par la Partie 6.1.5** : un chunk ne porte aucun pointeur persisté vers le texte environnant du document ORIGINAL -- seul le vrai `DocumentChunk.chunk_index` (Partie 6.1.5, migration 0068) permet à cette fonction d'aller chercher les vrais chunks SIBLINGS adjacents (même `document_id`, `chunk_index - 1`/`chunk_index + 1`) pour un vrai contexte avant/après -- jamais un "paragraphe environnant" fabriqué que ce dépôt n'a réellement aucun moyen de localiser. Honnêtement vide de chaque côté au vrai début/fin d'un document, ou quand aucun vrai `chunk_index` n'est connu (un chunk historique).
+
+✅ **`highlight_passage`, robustesse réelle (vision critique 3)** : chaque terme de recherche est échappé avant compilation en regex -- un terme de recherche est une vraie entrée utilisateur externe, jamais interprété comme un motif regex brut.
+
+✅ **`add_citations_to_response` (Partie 6.1.1) enrichi rétroactivement** : `text_preview` est maintenant réellement peuplé AU MOMENT DE LA CRÉATION de la citation, à partir du contenu complet du même vrai chunk.
+
+✅ **Intégration réelle dans les 3 endpoints de citations** : `enrich_citation_with_passage`/`enrich_citations_with_passage` re-dérivent EN DIRECT `text_preview` depuis le contenu réel et actuel du chunk, jamais commité en base.
+
+**Performance (vision critique 2)** : `get_passage_context` reste 2 requêtes indexées (`document_id` + `chunk_index`), bornées, jamais un scan du document entier.
+
+Tests réels dédiés (18 tests), voir `tests/test_citation_passage.py`.
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

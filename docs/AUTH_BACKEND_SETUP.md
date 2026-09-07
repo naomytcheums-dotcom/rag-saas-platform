@@ -8737,6 +8737,58 @@ in-memory function.
 
 **Real verification**: 11 tests, `tests/test_citation_relevance.py`.
 
+### Partie 6.1.7 -- exact passage
+
+**An honest coordinate-space reconciliation, not a bug (autonomous
+decision)**: `Citation.position_start`/`position_end` (Partie 6.1.1)
+locate the real `[N]` marker INSIDE the RESPONSE'S OWN answer text
+(`_find_marker_position`) -- a genuinely different real coordinate
+space from an offset inside a CHUNK'S OWN content.
+`extract_passage_from_chunk`'s own `position_start`/`position_end`
+parameters are deliberately real, independent, caller-supplied
+offsets into the given chunk's content -- never
+`Citation.position_start`/`position_end`: reusing the latter here
+would silently slice the wrong text. `enrich_citation_with_passage`
+therefore never passes them: with no real, specific sub-span to
+extract, the honest choice is the chunk's own FULL real content (then
+shortened by `format_passage_preview`), never a wrong or fabricated
+slice.
+
+New module `api/services/citation_passage.py`: all 5 literal functions
+(`extract_passage_from_chunk`, `format_passage_preview`,
+`highlight_passage`, `enrich_citation_with_passage`,
+`get_passage_context`) plus `enrich_citations_with_passage` (real
+plumbing).
+
+**`get_passage_context`, a real, honest scope, enabled by Partie
+6.1.5**: a chunk carries no persisted pointer into the ORIGINAL
+document's own surrounding text -- only the real
+`DocumentChunk.chunk_index` (Partie 6.1.5, migration `0068`) lets this
+function reach for real, adjacent SIBLING chunks (same `document_id`,
+`chunk_index - 1`/`chunk_index + 1`) for real before/after context --
+never a fabricated "surrounding paragraph" this codebase has no real
+way to locate. Honestly empty on either side at a real document's
+start/end, or when no real `chunk_index` is known (a legacy chunk).
+
+**`highlight_passage`, real robustness (vision critique 3)**: every
+search term is regex-escaped before compilation -- a search term is
+real, external user input, never trusted as a raw regex pattern.
+
+**`add_citations_to_response` (Partie 6.1.1) retroactively enriched**:
+`text_preview` is now really populated AT CITATION-CREATION TIME, from
+the same real chunk's own full content.
+
+**Real integration into the 3 citation endpoints**:
+`enrich_citation_with_passage`/`enrich_citations_with_passage`
+re-derive `text_preview` LIVE from the real, current chunk content,
+never committed to the database.
+
+**Performance (vision critique 2)**: `get_passage_context` stays 2
+indexed queries (`document_id` + `chunk_index`), bounded, never a
+whole-document scan.
+
+**Real verification**: 18 tests, `tests/test_citation_passage.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

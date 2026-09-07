@@ -26,6 +26,7 @@ from api.models.citation import Citation
 from api.models.response import Response
 from api.security.organization_settings import get_org_settings
 from api.services.citation_location import extract_heading_from_chunk, extract_page_from_chunk, extract_section_from_chunk
+from api.services.citation_passage import extract_passage_from_chunk, format_passage_preview
 from api.services.citation_relevance import calculate_relevance_label
 from api.services.citation_url import extract_url_from_chunk
 
@@ -117,6 +118,15 @@ async def add_citations_to_response(
             # api/services/citation_chunk.py's own top docstring for
             # why this is a real column, not a derived approximation).
             chunk_index=chunk.get("chunk_index"),
+            # Partie 6.1.7 -- real, short preview of this SAME real
+            # chunk's own content (also re-derivable later, live, via
+            # `citation_passage.enrich_citation_with_passage` -- see
+            # that module's own top docstring for why this is the
+            # chunk's own FULL content, never a slice by
+            # position_start/position_end, which locate the citation
+            # marker inside the response's own answer, a different
+            # real coordinate space entirely).
+            text_preview=format_passage_preview(extract_passage_from_chunk(chunk)),
         )
         db.add(citation)
         citations.append(citation)

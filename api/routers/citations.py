@@ -6,12 +6,13 @@ caller's real organization role together (`require_response_member`/
 Member+, same reasoning as every other individual-resource dependency
 in this codebase).
 
-Partie 6.1.2/6.1.3/6.1.4/6.1.5/6.1.6 -- every real citation returned
-here is enriched with its real, LIVE document name/type,
-page/section/heading, source URL, chunk ordinal, AND relevance label
-(`enrich_citation_with_document`/`enrich_citation_with_location`/
-`enrich_citation_with_url`/`enrich_citation_with_chunk`/
-`enrich_citation_with_relevance`, plural forms for the list endpoints)
+Partie 6.1.2/6.1.3/6.1.4/6.1.5/6.1.6/6.1.7 -- every real citation
+returned here is enriched with its real, LIVE document name/type,
+page/section/heading, source URL, chunk ordinal, relevance label, AND
+passage preview (`enrich_citation_with_document`/
+`enrich_citation_with_location`/`enrich_citation_with_url`/
+`enrich_citation_with_chunk`/`enrich_citation_with_relevance`/
+`enrich_citation_with_passage`, plural forms for the list endpoints)
 before being serialized, so a real API caller always sees the current
 real values, not only the denormalized snapshot from citation time.
 Real, deliberate scope: this enrichment is NEVER committed back to the
@@ -34,6 +35,7 @@ from api.security.citations import require_citation_member, require_document_cit
 from api.services.citation_chunk import enrich_citation_with_chunk, enrich_citations_with_chunk
 from api.services.citation_documents import enrich_citation_with_document, enrich_citations_with_documents
 from api.services.citation_location import enrich_citation_with_location, enrich_citations_with_location
+from api.services.citation_passage import enrich_citation_with_passage, enrich_citations_with_passage
 from api.services.citation_relevance import enrich_citation_with_relevance, enrich_citations_with_relevance
 from api.services.citation_url import enrich_citation_with_url, enrich_citations_with_url
 from api.services.citations import get_citations_by_document, get_citations_by_response
@@ -51,6 +53,7 @@ async def list_citations_by_response_endpoint(
     citations = await enrich_citations_with_location(db, citations)
     citations = await enrich_citations_with_url(db, citations)
     citations = await enrich_citations_with_chunk(db, citations)
+    citations = await enrich_citations_with_passage(db, citations)
     return enrich_citations_with_relevance(citations)
 
 
@@ -63,6 +66,7 @@ async def get_citation_endpoint(
     citation = await enrich_citation_with_location(db, citation)
     citation = await enrich_citation_with_url(db, citation)
     citation = await enrich_citation_with_chunk(db, citation)
+    citation = await enrich_citation_with_passage(db, citation)
     return enrich_citation_with_relevance(citation)
 
 
@@ -76,4 +80,5 @@ async def list_citations_by_document_endpoint(
     citations = await enrich_citations_with_location(db, citations)
     citations = await enrich_citations_with_url(db, citations)
     citations = await enrich_citations_with_chunk(db, citations)
+    citations = await enrich_citations_with_passage(db, citations)
     return enrich_citations_with_relevance(citations)
