@@ -7353,10 +7353,59 @@ record itself.
 
 **Real verification**: 12 tests, `tests/test_human_escalation.py`.
 
-**Partie 5.2 -- Integrated Tools: 8/9 items verified real in `api/`**
-(5.2.1 through 5.2.9, excluding Custom Tools/webhooks, not requested in
-this batch). "Search KB/GitHub/Human Escalation already exist in
-`src/`" claims stay unverified (inherited work, different granularity).
+### Partie 5.2.10 -- Custom Tools (webhooks)
+
+New real model `api/models/custom_tool.py` (`CustomTool`, migration
+`0064`, RLS enabled): id, organization_id (FK organizations), name,
+description, webhook_url, method, headers (JSON), timeout,
+retry_count, schema (JSON), created_by (FK users), created_at,
+updated_at, deleted_at (real soft delete, same reasoning as
+`Agent`/`Workflow`).
+
+**Security (vision critique 1): real, reused SSRF protection, not
+reinvented** -- `execute_custom_tool` reuses the SAME real
+`ssrf_safe_client` (`api/services/url_fetching.py`) already built for
+the workflow HTTP block (Partie 5.4.6) -- the same real,
+DNS-rebinding-safe transport blocking private/loopback/reserved
+addresses at the connection layer. No `allowed_domains` field was
+asked for in the literal model -- the real, connection-layer SSRF
+protection is already the substantive answer to this vision critique,
+exactly as it is for the HTTP block.
+
+**Coherence: input validation reuses the same real JSON-schema
+validator** -- `get_validation_errors` (`api/services/tool_validation.py`,
+Partie 5.1.9) is generic over any `(value, schema)` pair; reused here
+to validate a tool's own real INPUT parameters rather than its result,
+no second, competing validator.
+
+**Robustness (vision critique 3): real retries reusing `retry_async`**
+(`api/services/retry.py`, Partie 5.1.6) -- `retry_count` real
+attempts, retried ONLY on a real, transient network failure
+(`httpx.TimeoutException`/`httpx.TransportError`); a real non-2xx
+response from the webhook itself is a real, immediate failure, never
+retried (retrying a broken URL/real 4xx blindly would never help).
+Tested explicitly (a successful retry after a transient failure, a
+persistent failure after exhausting retries, no retry on a real 4xx).
+
+**Real orchestrator integration**: `get_available_custom_tools`/
+`get_custom_tool_spec` wrap each real `CustomTool` into a real
+`ToolSpec` (same generic shape as `api.services.tools`, Partie 5.1.2)
+-- the concrete answer to "the agent can call custom tools": a real
+caller assembling `AgentOrchestrator.run_agent`'s own `tools=` list
+simply includes this alongside every built-in tool, no orchestrator
+code change needed since it already accepts any real `ToolSpec`.
+Tested end-to-end.
+
+**6 real endpoints**, all 6 literal ones -- create/list org-scoped,
+get/update/delete/execute resolve the tool AND the caller's real role
+together.
+
+**Real verification**: 22 tests, `tests/test_custom_tools.py`.
+
+**Partie 5.2 -- Integrated Tools: 9/9 items verified real in `api/`**
+(5.2.1 through 5.2.10, complete batch). "Search KB/GitHub/Human
+Escalation already exist in `src/`" claims stay unverified (inherited
+work, different granularity).
 
 ### Partie 5.3.1 -- custom agent creation
 

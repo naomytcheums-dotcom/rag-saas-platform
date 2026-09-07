@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 11/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 complète -- 9/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 11/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -772,9 +772,23 @@ Tests réels dédiés (16 tests, `httpx.MockTransport` réel pour Gmail/Outlook,
 
 Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
-**Partie 5.2 — Outils intégrés : 8/9 items vérifiés réels dans `api/`** (5.2.1 à 5.2.9, sauf Custom Tools/webhooks, non demandé dans ce lot). Search KB/GitHub/Human Escalation "existent déjà côté `src/`" restent non revérifiés (travail hérité, granularité différente).
+#### Partie 5.2.10 — Custom Tools (webhooks)
 
-Custom Tools (webhooks) : ⬜.
+✅ **Nouveau modèle réel** `api/models/custom_tool.py` (`CustomTool`, migration `0064`, RLS activée) : id, organization_id (FK organizations), name, description, webhook_url, method, headers (JSON), timeout, retry_count, schema (JSON), created_by (FK users), created_at, updated_at, deleted_at (soft delete réel, même raisonnement qu'`Agent`/`Workflow`).
+
+✅ **Sécurité (vision critique 1) : vraie protection SSRF réutilisée, pas réinventée** -- `execute_custom_tool` réutilise le MÊME vrai `ssrf_safe_client` (`api/services/url_fetching.py`) déjà construit pour le bloc HTTP des workflows (Partie 5.4.6) -- même vrai transport résistant au DNS-rebinding, bloquant les adresses privées/loopback/réservées au niveau de la connexion. Aucun champ `allowed_domains` n'était demandé dans le modèle littéral -- la vraie protection SSRF au niveau connexion est déjà la réponse substantielle à cette vision critique, exactement comme pour le bloc HTTP.
+
+✅ **Cohérence : validation d'entrée réutilise le même vrai validateur JSON-schema** -- `get_validation_errors` (`api/services/tool_validation.py`, Partie 5.1.9) est générique sur n'importe quelle paire `(valeur, schéma)` ; réutilisé ici pour valider les vrais PARAMÈTRES D'ENTRÉE d'un outil plutôt que son résultat, sans second validateur concurrent.
+
+✅ **Robustesse (vision critique 3) : vraies retries réutilisant `retry_async`** (`api/services/retry.py`, Partie 5.1.6) -- `retry_count` vraies tentatives, retentées UNIQUEMENT sur un vrai échec réseau transitoire (`httpx.TimeoutException`/`httpx.TransportError`) ; une vraie réponse non-2xx du webhook lui-même est un vrai échec immédiat, jamais retentée (retenter une URL cassée/un vrai 4xx n'aiderait jamais). Testé explicitement (retry réussi après échec transitoire, échec persistant après épuisement, pas de retry sur un vrai 4xx).
+
+✅ **Intégration réelle dans l'orchestrateur** : `get_available_custom_tools`/`get_custom_tool_spec` enveloppent chaque vrai `CustomTool` dans un vrai `ToolSpec` (même forme générique que `api.services.tools`, Partie 5.1.2) -- la réponse concrète à "l'agent peut appeler les outils personnalisés" : un vrai appelant assemblant la liste `tools=` de `AgentOrchestrator.run_agent` inclut simplement ceci aux côtés de chaque outil intégré, aucune modification du code de l'orchestrateur n'étant nécessaire puisqu'il accepte déjà n'importe quel vrai `ToolSpec`. Testé de bout en bout (`test_get_available_custom_tools_returns_real_usable_toolspecs`).
+
+✅ **6 endpoints réels**, les 6 littéraux -- create/list org-scopés, get/update/delete/execute résolvent l'outil ET le rôle réel de l'appelant ensemble.
+
+Tests réels dédiés (22 tests), voir `tests/test_custom_tools.py`.
+
+**Partie 5.2 — Outils intégrés : 9/9 items vérifiés réels dans `api/`** (5.2.1 à 5.2.10, lot complet). Search KB/GitHub/Human Escalation "existent déjà côté `src/`" restent non revérifiés (travail hérité, granularité différente).
 
 ### 5.3 Agent Builder — 🟡 PARTIEL (9/10, 5.3.8 non demandé dans ce lot)
 

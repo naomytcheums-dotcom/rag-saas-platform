@@ -28,7 +28,7 @@ from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
     account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, conversations,
-    custom_domains, documents,
+    custom_domains, custom_tools, documents,
     email_domains, enterprise_sso, external_sources, human_approval, invitations, oauth, organization_branding,
     organization_members, organization_settings, organizations, password, quotas, reindex_schedules,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, two_factor,
@@ -175,6 +175,7 @@ app.include_router(usage.router)
 app.include_router(organization_settings.router)
 app.include_router(organization_branding.router)
 app.include_router(custom_domains.router)
+app.include_router(custom_tools.router)
 app.include_router(ssl_certificates.router)
 app.include_router(email_domains.router)
 app.include_router(white_label.router)
