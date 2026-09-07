@@ -20,6 +20,10 @@ from api.schemas.workflow_human_input import WorkflowHumanInputResponse, Workflo
 from api.schemas.workflow_triggers import (
     WorkflowRunRequest, WorkflowRunResponse, WorkflowTriggerCreateRequest, WorkflowTriggerResponse,
 )
+from api.schemas.workflow_versions import (
+    WorkflowVersionCreateRequest, WorkflowVersionDiffRequest, WorkflowVersionDiffResponse,
+    WorkflowVersionRestoreRequest, WorkflowVersionResponse,
+)
 from api.schemas.workflows import (
     WorkflowCreateRequest, WorkflowResponse, WorkflowUpdateRequest, WorkflowValidateResponse,
 )
@@ -33,6 +37,10 @@ from api.services.workflow_blocks import WorkflowBlockError
 from api.services.workflow_triggers import (
     TRIGGER_TYPES, WorkflowTriggerError, create_manual_trigger, create_schedule_trigger, create_webhook_trigger,
     delete_trigger, get_trigger, list_triggers, trigger_workflow, verify_webhook_token,
+)
+from api.services.workflow_versions import (
+    WorkflowVersionError, create_workflow_version, diff_workflow_versions, get_workflow_version,
+    list_workflow_versions, restore_workflow_version,
 )
 from api.services.workflows import WorkflowValidationError, validate_workflow
 
@@ -209,3 +217,64 @@ async def submit_human_block_endpoint(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This human input is no longer pending")
     await db.commit()
     return updated
+
+
+# ------------------------------------- Partie 5.4.13 -- workflow versioning -------------------------------------
+
+
+@router.get("/workflows/{workflow_id}/versions", response_model=list[WorkflowVersionResponse])
+async def list_workflow_versions_endpoint(
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    return await list_workflow_versions(db, workflow.id)
+
+
+@router.get("/workflows/{workflow_id}/versions/{version_number}", response_model=WorkflowVersionResponse)
+async def get_workflow_version_endpoint(
+    version_number: int,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    version = await get_workflow_version(db, workflow.id, version_number)
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return version
+
+
+@router.post("/workflows/{workflow_id}/versions/create", response_model=WorkflowVersionResponse)
+async def create_workflow_version_endpoint(
+    payload: WorkflowVersionCreateRequest,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_manager), db: AsyncSession = Depends(get_db),
+):
+    workflow, caller = workflow_ctx
+    version = await create_workflow_version(db, workflow.id, caller.user_id, payload.comment)
+    await db.commit()
+    return version
+
+
+@router.post("/workflows/{workflow_id}/versions/restore", response_model=WorkflowResponse)
+async def restore_workflow_version_endpoint(
+    payload: WorkflowVersionRestoreRequest,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_manager), db: AsyncSession = Depends(get_db),
+):
+    workflow, caller = workflow_ctx
+    try:
+        restored = await restore_workflow_version(db, workflow.id, payload.version_number, caller.user_id)
+    except WorkflowVersionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(restored)
+    return restored
+
+
+@router.post("/workflows/{workflow_id}/versions/diff", response_model=WorkflowVersionDiffResponse)
+async def diff_workflow_versions_endpoint(
+    payload: WorkflowVersionDiffRequest,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    try:
+        return await diff_workflow_versions(db, workflow.id, payload.version_a, payload.version_b)
+    except WorkflowVersionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

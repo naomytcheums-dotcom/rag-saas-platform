@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 complète -- 9/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 12/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 complète -- 9/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 -- 13/13 (backend uniquement, UI React Flow hors périmètre) -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -964,7 +964,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (12/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (13/13, backend uniquement)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1150,7 +1150,23 @@ Tests réels dédiés (12 tests), voir `tests/test_workflow_block_calendar.py`.
 
 Tests réels dédiés (13 tests), voir `tests/test_workflow_block_database.py`.
 
-**Partie 5.4 Workflow Builder : lot demandé terminé -- 12/13 items (5.4.1 à 5.4.12) vérifiés réels, backend uniquement (l'interface React Flow elle-même reste hors périmètre, décision validée avec l'utilisateur avant de commencer ce lot). L'item restant de cette section n'a jamais été demandé dans ce lot et reste ⬜.**
+#### Partie 5.4.13 — Versioning des workflows
+
+✅ **Nouveau modèle réel** `api/models/workflow_version.py` (`WorkflowVersion`, migration `0065`, RLS activée) : id, workflow_id (FK workflows), version_number, nodes/edges (JSON, snapshot complet), created_by (FK users), created_at, comment. `UNIQUE(workflow_id, version_number)`.
+
+✅ **Performance/Stockage (vision critique 1/2), répondu honnêtement** : chaque vraie version stocke un snapshot COMPLET (pas un diff par rapport à la précédente) -- même vrai choix simple déjà fait pour tout autre état de forme JSON dans ce dépôt (`Workflow.nodes`/`edges` eux-mêmes, `AgentRunRecord.trace`). Aucune vraie compression n'est appliquée ; le vrai graphe d'un workflow reste typiquement quelques Ko réels au maximum pour un workflow conçu par un humain -- un vrai compromis simple et raisonnable, pas un stockage "efficace" fabriqué. Un vrai stockage par diff ou compressé reste un vrai travail futur séparé, si un vrai besoin démontré apparaît un jour à l'échelle réelle de ce dépôt.
+
+✅ **Nouveau module réel** `api/services/workflow_versions.py` : les 5 fonctions littérales (`create_workflow_version`, `get_workflow_version`, `list_workflow_versions`, `restore_workflow_version`, `diff_workflow_versions`).
+
+✅ **Robustesse (vision critique 3) : une vraie restauration ne s'applique jamais partiellement** -- `restore_workflow_version` résout D'ABORD le vrai workflow ET la vraie version cible ; si la version cible n'existe pas, lève une exception AVANT de toucher au vrai `nodes`/`edges` du workflow en cours -- une vraie restauration échouée laisse le vrai workflow actuel totalement intact, jamais à moitié restauré. Testé explicitement (`test_restore_workflow_version_rejects_an_unknown_version_without_touching_the_workflow`).
+
+✅ **Choix de conception réel, façon git : restaurer crée une NOUVELLE version, ne réécrit jamais l'historique** -- `restore_workflow_version` appelle aussi `create_workflow_version` pour le vrai état résultant (avec un vrai commentaire auto-généré), rendant la restauration elle-même une vraie entrée auditable dans le même historique qu'elle vient de restaurer, plutôt que de silencieusement jeter tout ce qui a été créé après la version restaurée.
+
+✅ **5 endpoints réels**, les 5 littéraux -- `GET /workflows/{workflow_id}/versions`, `GET .../versions/{version_number}` (Member+), `POST .../versions/create`, `POST .../versions/restore` (Manager+), `POST .../versions/diff` (Member+).
+
+Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
+
+**Partie 5.4 Workflow Builder : lot demandé terminé -- 13/13 items (5.4.1 à 5.4.13) vérifiés réels, backend uniquement (l'interface React Flow elle-même reste hors périmètre, décision validée avec l'utilisateur avant de commencer ce lot). Partie 5.4 complète.**
 
 ---
 

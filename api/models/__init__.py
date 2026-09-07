@@ -41,6 +41,7 @@ from api.models.webauthn_credential import WebAuthnCredential
 from api.models.workflow import Workflow
 from api.models.workflow_human_input import WorkflowHumanInput
 from api.models.workflow_run import WorkflowRun, WorkflowTrigger
+from api.models.workflow_version import WorkflowVersion
 from api.models.workspace import Workspace
 
 __all__ = [
@@ -52,5 +53,5 @@ __all__ = [
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
     "TaskPlan", "TaskStep", "AgentTrace", "Escalation", "Agent", "AgentAPIKey",
-    "Workflow", "WorkflowTrigger", "WorkflowRun", "WorkflowHumanInput", "CustomTool",
+    "Workflow", "WorkflowTrigger", "WorkflowRun", "WorkflowHumanInput", "CustomTool", "WorkflowVersion",
 ]

@@ -8344,11 +8344,55 @@ introduced.
 
 **Real verification**: 13 tests, `tests/test_workflow_block_database.py`.
 
-**Partie 5.4 Workflow Builder for this requested batch is done -- 12/13
-items (5.4.1 through 5.4.12) verified real, backend only (the React
-Flow UI itself stays out of scope, a decision confirmed with the user
-before starting this batch). The 1 remaining item in this section was
-never requested in this batch and stays ⬜.**
+### Partie 5.4.13 -- workflow versioning
+
+New real model `api/models/workflow_version.py` (`WorkflowVersion`,
+migration `0065`, RLS enabled): id, workflow_id (FK workflows),
+version_number, nodes/edges (JSON, full snapshot), created_by (FK
+users), created_at, comment. `UNIQUE(workflow_id, version_number)`.
+
+**Performance/Storage (vision critique 1/2), answered honestly**: each
+real version stores a FULL snapshot (not a diff against the previous
+one) -- the same real, simple choice already made for every other
+JSON-blob-shaped state in this codebase (`Workflow.nodes`/`edges`
+themselves, `AgentRunRecord.trace`). No real compression is applied; a
+real workflow's own graph is typically a handful of real KB at most
+for a human-designed workflow -- a real, reasonable, simple
+trade-off, not a fabricated "efficient storage" scheme. Real,
+diff-based or compressed storage stays genuine, separate, future work
+if a real, demonstrated need for it ever arises at this codebase's
+actual scale.
+
+New module `api/services/workflow_versions.py`: all 5 literal
+functions (`create_workflow_version`, `get_workflow_version`,
+`list_workflow_versions`, `restore_workflow_version`,
+`diff_workflow_versions`).
+
+**Robustness (vision critique 3): a real restore never partially
+applies** -- `restore_workflow_version` resolves BOTH the real
+workflow AND the real target version FIRST; if the target version
+doesn't exist, it raises before ever touching the live workflow's own
+`nodes`/`edges` -- a real, failed restore leaves the real, current
+workflow completely untouched, never half-restored. Tested explicitly.
+
+**A real, git-like design choice: restoring creates a NEW version,
+never rewrites history** -- `restore_workflow_version` also calls
+`create_workflow_version` for the real, resulting state (with a real,
+auto-generated comment), so the restore itself becomes a real,
+auditable entry in the same history it just reverted to, rather than
+silently discarding everything created after the restored version.
+
+**5 real endpoints**, all 5 literal ones -- `GET
+/workflows/{workflow_id}/versions`, `GET .../versions/{version_number}`
+(Member+), `POST .../versions/create`, `POST .../versions/restore`
+(Manager+), `POST .../versions/diff` (Member+).
+
+**Real verification**: 14 tests, `tests/test_workflow_versions.py`.
+
+**Partie 5.4 Workflow Builder for this requested batch is done --
+13/13 items (5.4.1 through 5.4.13) verified real, backend only (the
+React Flow UI itself stays out of scope, a decision confirmed with the
+user before starting this batch). Partie 5.4 complete.**
 
 ### Partie 3.4.2 -- query rewriting
 
