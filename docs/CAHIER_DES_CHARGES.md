@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (1/10)
+### 6.1 Citations — 🟡 PARTIEL (3/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1201,6 +1201,38 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 **Performance (vision critique 2)** : `get_citations_by_response` reste une seule requête indexée sur `response_id` (index réel + FK) ; `get_citations_by_document` de même sur `document_id`.
 
 Tests réels dédiés (24 tests `tests/test_citations.py` + 5 tests `tests/test_generation.py` + 3 tests d'intégration dans `tests/test_agent_orchestrator.py`).
+
+#### Partie 6.1.2 — Source document (nom)
+
+✅ **Nouveau module réel** `api/services/citation_documents.py` : les 3 fonctions littérales (`enrich_citation_with_document`, `enrich_citations_with_documents`, `get_document_info`).
+
+✅ **Cohérence (vision critique 1) : distinct du snapshot dénormalisé, un vrai enrichissement LIVE** -- `add_citations_to_response` (Partie 6.1.1) capture déjà `document_name`/`document_type` au moment de la citation (un vrai snapshot historique) ; `get_document_info`/`enrich_citation_with_document` lisent directement et réellement la table `documents` -- une vraie source live, distincte, jamais une seconde source concurrente.
+
+✅ **Robustesse (vision critique 3) : que se passe-t-il si le document est supprimé** -- `enrich_citation_with_document` est un vrai no-op honnête quand le vrai document en direct n'existe plus (disparu ou réellement soft-deleted) : le vrai snapshot dénormalisé de la citation reste inchangé, jamais écrasé par `None`. Une vraie citation affiche toujours UN vrai nom -- le vrai nom live quand disponible, le vrai nom historique sinon -- jamais un blanc.
+
+✅ **Intégration réelle dans les 3 endpoints de citations (Partie 6.1.1)** : `GET /responses/{response_id}/citations`, `GET /citations/{citation_id}`, `GET /documents/{document_id}/citations` enrichissent maintenant chaque vraie citation avec son vrai nom de document EN DIRECT avant sérialisation -- jamais commité en base (une vraie lecture GET reste un vrai read honnête sans effet de bord persistant, seuls les objets en mémoire de CETTE réponse sont rafraîchis).
+
+**Performance (vision critique 2)** : une seule vraie requête par citation (`db.get(Document, ...)`, clé primaire) -- pas de jointure supplémentaire côté SQL.
+
+Tests réels dédiés (9 tests), voir `tests/test_citation_documents.py`.
+
+#### Partie 6.1.3 — Page PDF/Section
+
+✅ **Nouveau module réel** `api/services/citation_location.py` : les 4 fonctions littérales (`extract_page_from_chunk`, `extract_section_from_chunk`, `enrich_citation_with_location`, `format_citation_location`) + `extract_heading_from_chunk`/`enrich_citations_with_location` (plomberie réelle).
+
+✅ **Cohérence (vision critique 1) : extraction réelle depuis la vraie forme de métadonnées déjà en place** -- confirmé en LISANT directement `api/services/document_extraction.py` (pas supposé) : un vrai chunk PDF porte `{"page": N}`, un vrai chunk Markdown porte `{"heading": str, "level": int}` (clés omises si `None`), DOCX/TXT `{}`. Aucune nouvelle extraction n'a été inventée -- réutilisation directe de ce que le pipeline de chunking produit déjà réellement.
+
+✅ **Réconciliation honnête de deux champs littéraux vers une seule vraie source** : les items littéraux `source_section` et `source_heading` sont deux vraies colonnes séparées, mais ce dépôt ne trace réellement qu'UN seul vrai fait structurel par chunk (le `heading`/`level` réel d'un chunk Markdown -- aucun schéma de numérotation de chapitre/sous-section n'existe nulle part dans `structure_detection.py`/`document_extraction.py`). Plutôt que de laisser l'un des deux toujours `None` (ce qui ressemblerait à un vrai bug) ou d'inventer un faux schéma de numérotation, les deux sont réellement dérivés de la MÊME vraie paire `heading`/`level` : `source_heading` est le vrai texte du titre seul ; `source_section` est un vrai label qualifié par niveau (`"H{level}: {heading}"`) -- un contenu réellement distinct, mais fondé sur la même vraie donnée existante, jamais fabriqué.
+
+✅ **Robustesse (vision critique 3)** : chaque vraie fonction retourne `None` pour un vrai chunk dont les métadonnées ne portent réellement ni page ni titre (un vrai chunk DOCX/TXT, ou un chunk PDF antérieur à cette fonctionnalité) -- jamais un placeholder fabriqué comme `"Unknown"` ou `0`.
+
+✅ **`add_citations_to_response` (Partie 6.1.1) enrichi rétroactivement** : `source_page`/`source_section`/`source_heading` sont maintenant réellement peuplés AU MOMENT DE LA CRÉATION de la citation, à partir du même vrai chunk déjà utilisé pour `document_name`/`document_type` -- pas une seconde extraction, la même.
+
+✅ **Intégration réelle dans les 3 endpoints de citations** : `enrich_citation_with_location`/`enrich_citations_with_location` re-dérivent les vraies informations de localisation depuis le vrai chunk EN DIRECT (même raisonnement "live > snapshot, repli honnête sinon" que la Partie 6.1.2), jamais commité en base.
+
+Tests réels dédiés (16 tests), voir `tests/test_citation_location.py`.
+
+*(Note technique : les Parties 6.1.2 et 6.1.3 sont livrées dans un commit combiné, `api/services/citations.py` et `api/routers/citations.py` ayant été modifiés de façon imbriquée par les deux étapes -- une séparation fichier par fichier n'était pas propre.)*
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

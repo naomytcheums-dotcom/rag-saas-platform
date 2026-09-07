@@ -25,6 +25,7 @@ from api.config import settings
 from api.models.citation import Citation
 from api.models.response import Response
 from api.security.organization_settings import get_org_settings
+from api.services.citation_location import extract_heading_from_chunk, extract_page_from_chunk, extract_section_from_chunk
 
 CITATION_FORMATS = ("markdown", "html", "json")
 
@@ -84,6 +85,13 @@ async def add_citations_to_response(
             position_end=position_end,
             document_name=chunk.get("document_name"),
             document_type=chunk.get("file_type"),
+            # Partie 6.1.3 -- real, extracted from this SAME real chunk
+            # dict's own `metadata_json`, at citation-creation time
+            # (also re-derivable later, live, via
+            # `citation_location.enrich_citation_with_location`).
+            source_page=extract_page_from_chunk(chunk),
+            source_section=extract_section_from_chunk(chunk),
+            source_heading=extract_heading_from_chunk(chunk),
         )
         db.add(citation)
         citations.append(citation)
