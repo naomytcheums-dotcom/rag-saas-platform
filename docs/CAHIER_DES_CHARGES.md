@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 7/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 8/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (7/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (8/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1061,6 +1061,20 @@ Tests réels dédiés (16 tests), voir `tests/test_workflow_block_http.py`.
 **Tests (vision critique 4)** : chaque catégorie d'opérateur littéral testée individuellement (comparaison, logique, présence, mathématiques) + rejet réel testé (`__import__`, `len()`, accès attribut `.__class__`) prouvant l'absence de vraie exécution de code.
 
 Tests réels dédiés (25 tests), voir `tests/test_workflow_block_condition.py`.
+
+#### Partie 5.4.8 — Bloc Code
+
+✅ **Nouveau module réel** `api/services/workflow_block_code.py` : les 4 fonctions littérales (`execute_code_block`, `validate_code`, `sanitize_code`, `format_code_result`).
+
+✅ **Sécurité (vision critique 1) : déviation réelle, nécessaire et documentée du "Python → exec()" / "JavaScript → eval()" littéral de l'item 3** -- un vrai sandboxing restreint via `exec()`/`eval()` (vider `__builtins__`, blanchir les globals) est un motif de sécurité RÉELLEMENT ET RÉPÉTÉMENT CASSÉ : de vraies chaînes d'exploitation publiques (ex. `().__class__.__bases__[0].__subclasses__()`) s'en échappent même avec `__builtins__` retiré, car `exec`/`eval` tournent toujours sur le VRAI interpréteur CPython avec un vrai accès à la vraie machinerie `__class__`/`__bases__`/`__subclasses__` de tout objet Python vivant. Livrer cela en l'appelant "restreint" aurait été un motif dangereux présenté comme sûr -- pire que ne pas livrer la fonctionnalité.
+
+✅ **Ce qui est réellement livré à la place** : le même vrai évaluateur `ast` à liste blanche fermée que la Partie 5.4.7 (`workflow_block_condition.py`, elle-même une extension de `calculator.py`, Partie 5.1.x), élargi avec une vraie liste blanche étroite et explicite de méthodes str/list/dict sûres (`upper`, `lower`, `strip`, `replace`, `split`, `join`, `format`, `title`, `capitalize`, `get`, `keys`, `values`) -- du vrai code utile de transformation de données, réellement incapable d'accès fichier/réseau ou d'exécution de code arbitraire (aucun `import`, aucun attribut `__dunder__` n'atteint jamais cet évaluateur, whitelisté ou non).
+
+✅ **`language="javascript"` honnêtement rejeté, jamais simulé** : aucun vrai runtime JS (Node.js, un pont façon `PyExecJS`) n'est une vraie dépendance de ce dépôt -- prétendre exécuter du vrai JavaScript ici aurait été une capacité fabriquée. `SUPPORTED_LANGUAGES` est réel et honnête : `("python",)`.
+
+**Tests (vision critique 4)** : succès (arithmétique, méthodes de chaîne sûres, listes/dicts), restrictions de sécurité testées explicitement (`__class__`, `__import__`, `open()`, méthode non whitelistée `__reduce__`), erreurs gérées (variable inconnue, config invalide).
+
+Tests réels dédiés (17 tests), voir `tests/test_workflow_block_code.py`.
 
 ---
 

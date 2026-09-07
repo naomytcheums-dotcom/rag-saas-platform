@@ -8106,6 +8106,47 @@ access) proving no real code execution.
 
 **Real verification**: 25 tests, `tests/test_workflow_block_condition.py`.
 
+### Partie 5.4.8 -- Code block
+
+New module `api/services/workflow_block_code.py`: all 4 literal
+functions (`execute_code_block`, `validate_code`, `sanitize_code`,
+`format_code_result`).
+
+**Security (vision critique 1): a real, necessary, documented
+deviation from item 3's own literal "Python -> exec()" / "JavaScript
+-> eval()"** -- real, restricted sandboxing via `exec()`/`eval()`
+(clearing `__builtins__`, blanking globals) is a REALLY, REPEATEDLY
+BROKEN security pattern: real, public exploit chains (e.g.
+`().__class__.__bases__[0].__subclasses__()`) escape it even with
+`__builtins__` removed, because `exec`/`eval` still run on the REAL
+CPython interpreter with real access to every live Python object's own
+`__class__`/`__bases__`/`__subclasses__` machinery. Shipping that and
+calling it "restricted" would be an unsafe pattern presented as safe --
+worse than not shipping the feature.
+
+**What is really shipped instead**: the same real, closed-whitelist
+`ast` evaluator as Partie 5.4.7 (`workflow_block_condition.py`, itself
+extending `calculator.py`, Partie 5.1.x), widened with a real, narrow,
+explicit whitelist of safe str/list/dict methods (`upper`, `lower`,
+`strip`, `replace`, `split`, `join`, `format`, `title`, `capitalize`,
+`get`, `keys`, `values`) -- real, useful data-transformation "code,"
+genuinely incapable of file/network access or arbitrary code execution
+(no `import`, no `__dunder__` attribute ever reaches this evaluator,
+whitelisted or not).
+
+**`language="javascript"` is honestly rejected, not faked**: no real
+JS runtime (Node.js, a `PyExecJS`-style bridge) is a real dependency of
+this codebase -- claiming to execute real JavaScript here would be
+fabricated capability. `SUPPORTED_LANGUAGES` is real and honest:
+`("python",)`.
+
+**Tests (vision critique 4)**: success cases (arithmetic, safe string
+methods, lists/dicts), security restrictions tested explicitly
+(`__class__`, `__import__`, `open()`, an unwhitelisted `__reduce__`
+method), error handling (unknown variable, invalid config).
+
+**Real verification**: 17 tests, `tests/test_workflow_block_code.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
