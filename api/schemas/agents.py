@@ -63,3 +63,16 @@ class AgentResponse(BaseModel):
     created_by: uuid.UUID | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+class SystemPromptUpdateRequest(BaseModel):
+    system_prompt: str | None = None
+    system_prompt_template: str | None = None
+
+
+class SystemPromptPreviewResponse(BaseModel):
+    rendered: str
+
+
+class SystemPromptVariablesResponse(BaseModel):
+    variables: list[str]

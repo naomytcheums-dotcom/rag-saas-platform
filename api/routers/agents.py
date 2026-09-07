@@ -13,16 +13,21 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db
+from api.dependencies import get_current_user, get_db
 from api.models.agent import Agent
-from api.models.organization import OrganizationMember
-from api.schemas.agents import AgentCreateRequest, AgentResponse, AgentUpdateRequest
+from api.models.organization import Organization, OrganizationMember
+from api.models.user import User
+from api.schemas.agents import (
+    AgentCreateRequest, AgentResponse, AgentUpdateRequest, SystemPromptPreviewResponse, SystemPromptUpdateRequest,
+    SystemPromptVariablesResponse,
+)
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
     require_agent_member, update_agent,
 )
 from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
+from api.services.agent_prompts import get_system_prompt_variables, preview_system_prompt
 
 router = APIRouter(tags=["agents"])
 
@@ -111,3 +116,41 @@ async def archive_agent_endpoint(
     await db.commit()
     await db.refresh(updated)
     return updated
+
+
+# ------------------------------------- Partie 5.3.2 -- system prompt templating -------------------------------------
+
+
+@router.get("/agents/{agent_id}/system-prompt/preview", response_model=SystemPromptPreviewResponse)
+async def preview_system_prompt_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    organization = await db.get(Organization, agent.organization_id)
+    context = {
+        "user_name": current_user.full_name or current_user.email,
+        "organization_name": organization.name if organization else "",
+        "context": "[conversation context would appear here]",
+        "tools": ", ".join(t.get("name", "") for t in agent.tools) if agent.tools else "(none configured)",
+        "knowledge_base": str(agent.knowledge_base_id) if agent.knowledge_base_id else "(none configured)",
+    }
+    return SystemPromptPreviewResponse(rendered=preview_system_prompt(agent, context))
+
+
+@router.patch("/agents/{agent_id}/system-prompt", response_model=AgentResponse)
+async def update_system_prompt_endpoint(
+    payload: SystemPromptUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    updated = await update_agent(db, agent.id, payload.model_dump(exclude_unset=True))
+    await db.commit()
+    await db.refresh(updated)
+    return updated
+
+
+@router.get("/agents/{agent_id}/system-prompt/variables", response_model=SystemPromptVariablesResponse)
+async def get_system_prompt_variables_endpoint(agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member)):
+    agent, _caller = agent_ctx
+    return SystemPromptVariablesResponse(variables=get_system_prompt_variables(agent))

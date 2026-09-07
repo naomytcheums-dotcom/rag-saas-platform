@@ -86,8 +86,8 @@ async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Age
     if agent is None or agent.deleted_at is not None:
         return None
     for field in (
-        "name", "description", "system_prompt", "workspace_id", "memory_enabled", "memory_window_size",
-        "guardrails_enabled", "human_approval_required", "knowledge_base_id",
+        "name", "description", "system_prompt", "system_prompt_template", "workspace_id", "memory_enabled",
+        "memory_window_size", "guardrails_enabled", "human_approval_required", "knowledge_base_id",
     ):
         if field in data:
             setattr(agent, field, data[field])

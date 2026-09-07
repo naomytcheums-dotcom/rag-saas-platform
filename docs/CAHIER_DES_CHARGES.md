@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 1/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 2/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (1/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (2/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -797,6 +797,22 @@ Custom Tools (webhooks) : ⬜.
 **Performance (vision critique)** : `ix_agents_organization_id`/`ix_agents_workspace_id` réels.
 
 Tests réels dédiés (11 tests), voir `tests/test_agents.py`.
+
+#### Partie 5.3.2 — Instructions personnalisées
+
+✅ **Nouveau module réel** `api/services/agent_prompts.py` : les 4 fonctions littérales + `KNOWN_VARIABLES` (les 7 variables littérales).
+
+✅ **Décision réelle et sûre : substitution regex `{{var}}` à la main, PAS `str.format()`/`format_map()`** (vision critique : "les templates sont-ils protégés contre les injections ?") -- `format_map` exécuté contre une chaîne de format influencée par un attaquant est une vraie classe de vulnérabilité Python documentée (charges de type `"{0.__class__...}".format_map(...)`, traversée d'attributs) -- un vrai risque ici puisque l'AUTEUR du template (un Owner/Admin/Manager, réel mais pas forcément digne de confiance pour de l'exécution de code arbitraire) contrôle la chaîne de format elle-même, pas seulement les valeurs substituées. Testé explicitement (`test_render_system_prompt_rejects_no_real_code_execution_via_format`).
+
+✅ **Robustesse réelle et testée (vision critique)** : une variable réellement manquante reste littéralement `{{nom}}` dans le rendu -- jamais effacée silencieusement, jamais d'exception. Un vrai typo reste visible et débogable dans le texte rendu lui-même.
+
+✅ **`render_system_prompt`, périmètre honnête** : `{{date}}`/`{{time}}` sont calculées automatiquement (aucune DB nécessaire) ; `{{user_name}}`/`{{organization_name}}`/`{{context}}`/`{{tools}}`/`{{knowledge_base}}` ont besoin d'informations réelles (résolution DB, utilisateur courant) -- cette fonction reste volontairement indépendante de la DB, c'est à l'appelant réel (l'endpoint preview) de les résoudre et de les passer.
+
+**Sécurité (vision critique)** : `validate_system_prompt` réutilise le vrai `settings.SYSTEM_PROMPT_MAX_LENGTH` déjà établi (Partie 4.3.4) plutôt qu'une seconde limite arbitraire ; rejette aussi un vrai nombre excessif de placeholders (garde-fou réel minimal).
+
+✅ **3 endpoints réels**, les 3 littéraux, ajoutés au routeur `agents.py` existant.
+
+Tests réels dédiés (15 tests), voir `tests/test_agent_prompts.py`.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

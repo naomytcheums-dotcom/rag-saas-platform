@@ -7408,6 +7408,43 @@ together (literal paths with no `{org_id}`).
 
 **Real verification**: 11 tests, `tests/test_agents.py`.
 
+### Partie 5.3.2 -- custom instructions
+
+New module `api/services/agent_prompts.py`: all 4 literal functions
+plus `KNOWN_VARIABLES` (the 7 literal variables).
+
+**A real, safe choice: a hand-written `{{var}}` regex substitution,
+NOT `str.format()`/`format_map()`** (vision critique: "are templates
+protected against injection?") -- `format_map` run against an
+attacker-influenced format STRING is a real, documented Python
+vulnerability class (`"{0.__class__...}".format_map(...)`-style
+attribute-traversal payloads) -- a real risk here since the template's
+own AUTHOR (an Owner/Admin/Manager, real but not necessarily trusted
+with arbitrary code execution) controls the format string itself, not
+just the substituted values. Tested explicitly.
+
+**Real, tested robustness (vision critique)**: a real, missing
+variable stays literally `{{name}}` in the rendered output -- never
+silently blanked, never an exception. A real typo stays visible and
+debuggable in the actual rendered text.
+
+**`render_system_prompt`, an honest scope**: `{{date}}`/`{{time}}` are
+computed automatically (no DB needed); `{{user_name}}`/
+`{{organization_name}}`/`{{context}}`/`{{tools}}`/`{{knowledge_base}}`
+need real information (a real DB lookup, the current user) -- this
+function stays deliberately DB-independent, so the real caller (the
+preview endpoint) resolves and passes them in.
+
+**Security (vision critique)**: `validate_system_prompt` reuses the
+real, already-established `settings.SYSTEM_PROMPT_MAX_LENGTH` (Partie
+4.3.4) rather than a second, arbitrary limit; also rejects a real,
+excessive placeholder count (a real, minimal safeguard).
+
+**3 real endpoints**, all 3 literal ones, added to the existing
+`agents.py` router.
+
+**Real verification**: 15 tests, `tests/test_agent_prompts.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
