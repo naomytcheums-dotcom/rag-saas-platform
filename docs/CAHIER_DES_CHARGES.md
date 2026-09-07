@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 6/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 7/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (6/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (7/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1047,6 +1047,20 @@ Tests réels dédiés (11 tests), voir `tests/test_workflow_block_search.py`.
 **Performance (vision critique 2)** : un seul vrai appel réseau, aucune couche supplémentaire au-delà du vrai transport SSRF déjà établi.
 
 Tests réels dédiés (16 tests), voir `tests/test_workflow_block_http.py`.
+
+#### Partie 5.4.7 — Bloc Condition
+
+✅ **Nouveau module réel** `api/services/workflow_block_condition.py` : les 4 fonctions littérales (`execute_condition_block`, `evaluate_condition`, `validate_condition_config`, `format_condition_result`).
+
+✅ **Sécurité (vision critique 1) : déviation réelle et documentée du "JSONLogic" littéral** -- aucune bibliothèque JSONLogic n'est une vraie dépendance de ce dépôt (`requirements.txt`/`requirements-api.txt` vérifiés, ni l'un ni l'autre ne la déclare). En ajouter une pour cette seule fonctionnalité a été jugé ne pas valoir une nouvelle vraie dépendance tierce quand ce dépôt a déjà un vrai motif PROUVÉ SÛR pour exactement ce problème : le vrai évaluateur `ast` de `api/tools/calculator.py` (`_safe_eval_arithmetic`, Partie 5.1.x) -- jamais `eval()`/`exec()` (qui exécuterait du code arbitraire depuis une chaîne de condition écrite par un Manager, réel mais pas totalement digne de confiance -- même modèle de menace déjà documenté pour le rendu de templates de la Partie 5.3.2). Ce module étend ce même motif réel et sûr aux opérateurs littéraux de l'item 3 (comparaison, logique, présence, mathématiques) plutôt que d'inventer un second mécanisme de sécurité différent.
+
+✅ **Vraie résolution de variable, jamais silencieuse** : un `ast.Name` inconnu dans une condition lève un vrai `WorkflowBlockError` spécifique -- une condition évaluée silencieusement contre une variable manquante/`None` pourrait choisir la MAUVAISE vraie branche sans aucune erreur visible, une vraie classe d'échec silencieux dangereuse pour le flux de contrôle (pire qu'un placeholder de template littéral `{{typo}}`, visible dans le texte rendu).
+
+✅ **`contains`/`is_empty` (opérateurs de présence littéraux, pas une vraie syntaxe Python)** : exposés comme deux vrais noms de fonction explicitement whitelistés (`ast.Call` n'est JAMAIS autorisé autrement) -- ne peut jamais devenir un vrai vecteur d'appel arbitraire.
+
+**Tests (vision critique 4)** : chaque catégorie d'opérateur littéral testée individuellement (comparaison, logique, présence, mathématiques) + rejet réel testé (`__import__`, `len()`, accès attribut `.__class__`) prouvant l'absence de vraie exécution de code.
+
+Tests réels dédiés (25 tests), voir `tests/test_workflow_block_condition.py`.
 
 ---
 

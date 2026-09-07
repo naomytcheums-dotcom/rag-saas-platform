@@ -8066,6 +8066,46 @@ layer beyond the real, already-established SSRF transport.
 
 **Real verification**: 16 tests, `tests/test_workflow_block_http.py`.
 
+### Partie 5.4.7 -- Condition block
+
+New module `api/services/workflow_block_condition.py`: all 4 literal
+functions (`execute_condition_block`, `evaluate_condition`,
+`validate_condition_config`, `format_condition_result`).
+
+**Security (vision critique 1): a real, documented deviation from the
+literal "JSONLogic"** -- no JSONLogic library is a real dependency of
+this codebase (`requirements.txt`/`requirements-api.txt` checked,
+neither declares one). Adding one for this single feature was judged
+not worth a new, real third-party dependency when this codebase
+already has a real, PROVEN-SAFE pattern for exactly this problem:
+`api/tools/calculator.py`'s own real `ast` evaluator
+(`_safe_eval_arithmetic`, Partie 5.1.x) -- never `eval()`/`exec()`
+(which would execute arbitrary code from a Manager-authored, real but
+not fully trusted condition string -- the same real threat model
+already documented for Partie 5.3.2's own template rendering). This
+module extends that exact same real, safe pattern to item 3's own
+literal operator set (comparison, logical, presence, arithmetic)
+rather than inventing a second, different safety mechanism.
+
+**A real variable lookup, never silent**: an unknown `ast.Name` in a
+condition raises a real, specific `WorkflowBlockError` -- a condition
+silently evaluating against a missing/`None` variable could pick the
+WRONG real branch with no visible error, a real, dangerous
+silent-failure class for control flow (worse than a template's own
+literal `{{typo}}` placeholder, visible in the rendered text).
+
+**`contains`/`is_empty` (literal presence operators, not real Python
+syntax)**: exposed as two real, explicitly whitelisted function-call
+names (`ast.Call` is NEVER otherwise allowed) -- can never become a
+real, arbitrary call vector.
+
+**Tests (vision critique 4)**: every literal operator category tested
+individually (comparison, logical, presence, arithmetic) + real
+rejection tested (`__import__`, `len()`, `.__class__` attribute
+access) proving no real code execution.
+
+**Real verification**: 25 tests, `tests/test_workflow_block_condition.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
