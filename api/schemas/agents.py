@@ -22,6 +22,9 @@ class AgentCreateRequest(BaseModel):
     tools: list[dict] = Field(default_factory=list)
     memory_enabled: bool = True
     memory_window_size: int = 10
+    memory_ttl: int | None = None
+    memory_max_items: int | None = None
+    memory_retention_policy: str | None = None
     guardrails_enabled: bool = True
     human_approval_required: bool = False
     knowledge_base_id: uuid.UUID | None = None
@@ -38,6 +41,9 @@ class AgentUpdateRequest(BaseModel):
     tools: list[dict] | None = None
     memory_enabled: bool | None = None
     memory_window_size: int | None = None
+    memory_ttl: int | None = None
+    memory_max_items: int | None = None
+    memory_retention_policy: str | None = None
     guardrails_enabled: bool | None = None
     human_approval_required: bool | None = None
     knowledge_base_id: uuid.UUID | None = None
@@ -56,6 +62,9 @@ class AgentResponse(BaseModel):
     tools: list
     memory_enabled: bool
     memory_window_size: int
+    memory_ttl: int | None
+    memory_max_items: int | None
+    memory_retention_policy: str | None
     guardrails_enabled: bool
     human_approval_required: bool
     knowledge_base_id: uuid.UUID | None
@@ -129,3 +138,28 @@ class AgentToolsResponse(BaseModel):
 
 class ToolConfigUpdateRequest(BaseModel):
     config: dict | None = None
+
+
+class AgentMemoryConfigResponse(BaseModel):
+    memory_enabled: bool
+    memory_window_size: int
+    memory_ttl: int
+    memory_max_items: int
+    memory_retention_policy: str
+
+
+class AgentMemoryConfigUpdateRequest(BaseModel):
+    memory_enabled: bool | None = None
+    memory_window_size: int | None = None
+    memory_ttl: int | None = None
+    memory_max_items: int | None = None
+    memory_retention_policy: str | None = None
+
+
+class AgentMemoryUsageResponse(BaseModel):
+    session_count: int
+    item_count: int
+
+
+class AgentMemoryClearResponse(BaseModel):
+    cleared_items: int

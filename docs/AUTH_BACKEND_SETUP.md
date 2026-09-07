@@ -7588,6 +7588,60 @@ fabricated scope, not a real requirement).
 
 **Real verification**: 21 tests, `tests/test_agent_tools.py`.
 
+### Partie 5.3.6 -- memory configuration
+
+New module `api/services/agent_memory_config.py`: all 6 literal
+functions (`get_agent_memory_config`, `set_agent_memory_config`,
+`validate_memory_config`, `get_memory_usage`, `clear_agent_memory`,
+`get_default_memory_config`).
+
+**Real integration, not a second memory system**: `clear_agent_memory`
+reuses the real `clear_memory` from Partie 5.1.11
+(`api/services/agent_memory.py`) by resolving every real
+`AgentSession` row whose own `agent_id` string equals `str(Agent.id)`
+-- exactly the real integration point `api/models/agent.py`'s own
+docstring already documented since Partie 5.3.1 ("`str(Agent.id)` is
+now that same real string"). This étape is the first to actually walk
+that path, from a real `Agent` back to its real sessions.
+
+**A real, honest retention-policy set**: `MEMORY_RETENTION_POLICIES`
+contains only `"fifo"` -- the ONE eviction policy
+`_evict_oldest_if_full` (Partie 5.1.11) actually implements. Accepting
+a second, made-up value (e.g. "lru") that changes no real behavior
+anywhere would be a fabricated setting, not a real one.
+
+**`get_default_memory_config` reuses the real, already-established
+defaults** (`settings.AGENT_MEMORY_TTL`/`AGENT_MEMORY_SIZE`, Partie
+5.1.11) rather than a second, hardcoded set of values -- same pattern
+as Parties 5.3.3/5.3.4.
+
+**A real bypass gap found and fixed**: `memory_ttl`/`memory_max_items`/
+`memory_retention_policy` were already real, declared fields on
+`Agent` (migration `0058`) but entirely absent from the
+`AgentCreateRequest`/`AgentUpdateRequest` schemas and from
+`update_agent` -- added to both, with `validate_memory_config` called
+from `create_agent`/`update_agent` (not just from
+`set_agent_memory_config`), same reasoning as the Partie 5.3.4/5.3.5
+fixes. Tested.
+
+**`get_memory_usage`, a real, live count**: the real number of
+`AgentSession`/`AgentMemoryItem` rows (Partie 5.1.11) for this agent --
+not an estimate, a real `COUNT`/`JOIN` query.
+
+**4 real endpoints** -- `GET/PATCH /agents/{agent_id}/memory-config`,
+`GET /agents/{agent_id}/memory-usage`, `POST
+/agents/{agent_id}/memory/clear`.
+
+**Security (vision critique)**: `clear_agent_memory` tested to NEVER
+touch another agent's own sessions. Updates and clearing are
+manager-only (403 for a member, tested).
+
+**Real verification**: 22 tests, `tests/test_agent_memory_config.py`.
+
+**Partie 5.3 Agent Builder for this batch is done -- 6/10 items of the
+requested batch (5.3.1 through 5.3.6) verified real.** The remaining 4
+items (5.3.7-5.3.10, outside this batch) stay ⬜.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

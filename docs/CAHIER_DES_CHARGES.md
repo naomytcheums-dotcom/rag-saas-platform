@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 5/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 6/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (5/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (6/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -865,6 +865,28 @@ Tests réels dédiés (18 tests), voir `tests/test_agent_knowledge_base.py`.
 **Robustesse (vision critique)** : `set_agent_tools` valide TOUTE la liste avant la moindre écriture réelle -- une seule entrée invalide rejette tout, rien n'est appliqué partiellement. `validate_tool_config` reste volontairement minimal au-delà du nom/type de `config` (vision critique honnête : le spec littéral de cette étape ne définit aucun schéma par outil au-delà de "config" -- en inventer un serait un périmètre fabriqué, pas une vraie exigence).
 
 Tests réels dédiés (21 tests), voir `tests/test_agent_tools.py`.
+
+#### Partie 5.3.6 — Configuration de la mémoire
+
+✅ **Nouveau module réel** `api/services/agent_memory_config.py` : les 6 fonctions littérales (`get_agent_memory_config`, `set_agent_memory_config`, `validate_memory_config`, `get_memory_usage`, `clear_agent_memory`, `get_default_memory_config`).
+
+✅ **Vraie intégration, pas un second système de mémoire** : `clear_agent_memory` réutilise la vraie `clear_memory` de la Partie 5.1.11 (`api/services/agent_memory.py`), en résolvant chaque vraie ligne `AgentSession` dont le propre `agent_id` (chaîne) est égal à `str(Agent.id)` -- exactement le point d'intégration réel que le propre docstring de `api/models/agent.py` documentait déjà depuis la Partie 5.3.1 ("`str(Agent.id)` est maintenant cette même chaîne réelle"). Cette étape est la première à vraiment emprunter ce chemin, d'un `Agent` réel vers ses vraies sessions.
+
+✅ **Vrai ensemble honnête de politiques de rétention** : `MEMORY_RETENTION_POLICIES` ne contient que `"fifo"` -- la SEULE politique d'éviction réellement implémentée par `_evict_oldest_if_full` (Partie 5.1.11). Accepter une seconde valeur inventée (ex. "lru") qui ne change aucun comportement réel nulle part aurait été un réglage fabriqué, pas un réglage réel.
+
+✅ **`get_default_memory_config` réutilise les vrais défauts déjà établis** (`settings.AGENT_MEMORY_TTL`/`AGENT_MEMORY_SIZE`, Partie 5.1.11) plutôt qu'un second jeu de valeurs codées en dur -- même schéma que les Parties 5.3.3/5.3.4.
+
+✅ **Vraie faille de contournement corrigée** : `memory_ttl`/`memory_max_items`/`memory_retention_policy` étaient déjà déclarés réels sur `Agent` (migration `0058`) mais totalement absents des schémas `AgentCreateRequest`/`AgentUpdateRequest` et de `update_agent` -- ajoutés aux deux, avec `validate_memory_config` appelée depuis `create_agent`/`update_agent` (pas seulement depuis `set_agent_memory_config`), même raisonnement que les corrections des Parties 5.3.4/5.3.5. Testé (`test_update_agent_rejects_an_invalid_memory_config_via_generic_update`, `test_create_agent_rejects_an_invalid_memory_config`).
+
+✅ **`get_memory_usage`, vrai comptage live** : nombre réel de `AgentSession`/`AgentMemoryItem` (Partie 5.1.11) pour cet agent -- pas une estimation, une vraie requête `COUNT`/`JOIN`.
+
+✅ **4 endpoints réels** -- `GET/PATCH /agents/{agent_id}/memory-config`, `GET /agents/{agent_id}/memory-usage`, `POST /agents/{agent_id}/memory/clear`.
+
+**Sécurité (vision critique)** : `clear_agent_memory` testé pour ne JAMAIS toucher les sessions d'un autre agent (`test_clear_agent_memory_does_not_touch_another_agents_sessions`). Modification et vidage réservés aux managers (403 pour un member, testé).
+
+Tests réels dédiés (22 tests), voir `tests/test_agent_memory_config.py`.
+
+**Partie 5.3 Agent Builder terminée -- 6/10 items du lot demandé (5.3.1 à 5.3.6) vérifiés réels.** Les 4 items restants (5.3.7 à 5.3.10, hors de ce lot) restent ⬜.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

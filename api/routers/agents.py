@@ -18,7 +18,8 @@ from api.models.agent import Agent
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
-    AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentModelResponse,
+    AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentMemoryClearResponse,
+    AgentMemoryConfigResponse, AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse, AgentModelResponse,
     AgentModelUpdateRequest, AgentResponse, AgentToolsResponse, AgentToolsUpdateRequest, AgentUpdateRequest,
     KnowledgeBaseOption, SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse,
     ToolConfigUpdateRequest,
@@ -31,6 +32,9 @@ from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
 from api.services.agent_knowledge_base import (
     AgentKnowledgeBaseError, get_agent_kb_config, get_available_knowledge_bases, set_agent_knowledge_base,
+)
+from api.services.agent_memory_config import (
+    AgentMemoryConfigError, clear_agent_memory, get_agent_memory_config, get_memory_usage, set_agent_memory_config,
 )
 from api.services.agent_models import (
     AgentModelError, get_agent_model, get_available_models, set_agent_model,
@@ -51,7 +55,7 @@ async def create_agent_endpoint(
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
     try:
         agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
-    except (AgentKnowledgeBaseError, AgentToolError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(agent)
@@ -86,7 +90,7 @@ async def update_agent_endpoint(
     agent, _caller = agent_ctx
     try:
         updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
-    except (AgentKnowledgeBaseError, AgentToolError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(updated)
@@ -322,3 +326,46 @@ async def list_available_tools_endpoint(_current_user: User = Depends(get_curren
     # membership against -- any real, authenticated user can read this
     # real, static, non-secret tool catalog.
     return get_available_tools()
+
+
+# ------------------------------------- Partie 5.3.6 -- memory configuration -------------------------------------
+
+
+@router.get("/agents/{agent_id}/memory-config", response_model=AgentMemoryConfigResponse)
+async def get_agent_memory_config_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_agent_memory_config(db, agent.id)
+
+
+@router.patch("/agents/{agent_id}/memory-config", response_model=AgentMemoryConfigResponse)
+async def update_agent_memory_config_endpoint(
+    payload: AgentMemoryConfigUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    try:
+        await set_agent_memory_config(db, agent.id, **payload.model_dump(exclude_unset=True))
+    except AgentMemoryConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return await get_agent_memory_config(db, agent.id)
+
+
+@router.get("/agents/{agent_id}/memory-usage", response_model=AgentMemoryUsageResponse)
+async def get_agent_memory_usage_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_memory_usage(db, agent.id)
+
+
+@router.post("/agents/{agent_id}/memory/clear", response_model=AgentMemoryClearResponse)
+async def clear_agent_memory_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    cleared = await clear_agent_memory(db, agent.id)
+    await db.commit()
+    return AgentMemoryClearResponse(cleared_items=cleared)
