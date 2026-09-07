@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 8/10 (5.3.8 non demandé) -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (8/10, 5.3.8 non demandé dans ce lot)
+### 5.3 Agent Builder — 🟡 PARTIEL (9/10, 5.3.8 non demandé dans ce lot)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -927,6 +927,28 @@ Tests réels dédiés (19 tests `tests/test_agent_permissions.py` + 3 tests d'in
 ✅ **2 endpoints réels** -- `GET/PATCH /agents/{agent_id}/guardrails` (Manager+).
 
 Tests réels dédiés (25 tests `tests/test_agent_guardrails.py` + 2 tests d'intégration dans `tests/test_agent_orchestrator.py` + 1 test dans `tests/test_web_search.py`).
+
+#### Partie 5.3.10 — Déploiement (API key)
+
+✅ **Nouveau modèle réel** `api/models/agent_api_key.py` (`AgentAPIKey`, migration `0061`, RLS activée) : id, agent_id (FK agents), name, key_hash (String(64), SHA-256 hex, UNIQUE), key_prefix, scopes (JSON), expires_at, last_used_at, created_by (FK users), created_at, revoked_at. `UNIQUE(agent_id, name)`.
+
+✅ **Sécurité (vision critique 1) : seul le hash est stocké, jamais la clé en clair** -- `generate_api_key` génère `ak_<secrets.token_urlsafe(32)>` (même vrai RNG cryptographique que les tokens de reset de mot de passe/vérification email de ce dépôt, jamais `random`), retourne le texte en clair EXACTEMENT UNE FOIS, et ne persiste que `hash_api_key(key)` (SHA-256). Même discipline que le hachage des mots de passe : un hash se vérifie, ne se retrouve jamais en clair.
+
+✅ **Nouveau module réel** `api/services/agent_api_keys.py` : les 6 fonctions littérales (`generate_api_key`, `hash_api_key`, `verify_api_key`, `revoke_api_key`, `get_agent_from_api_key`, `list_api_keys`).
+
+✅ **Robustesse (vision critique 3) : expiration réelle et distincte de la révocation** -- `verify_api_key` refuse une clé réellement expirée (lazy check, même schéma que `api/services/agent_memory.py`), en la traitant comme invalide sans jamais la marquer révoquée -- `revoke_api_key` reste une action explicite, permanente, distincte, testée idempotente (retourne `False` pour une clé déjà révoquée ou inconnue).
+
+✅ **Performance (vision critique 2)** : `verify_api_key` reste une seule requête indexée sur `key_hash` (contrainte UNIQUE + index réels) -- aucun scan, même catégorie de performance que chaque autre point d'authentification de ce dépôt.
+
+✅ **Middleware d'authentification réel, mécanisme distinct** : `api/security/agent_api_keys.py` (`require_agent_api_key`, `require_api_key_scope`) -- une vraie dépendance FastAPI lisant le header `X-API-Key`, entièrement séparée de `get_current_user`/JWT. Un agent réel + la clé résolue ensemble, une clé invalide/expirée/révoquée renvoie 401 (jamais 404, même raisonnement anti-énumération que le reste de ce dépôt).
+
+✅ **4 endpoints réels** -- `POST/GET /agents/{agent_id}/api-keys`, `DELETE /agents/{agent_id}/api-keys/{key_id}` (Manager+), `POST /api/agents/run` (authentification par clé API, scope `execute` requis).
+
+✅ **`POST /api/agents/run` réutilise l'orchestrateur réel sans le contourner** : passe par le même `AgentOrchestrator.run_agent`, donc les vraies vérifications de permission (Partie 5.3.7) ET de garde-fous (Partie 5.3.9) s'appliquent aussi à une exécution via clé API -- une clé API n'est jamais un moyen de contourner ce qui s'applique déjà à tout autre appelant réel.
+
+Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
+
+**Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

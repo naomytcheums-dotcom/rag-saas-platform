@@ -7758,9 +7758,61 @@ already-in-memory text -- no network call.
 2 integration tests in `tests/test_agent_orchestrator.py` + 1 test in
 `tests/test_web_search.py`.
 
-**Partie 5.3 Agent Builder for this batch is done -- 8/10 items of the
-requested batch (5.3.1-5.3.7, 5.3.9) verified real.** 5.3.8 was not
-requested in this batch; 5.3.10 stays ⬜.
+### Partie 5.3.10 -- deployment (API keys)
+
+New real model `api/models/agent_api_key.py` (`AgentAPIKey`, migration
+`0061`, RLS enabled): id, agent_id (FK agents), name, key_hash
+(String(64), SHA-256 hex, UNIQUE), key_prefix, scopes (JSON),
+expires_at, last_used_at, created_by (FK users), created_at,
+revoked_at. `UNIQUE(agent_id, name)`.
+
+**Security (vision critique 1): only the hash is ever stored, never
+the plaintext key** -- `generate_api_key` generates
+`ak_<secrets.token_urlsafe(32)>` (the same real, cryptographic RNG
+this codebase's own password-reset/email-verification tokens already
+use, never `random`), returns the plaintext EXACTLY ONCE, and persists
+only `hash_api_key(key)` (SHA-256). Same discipline as password
+hashing: a hash is verified against, never turned back into the real
+secret.
+
+New module `api/services/agent_api_keys.py`: all 6 literal functions
+(`generate_api_key`, `hash_api_key`, `verify_api_key`,
+`revoke_api_key`, `get_agent_from_api_key`, `list_api_keys`).
+
+**Robustness (vision critique 3): real expiry, distinct from
+revocation** -- `verify_api_key` rejects a really-expired key (lazy
+check, same pattern as `api/services/agent_memory.py`), treating it as
+invalid without ever marking it revoked -- `revoke_api_key` stays an
+explicit, permanent, distinct action, tested idempotent (returns
+`False` for an already-revoked or unknown key).
+
+**Performance (vision critique 2)**: `verify_api_key` stays a single
+lookup indexed on `key_hash` (a real UNIQUE constraint + index) -- no
+scan, same performance category as every other auth entry point in
+this codebase.
+
+**Real authentication middleware, a distinct mechanism**:
+`api/security/agent_api_keys.py` (`require_agent_api_key`,
+`require_api_key_scope`) -- a real FastAPI dependency reading the
+`X-API-Key` header, entirely separate from `get_current_user`/JWT. An
+invalid/expired/revoked key returns 401 (never 404, same
+anti-enumeration reasoning as the rest of this codebase).
+
+**4 real endpoints** -- `POST/GET /agents/{agent_id}/api-keys`,
+`DELETE /agents/{agent_id}/api-keys/{key_id}` (Manager+), `POST
+/api/agents/run` (API-key auth, `execute` scope required).
+
+**`POST /api/agents/run` reuses the real orchestrator without
+bypassing it**: goes through the SAME `AgentOrchestrator.run_agent`, so
+the real permission checks (Partie 5.3.7) AND guardrail checks (Partie
+5.3.9) also apply to a run made via API key -- an API key is never a
+way to bypass what already applies to every other real caller.
+
+**Real verification**: 19 tests, `tests/test_agent_api_keys.py`.
+
+**Partie 5.3 Agent Builder for this requested batch is done -- 9/10
+items (5.3.1-5.3.7, 5.3.9, 5.3.10) verified real.** 5.3.8 was never
+requested in this batch and stays ⬜.
 
 ### Partie 3.4.2 -- query rewriting
 
