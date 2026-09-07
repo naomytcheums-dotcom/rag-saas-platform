@@ -76,3 +76,19 @@ class SystemPromptPreviewResponse(BaseModel):
 
 class SystemPromptVariablesResponse(BaseModel):
     variables: list[str]
+
+
+class AgentModelResponse(BaseModel):
+    provider: str
+    model: str
+    temperature: float
+    max_tokens: int
+    top_p: float
+
+
+class AgentModelUpdateRequest(BaseModel):
+    provider: str
+    model: str
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None

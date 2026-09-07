@@ -7445,6 +7445,46 @@ excessive placeholder count (a real, minimal safeguard).
 
 **Real verification**: 15 tests, `tests/test_agent_prompts.py`.
 
+### Partie 5.3.3 -- LLM model selection
+
+New module `api/services/agent_models.py`: all 5 literal functions
+(`validate_agent_model`, `get_available_models`,
+`get_default_model_config`, `get_agent_model`, `set_agent_model`) plus
+`MODEL_CATALOG` (the 9 literal named models, across 5 providers).
+
+**Real reuse, not a second competing registry**: `MODEL_CATALOG` groups
+models under the SAME real provider keys
+`api/services/llm_providers.py` (Partie 4.1.7) already uses to make a
+real LLM call -- `"gemini"`, not this étape's own literal "Google"
+label (a real, documented naming reconciliation, not a second,
+competing provider registry). `validate_agent_model` validates against
+the real `PROVIDER_SETTINGS` first, then the real `MODEL_CATALOG`.
+
+**`get_default_model_config` reuses the real, already-established
+defaults** (`DEFAULT_SETTINGS` from Partie 4.3.1-4.3.5,
+`settings.ANTHROPIC_MODEL`) rather than a second, hardcoded set of
+values.
+
+**`get_agent_model`, a real effective config**: the agent's own real
+`model_config_json`, filled in with real defaults for any missing key
+-- never a partial config returned to the caller.
+
+**4 real endpoints**, all 4 literal ones -- `GET/PATCH
+/agents/{agent_id}/model` (member reads, manager updates), `GET
+/models`, and `GET /models/{provider}`.
+
+**Security (vision critique)**: `PATCH .../model` is manager-only
+(`require_agent_manager`), tested (403 for a member). An invalid model
+or provider is rejected BEFORE any real write (400, tested).
+
+**A real, documented deviation**: `GET /models`/`GET
+/models/{provider}` literally carry no `{org_id}` in their path --
+gated by `get_current_user` alone (any real, authenticated user can
+read this real, static, non-secret catalog), not by an organization
+membership check (impossible on this literal path).
+
+**Real verification**: 16 tests, `tests/test_agent_models.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

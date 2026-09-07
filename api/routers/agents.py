@@ -10,7 +10,7 @@ those (`GET/PATCH/DELETE /agents/{agent_id}`) carry no `{org_id}`.
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -18,8 +18,8 @@ from api.models.agent import Agent
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
-    AgentCreateRequest, AgentResponse, AgentUpdateRequest, SystemPromptPreviewResponse, SystemPromptUpdateRequest,
-    SystemPromptVariablesResponse,
+    AgentCreateRequest, AgentModelResponse, AgentModelUpdateRequest, AgentResponse, AgentUpdateRequest,
+    SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse,
 )
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
@@ -27,6 +27,9 @@ from api.security.agents import (
 )
 from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
+from api.services.agent_models import (
+    AgentModelError, get_agent_model, get_available_models, set_agent_model,
+)
 from api.services.agent_prompts import get_system_prompt_variables, preview_system_prompt
 
 router = APIRouter(tags=["agents"])
@@ -154,3 +157,45 @@ async def update_system_prompt_endpoint(
 async def get_system_prompt_variables_endpoint(agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member)):
     agent, _caller = agent_ctx
     return SystemPromptVariablesResponse(variables=get_system_prompt_variables(agent))
+
+
+# ------------------------------------- Partie 5.3.3 -- LLM model selection -------------------------------------
+
+
+@router.get("/agents/{agent_id}/model", response_model=AgentModelResponse)
+async def get_agent_model_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_agent_model(db, agent.id)
+
+
+@router.patch("/agents/{agent_id}/model", response_model=AgentModelResponse)
+async def update_agent_model_endpoint(
+    payload: AgentModelUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    try:
+        await set_agent_model(db, agent.id, payload.provider, payload.model, payload.temperature, payload.max_tokens, payload.top_p)
+    except AgentModelError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return await get_agent_model(db, agent.id)
+
+
+@router.get("/models")
+async def list_all_models_endpoint(_current_user: User = Depends(get_current_user)):
+    # Real, deliberate deviation: "Member+" has no real organization to
+    # check against on this literal, org-less path -- any real,
+    # authenticated user can read this real, static, non-secret model
+    # catalog.
+    return get_available_models()
+
+
+@router.get("/models/{provider}")
+async def list_provider_models_endpoint(provider: str, _current_user: User = Depends(get_current_user)):
+    try:
+        return get_available_models(provider)
+    except AgentModelError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

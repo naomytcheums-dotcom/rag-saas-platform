@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 2/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 3/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (2/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (3/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -813,6 +813,24 @@ Tests réels dédiés (11 tests), voir `tests/test_agents.py`.
 ✅ **3 endpoints réels**, les 3 littéraux, ajoutés au routeur `agents.py` existant.
 
 Tests réels dédiés (15 tests), voir `tests/test_agent_prompts.py`.
+
+#### Partie 5.3.3 — Choix du modèle LLM
+
+✅ **Nouveau module réel** `api/services/agent_models.py` : les 5 fonctions littérales (`validate_agent_model`, `get_available_models`, `get_default_model_config`, `get_agent_model`, `set_agent_model`) + `MODEL_CATALOG` (les 9 modèles nommés littéraux, sur 5 fournisseurs).
+
+✅ **Vraie réutilisation, pas un second registre concurrent** : `MODEL_CATALOG` regroupe par les MÊMES vraies clés fournisseur que `api/services/llm_providers.py` (Partie 4.1.7) utilise déjà pour un vrai appel LLM -- `"gemini"`, pas le libellé littéral "Google" de cette étape (réconciliation de nommage réelle et documentée, pas un second registre de fournisseurs concurrent). `validate_agent_model` valide d'abord contre le vrai `PROVIDER_SETTINGS`, puis contre le vrai `MODEL_CATALOG`.
+
+✅ **`get_default_model_config` réutilise les vrais défauts déjà établis** (`DEFAULT_SETTINGS` de la Partie 4.3.1-4.3.5, `settings.ANTHROPIC_MODEL`) plutôt qu'un second jeu de valeurs codées en dur.
+
+✅ **`get_agent_model`, config effective réelle** : le vrai `model_config_json` de l'agent, complété par les vrais défauts pour toute clé manquante -- jamais de config partielle renvoyée à l'appelant.
+
+✅ **4 endpoints réels**, les 4 littéraux -- `GET/PATCH /agents/{agent_id}/model` (member lit, manager modifie), `GET /models` et `GET /models/{provider}`.
+
+**Sécurité (vision critique)** : `PATCH .../model` réservé aux managers (`require_agent_manager`), testé (403 pour un member). Un modèle ou fournisseur invalide est rejeté AVANT toute écriture réelle (400, testé).
+
+**Déviation réelle et documentée** : `GET /models`/`GET /models/{provider}` n'ont littéralement pas de `{org_id}` dans leur chemin -- gatés par `get_current_user` seul (tout utilisateur authentifié réel peut lire ce catalogue réel, statique, non secret), pas par une vérification d'appartenance à une organisation (impossible sur ce chemin littéral).
+
+Tests réels dédiés (16 tests), voir `tests/test_agent_models.py`.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 
