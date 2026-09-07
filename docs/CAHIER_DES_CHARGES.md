@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (3/10)
+### 6.1 Citations — 🟡 PARTIEL (4/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1233,6 +1233,24 @@ Tests réels dédiés (9 tests), voir `tests/test_citation_documents.py`.
 Tests réels dédiés (16 tests), voir `tests/test_citation_location.py`.
 
 *(Note technique : les Parties 6.1.2 et 6.1.3 sont livrées dans un commit combiné, `api/services/citations.py` et `api/routers/citations.py` ayant été modifiés de façon imbriquée par les deux étapes -- une séparation fichier par fichier n'était pas propre.)*
+
+#### Partie 6.1.4 — URL source
+
+✅ **Nouveau module réel** `api/services/citation_url.py` : les 5 fonctions littérales (`extract_url_from_document`, `extract_url_from_chunk`, `enrich_citation_with_url`, `format_citation_url`, `is_url_valid`) + `enrich_citations_with_url` (plomberie réelle, même précédent que les Parties 6.1.2/6.1.3).
+
+✅ **Réutilisation réelle de `Document.source_url`** : cette colonne existait déjà (Partie 2.1.10, `POST /documents/url`), réelle mais jamais réellement câblée jusqu'à une citation -- `Citation.source_url` (déclarée dès la Partie 6.1.1) était réelle mais toujours `None` en pratique. Aucune seconde notion d'URL n'a été inventée : c'est la MÊME colonne réelle qui alimente enfin une vraie citation.
+
+✅ **Plomberie réelle étendue, pas une seconde requête** : `api/services/retrieval_pipeline.py`'s own `fetch_organization_chunks` (la vraie jointure partagée par CHAQUE stratégie de recherche) inclut maintenant `Document.source_url` -- exactement la même jointure déjà utilisée pour `document_name`/`file_type` depuis la Partie 3.4.x, un seul champ de plus, aucune requête supplémentaire. `search_with_context`'s own `context` dict expose aussi ce champ pour cohérence.
+
+✅ **`is_url_valid`, robustesse réelle contre l'injection (vision critique 3)** : seules les URL absolues `http`/`https` sont acceptées -- un `javascript:`/`data:`/chemin relatif est réellement rejeté, jamais rendu cliquable. Une URL de citation est affichée directement côté client ; un schéma malveillant ici est un vrai risque d'injection, pas seulement cosmétique.
+
+✅ **Même vrai design à deux couches que les Parties 6.1.2/6.1.3** : `extract_url_from_chunk` alimente le vrai snapshot dénormalisé au moment de la création (`add_citations_to_response`, Partie 6.1.1, maintenant enrichi rétroactivement) ; `enrich_citation_with_url` re-dérive EN DIRECT depuis le vrai `Document.source_url` actuel dans les 3 endpoints -- y compris le cas honnête où l'URL a réellement disparu depuis (un vrai `None` live remplace alors le vrai snapshot devenu obsolète, contrairement au nom/type de document où le snapshot historique est délibérément préservé -- ici il n'existe qu'UNE seule vraie source d'URL possible par document, donc `None` live est la vérité actuelle, pas une perte d'information).
+
+✅ **`format_citation_url`** : vrai lien Markdown cliquable (`[label](url)`), honnêtement vide quand aucune vraie URL n'est connue -- jamais un lien fabriqué ou un placeholder.
+
+**Performance (vision critique 2)** : zéro requête SQL supplémentaire à la création (le champ arrive déjà dans le vrai chunk) ; une seule requête par clé primaire (`db.get(Document, ...)`, déjà chargée pour Partie 6.1.2) côté enrichissement live.
+
+Tests réels dédiés (20 tests, `tests/test_citation_url.py`) + le test existant `test_search_with_context_includes_real_document_context` (`tests/test_retrieval_pipeline.py`) étendu avec 2 assertions verrouillant le nouveau champ `source_url` dans `fetch_organization_chunks`/`search_with_context`.
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

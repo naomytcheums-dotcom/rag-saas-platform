@@ -8587,6 +8587,61 @@ commit -- `api/services/citations.py` and `api/routers/citations.py`
 were modified in an interleaved way by both étapes, so a clean
 file-by-file split wasn't practical.)*
 
+### Partie 6.1.4 -- source URL
+
+New module `api/services/citation_url.py`: all 5 literal functions
+(`extract_url_from_document`, `extract_url_from_chunk`,
+`enrich_citation_with_url`, `format_citation_url`, `is_url_valid`) plus
+`enrich_citations_with_url` (real plumbing, same precedent as Parties
+6.1.2/6.1.3).
+
+**Real reuse of `Document.source_url`**: this column already existed
+(Partie 2.1.10, `POST /documents/url`), real but never actually wired
+through to a citation -- `Citation.source_url` (declared back in
+Partie 6.1.1) was real but always `None` in practice. No second URL
+concept was invented: it's the SAME real column finally feeding a real
+citation.
+
+**Real plumbing extended, not a second query**: `Document.source_url`
+is now joined into `api/services/retrieval_pipeline.py`'s own
+`fetch_organization_chunks` (the real, shared join every search
+strategy already goes through) -- the exact same join already used for
+`document_name`/`file_type` since Partie 3.4.x, one more column, zero
+extra queries. `search_with_context`'s own `context` dict exposes it
+too, for consistency.
+
+**`is_url_valid`, real robustness against injection (vision critique
+3)**: only absolute `http`/`https` URLs are accepted -- a
+`javascript:`/`data:`/relative path is really rejected, never rendered
+clickable. A citation URL is displayed directly on the client side; a
+malicious scheme here is a real injection risk, not just cosmetic.
+
+**Same real two-layer design as Parties 6.1.2/6.1.3**:
+`extract_url_from_chunk` feeds the real, denormalized snapshot at
+citation-creation time (`add_citations_to_response`, Partie 6.1.1, now
+retroactively enriched); `enrich_citation_with_url` re-derives it LIVE
+from the real, current `Document.source_url` in the 3 endpoints --
+including the honest case where the URL has really since disappeared
+(a real, live `None` then replaces the now-stale snapshot, unlike
+document name/type where the historical snapshot is deliberately kept
+-- here there is only ONE real possible URL source per document, so a
+live `None` is the current truth, not a loss of information).
+
+**`format_citation_url`**: a real, clickable Markdown link
+(`[label](url)`), honestly empty when no real URL is known -- never a
+fabricated link or placeholder.
+
+**Performance (vision critique 2)**: zero extra SQL queries at
+creation time (the field already arrives on the real chunk); one
+real, primary-key lookup per citation (`db.get(Document, ...)`,
+already loaded for Partie 6.1.2) for live enrichment.
+
+**Real verification**: 20 tests, `tests/test_citation_url.py`, plus
+the existing `test_search_with_context_includes_real_document_context`
+(`tests/test_retrieval_pipeline.py`) extended with 2 assertions
+locking in the new `source_url` field in
+`fetch_organization_chunks`/`search_with_context`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -100,7 +100,7 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id) -> list[d
     real chunks WITHOUT a query embedding at all (a metadata-only
     search has no real query to rank against)."""
     rows = await db.execute(
-        select(DocumentChunk, Document.name, Document.file_type, Document.id.label("doc_id"))
+        select(DocumentChunk, Document.name, Document.file_type, Document.source_url, Document.id.label("doc_id"))
         .join(Document, Document.id == DocumentChunk.document_id)
         .where(
             DocumentChunk.organization_id == organization_id,
@@ -117,8 +117,16 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id) -> list[d
             "embedding": chunk.embedding,
             "document_name": name,
             "file_type": file_type,
+            # Partie 6.1.4 -- the parent document's own real source_url
+            # (only ever real for a document imported via `POST
+            # .../documents/url`, see api/models/document.py's own
+            # docstring), joined in here for the SAME reason
+            # document_name/file_type already are: a citation built from
+            # this chunk needs its parent document's real context
+            # without a second, separate query.
+            "source_url": source_url,
         }
-        for chunk, name, file_type, _doc_id in rows.all()
+        for chunk, name, file_type, source_url, _doc_id in rows.all()
     ]
 
 
@@ -349,6 +357,7 @@ async def search_with_context(
             "context": {
                 "document_name": result["document_name"],
                 "file_type": result["file_type"],
+                "source_url": result["source_url"],
                 "metadata": result["metadata_json"],
             },
         }

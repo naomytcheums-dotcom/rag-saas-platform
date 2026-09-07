@@ -21,10 +21,10 @@ async def _make_org(db_session, name):
     return org
 
 
-async def _make_document(db_session, org_id, name="doc.pdf"):
+async def _make_document(db_session, org_id, name="doc.pdf", source_url=None):
     document = Document(
         organization_id=org_id, name=name, file_key=f"documents/{uuid.uuid4()}/{name}",
-        file_size=100, file_type="application/pdf", status=DocumentStatus.completed.value,
+        file_size=100, file_type="application/pdf", status=DocumentStatus.completed.value, source_url=source_url,
     )
     db_session.add(document)
     await db_session.flush()
@@ -195,13 +195,18 @@ async def test_search_with_context_includes_real_document_context(db_session):
     """Validation criterion: search_with_context retourne les chunks
     avec contexte."""
     org = await _make_org(db_session, "Org Context")
-    document = await _make_document(db_session, org.id, name="handbook.pdf")
+    document = await _make_document(db_session, org.id, name="handbook.pdf", source_url="https://example.com/handbook")
     await _add_chunks(db_session, org.id, document.id, ["Real vacation policy details for employees."])
 
     results = await search_with_context(db_session, org.id, "vacation policy", strategy="vector_only", top_k=1)
     assert len(results) == 1
     assert results[0]["context"]["document_name"] == "handbook.pdf"
     assert results[0]["context"]["file_type"] == "application/pdf"
+    # Partie 6.1.4 -- the parent document's own real source_url now
+    # flows through the same real join, for a real citation's own
+    # source_url to be captured from at citation-creation time.
+    assert results[0]["context"]["source_url"] == "https://example.com/handbook"
+    assert results[0]["source_url"] == "https://example.com/handbook"
 
 
 # ------------------------------- real config application (vision critique 2) -------------------------------

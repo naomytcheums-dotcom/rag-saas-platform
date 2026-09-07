@@ -26,6 +26,7 @@ from api.models.citation import Citation
 from api.models.response import Response
 from api.security.organization_settings import get_org_settings
 from api.services.citation_location import extract_heading_from_chunk, extract_page_from_chunk, extract_section_from_chunk
+from api.services.citation_url import extract_url_from_chunk
 
 CITATION_FORMATS = ("markdown", "html", "json")
 
@@ -78,6 +79,13 @@ async def add_citations_to_response(
             document_id=uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None,
             chunk_id=uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None,
             source_title=chunk.get("document_name"),
+            # Partie 6.1.4 -- real, from this SAME real chunk dict's own
+            # `source_url` (the parent document's real source_url,
+            # joined in by `fetch_organization_chunks` -- see
+            # api/services/citation_url.py's own top docstring; also
+            # re-derivable later, live, via
+            # `citation_url.enrich_citation_with_url`).
+            source_url=extract_url_from_chunk(chunk),
             text=chunk.get("content", ""),
             relevance_score=float(chunk.get("score", 0.0)),
             citation_number=number,
