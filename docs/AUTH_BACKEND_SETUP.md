@@ -8033,6 +8033,39 @@ no extra layer.
 
 **Real verification**: 11 tests, `tests/test_workflow_block_search.py`.
 
+### Partie 5.4.6 -- HTTP block
+
+New module `api/services/workflow_block_http.py`: all 5 literal
+functions (`execute_http_block`, `render_http_url`, `render_http_body`,
+`validate_http_config`, `format_http_response`).
+
+**Security (vision critique 1): real, reused SSRF protection, not
+reinvented** -- this is a genuinely dangerous real feature (a
+Manager-authored node telling this backend to call an arbitrary, real,
+runtime-rendered URL) unless the real HTTP call goes through a real,
+DNS-rebinding-safe transport that blocks private/loopback/link-local/
+reserved addresses AT THE CONNECTION LAYER (checking the real resolved
+IP right before every real TCP connect, including after a real
+redirect) -- exactly what `api/services/url_fetching.py`'s own
+`_SSRFSafeAsyncTransport` (Partie 2.2.x) already is. `ssrf_safe_client`
+(this étape's own small, real addition there) exposes that SAME real
+transport for reuse here, not a second, weaker SSRF implementation.
+`validate_url` (same module) rejects a non-`http(s)` scheme, a missing
+hostname, and embedded credentials, BEFORE any real network I/O.
+
+**Robustness (vision critique 3)**: a real connection failure/timeout/
+non-2xx status is never a raw, leaked `httpx` exception -- always a
+real, shared `WorkflowBlockError` with the real, specific reason.
+
+**`render_http_body` handles both real shapes**: a plain string
+(rendered directly) OR a real JSON object/array (every real string
+leaf value rendered, structure preserved).
+
+**Performance (vision critique 2)**: one real network call, no extra
+layer beyond the real, already-established SSRF transport.
+
+**Real verification**: 16 tests, `tests/test_workflow_block_http.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

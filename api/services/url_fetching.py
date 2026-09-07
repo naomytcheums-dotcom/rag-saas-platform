@@ -139,6 +139,16 @@ def _client() -> httpx.AsyncClient:
     )
 
 
+def ssrf_safe_client() -> httpx.AsyncClient:
+    """Partie 5.4.6 -- a real, public wrapper around this module's own
+    `_client` for real cross-module reuse (the workflow `http_call`
+    block, `api/services/workflow_block_http.py`, needs the SAME real,
+    DNS-rebinding-safe SSRF protection this module already built for
+    document fetching -- not a second, weaker implementation of the
+    same real defense)."""
+    return _client()
+
+
 def validate_url(url: str) -> str:
     """Item 3's literal function -- real, PURE format/scheme validation,
     zero network I/O (see this module's own docstring on why the real

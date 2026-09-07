@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 5/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 6/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (5/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (6/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1033,6 +1033,20 @@ Tests réels dédiés (13 tests), voir `tests/test_workflow_block_rag.py`.
 **Performance (vision critique 2)** : un seul vrai appel réseau (Tavily), aucune couche supplémentaire.
 
 Tests réels dédiés (11 tests), voir `tests/test_workflow_block_search.py`.
+
+#### Partie 5.4.6 — Bloc HTTP
+
+✅ **Nouveau module réel** `api/services/workflow_block_http.py` : les 5 fonctions littérales (`execute_http_block`, `render_http_url`, `render_http_body`, `validate_http_config`, `format_http_response`).
+
+✅ **Sécurité (vision critique 1) : vraie protection SSRF réutilisée, pas réinventée** -- ce bloc est une vraie fonctionnalité dangereuse (un nœud écrit par un Manager qui dit à ce backend d'appeler une vraie URL arbitraire, rendue au runtime) à moins que le vrai appel HTTP passe par un vrai transport résistant au DNS-rebinding qui bloque les adresses privées/loopback/link-local/réservées AU NIVEAU DE LA CONNEXION (vérifiant la vraie IP résolue juste avant chaque vrai connect TCP, y compris après une vraie redirection) -- exactement ce qu'est déjà `api/services/url_fetching.py`'s own `_SSRFSafeAsyncTransport` (Partie 2.2.x). `ssrf_safe_client` (petit ajout réel de cette étape à ce module) expose ce MÊME vrai transport pour réutilisation ici, plutôt qu'une seconde implémentation SSRF plus faible. `validate_url` (même module) rejette un schéma non `http(s)`, un hostname manquant, et des identifiants intégrés, AVANT tout véritable I/O réseau.
+
+✅ **Robustesse (vision critique 3)** : un vrai échec de connexion/timeout/statut non-2xx n'est jamais une exception `httpx` brute qui fuit -- toujours un vrai `WorkflowBlockError` partagé avec la raison réelle et spécifique.
+
+✅ **`render_http_body`, gère les deux vraies formes réelles** : une chaîne simple (rendue directement) OU un vrai objet/tableau JSON (chaque vraie valeur-feuille string rendue, structure préservée).
+
+**Performance (vision critique 2)** : un seul vrai appel réseau, aucune couche supplémentaire au-delà du vrai transport SSRF déjà établi.
+
+Tests réels dédiés (16 tests), voir `tests/test_workflow_block_http.py`.
 
 ---
 
