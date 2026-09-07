@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 2/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 3/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (2/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (3/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -991,6 +991,22 @@ Tests réels dédiés (26 tests), voir `tests/test_workflows.py`.
 **Robustesse (vision critique 3)** : `trigger_workflow` retourne toujours un vrai `WorkflowRun` réel (jamais d'exception) ; un échec de déclenchement webhook (token invalide) est un vrai 401, pas un run silencieusement créé.
 
 Tests réels dédiés (17 tests), voir `tests/test_workflow_triggers.py`.
+
+#### Partie 5.4.3 — Bloc LLM
+
+✅ **Nouveau module partagé réel** `api/services/template_rendering.py` : la substitution `{{var}}` sûre, réellement EXTRAITE de `api/services/agent_prompts.py` (Partie 5.3.2, refactor non-régressif, les 15 tests de ce module restent verts) pour être réutilisée par les 8 rendus de blocs restants (5.4.4-5.4.11) au lieu d'être réécrite 8 fois. Même choix de sécurité réel que la Partie 5.3.2 : jamais `str.format()`/`format_map()`.
+
+✅ **Nouveau module partagé réel** `api/services/workflow_blocks.py` : `WorkflowBlockError`, une seule vraie exception partagée par les 9 exécuteurs de blocs (5.4.3-5.4.11), pas 9 exceptions identiques séparées.
+
+✅ **Nouveau module réel** `api/services/workflow_block_llm.py` : les 4 fonctions littérales (`execute_llm_block`, `render_llm_prompt`, `validate_llm_config`, `get_available_llm_models`).
+
+✅ **Cohérence (vision critique 1) : réutilise l'abstraction LLM existante de bout en bout, aucun second chemin concurrent** -- `resolve_llm_config` (Partie 4.3.1-4.3.5) pour les vrais défauts provider/model/temperature/max_tokens/top_p, `chat_completion` (Partie 4.1.7) pour le vrai appel LLM. `get_available_llm_models` délègue au vrai catalogue déjà établi par `agent_models.get_available_models` (Partie 5.3.3) -- un seul vrai catalogue de modèles, pas un second pour les workflows.
+
+✅ **Robustesse (vision critique 3)** : un vrai échec LLM (`LLMError`) est capturé et relevé comme un vrai `WorkflowBlockError` -- un seul type d'erreur réel et partagé que tout exécuteur de bloc lève, pas une exception spécifique à un fournisseur qu'un futur appelant (le moteur de graphe réel) devrait connaître.
+
+**Performance (vision critique 2)** : aucune couche supplémentaire réelle -- un seul vrai appel réseau (`chat_completion`), même catégorie de performance que `AgentOrchestrator.run_agent`.
+
+Tests réels dédiés (5 tests `tests/test_template_rendering.py` + 10 tests `tests/test_workflow_block_llm.py`).
 
 ---
 

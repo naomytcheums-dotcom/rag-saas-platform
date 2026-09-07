@@ -7929,6 +7929,45 @@ a real `WorkflowRun` (never an exception); a failed webhook trigger
 
 **Real verification**: 17 tests, `tests/test_workflow_triggers.py`.
 
+### Partie 5.4.3 -- LLM block
+
+New shared module `api/services/template_rendering.py`: the safe
+`{{var}}` substitution, really EXTRACTED from
+`api/services/agent_prompts.py` (Partie 5.3.2, a non-regressive
+refactor -- that module's own 15 tests stay green) so it can be reused
+by the 8 remaining block renderers (5.4.4-5.4.11) instead of being
+rewritten 8 times. Same real security choice as Partie 5.3.2: never
+`str.format()`/`format_map()`.
+
+New shared module `api/services/workflow_blocks.py`:
+`WorkflowBlockError`, one real, shared exception for all 9 block
+executors (5.4.3-5.4.11), not 9 separate, identical ones.
+
+New module `api/services/workflow_block_llm.py`: all 4 literal
+functions (`execute_llm_block`, `render_llm_prompt`,
+`validate_llm_config`, `get_available_llm_models`).
+
+**Coherence (vision critique 1): reuses the existing LLM abstraction
+end-to-end, no second competing path** -- `resolve_llm_config` (Partie
+4.3.1-4.3.5) for real provider/model/temperature/max_tokens/top_p
+defaults, `chat_completion` (Partie 4.1.7) for the real LLM call.
+`get_available_llm_models` delegates to the real, already-established
+`agent_models.get_available_models` (Partie 5.3.3) -- one real model
+catalog, not a second one for workflows.
+
+**Robustness (vision critique 3)**: a real LLM failure (`LLMError`) is
+caught and re-raised as a real `WorkflowBlockError` -- one real,
+shared error type every block executor raises, not a
+provider-specific exception a future caller (the real graph executor)
+would need to know about.
+
+**Performance (vision critique 2)**: no extra real layer -- one real
+network call (`chat_completion`), same performance category as
+`AgentOrchestrator.run_agent`.
+
+**Real verification**: 5 tests in `tests/test_template_rendering.py` +
+10 tests in `tests/test_workflow_block_llm.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

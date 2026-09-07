@@ -20,15 +20,20 @@ of a small, real, known set of variable names.
 its own literal `{{name}}` placeholder in the rendered output, never
 silently blanked and never a raised exception -- a real typo in a
 template is visible and debuggable in the actual rendered text, rather
-than either crashing every real run or hiding the mistake."""
+than either crashing every real run or hiding the mistake.
+
+**Since Partie 5.4.3**: the actual regex substitution itself now lives
+in `api/services/template_rendering.py` (`render_template`), shared
+with every real workflow block renderer -- this module keeps only its
+own real, agent-specific concerns (the 7 known variables, length/
+placeholder-count validation, the DB-independent `{{date}}`/`{{time}}`
+auto-fill)."""
 
 import datetime as dt
-import re
 
 from api.config import settings
 from api.models.agent import Agent
-
-_VARIABLE_PATTERN = re.compile(r"\{\{(\w+)\}\}")
+from api.services.template_rendering import find_placeholders, render_template
 
 # Item 3's own literal 7 variables.
 KNOWN_VARIABLES = ("user_name", "organization_name", "date", "time", "context", "tools", "knowledge_base")
@@ -57,7 +62,7 @@ def validate_system_prompt(prompt: str) -> list[str]:
     if len(prompt) > settings.SYSTEM_PROMPT_MAX_LENGTH:
         errors.append(f"System prompt exceeds the real maximum length of {settings.SYSTEM_PROMPT_MAX_LENGTH} characters")
 
-    placeholders = _VARIABLE_PATTERN.findall(prompt)
+    placeholders = find_placeholders(prompt)
     if len(placeholders) > _MAX_PLACEHOLDERS:
         errors.append(f"Too many template placeholders: {len(placeholders)} (real maximum {_MAX_PLACEHOLDERS})")
     unknown = sorted(set(p for p in placeholders if p not in KNOWN_VARIABLES))
@@ -84,7 +89,7 @@ def render_system_prompt(agent: Agent, context: dict | None = None) -> str:
     values = {"date": now.strftime("%Y-%m-%d"), "time": now.strftime("%H:%M:%S UTC"), **(context or {})}
 
     template = agent.system_prompt_template or agent.system_prompt
-    return _VARIABLE_PATTERN.sub(lambda m: str(values[m.group(1)]) if m.group(1) in values else m.group(0), template)
+    return render_template(template, values)
 
 
 def preview_system_prompt(agent: Agent, context: dict | None = None) -> str:
