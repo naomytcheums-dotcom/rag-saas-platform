@@ -29,6 +29,7 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.services.agent_knowledge_base import validate_knowledge_base_access
 from api.services.agent_memory_config import validate_memory_config
+from api.services.agent_permissions import validate_allowed_roles
 from api.services.agent_tools import validate_tools_list
 
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -78,6 +79,8 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
     if data.get("tools"):
         validate_tools_list(data["tools"])
     validate_memory_config(data)
+    if data.get("allowed_roles"):
+        validate_allowed_roles(data["allowed_roles"])
     agent = Agent(
         organization_id=organization_id, created_by=created_by,
         workspace_id=data.get("workspace_id"), name=data["name"], description=data.get("description"),
@@ -88,6 +91,7 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
         memory_retention_policy=data.get("memory_retention_policy"),
         guardrails_enabled=data.get("guardrails_enabled", True), human_approval_required=data.get("human_approval_required", False),
         knowledge_base_id=data.get("knowledge_base_id"),
+        is_public=data.get("is_public", False), allowed_roles=data.get("allowed_roles"),
     )
     db.add(agent)
     await db.flush()
@@ -109,10 +113,12 @@ async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Age
     if data.get("tools"):
         validate_tools_list(data["tools"])
     validate_memory_config(data)
+    if data.get("allowed_roles"):
+        validate_allowed_roles(data["allowed_roles"])
     for field in (
         "name", "description", "system_prompt", "system_prompt_template", "workspace_id", "memory_enabled",
         "memory_window_size", "memory_ttl", "memory_max_items", "memory_retention_policy",
-        "guardrails_enabled", "human_approval_required", "knowledge_base_id",
+        "guardrails_enabled", "human_approval_required", "knowledge_base_id", "is_public", "allowed_roles",
     ):
         if field in data:
             setattr(agent, field, data[field])

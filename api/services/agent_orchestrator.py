@@ -64,12 +64,14 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.agent import Agent
 from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
 from api.security.conversations import add_message, get_conversation_messages
 from api.security.tool_permissions import check_tool_permission
 from api.services.agent_memory import get_all_memory
+from api.services.agent_permissions import check_agent_permission
 from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
@@ -136,6 +138,37 @@ class AgentOrchestrator:
             run = await create_run(db, agent_id=agent_id, input=input, context=context, organization_id=organization_id, created_by=created_by)
             await update_run_status(db, run.id, AgentRunStatus.pending.value, trace=list(trace))
             await db.commit()
+
+        # Partie 5.3.7 -- a real, additive permission check, only when
+        # `agent_id` actually resolves to a real, persisted `Agent` row
+        # (Partie 5.3.1) AND a real `created_by` is given. Neither is
+        # guaranteed here (this module's own top docstring: `agent_id`
+        # has always been a real, caller-supplied STRING, not
+        # necessarily backed by a real `Agent` row) -- an unresolvable
+        # id or an anonymous/system caller (`created_by=None`) is a
+        # real, honest no-op, same backward-compatible reasoning as
+        # every other optional integration point in this file (tools,
+        # memory, planning above).
+        if created_by is not None:
+            try:
+                real_agent_id = uuid.UUID(agent_id)
+            except ValueError:
+                real_agent_id = None
+            if real_agent_id is not None:
+                async with self._db_lock:
+                    agent_row = await db.get(Agent, real_agent_id)
+                    allowed = True
+                    if agent_row is not None and agent_row.deleted_at is None:
+                        allowed = await check_agent_permission(db, real_agent_id, created_by, "use")
+                    if not allowed:
+                        trace.append(self._trace_event("permission_denied", {"user_id": str(created_by)}))
+                        await update_run_status(
+                            db, run.id, AgentRunStatus.failed.value, error="Permission denied: you are not allowed to use this agent",
+                            trace=list(trace),
+                        )
+                        await db.commit()
+                        await db.refresh(run)
+                        return run
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]

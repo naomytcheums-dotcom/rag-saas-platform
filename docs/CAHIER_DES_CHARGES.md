@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 6/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 7/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (6/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (7/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -886,7 +886,23 @@ Tests réels dédiés (21 tests), voir `tests/test_agent_tools.py`.
 
 Tests réels dédiés (22 tests), voir `tests/test_agent_memory_config.py`.
 
-**Partie 5.3 Agent Builder terminée -- 6/10 items du lot demandé (5.3.1 à 5.3.6) vérifiés réels.** Les 4 items restants (5.3.7 à 5.3.10, hors de ce lot) restent ⬜.
+#### Partie 5.3.7 — Permissions
+
+✅ **Nouveau module réel** `api/services/agent_permissions.py` : les 5 fonctions littérales (`check_agent_permission`, `get_allowed_users`, `add_allowed_user`, `remove_allowed_user`, `set_agent_visibility`) + 3 nouveaux champs réels sur `Agent` (migration `0059`) : `allowed_users` (JSON), `allowed_roles` (JSON), `is_public` (Boolean, défaut `False`).
+
+✅ **Cohérence avec le RBAC existant (vision critique 1)** : cette étape ne remplace RIEN du système de rôles existant (Partie 1.2) -- `update`/`delete` restent décidés EXCLUSIVEMENT par le rôle réel Owner/Admin/Manager (même vérification que `require_agent_manager`, Partie 5.3.1). Le vrai écart que cette étape ferme : `action="use"` (invoquer réellement l'agent) n'était vérifié par RIEN avant cette étape -- n'importe quel member réel de l'organisation pouvait invoquer n'importe quel agent. `allowed_users`/`allowed_roles`/`is_public` élargissent ou restreignent UNIQUEMENT ce point d'accès, jamais `update`/`delete` -- testé explicitement (`test_member_cannot_update_or_delete_even_if_allowed_user`).
+
+✅ **Sécurité (vision critique 2)** : `check_agent_permission` est appelée à CHAQUE invocation réelle -- intégrée directement dans `AgentOrchestrator.run_agent` (voir plus bas), pas seulement au niveau des endpoints HTTP. `add_allowed_user`/`remove_allowed_user` valident que `added_by`/`removed_by` appartient réellement à la MÊME organisation que l'agent (même discipline que la correction cross-organisation de la Partie 5.3.4).
+
+✅ **Performance (vision critique 3)** : `check_agent_permission` reste une seule requête indexée par `Agent.id` (clé primaire) + une requête sur `OrganizationMember` (déjà indexée sur `organization_id`/`user_id` depuis la Partie 1.2) -- même catégorie de performance que tous les autres `require_*` de ce dépôt.
+
+✅ **Intégration réelle dans l'orchestrateur** : `AgentOrchestrator.run_agent` résout maintenant, quand `agent_id` correspond à un vrai `Agent` ET qu'un vrai `created_by` est fourni, la permission réelle `"use"` avant tout appel LLM -- un refus persiste un vrai `AgentRunRecord` avec `status="failed"` et un message clair (jamais d'exception, même discipline "never raises" déjà documentée). **Rétrocompatibilité réelle et testée** : un `agent_id` qui n'est pas un UUID réel, ou sans `created_by`, saute silencieusement la vérification -- comportement inchangé pour tous les appelants existants depuis la Partie 5.1.1 (`test_run_agent_with_a_non_uuid_agent_id_skips_the_permission_check`).
+
+✅ **4 endpoints réels** -- `GET/PATCH /agents/{agent_id}/permissions`, `POST /agents/{agent_id}/permissions/users`, `DELETE /agents/{agent_id}/permissions/users/{user_id}` (tous Manager+).
+
+**Tests (vision critique 4)** : allow (public, allowed_roles, allowed_users, owner), deny (member non listé, non-membre, agent inconnu), héritage (le rôle RBAC prime toujours pour update/delete, jamais contourné par l'ACL) -- tous testés explicitement.
+
+Tests réels dédiés (19 tests `tests/test_agent_permissions.py` + 3 tests d'intégration dans `tests/test_agent_orchestrator.py`).
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

@@ -28,6 +28,8 @@ class AgentCreateRequest(BaseModel):
     guardrails_enabled: bool = True
     human_approval_required: bool = False
     knowledge_base_id: uuid.UUID | None = None
+    is_public: bool = False
+    allowed_roles: list[str] | None = None
 
 
 class AgentUpdateRequest(BaseModel):
@@ -47,6 +49,8 @@ class AgentUpdateRequest(BaseModel):
     guardrails_enabled: bool | None = None
     human_approval_required: bool | None = None
     knowledge_base_id: uuid.UUID | None = None
+    is_public: bool | None = None
+    allowed_roles: list[str] | None = None
 
 
 class AgentResponse(BaseModel):
@@ -68,6 +72,9 @@ class AgentResponse(BaseModel):
     guardrails_enabled: bool
     human_approval_required: bool
     knowledge_base_id: uuid.UUID | None
+    is_public: bool
+    allowed_roles: list | None
+    allowed_users: list | None
     status: str
     created_by: uuid.UUID | None
     created_at: dt.datetime
@@ -163,3 +170,18 @@ class AgentMemoryUsageResponse(BaseModel):
 
 class AgentMemoryClearResponse(BaseModel):
     cleared_items: int
+
+
+class AgentPermissionsResponse(BaseModel):
+    is_public: bool
+    allowed_roles: list[str]
+    allowed_users: list[str]
+
+
+class AgentPermissionsUpdateRequest(BaseModel):
+    is_public: bool | None = None
+    allowed_roles: list[str] | None = None
+
+
+class AgentAllowedUserRequest(BaseModel):
+    user_id: uuid.UUID

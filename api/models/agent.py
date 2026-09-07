@@ -68,6 +68,13 @@ class Agent(Base):
     knowledge_base_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True)
     # Partie 5.3.4 -- real, inert until that étape's own get/set_agent_knowledge_base.
     knowledge_base_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 5.3.7 -- real ACL layer, additive on top of the existing
+    # org role tier (see api/services/agent_permissions.py's own module
+    # docstring). `allowed_users`: list[str] of real user id strings.
+    # `allowed_roles`: list[str] of real OrganizationRole values.
+    allowed_users: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    allowed_roles: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=AgentStatus.active.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

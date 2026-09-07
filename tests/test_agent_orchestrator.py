@@ -18,7 +18,9 @@ from litellm.types.utils import Choices, Message, ModelResponse
 
 from api.config import settings
 from api.models.agent_run import AgentRunRecord
+from api.models.organization import OrganizationMember, OrganizationRole
 from api.security.agent_runs import get_run, get_runs
+from api.security.agents import create_agent
 from api.services.agent_orchestrator import AgentOrchestrator
 from api.security.tool_permissions import grant_tool_permission
 from api.services.tools import CALCULATOR_TOOL, WORD_COUNT_TOOL
@@ -509,3 +511,58 @@ async def test_run_multi_agent_respects_real_per_agent_overrides(monkeypatch, db
     )
 
     assert mock_acompletion.call_args.kwargs["temperature"] == 0.9
+
+
+# ------------------------------------- Partie 5.3.7 -- permission check -------------------------------------
+
+
+async def test_run_agent_denies_a_real_private_agent_to_a_non_allowed_member(monkeypatch, db_session):
+    """Validation criterion: sécurité -- un member sans permission ne
+    peut pas invoquer un agent privé."""
+    mock_acompletion = AsyncMock(return_value=_real_response("should never be reached"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    db_session.add(OrganizationMember(organization_id=org_id, user_id=member_id, role=OrganizationRole.member))
+    await db_session.commit()
+    agent = await create_agent(db_session, org_id, {"name": "Bot"}, None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "hi", db=db_session, organization_id=org_id, created_by=member_id)
+
+    assert run.status == "failed"
+    assert "Permission denied" in run.error
+    mock_acompletion.assert_not_called()
+
+
+async def test_run_agent_allows_a_real_public_agent_for_any_member(monkeypatch, db_session):
+    """Validation criterion: allow -- is_public laisse passer l'exécution réelle."""
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    db_session.add(OrganizationMember(organization_id=org_id, user_id=member_id, role=OrganizationRole.member))
+    await db_session.commit()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "is_public": True}, None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "hi", db=db_session, organization_id=org_id, created_by=member_id)
+
+    assert run.status == "completed"
+    mock_acompletion.assert_called_once()
+
+
+async def test_run_agent_with_a_non_uuid_agent_id_skips_the_permission_check(monkeypatch, db_session):
+    """Validation criterion: robustesse -- rétrocompatibilité pour un
+    agent_id non réel (comportement inchangé depuis la Partie 5.1.1)."""
+    mock_acompletion = AsyncMock(return_value=_real_response("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "hi", db=db_session, created_by=uuid.uuid4())
+
+    assert run.status == "completed"

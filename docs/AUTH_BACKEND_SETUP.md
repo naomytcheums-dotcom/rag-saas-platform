@@ -7638,9 +7638,62 @@ manager-only (403 for a member, tested).
 
 **Real verification**: 22 tests, `tests/test_agent_memory_config.py`.
 
-**Partie 5.3 Agent Builder for this batch is done -- 6/10 items of the
-requested batch (5.3.1 through 5.3.6) verified real.** The remaining 4
-items (5.3.7-5.3.10, outside this batch) stay ⬜.
+### Partie 5.3.7 -- permissions
+
+New module `api/services/agent_permissions.py`: all 5 literal
+functions (`check_agent_permission`, `get_allowed_users`,
+`add_allowed_user`, `remove_allowed_user`, `set_agent_visibility`) plus
+3 new real fields on `Agent` (migration `0059`): `allowed_users`
+(JSON), `allowed_roles` (JSON), `is_public` (Boolean, default
+`False`).
+
+**Coherence with the existing RBAC (vision critique 1)**: this étape
+replaces NOTHING of the existing role system (Partie 1.2) --
+`update`/`delete` stay decided EXCLUSIVELY by the real
+Owner/Admin/Manager role (same check as `require_agent_manager`,
+Partie 5.3.1). The real gap this étape closes: `action="use"`
+(actually invoking the agent) was never checked by anything before
+this étape -- any real org member could invoke any agent.
+`allowed_users`/`allowed_roles`/`is_public` widen or narrow ONLY that
+access point, never `update`/`delete` -- tested explicitly.
+
+**Security (vision critique 2)**: `check_agent_permission` is called
+on EVERY real invocation -- wired directly into
+`AgentOrchestrator.run_agent` (see below), not just at the HTTP
+endpoint level. `add_allowed_user`/`remove_allowed_user` validate that
+`added_by`/`removed_by` really belongs to the SAME organization as the
+agent (same discipline as Partie 5.3.4's cross-organization fix).
+
+**Performance (vision critique 3)**: `check_agent_permission` stays a
+single indexed lookup by `Agent.id` (primary key) plus one query on
+`OrganizationMember` (already indexed on `organization_id`/`user_id`
+since Partie 1.2) -- same performance category as every other
+`require_*` dependency in this codebase.
+
+**Real orchestrator integration**: `AgentOrchestrator.run_agent` now
+resolves, when `agent_id` maps to a real `Agent` AND a real
+`created_by` is given, the real `"use"` permission before any LLM
+call -- a denial persists a real `AgentRunRecord` with
+`status="failed"` and a clear message (never an exception, same
+"never raises" discipline). **Real, tested backward compatibility**:
+a non-UUID `agent_id`, or no `created_by`, silently skips the check --
+unchanged behavior for every existing caller since Partie 5.1.1.
+
+**4 real endpoints** -- `GET/PATCH /agents/{agent_id}/permissions`,
+`POST /agents/{agent_id}/permissions/users`, `DELETE
+/agents/{agent_id}/permissions/users/{user_id}` (all Manager+).
+
+**Tests (vision critique 4)**: allow (public, allowed_roles,
+allowed_users, owner), deny (unlisted member, non-member, unknown
+agent), inheritance (the RBAC role always wins for update/delete,
+never bypassed by the ACL) -- all tested explicitly.
+
+**Real verification**: 19 tests in `tests/test_agent_permissions.py` +
+3 integration tests in `tests/test_agent_orchestrator.py`.
+
+**Partie 5.3 Agent Builder for this batch is done -- 7/10 items of the
+requested batch (5.3.1 through 5.3.7) verified real.** The remaining 3
+items (5.3.8-5.3.10, 5.3.8 outside this batch) stay ⬜.
 
 ### Partie 3.4.2 -- query rewriting
 

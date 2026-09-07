@@ -18,11 +18,11 @@ from api.models.agent import Agent
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
-    AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentMemoryClearResponse,
-    AgentMemoryConfigResponse, AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse, AgentModelResponse,
-    AgentModelUpdateRequest, AgentResponse, AgentToolsResponse, AgentToolsUpdateRequest, AgentUpdateRequest,
-    KnowledgeBaseOption, SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse,
-    ToolConfigUpdateRequest,
+    AgentAllowedUserRequest, AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest,
+    AgentMemoryClearResponse, AgentMemoryConfigResponse, AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse,
+    AgentModelResponse, AgentModelUpdateRequest, AgentPermissionsResponse, AgentPermissionsUpdateRequest,
+    AgentResponse, AgentToolsResponse, AgentToolsUpdateRequest, AgentUpdateRequest, KnowledgeBaseOption,
+    SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse, ToolConfigUpdateRequest,
 )
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
@@ -38,6 +38,9 @@ from api.services.agent_memory_config import (
 )
 from api.services.agent_models import (
     AgentModelError, get_agent_model, get_available_models, set_agent_model,
+)
+from api.services.agent_permissions import (
+    AgentPermissionError, add_allowed_user, get_allowed_users, remove_allowed_user, set_agent_visibility,
 )
 from api.services.agent_prompts import get_system_prompt_variables, preview_system_prompt
 from api.services.agent_tools import (
@@ -55,7 +58,7 @@ async def create_agent_endpoint(
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
     try:
         agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
-    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(agent)
@@ -90,7 +93,7 @@ async def update_agent_endpoint(
     agent, _caller = agent_ctx
     try:
         updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
-    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(updated)
@@ -369,3 +372,67 @@ async def clear_agent_memory_endpoint(
     cleared = await clear_agent_memory(db, agent.id)
     await db.commit()
     return AgentMemoryClearResponse(cleared_items=cleared)
+
+
+# ------------------------------------- Partie 5.3.7 -- permissions -------------------------------------
+
+
+@router.get("/agents/{agent_id}/permissions", response_model=AgentPermissionsResponse)
+async def get_agent_permissions_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return AgentPermissionsResponse(
+        is_public=agent.is_public, allowed_roles=list(agent.allowed_roles or []), allowed_users=await get_allowed_users(db, agent.id),
+    )
+
+
+@router.patch("/agents/{agent_id}/permissions", response_model=AgentPermissionsResponse)
+async def update_agent_permissions_endpoint(
+    payload: AgentPermissionsUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    fields_set = payload.model_fields_set
+    is_public = payload.is_public if "is_public" in fields_set else agent.is_public
+    try:
+        await set_agent_visibility(db, agent.id, is_public, payload.allowed_roles)
+    except AgentPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(agent)
+    return AgentPermissionsResponse(
+        is_public=agent.is_public, allowed_roles=list(agent.allowed_roles or []), allowed_users=await get_allowed_users(db, agent.id),
+    )
+
+
+@router.post("/agents/{agent_id}/permissions/users", response_model=AgentPermissionsResponse)
+async def add_agent_allowed_user_endpoint(
+    payload: AgentAllowedUserRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, caller = agent_ctx
+    try:
+        await add_allowed_user(db, agent.id, payload.user_id, caller.user_id)
+    except AgentPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return AgentPermissionsResponse(
+        is_public=agent.is_public, allowed_roles=list(agent.allowed_roles or []), allowed_users=await get_allowed_users(db, agent.id),
+    )
+
+
+@router.delete("/agents/{agent_id}/permissions/users/{user_id}", response_model=AgentPermissionsResponse)
+async def remove_agent_allowed_user_endpoint(
+    user_id: uuid.UUID,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, caller = agent_ctx
+    try:
+        await remove_allowed_user(db, agent.id, user_id, caller.user_id)
+    except AgentPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return AgentPermissionsResponse(
+        is_public=agent.is_public, allowed_roles=list(agent.allowed_roles or []), allowed_users=await get_allowed_users(db, agent.id),
+    )
