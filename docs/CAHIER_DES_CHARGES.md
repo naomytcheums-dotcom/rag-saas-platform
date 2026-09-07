@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 7/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 8/10 (5.3.8 non demandé) -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (7/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (8/10, 5.3.8 non demandé dans ce lot)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -903,6 +903,30 @@ Tests réels dédiés (22 tests), voir `tests/test_agent_memory_config.py`.
 **Tests (vision critique 4)** : allow (public, allowed_roles, allowed_users, owner), deny (member non listé, non-membre, agent inconnu), héritage (le rôle RBAC prime toujours pour update/delete, jamais contourné par l'ACL) -- tous testés explicitement.
 
 Tests réels dédiés (19 tests `tests/test_agent_permissions.py` + 3 tests d'intégration dans `tests/test_agent_orchestrator.py`).
+
+#### Partie 5.3.9 — Guardrails
+
+✅ **Nouveau module réel** `api/services/agent_guardrails.py` : les 5 fonctions littérales, étendues (`validate_guardrails`, `check_blocked_topics`, `check_content_safety`, `check_domain_whitelist`, `validate_output_length`) + `get_agent_guardrails`/`set_agent_guardrails` (getter/setter réels) + 5 nouveaux champs réels sur `Agent` (migration `0060`) : `guardrails_config`, `blocked_topics`, `allowed_domains` (JSON), `max_tokens_per_response` (Integer), `content_filter_level` (String).
+
+✅ **Honnêteté de périmètre pour `check_content_safety` (vision critique)** : ce dépôt ne configure AUCUNE vraie API de modération externe (aucune clé/réglage OpenAI moderation ou Perspective API n'existe dans `api/config.py`) -- prétendre en appeler une aurait été une capacité fabriquée. Ce qui est réellement livré : une heuristique regex/mot-clé réelle et minimale contre un petit ensemble intégré de catégories d'intention dangereuse, gérée par `content_filter_level` (low/medium/high, graduée) -- une vraie première ligne fonctionnelle mais volontairement grossière, même catégorie de compromis honnête que la troncature de conversation par nombre de messages (Partie 5.1.12).
+
+✅ **`validate_output_length`, approximation honnête** : aucune dépendance de tokenizer n'existe dans ce dépôt pour un vrai comptage de tokens par fournisseur -- un vrai comptage de MOTS (espaces) sert d'approximation pour `max_tokens_per_response`, même catégorie d'approximation que `CONVERSATION_HISTORY_MAX_MESSAGES`.
+
+✅ **`check_domain_whitelist`, vraie logique opt-in** : un agent sans `allowed_domains` configuré autorise tout domaine réel (garde-fou additif, jamais une nouvelle restriction silencieuse). Un domaine configuré correspond au vrai hostname exactement OU comme sous-domaine réel.
+
+✅ **Robustesse (vision critique 3)** : `validate_guardrails` ne lève JAMAIS d'exception pour une vraie violation attendue -- retourne un dict structuré `{"passed": bool, "violations": [...]}"`, même doctrine "never raises" que `AgentOrchestrator.run_agent` lui-même. `guardrails_enabled=False` (bascule déjà réelle depuis la Partie 5.3.1) est un vrai no-op testé -- rien n'est bloqué si les garde-fous n'ont jamais été activés.
+
+✅ **Intégration réelle dans l'orchestrateur** : `AgentOrchestrator.run_agent` appelle `validate_guardrails` juste après une vraie réponse LLM réussie -- une violation bloque la réponse (jamais renvoyée à l'appelant ni ajoutée à l'historique de conversation), persistée comme un vrai `AgentRunRecord` avec `status="failed"` et les violations listées dans `error`. Testé (`test_run_agent_blocks_a_real_response_matching_a_blocked_topic`).
+
+✅ **`web_search` modifié pour vérifier les domaines autorisés (item 4)** : un `allowed_domains` réel, donné par agent, est transmis directement comme le vrai paramètre `include_domains` de Tavily -- appliqué côté serveur, pas en filtrant les résultats après coup. Un `allowed_domains` par agent prend priorité sur le défaut global `TAVILY_INCLUDE_DOMAINS`.
+
+**Cohérence (vision critique 1)** : tous les canaux d'entrée/sortie réels passent par le même `validate_guardrails` (input ET output vérifiés ensemble).
+
+**Performance (vision critique 2)** : chaque vérification reste une seule requête par `Agent.id` (clé primaire) + une évaluation regex en mémoire sur un texte déjà en mémoire -- pas d'appel réseau.
+
+✅ **2 endpoints réels** -- `GET/PATCH /agents/{agent_id}/guardrails` (Manager+).
+
+Tests réels dédiés (25 tests `tests/test_agent_guardrails.py` + 2 tests d'intégration dans `tests/test_agent_orchestrator.py` + 1 test dans `tests/test_web_search.py`).
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

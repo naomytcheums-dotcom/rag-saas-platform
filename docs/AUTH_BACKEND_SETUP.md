@@ -7691,9 +7691,76 @@ never bypassed by the ACL) -- all tested explicitly.
 **Real verification**: 19 tests in `tests/test_agent_permissions.py` +
 3 integration tests in `tests/test_agent_orchestrator.py`.
 
-**Partie 5.3 Agent Builder for this batch is done -- 7/10 items of the
-requested batch (5.3.1 through 5.3.7) verified real.** The remaining 3
-items (5.3.8-5.3.10, 5.3.8 outside this batch) stay ⬜.
+### Partie 5.3.9 -- guardrails
+
+New module `api/services/agent_guardrails.py`: the 5 literal
+functions, extended (`validate_guardrails`, `check_blocked_topics`,
+`check_content_safety`, `check_domain_whitelist`,
+`validate_output_length`) plus `get_agent_guardrails`/
+`set_agent_guardrails` (real getter/setter) and 5 new real fields on
+`Agent` (migration `0060`): `guardrails_config`, `blocked_topics`,
+`allowed_domains` (JSON), `max_tokens_per_response` (Integer),
+`content_filter_level` (String).
+
+**An honest scope boundary for `check_content_safety` (vision
+critique)**: this codebase configures NO real external moderation API
+(no OpenAI moderation or Perspective API key/setting exists anywhere
+in `api/config.py`) -- claiming to call one would be fabricated
+capability. What IS really shipped: a real, minimal regex/keyword
+heuristic against a small, built-in set of unsafe-intent categories,
+gated by `content_filter_level` (low/medium/high, graduated) -- a
+real, functional but deliberately coarse first line, same honest
+trade-off category as the message-count conversation truncation
+(Partie 5.1.12).
+
+**`validate_output_length`, an honest approximation**: no tokenizer
+dependency exists in this codebase for a real per-provider token
+count -- a real WORD count (whitespace-split) stands in for
+`max_tokens_per_response`, same approximation category as
+`CONVERSATION_HISTORY_MAX_MESSAGES`.
+
+**`check_domain_whitelist`, real opt-in logic**: an agent with no
+`allowed_domains` configured allows every real domain (an additive
+guardrail, never a silent new restriction). A configured domain
+matches the real hostname exactly OR as a real subdomain.
+
+**Robustness (vision critique 3)**: `validate_guardrails` NEVER raises
+for a real, expected violation -- returns a real, structured
+`{"passed": bool, "violations": [...]}` dict, same "never raises"
+doctrine as `AgentOrchestrator.run_agent` itself. `guardrails_enabled=False`
+(a real toggle since Partie 5.3.1) is a real, tested no-op -- nothing
+is blocked if guardrails were never turned on.
+
+**Real orchestrator integration**: `AgentOrchestrator.run_agent` calls
+`validate_guardrails` right after a real, successful LLM response --
+a violation blocks the response (never returned to the caller, never
+added to conversation history), persisted as a real `AgentRunRecord`
+with `status="failed"` and the violations listed in `error`. Tested.
+
+**`web_search` modified to check allowed domains (item 4)**: a real,
+given per-agent `allowed_domains` is passed straight through as
+Tavily's own real `include_domains` parameter -- enforced server-side,
+not by filtering results after the fact. A per-agent `allowed_domains`
+takes priority over the global `TAVILY_INCLUDE_DOMAINS` default.
+
+**Coherence (vision critique 1)**: every real input/output channel
+goes through the SAME `validate_guardrails` (input AND output checked
+together).
+
+**Performance (vision critique 2)**: every check stays a single lookup
+by `Agent.id` (primary key) plus an in-memory regex evaluation on
+already-in-memory text -- no network call.
+
+**2 real endpoints** -- `GET/PATCH /agents/{agent_id}/guardrails`
+(Manager+).
+
+**Real verification**: 25 tests in `tests/test_agent_guardrails.py` +
+2 integration tests in `tests/test_agent_orchestrator.py` + 1 test in
+`tests/test_web_search.py`.
+
+**Partie 5.3 Agent Builder for this batch is done -- 8/10 items of the
+requested batch (5.3.1-5.3.7, 5.3.9) verified real.** 5.3.8 was not
+requested in this batch; 5.3.10 stays ⬜.
 
 ### Partie 3.4.2 -- query rewriting
 

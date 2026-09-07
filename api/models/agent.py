@@ -75,6 +75,13 @@ class Agent(Base):
     allowed_users: Mapped[list | None] = mapped_column(JSON, nullable=True)
     allowed_roles: Mapped[list | None] = mapped_column(JSON, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Partie 5.3.9 -- real, inert until that étape's own
+    # api/services/agent_guardrails.py consumes them.
+    guardrails_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    blocked_topics: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    allowed_domains: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    max_tokens_per_response: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    content_filter_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=AgentStatus.active.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

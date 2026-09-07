@@ -61,6 +61,20 @@ async def test_web_search_respects_real_parameters(monkeypatch):
     await web_search("query", search_depth="advanced", max_results=3)
 
 
+async def test_web_search_passes_real_allowed_domains_as_include_domains(monkeypatch):
+    """Validation criterion: Partie 5.3.9 -- un allowed_domains par
+    agent est bien transmis à Tavily."""
+    import json
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.read())
+        assert payload["include_domains"] == ["acme.com"]
+        return httpx.Response(200, json=_REAL_SHAPED_RESPONSE)
+
+    _patch_client(monkeypatch, handler)
+    await web_search("query", allowed_domains=["acme.com"])
+
+
 async def test_web_search_with_context_forces_real_raw_content(monkeypatch):
     import json
 

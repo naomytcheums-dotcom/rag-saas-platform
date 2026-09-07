@@ -41,7 +41,10 @@ class WebSearchError(Exception):
     failed" apart from any other real error in an agent's own flow."""
 
 
-async def _call_tavily(query: str, search_depth: str | None, max_results: int | None, include_raw_content: bool) -> dict:
+async def _call_tavily(
+    query: str, search_depth: str | None, max_results: int | None, include_raw_content: bool,
+    allowed_domains: list[str] | None = None,
+) -> dict:
     if not settings.TAVILY_API_KEY:
         raise WebSearchError("TAVILY_API_KEY is not configured -- get one from https://tavily.com and set it in .env")
 
@@ -52,7 +55,14 @@ async def _call_tavily(query: str, search_depth: str | None, max_results: int | 
         "max_results": max_results or settings.TAVILY_MAX_RESULTS,
         "include_raw_content": include_raw_content,
     }
-    if settings.TAVILY_INCLUDE_DOMAINS:
+    # Partie 5.3.9 -- a real, given per-agent `allowed_domains`
+    # (api/services/agent_guardrails.py) takes priority over the
+    # global, static `TAVILY_INCLUDE_DOMAINS` default: a real,
+    # per-agent guardrail should never be silently widened back out by
+    # a real, global config value.
+    if allowed_domains:
+        body["include_domains"] = allowed_domains
+    elif settings.TAVILY_INCLUDE_DOMAINS:
         body["include_domains"] = settings.TAVILY_INCLUDE_DOMAINS
     if settings.TAVILY_EXCLUDE_DOMAINS:
         body["exclude_domains"] = settings.TAVILY_EXCLUDE_DOMAINS
@@ -71,10 +81,18 @@ async def _call_tavily(query: str, search_depth: str | None, max_results: int | 
     return response.json()
 
 
-async def web_search(query: str, search_depth: str | None = None, max_results: int | None = None) -> dict:
+async def web_search(
+    query: str, search_depth: str | None = None, max_results: int | None = None, allowed_domains: list[str] | None = None,
+) -> dict:
     """Item 2's own literal function -- `include_raw_content` follows
-    the real, configured `TAVILY_INCLUDE_RAW_CONTENT` default."""
-    return await _call_tavily(query, search_depth, max_results, settings.TAVILY_INCLUDE_RAW_CONTENT)
+    the real, configured `TAVILY_INCLUDE_RAW_CONTENT` default.
+
+    `allowed_domains` (Partie 5.3.9, optional) -- a real, given agent
+    guardrail (`api.services.agent_guardrails.check_domain_whitelist`'s
+    own `Agent.allowed_domains`), passed straight through as Tavily's
+    own real `include_domains` request parameter so the restriction is
+    enforced server-side, not by discarding results after the fact."""
+    return await _call_tavily(query, search_depth, max_results, settings.TAVILY_INCLUDE_RAW_CONTENT, allowed_domains)
 
 
 async def web_search_with_context(query: str, search_depth: str | None = None, max_results: int | None = None) -> dict:

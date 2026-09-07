@@ -30,6 +30,10 @@ class AgentCreateRequest(BaseModel):
     knowledge_base_id: uuid.UUID | None = None
     is_public: bool = False
     allowed_roles: list[str] | None = None
+    blocked_topics: list[str] | None = None
+    allowed_domains: list[str] | None = None
+    max_tokens_per_response: int | None = None
+    content_filter_level: str | None = None
 
 
 class AgentUpdateRequest(BaseModel):
@@ -51,6 +55,10 @@ class AgentUpdateRequest(BaseModel):
     knowledge_base_id: uuid.UUID | None = None
     is_public: bool | None = None
     allowed_roles: list[str] | None = None
+    blocked_topics: list[str] | None = None
+    allowed_domains: list[str] | None = None
+    max_tokens_per_response: int | None = None
+    content_filter_level: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -75,6 +83,10 @@ class AgentResponse(BaseModel):
     is_public: bool
     allowed_roles: list | None
     allowed_users: list | None
+    blocked_topics: list | None
+    allowed_domains: list | None
+    max_tokens_per_response: int | None
+    content_filter_level: str | None
     status: str
     created_by: uuid.UUID | None
     created_at: dt.datetime
@@ -185,3 +197,19 @@ class AgentPermissionsUpdateRequest(BaseModel):
 
 class AgentAllowedUserRequest(BaseModel):
     user_id: uuid.UUID
+
+
+class AgentGuardrailsResponse(BaseModel):
+    guardrails_enabled: bool
+    blocked_topics: list[str]
+    allowed_domains: list[str]
+    max_tokens_per_response: int | None
+    content_filter_level: str
+
+
+class AgentGuardrailsUpdateRequest(BaseModel):
+    guardrails_enabled: bool | None = None
+    blocked_topics: list[str] | None = None
+    allowed_domains: list[str] | None = None
+    max_tokens_per_response: int | None = None
+    content_filter_level: str | None = None

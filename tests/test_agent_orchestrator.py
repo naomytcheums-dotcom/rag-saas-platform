@@ -566,3 +566,40 @@ async def test_run_agent_with_a_non_uuid_agent_id_skips_the_permission_check(mon
     run = await orchestrator.run_agent("agent-1", "hi", db=db_session, created_by=uuid.uuid4())
 
     assert run.status == "completed"
+
+
+# ------------------------------------- Partie 5.3.9 -- guardrails -------------------------------------
+
+
+async def test_run_agent_blocks_a_real_response_matching_a_blocked_topic(monkeypatch, db_session):
+    """Validation criterion: robustesse -- un garde-fou déclenché bloque
+    la réponse plutôt que de la renvoyer."""
+    mock_acompletion = AsyncMock(return_value=_real_response("let's talk about politics"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "blocked_topics": ["politics"]}, None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "hi", db=db_session, organization_id=org_id)
+
+    assert run.status == "failed"
+    assert "Guardrail violation" in run.error
+    assert "politics" in run.error
+
+
+async def test_run_agent_with_no_guardrail_violation_completes_normally(monkeypatch, db_session):
+    """Validation criterion: allow -- une réponse propre n'est jamais bloquée."""
+    mock_acompletion = AsyncMock(return_value=_real_response("here is your answer"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "blocked_topics": ["politics"]}, None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "hi", db=db_session, organization_id=org_id)
+
+    assert run.status == "completed"
+    assert run.result == "here is your answer"

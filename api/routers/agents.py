@@ -18,11 +18,12 @@ from api.models.agent import Agent
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
-    AgentAllowedUserRequest, AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest,
-    AgentMemoryClearResponse, AgentMemoryConfigResponse, AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse,
-    AgentModelResponse, AgentModelUpdateRequest, AgentPermissionsResponse, AgentPermissionsUpdateRequest,
-    AgentResponse, AgentToolsResponse, AgentToolsUpdateRequest, AgentUpdateRequest, KnowledgeBaseOption,
-    SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse, ToolConfigUpdateRequest,
+    AgentAllowedUserRequest, AgentCreateRequest, AgentGuardrailsResponse, AgentGuardrailsUpdateRequest,
+    AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentMemoryClearResponse, AgentMemoryConfigResponse,
+    AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse, AgentModelResponse, AgentModelUpdateRequest,
+    AgentPermissionsResponse, AgentPermissionsUpdateRequest, AgentResponse, AgentToolsResponse,
+    AgentToolsUpdateRequest, AgentUpdateRequest, KnowledgeBaseOption, SystemPromptPreviewResponse,
+    SystemPromptUpdateRequest, SystemPromptVariablesResponse, ToolConfigUpdateRequest,
 )
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
@@ -30,6 +31,7 @@ from api.security.agents import (
 )
 from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
+from api.services.agent_guardrails import AgentGuardrailError, get_agent_guardrails, set_agent_guardrails
 from api.services.agent_knowledge_base import (
     AgentKnowledgeBaseError, get_agent_kb_config, get_available_knowledge_bases, set_agent_knowledge_base,
 )
@@ -58,7 +60,7 @@ async def create_agent_endpoint(
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
     try:
         agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
-    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError, AgentGuardrailError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(agent)
@@ -93,7 +95,7 @@ async def update_agent_endpoint(
     agent, _caller = agent_ctx
     try:
         updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
-    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError) as exc:
+    except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError, AgentGuardrailError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(updated)
@@ -420,6 +422,31 @@ async def add_agent_allowed_user_endpoint(
     return AgentPermissionsResponse(
         is_public=agent.is_public, allowed_roles=list(agent.allowed_roles or []), allowed_users=await get_allowed_users(db, agent.id),
     )
+
+
+# ------------------------------------- Partie 5.3.9 -- guardrails -------------------------------------
+
+
+@router.get("/agents/{agent_id}/guardrails", response_model=AgentGuardrailsResponse)
+async def get_agent_guardrails_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return await get_agent_guardrails(db, agent.id)
+
+
+@router.patch("/agents/{agent_id}/guardrails", response_model=AgentGuardrailsResponse)
+async def update_agent_guardrails_endpoint(
+    payload: AgentGuardrailsUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    try:
+        await set_agent_guardrails(db, agent.id, **payload.model_dump(exclude_unset=True))
+    except AgentGuardrailError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return await get_agent_guardrails(db, agent.id)
 
 
 @router.delete("/agents/{agent_id}/permissions/users/{user_id}", response_model=AgentPermissionsResponse)
