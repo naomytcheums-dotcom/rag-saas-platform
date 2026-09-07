@@ -30,3 +30,22 @@ class CitationResponse(BaseModel):
     relevance_label: str | None
     text_preview: str | None
     is_primary: bool
+
+
+class ConfidenceResponse(BaseModel):
+    """Partie 6.1.10 -- real, LIVE-recomputed confidence for a
+    response's own current citations (see
+    api/routers/citations.py's own docstring for why this is
+    recomputed, not read from the stored snapshot)."""
+
+    confidence_score: float
+    confidence_label: str
+    confidence_color: str
+
+
+class ConfidenceFactorsResponse(BaseModel):
+    citation_count: float
+    relevance: float
+    diversity: float
+    reliability: float
+    consistency: float

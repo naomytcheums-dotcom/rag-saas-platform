@@ -78,6 +78,7 @@ from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
+from api.services.response_confidence import enrich_response_with_confidence
 from api.services.task_planning import get_plan_steps, plan_task
 from api.services.tool_selection import select_tools
 from api.services.tools import ToolSpec
@@ -350,7 +351,10 @@ class AgentOrchestrator:
                         response_row = Response(organization_id=organization_id, query=input, answer=result, created_by=created_by)
                         db.add(response_row)
                         await db.flush()
-                        await add_citations_to_response(db, response_row, citation_chunks)
+                        citations_row = await add_citations_to_response(db, response_row, citation_chunks)
+                        # Partie 6.1.10 -- real, creation-time confidence
+                        # snapshot, same as generate_response's own.
+                        enrich_response_with_confidence(response_row, citations_row)
                         run_row = await get_run(db, run.id)
                         run_row.response_id = response_row.id
                     await db.commit()

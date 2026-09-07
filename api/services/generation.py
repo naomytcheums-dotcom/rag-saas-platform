@@ -27,6 +27,7 @@ from api.security.organization_settings import get_org_settings
 from api.services.citations import add_citations_to_response
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import chat_completion
+from api.services.response_confidence import enrich_response_with_confidence
 from api.services.retrieval_pipeline import search_with_context
 
 _CITATION_INSTRUCTIONS = (
@@ -65,5 +66,8 @@ async def generate_response(
     count = citation_count if citation_count is not None else min(
         org_settings.get("citation_count", settings.CITATION_DEFAULT_COUNT), settings.CITATION_MAX_COUNT,
     )
-    await add_citations_to_response(db, response, chunks, count)
+    citations = await add_citations_to_response(db, response, chunks, count)
+    # Partie 6.1.10 -- real, creation-time confidence snapshot, from
+    # these SAME real, just-created citations.
+    enrich_response_with_confidence(response, citations)
     return response

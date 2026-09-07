@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (9/10)
+### 6.1 Citations — ✅ COMPLET (10/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1334,7 +1334,27 @@ Tests réels dédiés (8 tests), voir `tests/test_citation_preview.py`.
 
 **Performance (vision critique 2)** : `get_secondary_source_count` reste une seule vraie requête `COUNT(*)` indexée, jamais un `len()` d'une liste chargée en Python.
 
-Tests réels dédiés (12 tests), voir `tests/test_citation_secondary.py`. **Complète la Partie 6.1 à 9/10.**
+Tests réels dédiés (12 tests), voir `tests/test_citation_secondary.py`.
+
+#### Partie 6.1.10 — Confidence score global
+
+✅ **Nouveau module réel** `api/services/response_confidence.py` : les 5 fonctions littérales (`calculate_confidence_score`, `calculate_confidence_factors`, `format_confidence_score`, `get_confidence_label`, `get_confidence_color`) + `enrich_response_with_confidence` (plomberie réelle).
+
+⚠️ **Cohérence (vision critique 1) : 5 vrais facteurs honnêtement définis, aucun signal de "confiance" fabriqué** : ce dépôt n'a aucun vrai signal externe validé pour la fiabilité d'une source (`hallucination_detection.py`/`llm_judge.py` sont réels mais "jamais validés en conditions réelles, bloqués sur crédit API" selon la propre section 6.2 de ce document -- les utiliser ici aurait silencieusement importé l'incertitude d'un système non validé dans un nombre que cette étape présente comme faisant autorité). Chaque facteur est plutôt calculé à partir de données déjà réellement fournies par `Citation`/`api/config.py` : `citation_count` (proximité du vrai `CITATION_DEFAULT_COUNT`), `relevance` (moyenne réelle des `relevance_score`), `diversity` (fraction réelle de documents distincts cités), `reliability` (fraction réelle de citations avec un vrai `document_id` traçable), `consistency` (accord réel entre les scores, 1 moins leur vrai écart-type, honnêtement `1.0` pour une seule citation -- rien avec quoi être incohérente).
+
+✅ **Basé UNIQUEMENT sur les vraies citations primaires** : une vraie source secondaire (Partie 6.1.9, non citée directement) n'inflate ni ne dégrade jamais la confiance -- vérifié explicitement par un test dédié.
+
+✅ **Robustesse (vision critique 3)** : zéro vraie citation primaire est un vrai résultat de confiance BASSE honnête (`0.0` sur chaque facteur), jamais un défaut neutre fabriqué.
+
+✅ **`get_confidence_label`/`get_confidence_color`/`format_confidence_score`, une vraie réutilisation délibérée** : réutilisent directement les propres seuils/couleurs/formatage réels de `citation_relevance.py` plutôt que de déclarer un second jeu parallèle de constantes `CONFIDENCE_THRESHOLD_*` pour la même vraie échelle sémantique `[0.0, 1.0]` à trois niveaux.
+
+✅ **`generate_response` (Partie 6.1.1) ET `AgentOrchestrator.run_agent` (même Partie) enrichis rétroactivement** : les deux vrais points d'entrée qui créent une `Response` + ses citations calculent et persistent maintenant réellement le vrai snapshot `confidence_score`/`confidence_factors` au moment de la création, via la même fonction partagée `enrich_response_with_confidence`.
+
+✅ **2 nouveaux endpoints réels** : `GET /responses/{response_id}/confidence`, `GET /responses/{response_id}/confidence/factors` (réutilisant `require_response_member`, déjà établi). Délibérément RECALCULÉS EN DIRECT à chaque appel depuis les vraies citations actuelles de la réponse plutôt que de faire confiance au snapshot stocké -- même raisonnement "live > snapshot" que chaque enrichissement de citation, particulièrement pertinent ici puisque le `document_id` d'une citation peut réellement devenir `NULL` après la suppression de son document source (Partie 6.1.1's own `ondelete="SET NULL"`), ce qui doit honnêtement faire baisser un facteur `reliability` recalculé en direct, jamais continuer de rapporter silencieusement un chiffre périmé et trop optimiste.
+
+**Performance (vision critique 2)** : aucune requête SQL supplémentaire par rapport à `GET /responses/{response_id}/citations`, qui charge déjà les mêmes vraies citations.
+
+Tests réels dédiés (18 tests), voir `tests/test_response_confidence.py`. **Complète la Partie 6.1 à 10/10.**
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

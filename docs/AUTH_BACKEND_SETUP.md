@@ -8885,7 +8885,69 @@ stays a single, real, indexed `COUNT(*)` query, never a Python-side
 `len()` of a fully-loaded list.
 
 **Real verification**: 12 tests, `tests/test_citation_secondary.py`.
-**Completes Partie 6.1 at 9/10.**
+
+### Partie 6.1.10 -- global confidence score
+
+New module `api/services/response_confidence.py`: all 5 literal
+functions (`calculate_confidence_score`, `calculate_confidence_factors`,
+`format_confidence_score`, `get_confidence_label`,
+`get_confidence_color`) plus `enrich_response_with_confidence` (real
+plumbing).
+
+**Coherence (vision critique 1): 5 real, honestly-defined factors, no
+fabricated "trust" signal**: this codebase has no real, validated
+external signal for a source's own trustworthiness
+(`hallucination_detection.py`/`llm_judge.py` are real but "never
+validated in real conditions, blocked on API credit" per this
+document's own 6.2 section -- using either here would silently smuggle
+an unvalidated system's own uncertainty into a number this étape
+presents as authoritative). Every factor is instead computed from data
+`Citation`/`api/config.py` already, honestly, provide: `citation_count`
+(closeness to the real `CITATION_DEFAULT_COUNT`), `relevance` (real
+mean `relevance_score`), `diversity` (real fraction of distinct
+documents cited), `reliability` (real fraction of citations with a
+real, traceable `document_id`), `consistency` (real agreement across
+scores, 1 minus their real standard deviation -- honestly `1.0` for a
+single citation, which has nothing to disagree with).
+
+**Built ONLY from real primary citations**: a real secondary source
+(Partie 6.1.9, not directly cited) never inflates or deflates
+confidence -- explicitly verified by a dedicated test.
+
+**Robustness (vision critique 3)**: zero real primary citations is a
+real, honest LOW-confidence outcome (`0.0` on every factor), never a
+fabricated neutral default.
+
+**`get_confidence_label`/`get_confidence_color`/`format_confidence_score`,
+a real, deliberate reuse**: directly reuse `citation_relevance.py`'s
+own real thresholds/colors/formatting rather than declaring a second,
+parallel set of `CONFIDENCE_THRESHOLD_*` constants for the exact same
+real `[0.0, 1.0]`, three-tier semantic scale.
+
+**`generate_response` (Partie 6.1.1) AND `AgentOrchestrator.run_agent`
+(same Partie) retroactively enriched**: both real entry points that
+create a `Response` + its citations now really compute and persist the
+real `confidence_score`/`confidence_factors` snapshot at creation time,
+via the same shared `enrich_response_with_confidence`.
+
+**2 new real endpoints**: `GET /responses/{response_id}/confidence`,
+`GET /responses/{response_id}/confidence/factors` (reusing the
+already-established `require_response_member`). Deliberately
+RECOMPUTED LIVE on every call from the response's own current
+citations rather than trusting the stored snapshot -- the same "live >
+snapshot" reasoning as every citation enrichment, particularly
+meaningful here since a citation's own `document_id` can really go
+`NULL` after its source document is later deleted (Partie 6.1.1's own
+`ondelete="SET NULL"`), which should honestly lower a live-recomputed
+`reliability` factor, never silently keep reporting a stale,
+over-confident number.
+
+**Performance (vision critique 2)**: zero extra SQL queries compared to
+`GET /responses/{response_id}/citations`, which already loads the same
+real citations.
+
+**Real verification**: 18 tests, `tests/test_response_confidence.py`.
+**Completes Partie 6.1 at 10/10.**
 
 ### Partie 3.4.2 -- query rewriting
 
