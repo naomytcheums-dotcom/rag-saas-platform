@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 4/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 5/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (4/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (5/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1021,6 +1021,18 @@ Tests réels dédiés (5 tests `tests/test_template_rendering.py` + 10 tests `te
 **Robustesse (vision critique 3)** : que se passe-t-il si la KB est vide ? `format_rag_results` retourne un vrai message honnête ("No relevant documents found.") plutôt qu'une chaîne vide silencieuse.
 
 Tests réels dédiés (13 tests), voir `tests/test_workflow_block_rag.py`.
+
+#### Partie 5.4.5 — Bloc Search
+
+✅ **Nouveau module réel** `api/services/workflow_block_search.py` : les 4 fonctions littérales (`execute_search_block`, `render_search_query`, `validate_search_config`, `format_search_results`).
+
+✅ **Cohérence (vision critique 1) : réutilise le vrai outil `web_search` (Partie 5.2.2) de bout en bout, aucun second chemin concurrent** -- `api.tools.web_search.web_search` pour le vrai appel Tavily, `format_web_search_results` pour le vrai formatage LLM-facing. `exclude_domains` (champ littéral de cette étape) a nécessité un vrai ajout symétrique, petit et réel à `web_search`/`_call_tavily` (aux côtés du `allowed_domains` déjà ajouté à la Partie 5.3.9) -- les deux sont maintenant un vrai réglage "donné > global", pas un second mécanisme de filtrage de domaines parallèle.
+
+✅ **Robustesse (vision critique 3)** : un vrai échec de recherche (`WebSearchError`) est capturé et relevé comme un vrai `WorkflowBlockError` -- même type d'erreur partagé que le bloc LLM (Partie 5.4.3).
+
+**Performance (vision critique 2)** : un seul vrai appel réseau (Tavily), aucune couche supplémentaire.
+
+Tests réels dédiés (11 tests), voir `tests/test_workflow_block_search.py`.
 
 ---
 

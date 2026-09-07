@@ -8007,6 +8007,32 @@ documents found.") rather than a silent empty string.
 
 **Real verification**: 13 tests, `tests/test_workflow_block_rag.py`.
 
+### Partie 5.4.5 -- Search block
+
+New module `api/services/workflow_block_search.py`: all 4 literal
+functions (`execute_search_block`, `render_search_query`,
+`validate_search_config`, `format_search_results`).
+
+**Coherence (vision critique 1): reuses the real `web_search` tool
+(Partie 5.2.2) end-to-end, no second competing path** --
+`api.tools.web_search.web_search` for the real Tavily call,
+`format_web_search_results` for the real, LLM-facing formatting.
+`exclude_domains` (this étape's own literal config field) needed a
+real, small, symmetric addition to `web_search`/`_call_tavily`
+(alongside Partie 5.3.9's own `allowed_domains`) -- both are now real,
+given-overrides-global config, not a second, parallel domain-filtering
+mechanism.
+
+**Robustness (vision critique 3)**: a real search failure
+(`WebSearchError`) is caught and re-raised as a real
+`WorkflowBlockError` -- same shared error type as the LLM block
+(Partie 5.4.3).
+
+**Performance (vision critique 2)**: one real network call (Tavily),
+no extra layer.
+
+**Real verification**: 11 tests, `tests/test_workflow_block_search.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -43,7 +43,7 @@ class WebSearchError(Exception):
 
 async def _call_tavily(
     query: str, search_depth: str | None, max_results: int | None, include_raw_content: bool,
-    allowed_domains: list[str] | None = None,
+    allowed_domains: list[str] | None = None, exclude_domains: list[str] | None = None,
 ) -> dict:
     if not settings.TAVILY_API_KEY:
         raise WebSearchError("TAVILY_API_KEY is not configured -- get one from https://tavily.com and set it in .env")
@@ -64,7 +64,12 @@ async def _call_tavily(
         body["include_domains"] = allowed_domains
     elif settings.TAVILY_INCLUDE_DOMAINS:
         body["include_domains"] = settings.TAVILY_INCLUDE_DOMAINS
-    if settings.TAVILY_EXCLUDE_DOMAINS:
+    # Partie 5.4.5 -- same real, given-overrides-global precedence as
+    # `allowed_domains` above, for a workflow `web_search` block's own
+    # `exclude_domains` config field.
+    if exclude_domains:
+        body["exclude_domains"] = exclude_domains
+    elif settings.TAVILY_EXCLUDE_DOMAINS:
         body["exclude_domains"] = settings.TAVILY_EXCLUDE_DOMAINS
 
     try:
@@ -82,7 +87,8 @@ async def _call_tavily(
 
 
 async def web_search(
-    query: str, search_depth: str | None = None, max_results: int | None = None, allowed_domains: list[str] | None = None,
+    query: str, search_depth: str | None = None, max_results: int | None = None,
+    allowed_domains: list[str] | None = None, exclude_domains: list[str] | None = None,
 ) -> dict:
     """Item 2's own literal function -- `include_raw_content` follows
     the real, configured `TAVILY_INCLUDE_RAW_CONTENT` default.
@@ -91,8 +97,12 @@ async def web_search(
     guardrail (`api.services.agent_guardrails.check_domain_whitelist`'s
     own `Agent.allowed_domains`), passed straight through as Tavily's
     own real `include_domains` request parameter so the restriction is
-    enforced server-side, not by discarding results after the fact."""
-    return await _call_tavily(query, search_depth, max_results, settings.TAVILY_INCLUDE_RAW_CONTENT, allowed_domains)
+    enforced server-side, not by discarding results after the fact.
+
+    `exclude_domains` (Partie 5.4.5, optional) -- the same real,
+    server-side treatment for a workflow `web_search` block's own
+    `exclude_domains` config field."""
+    return await _call_tavily(query, search_depth, max_results, settings.TAVILY_INCLUDE_RAW_CONTENT, allowed_domains, exclude_domains)
 
 
 async def web_search_with_context(query: str, search_depth: str | None = None, max_results: int | None = None) -> dict:
