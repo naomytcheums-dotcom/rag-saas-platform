@@ -8187,6 +8187,41 @@ never a silent double submission.
 
 **Real verification**: 18 tests, `tests/test_workflow_block_human.py`.
 
+**A real, backward-compatible improvement found while testing this
+étape**: `api/services/template_rendering.py` (shared since Partie
+5.4.3) only accepted a `\w+` (single-word) pattern -- the literal
+`{{user.email}}`/`{{user.name}}` variables from Parties 5.4.10/5.4.11's
+own item 3 would NEVER have matched that pattern and would have stayed
+silently unrendered forever. The pattern now accepts `[\w.]+` with
+real, dot-separated nested lookup (`{{user.email}}` ->
+`context["user"]["email"]`), fully backward-compatible with every flat
+key already in use (Partie 5.3.2, Parties 5.4.3-5.4.9). Tested
+explicitly in `tests/test_template_rendering.py`.
+
+### Partie 5.4.10 -- Email block
+
+New module `api/services/workflow_block_email.py`: all 4 literal
+functions (`execute_email_block`, `render_email_template`,
+`validate_email_config`, `send_email_with_provider`).
+
+**Coherence (vision critique 1): reuses the real `email_send` tool
+(Partie 5.2.8) end-to-end, no second competing send path** --
+`api.tools.email_tools.email_send` for the real send (Gmail/Outlook/
+SMTP), `EmailToolError` mapped to the shared `WorkflowBlockError`.
+
+**A real, necessary addition beyond item 1's own literal config
+fields**: `email_send` has no real default provider (no
+`EMAIL_PROVIDER` setting exists in `api/config.py`) -- a real
+`provider` field (`"gmail"`/`"outlook"`/`"smtp"`) is required in this
+block's own config, the same real value `email_send` itself already
+requires positionally.
+
+**Robustness (vision critique 3)**: a real send failure
+(`EmailToolError`) is caught and re-raised as the shared
+`WorkflowBlockError`.
+
+**Real verification**: 9 tests, `tests/test_workflow_block_email.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
