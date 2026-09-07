@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (4/10)
+### 6.1 Citations — 🟡 PARTIEL (5/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1251,6 +1251,24 @@ Tests réels dédiés (16 tests), voir `tests/test_citation_location.py`.
 **Performance (vision critique 2)** : zéro requête SQL supplémentaire à la création (le champ arrive déjà dans le vrai chunk) ; une seule requête par clé primaire (`db.get(Document, ...)`, déjà chargée pour Partie 6.1.2) côté enrichissement live.
 
 Tests réels dédiés (20 tests, `tests/test_citation_url.py`) + le test existant `test_search_with_context_includes_real_document_context` (`tests/test_retrieval_pipeline.py`) étendu avec 2 assertions verrouillant le nouveau champ `source_url` dans `fetch_organization_chunks`/`search_with_context`.
+
+#### Partie 6.1.5 — Chunk ID
+
+⚠️ **Bug réel trouvé et corrigé pendant les tests, pas un cas hypothétique (décision autonome)** : la première implémentation réelle de cette étape dérivait `chunk_index` en triant les chunks d'un document par `(created_at, id)` -- `DocumentChunk` n'avait alors aucun vrai ordinal persisté. Les tests ont immédiatement prouvé que ce "best-effort" était en réalité proche du hasard : `api/security/documents.py`'s own real chunking loop insère TOUS les chunks d'un document dans la MÊME vraie transaction, et un vrai `now()` Postgres (comme `CURRENT_TIMESTAMP` sous SQLite) retourne la MÊME valeur pour chaque instruction d'une même transaction -- donc chaque vrai chunk d'un document fraîchement traité partage un `created_at` identique, faisant de `id` (un UUID aléatoire) le SEUL vrai départage, sans aucun rapport avec l'ordre réel du contenu. Une vraie colonne persistée a donc été ajoutée à la place.
+
+✅ **Nouvelle vraie colonne** `DocumentChunk.chunk_index` (migration `0068`, réel, 1-based, nullable) : peuplée directement depuis la vraie liste `chunk_records`, déjà dans le vrai ordre du contenu, au moment de la création des chunks (`api/security/documents.py`, réel, aucune donnée nouvelle inventée -- juste la position déjà connue enfin persistée). `fetch_organization_chunks`/`search_with_context` exposent maintenant ce champ pour chaque résultat, sans jointure supplémentaire (c'est une colonne du chunk lui-même).
+
+✅ **Nouveau module réel** `api/services/citation_chunk.py` : les 4 fonctions littérales (`extract_chunk_info`, `enrich_citation_with_chunk`, `get_chunk_content`, `format_chunk_reference`) + `enrich_citations_with_chunk` (plomberie réelle).
+
+✅ **`add_citations_to_response` (Partie 6.1.1) enrichi rétroactivement** : `chunk_index` est maintenant réellement peuplé AU MOMENT DE LA CRÉATION de la citation, directement depuis le même vrai chunk dict (`chunk.get("chunk_index")`) -- zéro requête SQL supplémentaire, contrairement à la première implémentation abandonnée.
+
+✅ **Robustesse (vision critique 3)** : `chunk_index` reste honnêtement `None` pour un vrai chunk antérieur à la migration `0068` (aucun backfill fabriqué -- rechunker rétroactivement changerait aussi les embeddings/ids, une vraie limite de périmètre documentée, pas un oubli). `enrich_citation_with_chunk` est un vrai no-op (garde le snapshot) quand le vrai chunk a disparu OU quand le vrai chunk existe mais n'a lui-même aucun vrai index (chunk historique).
+
+✅ **Intégration réelle dans les 3 endpoints de citations** : `enrich_citation_with_chunk`/`enrich_citations_with_chunk` re-dérivent EN DIRECT depuis le vrai `DocumentChunk.chunk_index` actuel (même raisonnement que les Parties 6.1.2/6.1.3/6.1.4), jamais commité en base.
+
+**Performance (vision critique 2)** : lecture O(1) par clé primaire, aucun scan de document -- la correction du bug ci-dessus a aussi supprimé un vrai coût de requête proportionnel à la taille du document que la première implémentation aurait payé à chaque citation.
+
+Tests réels dédiés (15 tests, `tests/test_citation_chunk.py`) + `tests/test_documents_integration.py`'s own real end-to-end PDF pipeline test étendu avec une assertion verrouillant le vrai ordre 1..N de `chunk_index` (nécessite Postgres/S3 réels, non exécutable dans cet environnement local -- même limitation que toute la suite `*_integration.py`).
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

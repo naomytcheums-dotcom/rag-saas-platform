@@ -8642,6 +8642,66 @@ the existing `test_search_with_context_includes_real_document_context`
 locking in the new `source_url` field in
 `fetch_organization_chunks`/`search_with_context`.
 
+### Partie 6.1.5 -- chunk ID
+
+**A real bug found and fixed while testing, not a hypothetical edge
+case (autonomous decision)**: the first real implementation of this
+étape derived `chunk_index` by ordering a document's own chunks by
+`(created_at, id)` -- `DocumentChunk` had no persisted ordinal at the
+time. Testing immediately proved that "best-effort" was actually
+close to RANDOM: `api/security/documents.py`'s own real chunking loop
+inserts every chunk for one document inside the SAME real
+transaction, and a real Postgres `now()` (like SQLite's
+`CURRENT_TIMESTAMP`) returns the SAME value for every statement in one
+transaction -- so every real chunk of a freshly-processed document
+shares an identical `created_at`, making `id` (a random UUID) the
+ONLY real tie-break, with zero relation to actual content order. A
+real, persisted column was added instead.
+
+**New real column** `DocumentChunk.chunk_index` (migration `0068`,
+real, 1-based, nullable): populated directly from the real, already
+in-order `chunk_records` list at chunk-creation time
+(`api/security/documents.py`, real, no new data invented -- just the
+already-known position finally persisted). `fetch_organization_chunks`/
+`search_with_context` now expose this field on every result, no extra
+join needed (it's a column on the chunk row itself).
+
+**New module** `api/services/citation_chunk.py`: all 4 literal
+functions (`extract_chunk_info`, `enrich_citation_with_chunk`,
+`get_chunk_content`, `format_chunk_reference`) plus
+`enrich_citations_with_chunk` (real plumbing).
+
+**`add_citations_to_response` (Partie 6.1.1) retroactively enriched**:
+`chunk_index` is now really populated AT CITATION-CREATION TIME,
+directly from the same real chunk dict (`chunk.get("chunk_index")`) --
+zero extra SQL queries, unlike the abandoned first implementation.
+
+**Robustness (vision critique 3)**: `chunk_index` honestly stays
+`None` for a real chunk that predates migration `0068` (no fabricated
+backfill -- retroactively re-chunking would also change
+embeddings/ids, a real, documented scope limit, not an oversight).
+`enrich_citation_with_chunk` is a real no-op (keeps the snapshot) when
+the real chunk is gone OR when the real chunk still exists but has no
+real index of its own (a legacy chunk).
+
+**Real integration into the 3 citation endpoints**:
+`enrich_citation_with_chunk`/`enrich_citations_with_chunk` re-derive
+LIVE from the real, current `DocumentChunk.chunk_index` (same
+reasoning as Parties 6.1.2/6.1.3/6.1.4), never committed to the
+database.
+
+**Performance (vision critique 2)**: an O(1), primary-key read -- no
+document scan. Fixing the bug above also removed a real query cost
+proportional to document size that the first implementation would
+have paid on every single citation.
+
+**Real verification**: 15 tests, `tests/test_citation_chunk.py`, plus
+`tests/test_documents_integration.py`'s own real end-to-end PDF
+pipeline test extended with an assertion locking in the real 1..N
+order of `chunk_index` (needs real Postgres/S3, not runnable in this
+local environment -- same limitation as the entire `*_integration.py`
+suite).
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

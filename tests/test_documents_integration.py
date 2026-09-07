@@ -413,6 +413,13 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
                 # every chunk's own metadata alongside its real,
                 # existing per-format fields.
                 assert chunk["metadata_json"] == {"page": 1, "language": "en"}
+            # Partie 6.1.5 -- real, 1-based, real content-order ordinal
+            # (not derived from created_at -- see
+            # api/models/document.py's own DocumentChunk docstring for
+            # why: every chunk here is inserted in the SAME real
+            # transaction, so created_at alone could never distinguish
+            # them).
+            assert sorted(chunk_row._mapping["chunk_index"] for chunk_row in chunks) == list(range(1, len(chunks) + 1))
         finally:
             await _cleanup(session, organization.id, owner.id)
 

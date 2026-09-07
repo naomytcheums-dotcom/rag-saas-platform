@@ -3132,10 +3132,20 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             # document) are replaced, not appended to -- otherwise
             # reprocessing would duplicate every chunk each time.
             await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
-            for record, embedding in zip(chunk_records, embeddings):
+            for index, (record, embedding) in enumerate(zip(chunk_records, embeddings), start=1):
                 db.add(DocumentChunk(
                     document_id=document.id, organization_id=document.organization_id, content=record["content"],
                     metadata_json=record["metadata"] or None, embedding=embedding,
+                    # Partie 6.1.5 -- real, per-document content-order
+                    # ordinal, straight from this SAME real, in-order
+                    # `chunk_records` list -- see
+                    # api/models/document.py's own DocumentChunk
+                    # docstring for why this is a real, persisted
+                    # column rather than a fragile, derived
+                    # approximation (created_at ties are the REAL,
+                    # common case here: every chunk in this loop is
+                    # inserted within the SAME real transaction).
+                    chunk_index=index,
                 ))
 
             # Partie 3.1.5 -- real, embedded images (PDF/DOCX/EPUB only,

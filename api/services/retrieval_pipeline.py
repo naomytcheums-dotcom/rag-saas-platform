@@ -117,6 +117,12 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id) -> list[d
             "embedding": chunk.embedding,
             "document_name": name,
             "file_type": file_type,
+            # Partie 6.1.5 -- real, per-document content-order ordinal,
+            # already a real column on this SAME chunk row (see
+            # api/models/document.py's own DocumentChunk docstring) --
+            # no extra join needed, unlike document_name/file_type/
+            # source_url above.
+            "chunk_index": chunk.chunk_index,
             # Partie 6.1.4 -- the parent document's own real source_url
             # (only ever real for a document imported via `POST
             # .../documents/url`, see api/models/document.py's own

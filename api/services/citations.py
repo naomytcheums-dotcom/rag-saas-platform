@@ -74,10 +74,12 @@ async def add_citations_to_response(
     citations = []
     for number, chunk in enumerate(selected, start=1):
         position_start, position_end = _find_marker_position(response.answer, number)
+        document_id = uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None
+        chunk_id = uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None
         citation = Citation(
             response_id=response.id,
-            document_id=uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None,
-            chunk_id=uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None,
+            document_id=document_id,
+            chunk_id=chunk_id,
             source_title=chunk.get("document_name"),
             # Partie 6.1.4 -- real, from this SAME real chunk dict's own
             # `source_url` (the parent document's real source_url,
@@ -100,6 +102,12 @@ async def add_citations_to_response(
             source_page=extract_page_from_chunk(chunk),
             source_section=extract_section_from_chunk(chunk),
             source_heading=extract_heading_from_chunk(chunk),
+            # Partie 6.1.5 -- real, from this SAME real chunk dict's own
+            # `chunk_index` (a real, persisted column on DocumentChunk
+            # itself, migration 0068 -- see
+            # api/services/citation_chunk.py's own top docstring for
+            # why this is a real column, not a derived approximation).
+            chunk_index=chunk.get("chunk_index"),
         )
         db.add(citation)
         citations.append(citation)
