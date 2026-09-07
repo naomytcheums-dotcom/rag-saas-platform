@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 8/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 9/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (8/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (9/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1075,6 +1075,24 @@ Tests réels dédiés (25 tests), voir `tests/test_workflow_block_condition.py`.
 **Tests (vision critique 4)** : succès (arithmétique, méthodes de chaîne sûres, listes/dicts), restrictions de sécurité testées explicitement (`__class__`, `__import__`, `open()`, méthode non whitelistée `__reduce__`), erreurs gérées (variable inconnue, config invalide).
 
 Tests réels dédiés (17 tests), voir `tests/test_workflow_block_code.py`.
+
+#### Partie 5.4.9 — Bloc Human
+
+✅ **Nouveau modèle réel** `api/models/workflow_human_input.py` (`WorkflowHumanInput`, migration `0063`, RLS activée) : id, workflow_run_id (FK workflow_runs), node_id, message, input_type, options (JSON), required, status (pending/submitted/timeout), value (JSON), submitted_by/submitted_at, created_at, expires_at.
+
+✅ **Ce bloc ne peut pas "s'exécuter jusqu'au bout" de façon synchrone, contrairement aux Parties 5.4.3-5.4.8** : un bloc `human` doit réellement METTRE EN PAUSE et attendre une vraie soumission séparée -- cette table EST l'état d'exécution réel de ce bloc, pas une réflexion après coup.
+
+✅ **Nouveau module réel** `api/services/workflow_block_human.py` : les 5 fonctions littérales (`execute_human_block`, `render_human_message`, `validate_human_input`, `get_human_approval`, `submit_human_input`).
+
+✅ **Vraie résolution de timeout paresseuse, même motif que `api/security/human_approval.py` (Partie 5.1.10)** : `get_human_approval` fait basculer une vraie ligne encore "pending" passé son propre `expires_at` vers `"timeout"` au moment même de la lecture, sans sweep d'arrière-plan séparé.
+
+✅ **Déviation réelle et documentée du signature littéral à 2 arguments** : créer une vraie requête persistée a réellement besoin d'une vraie session `db`, du vrai `workflow_run_id`, et du vrai `node_id` d'origine -- signature réelle : `execute_human_block(db, workflow_run_id, node_id, block_config, context)`.
+
+✅ **3 endpoints réels** -- `GET /workflows/runs/{run_id}/human-blocks`, `GET .../human-blocks/{block_id}`, `POST .../human-blocks/{block_id}/submit`, protégés par un nouveau `require_workflow_run_member` réel (résout run → workflow → appartenance organisationnelle, puisqu'un run n'a pas son propre `organization_id`).
+
+**Robustesse (vision critique 3)** : `submit_human_input` retourne un vrai no-op (`None`) pour une requête déjà soumise ou expirée -- jamais une double soumission silencieuse.
+
+Tests réels dédiés (18 tests), voir `tests/test_workflow_block_human.py`.
 
 ---
 

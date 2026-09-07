@@ -19,6 +19,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.models.workflow import Workflow, WorkflowStatus
+from api.models.workflow_run import WorkflowRun
 from api.services.workflows import validate_workflow_data
 
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -105,6 +106,31 @@ async def list_workflows(db: AsyncSession, organization_id: uuid.UUID, limit: in
         .order_by(Workflow.created_at.desc()).limit(limit).offset(offset)
     )
     return list((await db.scalars(query)).all())
+
+
+async def require_workflow_run_member(
+    run_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[WorkflowRun, OrganizationMember]:
+    """Partie 5.4.9 -- real dependency for the `human` block's own
+    endpoints: resolves the real `WorkflowRun`, its own real
+    `Workflow`, AND the caller's real organization membership together
+    (same 404-not-403 anti-enumeration reasoning as
+    `require_workflow_member`), since a run has no `organization_id`
+    of its own -- only its parent workflow does."""
+    run = await db.get(WorkflowRun, run_id)
+    if run is None:
+        raise _NOT_FOUND
+    workflow = await db.get(Workflow, run.workflow_id)
+    if workflow is None or workflow.deleted_at is not None:
+        raise _NOT_FOUND
+    membership = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == workflow.organization_id, OrganizationMember.user_id == current_user.id,
+        )
+    )
+    if membership is None:
+        raise _NOT_FOUND
+    return run, membership
 
 
 async def delete_workflow(db: AsyncSession, workflow_id: uuid.UUID) -> bool:

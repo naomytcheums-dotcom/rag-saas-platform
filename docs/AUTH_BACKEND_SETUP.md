@@ -8147,6 +8147,46 @@ method), error handling (unknown variable, invalid config).
 
 **Real verification**: 17 tests, `tests/test_workflow_block_code.py`.
 
+### Partie 5.4.9 -- Human block
+
+New real model `api/models/workflow_human_input.py` (`WorkflowHumanInput`,
+migration `0063`, RLS enabled): id, workflow_run_id (FK workflow_runs),
+node_id, message, input_type, options (JSON), required, status
+(pending/submitted/timeout), value (JSON), submitted_by/submitted_at,
+created_at, expires_at.
+
+**This block cannot "execute to completion" synchronously, unlike
+Parties 5.4.3-5.4.8**: a `human` block must really PAUSE and wait for
+a real, separate submission -- this table IS this block's own real
+execution state, not an afterthought.
+
+New module `api/services/workflow_block_human.py`: all 5 literal
+functions (`execute_human_block`, `render_human_message`,
+`validate_human_input`, `get_human_approval`, `submit_human_input`).
+
+**Real, lazy timeout resolution, same pattern as
+`api/security/human_approval.py` (Partie 5.1.10)**: `get_human_approval`
+flips a real, still-pending row past its own `expires_at` to
+`"timeout"` the moment it's read, no separate background sweep.
+
+**A real, documented deviation from the literal 2-argument
+signature**: creating a real, persisted request genuinely needs a real
+`db` session, the real `workflow_run_id`, and the real originating
+`node_id` -- real signature: `execute_human_block(db, workflow_run_id,
+node_id, block_config, context)`.
+
+**3 real endpoints** -- `GET /workflows/runs/{run_id}/human-blocks`,
+`GET .../human-blocks/{block_id}`, `POST .../human-blocks/{block_id}/submit`,
+protected by a new, real `require_workflow_run_member` (resolves run
+-> workflow -> organization membership, since a run has no
+`organization_id` of its own).
+
+**Robustness (vision critique 3)**: `submit_human_input` returns a
+real no-op (`None`) for an already-submitted or timed-out request --
+never a silent double submission.
+
+**Real verification**: 18 tests, `tests/test_workflow_block_human.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.models.workflow import Workflow
+from api.models.workflow_run import WorkflowRun
+from api.schemas.workflow_human_input import WorkflowHumanInputResponse, WorkflowHumanInputSubmitRequest
 from api.schemas.workflow_triggers import (
     WorkflowRunRequest, WorkflowRunResponse, WorkflowTriggerCreateRequest, WorkflowTriggerResponse,
 )
@@ -24,8 +26,10 @@ from api.schemas.workflows import (
 from api.security.organizations import require_org_manager
 from api.security.workflows import (
     create_workflow, delete_workflow, list_workflows, require_workflow_manager, require_workflow_member,
-    update_workflow,
+    require_workflow_run_member, update_workflow,
 )
+from api.services.workflow_block_human import get_human_approval, list_human_blocks, submit_human_input
+from api.services.workflow_blocks import WorkflowBlockError
 from api.services.workflow_triggers import (
     TRIGGER_TYPES, WorkflowTriggerError, create_manual_trigger, create_schedule_trigger, create_webhook_trigger,
     delete_trigger, get_trigger, list_triggers, trigger_workflow, verify_webhook_token,
@@ -160,3 +164,48 @@ async def run_workflow_manually_endpoint(
     run = await trigger_workflow(db, workflow.id, payload.input)
     await db.commit()
     return run
+
+
+# ------------------------------------- Partie 5.4.9 -- human block -------------------------------------
+
+
+@router.get("/workflows/runs/{run_id}/human-blocks", response_model=list[WorkflowHumanInputResponse])
+async def list_human_blocks_endpoint(
+    run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member), db: AsyncSession = Depends(get_db),
+):
+    run, _caller = run_ctx
+    blocks = await list_human_blocks(db, run.id)
+    await db.commit()
+    return blocks
+
+
+@router.get("/workflows/runs/{run_id}/human-blocks/{block_id}", response_model=WorkflowHumanInputResponse)
+async def get_human_block_endpoint(
+    block_id: uuid.UUID,
+    run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member), db: AsyncSession = Depends(get_db),
+):
+    run, _caller = run_ctx
+    block = await get_human_approval(db, block_id)
+    if block is None or block.workflow_run_id != run.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await db.commit()
+    return block
+
+
+@router.post("/workflows/runs/{run_id}/human-blocks/{block_id}/submit", response_model=WorkflowHumanInputResponse)
+async def submit_human_block_endpoint(
+    block_id: uuid.UUID, payload: WorkflowHumanInputSubmitRequest,
+    run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member), db: AsyncSession = Depends(get_db),
+):
+    run, caller = run_ctx
+    existing = await get_human_approval(db, block_id)
+    if existing is None or existing.workflow_run_id != run.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    try:
+        updated = await submit_human_input(db, block_id, caller.user_id, payload.value)
+    except WorkflowBlockError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This human input is no longer pending")
+    await db.commit()
+    return updated
