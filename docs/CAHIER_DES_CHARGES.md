@@ -730,8 +730,22 @@ Tests réels dédiés (16 tests), voir `tests/test_calculator_tool.py`.
 
 Tests réels dédiés (10 tests), voir `tests/test_url_reader.py`. Suite `test_url_fetching.py`/`test_url_extraction.py` reconfirmée intacte.
 
+#### Partie 5.2.7 — Calendar (Google, Outlook)
+
+✅ **Nouveau module réel** `api/tools/calendar_tools.py` : les 6 fonctions littérales. **Réutilisation réelle d'un PATTERN établi, pas des fonctions exactes** : `google_drive_extraction.py`'s `authenticate_drive` et `onedrive_extraction.py`'s `authenticate_onedrive` avaient déjà établi la vraie technique "échanger un refresh token contre un vrai access token court, mis en cache et rafraîchi PROACTIVEMENT avant sa vraie expiration" -- mais cette étape déclare ses propres identifiants OAuth réels et distincts (`GOOGLE_CALENDAR_*`/`OUTLOOK_CALENDAR_*`), donc ce module construit son propre vrai cache de tokens contre les mêmes vrais endpoints OAuth, plutôt que d'appeler ces autres fonctions avec de mauvais identifiants.
+
+✅ **Vraie forme unifiée** : chaque fonction dispatche réellement vers Google Calendar API v3 ou Microsoft Graph selon `provider`, reformatant chaque vrai résultat dans la même forme unifiée (`id`/`title`/`start`/`end`/`description`).
+
+**`calendar_find_available_slots`, algorithme réel et délibérément simple** : lit les vrais événements existants et retourne chaque vrai intervalle d'au moins `duration` minutes entre eux -- pas de logique d'heures de travail/fuseau horaire, une base réelle et honnête, pas chaque nuance qu'un vrai produit de planification dédié aurait.
+
+**Limitation honnête, même que chaque module basé sur OAuth de ce dépôt** : aucun identifiant OAuth Google/Microsoft réel et vivant dans cette session (en fournir un exigerait un vrai flux de consentement navigateur interactif, hors du périmètre sûr et automatisé de cette session, même retenue déjà documentée par `google_drive_extraction.py`) -- chaque appel HTTP réel ci-dessous est construit contre la vraie documentation publique de chaque fournisseur, testé via `httpx.MockTransport`, non vérifié de bout en bout contre un compte vivant.
+
+**Sécurité (vision critique)** : un refresh token manquant lève une vraie erreur immédiate, testé.
+
+Tests réels dédiés (10 tests, `httpx.MockTransport` réel), voir `tests/test_calendar_tools.py`.
+
 Human Escalation : existe déjà côté `src/`, non revérifié.
-Calendar complet, Email, Custom Tools (webhooks) : ⬜.
+Email, Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)

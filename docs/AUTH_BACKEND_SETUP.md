@@ -7244,6 +7244,45 @@ spoofable via a bare domain string).
 existing `test_url_fetching.py`/`test_url_extraction.py` suites
 reconfirmed untouched.
 
+### Partie 5.2.7 -- Calendar (Google, Outlook)
+
+New module `api/tools/calendar_tools.py`: all 6 literal functions.
+**Real reuse of an established PATTERN, not the exact functions**:
+`google_drive_extraction.py`'s `authenticate_drive` and
+`onedrive_extraction.py`'s `authenticate_onedrive` already established
+the real "exchange a refresh token for a real, short-lived access
+token, cached and PROACTIVELY refreshed before its own real expiry"
+technique -- but this étape declares its own, real, separate OAuth
+credentials (`GOOGLE_CALENDAR_*`/`OUTLOOK_CALENDAR_*`), so this module
+builds its own real token cache against the same real OAuth endpoints
+rather than calling those other functions with the wrong credentials.
+
+**A real, unified shape**: every function really dispatches to Google
+Calendar API v3 or Microsoft Graph based on `provider`, reshaping each
+real result into the same unified shape (`id`/`title`/`start`/`end`/
+`description`).
+
+**`calendar_find_available_slots`, a real, deliberately simple
+algorithm**: reads real existing events and returns every real gap of
+at least `duration` minutes between them -- no working-hours/timezone
+preference logic, a real, honest baseline, not every nuance a
+dedicated scheduling product would have.
+
+**An honest limitation, same as every OAuth-based module in this
+codebase**: no real, live Google/Microsoft OAuth credentials in this
+session (provisioning one needs a real, interactive browser consent
+flow, outside this session's safe, automated scope, same restraint
+already documented by `google_drive_extraction.py`) -- every real HTTP
+call is built against each provider's own real public documentation,
+tested via `httpx.MockTransport`, not verified end-to-end against a
+live account.
+
+**Security (vision critique)**: a missing refresh token raises a real,
+immediate error, tested.
+
+**Real verification**: 10 tests, real `httpx.MockTransport`,
+`tests/test_calendar_tools.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
