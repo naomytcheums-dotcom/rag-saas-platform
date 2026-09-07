@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.3-5.4 restent à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 1/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,10 +776,32 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (1/10)
+
+#### Partie 5.3.1 — Création d'agent personnalisé
+
+✅ **La vraie entité `Agent` qui manquait honnêtement depuis la Partie 5.1.1** : `api/models/agent.py` (`Agent`, migration `0058`, RLS activée). **Fermeture réelle d'un écart documenté** : chaque module 5.1.x/5.2.x (`AgentOrchestrator`, `AgentSession`, `ToolPermission`, ...) attendait déjà une vraie chaîne `agent_id` -- `str(Agent.id)` est maintenant cette même chaîne réelle, sans changer aucun de ces sites d'appel.
+
+✅ **Tous les champs des Parties 5.3.1 à 5.3.6 déclarés ensemble, dans une seule vraie migration** -- `system_prompt_template` (5.3.2), `knowledge_base_config` (5.3.4), `memory_ttl`/`memory_max_items`/`memory_retention_policy` (5.3.6) sont réels mais inertes tant que leur propre étape ne les consomme pas, même approche déjà utilisée pour les ajouts de configuration de tout ce lot.
+
+✅ **`knowledge_base_id`, vraie réutilisation de `workspaces`, pas une seconde entité** : ce dépôt n'a pas de table `KnowledgeBase` dédiée -- un `Workspace` EST déjà le vrai conteneur de documents. Colonne réelle distincte de `workspace_id` car l'un et l'autre peuvent réellement différer.
+
+✅ **Nouveau module réel** `api/security/agents.py` : les 8 fonctions littérales + `require_agent_member`/`require_agent_manager` (dépendances réelles supplémentaires, même vrai schéma que `require_workspace_permission` de `api/routers/workspaces.py` -- 404, pas 403, pour un non-membre, même raisonnement anti-énumération). `delete_agent` est un vrai *soft delete* (`deleted_at`), pas un `DELETE` brut -- les vrais runs/traces/escalades d'un agent gardent une référence réelle et significative.
+
+✅ **Vraie intégration au système de quotas** : "agents" était l'une des 7 dimensions honnêtement non trackées de la Partie 1.3.6 (aucune vraie table `Agent` n'existait). Maintenant qu'elle existe, un vrai compteur live a été câblé dans `api/security/quotas.py` (`_LIVE_COUNTERS`), et `POST .../agents` appelle réellement `require_quota_available` -- testé, y compris le vrai dépassement de quota (402).
+
+✅ **8 endpoints réels**, les 8 littéraux -- create/list org-scopés (`require_org_manager`/`require_org_member`), get/update/delete/activate/pause/archive résolvent l'agent ET le rôle réel de l'appelant ensemble (chemins littéraux sans `{org_id}`).
+
+**Sécurité (vision critique)** : isolation par organisation testée (`test_cannot_access_an_agent_from_another_organization`, 404). Member ne peut ni créer ni modifier (403, testé).
+
+**Performance (vision critique)** : `ix_agents_organization_id`/`ix_agents_workspace_id` réels.
+
+Tests réels dédiés (11 tests), voir `tests/test_agents.py`.
+
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 
-Aucune table `agents`, aucune UI (React Flow).
+Pas encore d'UI (React Flow) -- backend uniquement, cohérent avec le
+reste de ce dépôt à ce stade.
 
 ---
 

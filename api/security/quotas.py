@@ -1,25 +1,27 @@
 """
 Partie 1.3.6 -- per-organization resource limits
 (api/models/organization_quota.py). Ten dimensions are named in this
-step's spec; only THREE map to a real, countable table today: users
-(`organization_members`), workspaces (`workspaces`), teams (`teams`).
-The other seven -- documents, storage, requests per day/month, API
-calls, agents, KB size -- have no corresponding table or endpoint yet
-(documents/KB: Partie 2, agents: Partie 5, requests/api_calls: Partie 9's
-public API, none built). `check_quota` returns `True` (not enforced) and
-`get_quota_usage` reports `None` (not measured, not "0 used") for those
-seven -- stored as configuration only, ready the moment the resource
-they gate actually exists, rather than silently pretending to enforce a
-limit nothing produces usage against.
+step's spec; FOUR map to a real, countable table today: users
+(`organization_members`), workspaces (`workspaces`), teams (`teams`),
+and agents (`agents`, real since Partie 5.3.1 -- a real `Agent` table
+didn't exist when this docstring first flagged it as untracked; a real,
+live count was wired in the moment one did). The other six --
+documents, storage, requests per day/month, API calls, KB size -- have
+no corresponding table or endpoint yet (documents/KB: Partie 2,
+requests/api_calls: Partie 9's public API, none built). `check_quota`
+returns `True` (not enforced) and `get_quota_usage` reports `None` (not
+measured, not "0 used") for those six -- stored as configuration only,
+ready the moment the resource they gate actually exists, rather than
+silently pretending to enforce a limit nothing produces usage against.
 
-For the three real dimensions, usage is a LIVE COUNT against the real
+For the four real dimensions, usage is a LIVE COUNT against the real
 table, never a separately maintained counter -- see
 api/models/organization_quota.py's own docstring for why (a live count
 can't drift from reality the way an increment/decrement pair can).
 There is consequently no `organization_usage_counters` table and
-`increment_usage` is a documented no-op for these three: the "increment"
-already happened, it's the INSERT into organization_members/workspaces/teams
-itself.
+`increment_usage` is a documented no-op for these four: the "increment"
+already happened, it's the INSERT into
+organization_members/workspaces/teams/agents itself.
 
 **Known, accepted race**: check-then-insert (check_quota, then the
 caller's own INSERT) is not wrapped in one atomic operation here -- two
@@ -40,6 +42,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.agent import Agent
 from api.models.organization import OrganizationMember
 from api.models.organization_quota import OrganizationQuota
 from api.models.team import Team
@@ -53,13 +56,18 @@ _LIVE_COUNTERS = {
     "users": ("max_users", lambda organization_id: select(func.count()).select_from(OrganizationMember).where(OrganizationMember.organization_id == organization_id)),
     "workspaces": ("max_workspaces", lambda organization_id: select(func.count()).select_from(Workspace).where(Workspace.organization_id == organization_id)),
     "teams": ("max_teams", lambda organization_id: select(func.count()).select_from(Team).where(Team.organization_id == organization_id)),
+    # Partie 5.3.1 -- a real Agent table now exists (it didn't when this
+    # module's own docstring above first flagged "agents" as untracked);
+    # a real, live count, soft-deleted agents excluded (matching every
+    # other real query in this codebase that reads api.models.agent.Agent).
+    "agents": ("max_agents", lambda organization_id: select(func.count()).select_from(Agent).where(Agent.organization_id == organization_id, Agent.deleted_at.is_(None))),
 }
 
-# The remaining seven dimensions this step's spec names -- stored on
+# The remaining six dimensions this step's spec names -- stored on
 # OrganizationQuota, configurable, but not yet backed by any real table
 # or endpoint to measure usage against.
 _NOT_YET_TRACKED = (
-    "documents", "storage_mb", "requests_per_month", "requests_per_day", "api_calls", "agents", "kb_size_mb",
+    "documents", "storage_mb", "requests_per_month", "requests_per_day", "api_calls", "kb_size_mb",
 )
 
 ALL_RESOURCE_TYPES = tuple(_LIVE_COUNTERS) + _NOT_YET_TRACKED
@@ -114,7 +122,7 @@ async def get_quota_limits(db: AsyncSession, organization_id: uuid.UUID) -> dict
 
 async def get_quota_usage(db: AsyncSession, organization_id: uuid.UUID) -> dict[str, int | None]:
     """Item 3's literal function -- current usage per dimension. `None`
-    for the seven dimensions with no real table to count yet (NOT `0`:
+    for the six dimensions with no real table to count yet (NOT `0`:
     zero would claim "nothing used," which is a different, false
     statement from "not measured")."""
     usage: dict[str, int | None] = {resource_type: None for resource_type in _NOT_YET_TRACKED}
@@ -125,7 +133,7 @@ async def get_quota_usage(db: AsyncSession, organization_id: uuid.UUID) -> dict[
 
 async def check_quota(db: AsyncSession, organization_id: uuid.UUID, resource_type: str, delta: int = 1) -> bool:
     """
-    Item 3's literal function. `True` (not blocked) for any of the seven
+    Item 3's literal function. `True` (not blocked) for any of the six
     not-yet-tracked dimensions -- see this module's top docstring for
     why that's the honest answer, not a bug: there is nothing to measure
     usage against yet, so nothing can be "over" a limit that has no
@@ -143,10 +151,10 @@ async def check_quota(db: AsyncSession, organization_id: uuid.UUID, resource_typ
 async def increment_usage(organization_id: uuid.UUID, resource_type: str, delta: int = 1) -> None:
     """
     Item 3's literal function. A genuine no-op for all ten dimensions
-    today -- see this module's top docstring: the three live-counted
+    today -- see this module's top docstring: the four live-counted
     ones need no separate increment (the INSERT that creates the row IS
     the increment, already reflected the next time usage is counted);
-    the other seven have no counter storage to increment into at all
+    the other six have no counter storage to increment into at all
     yet (no request-metering infrastructure exists -- Partie 9 isn't
     built). Kept as a real, callable function -- not deleted -- so the
     four functions this step asks for exist with a stable signature;

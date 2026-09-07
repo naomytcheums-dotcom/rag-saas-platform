@@ -6,6 +6,7 @@ registers its table).
 """
 
 from api.database import Base
+from api.models.agent import Agent
 from api.models.agent_memory import AgentMemoryItem, AgentSession
 from api.models.agent_run import AgentRunRecord
 from api.models.agent_trace import AgentTrace
@@ -45,5 +46,5 @@ __all__ = [
     "ResourcePermission", "Team", "TeamMember", "Invitation", "OrganizationQuota",
     "AgentRunRecord", "ToolPermission", "ToolTimeoutOverride", "ToolBudget", "ToolFallback", "LlmFallback",
     "HumanApproval", "AgentSession", "AgentMemoryItem", "Conversation", "ConversationMessage",
-    "TaskPlan", "TaskStep", "AgentTrace", "Escalation",
+    "TaskPlan", "TaskStep", "AgentTrace", "Escalation", "Agent",
 ]

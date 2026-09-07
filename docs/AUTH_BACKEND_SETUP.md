@@ -7358,6 +7358,56 @@ record itself.
 this batch). "Search KB/GitHub/Human Escalation already exist in
 `src/`" claims stay unverified (inherited work, different granularity).
 
+### Partie 5.3.1 -- custom agent creation
+
+**The real `Agent` entity honestly missing since Partie 5.1.1**:
+`api/models/agent.py` (`Agent`, migration `0058`, RLS enabled). **A
+real, closed gap**: every 5.1.x/5.2.x module (`AgentOrchestrator`,
+`AgentSession`, `ToolPermission`, ...) already expected a real
+`agent_id` string -- `str(Agent.id)` is now that same real string,
+without changing any of those call sites.
+
+**All columns from Partie 5.3.1 through 5.3.6 declared together, in
+one real migration** -- `system_prompt_template` (5.3.2),
+`knowledge_base_config` (5.3.4), `memory_ttl`/`memory_max_items`/
+`memory_retention_policy` (5.3.6) are real but inert until their own
+étape's own real functions consume them, the same approach already
+used for every config addition in this whole batch.
+
+**`knowledge_base_id`, a real reuse of `workspaces`, not a second
+entity**: this codebase has no dedicated `KnowledgeBase` table -- a
+`Workspace` already IS the real document container. A real, distinct
+column from `workspace_id` since the two are genuinely allowed to
+differ.
+
+New module `api/security/agents.py`: all 8 literal functions plus
+`require_agent_member`/`require_agent_manager` (real, additional
+dependencies, the same real shape as `api/routers/workspaces.py`'s own
+`require_workspace_permission` -- 404, not 403, for a non-member, same
+anti-enumeration reasoning). `delete_agent` is a real SOFT delete
+(`deleted_at`), not a raw `DELETE` -- a real agent's own runs/traces/
+escalations keep a real, meaningful reference to it.
+
+**Real quota system integration**: "agents" was one of Partie 1.3.6's
+own 7 honestly untracked dimensions (no real `Agent` table existed). Now
+that one does, a real live counter was wired into
+`api/security/quotas.py`'s own `_LIVE_COUNTERS`, and `POST .../agents`
+really calls `require_quota_available` -- tested, including a real
+quota-exceeded case (402).
+
+**8 real endpoints**, all 8 literal ones -- create/list org-scoped
+(`require_org_manager`/`require_org_member`), get/update/delete/
+activate/pause/archive resolve the agent AND the caller's real role
+together (literal paths with no `{org_id}`).
+
+**Security (vision critique)**: per-organization isolation tested
+(404). A Member can neither create nor update (403, tested).
+
+**Performance (vision critique)**: real `ix_agents_organization_id`/
+`ix_agents_workspace_id` indexes.
+
+**Real verification**: 11 tests, `tests/test_agents.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
