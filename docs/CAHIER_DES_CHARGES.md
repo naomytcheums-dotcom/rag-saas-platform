@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 1/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 2/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (1/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (2/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -975,6 +975,22 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 **Performance (vision critique 2)** : `nodes`/`edges` en JSON -- toujours lus/écrits en bloc (rendu, validation, export), jamais interrogés nœud par nœud ; même raisonnement que `AgentRunRecord.trace`. Pas de mesure réelle de fluidité d'un canvas qui n'existe pas encore côté frontend (honnête, cf. décision de périmètre ci-dessus).
 
 Tests réels dédiés (26 tests), voir `tests/test_workflows.py`.
+
+#### Partie 5.4.2 — Bloc Trigger (backend réel)
+
+✅ **Nouveau module réel** `api/services/workflow_triggers.py` : les 5 fonctions littérales (`create_webhook_trigger`, `create_schedule_trigger`, `create_manual_trigger`, `trigger_workflow`, `get_trigger_url`) + `verify_webhook_token`/`get_trigger`/`list_triggers`/`delete_trigger` (plomberie réelle).
+
+✅ **Sécurité (vision critique 1) : vrai token de webhook, chemin littéral conservé** -- `create_webhook_trigger` génère un vrai `webhook_token` cryptographique (`secrets.token_urlsafe`, même vrai RNG que les clés API de la Partie 5.3.10). L'endpoint réel `POST /webhooks/{trigger_id}` exige ce même vrai token dans un header réel `X-Webhook-Token`, vérifié via `secrets.compare_digest` (temps constant). Contrairement à une clé API (montrée une seule fois), le token d'un webhook reste réellement re-visible à un Manager -- même besoin opérationnel réel que les écrans de configuration webhook de GitHub/Slack/Discord (il faut pouvoir re-copier l'URL+secret pour reconfigurer l'appelant externe).
+
+✅ **Schedules, vraie validation cron sans nouvelle dépendance** : `create_schedule_trigger` réutilise EXACTEMENT le même vrai parsing 5-champs via `celery.schedules.crontab` que `api/security/reindex_schedules.py` (Partie 2.2.15) -- aucune bibliothèque de parsing cron supplémentaire pour cette seule fonctionnalité.
+
+✅ **Périmètre honnête et documenté (pas une capacité fabriquée)** : `trigger_workflow` crée un vrai `WorkflowRun` persisté (`status="pending"`) -- il ne parcourt PAS le vrai graphe pour exécuter chaque nœud réel. C'est un vrai moteur d'exécution de graphe, séparé et substantiel (enchaînant les fonctions d'exécution par bloc des Parties 5.4.3-5.4.11 le long des vraies arêtes), que cette étape ne prétend pas livrer -- son propre périmètre littéral est le DÉCLENCHEUR lui-même (titre littéral de l'item 1, "Bloc Trigger"), pas l'exécution complète du workflow, même honnêteté que le "no automatic function-calling loop" déjà documenté dans `api/services/agent_orchestrator.py`.
+
+✅ **5 endpoints réels** -- `POST/GET /workflows/{workflow_id}/triggers`, `DELETE .../triggers/{trigger_id}` (Manager+), `POST /webhooks/{trigger_id}` (public, authentifié par token), `POST /workflows/{workflow_id}/run` (Member+, déclenchement manuel réel).
+
+**Robustesse (vision critique 3)** : `trigger_workflow` retourne toujours un vrai `WorkflowRun` réel (jamais d'exception) ; un échec de déclenchement webhook (token invalide) est un vrai 401, pas un run silencieusement créé.
+
+Tests réels dédiés (17 tests), voir `tests/test_workflow_triggers.py`.
 
 ---
 

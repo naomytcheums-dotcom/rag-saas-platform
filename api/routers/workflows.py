@@ -9,12 +9,15 @@ same reasoning as `api/routers/agents.py`.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.models.workflow import Workflow
+from api.schemas.workflow_triggers import (
+    WorkflowRunRequest, WorkflowRunResponse, WorkflowTriggerCreateRequest, WorkflowTriggerResponse,
+)
 from api.schemas.workflows import (
     WorkflowCreateRequest, WorkflowResponse, WorkflowUpdateRequest, WorkflowValidateResponse,
 )
@@ -22,6 +25,10 @@ from api.security.organizations import require_org_manager
 from api.security.workflows import (
     create_workflow, delete_workflow, list_workflows, require_workflow_manager, require_workflow_member,
     update_workflow,
+)
+from api.services.workflow_triggers import (
+    TRIGGER_TYPES, WorkflowTriggerError, create_manual_trigger, create_schedule_trigger, create_webhook_trigger,
+    delete_trigger, get_trigger, list_triggers, trigger_workflow, verify_webhook_token,
 )
 from api.services.workflows import WorkflowValidationError, validate_workflow
 
@@ -85,3 +92,71 @@ async def validate_workflow_endpoint(workflow_ctx: tuple[Workflow, OrganizationM
     workflow, _caller = workflow_ctx
     errors = validate_workflow(workflow.nodes, workflow.edges)
     return WorkflowValidateResponse(valid=len(errors) == 0, errors=errors)
+
+
+# ------------------------------------- Partie 5.4.2 -- triggers -------------------------------------
+
+
+@router.post("/workflows/{workflow_id}/triggers", response_model=WorkflowTriggerResponse)
+async def create_trigger_endpoint(
+    payload: WorkflowTriggerCreateRequest,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_manager), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    try:
+        if payload.type == "webhook":
+            trigger = await create_webhook_trigger(db, workflow.id, payload.config)
+        elif payload.type == "schedule":
+            trigger = await create_schedule_trigger(db, workflow.id, payload.config.get("cron_pattern", ""))
+        elif payload.type == "manual":
+            trigger = await create_manual_trigger(db, workflow.id)
+        else:
+            raise WorkflowTriggerError(f"Unknown trigger type: {payload.type!r} (expected one of {TRIGGER_TYPES})")
+    except WorkflowTriggerError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return trigger
+
+
+@router.get("/workflows/{workflow_id}/triggers", response_model=list[WorkflowTriggerResponse])
+async def list_triggers_endpoint(
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_manager), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    return await list_triggers(db, workflow.id)
+
+
+@router.delete("/workflows/{workflow_id}/triggers/{trigger_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trigger_endpoint(
+    trigger_id: uuid.UUID,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_manager), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    trigger = await get_trigger(db, trigger_id)
+    if trigger is not None and trigger.workflow_id == workflow.id:
+        await delete_trigger(db, trigger_id)
+        await db.commit()
+
+
+@router.post("/webhooks/{trigger_id}", response_model=WorkflowRunResponse)
+async def run_workflow_via_webhook_endpoint(
+    trigger_id: uuid.UUID, payload: WorkflowRunRequest,
+    x_webhook_token: str = Header(..., alias="X-Webhook-Token"), db: AsyncSession = Depends(get_db),
+):
+    trigger = await get_trigger(db, trigger_id)
+    if trigger is None or trigger.type != "webhook" or not verify_webhook_token(trigger, x_webhook_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook token")
+    run = await trigger_workflow(db, trigger.workflow_id, payload.input, trigger_id=trigger.id)
+    await db.commit()
+    return run
+
+
+@router.post("/workflows/{workflow_id}/run", response_model=WorkflowRunResponse)
+async def run_workflow_manually_endpoint(
+    payload: WorkflowRunRequest,
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    run = await trigger_workflow(db, workflow.id, payload.input)
+    await db.commit()
+    return run

@@ -7881,6 +7881,54 @@ yet (honest, per the scope decision above).
 
 **Real verification**: 26 tests, `tests/test_workflows.py`.
 
+### Partie 5.4.2 -- trigger block (real backend)
+
+New module `api/services/workflow_triggers.py`: all 5 literal
+functions (`create_webhook_trigger`, `create_schedule_trigger`,
+`create_manual_trigger`, `trigger_workflow`, `get_trigger_url`) plus
+`verify_webhook_token`/`get_trigger`/`list_triggers`/`delete_trigger`
+(real plumbing).
+
+**Security (vision critique 1): a real webhook token, the literal
+path kept intact** -- `create_webhook_trigger` generates a real,
+cryptographic `webhook_token` (`secrets.token_urlsafe`, same real RNG
+as Partie 5.3.10's own API keys). The real endpoint (`POST
+/webhooks/{trigger_id}`) requires that same real token in a real
+`X-Webhook-Token` header, checked via `secrets.compare_digest`
+(constant-time). Unlike an API key (shown once), a webhook's own
+token stays really re-visible to a Manager -- same real, operational
+need as GitHub/Slack/Discord's own webhook config screens (you must be
+able to re-copy the URL+secret to reconfigure the calling external
+service).
+
+**Schedules, real cron validation, no new dependency**:
+`create_schedule_trigger` reuses the EXACT same real 5-field parsing
+via `celery.schedules.crontab` as `api/security/reindex_schedules.py`
+(Partie 2.2.15) -- no second cron-parsing library for this one
+feature.
+
+**An honest, documented scope boundary (not fabricated capability)**:
+`trigger_workflow` creates a real, persisted `WorkflowRun`
+(`status="pending"`) -- it does NOT walk the real graph and execute
+each real node. That is a genuinely separate, substantial graph
+execution engine (chaining Parties 5.4.3-5.4.11's own per-block
+execution functions along real edges) this étape does not claim to
+deliver -- its own literal scope is the TRIGGER itself (item 1's own
+literal title, "Bloc Trigger"), not full workflow execution, same
+honesty already documented in `api/services/agent_orchestrator.py`'s
+own "no automatic function-calling loop".
+
+**5 real endpoints** -- `POST/GET /workflows/{workflow_id}/triggers`,
+`DELETE .../triggers/{trigger_id}` (Manager+), `POST
+/webhooks/{trigger_id}` (public, token-authenticated), `POST
+/workflows/{workflow_id}/run` (Member+, real manual trigger).
+
+**Robustness (vision critique 3)**: `trigger_workflow` always returns
+a real `WorkflowRun` (never an exception); a failed webhook trigger
+(invalid token) is a real 401, never a silently created run.
+
+**Real verification**: 17 tests, `tests/test_workflow_triggers.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
