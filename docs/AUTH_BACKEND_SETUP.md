@@ -8304,11 +8304,51 @@ know `calendar_tools.py`'s own internal `httpx` dependency exists.
 
 **Real verification**: 12 tests, `tests/test_workflow_block_calendar.py`.
 
-**Partie 5.4 Workflow Builder for this requested batch is done -- 11/13
-items (5.4.1 through 5.4.11) verified real, backend only (the React
+### Partie 5.4.12 -- Database block
+
+New module `api/services/workflow_block_database.py`: all 4 literal
+functions (`execute_database_block`, `render_sql_query`,
+`validate_sql_query`, `format_database_results`).
+
+**Coherence (vision critique 1): reuses the real SQL tool (Partie
+5.2.4) end-to-end, no second competing query path** --
+`api.tools.sql_tool.validate_sql_query`/`execute_sql_query`/
+`format_sql_results` for every real check/call, `SqlToolError` mapped
+to the shared `WorkflowBlockError`.
+
+**Security (vision critique 2): the SAME real defense-in-depth as the
+SQL tool itself, not a second, weaker one** -- a real, single-table,
+regex-anchored `SELECT`-only subset, a real table allowlist, a real,
+ALWAYS-injected `organization_id` filter via a real bound parameter
+(never string interpolation), a real row cap. This block adds no new
+SQL-parsing surface of its own.
+
+**`connection`/`read_only`, honest scope limits, never silently
+ignored**: this codebase has no real second data-source abstraction
+anywhere (`execute_sql_query` always runs against the SAME real,
+caller-supplied `db` session) -- `connection="custom"` is honestly
+rejected, never faked as if a second real connection existed.
+`read_only=False` is honestly rejected too: `api.tools.sql_tool`'s own
+real validator only ever accepts a `SELECT` statement -- there is no
+real write capability this block could turn on even if asked to.
+
+**A real, documented deviation from the literal 2-argument
+signature**: a real SQL query genuinely needs a real `db` session and
+a real `organization_id` to scope it -- same reasoning as the RAG
+block's own deviation (Partie 5.4.4).
+
+**Performance (vision critique 3)**: the real row cap
+(`SQL_TOOL_MAX_ROWS`) and real max query length stay the same ones
+already established by the SQL tool -- no second, competing limit
+introduced.
+
+**Real verification**: 13 tests, `tests/test_workflow_block_database.py`.
+
+**Partie 5.4 Workflow Builder for this requested batch is done -- 12/13
+items (5.4.1 through 5.4.12) verified real, backend only (the React
 Flow UI itself stays out of scope, a decision confirmed with the user
-before starting this batch). The 2 remaining items in this section
-were never requested in this batch and stay ⬜.**
+before starting this batch). The 1 remaining item in this section was
+never requested in this batch and stays ⬜.**
 
 ### Partie 3.4.2 -- query rewriting
 

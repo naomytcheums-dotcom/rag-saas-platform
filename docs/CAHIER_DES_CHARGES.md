@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 complète -- 9/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 11/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 complète -- 9/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 12/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -964,7 +964,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (11/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (12/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1134,7 +1134,23 @@ Tests réels dédiés (9 tests), voir `tests/test_workflow_block_email.py`.
 
 Tests réels dédiés (12 tests), voir `tests/test_workflow_block_calendar.py`.
 
-**Partie 5.4 Workflow Builder : lot demandé terminé -- 11/13 items (5.4.1 à 5.4.11) vérifiés réels, backend uniquement (l'interface React Flow elle-même reste hors périmètre, décision validée avec l'utilisateur avant de commencer ce lot). Les 2 items restants de cette section n'ont jamais été demandés dans ce lot et restent ⬜.**
+#### Partie 5.4.12 — Bloc Database
+
+✅ **Nouveau module réel** `api/services/workflow_block_database.py` : les 4 fonctions littérales (`execute_database_block`, `render_sql_query`, `validate_sql_query`, `format_database_results`).
+
+✅ **Cohérence (vision critique 1) : réutilise le vrai outil SQL (Partie 5.2.4) de bout en bout, aucun second chemin de requête concurrent** -- `api.tools.sql_tool.validate_sql_query`/`execute_sql_query`/`format_sql_results` pour chaque vraie vérification/appel, `SqlToolError` mappé vers le `WorkflowBlockError` partagé.
+
+✅ **Sécurité (vision critique 2) : la MÊME vraie défense en profondeur que l'outil SQL lui-même, pas une seconde plus faible** -- un vrai sous-ensemble `SELECT` mono-table ancré par regex, une vraie liste blanche de tables, un vrai filtre `organization_id` TOUJOURS injecté via un vrai paramètre lié (jamais d'interpolation de chaîne), un vrai plafond de lignes. Ce bloc n'ajoute aucune nouvelle surface d'analyse SQL.
+
+✅ **`connection`/`read_only`, vraies limites de périmètre honnêtes, jamais silencieusement ignorées** : ce dépôt n'a aucune vraie seconde abstraction de source de données nulle part (`execute_sql_query` s'exécute toujours contre la MÊME vraie session `db` fournie par l'appelant) -- `connection="custom"` est honnêtement rejeté, jamais simulé comme si une seconde vraie connexion existait. `read_only=False` est aussi honnêtement rejeté : le vrai validateur d'`api.tools.sql_tool` n'accepte jamais qu'une instruction `SELECT` -- il n'y a aucune vraie capacité d'écriture que ce bloc pourrait activer même si on le lui demandait.
+
+✅ **Déviation réelle et documentée du signature littéral à 2 arguments** : une vraie requête SQL a réellement besoin d'une vraie session `db` et d'un vrai `organization_id` pour la scoper -- même raisonnement que la déviation du bloc RAG (Partie 5.4.4).
+
+**Performance (vision critique 3)** : le vrai plafond de lignes (`SQL_TOOL_MAX_ROWS`) et la vraie longueur maximale de requête restent ceux déjà établis par l'outil SQL -- aucune seconde limite concurrente introduite.
+
+Tests réels dédiés (13 tests), voir `tests/test_workflow_block_database.py`.
+
+**Partie 5.4 Workflow Builder : lot demandé terminé -- 12/13 items (5.4.1 à 5.4.12) vérifiés réels, backend uniquement (l'interface React Flow elle-même reste hors périmètre, décision validée avec l'utilisateur avant de commencer ce lot). L'item restant de cette section n'a jamais été demandé dans ce lot et reste ⬜.**
 
 ---
 
