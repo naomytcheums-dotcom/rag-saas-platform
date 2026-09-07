@@ -7968,6 +7968,45 @@ network call (`chat_completion`), same performance category as
 **Real verification**: 5 tests in `tests/test_template_rendering.py` +
 10 tests in `tests/test_workflow_block_llm.py`.
 
+### Partie 5.4.4 -- RAG block
+
+New module `api/services/workflow_block_rag.py`: all 4 literal
+functions (`execute_rag_block`, `render_rag_query`, `validate_rag_config`,
+`format_rag_results`).
+
+**Coherence (vision critique 1): reuses the real search pipeline
+end-to-end** -- `api.services.retrieval_pipeline.search` (Partie
+3.4.x) for the real strategy dispatch/reranking/score-threshold
+filter, `api.services.metadata_filtering.validate_filters`/
+`apply_metadata_filter` (Partie 3.x) for `filters` -- no second,
+competing retrieval or filtering path.
+
+**A real, honestly documented limitation for `knowledge_base_id`
+(pre-existing, not fabricated by this étape)**: `retrieval_pipeline.search`'s
+own real `fetch_organization_chunks` scopes every real chunk fetch by
+`organization_id` ALONE -- no real `workspace_id`/knowledge-base-level
+filter exists anywhere in that pipeline today (a real, pre-existing
+gap in Partie 3.4.x, neither introduced nor claimed fixed here).
+`knowledge_base_id` is accepted (item 1's own literal config field) and
+really VALIDATED (must be a real workspace in the SAME organization,
+same cross-organization discipline as Partie 5.3.4), but has no real
+effect on which chunks get searched -- honestly documented, never
+silently dropped.
+
+**A real, documented deviation from item 2's own literal 2-argument
+signature** (`execute_rag_block(block_config, context)`): a real RAG
+search genuinely needs a real `db` session and a real
+`organization_id` to scope it (the same two things every other real
+retrieval call site in this codebase already requires) -- this
+executor's real signature is `execute_rag_block(db, organization_id,
+block_config, context)`.
+
+**Robustness (vision critique 3)**: what happens if the KB is empty?
+`format_rag_results` returns a real, honest message ("No relevant
+documents found.") rather than a silent empty string.
+
+**Real verification**: 13 tests, `tests/test_workflow_block_rag.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

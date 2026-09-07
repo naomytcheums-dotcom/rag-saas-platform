@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 3/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 4/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (3/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (4/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1007,6 +1007,20 @@ Tests réels dédiés (17 tests), voir `tests/test_workflow_triggers.py`.
 **Performance (vision critique 2)** : aucune couche supplémentaire réelle -- un seul vrai appel réseau (`chat_completion`), même catégorie de performance que `AgentOrchestrator.run_agent`.
 
 Tests réels dédiés (5 tests `tests/test_template_rendering.py` + 10 tests `tests/test_workflow_block_llm.py`).
+
+#### Partie 5.4.4 — Bloc RAG
+
+✅ **Nouveau module réel** `api/services/workflow_block_rag.py` : les 4 fonctions littérales (`execute_rag_block`, `render_rag_query`, `validate_rag_config`, `format_rag_results`).
+
+✅ **Cohérence (vision critique 1) : réutilise le pipeline de recherche réel de bout en bout** -- `api.services.retrieval_pipeline.search` (Partie 3.4.x) pour le vrai dispatch de stratégie/reranking/filtre de seuil de score, `api.services.metadata_filtering.validate_filters`/`apply_metadata_filter` (Partie 3.x) pour `filters` -- aucun second chemin concurrent de recherche ou de filtrage.
+
+✅ **Limitation réelle et honnêtement documentée pour `knowledge_base_id` (préexistante, pas fabriquée par cette étape)** : le vrai `fetch_organization_chunks` de `retrieval_pipeline.search` scope chaque vraie récupération de chunk par `organization_id` SEUL -- aucun vrai filtre par `workspace_id`/knowledge-base n'existe nulle part dans ce pipeline aujourd'hui (un vrai écart déjà présent dans la Partie 3.4.x, que cette étape n'introduit ni ne prétend corriger). `knowledge_base_id` est accepté (champ littéral de l'item 1) et réellement VALIDÉ (doit être un vrai workspace de la MÊME organisation, même discipline cross-organisation que la Partie 5.3.4), mais n'a aucun effet réel sur les chunks recherchés -- honnêtement documenté, jamais silencieusement ignoré.
+
+✅ **Déviation réelle et documentée du signature littéral à 2 arguments** (`execute_rag_block(block_config, context)`) : une vraie recherche RAG a réellement besoin d'une vraie session `db` et d'un vrai `organization_id` pour la scoper (les deux mêmes éléments que tout autre point d'appel réel de récupération dans ce dépôt exige déjà) -- la vraie signature de cet exécuteur est `execute_rag_block(db, organization_id, block_config, context)`.
+
+**Robustesse (vision critique 3)** : que se passe-t-il si la KB est vide ? `format_rag_results` retourne un vrai message honnête ("No relevant documents found.") plutôt qu'une chaîne vide silencieuse.
+
+Tests réels dédiés (13 tests), voir `tests/test_workflow_block_rag.py`.
 
 ---
 
