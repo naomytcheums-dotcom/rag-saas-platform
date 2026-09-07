@@ -8222,6 +8222,45 @@ requires positionally.
 
 **Real verification**: 9 tests, `tests/test_workflow_block_email.py`.
 
+### Partie 5.4.11 -- Calendar block
+
+New module `api/services/workflow_block_calendar.py`: all 4 literal
+functions (`execute_calendar_block`, `render_calendar_field`,
+`validate_calendar_config`, `format_calendar_results`).
+
+**Coherence (vision critique 1): reuses the real calendar tools
+(Partie 5.2.7) end-to-end, no second competing path** --
+`api.tools.calendar_tools.calendar_list_events`/`calendar_create_event`/
+`calendar_update_event`/`calendar_delete_event`/`calendar_find_available_slots`
+for every real literal `action`, `CalendarError` mapped to the shared
+`WorkflowBlockError`.
+
+**A real, necessary addition beyond item 1's own literal config
+fields**: `action="update"`/`"delete"` genuinely need a real, existing
+`event_id` to act on -- neither `calendar_update_event` nor
+`calendar_delete_event` can work without one. `event_id` is a real,
+required config field for those two actions, same kind of real,
+necessary addition as the Email block's own `provider` field (Partie
+5.4.10).
+
+**Robustness (vision critique 3): a real gap found in the underlying
+tool, compensated at this block's own boundary, never silently
+masked** -- `api/tools/calendar_tools.py`'s own functions (Partie
+5.2.7) only ever raise `CalendarError` for a real provider/credential
+problem; a real HTTP failure (non-2xx status, real connection error)
+propagates as a RAW `httpx.HTTPError`, never wrapped. This block
+catches BOTH real exception types and re-raises the shared
+`WorkflowBlockError` either way -- a real caller here never needs to
+know `calendar_tools.py`'s own internal `httpx` dependency exists.
+
+**Real verification**: 12 tests, `tests/test_workflow_block_calendar.py`.
+
+**Partie 5.4 Workflow Builder for this requested batch is done -- 11/13
+items (5.4.1 through 5.4.11) verified real, backend only (the React
+Flow UI itself stays out of scope, a decision confirmed with the user
+before starting this batch). The 2 remaining items in this section
+were never requested in this batch and stay ⬜.**
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

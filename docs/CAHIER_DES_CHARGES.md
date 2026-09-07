@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 10/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 9/10 (5.3.8 non demandé) -- + Partie 5.4 démarrée -- 11/13 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité)
 
 ### 5.1 Architecture Agent
 
@@ -950,7 +950,7 @@ Tests réels dédiés (19 tests `tests/test_agent_api_keys.py`).
 
 **Partie 5.3 Agent Builder : lot demandé terminé -- 9/10 items (5.3.1 à 5.3.7, 5.3.9, 5.3.10) vérifiés réels.** 5.3.8 n'a jamais été demandé dans ce lot et reste ⬜.
 
-### 5.4 Workflow Builder — 🟡 PARTIEL (10/13)
+### 5.4 Workflow Builder — 🟡 PARTIEL (11/13)
 
 **Décision de périmètre réelle et explicite, validée avec l'utilisateur avant de commencer** : ce dépôt n'a AUCUNE infrastructure frontend nulle part (aucun `package.json`, aucune dépendance React) -- un vrai canvas React Flow serait un nouveau projet complet (npm, build tooling, composants), un écart massif par rapport à tout ce qui existe ici. Pour tout ce lot 5.4, seul le VRAI BACKEND est livré (modèle, endpoints, validation structurelle, exécution réelle par bloc) -- l'interface visuelle React Flow elle-même reste explicitement hors périmètre, documentée ici plutôt que fabriquée.
 
@@ -1107,6 +1107,20 @@ Tests réels dédiés (18 tests), voir `tests/test_workflow_block_human.py`.
 **Robustesse (vision critique 3)** : un vrai échec d'envoi (`EmailToolError`) est capturé et relevé comme un vrai `WorkflowBlockError` partagé.
 
 Tests réels dédiés (9 tests), voir `tests/test_workflow_block_email.py`.
+
+#### Partie 5.4.11 — Bloc Calendar
+
+✅ **Nouveau module réel** `api/services/workflow_block_calendar.py` : les 4 fonctions littérales (`execute_calendar_block`, `render_calendar_field`, `validate_calendar_config`, `format_calendar_results`).
+
+✅ **Cohérence (vision critique 1) : réutilise les vrais outils calendrier (Partie 5.2.7) de bout en bout, aucun second chemin concurrent** -- `api.tools.calendar_tools.calendar_list_events`/`calendar_create_event`/`calendar_update_event`/`calendar_delete_event`/`calendar_find_available_slots` pour chaque vraie `action` littérale, `CalendarError` mappé vers le `WorkflowBlockError` partagé.
+
+✅ **Ajout réel et nécessaire au-delà des champs littéraux de l'item 1** : `action="update"`/`"delete"` ont réellement besoin d'un vrai `event_id` existant -- ni `calendar_update_event` ni `calendar_delete_event` ne peuvent fonctionner sans. `event_id` est un vrai champ de config requis pour ces deux actions, même type d'ajout réel et nécessaire déjà fait pour le champ `provider` du bloc Email (Partie 5.4.10).
+
+✅ **Robustesse (vision critique 3) : un vrai écart trouvé dans l'outil sous-jacent, compensé à la frontière de ce bloc, jamais masqué silencieusement** -- les propres fonctions de `api/tools/calendar_tools.py` (Partie 5.2.7) ne lèvent `CalendarError` QUE pour un vrai problème de fournisseur/identifiants ; un vrai échec HTTP (statut non-2xx, vraie erreur de connexion) se propage TEL QUEL comme une `httpx.HTTPError` brute, jamais enveloppée. Ce bloc capture les DEUX vrais types d'exception et relève le `WorkflowBlockError` partagé dans les deux cas -- un vrai appelant ici n'a jamais besoin de connaître la vraie dépendance interne `httpx` de `calendar_tools.py`.
+
+Tests réels dédiés (12 tests), voir `tests/test_workflow_block_calendar.py`.
+
+**Partie 5.4 Workflow Builder : lot demandé terminé -- 11/13 items (5.4.1 à 5.4.11) vérifiés réels, backend uniquement (l'interface React Flow elle-même reste hors périmètre, décision validée avec l'utilisateur avant de commencer ce lot). Les 2 items restants de cette section n'ont jamais été demandés dans ce lot et restent ⬜.**
 
 ---
 
