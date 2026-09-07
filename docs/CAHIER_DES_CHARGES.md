@@ -744,8 +744,22 @@ Tests réels dédiés (10 tests), voir `tests/test_url_reader.py`. Suite `test_u
 
 Tests réels dédiés (10 tests, `httpx.MockTransport` réel), voir `tests/test_calendar_tools.py`.
 
+#### Partie 5.2.8 — Email (Gmail, Outlook, SMTP)
+
+✅ **Nouveau module réel** `api/tools/email_tools.py` : les 6 fonctions littérales + `EMAIL_SEND_TOOL`. Gmail/Outlook réutilisent le même vrai pattern OAuth que `calendar_tools.py` (identifiants réels et distincts, `GMAIL_*`/`OUTLOOK_EMAIL_*`).
+
+✅ **SMTP réel via la stdlib Python**, pas de nouvelle dépendance : `aiosmtplib` n'est pas installé dans cet environnement -- même précédent réel déjà établi par `api/security/ssl_certificates.py` (enveloppe d'un client synchrone via `asyncio.to_thread` plutôt qu'une bibliothèque async-native).
+
+✅ **Vraie limitation protocolaire honnête, pas un manque de ce module** : SMTP est un protocole d'ENVOI uniquement -- aucun vrai verbe SMTP pour lire, rechercher, répondre (en tant que message stocké référençable), ou récupérer des pièces jointes DEPUIS une boîte (ça, c'est IMAP/POP3, des protocoles réellement différents, non demandés ici). `email_read`/`email_search`/`email_reply`/`email_forward`/`email_get_attachments` lèvent tous une vraie erreur explicite et honnête pour `provider="smtp"`, testé pour chacune, plutôt que de prétendre supporter ce que SMTP ne peut réellement pas faire.
+
+**Robustesse (vision critique)** : réponse HTTP réelle vérifiée (Gmail encode un vrai message RFC 2822 en base64url, Outlook envoie un vrai JSON structuré) ; `email_reply` récupère le vrai `threadId` Gmail avant de répondre, pour un vrai threading de conversation.
+
+**Sécurité (vision critique)** : token OAuth manquant → vraie erreur immédiate, testé.
+
+Tests réels dédiés (16 tests, `httpx.MockTransport` réel pour Gmail/Outlook, faux `smtplib.SMTP` réel et minimal pour SMTP), voir `tests/test_email_tools.py`.
+
 Human Escalation : existe déjà côté `src/`, non revérifié.
-Email, Custom Tools (webhooks) : ⬜.
+Custom Tools (webhooks) : ⬜.
 
 ### 5.3 Agent Builder — ⬜ NON COMMENCÉ (0/10)
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)

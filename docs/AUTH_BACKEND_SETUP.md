@@ -7283,6 +7283,40 @@ immediate error, tested.
 **Real verification**: 10 tests, real `httpx.MockTransport`,
 `tests/test_calendar_tools.py`.
 
+### Partie 5.2.8 -- Email (Gmail, Outlook, SMTP)
+
+New module `api/tools/email_tools.py`: all 6 literal functions plus
+`EMAIL_SEND_TOOL`. Gmail/Outlook reuse the same real OAuth pattern as
+`calendar_tools.py` (real, separate credentials, `GMAIL_*`/
+`OUTLOOK_EMAIL_*`).
+
+**Real SMTP via Python's own stdlib**, no new dependency:
+`aiosmtplib` isn't installed in this environment -- same real
+precedent already established by `api/security/ssl_certificates.py`
+(wrapping a synchronous client via `asyncio.to_thread` rather than an
+async-native library).
+
+**A real, honest protocol limitation, not a gap in this module**: SMTP
+is a SEND-only protocol -- there is no real SMTP verb for reading,
+searching, replying to (as a stored, referenceable message), or
+fetching attachments FROM an inbox (that's IMAP/POP3, genuinely
+different protocols, not requested here). `email_read`/`email_search`/
+`email_reply`/`email_forward`/`email_get_attachments` all raise a
+real, explicit, honest error for `provider="smtp"`, tested for each,
+rather than pretending to support what SMTP genuinely cannot do.
+
+**Robustness (vision critique)**: real response handling verified
+(Gmail encodes a real RFC 2822 message as base64url, Outlook sends
+real structured JSON); `email_reply` fetches the real Gmail
+`threadId` before replying, for real conversation threading.
+
+**Security (vision critique)**: a missing OAuth token raises a real,
+immediate error, tested.
+
+**Real verification**: 16 tests (real `httpx.MockTransport` for
+Gmail/Outlook, a real, minimal fake `smtplib.SMTP` for SMTP),
+`tests/test_email_tools.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
