@@ -26,6 +26,7 @@ from api.models.citation import Citation
 from api.models.response import Response
 from api.security.organization_settings import get_org_settings
 from api.services.citation_location import extract_heading_from_chunk, extract_page_from_chunk, extract_section_from_chunk
+from api.services.citation_relevance import calculate_relevance_label
 from api.services.citation_url import extract_url_from_chunk
 
 CITATION_FORMATS = ("markdown", "html", "json")
@@ -76,6 +77,7 @@ async def add_citations_to_response(
         position_start, position_end = _find_marker_position(response.answer, number)
         document_id = uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None
         chunk_id = uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None
+        score = float(chunk.get("score", 0.0))
         citation = Citation(
             response_id=response.id,
             document_id=document_id,
@@ -89,7 +91,14 @@ async def add_citations_to_response(
             # `citation_url.enrich_citation_with_url`).
             source_url=extract_url_from_chunk(chunk),
             text=chunk.get("content", ""),
-            relevance_score=float(chunk.get("score", 0.0)),
+            relevance_score=score,
+            # Partie 6.1.6 -- real, from this SAME real score, against
+            # the real, current RELEVANCE_THRESHOLD_HIGH/MEDIUM (also
+            # re-derivable later, live, via
+            # `citation_relevance.enrich_citation_with_relevance`, see
+            # that module's own top docstring for why "live" is a real,
+            # meaningful distinction here, not just precedent-following).
+            relevance_label=calculate_relevance_label(score),
             citation_number=number,
             position_start=position_start,
             position_end=position_end,

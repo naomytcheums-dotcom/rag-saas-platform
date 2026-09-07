@@ -6,11 +6,12 @@ caller's real organization role together (`require_response_member`/
 Member+, same reasoning as every other individual-resource dependency
 in this codebase).
 
-Partie 6.1.2/6.1.3/6.1.4/6.1.5 -- every real citation returned here is
-enriched with its real, LIVE document name/type, page/section/heading,
-source URL, AND chunk ordinal (`enrich_citation_with_document`/
-`enrich_citation_with_location`/`enrich_citation_with_url`/
-`enrich_citation_with_chunk`, plural forms for the list endpoints)
+Partie 6.1.2/6.1.3/6.1.4/6.1.5/6.1.6 -- every real citation returned
+here is enriched with its real, LIVE document name/type,
+page/section/heading, source URL, chunk ordinal, AND relevance label
+(`enrich_citation_with_document`/`enrich_citation_with_location`/
+`enrich_citation_with_url`/`enrich_citation_with_chunk`/
+`enrich_citation_with_relevance`, plural forms for the list endpoints)
 before being serialized, so a real API caller always sees the current
 real values, not only the denormalized snapshot from citation time.
 Real, deliberate scope: this enrichment is NEVER committed back to the
@@ -33,6 +34,7 @@ from api.security.citations import require_citation_member, require_document_cit
 from api.services.citation_chunk import enrich_citation_with_chunk, enrich_citations_with_chunk
 from api.services.citation_documents import enrich_citation_with_document, enrich_citations_with_documents
 from api.services.citation_location import enrich_citation_with_location, enrich_citations_with_location
+from api.services.citation_relevance import enrich_citation_with_relevance, enrich_citations_with_relevance
 from api.services.citation_url import enrich_citation_with_url, enrich_citations_with_url
 from api.services.citations import get_citations_by_document, get_citations_by_response
 
@@ -48,7 +50,8 @@ async def list_citations_by_response_endpoint(
     citations = await enrich_citations_with_documents(db, citations)
     citations = await enrich_citations_with_location(db, citations)
     citations = await enrich_citations_with_url(db, citations)
-    return await enrich_citations_with_chunk(db, citations)
+    citations = await enrich_citations_with_chunk(db, citations)
+    return enrich_citations_with_relevance(citations)
 
 
 @router.get("/citations/{citation_id}", response_model=CitationResponse)
@@ -59,7 +62,8 @@ async def get_citation_endpoint(
     citation = await enrich_citation_with_document(db, citation)
     citation = await enrich_citation_with_location(db, citation)
     citation = await enrich_citation_with_url(db, citation)
-    return await enrich_citation_with_chunk(db, citation)
+    citation = await enrich_citation_with_chunk(db, citation)
+    return enrich_citation_with_relevance(citation)
 
 
 @router.get("/documents/{document_id}/citations", response_model=list[CitationResponse])
@@ -71,4 +75,5 @@ async def list_citations_by_document_endpoint(
     citations = await enrich_citations_with_documents(db, citations)
     citations = await enrich_citations_with_location(db, citations)
     citations = await enrich_citations_with_url(db, citations)
-    return await enrich_citations_with_chunk(db, citations)
+    citations = await enrich_citations_with_chunk(db, citations)
+    return enrich_citations_with_relevance(citations)

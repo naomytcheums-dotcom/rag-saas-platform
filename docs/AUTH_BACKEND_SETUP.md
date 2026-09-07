@@ -8702,6 +8702,41 @@ order of `chunk_index` (needs real Postgres/S3, not runnable in this
 local environment -- same limitation as the entire `*_integration.py`
 suite).
 
+### Partie 6.1.6 -- relevance score
+
+New module `api/services/citation_relevance.py`: all 4 literal
+functions (`calculate_relevance_label`, `format_relevance_score`,
+`get_relevance_color`, `enrich_citation_with_relevance`) plus
+`enrich_citations_with_relevance` (real plumbing).
+
+**Coherence (vision critique 1): a real, pure function, unlike
+Parties 6.1.2-6.1.5** -- `relevance_score` never changes after a
+citation is created, so `calculate_relevance_label` needs no database
+access at all: a deterministic function of the score AND the current
+`RELEVANCE_THRESHOLD_HIGH`/`RELEVANCE_THRESHOLD_MEDIUM` settings.
+
+**`enrich_citation_with_relevance`, a real LIVE enrichment for a real
+reason, not just precedent**: if an operator changes those thresholds
+after a citation was created, a real, already-persisted label computed
+under the OLD thresholds would silently mislabel it -- re-deriving at
+read time keeps every label honestly consistent with the platform's
+CURRENT configuration.
+
+**`add_citations_to_response` (Partie 6.1.1) retroactively enriched**:
+`relevance_label` is now really populated AT CITATION-CREATION TIME,
+from the same real score already used for `relevance_score`.
+
+**`get_relevance_color`**: a real, semantic color name (not a hex
+value -- no real frontend design system exists yet in this codebase,
+same documented scope boundary as Partie 5.4's own Workflow Builder),
+derived from the SAME real label, never a second, independent
+threshold check.
+
+**Performance (vision critique 2)**: zero database access -- a pure,
+in-memory function.
+
+**Real verification**: 11 tests, `tests/test_citation_relevance.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

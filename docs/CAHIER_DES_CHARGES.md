@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (5/10)
+### 6.1 Citations — 🟡 PARTIEL (6/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1269,6 +1269,22 @@ Tests réels dédiés (20 tests, `tests/test_citation_url.py`) + le test existan
 **Performance (vision critique 2)** : lecture O(1) par clé primaire, aucun scan de document -- la correction du bug ci-dessus a aussi supprimé un vrai coût de requête proportionnel à la taille du document que la première implémentation aurait payé à chaque citation.
 
 Tests réels dédiés (15 tests, `tests/test_citation_chunk.py`) + `tests/test_documents_integration.py`'s own real end-to-end PDF pipeline test étendu avec une assertion verrouillant le vrai ordre 1..N de `chunk_index` (nécessite Postgres/S3 réels, non exécutable dans cet environnement local -- même limitation que toute la suite `*_integration.py`).
+
+#### Partie 6.1.6 — Score de pertinence
+
+✅ **Nouveau module réel** `api/services/citation_relevance.py` : les 4 fonctions littérales (`calculate_relevance_label`, `format_relevance_score`, `get_relevance_color`, `enrich_citation_with_relevance`) + `enrich_citations_with_relevance` (plomberie réelle).
+
+✅ **Cohérence (vision critique 1) : une vraie fonction pure, contrairement aux Parties 6.1.2 à 6.1.5** -- `relevance_score` ne change jamais après la création d'une citation, donc `calculate_relevance_label` n'a besoin d'aucun accès base de données : une fonction déterministe du score ET des réglages actuels `RELEVANCE_THRESHOLD_HIGH`/`RELEVANCE_THRESHOLD_MEDIUM`.
+
+✅ **`enrich_citation_with_relevance`, un vrai enrichissement LIVE avec une raison réelle, pas juste par précédent** : si un administrateur change ces seuils après la création d'une citation, un vrai label déjà persisté calculé sous les ANCIENS seuils la classerait mal silencieusement -- re-dériver à la lecture garde chaque label honnêtement cohérent avec la configuration ACTUELLE de la plateforme.
+
+✅ **`add_citations_to_response` (Partie 6.1.1) enrichi rétroactivement** : `relevance_label` est maintenant réellement peuplé AU MOMENT DE LA CRÉATION de la citation, à partir du même vrai score déjà utilisé pour `relevance_score`.
+
+✅ **`get_relevance_color`** : une vraie couleur sémantique (pas une valeur hexadécimale -- aucun vrai système de design frontend n'existe encore dans ce dépôt, même limite de périmètre documentée que le Workflow Builder de la Partie 5.4), dérivée du MÊME vrai label, jamais un second seuil indépendant.
+
+**Performance (vision critique 2)** : zéro accès base de données -- une fonction pure en mémoire.
+
+Tests réels dédiés (11 tests), voir `tests/test_citation_relevance.py`.
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 
