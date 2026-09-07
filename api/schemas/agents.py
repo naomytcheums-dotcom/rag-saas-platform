@@ -111,3 +111,21 @@ class KnowledgeBaseOption(BaseModel):
 
     id: uuid.UUID
     name: str
+
+
+class AgentToolEntry(BaseModel):
+    name: str
+    enabled: bool = True
+    config: dict = Field(default_factory=dict)
+
+
+class AgentToolsUpdateRequest(BaseModel):
+    tools: list[AgentToolEntry]
+
+
+class AgentToolsResponse(BaseModel):
+    tools: list[AgentToolEntry]
+
+
+class ToolConfigUpdateRequest(BaseModel):
+    config: dict | None = None

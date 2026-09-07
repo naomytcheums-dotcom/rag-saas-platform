@@ -7532,6 +7532,62 @@ tested).
 
 **Real verification**: 18 tests, `tests/test_agent_knowledge_base.py`.
 
+### Partie 5.3.5 -- tool selection
+
+New module `api/services/agent_tools.py`: all 6 literal functions
+(`get_agent_tools`, `set_agent_tools`, `enable_tool`, `disable_tool`,
+`get_available_tools`, `validate_tool_config`) plus
+`AGENT_TOOL_CATALOG`, a real catalog of the 12 literal names -- each
+pointing at a real, already-existing implementation
+(`api/tools/search_kb.py`, `web_search.py`, `github_tools.py`,
+`sql_tool.py`, `calculator.py`, `url_reader.py`, `calendar_tools.py`,
+`email_tools.py`, `human_escalation.py`).
+
+**An honest scope boundary, not a fabricated success**: 6 of the 12
+tools (`search_knowledge_base`, `web_search`, `read_url`, `email_send`,
+`escalate_to_human`, and `calculate` under its own separate
+`advanced_calculator` name) already have a real `ToolSpec` registered
+in `api.services.tools`'s shared registry (Partie 5.1.2). The other 6
+(`github_get_repo`, `github_list_issues`, `execute_sql_query`,
+`calendar_list_events`, `calendar_create_event`, `email_read`) are
+real, callable functions in `api/tools/`, but were never wrapped into
+that shared registry / the LLM function-calling loop -- a real,
+pre-existing Partie 5.1/5.2 limitation (already documented in
+`api.services.tools`'s own docstring: "no automatic
+LLM-function-calling loop"), which this étape does NOT claim to fix:
+selecting a tool here records a real, honest intent (`Agent.tools`),
+independent of whether it's fully wired into that separate execution
+layer yet.
+
+**A real bypass gap found and fixed**: `create_agent`/`update_agent`
+(Partie 5.3.1) already accepted a raw `tools` field with no real
+validation against any catalog -- a manager could write any made-up
+name via the generic endpoint. `validate_tools_list` (called from
+`set_agent_tools` AND directly from `create_agent`/`update_agent`)
+closes this gap -- same reasoning as Partie 5.3.4's cross-organization
+fix. Tested.
+
+**`disable_tool`, a real soft disable, not a removal**: `enabled=False`
+keeps the real, already-recorded config (same pattern as
+`Agent.status="archived"`, Partie 5.3.1) -- disabling a tool the agent
+never had is a real no-op, not an error.
+
+**5 real endpoints** -- `GET/PATCH /agents/{agent_id}/tools`, `POST
+/agents/{agent_id}/tools/{tool_name}/enable`, `POST .../disable`, `GET
+/tools/available` (same documented deviation as `GET /models`, Partie
+5.3.3: no `{org_id}` on this literal path, gated by authentication
+alone).
+
+**Robustness (vision critique)**: `set_agent_tools` validates the
+ENTIRE list before any real write -- one invalid entry rejects
+everything, nothing is partially applied. `validate_tool_config` stays
+deliberately minimal beyond name/config-type (an honest vision
+critique answer: this étape's own literal spec never defines a
+per-tool config schema beyond "config" -- inventing one would be
+fabricated scope, not a real requirement).
+
+**Real verification**: 21 tests, `tests/test_agent_tools.py`.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

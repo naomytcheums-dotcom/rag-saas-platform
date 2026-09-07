@@ -28,6 +28,7 @@ from api.models.agent import Agent, AgentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.services.agent_knowledge_base import validate_knowledge_base_access
+from api.services.agent_tools import validate_tools_list
 
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
@@ -73,6 +74,8 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
     docstring for the real cross-organization gap this closes."""
     if data.get("knowledge_base_id") is not None:
         await validate_knowledge_base_access(db, organization_id, data["knowledge_base_id"])
+    if data.get("tools"):
+        validate_tools_list(data["tools"])
     agent = Agent(
         organization_id=organization_id, created_by=created_by,
         workspace_id=data.get("workspace_id"), name=data["name"], description=data.get("description"),
@@ -99,6 +102,8 @@ async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Age
         return None
     if data.get("knowledge_base_id") is not None:
         await validate_knowledge_base_access(db, agent.organization_id, data["knowledge_base_id"])
+    if data.get("tools"):
+        validate_tools_list(data["tools"])
     for field in (
         "name", "description", "system_prompt", "system_prompt_template", "workspace_id", "memory_enabled",
         "memory_window_size", "guardrails_enabled", "human_approval_required", "knowledge_base_id",

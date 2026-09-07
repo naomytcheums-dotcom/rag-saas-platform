@@ -462,7 +462,7 @@ Tests réels dédiés (29 tests, dont le vrai bug RateLimitError en régression 
 
 ---
 
-## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 4/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
+## PARTIE 5 — Agent IA — 🟡 PARTIEL (Partie 5.1 complète -- 14/14 -- + Partie 5.2 quasi-complète -- 8/9 -- + Partie 5.3 démarrée -- 5/10 -- items vérifiés réels dans `api/`, + ~0-14/47 hérité côté `src/`, non revérifié, selon granularité ; 5.4 reste à faire)
 
 ### 5.1 Architecture Agent
 
@@ -776,7 +776,7 @@ Tests réels dédiés (12 tests), voir `tests/test_human_escalation.py`.
 
 Custom Tools (webhooks) : ⬜.
 
-### 5.3 Agent Builder — 🟡 PARTIEL (4/10)
+### 5.3 Agent Builder — 🟡 PARTIEL (5/10)
 
 #### Partie 5.3.1 — Création d'agent personnalisé
 
@@ -849,6 +849,22 @@ Tests réels dédiés (16 tests), voir `tests/test_agent_models.py`.
 **Sécurité (vision critique)** : rejet cross-organisation testé à 3 niveaux (fonction pure, endpoint dédié, `create_agent`/`update_agent` génériques). Modification réservée aux managers (403 pour un member, testé).
 
 Tests réels dédiés (18 tests), voir `tests/test_agent_knowledge_base.py`.
+
+#### Partie 5.3.5 — Sélection des outils
+
+✅ **Nouveau module réel** `api/services/agent_tools.py` : les 6 fonctions littérales (`get_agent_tools`, `set_agent_tools`, `enable_tool`, `disable_tool`, `get_available_tools`, `validate_tool_config`) + `AGENT_TOOL_CATALOG`, un vrai catalogue des 12 noms littéraux -- chacun pointant vers une implémentation réelle et déjà existante (`api/tools/search_kb.py`, `web_search.py`, `github_tools.py`, `sql_tool.py`, `calculator.py`, `url_reader.py`, `calendar_tools.py`, `email_tools.py`, `human_escalation.py`).
+
+✅ **Honnêteté de périmètre, pas un succès fabriqué** : 6 des 12 outils (`search_knowledge_base`, `web_search`, `read_url`, `email_send`, `escalate_to_human`, et `calculate` sous son propre nom séparé `advanced_calculator`) ont déjà un vrai `ToolSpec` enregistré dans le registre partagé de `api.services.tools` (Partie 5.1.2). Les 6 autres (`github_get_repo`, `github_list_issues`, `execute_sql_query`, `calendar_list_events`, `calendar_create_event`, `email_read`) sont des fonctions réelles et appelables dans `api/tools/`, mais jamais enveloppées dans ce registre partagé / la boucle d'appel de fonctions LLM -- un vrai écart préexistant des Parties 5.1/5.2 (déjà documenté dans le propre docstring de `api.services.tools` : "no automatic LLM-function-calling loop"), que cette étape ne prétend PAS corriger : sélectionner un outil ici enregistre une intention réelle et honnête (`Agent.tools`), indépendamment de son câblage complet dans cette couche d'exécution séparée.
+
+✅ **Vraie faille de contournement corrigée** : `create_agent`/`update_agent` (Partie 5.3.1) acceptaient déjà un champ `tools` brut sans jamais le valider contre un vrai catalogue -- un manager pouvait y écrire n'importe quel nom inventé via l'endpoint générique. `validate_tools_list` (appelée depuis `set_agent_tools` ET directement depuis `create_agent`/`update_agent`) ferme cet écart, même raisonnement que la correction cross-organisation de la Partie 5.3.4. Testé (`test_update_agent_rejects_an_unknown_tool_name_via_generic_update`, `test_create_agent_rejects_an_unknown_tool_name`).
+
+✅ **`disable_tool`, vrai soft-disable, pas une suppression** : `enabled=False` conserve la vraie config déjà enregistrée (même schéma que `Agent.status="archived"`, Partie 5.3.1) -- désactiver un outil que l'agent n'a jamais eu est un vrai no-op, pas une erreur.
+
+✅ **5 endpoints réels** -- `GET/PATCH /agents/{agent_id}/tools`, `POST /agents/{agent_id}/tools/{tool_name}/enable`, `POST .../disable`, `GET /tools/available` (même déviation documentée que `GET /models`, Partie 5.3.3 : pas de `{org_id}` sur ce chemin littéral, gaté par authentification seule).
+
+**Robustesse (vision critique)** : `set_agent_tools` valide TOUTE la liste avant la moindre écriture réelle -- une seule entrée invalide rejette tout, rien n'est appliqué partiellement. `validate_tool_config` reste volontairement minimal au-delà du nom/type de `config` (vision critique honnête : le spec littéral de cette étape ne définit aucun schéma par outil au-delà de "config" -- en inventer un serait un périmètre fabriqué, pas une vraie exigence).
+
+Tests réels dédiés (21 tests), voir `tests/test_agent_tools.py`.
 
 ### 5.4 Workflow Builder — ⬜ NON COMMENCÉ (0/13)
 

@@ -19,8 +19,9 @@ from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
     AgentCreateRequest, AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentModelResponse,
-    AgentModelUpdateRequest, AgentResponse, AgentUpdateRequest, KnowledgeBaseOption, SystemPromptPreviewResponse,
-    SystemPromptUpdateRequest, SystemPromptVariablesResponse,
+    AgentModelUpdateRequest, AgentResponse, AgentToolsResponse, AgentToolsUpdateRequest, AgentUpdateRequest,
+    KnowledgeBaseOption, SystemPromptPreviewResponse, SystemPromptUpdateRequest, SystemPromptVariablesResponse,
+    ToolConfigUpdateRequest,
 )
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
@@ -35,6 +36,9 @@ from api.services.agent_models import (
     AgentModelError, get_agent_model, get_available_models, set_agent_model,
 )
 from api.services.agent_prompts import get_system_prompt_variables, preview_system_prompt
+from api.services.agent_tools import (
+    AgentToolError, disable_tool, enable_tool, get_agent_tools, get_available_tools, set_agent_tools,
+)
 
 router = APIRouter(tags=["agents"])
 
@@ -47,7 +51,7 @@ async def create_agent_endpoint(
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
     try:
         agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
-    except AgentKnowledgeBaseError as exc:
+    except (AgentKnowledgeBaseError, AgentToolError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(agent)
@@ -82,7 +86,7 @@ async def update_agent_endpoint(
     agent, _caller = agent_ctx
     try:
         updated = await update_agent(db, agent.id, payload.model_dump(by_alias=True, exclude_unset=True))
-    except AgentKnowledgeBaseError as exc:
+    except (AgentKnowledgeBaseError, AgentToolError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(updated)
@@ -259,3 +263,62 @@ async def list_agent_knowledge_base_options_endpoint(
 ):
     agent, _caller = agent_ctx
     return await get_available_knowledge_bases(db, agent.organization_id)
+
+
+# ------------------------------------- Partie 5.3.5 -- tool selection -------------------------------------
+
+
+@router.get("/agents/{agent_id}/tools", response_model=AgentToolsResponse)
+async def get_agent_tools_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    return AgentToolsResponse(tools=await get_agent_tools(db, agent.id))
+
+
+@router.patch("/agents/{agent_id}/tools", response_model=AgentToolsResponse)
+async def update_agent_tools_endpoint(
+    payload: AgentToolsUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    try:
+        await set_agent_tools(db, agent.id, [t.model_dump() for t in payload.tools])
+    except AgentToolError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return AgentToolsResponse(tools=await get_agent_tools(db, agent.id))
+
+
+@router.post("/agents/{agent_id}/tools/{tool_name}/enable", response_model=AgentToolsResponse)
+async def enable_agent_tool_endpoint(
+    tool_name: str, payload: ToolConfigUpdateRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    try:
+        await enable_tool(db, agent.id, tool_name, payload.config)
+    except AgentToolError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return AgentToolsResponse(tools=await get_agent_tools(db, agent.id))
+
+
+@router.post("/agents/{agent_id}/tools/{tool_name}/disable", response_model=AgentToolsResponse)
+async def disable_agent_tool_endpoint(
+    tool_name: str,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, _caller = agent_ctx
+    await disable_tool(db, agent.id, tool_name)
+    await db.commit()
+    return AgentToolsResponse(tools=await get_agent_tools(db, agent.id))
+
+
+@router.get("/tools/available")
+async def list_available_tools_endpoint(_current_user: User = Depends(get_current_user)):
+    # Real, deliberate deviation, same reasoning as GET /models
+    # (Partie 5.3.3): this literal path has no {org_id} to check
+    # membership against -- any real, authenticated user can read this
+    # real, static, non-secret tool catalog.
+    return get_available_tools()
