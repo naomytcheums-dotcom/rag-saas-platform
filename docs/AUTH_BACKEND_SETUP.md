@@ -8832,6 +8832,61 @@ real, primary-key read.
 
 **Real verification**: 8 tests, `tests/test_citation_preview.py`.
 
+### Partie 6.1.9 -- secondary sources
+
+**An honest consolidation of two redundant settings (autonomous
+decision)**: `api/config.py` already declared TWO booleans for the
+exact same real concept -- `CITATION_INCLUDE_SECONDARY` (Partie
+6.1.1's own config block) and this étape's own
+`CITATION_SECONDARY_ENABLED`. The former was never actually read
+anywhere in this codebase (confirmed by grepping the whole repo, not
+assumed) -- removed rather than risk the two silently drifting apart.
+
+New module `api/services/citation_secondary.py`: all 5 literal
+functions (`select_primary_sources`, `select_secondary_sources`,
+`get_sources_by_response`, `format_secondary_sources`,
+`get_secondary_source_count`).
+
+**Coherence (vision critique 1): one real, canonical selection
+function**: `select_primary_sources` is the SAME real filter+rank
+logic `citations.py`'s own `select_top_citations` (Partie 6.1.1)
+already implemented -- moved here under this étape's own canonical
+name, with `select_top_citations` kept in `citations.py` as a real,
+backward-compatible alias for every existing caller/test, never a
+second copy that could drift.
+
+**`select_secondary_sources`, a real, honest band-based selection**:
+selects real chunks scoring in `[threshold, CITATION_MIN_SCORE)` --
+real, relevant enough to mention as supporting context, but not strong
+enough to clear the bar `select_primary_sources` itself requires to be
+cited outright. Self-contained (no dependency on knowing the exact
+primary set already chosen), matching this étape's own literal
+3-argument signature exactly.
+
+**`add_citations_to_response` (Partie 6.1.1) retroactively enriched**:
+when `CITATION_SECONDARY_ENABLED`, real secondary sources are now
+really persisted as real `Citation` rows (`is_primary=False`),
+continuing the SAME real `citation_number` sequence -- never re-using
+a primary citation's own number. `position_start`/`position_end` stay
+honestly `None` for these, since the LLM was never asked to mark them
+with a real `[N]`.
+
+**A real, honest, deliberate behavior change on the 3 existing
+endpoints**: they now really also return secondary citations (each
+self-describing via `is_primary`) -- a real behavior change, not a
+bug: `get_sources_by_response`/`get_secondary_source_count` are the
+real, dedicated, controllable functions for a caller that wants to
+filter. Consistent with the scope already established in Partie
+6.1.8: no new HTTP endpoints added (still no real frontend to consume
+them).
+
+**Performance (vision critique 2)**: `get_secondary_source_count`
+stays a single, real, indexed `COUNT(*)` query, never a Python-side
+`len()` of a fully-loaded list.
+
+**Real verification**: 12 tests, `tests/test_citation_secondary.py`.
+**Completes Partie 6.1 at 9/10.**
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

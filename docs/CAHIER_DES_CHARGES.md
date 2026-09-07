@@ -1172,7 +1172,7 @@ Tests réels dédiés (14 tests), voir `tests/test_workflow_versions.py`.
 
 ## PARTIE 6 — Citations & Anti-hallucination — 🟡 PARTIEL
 
-### 6.1 Citations — 🟡 PARTIEL (8/10)
+### 6.1 Citations — 🟡 PARTIEL (9/10)
 
 **Écart de fondation réel trouvé et fermé avant de commencer (décision autonome, cf. l'avertissement de l'utilisateur que ces prompts viennent d'un autre modèle et peuvent contenir des incohérences)** : le spec littéral de 6.1.1 suppose une table `responses` déjà existante (`response_id UUID FK → responses`) -- **aucune table `responses`, ni aucun véritable endpoint de génération (retrieval + LLM + citations) n'existait nulle part dans ce dépôt**. Le propre docstring de `api/security/organization_settings.py` documentait déjà honnêtement cet écart : *"a real, live, multi-tenant HTTP endpoint that actually ANSWERS a question (retrieval + generation combined, citing sources, honoring citation_required/language) is still real, substantial, separate work belonging to Partie 9 (or whichever later étape actually asks for it)"*. Cette étape EST cette étape-là -- même raisonnement déjà appliqué pour `Agent` (Partie 5.3.1) et `Workflow` (Partie 5.4.1).
 
@@ -1317,6 +1317,24 @@ Tests réels dédiés (18 tests), voir `tests/test_citation_passage.py`.
 **Performance (vision critique 2)** : `format_citation_preview`/`enrich_citation_with_preview` sont des fonctions pures, zéro accès base de données ; `get_citation_preview`/`get_citation_context` restent une seule vraie lecture par clé primaire.
 
 Tests réels dédiés (8 tests), voir `tests/test_citation_preview.py`.
+
+#### Partie 6.1.9 — Sources secondaires
+
+⚠️ **Consolidation honnête de deux réglages redondants (décision autonome)** : `api/config.py` déclarait déjà DEUX booléens pour le même vrai concept -- `CITATION_INCLUDE_SECONDARY` (bloc de config de la Partie 6.1.1) et le propre `CITATION_SECONDARY_ENABLED` de cette étape. Le premier n'était réellement lu nulle part dans ce dépôt (vérifié par une recherche sur tout le dépôt, pas supposé) -- supprimé plutôt que de risquer que les deux dérivent silencieusement l'un de l'autre.
+
+✅ **Nouveau module réel** `api/services/citation_secondary.py` : les 5 fonctions littérales (`select_primary_sources`, `select_secondary_sources`, `get_sources_by_response`, `format_secondary_sources`, `get_secondary_source_count`).
+
+✅ **Cohérence (vision critique 1) : une seule vraie fonction de sélection canonique** : `select_primary_sources` est la MÊME vraie logique de filtre+tri que `citations.py`'s own `select_top_citations` (Partie 6.1.1) implémentait déjà -- déplacée ici sous le nom canonique de cette étape, `select_top_citations` restant dans `citations.py` comme un vrai alias rétrocompatible pour chaque appelant/test existant, jamais une seconde copie susceptible de dériver.
+
+✅ **`select_secondary_sources`, une vraie sélection honnête par bande** : sélectionne les vrais chunks dont le score se situe dans `[threshold, CITATION_MIN_SCORE)` -- réellement assez pertinents pour être mentionnés comme contexte de soutien, mais pas assez forts pour franchir la barre que `select_primary_sources` exige pour être réellement cités. Autonome (ne dépend pas de connaître l'ensemble exact déjà choisi comme primaire), correspondant exactement à la signature littérale à 3 arguments de cette étape.
+
+✅ **`add_citations_to_response` (Partie 6.1.1) enrichi rétroactivement** : quand `CITATION_SECONDARY_ENABLED`, de vraies sources secondaires sont maintenant réellement persistées comme de vraies lignes `Citation` (`is_primary=False`), continuant la MÊME vraie séquence `citation_number` -- jamais en réutilisant le numéro d'une citation primaire. `position_start`/`position_end` restent honnêtement `None` pour ces citations secondaires, puisque le LLM n'a jamais été invité à les marquer d'un vrai `[N]`.
+
+⚠️ **Conséquence réelle et honnête sur les 3 endpoints existants (décision assumée)** : ces endpoints renvoient maintenant réellement aussi les citations secondaires (chacune s'auto-décrivant via `is_primary`) -- un vrai changement de comportement, pas un bug : `get_sources_by_response`/`get_secondary_source_count` sont les vraies fonctions dédiées, contrôlables, pour un appelant qui veut filtrer. Cohérent avec le périmètre déjà établi à la Partie 6.1.8 : aucun nouvel endpoint HTTP n'est ajouté (toujours aucun vrai frontend pour les consommer).
+
+**Performance (vision critique 2)** : `get_secondary_source_count` reste une seule vraie requête `COUNT(*)` indexée, jamais un `len()` d'une liste chargée en Python.
+
+Tests réels dédiés (12 tests), voir `tests/test_citation_secondary.py`. **Complète la Partie 6.1 à 9/10.**
 
 ### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL
 

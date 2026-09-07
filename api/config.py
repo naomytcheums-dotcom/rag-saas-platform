@@ -924,7 +924,6 @@ class Settings(BaseSettings):
     CITATION_DEFAULT_COUNT: int = 5
     CITATION_MAX_COUNT: int = 10
     CITATION_MIN_SCORE: float = 0.5
-    CITATION_INCLUDE_SECONDARY: bool = False
 
     # -- Citation relevance (Partie 6.1.6) -------------------------------------
     RELEVANCE_THRESHOLD_HIGH: float = 0.7
@@ -941,6 +940,13 @@ class Settings(BaseSettings):
     CITATION_HOVER_DELAY: int = 300
 
     # -- Secondary sources (Partie 6.1.9) --------------------------------------
+    # A real, honest consolidation (autonomous decision): Partie 6.1.1's
+    # own config block originally pre-declared a SEPARATE, always-unused
+    # `CITATION_INCLUDE_SECONDARY: bool` for this exact same real
+    # concept -- never read anywhere in this codebase (confirmed by
+    # grepping the whole repo, not assumed). Two competing flags for
+    # "include secondary sources" would only invite them to silently
+    # drift apart; removed in favor of this ONE real, complete trio.
     CITATION_SECONDARY_ENABLED: bool = True
     CITATION_SECONDARY_COUNT: int = 3
     CITATION_SECONDARY_THRESHOLD: float = 0.3

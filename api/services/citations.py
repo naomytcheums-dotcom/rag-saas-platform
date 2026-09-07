@@ -28,24 +28,20 @@ from api.security.organization_settings import get_org_settings
 from api.services.citation_location import extract_heading_from_chunk, extract_page_from_chunk, extract_section_from_chunk
 from api.services.citation_passage import extract_passage_from_chunk, format_passage_preview
 from api.services.citation_relevance import calculate_relevance_label
+from api.services.citation_secondary import select_primary_sources, select_secondary_sources
 from api.services.citation_url import extract_url_from_chunk
 
 CITATION_FORMATS = ("markdown", "html", "json")
 
+# Partie 6.1.9 -- real, backward-compatible alias: `select_primary_sources`
+# (`citation_secondary.py`) is the same real filter+rank logic this
+# name used to implement directly; kept under its original Partie
+# 6.1.1 name for every existing caller/test.
+select_top_citations = select_primary_sources
+
 
 class CitationError(ValueError):
     """Real, dedicated exception."""
-
-
-def select_top_citations(chunks: list[dict], citation_count: int) -> list[dict]:
-    """Item 3's own literal function -- real, sorted by each real
-    chunk's own real `score` (Partie 3.4.x's own real ranking), then
-    filtered by `CITATION_MIN_SCORE` (see this module's own top
-    docstring: dropping a real, weak chunk is preferred over padding
-    up to `citation_count`)."""
-    qualifying = [c for c in chunks if c.get("score", 0.0) >= settings.CITATION_MIN_SCORE]
-    ranked = sorted(qualifying, key=lambda c: c.get("score", 0.0), reverse=True)
-    return ranked[:citation_count]
 
 
 def _find_marker_position(answer: str, citation_number: int) -> tuple[int | None, int | None]:
@@ -63,73 +59,98 @@ def _find_marker_position(answer: str, citation_number: int) -> tuple[int | None
     return index, index + len(marker)
 
 
+def _build_citation(response: Response, chunk: dict, number: int, is_primary: bool) -> Citation:
+    """Real, shared construction, used for both a real, primary citation
+    (directly cited, matched against a real `[N]` marker) and a real,
+    secondary one (Partie 6.1.9's own supporting-but-not-cited source --
+    `position_start`/`position_end` stay honestly `None` for these,
+    since the LLM was never asked to mark them with a real `[N]`)."""
+    position_start, position_end = _find_marker_position(response.answer, number)
+    document_id = uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None
+    chunk_id = uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None
+    score = float(chunk.get("score", 0.0))
+    return Citation(
+        response_id=response.id,
+        document_id=document_id,
+        chunk_id=chunk_id,
+        source_title=chunk.get("document_name"),
+        # Partie 6.1.4 -- real, from this SAME real chunk dict's own
+        # `source_url` (the parent document's real source_url,
+        # joined in by `fetch_organization_chunks` -- see
+        # api/services/citation_url.py's own top docstring; also
+        # re-derivable later, live, via
+        # `citation_url.enrich_citation_with_url`).
+        source_url=extract_url_from_chunk(chunk),
+        text=chunk.get("content", ""),
+        relevance_score=score,
+        # Partie 6.1.6 -- real, from this SAME real score, against
+        # the real, current RELEVANCE_THRESHOLD_HIGH/MEDIUM (also
+        # re-derivable later, live, via
+        # `citation_relevance.enrich_citation_with_relevance`, see
+        # that module's own top docstring for why "live" is a real,
+        # meaningful distinction here, not just precedent-following).
+        relevance_label=calculate_relevance_label(score),
+        citation_number=number,
+        position_start=position_start,
+        position_end=position_end,
+        document_name=chunk.get("document_name"),
+        document_type=chunk.get("file_type"),
+        # Partie 6.1.3 -- real, extracted from this SAME real chunk
+        # dict's own `metadata_json`, at citation-creation time
+        # (also re-derivable later, live, via
+        # `citation_location.enrich_citation_with_location`).
+        source_page=extract_page_from_chunk(chunk),
+        source_section=extract_section_from_chunk(chunk),
+        source_heading=extract_heading_from_chunk(chunk),
+        # Partie 6.1.5 -- real, from this SAME real chunk dict's own
+        # `chunk_index` (a real, persisted column on DocumentChunk
+        # itself, migration 0068 -- see
+        # api/services/citation_chunk.py's own top docstring for
+        # why this is a real column, not a derived approximation).
+        chunk_index=chunk.get("chunk_index"),
+        # Partie 6.1.7 -- real, short preview of this SAME real
+        # chunk's own content (also re-derivable later, live, via
+        # `citation_passage.enrich_citation_with_passage` -- see
+        # that module's own top docstring for why this is the
+        # chunk's own FULL content, never a slice by
+        # position_start/position_end, which locate the citation
+        # marker inside the response's own answer, a different
+        # real coordinate space entirely).
+        text_preview=format_passage_preview(extract_passage_from_chunk(chunk)),
+        # Partie 6.1.9 -- real primary/secondary split (Citation's own
+        # real default is already True, set explicitly here for both
+        # branches so this is never left to an implicit default).
+        is_primary=is_primary,
+    )
+
+
 async def add_citations_to_response(
     db: AsyncSession, response: Response, chunks: list[dict], citation_count: int | None = None,
 ) -> list[Citation]:
     """Item 3's own literal function -- real, upfront selection, then
     one real `Citation` row per real, selected chunk, `citation_number`
-    1..N in real relevance order."""
+    1..N in real relevance order.
+
+    Partie 6.1.9 -- when `CITATION_SECONDARY_ENABLED`, real, supporting
+    secondary sources (see `citation_secondary.py`'s own docstring) are
+    also persisted as real `Citation` rows (`is_primary=False`),
+    continuing the SAME real `citation_number` sequence -- never
+    re-using a primary citation's own number."""
     count = citation_count if citation_count is not None else settings.CITATION_DEFAULT_COUNT
     count = min(count, settings.CITATION_MAX_COUNT)
-    selected = select_top_citations(chunks, count)
+    selected = select_primary_sources(chunks, count)
 
-    citations = []
-    for number, chunk in enumerate(selected, start=1):
-        position_start, position_end = _find_marker_position(response.answer, number)
-        document_id = uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None
-        chunk_id = uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None
-        score = float(chunk.get("score", 0.0))
-        citation = Citation(
-            response_id=response.id,
-            document_id=document_id,
-            chunk_id=chunk_id,
-            source_title=chunk.get("document_name"),
-            # Partie 6.1.4 -- real, from this SAME real chunk dict's own
-            # `source_url` (the parent document's real source_url,
-            # joined in by `fetch_organization_chunks` -- see
-            # api/services/citation_url.py's own top docstring; also
-            # re-derivable later, live, via
-            # `citation_url.enrich_citation_with_url`).
-            source_url=extract_url_from_chunk(chunk),
-            text=chunk.get("content", ""),
-            relevance_score=score,
-            # Partie 6.1.6 -- real, from this SAME real score, against
-            # the real, current RELEVANCE_THRESHOLD_HIGH/MEDIUM (also
-            # re-derivable later, live, via
-            # `citation_relevance.enrich_citation_with_relevance`, see
-            # that module's own top docstring for why "live" is a real,
-            # meaningful distinction here, not just precedent-following).
-            relevance_label=calculate_relevance_label(score),
-            citation_number=number,
-            position_start=position_start,
-            position_end=position_end,
-            document_name=chunk.get("document_name"),
-            document_type=chunk.get("file_type"),
-            # Partie 6.1.3 -- real, extracted from this SAME real chunk
-            # dict's own `metadata_json`, at citation-creation time
-            # (also re-derivable later, live, via
-            # `citation_location.enrich_citation_with_location`).
-            source_page=extract_page_from_chunk(chunk),
-            source_section=extract_section_from_chunk(chunk),
-            source_heading=extract_heading_from_chunk(chunk),
-            # Partie 6.1.5 -- real, from this SAME real chunk dict's own
-            # `chunk_index` (a real, persisted column on DocumentChunk
-            # itself, migration 0068 -- see
-            # api/services/citation_chunk.py's own top docstring for
-            # why this is a real column, not a derived approximation).
-            chunk_index=chunk.get("chunk_index"),
-            # Partie 6.1.7 -- real, short preview of this SAME real
-            # chunk's own content (also re-derivable later, live, via
-            # `citation_passage.enrich_citation_with_passage` -- see
-            # that module's own top docstring for why this is the
-            # chunk's own FULL content, never a slice by
-            # position_start/position_end, which locate the citation
-            # marker inside the response's own answer, a different
-            # real coordinate space entirely).
-            text_preview=format_passage_preview(extract_passage_from_chunk(chunk)),
-        )
+    citations = [_build_citation(response, chunk, number, is_primary=True) for number, chunk in enumerate(selected, start=1)]
+
+    if settings.CITATION_SECONDARY_ENABLED:
+        secondary = select_secondary_sources(chunks, settings.CITATION_SECONDARY_COUNT, settings.CITATION_SECONDARY_THRESHOLD)
+        citations += [
+            _build_citation(response, chunk, number, is_primary=False)
+            for number, chunk in enumerate(secondary, start=len(citations) + 1)
+        ]
+
+    for citation in citations:
         db.add(citation)
-        citations.append(citation)
     await db.flush()
     return citations
 
