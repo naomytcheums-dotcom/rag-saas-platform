@@ -28,6 +28,7 @@ from api.models.agent import Agent, AgentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.services.agent_guardrails import validate_guardrails_config
+from api.services.agent_idk import validate_idk_threshold
 from api.services.agent_knowledge_base import validate_knowledge_base_access
 from api.services.agent_memory_config import validate_memory_config
 from api.services.agent_permissions import validate_allowed_roles
@@ -83,6 +84,7 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
     if data.get("allowed_roles"):
         validate_allowed_roles(data["allowed_roles"])
     validate_guardrails_config(data)
+    validate_idk_threshold(data.get("idk_threshold"))
     agent = Agent(
         organization_id=organization_id, created_by=created_by,
         workspace_id=data.get("workspace_id"), name=data["name"], description=data.get("description"),
@@ -96,6 +98,9 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
         is_public=data.get("is_public", False), allowed_roles=data.get("allowed_roles"),
         blocked_topics=data.get("blocked_topics"), allowed_domains=data.get("allowed_domains"),
         max_tokens_per_response=data.get("max_tokens_per_response"), content_filter_level=data.get("content_filter_level"),
+        citation_required=data.get("citation_required", False), citation_required_message=data.get("citation_required_message"),
+        answer_only_from_context=data.get("answer_only_from_context", False), context_only_message=data.get("context_only_message"),
+        idk_threshold=data.get("idk_threshold"), idk_message=data.get("idk_message"),
     )
     db.add(agent)
     await db.flush()
@@ -120,11 +125,15 @@ async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Age
     if data.get("allowed_roles"):
         validate_allowed_roles(data["allowed_roles"])
     validate_guardrails_config(data)
+    if "idk_threshold" in data:
+        validate_idk_threshold(data["idk_threshold"])
     for field in (
         "name", "description", "system_prompt", "system_prompt_template", "workspace_id", "memory_enabled",
         "memory_window_size", "memory_ttl", "memory_max_items", "memory_retention_policy",
         "guardrails_enabled", "human_approval_required", "knowledge_base_id", "is_public", "allowed_roles",
         "blocked_topics", "allowed_domains", "max_tokens_per_response", "content_filter_level",
+        "citation_required", "citation_required_message", "answer_only_from_context", "context_only_message",
+        "idk_threshold", "idk_message",
     ):
         if field in data:
             setattr(agent, field, data[field])

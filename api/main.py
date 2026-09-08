@@ -30,7 +30,7 @@ from api.routers import (
     account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, citations, conversations,
     custom_domains, custom_tools, documents,
     email_domains, enterprise_sso, external_sources, human_approval, invitations, oauth, organization_branding,
-    organization_members, organization_settings, organizations, password, quotas, reindex_schedules,
+    organization_members, organization_settings, organizations, password, quality_dashboard, quotas, reindex_schedules,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, two_factor,
     usage, user_limits, verify, webauthn, white_label, workflows, workspaces,
 )
@@ -192,6 +192,7 @@ app.include_router(conversations.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)
 app.include_router(agent_api_keys.router)
+app.include_router(quality_dashboard.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

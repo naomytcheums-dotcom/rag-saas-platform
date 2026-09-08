@@ -1356,15 +1356,47 @@ Tests réels dédiés (12 tests), voir `tests/test_citation_secondary.py`.
 
 Tests réels dédiés (18 tests), voir `tests/test_response_confidence.py`. **Complète la Partie 6.1 à 10/10.**
 
-### 6.2 Anti-hallucination (12 items) — 🟡 PARTIEL (6/12)
+### 6.2 Anti-hallucination (12 items) — ✅ COMPLET (12/12)
 
-Items non listés ci-dessous (6.2.1/6.2.2/6.2.3/6.2.5/6.2.11/6.2.12) : code écrit dans `src/hallucination_detection.py`/`src/llm_judge.py` mais **jamais validé en conditions réelles** — bloqué sur crédit API selon `README.md`. Ces prompts n'ont pas encore été reçus ; leur statut réel reste à vérifier au moment où l'étape correspondante sera exécutée.
+**Fondation partagée réelle, construite une seule fois pour tout ce lot (décision autonome)** : les Parties 6.2.4/6.2.5/6.2.6/6.2.7/6.2.9/6.2.10/6.2.11 demandaient toutes, implicitement ou littéralement, une vraie extraction d'affirmations depuis le texte de la réponse -- `api/services/claim_extraction.py` (découpage réel en phrases, réel et rapide, jamais un appel LLM) construit ce vrai fondement une seule fois, réutilisé partout. De même, `api/services/text_similarity.py` fournit les vraies primitives rapides (chevauchement de mots, détection de négation, extraction de nombres) partagées par la quasi-totalité de ces étapes -- délibérément PAS basées sur des embeddings réels (`generate_embeddings` existe déjà et est réel, mais charger ce modèle et faire une vraie inférence sur CHAQUE comparaison de citation/affirmation, dans un vrai chemin d'exécution par agent, est un vrai coût que la question "Performance : est-ce rapide ?" de chacune de ces étapes justifie d'éviter).
 
-**Fondation partagée réelle, construite une seule fois pour tout ce lot (décision autonome)** : les Parties 6.2.4/6.2.6/6.2.7/6.2.9/6.2.10 demandaient toutes, implicitement, une vraie extraction d'affirmations depuis le texte de la réponse -- `api/services/claim_extraction.py` (découpage réel en phrases, réel et rapide, jamais un appel LLM) construit ce vrai fondement une seule fois, réutilisé partout. De même, `api/services/text_similarity.py` fournit les vraies primitives rapides (chevauchement de mots, détection de négation, extraction de nombres) partagées par 6.2.4/6.2.7/6.2.8/6.2.9/6.2.10 -- délibérément PAS basées sur des embeddings réels (`generate_embeddings` existe déjà et est réel, mais charger ce modèle et faire une vraie inférence sur CHAQUE comparaison de citation/affirmation, dans un vrai chemin d'exécution par agent, est un vrai coût que la question "Performance : est-ce rapide ?" de chacune de ces 6 étapes justifie d'éviter).
+**Nouvel endpoint réel** `GET /responses/{response_id}` (`api/routers/citations.py`, réutilise `require_response_member`) : aucune des Parties 6.2.4-6.2.11 ne demandait littéralement un nouvel endpoint, mais sans lui, les 16 nouveaux champs réels de `Response` n'étaient accessibles par aucune vraie route -- ajouté pour que le critère de test "les permissions sont respectées", littéralement présent dans presque tous ces prompts, ait un vrai sens.
 
-**Nouvel endpoint réel** `GET /responses/{response_id}` (`api/routers/citations.py`, réutilise `require_response_member`) : aucune des 6 étapes ne demandait littéralement un nouvel endpoint, mais sans lui, les 12 nouveaux champs réels de `Response` n'étaient accessibles par aucune vraie route -- ajouté pour que le critère de test "les permissions sont respectées", littéralement présent dans les 6 prompts, ait un vrai sens.
+**`api/services/response_quality.py`** : câblage réel partagé, appelé une seule fois depuis `generate_response` (Partie 6.1.1) ET `AgentOrchestrator.run_agent` (même Partie), exécutant les 8 vraies vérifications ci-dessous sur la même vraie réponse/citations/contexte à chaque fois qu'une réponse réelle est générée.
 
-**`api/services/response_quality.py`** : câblage réel partagé, appelé une seule fois depuis `generate_response` (Partie 6.1.1) ET `AgentOrchestrator.run_agent` (même Partie), exécutant les 6 vraies vérifications ci-dessous sur la même vraie réponse/citations/contexte à chaque fois qu'une réponse réelle est générée.
+#### Partie 6.2.1 — Citation-required mode
+
+✅ **Nouveau module réel** `api/services/agent_citation_required.py` : les 4 fonctions littérales (`is_citation_required`, `validate_response_has_citations`, `get_citation_required_message`, `format_citation_required_response`).
+
+⚠️ **Déviation réelle et documentée du signature littéral** : `validate_response_has_citations` accepte une vraie liste de `Citation` plutôt qu'un objet `Response` -- `Response` n'a aucune relation ORM réelle vers ses propres `Citation` (ce dépôt les requête toujours explicitement, y compris dans `citations.py`'s own `get_citations_by_response`), donc la vraie liste déjà chargée est transmise directement plutôt que re-dérivée d'un `response` nu.
+
+⚠️ **Cohérence (vision critique 1) -- périmètre honnête** : ce mode ne s'applique réellement qu'à l'intérieur de la branche RAG réelle d'`AgentOrchestrator.run_agent` (`citation_chunks` donné) -- un appel d'agent conversationnel simple sans RAG n'a réellement aucun concept de citation à faire respecter.
+
+✅ **Intégré dans l'orchestrateur** : un vrai refus (remplacement de `response.answer` ET `run.result` par le message configuré) est le PREMIER des 3 vrais portails séquentiels (6.2.1 → 6.2.2 → 6.2.3, le premier qui se déclenche gagne).
+
+Tests réels dédiés (9 tests unitaires + 3 tests d'intégration bout-en-bout via l'orchestrateur), voir `tests/test_agent_citation_required.py` + `tests/test_agent_orchestrator.py`.
+
+#### Partie 6.2.2 — Answer only from context
+
+✅ **Nouveau module réel** `api/services/agent_context_only.py` : les 4 fonctions littérales (`is_answer_only_from_context`, `validate_response_in_context`, `get_context_only_message`, `format_context_only_response`).
+
+✅ **`CONTEXT_ONLY_STRICT`, une vraie distinction utile** : en mode strict (réel défaut), CHAQUE affirmation réelle extraite de la réponse doit individuellement franchir `CONTEXT_ONLY_SIMILARITY_THRESHOLD` par rapport au contexte -- une seule phrase réellement non ancrée fait échouer toute la réponse. En mode non strict, seule la moyenne globale réelle compte -- une vraie vérification plus permissive.
+
+✅ **Robustesse (vision critique 3)** : honnêtement `False` avec un contexte réel vide -- une réponse ne peut jamais réellement être "uniquement du contexte" quand il n'y a réellement aucun contexte dont provenir.
+
+Tests réels dédiés (10 tests unitaires + 2 tests d'intégration), voir `tests/test_agent_context_only.py` + `tests/test_agent_orchestrator.py`.
+
+#### Partie 6.2.3 — "I don't know" threshold
+
+✅ **Nouveau module réel** `api/services/agent_idk.py` : les 4 fonctions littérales (`get_idk_threshold`, `should_say_idk`, `get_idk_message`, `format_idk_response`) + `validate_idk_threshold` (réelle validation des bornes à l'écriture, même précédent que `agent_guardrails.validate_guardrails_config`).
+
+✅ **Robustesse (vision critique 3)** : `should_say_idk` retourne honnêtement `False` quand le score de confiance est `None` -- refuser de répondre est une vraie décision active qui a besoin d'un vrai signal ; le défaut sûr quand ce signal est réellement indisponible est de NE PAS forcer un refus.
+
+✅ **`idk_threshold=None` signifie "utiliser IDK_THRESHOLD_DEFAULT", pas "désactivé"** : contrairement aux Parties 6.2.1/6.2.2, cette vraie fonctionnalité n'a pas son propre booléen d'activation dédié -- chaque vrai agent a toujours UN vrai seuil, avec repli sur la valeur réelle configurée de la plateforme. Une vraie validation croisée (`_idk_threshold_bounds_must_be_sane`) garantit au démarrage que `IDK_THRESHOLD_DEFAULT` reste dans ses propres bornes configurées.
+
+✅ **Utilise le score de confiance de la Partie 6.2.4** (`Response.confidence_estimation`, juste calculé au même moment) comme signal réel — le TROISIÈME et dernier portail de la séquence réelle.
+
+Tests réels dédiés (9 tests unitaires + 2 tests d'intégration), voir `tests/test_agent_idk.py` + `tests/test_agent_orchestrator.py`.
 
 #### Partie 6.2.4 — Confidence estimation
 
@@ -1381,6 +1413,20 @@ Items non listés ci-dessous (6.2.1/6.2.2/6.2.3/6.2.5/6.2.11/6.2.12) : code écr
 ✅ **Robustesse (vision critique 3)** : chaque facteur retourne honnêtement `0.0` sans citations réelles -- jamais un défaut neutre fabriqué.
 
 Tests réels dédiés (14 tests), voir `tests/test_confidence_estimation.py`.
+
+#### Partie 6.2.5 — Unsupported claim detection
+
+✅ **Nouveau module réel** `api/services/unsupported_claims.py` : les 4 fonctions littérales (`detect_unsupported_claims`, `extract_claims`, `match_claims_to_citations`, `flag_unsupported_claim`).
+
+⚠️ **Cohérence -- une vraie sœur, plus ÉTROITE, de `hallucination_detector.identify_hallucinated_claims` (Partie 6.2.9)** : cette dernière marque les affirmations `"unverified"` OU `"contradictory"` (définition plus large, centrée hallucination) ; ce module ne marque QUE les affirmations réellement non sourcées -- une affirmation activement CONTREDITE par une vraie source a de vraies tentatives de support derrière elle, juste conflictuelles, un vrai problème différent déjà possédé par la Partie 6.2.7. Deux vraies définitions complémentaires, non redondantes.
+
+✅ **`extract_claims(response)`, une vraie délégation** : ce littéral redéclare une fonction déjà construite et testée une fois dans `claim_extraction.py` -- ici une vraie délégation d'une ligne sous ce nom/signature littéral, pas une seconde implémentation concurrente.
+
+✅ **`UNSUPPORTED_CLAIM_MIN_CONFIDENCE`, réellement utilisé** : une vraie citation ne compte comme vrai support QUE si elle chevauche réellement le texte ET si elle était elle-même assez pertinente à l'origine (`Citation.relevance_score >= UNSUPPORTED_CLAIM_MIN_CONFIDENCE`) -- une citation qui partage juste des mots mais était à peine pertinente est une preuve réelle mais faible, pas un vrai support.
+
+✅ **Précision (vision critique 2)** : cas mixte (sourcé + non sourcé) vérifié par un test dédié.
+
+Tests réels dédiés (8 tests), voir `tests/test_unsupported_claims.py`.
 
 #### Partie 6.2.6 — Claim verification
 
@@ -1452,7 +1498,35 @@ Tests réels dédiés (13 tests), voir `tests/test_hallucination_detector.py`.
 
 Tests réels dédiés (12 tests), voir `tests/test_groundedness.py`.
 
-**Câblage partagé et endpoint** : `api/services/response_quality.py` (2 tests) + `GET /responses/{response_id}` (4 tests), voir `tests/test_response_quality.py`/`tests/test_response_detail_endpoint.py`. Régression complète (178 tests sur les 6 nouveaux modules + modules partagés + `generation.py`/`agent_orchestrator.py`/`citations.py`, puis 129 tests sur toute la suite de citations réutilisée) : zéro échec.
+#### Partie 6.2.11 — Faithfulness score
+
+✅ **Nouveau module réel** `api/services/faithfulness.py` : les 5 fonctions littérales (`calculate_faithfulness_score`, `calculate_claim_accuracy`, `calculate_source_fidelity`, `calculate_context_fidelity`, `calculate_citation_consistency`).
+
+✅ **Cohérence (vision critique 1) -- réutilisation réelle de 3 de ses 4 facteurs, évitant une 3ème ou 4ème réimplémentation** : `source_fidelity` réutilise directement `source_consistency.calculate_source_agreement` (Partie 6.2.8) ; `context_fidelity` réutilise directement `confidence_estimation.calculate_context_alignment` (Partie 6.2.4) ; `citation_consistency` réutilise directement `response_confidence.calculate_confidence_factors`'s own real, SCORE-VARIANCE-based `consistency` (Partie 6.1.10) -- délibérément DIFFÉRENT de `source_fidelity` (qui vérifie si les TEXTES des citations se contredisent ; celui de la 6.1.10 vérifie si les SCORES DE PERTINENCE s'accordent) -- réellement distinct, tous deux réels.
+
+✅ **`claim_accuracy`, le seul vrai facteur véritablement NOUVEAU** : la vraie fraction d'affirmations que `claim_verification.verify_single_claim` (Partie 6.2.6) qualifie pleinement de `"verified"` -- une vraie barre plus STRICTE que le `groundedness.calculate_claim_support` de la Partie 6.2.10 (qui compte tout vrai support, même partiel).
+
+✅ **Robustesse (vision critique 3)** : chaque facteur retourne honnêtement `0.0` sans citations réelles.
+
+Tests réels dédiés (9 tests), voir `tests/test_faithfulness.py`.
+
+#### Partie 6.2.12 — Dashboard qualité
+
+✅ **Nouveau module réel** `api/services/quality_dashboard.py` : les 5 fonctions littérales (`get_quality_dashboard`, `get_quality_metrics`, `get_quality_trends`, `get_quality_responses`, `export_quality_metrics`) + 5 nouveaux endpoints réels Admin+ (`api/routers/quality_dashboard.py`, réutilise `require_org_admin`, même précédent que `api/routers/usage.py`).
+
+✅ **Performance/Scalabilité (vision critique 1/2) -- agrégation SQL réelle, jamais un scan Python** : chaque métrique réelle passe par une vraie requête `AVG`/`COUNT`/`GROUP BY`, bornée par un vrai filtre indexé `organization_id`/`created_at` -- passe à l'échelle avec le vrai planificateur de requêtes de la base, pas avec le nombre de réponses jamais générées. `get_quality_responses` reste réellement paginé, plafonné à `QUALITY_DASHBOARD_MAX_RESPONSES` par page.
+
+✅ **Sécurité (vision critique 3) -- isolation réelle et indexée par organisation** : chaque vraie requête filtre `Response.organization_id == organization_id` ; le routeur exige en plus une vraie appartenance Admin+ à CETTE MÊME organisation avant tout appel.
+
+⚠️ **`supported_claims_rate`, un vrai proxy honnêtement scopé** : `Response.unsupported_claims` est un vrai blob JSON, pas une table normalisée indexable -- un vrai taux PAR AFFIRMATION nécessiterait de parser ce JSON pour chaque réponse réelle de la période, un vrai problème de scalabilité que ce module évite délibérément. `supported_claims_rate` est plutôt un vrai proxy PAR RÉPONSE (fraction de réponses sans aucune vraie affirmation non sourcée), documenté honnêtement comme une approximation.
+
+✅ **`period`, une vraie fenêtre toujours bornée** : `None` signifie "aussi loin que le permet la vraie rétention configurée" (`QUALITY_DASHBOARD_RETENTION_DAYS`), jamais réellement illimité.
+
+✅ **"Top documents"/"Top agents" (item 4)** : jointure réelle `Citation`→`Document` pour les documents les plus cités ; jointure réelle `AgentRunRecord.response_id`→`Response` pour les agents les plus fidèles (`Response` lui-même n'a réellement aucune colonne `agent_id` -- `AgentRunRecord.agent_id` est une vraie chaîne, pas nécessairement adossée à un vrai `Agent`, voir le docstring de `agent_orchestrator.py`).
+
+Tests réels dédiés (14 tests), voir `tests/test_quality_dashboard.py`.
+
+**Câblage partagé et endpoint** : `api/services/response_quality.py` + `GET /responses/{response_id}`, voir `tests/test_response_quality.py`/`tests/test_response_detail_endpoint.py`. **Partie 6.2 Anti-hallucination désormais COMPLÈTE à 12/12.** Régression complète (216+ tests sur l'ensemble des modules 6.1/6.2 + `generation.py`/`agent_orchestrator.py`/`agents.py`/`citations.py`) : zéro échec.
 
 ---
 

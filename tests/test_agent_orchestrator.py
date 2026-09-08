@@ -647,3 +647,122 @@ async def test_run_agent_with_citation_chunks_but_no_organization_id_is_a_real_n
     run = await orchestrator.run_agent("agent-1", "hi", db=db_session, citation_chunks=chunks)
 
     assert run.response_id is None
+
+
+# ------------------------------------- Partie 6.2.1/6.2.2/6.2.3 -- response gates -------------------------------------
+
+
+async def test_run_agent_refuses_when_citation_required_and_no_citations_found(monkeypatch, db_session):
+    """Validation criterion: le mode citation obligatoire fonctionne."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Here is an answer with no real citations.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "citation_required": True}, None)
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "a question", db=db_session, organization_id=org_id, citation_chunks=[])
+
+    from api.services.agent_citation_required import DEFAULT_CITATION_REQUIRED_MESSAGE
+    assert run.status == "completed"
+    assert run.result == DEFAULT_CITATION_REQUIRED_MESSAGE
+
+
+async def test_run_agent_uses_the_real_custom_citation_required_message(monkeypatch, db_session):
+    """Validation criterion: le message personnalisé est affiché."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("An answer.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(
+        db_session, org_id, {"name": "Bot", "citation_required": True, "citation_required_message": "Please ask something I can cite."},
+        None,
+    )
+    await db_session.commit()
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "q", db=db_session, organization_id=org_id, citation_chunks=[])
+
+    assert run.result == "Please ask something I can cite."
+
+
+async def test_run_agent_does_not_refuse_when_citation_required_and_citations_exist(monkeypatch, db_session):
+    """Validation criterion: les citations sont vérifiées (cas présent)."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("The sky is blue [1].")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "citation_required": True}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Real sky content", "score": 0.9, "document_name": "sky.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    assert run.result == "The sky is blue [1]."
+
+
+async def test_run_agent_refuses_when_context_only_and_answer_is_ungrounded(monkeypatch, db_session):
+    """Validation criterion: le mode contexte uniquement fonctionne."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("The stock market crashed due to unrelated economic factors.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "answer_only_from_context": True}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Rayleigh scattering explains why the sky is blue.", "score": 0.9, "document_name": "d.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    from api.services.agent_context_only import DEFAULT_CONTEXT_ONLY_MESSAGE
+    assert run.result == DEFAULT_CONTEXT_ONLY_MESSAGE
+
+
+async def test_run_agent_does_not_refuse_when_context_only_and_answer_is_grounded(monkeypatch, db_session):
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Rayleigh scattering explains why the sky is blue.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "answer_only_from_context": True}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Rayleigh scattering explains why the sky is blue.", "score": 0.9, "document_name": "d.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    assert run.result == "Rayleigh scattering explains why the sky is blue."
+
+
+async def test_run_agent_says_idk_when_confidence_is_below_the_real_threshold(monkeypatch, db_session):
+    """Validation criterion: le seuil de confiance fonctionne."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Some answer.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "idk_threshold": 0.99}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Some content.", "score": 0.9, "document_name": "d.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "q", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    from api.services.agent_idk import DEFAULT_IDK_MESSAGE
+    assert run.result == DEFAULT_IDK_MESSAGE
+
+
+async def test_run_agent_uses_the_real_custom_idk_message(monkeypatch, db_session):
+    """Validation criterion: le message personnalisé est affiché."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Some answer.")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "idk_threshold": 0.99, "idk_message": "Custom IDK."}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Some content.", "score": 0.9, "document_name": "d.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "q", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    assert run.result == "Custom IDK."
+
+
+async def test_run_agent_never_gates_the_response_when_no_real_gate_is_configured(monkeypatch, db_session):
+    """Validation criterion: robustesse -- aucun mode activé, réponse inchangée."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("The sky is blue [1].")))
+    org_id = uuid.uuid4()
+    agent = await create_agent(db_session, org_id, {"name": "Bot"}, None)
+    await db_session.commit()
+    chunks = [{"chunk_id": str(uuid.uuid4()), "document_id": str(uuid.uuid4()), "content": "Real sky content", "score": 0.9, "document_name": "sky.pdf", "file_type": "pdf"}]
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
+
+    assert run.result == "The sky is blue [1]."

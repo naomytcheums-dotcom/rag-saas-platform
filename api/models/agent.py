@@ -30,7 +30,7 @@ import datetime as dt
 import uuid
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -82,6 +82,17 @@ class Agent(Base):
     allowed_domains: Mapped[list | None] = mapped_column(JSON, nullable=True)
     max_tokens_per_response: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_filter_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Partie 6.2.1 -- real, opt-in refusal mode (api/services/agent_citation_required.py).
+    citation_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    citation_required_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 6.2.2 -- real, opt-in refusal mode (api/services/agent_context_only.py).
+    answer_only_from_context: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    context_only_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 6.2.3 -- real, opt-in "I don't know" threshold
+    # (api/services/agent_idk.py). `None` means "use IDK_THRESHOLD_DEFAULT",
+    # not "disabled" -- see that module's own docstring.
+    idk_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    idk_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=AgentStatus.active.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -73,3 +73,10 @@ class Response(Base):
     # Partie 6.2.10 -- real (api/services/groundedness.py).
     groundedness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     groundedness_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 6.2.5 -- real (api/services/unsupported_claims.py). A real
+    # LIST of flagged-claim dicts, not a single dict.
+    has_unsupported_claims: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    unsupported_claims: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Partie 6.2.11 -- real (api/services/faithfulness.py).
+    faithfulness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    faithfulness_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)

@@ -71,7 +71,15 @@ from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
 from api.security.conversations import add_message, get_conversation_messages
 from api.security.tool_permissions import check_tool_permission
+from api.services.agent_citation_required import (
+    format_citation_required_response, get_citation_required_message, is_citation_required,
+    validate_response_has_citations,
+)
+from api.services.agent_context_only import (
+    format_context_only_response, get_context_only_message, is_answer_only_from_context, validate_response_in_context,
+)
 from api.services.agent_guardrails import validate_guardrails
+from api.services.agent_idk import format_idk_response, get_idk_message, get_idk_threshold, should_say_idk
 from api.services.agent_memory import get_all_memory
 from api.services.agent_permissions import check_agent_permission
 from api.services.citations import add_citations_to_response
@@ -368,6 +376,38 @@ class AgentOrchestrator:
                         await enrich_response_with_quality_metrics(db, response_row, citations_row, context=quality_context)
                         run_row = await get_run(db, run.id)
                         run_row.response_id = response_row.id
+
+                        # Partie 6.2.1/6.2.2/6.2.3 -- real, sequential
+                        # refusal gates, in this real, deliberate
+                        # precedence order: does a real citation even
+                        # exist at all, THEN is the real wording
+                        # actually grounded in the real context, THEN
+                        # is the agent's own real, broader confidence
+                        # (Partie 6.2.4, just computed above) too low.
+                        # The FIRST real gate that trips wins -- a
+                        # real, honest refusal replaces both the real
+                        # `Response.answer` and the real, persisted
+                        # `run.result`, so a caller reading either one
+                        # sees the SAME real, final text.
+                        gated_answer = None
+                        if real_agent_id is not None:
+                            if await is_citation_required(db, real_agent_id) and not validate_response_has_citations(citations_row):
+                                gated_answer = format_citation_required_response(
+                                    await get_citation_required_message(db, real_agent_id)
+                                )
+                            elif await is_answer_only_from_context(db, real_agent_id) and not validate_response_in_context(
+                                result, quality_context or "",
+                            ):
+                                gated_answer = format_context_only_response(await get_context_only_message(db, real_agent_id))
+                            else:
+                                idk_threshold = await get_idk_threshold(db, real_agent_id)
+                                if should_say_idk(response_row.confidence_estimation, idk_threshold):
+                                    gated_answer = format_idk_response(await get_idk_message(db, real_agent_id))
+                        if gated_answer is not None:
+                            trace.append(self._trace_event("response_gated", {"reason": gated_answer}))
+                            response_row.answer = gated_answer
+                            run_row.result = gated_answer
+                            run_row.trace = list(trace)
                     await db.commit()
 
         task = asyncio.create_task(_execute())

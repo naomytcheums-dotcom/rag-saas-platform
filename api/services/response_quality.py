@@ -1,13 +1,13 @@
 """
-Real, shared plumbing wiring Parties 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/
-6.2.10 together -- both real call sites that create a `Response`
-(`api/services/generation.py`'s own `generate_response` and
+Real, shared plumbing wiring Parties 6.2.4/6.2.5/6.2.6/6.2.7/6.2.8/
+6.2.9/6.2.10/6.2.11 together -- both real call sites that create a
+`Response` (`api/services/generation.py`'s own `generate_response` and
 `AgentOrchestrator.run_agent`'s own `citation_chunks` branch) need the
-exact same real sequence of 6 real enrichments; built once here rather
+exact same real sequence of real enrichments; built once here rather
 than repeated twice.
 
 **Robustesse -- what happens with no real citations**: every one of
-the 6 real modules this calls already, honestly, independently handles
+the real modules this calls already, honestly, independently handles
 that real case (see each module's own top docstring) -- this function
 adds no further special-casing of its own, it simply wires their
 already-real outputs onto the real `Response` row."""
@@ -19,15 +19,17 @@ from api.models.response import Response
 from api.services.claim_verification import verify_claims
 from api.services.confidence_estimation import estimate_confidence
 from api.services.contradiction_detection import detect_contradictions
+from api.services.faithfulness import calculate_faithfulness_score
 from api.services.groundedness import calculate_groundedness_score
 from api.services.hallucination_detector import detect_hallucinations
 from api.services.source_consistency import check_source_consistency
+from api.services.unsupported_claims import detect_unsupported_claims
 
 
 async def enrich_response_with_quality_metrics(
     db: AsyncSession, response: Response, citations: list[Citation], context: str | None = None,
 ) -> Response:
-    """Real, shared enrichment: runs all 6 real Partie 6.2 checks
+    """Real, shared enrichment: runs every real Partie 6.2 check
     against this SAME real response/citations/context, persisting each
     real result onto its own real `Response` column (never committed
     here -- the real caller's own existing transaction does that, same
@@ -55,5 +57,13 @@ async def enrich_response_with_quality_metrics(
     groundedness_result = calculate_groundedness_score(response, citations, context)
     response.groundedness_score = groundedness_result["score"]
     response.groundedness_factors = groundedness_result
+
+    unsupported_result = detect_unsupported_claims(response, citations)
+    response.has_unsupported_claims = unsupported_result["has_unsupported_claims"]
+    response.unsupported_claims = unsupported_result["unsupported_claims"]
+
+    faithfulness_result = calculate_faithfulness_score(response, citations, context)
+    response.faithfulness_score = faithfulness_result["score"]
+    response.faithfulness_factors = faithfulness_result
 
     return response

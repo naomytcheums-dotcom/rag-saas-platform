@@ -1020,6 +1020,37 @@ class Settings(BaseSettings):
     })
     GROUNDEDNESS_MIN_CITATIONS: int = 2
 
+    # -- Answer only from context (Partie 6.2.2) -------------------------------
+    CONTEXT_ONLY_STRICT: bool = True
+    CONTEXT_ONLY_SIMILARITY_THRESHOLD: float = 0.7
+
+    # -- "I don't know" threshold (Partie 6.2.3) -------------------------------
+    IDK_THRESHOLD_DEFAULT: float = 0.3
+    IDK_THRESHOLD_MIN: float = 0.0
+    IDK_THRESHOLD_MAX: float = 1.0
+
+    # -- Unsupported claim detection (Partie 6.2.5) ----------------------------
+    # A real, deliberate, narrower sibling of Partie 6.2.9's own
+    # HALLUCINATION_FACTORS_WEIGHTS -- see api/services/unsupported_claims.py's
+    # own docstring for why "unsupported" (no real support found) is a
+    # genuinely different, complementary real concept from "hallucinated"
+    # (unsupported OR actively contradicted).
+    UNSUPPORTED_CLAIM_DETECTION_ENABLED: bool = True
+    UNSUPPORTED_CLAIM_SIMILARITY_THRESHOLD: float = 0.7
+    UNSUPPORTED_CLAIM_MIN_CONFIDENCE: float = 0.5
+
+    # -- Faithfulness score (Partie 6.2.11) ------------------------------------
+    FAITHFULNESS_ENABLED: bool = True
+    FAITHFULNESS_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "claim_accuracy": 0.3, "source_fidelity": 0.25, "context_fidelity": 0.25, "citation_consistency": 0.2,
+    })
+    FAITHFULNESS_MIN_CITATIONS: int = 2
+
+    # -- Quality dashboard (Partie 6.2.12) -------------------------------------
+    QUALITY_DASHBOARD_ENABLED: bool = True
+    QUALITY_DASHBOARD_MAX_RESPONSES: int = 1000
+    QUALITY_DASHBOARD_RETENTION_DAYS: int = 90
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1115,6 +1146,29 @@ class Settings(BaseSettings):
         total = sum(self.GROUNDEDNESS_FACTORS_WEIGHTS.values())
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"GROUNDEDNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _faithfulness_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 6.2.11's own weight dict."""
+        total = sum(self.FAITHFULNESS_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"FAITHFULNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _idk_threshold_bounds_must_be_sane(self) -> "Settings":
+        """A real, valuable check beyond item 3's own literal ask (Partie
+        6.2.3): `IDK_THRESHOLD_DEFAULT` genuinely has to sit inside its
+        own configured `[IDK_THRESHOLD_MIN, IDK_THRESHOLD_MAX]` bounds --
+        the same "safety never depends on a coincidence" reasoning as
+        this class's own other real cross-field validators."""
+        if not (self.IDK_THRESHOLD_MIN <= self.IDK_THRESHOLD_DEFAULT <= self.IDK_THRESHOLD_MAX):
+            raise ValueError(
+                f"IDK_THRESHOLD_DEFAULT ({self.IDK_THRESHOLD_DEFAULT}) must be within "
+                f"[IDK_THRESHOLD_MIN, IDK_THRESHOLD_MAX] ({self.IDK_THRESHOLD_MIN}, {self.IDK_THRESHOLD_MAX})"
+            )
         return self
 
 

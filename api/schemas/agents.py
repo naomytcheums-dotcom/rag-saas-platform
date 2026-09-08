@@ -34,6 +34,12 @@ class AgentCreateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+    citation_required: bool = False
+    citation_required_message: str | None = None
+    answer_only_from_context: bool = False
+    context_only_message: str | None = None
+    idk_threshold: float | None = None
+    idk_message: str | None = None
 
 
 class AgentUpdateRequest(BaseModel):
@@ -59,6 +65,12 @@ class AgentUpdateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+    citation_required: bool | None = None
+    citation_required_message: str | None = None
+    answer_only_from_context: bool | None = None
+    context_only_message: str | None = None
+    idk_threshold: float | None = None
+    idk_message: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -87,6 +99,12 @@ class AgentResponse(BaseModel):
     allowed_domains: list | None
     max_tokens_per_response: int | None
     content_filter_level: str | None
+    citation_required: bool
+    citation_required_message: str | None
+    answer_only_from_context: bool
+    context_only_message: str | None
+    idk_threshold: float | None
+    idk_message: str | None
     status: str
     created_by: uuid.UUID | None
     created_at: dt.datetime

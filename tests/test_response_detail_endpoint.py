@@ -42,6 +42,9 @@ async def test_get_response_endpoint_exposes_all_real_batch_6_2_fields(client, d
     response.source_consistency_score = 0.9
     response.hallucination_score = 0.2
     response.groundedness_score = 0.6
+    response.has_unsupported_claims = True
+    response.unsupported_claims = [{"claim": "x", "reason": "no supporting citation found", "unsupported": True}]
+    response.faithfulness_score = 0.7
     await db_session.commit()
 
     api_response = await client.get(f"/responses/{response.id}", headers=_auth_header(owner_token))
@@ -52,6 +55,8 @@ async def test_get_response_endpoint_exposes_all_real_batch_6_2_fields(client, d
     assert body["has_contradictions"] is True
     assert body["contradictions"] == [{"type": "factual"}]
     assert body["source_consistency_score"] == 0.9
+    assert body["has_unsupported_claims"] is True
+    assert body["faithfulness_score"] == 0.7
     assert body["hallucination_score"] == 0.2
     assert body["groundedness_score"] == 0.6
 

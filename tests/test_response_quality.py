@@ -45,6 +45,10 @@ async def test_enrich_response_with_quality_metrics_populates_every_real_field(d
     assert enriched.hallucination_factors is not None
     assert 0.0 <= enriched.groundedness_score <= 1.0
     assert enriched.groundedness_factors is not None
+    assert enriched.has_unsupported_claims is False
+    assert enriched.unsupported_claims == []
+    assert 0.0 <= enriched.faithfulness_score <= 1.0
+    assert enriched.faithfulness_factors is not None
 
 
 async def test_enrich_response_with_quality_metrics_is_honest_with_no_real_citations(db_session):

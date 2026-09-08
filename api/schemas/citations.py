@@ -85,3 +85,7 @@ class ResponseDetailResponse(BaseModel):
     hallucination_factors: dict | None
     groundedness_score: float | None
     groundedness_factors: dict | None
+    has_unsupported_claims: bool
+    unsupported_claims: list | None
+    faithfulness_score: float | None
+    faithfulness_factors: dict | None

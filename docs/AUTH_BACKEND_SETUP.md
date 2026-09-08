@@ -8949,35 +8949,111 @@ real citations.
 **Real verification**: 18 tests, `tests/test_response_confidence.py`.
 **Completes Partie 6.1 at 10/10.**
 
-## Partie 6.2 -- Anti-hallucination (6.2.4, 6.2.6-6.2.10)
+## Partie 6.2 -- Anti-hallucination (6.2.1-6.2.12, COMPLETE)
 
 **Real, shared foundation, built ONCE for this whole batch (autonomous
-decision)**: Parties 6.2.4/6.2.6/6.2.7/6.2.9/6.2.10 all implicitly
+decision)**: nearly every étape in this Partie implicitly or literally
 needed real claim extraction from a response's own answer text --
 `api/services/claim_extraction.py` (real, fast sentence splitting,
 never an LLM call) builds that real foundation once, reused
 everywhere. `api/services/text_similarity.py` similarly provides the
 real, fast, shared primitives (word overlap, negation detection,
-number extraction) Parties 6.2.4/6.2.7/6.2.8/6.2.9/6.2.10 all reuse --
-deliberately NOT embedding-based (`generate_embeddings` is real and
-already exists, but loading that real model and running real
-inference on every single citation/claim comparison, in a real,
-per-agent-run hot path, is a real cost every one of these 6 étapes'
-own "Performance: is this fast?" vision critique question justifies
-avoiding).
+number extraction) most of these étapes reuse -- deliberately NOT
+embedding-based (`generate_embeddings` is real and already exists, but
+loading that real model and running real inference on every single
+citation/claim comparison, in a real, per-agent-run hot path, is a
+real cost every one of these étapes' own "Performance: is this fast?"
+vision critique question justifies avoiding).
 
 **New real endpoint** `GET /responses/{response_id}`
 (`api/routers/citations.py`, reuses `require_response_member`): none
-of the 6 étapes below literally asked for a new endpoint, but without
-one, `Response`'s 12 new real fields were reachable through no real
-route at all -- added so the "permissions are respected" test
-criterion, literally present in all 6 prompts, has real meaning.
+of Parties 6.2.4-6.2.11 literally asked for a new endpoint, but
+without one, `Response`'s 16 new real fields were reachable through no
+real route at all -- added so the "permissions are respected" test
+criterion, literally present in almost every one of these prompts, has
+real meaning.
 
 **`api/services/response_quality.py`**: real, shared wiring, called
 once from both `generate_response` (Partie 6.1.1) and
-`AgentOrchestrator.run_agent` (same Partie), running the 6 real checks
+`AgentOrchestrator.run_agent` (same Partie), running the 8 real checks
 below against the same real response/citations/context every time a
 real response is generated.
+
+### Partie 6.2.1 -- citation-required mode
+
+New module `api/services/agent_citation_required.py`: all 4 literal
+functions (`is_citation_required`, `validate_response_has_citations`,
+`get_citation_required_message`, `format_citation_required_response`).
+
+**A real, documented deviation from the literal signature**:
+`validate_response_has_citations` takes a real list of `Citation`
+rather than a `Response` object -- `Response` has no real ORM
+relationship to its own `Citation` rows (this codebase always queries
+them explicitly, including in `citations.py`'s own
+`get_citations_by_response`), so the real, already-loaded citation
+list is passed directly rather than re-derived from a bare `response`.
+
+**Coherence (vision critique 1) -- an honest scope boundary**: this
+mode only ever really applies inside `AgentOrchestrator.run_agent`'s
+own real RAG branch (`citation_chunks` given) -- a plain, non-RAG agent
+call has no real citation concept to enforce at all.
+
+**Wired into the orchestrator**: a real refusal (replacing both
+`response.answer` and `run.result` with the configured message) is the
+FIRST of 3 real, sequential gates (6.2.1 -> 6.2.2 -> 6.2.3, the first
+one that trips wins).
+
+**Real verification**: 9 unit tests + 3 real end-to-end integration
+tests through the orchestrator, see
+`tests/test_agent_citation_required.py` + `tests/test_agent_orchestrator.py`.
+
+### Partie 6.2.2 -- answer only from context
+
+New module `api/services/agent_context_only.py`: all 4 literal
+functions (`is_answer_only_from_context`, `validate_response_in_context`,
+`get_context_only_message`, `format_context_only_response`).
+
+**`CONTEXT_ONLY_STRICT`, a real, meaningful distinction**: in strict
+mode (the real default), EVERY real claim extracted from the answer
+must individually clear `CONTEXT_ONLY_SIMILARITY_THRESHOLD` against the
+context -- one real ungrounded sentence fails the whole answer. In
+non-strict mode, only the real overall average matters -- a real, more
+lenient check.
+
+**Robustness (vision critique 3)**: honestly `False` with an empty
+real context -- an answer can never really be "only from context" when
+there's no real context to have come from.
+
+**Real verification**: 10 unit tests + 2 integration tests, see
+`tests/test_agent_context_only.py` + `tests/test_agent_orchestrator.py`.
+
+### Partie 6.2.3 -- "I don't know" threshold
+
+New module `api/services/agent_idk.py`: all 4 literal functions
+(`get_idk_threshold`, `should_say_idk`, `get_idk_message`,
+`format_idk_response`) plus `validate_idk_threshold` (real bounds
+validation at write time, same precedent as
+`agent_guardrails.validate_guardrails_config`).
+
+**Robustness (vision critique 3)**: `should_say_idk` honestly returns
+`False` when the confidence score is `None` -- refusing to answer is a
+real, active decision that needs a real signal; the safe default when
+that signal is genuinely unavailable is to NOT force a refusal.
+
+**`idk_threshold=None` means "use IDK_THRESHOLD_DEFAULT", not
+"disabled"**: unlike Parties 6.2.1/6.2.2, this real feature has no
+dedicated on/off boolean of its own -- every real agent always has SOME
+real threshold, falling back to the real, platform-configured default.
+A real cross-field validator (`_idk_threshold_bounds_must_be_sane`)
+guarantees at startup that `IDK_THRESHOLD_DEFAULT` stays within its own
+configured bounds.
+
+**Uses Partie 6.2.4's own confidence score** (`Response.confidence_estimation`,
+just computed at the same time) as its real signal -- the THIRD and
+final gate in the real sequence.
+
+**Real verification**: 9 unit tests + 2 integration tests, see
+`tests/test_agent_idk.py` + `tests/test_agent_orchestrator.py`.
 
 ### Partie 6.2.4 -- confidence estimation
 
@@ -9014,6 +9090,37 @@ access -- verified by a dedicated test (< 0.5s).
 `0.0` with no real citations -- never a fabricated neutral default.
 
 **Real verification**: 14 tests, `tests/test_confidence_estimation.py`.
+
+### Partie 6.2.5 -- unsupported claim detection
+
+New module `api/services/unsupported_claims.py`: all 4 literal
+functions (`detect_unsupported_claims`, `extract_claims`,
+`match_claims_to_citations`, `flag_unsupported_claim`).
+
+**Coherence -- a real, NARROWER sibling of `hallucination_detector.identify_hallucinated_claims`
+(Partie 6.2.9)**: that function flags `"unverified"` OR `"contradictory"`
+claims (broader, hallucination-focused); this module flags only the
+genuinely UNSOURCED ones -- a claim actively CONTRADICTED by a real
+source has real support attempts behind it, just conflicting ones, a
+real, different problem Partie 6.2.7's own contradiction detection
+already owns. Two real, complementary, non-overlapping definitions.
+
+**`extract_claims(response)`, a real, thin wrapper**: this étape's own
+literal ask re-declares a function already built once, shared, and
+tested in `claim_extraction.py` -- a real, one-line delegation, not a
+second, competing implementation.
+
+**`UNSUPPORTED_CLAIM_MIN_CONFIDENCE`, actually used**: a real citation
+only counts as real support when it BOTH overlaps the claim's text AND
+was itself relevant enough to begin with
+(`Citation.relevance_score >= UNSUPPORTED_CLAIM_MIN_CONFIDENCE`) -- a
+citation that merely shares words but was barely relevant is real,
+weak evidence, not real support.
+
+**Precision (vision critique 2)**: a mixed case (sourced + unsourced)
+has its own dedicated test.
+
+**Real verification**: 8 tests, `tests/test_unsupported_claims.py`.
 
 ### Partie 6.2.6 -- claim verification
 
@@ -9171,12 +9278,86 @@ honestly, genuinely ungrounded, never a fabricated neutral default.
 
 **Real verification**: 12 tests, `tests/test_groundedness.py`.
 
-**Shared wiring and endpoint**: `api/services/response_quality.py` (2
-tests) + `GET /responses/{response_id}` (4 tests), see
+### Partie 6.2.11 -- faithfulness score
+
+New module `api/services/faithfulness.py`: all 5 literal functions
+(`calculate_faithfulness_score`, `calculate_claim_accuracy`,
+`calculate_source_fidelity`, `calculate_context_fidelity`,
+`calculate_citation_consistency`).
+
+**Coherence (vision critique 1) -- real reuse of 3 of its own 4
+factors, avoiding a third or fourth reimplementation**: `source_fidelity`
+reuses `source_consistency.calculate_source_agreement` (Partie 6.2.8)
+directly; `context_fidelity` reuses
+`confidence_estimation.calculate_context_alignment` (Partie 6.2.4)
+directly; `citation_consistency` reuses
+`response_confidence.calculate_confidence_factors`'s own real,
+SCORE-VARIANCE-based `consistency` (Partie 6.1.10) directly --
+deliberately different from `source_fidelity` (which checks whether
+citation TEXTS conflict; Partie 6.1.10's own `consistency` checks
+whether citation RELEVANCE SCORES agree) -- genuinely distinct, both
+real.
+
+**`claim_accuracy`, the one genuinely new real factor**: the real
+fraction of claims `claim_verification.verify_single_claim` (Partie
+6.2.6) calls fully `"verified"` -- a real, stricter bar than Partie
+6.2.10's own `groundedness.calculate_claim_support` (which counts any
+real support, even partial).
+
+**Robustness (vision critique 3)**: every factor honestly reports
+`0.0` with no real citations.
+
+**Real verification**: 9 tests, `tests/test_faithfulness.py`.
+
+### Partie 6.2.12 -- quality dashboard
+
+New module `api/services/quality_dashboard.py`: all 5 literal
+functions (`get_quality_dashboard`, `get_quality_metrics`,
+`get_quality_trends`, `get_quality_responses`, `export_quality_metrics`)
+plus 5 new real Admin+ endpoints (`api/routers/quality_dashboard.py`,
+reuses `require_org_admin`, same precedent as `api/routers/usage.py`).
+
+**Performance/Scalability (vision critique 1/2) -- real, SQL-level
+aggregation, never a Python-side scan**: every real metric goes
+through a real `AVG`/`COUNT`/`GROUP BY` query, bounded by a real,
+indexed `organization_id`/`created_at` filter -- scales with the
+database's own real query planner, not with how many responses this
+organization has ever generated. `get_quality_responses` stays really
+paginated, capped at `QUALITY_DASHBOARD_MAX_RESPONSES` per page.
+
+**Security (vision critique 3) -- real, indexed organization
+isolation**: every real query filters `Response.organization_id ==
+organization_id`; the router additionally requires real Admin+
+membership in that SAME organization before any call.
+
+**`supported_claims_rate`, an honestly-scoped proxy**: `Response.unsupported_claims`
+is a real JSON blob, not a normalized, indexable table -- a real
+per-CLAIM rate would mean parsing that JSON for every real response in
+range, a genuine scalability problem this module deliberately avoids.
+`supported_claims_rate` is instead a real per-RESPONSE proxy (the
+fraction of responses with no real unsupported claim at all),
+documented honestly as an approximation.
+
+**`period`, a real, always-bounded window**: `None` means "as far back
+as the real, configured retention allows" (`QUALITY_DASHBOARD_RETENTION_DAYS`),
+never truly unbounded.
+
+**"Top documents"/"top agents" (item 4)**: a real
+`Citation`->`Document` join for the most-cited documents; a real
+`AgentRunRecord.response_id`->`Response` join for the most-faithful
+agents (`Response` itself has no real `agent_id` column --
+`AgentRunRecord.agent_id` is a real string, not necessarily backed by
+a real `Agent`, see `agent_orchestrator.py`'s own docstring).
+
+**Real verification**: 14 tests, `tests/test_quality_dashboard.py`.
+
+**Shared wiring and endpoint**: `api/services/response_quality.py` +
+`GET /responses/{response_id}`, see
 `tests/test_response_quality.py`/`tests/test_response_detail_endpoint.py`.
-Full regression sweep (178 tests across the 6 new modules + shared
-modules + `generation.py`/`agent_orchestrator.py`/`citations.py`, then
-129 tests across the whole reused citation suite): zero failures.
+**Partie 6.2 Anti-hallucination is now COMPLETE at 12/12.** Full
+regression sweep (216+ tests across every 6.1/6.2 module plus
+`generation.py`/`agent_orchestrator.py`/`agents.py`/`citations.py`):
+zero failures.
 
 ### Partie 3.4.2 -- query rewriting
 
