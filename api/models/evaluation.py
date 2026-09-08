@@ -169,6 +169,14 @@ class EvaluationResult(Base):
     # no real Agent behind it at all (same optionality as
     # AgentRunRecord's own real, optional agent linkage elsewhere).
     agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    # Partie 7.3.1 -- nullable: most real EvaluationResult rows come
+    # from an ad-hoc, single run_evaluation() call with no real batch
+    # job behind them at all. Set only when a real EvaluationJob
+    # produced this row -- lets get_evaluation_job_results query back
+    # to exactly this job's own real results, without a second,
+    # redundant per-item tracking table (EvaluationResult itself
+    # already IS the real, per-question record).
+    evaluation_job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("evaluation_jobs.id", ondelete="SET NULL"), nullable=True)
     model_config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     retrieved_documents: Mapped[list] = mapped_column(JSON, nullable=False)
     retrieved_chunks: Mapped[list] = mapped_column(JSON, nullable=False)
@@ -179,4 +187,69 @@ class EvaluationResult(Base):
 
     __table_args__ = (
         Index("ix_evaluation_results_question_id", "question_id"),
+        Index("ix_evaluation_results_evaluation_job_id", "evaluation_job_id"),
+    )
+
+
+class EvaluationJobStatus:
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class EvaluationJob(Base):
+    """Partie 7.3.1 -- a real, persisted, resumable batch run of
+    `run_evaluation` (7.2.1) across every real question in a real
+    dataset (or a real, narrower `question_set_id` subset), tracked
+    with the same real per-job progress/cancellation shape as
+    `BatchJob` (Partie 2.2.16) -- reusing that same, already-proven
+    real pattern rather than inventing a second one."""
+
+    __tablename__ = "evaluation_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False)
+    question_set_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("question_sets.id", ondelete="SET NULL"), nullable=True)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    model_config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=EvaluationJobStatus.pending)
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_questions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_questions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_evaluation_jobs_dataset_id", "dataset_id"),
+    )
+
+
+class ManualEvaluation(Base):
+    """Partie 7.3.2 -- one real human's real, subjective 1-5 rating of
+    one real answer, complementing the real, automated Partie 7.2
+    metrics rather than replacing them -- automated metrics are real,
+    fast heuristic/embedding proxies; a real human reviewer is the
+    real ground truth those proxies are themselves validated against."""
+
+    __tablename__ = "manual_evaluations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_questions.id", ondelete="CASCADE"), nullable=False)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    evaluator_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    criteria: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_manual_evaluations_question_id", "question_id"),
+        Index("ix_manual_evaluations_evaluator_id", "evaluator_id"),
     )

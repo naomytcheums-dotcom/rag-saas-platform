@@ -1530,7 +1530,7 @@ Tests réels dédiés (14 tests), voir `tests/test_quality_dashboard.py`.
 
 ---
 
-## PARTIE 7 — Evaluation Lab — ✅ COMPLET (7.1 + 7.2 + 7.3, aucune portée restante identifiée)
+## PARTIE 7 — Evaluation Lab — 🟡 PARTIEL (7.1 ✅ + 7.2 ✅ ; 7.3 — MLOps avancé — 🟡 en cours)
 
 ### 7.1 Dataset manager — ✅ COMPLET (6/6)
 
@@ -1732,9 +1732,9 @@ Tests réels dédiés (7 tests), voir `tests/test_cost_tracking.py`.
 
 **Régression complète (7.2.10-7.2.15)** (39 tests sur les 6 nouveaux fichiers, plus zéro régression sur `test_evaluation_results.py`/`test_evaluation_results_endpoints.py`/`test_answer_quality_metrics.py`/`test_retrieval_metrics.py`/`test_evaluation_comparisons.py`/`test_generation.py`/`test_agent_orchestrator.py`/`test_llm_providers.py`/`test_llm_config.py`/`test_organization_settings.py`) : zéro échec.
 
-### 7.3 Comparaisons multi-modèles & A/B testing — ✅ COMPLET (autonome)
+### 7.2.16 (bis) — Fondation autonome : comparaisons multi-modèles & A/B testing (offline, niveau question) — ✅ COMPLET
 
-**Bâtie de manière autonome, sans prompt DeepSeek reçu** : cette section n'avait encore reçu aucun littéral au moment de sa construction (voir la version précédente de cette section : "prompts non encore reçus"). Construite sous l'autorisation permanente déjà accordée pour combler les vrais manques identifiés, avec la même rigueur que chaque étape précédente.
+**Renommée depuis l'ancienne "Partie 7.3"** : bâtie de manière autonome, avant réception d'aucun prompt DeepSeek pour une vraie Partie 7.3 (voir la version précédente de cette section, qui portait alors ce nom : "prompts non encore reçus"). Une fois les vrais prompts 7.3.1-7.3.10 reçus, ils définissent une Partie 7.3 bien plus large et différemment scopée (jobs persistés, Celery, seuils de régression, A/B testing PRODUCTION) -- cette section est donc renumérotée ici pour éviter toute collision, et sert de vraie fondation réutilisée directement par 7.3.4 (Model comparison) et 7.3.10 (A/B testing production) : `run_multi_model_comparison`/`run_ab_test` restent le vrai mécanisme OFFLINE, au niveau d'une question, que ces deux étapes officielles enveloppent avec une vraie persistance/Celery/traffic-splitting.
 
 ✅ **Nouveau module réel** `api/services/evaluation_comparisons.py` : `run_multi_model_comparison`, `run_ab_test`.
 
@@ -1753,6 +1753,44 @@ Tests réels dédiés (7 tests), voir `tests/test_cost_tracking.py`.
 Tests réels dédiés (7 + 4 tests), voir `tests/test_evaluation_comparisons.py` + `tests/test_evaluation_comparisons_endpoints.py`.
 
 **Régression complète** : zéro échec (voir section suivante pour le décompte global).
+
+### 7.3 MLOps avancé — 🟡 EN COURS (2/10)
+
+Persistance réelle des runs d'évaluation en tant que vrais jobs Celery, notation humaine, détection de régression, comparaisons persistées (modèle/retriever/reranker/prompt), auto-eval pré-déploiement, seuils configurables, A/B testing PRODUCTION avec traffic-splitting réel.
+
+#### Partie 7.3.1 — Automatic evaluation
+
+✅ **Nouveau vrai modèle** `EvaluationJob` (migration 0073) + colonne `EvaluationResult.evaluation_job_id` (FK nullable, réelle et nécessaire pour relier chaque résultat à son job sans table d'items séparée -- `EvaluationResult` EST déjà l'enregistrement réel par question).
+
+✅ **Nouveau module réel** `api/services/evaluation_jobs.py` : `create_evaluation_job`, `run_evaluation_job`, `get_evaluation_job`, `list_evaluation_jobs`, `cancel_evaluation_job`, `get_evaluation_job_results`. Réutilise directement `run_evaluation` (7.2.1) -- aucune deuxième pipeline de génération.
+
+⚠️ **Même vraie résilience par item que `process_batch_job`** (Partie 2.2.16), réutilisée à l'identique : commit après CHAQUE vraie question, une vraie question en échec ne bloque jamais les suivantes, annulation coopérative vérifiée avant chaque vraie question.
+
+🐛 **Vrai bug trouvé et corrigé pendant l'implémentation** : un vrai `db.rollback()` (chemin d'échec par question) expire TOUS les objets réels du dataset SQLAlchemy encore en session -- y compris les vraies questions pas encore traitées de la boucle. Lire `question.id` sur un vrai objet expiré, hors d'un vrai `await db.refresh(...)`, lève une vraie `MissingGreenlet` (SQLAlchemy async interdit tout vrai IO implicite synchrone). Corrigé en capturant les vrais UUIDs de questions AVANT la boucle -- un vrai `uuid.UUID` brut n'expire jamais.
+
+✅ **Scalabilité (vision critique 3)** : `create_evaluation_job` ne persiste qu'une vraie ligne `pending` ; le vrai travail (`run_evaluation_job`) est dispatché à un vrai worker Celery (`api/tasks/evaluation_jobs.py`), jamais exécuté en ligne dans une requête HTTP.
+
+Nouveaux endpoints réels Admin+ : `POST /datasets/{id}/evaluate`, `GET /datasets/{id}/jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`, `GET /jobs/{id}/results`.
+
+Tests réels dédiés (7 + 5 tests), voir `tests/test_evaluation_jobs.py` + `tests/test_evaluation_jobs_endpoints.py`.
+
+#### Partie 7.3.2 — Manual evaluation
+
+✅ **Nouveau vrai modèle** `ManualEvaluation` (même migration 0073).
+
+✅ **Nouveau module réel** `api/services/manual_evaluations.py` : `create_manual_evaluation`, `update_manual_evaluation`, `get_manual_evaluation`, `list_manual_evaluations`, `get_manual_evaluation_summary`, `get_manual_evaluation_stats`.
+
+✅ **Robustesse (vision critique 3) -- un critère manquant** : `criteria` est un vrai dict PARTIEL -- n'importe quel sous-ensemble des 5 vrais critères connus, ou aucun. Seule une vraie clé INCONNUE ou une valeur hors 1-5 lève une erreur ; un vrai critère manquant n'en est jamais une.
+
+⚠️ **Sécurité (vision critique 1)** : nouvelles dépendances réelles `require_question_member`/`require_manual_evaluation_access` (Member+, hors Viewer) dans `api/security/evaluation.py` ; `PATCH /evaluations/{id}` vérifie en plus une vraie propriété (`evaluator_id == current_user.id`) OU Admin+.
+
+🐛 **Vrai bug trouvé et corrigé** : les endpoints POST/PATCH ne rafraîchissaient jamais l'objet réel après commit -- `updated_at` (calculé côté serveur, `onupdate=func.now()`) déclenchait un vrai rechargement paresseux synchrone pendant la sérialisation Pydantic, hors contexte async valide (`MissingGreenlet`). Corrigé par un vrai `await db.refresh(...)` avant chaque retour.
+
+Nouveaux endpoints réels : `POST /questions/{id}/evaluate` (Member+), `GET /questions/{id}/evaluations` (Member+), `GET /questions/{id}/evaluations/summary` (Member+, ajout réel au-delà du littéral -- la fonction existait déjà sans point d'entrée), `GET /evaluations/{id}` (Member+), `PATCH /evaluations/{id}` (Member+ propriétaire ou Admin+), `GET /datasets/{id}/evaluations/stats` (Admin+).
+
+Tests réels dédiés (8 + 5 tests), voir `tests/test_manual_evaluations.py` + `tests/test_manual_evaluations_endpoints.py`.
+
+**Régression complète (7.3.1/7.3.2)** : 26 tests dédiés + zéro régression sur `test_batch_jobs.py`/`test_question_sets.py`/`test_evaluation_datasets.py`/`test_evaluation_results.py`.
 
 ---
 

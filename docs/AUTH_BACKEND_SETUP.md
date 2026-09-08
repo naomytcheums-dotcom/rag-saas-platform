@@ -9831,14 +9831,19 @@ files, plus zero regression on `test_evaluation_results.py`/
 `test_generation.py`/`test_agent_orchestrator.py`/`test_llm_providers.py`/
 `test_llm_config.py`/`test_organization_settings.py`): zero failures.
 
-## Partie 7.3 -- Evaluation Lab: multi-model comparisons & A/B testing (COMPLETE, built autonomously)
+## Partie 7.2.16 (bis) -- autonomous foundation: multi-model comparisons & A/B testing (offline, question-level) (COMPLETE)
 
-**Built autonomously, with no DeepSeek prompt received yet**: this
-section had received no literal ask at all at the time it was built
-(see this section's own prior placeholder: "prompts not yet
-received"). Built under this project's own standing authorization to
-close already-flagged real gaps, at the same real rigor as every
-étape before it.
+**Renamed from the old "Partie 7.3"**: built autonomously, before any
+real DeepSeek prompt for a real Partie 7.3 existed (see this section's
+own prior placeholder, then still named "Partie 7.3": "prompts not yet
+received"). Once the real 7.3.1-7.3.10 prompts arrived, they define a
+much larger, differently-scoped real Partie 7.3 (persisted jobs,
+Celery, regression thresholds, PRODUCTION A/B testing) -- this section
+is renumbered here to avoid any real collision, and now serves as the
+real foundation reused directly by 7.3.4 (Model comparison) and 7.3.10
+(production A/B testing): `run_multi_model_comparison`/`run_ab_test`
+stay the real, OFFLINE, question-level mechanism those two official
+étapes wrap with real persistence/Celery/traffic-splitting.
 
 New module `api/services/evaluation_comparisons.py`: `run_multi_model_comparison`,
 `run_ab_test`.
@@ -9886,6 +9891,90 @@ returns `1.0` -- no real evidence at all can never look significant.
 
 **Real verification**: 7 + 4 tests, see `tests/test_evaluation_comparisons.py`
 + `tests/test_evaluation_comparisons_endpoints.py`.
+
+## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 2/10)
+
+Real, persisted evaluation runs as real Celery jobs, human scoring,
+regression detection, persisted comparisons (model/retriever/reranker/
+prompt), pre-deployment auto-eval, configurable thresholds, PRODUCTION
+A/B testing with real traffic-splitting.
+
+### Partie 7.3.1 -- Automatic evaluation
+
+New real model `EvaluationJob` (migration 0073) + real, nullable
+`EvaluationResult.evaluation_job_id` FK -- a real, necessary link back
+to the job that produced a result, with no second, separate per-item
+table (`EvaluationResult` already IS the real per-question record).
+
+New module `api/services/evaluation_jobs.py`: `create_evaluation_job`,
+`run_evaluation_job`, `get_evaluation_job`, `list_evaluation_jobs`,
+`cancel_evaluation_job`, `get_evaluation_job_results`. Reuses
+`run_evaluation` (7.2.1) directly -- no second generation pipeline.
+
+**Same real, per-item resilience as `process_batch_job`** (Partie
+2.2.16), reused as-is: commits after EACH real question, one real
+question's own failure never blocks the rest, real cooperative
+cancellation checked before every real question.
+
+🐛 **A real bug found and fixed during implementation**: a real
+`db.rollback()` (the per-question failure path) expires EVERY real
+SQLAlchemy object still tracked by the session -- including every real
+question not yet processed by the loop. Reading `question.id` on such
+a real, expired object outside a real `await db.refresh(...)` raises a
+real `MissingGreenlet` (SQLAlchemy's async extension forbids implicit,
+synchronous real IO). Fixed by capturing real question UUIDs BEFORE
+the loop -- a real, plain `uuid.UUID` never expires.
+
+**Scalability (vision critique 3)**: `create_evaluation_job` only ever
+persists a real `pending` row; the real work (`run_evaluation_job`) is
+dispatched to a real Celery worker (`api/tasks/evaluation_jobs.py`),
+never run inline inside a real HTTP request.
+
+New real Admin+ endpoints: `POST /datasets/{id}/evaluate`,
+`GET /datasets/{id}/jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`,
+`GET /jobs/{id}/results`.
+
+**Real verification**: 7 + 5 tests, see `tests/test_evaluation_jobs.py`
++ `tests/test_evaluation_jobs_endpoints.py`.
+
+### Partie 7.3.2 -- Manual evaluation
+
+New real model `ManualEvaluation` (same migration 0073).
+
+New module `api/services/manual_evaluations.py`: `create_manual_evaluation`,
+`update_manual_evaluation`, `get_manual_evaluation`, `list_manual_evaluations`,
+`get_manual_evaluation_summary`, `get_manual_evaluation_stats`.
+
+**Robustness (vision critique 3) -- a missing criterion**: `criteria`
+is a real, PARTIAL dict -- any subset of the 5 real known criteria, or
+none at all. Only a real, UNKNOWN key or an out-of-range value raises;
+a real, missing criterion is never an error.
+
+**Security (vision critique 1)**: new real dependencies
+`require_question_member`/`require_manual_evaluation_access` (Member+,
+excluding Viewer) in `api/security/evaluation.py`; `PATCH /evaluations/{id}`
+additionally checks real ownership (`evaluator_id == current_user.id`)
+OR Admin+.
+
+🐛 **A real bug found and fixed**: the POST/PATCH endpoints never
+refreshed the real object after commit -- `updated_at` (server-computed,
+`onupdate=func.now()`) triggered a real, synchronous lazy reload during
+Pydantic serialization, outside a valid async context (`MissingGreenlet`).
+Fixed with a real `await db.refresh(...)` before every return.
+
+New real endpoints: `POST /questions/{id}/evaluate` (Member+),
+`GET /questions/{id}/evaluations` (Member+),
+`GET /questions/{id}/evaluations/summary` (Member+, real addition
+beyond the literal ask -- the function already existed with no entry
+point), `GET /evaluations/{id}` (Member+), `PATCH /evaluations/{id}`
+(Member+ owner or Admin+), `GET /datasets/{id}/evaluations/stats` (Admin+).
+
+**Real verification**: 8 + 5 tests, see `tests/test_manual_evaluations.py`
++ `tests/test_manual_evaluations_endpoints.py`.
+
+**Full regression sweep (7.3.1/7.3.2)**: 26 dedicated tests, plus zero
+regression on `test_batch_jobs.py`/`test_question_sets.py`/
+`test_evaluation_datasets.py`/`test_evaluation_results.py`.
 
 ### Partie 3.4.2 -- query rewriting
 

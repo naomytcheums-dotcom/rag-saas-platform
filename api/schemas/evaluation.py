@@ -254,3 +254,84 @@ class ABTestResponse(BaseModel):
     average_delta: float
     p_value: float
     significant: bool
+
+
+class EvaluationJobCreateRequest(BaseModel):
+    question_set_id: uuid.UUID | None = None
+    agent_id: uuid.UUID | None = None
+    model_config_override: dict | None = None
+
+
+class EvaluationJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    question_set_id: uuid.UUID | None
+    agent_id: uuid.UUID | None
+    model_config_data: dict = Field(validation_alias="model_config_json", serialization_alias="model_config")
+    status: str
+    progress: int
+    total_questions: int
+    completed_questions: int
+    results: dict | None
+    error: str | None
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    started_at: dt.datetime | None
+    completed_at: dt.datetime | None
+
+
+class EvaluationJobListResponse(BaseModel):
+    items: list[EvaluationJobResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ManualEvaluationCreateRequest(BaseModel):
+    agent_id: uuid.UUID | None = None
+    score: int | None = Field(default=None, ge=1, le=5)
+    feedback: str | None = None
+    criteria: dict[str, int] | None = None
+
+
+class ManualEvaluationUpdateRequest(BaseModel):
+    score: int | None = Field(default=None, ge=1, le=5)
+    feedback: str | None = None
+    criteria: dict[str, int] | None = None
+
+
+class ManualEvaluationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    question_id: uuid.UUID
+    agent_id: uuid.UUID | None
+    evaluator_id: uuid.UUID
+    score: int | None
+    feedback: str | None
+    criteria: dict | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class ManualEvaluationListResponse(BaseModel):
+    items: list[ManualEvaluationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ManualEvaluationSummaryResponse(BaseModel):
+    question_id: uuid.UUID
+    count: int
+    average_score: float | None
+    criteria_averages: dict[str, float | None]
+
+
+class ManualEvaluationStatsResponse(BaseModel):
+    dataset_id: uuid.UUID
+    count: int
+    average_score: float | None
+    criteria_averages: dict[str, float | None]
