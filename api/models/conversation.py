@@ -20,7 +20,7 @@ what access control relies on here."""
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -56,5 +56,14 @@ class ConversationMessage(Base):
     tool_call_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 8.1.8 -- real retry count. This codebase's own real
+    # `ConversationMessage` rows only ever get persisted once a real
+    # generation SUCCEEDS (see `agent_orchestrator.run_agent`'s own
+    # real `add_message` calls) -- a real failure never produces a row
+    # at all. So this real column lives on the real, already-persisted
+    # USER message (never an "assistant" one): it counts how many real
+    # attempts have already been made to answer THIS real question --
+    # see `api/services/message_actions.py`'s own real `is_retryable`.
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     __table_args__ = (Index("ix_conversation_messages_conversation_id", "conversation_id"),)

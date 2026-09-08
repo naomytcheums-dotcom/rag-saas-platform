@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (3/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (7/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -1961,6 +1961,32 @@ Tests réels dédiés (18 tests), voir `tests/test_markdown_renderer.py`, inclua
 Tests réels dédiés (13 tests), voir `tests/test_code_highlighter.py`.
 
 **Régression complète (8.1.2 + 8.1.3)** : 48 tests (`test_code_highlighter.py` + `test_markdown_renderer.py` + `test_markdown_extraction.py`, pour confirmer l'absence d'interférence avec la vraie dépendance partagée `markdown-it-py`), zéro échec.
+
+⏸️ **8.1.4 (Citations cliquables) et 8.1.5 (Copy) reportés** : ce sont deux étapes purement frontend (composants React), sans backend propre -- reportées volontairement après le scaffold Next.js/React/TypeScript (voir la contrainte de stack ci-dessus), pour éviter de construire des composants contre une API encore instable pendant que le reste de 8.1 est bâti.
+
+#### Partie 8.1.6 — Regenerate + Partie 8.1.7 — Edit question + Partie 8.1.8 — Retry
+
+✅ **Cohérence réelle -- un seul moteur partagé** : régénérer, réessayer et éditer-puis-régénérer sont, en réalité, la MÊME opération (relancer l'agent sur une vraie question, persister une nouvelle réponse) -- `api/services/message_actions.py` construit donc un seul moteur réel partagé (`_generate_assistant_reply`), les trois fonctions publiques l'appellent, plutôt que trois copies parallèles de la même logique LLM/persistance (même pattern de consolidation que `comparison_jobs.py`, 7.3.4-7.3.7).
+
+🐛 **Incohérence réelle du prompt 8.1.8 corrigée** : "réessayer un message échoué" suppose qu'une ligne `ConversationMessage` représente cet échec -- ça n'arrive jamais ici : `run_agent` n'appelle `add_message(..., "assistant", ...)` que sur un vrai SUCCÈS (voir `agent_orchestrator.py`), un échec ne produit AUCUNE ligne. `retry_count` vit donc réellement sur le message UTILISATEUR (nouvelle colonne, migration `0078`), et `is_retryable`/`retry_message` opèrent sur ce message utilisateur, pas sur un "message assistant échoué" fictif que ce schéma n'a nulle part où stocker.
+
+✅ **Nouveaux modèles réels** (`api/models/message_actions.py`, migration `0078`) : `RegenerationHistory` (lie l'ancienne réponse à la nouvelle, jamais de suppression -- un vrai frontend peut faire basculer entre versions), `MessageEditHistory` (contenu PRÉCÉDENT sauvegardé avant chaque édition, chaîne de versions jamais perdue).
+
+✅ **`revert_to_version`** : réel, non destructif -- implémenté comme une NOUVELLE édition (via `edit_question`), jamais une réécriture du passé.
+
+Nouveaux endpoints réels, sous `/conversations/{id}/messages/{message_id}/...` (pas un second préfixe `/chat` redondant -- voir la note "cohérence réelle corrigée (routing)" dans `conversations.py`) : `POST .../regenerate`, `PATCH .../` (édition simple), `POST .../edit` (édition + régénération), `GET .../edit-history`, `POST .../revert`, `POST .../retry`.
+
+#### Partie 8.1.9 — Feedback 👍/👎
+
+✅ **Nouveau modèle réel** `MessageFeedback` (migration `0078`), `UNIQUE(message_id, user_id)` -- un vrai vote par utilisateur par message, `add_feedback` fait un vrai UPSERT (pas de doublon accumulé).
+
+Nouveaux endpoints réels : `POST /messages/{id}/feedback`, `GET /messages/{id}/feedback`, `PATCH /feedback/{id}`, `DELETE /feedback/{id}`, `GET /organizations/{org_id}/feedback/stats` (`require_org_admin`, seule route réellement organization-scoped de ce lot -- une vraie agrégation cross-utilisateurs, pas une ressource personnelle).
+
+⚠️ **Robustesse (vision critique) -- comparaison de timestamps corrigée** : les requêtes "réponse existe-t-elle déjà après ce message ?" comparent contre une vraie sous-requête SQL sur le timestamp du message en base, jamais contre l'attribut Python potentiellement encore `None` juste après un `flush()` (un vrai piège trouvé pendant les tests : SQLite ne retourne pas toujours `server_default=func.now()` sans `refresh()` explicite).
+
+Tests réels dédiés (25 tests), voir `tests/test_message_actions.py`.
+
+**Régression complète (8.1.6-8.1.9)** : 89 tests, zéro échec.
 
 ---
 

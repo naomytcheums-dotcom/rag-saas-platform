@@ -1256,6 +1256,46 @@ class Settings(BaseSettings):
     })
     MARKDOWN_ALLOWED_PROTOCOLS: list[str] = Field(default_factory=lambda: ["http", "https", "mailto"])
 
+    # -- Retry (Partie 8.1.8) -------------------------------------------------------
+    RETRY_MAX_ATTEMPTS: int = 3
+    RETRY_DELAY_BASE: float = 1.0
+    RETRY_DELAY_MAX: float = 10.0
+    RETRY_ON_STATUS_CODES: list[int] = Field(default_factory=lambda: [408, 429, 500, 502, 503, 504])
+
+    # -- Rename conversation (Partie 8.1.11) ----------------------------------------
+    CONVERSATION_TITLE_MIN_LENGTH: int = 3
+    CONVERSATION_TITLE_MAX_LENGTH: int = 100
+    CONVERSATION_AUTO_TITLE_ENABLED: bool = True
+
+    # -- Search conversations (Partie 8.1.12) ---------------------------------------
+    SEARCH_MIN_QUERY_LENGTH: int = 2
+    SEARCH_MAX_RESULTS: int = 20
+    SEARCH_FUZZY_MATCHING: bool = False
+
+    # -- Delete conversation (Partie 8.1.13) ----------------------------------------
+    CONVERSATION_DELETION_GRACE_PERIOD: int = 30  # days
+    CONVERSATION_DELETION_BATCH_SIZE: int = 100
+
+    # -- Export (Partie 8.1.14) ------------------------------------------------------
+    EXPORT_PDF_TEMPLATE: str = "conversation"
+    EXPORT_DOCX_TEMPLATE: str = "conversation"
+    EXPORT_MAX_MESSAGES: int = 1000
+
+    # -- Suggested questions (Partie 8.1.17) ----------------------------------------
+    SUGGESTED_QUESTIONS_COUNT: int = 5
+    SUGGESTED_QUESTIONS_GENERATE_ENABLED: bool = True
+    SUGGESTED_QUESTIONS_USE_POPULAR: bool = True
+
+    # -- Follow-up questions (Partie 8.1.18) ----------------------------------------
+    FOLLOW_UP_QUESTIONS_COUNT: int = 3
+    FOLLOW_UP_QUESTIONS_GENERATE_ENABLED: bool = True
+    FOLLOW_UP_QUESTIONS_MAX_TOKENS: int = 256
+
+    # -- Multi-langue UI / i18n (Partie 8.1.19) -------------------------------------
+    UI_DEFAULT_LANGUAGE: str = "en"
+    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["en", "fr", "es", "de", "pt", "ar"])
+    UI_LANGUAGE_COOKIE_NAME: str = "lang"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

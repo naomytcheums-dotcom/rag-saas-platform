@@ -10385,6 +10385,72 @@ rather than something requiring a silent fix.
 `test_markdown_extraction.py`, to confirm no interference with the
 shared `markdown-it-py` dependency), zero failures.
 
+**8.1.4 (Clickable citations) and 8.1.5 (Copy) deferred**: both are
+pure-frontend étapes (React components) with no real backend of their
+own -- deliberately deferred until after the Next.js/React/TypeScript
+scaffold (see the stack constraint above), to avoid building
+components against a still-changing API while the rest of 8.1 is
+built.
+
+### Partie 8.1.6 -- Regenerate + Partie 8.1.7 -- Edit question + Partie 8.1.8 -- Retry
+
+**Real coherence -- one shared engine**: regenerate, retry, and
+edit-then-regenerate are, in reality, the SAME operation (re-run the
+agent for a real question, persist a new real reply) --
+`api/services/message_actions.py` builds one real, shared engine
+(`_generate_assistant_reply`), all three public functions call it,
+instead of three real, parallel copies of the same LLM-call/persistence
+logic (same consolidation pattern as `comparison_jobs.py`, 7.3.4-7.3.7).
+
+🐛 **Real incoherence in the 8.1.8 prompt, fixed**: "retry a failed
+message" assumes a real `ConversationMessage` row represents that
+failure -- it never does here: `run_agent` only calls
+`add_message(..., "assistant", ...)` on a real SUCCESS (see
+`agent_orchestrator.py`) -- a failure produces no row at all.
+`retry_count` therefore really lives on the USER message (new column,
+migration `0078`), and `is_retryable`/`retry_message` operate on that
+user message, not a fabricated "failed assistant message" this schema
+has nowhere to store.
+
+New real models (`api/models/message_actions.py`, migration `0078`):
+`RegenerationHistory` (links the old reply to the new one, never
+deletes -- a real frontend can toggle between versions),
+`MessageEditHistory` (the PRIOR content saved before each edit, so the
+version chain is never lost).
+
+**`revert_to_version`**: real, non-destructive -- implemented as a NEW
+edit (via `edit_question`), never a rewrite of the past.
+
+New real endpoints, under `/conversations/{id}/messages/{message_id}/...`
+(not a second, redundant `/chat` prefix -- see the "real, corrected
+coherence (routing)" note in `conversations.py`): `POST .../regenerate`,
+`PATCH .../` (plain edit), `POST .../edit` (edit + regenerate),
+`GET .../edit-history`, `POST .../revert`, `POST .../retry`.
+
+### Partie 8.1.9 -- Feedback 👍/👎
+
+New real model `MessageFeedback` (migration `0078`),
+`UNIQUE(message_id, user_id)` -- one real vote per real user per real
+message, `add_feedback` does a real UPSERT (never an accumulated
+duplicate).
+
+New real endpoints: `POST /messages/{id}/feedback`,
+`GET /messages/{id}/feedback`, `PATCH /feedback/{id}`,
+`DELETE /feedback/{id}`, `GET /organizations/{org_id}/feedback/stats`
+(`require_org_admin`, the only genuinely organization-scoped route in
+this batch -- a real cross-user aggregate, not a personal resource).
+
+**Robustness (vision critique) -- fixed timestamp comparison**: "does
+a reply already exist after this message?" queries compare against a
+real DB-side subquery on the message's own timestamp, never against
+the Python attribute (possibly still `None` right after a `flush()` --
+a real trap found while testing: SQLite doesn't always return
+`server_default=func.now()` without an explicit `refresh()`).
+
+**Real verification**: 25 tests, see `tests/test_message_actions.py`.
+
+**Full regression sweep (8.1.6-8.1.9)**: 89 tests, zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

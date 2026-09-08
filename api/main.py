@@ -29,7 +29,7 @@ from api.monitoring import render_prometheus_metrics, track_request_duration_mid
 from api.routers import (
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
     chat_stream, citations, conversations,
-    custom_domains, custom_tools, documents,
+    custom_domains, custom_tools, documents, feedback,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, quality_dashboard,
@@ -193,6 +193,7 @@ app.include_router(tool_permissions.router)
 app.include_router(tool_config.router)
 app.include_router(human_approval.router)
 app.include_router(conversations.router)
+app.include_router(feedback.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)
 app.include_router(agent_api_keys.router)
