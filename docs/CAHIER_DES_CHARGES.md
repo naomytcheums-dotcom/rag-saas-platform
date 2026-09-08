@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (1/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (3/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -1907,6 +1907,8 @@ backend (testable immédiatement avec l'infra Python existante) avant
 le scaffold frontend (aucune base React n'existait avant cette étape).
 
 ⚠️ **Contrainte de conception permanente, rappelée par l'utilisateur** : l'interface à venir doit être **exclusivement en thème clair, élégant** -- jamais de mode sombre, aucun toggle dark/light. S'applique à CHAQUE composant React construit dans cette Partie 8.
+
+⚠️ **Contrainte de stack, confirmée par l'utilisateur** : le frontend doit utiliser un vrai framework moderne et recherché sur le marché (Next.js + React + TypeScript, déjà le choix documenté plus haut), **jamais du HTML/CSS brut** -- un langage de base n'est pas adapté à un projet de cette envergure et réduirait sa valeur de revente. Ce choix (déjà prévu avant même cette demande) reste donc confirmé et inchangé pour le scaffold à venir.
 
 ### 8.1 Chat Interface
 
@@ -1929,6 +1931,36 @@ Nouveaux endpoints réels : `GET /chat/stream` (query string, pour un vrai `Even
 Tests réels dédiés (7 tests), voir `tests/test_streaming.py`.
 
 **Régression complète (8.1.1)** : zéro échec.
+
+#### Partie 8.1.2 — Rendu Markdown
+
+✅ **Nouveau module réel** `api/services/markdown_renderer.py`, réutilisant `markdown-it-py` (déjà une vraie dépendance, 2.1.4, utilisée là pour l'INGESTION -- ici pour le RENDU, un vrai usage différent de la même librairie) : `render_markdown`, `render_markdown_safe`, `render_inline_markdown`, `extract_markdown_toc`, `get_markdown_metadata`, `sanitize_html`.
+
+✅ **Nouvelle vraie dépendance** `bleach==6.2.0` : sanitisation HTML par liste blanche (jamais par liste noire), seul vrai sanitiseur du projet -- installée réellement (`pip install`), pas seulement ajoutée au fichier requirements.
+
+✅ **Cohérence (vision critique) -- rendu cohérent avec le surlignage de code (8.1.3) ?** Oui, câblé directement : le callback `highlight` de `markdown-it-py` appelle le pipeline Pygments de 8.1.3 -- un bloc ` ```python ` dans une réponse d'agent passe par le MÊME vrai pipeline, jamais un second chemin de rendu parallèle.
+
+🐛 **Bug réel trouvé et corrigé pendant le développement (double-wrapping HTML)** : `markdown-it-py`'s own `fence()` renderer ne fait confiance au retour du callback `highlight` que s'il commence littéralement par `<pre` -- sinon il l'enveloppe une seconde fois dans son propre `<pre><code>...</code></pre>`. Or Pygments' `HtmlFormatter` (usage par défaut) produit un HTML commençant par `<div class="highlight">`, jamais `<pre` -- ce qui produisait un HTML invalide et doublement enveloppé (`<pre><code><div class="highlight">...`), vérifié par introspection directe des deux formes réelles de sortie Pygments (`linenos=False` et `linenos="table"`, aucune des deux ne commence par `<pre`). Corrigé en appelant Pygments avec `nowrap=True` (spans de tokens seuls, sans wrapper) et en construisant le `<pre>` nous-mêmes -- le HTML retourné commence donc réellement par `<pre` et n'est plus enveloppé une seconde fois.
+
+⚠️ **Décision de portée honnête, documentée** : les numéros de ligne (`linenos="table"`) ne sont jamais rendus pour un bloc de code intégré dans une réponse Markdown -- un layout `<table>` ne peut pas être réduit à une chaîne commençant par `<pre` sans réintroduire le même bug de double-wrapping, et un vrai bouton "copier" côté frontend rend les numéros de ligne inline largement redondants ici. `code_highlighter.add_line_numbers`/`highlight_code(..., line_numbers=True)` restent réels et disponibles pour un vrai visualiseur de code autonome, hors Markdown.
+
+✅ **Sécurité (vision critique) -- XSS** : `MARKDOWN_ALLOWED_TAGS`/`MARKDOWN_ALLOWED_ATTRIBUTES` (`api/config.py`) délibérément assez larges pour préserver le vrai balisage `class="..."` de Pygments à travers `sanitize_html` -- un piège réel évité (une liste blanche écrite sans y penser aurait silencieusement supprimé la couleur de chaque token surligné).
+
+Tests réels dédiés (18 tests), voir `tests/test_markdown_renderer.py`, incluant un test de non-régression explicite sur le bug de double-wrapping ci-dessus.
+
+#### Partie 8.1.3 — Surlignage de code (syntax highlighting)
+
+✅ **Nouveau module réel** `api/services/code_highlighter.py`, via Pygments (déjà une vraie dépendance, `pygments==2.21.0`, 3.3.x) : `get_available_languages`, `detect_code_language`, `highlight_code`, `add_line_numbers`, `format_code_html`, `highlight_inline_code`.
+
+🐛 **Incohérence réelle trouvée et corrigée dans le prompt initial (avant même d'écrire le code)** : la liste de styles demandée nommait `"github-light"` -- ce style **n'existe pas réellement** dans Pygments (vérifié directement contre `pygments.styles.get_all_styles()` : seul `"github-dark"` existe). Remplacé par `"default"`, le vrai style clair canonique de Pygments. Corrige aussi une seconde incohérence : le défaut initialement demandé (`CODE_HIGHLIGHTING_STYLE = "github-dark"`) contredisait directement la contrainte permanente de l'utilisateur ("fond clair... pas de mode sombre") -- le vrai défaut ici est `"default"` (clair), jamais un style sombre, même si `"github-dark"`/`"monokai"`/`"dracula"`/`"solarized-dark"` restent des styles optionnels disponibles.
+
+✅ **Sécurité (vision critique) -- le code est-il échappé avant surlignage ?** Oui, toujours : le vrai `HtmlFormatter` de Pygments échappe chaque token en HTML en interne avant de l'envelopper dans un vrai `<span class="...">` -- ce module ne concatène jamais de code utilisateur brut dans du HTML lui-même.
+
+⚠️ **Limite honnête observée (pas un bug, une limite réelle de l'heuristique)** : `detect_code_language` sur un extrait très court/ambigu peut se tromper (observé : un extrait Python à 2 lignes détecté comme `teratermmacro`) -- limite inhérente à `guess_lexer`, déjà documentée dans le docstring du module comme "jamais une supposition fabriquée", donc un vrai échec honnête plutôt qu'une correction silencieuse.
+
+Tests réels dédiés (13 tests), voir `tests/test_code_highlighter.py`.
+
+**Régression complète (8.1.2 + 8.1.3)** : 48 tests (`test_code_highlighter.py` + `test_markdown_renderer.py` + `test_markdown_extraction.py`, pour confirmer l'absence d'interférence avec la vraie dépendance partagée `markdown-it-py`), zéro échec.
 
 ---
 

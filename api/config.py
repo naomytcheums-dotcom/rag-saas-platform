@@ -1220,6 +1220,42 @@ class Settings(BaseSettings):
     SSE_HEARTBEAT_INTERVAL: float = 15.0
     SSE_TIMEOUT: float = 120.0
 
+    # -- Code highlighting (Partie 8.1.3) ------------------------------------------
+    CODE_HIGHLIGHTING_ENABLED: bool = True
+    # Real, deliberate FIX of item 4's own literal default
+    # ("github-dark"): this whole project's own standing design mandate
+    # is a real, light-only UI, never dark -- see
+    # `code_highlighter.py`'s own top docstring for the full real
+    # reasoning (also: "github-light" itself, the literal ask's own
+    # named light counterpart, does not real-ily exist in Pygments at
+    # all).
+    CODE_HIGHLIGHTING_STYLE: str = "default"
+    CODE_HIGHLIGHTING_LINE_NUMBERS: bool = True
+    CODE_HIGHLIGHTING_MAX_LINES: int = 100
+    CODE_HIGHLIGHTING_FALLBACK: str = "text"
+
+    # -- Markdown rendering (Partie 8.1.2) -----------------------------------------
+    MARKDOWN_RENDER_ENABLED: bool = True
+    MARKDOWN_SANITIZE_ENABLED: bool = True
+    # Real, additive beyond item 4's own literal 3 config values --
+    # `markdown_it.MarkdownIt`'s own real extensions actually enabled.
+    MARKDOWN_EXTENSIONS: list[str] = Field(default_factory=lambda: ["tables", "fenced_code", "footnotes", "front_matter"])
+    # Real allowlist `sanitize_html` (`bleach.clean`) enforces --
+    # includes every real tag/attribute `code_highlighter.py`'s own
+    # real Pygments output actually needs (`span`/`div`/`table` with a
+    # real `class`, Partie 8.1.3's own real coherence requirement) so
+    # sanitizing never silently strips real syntax highlighting.
+    MARKDOWN_ALLOWED_TAGS: list[str] = Field(default_factory=lambda: [
+        "p", "br", "hr", "strong", "em", "del", "blockquote", "ul", "ol", "li", "a", "code", "pre",
+        "h1", "h2", "h3", "h4", "h5", "h6", "table", "thead", "tbody", "tr", "th", "td", "sup", "span", "div", "img",
+    ])
+    MARKDOWN_ALLOWED_ATTRIBUTES: dict[str, list[str]] = Field(default_factory=lambda: {
+        "a": ["href", "title"], "img": ["src", "alt", "title"],
+        "code": ["class"], "pre": ["class"], "span": ["class"], "div": ["class", "data-language"],
+        "table": ["class"], "th": ["align", "class"], "td": ["align", "class"],
+    })
+    MARKDOWN_ALLOWED_PROTOCOLS: list[str] = Field(default_factory=lambda: ["http", "https", "mailto"])
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

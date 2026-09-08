@@ -173,6 +173,15 @@ markdown-it-py==4.2.0
 mdit-py-plugins==0.6.1
 pyyaml==6.0.3
 
+# -- Markdown rendering / HTML sanitization (Partie 8.1.2) --------------------
+# A real, genuinely new dependency -- markdown-it-py above is already
+# real (used for real Markdown INGESTION, 2.1.4), reused here directly
+# for real RENDERING too, but this codebase has no real HTML
+# sanitizer anywhere yet. bleach is the real, standard, well-known
+# choice (an allowlist-based sanitizer, not a denylist one) for this
+# exact real XSS-prevention need.
+bleach==6.2.0
+
 # -- Documents / HTML import (Partie 2.1.5) -----------------------------------
 # The exact libraries the master cahier des charges names for this item
 # ("2.1.5 | HTML | BeautifulSoup4 + readability-lxml"). beautifulsoup4

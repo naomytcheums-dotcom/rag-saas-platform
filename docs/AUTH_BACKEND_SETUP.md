@@ -10295,6 +10295,96 @@ native `EventSource`), `POST /chat/stream` (JSON body, for a real
 
 **Full regression sweep (8.1.1)**: zero failures.
 
+### Partie 8.1.2 -- Markdown rendering
+
+New module `api/services/markdown_renderer.py`, reusing `markdown-it-py`
+(already a real dependency, 2.1.4, used there for INGESTION -- here for
+RENDERING, a genuinely different real use of the same library):
+`render_markdown`, `render_markdown_safe`, `render_inline_markdown`,
+`extract_markdown_toc`, `get_markdown_metadata`, `sanitize_html`.
+
+New real dependency `bleach==6.2.0`: allowlist-based HTML sanitization
+(never a denylist), the project's only real sanitizer -- actually
+`pip install`ed, not just added to the requirements file.
+
+**Coherence (vision critique) -- consistent with code highlighting
+(8.1.3)?** Yes, directly wired: `markdown-it-py`'s own `highlight`
+callback calls 8.1.3's own Pygments pipeline directly -- a real
+` ```python ` fenced block in an agent answer renders through the SAME
+real pipeline, never a second, parallel rendering path.
+
+🐛 **Real bug found and fixed during development (HTML
+double-wrapping)**: `markdown-it-py`'s own `fence()` renderer only
+trusts a `highlight` callback's return value as-is when it starts with
+the literal string `<pre` -- otherwise it wraps it a second time in its
+own `<pre><code>...</code></pre>`. Pygments' `HtmlFormatter` (default
+usage) produces HTML starting with `<div class="highlight">`, never
+`<pre` -- producing invalid, double-wrapped HTML
+(`<pre><code><div class="highlight">...`), confirmed by directly
+inspecting both real Pygments output shapes (`linenos=False` and
+`linenos="table"`, neither starts with `<pre`). Fixed by calling
+Pygments with `nowrap=True` (token spans only, no wrapper) and building
+the `<pre>` wrapper ourselves -- the returned HTML genuinely starts
+with `<pre` and is no longer double-wrapped.
+
+**Honest, documented scope decision**: line numbers (`linenos="table"`)
+are never rendered for a code block embedded in a Markdown-rendered
+response -- a `<table>` layout can't be reduced to a string starting
+with `<pre` without reintroducing the same double-wrap bug, and a real
+frontend copy button already makes inline line numbers largely
+redundant here. `code_highlighter.add_line_numbers`/
+`highlight_code(..., line_numbers=True)` stay real and available for a
+real, standalone, non-Markdown code viewer.
+
+**Security (vision critique) -- XSS**: `MARKDOWN_ALLOWED_TAGS`/
+`MARKDOWN_ALLOWED_ATTRIBUTES` (`api/config.py`) deliberately wide
+enough to keep Pygments' own real `class="..."` markup intact through
+`sanitize_html` -- a real trap avoided (an allowlist written without
+this in mind would silently strip every highlighted token's own
+color).
+
+**Real verification**: 18 tests, see `tests/test_markdown_renderer.py`,
+including an explicit regression test for the double-wrapping bug
+above.
+
+### Partie 8.1.3 -- Code syntax highlighting
+
+New module `api/services/code_highlighter.py`, via Pygments (already a
+real dependency, `pygments==2.21.0`, 3.3.x): `get_available_languages`,
+`detect_code_language`, `highlight_code`, `add_line_numbers`,
+`format_code_html`, `highlight_inline_code`.
+
+🐛 **Real incoherence found and fixed in the initial prompt (before any
+code was written)**: the requested style list named `"github-light"` --
+this style **does not real-ily exist** in Pygments (verified directly
+against `pygments.styles.get_all_styles()`: only `"github-dark"`
+exists). Replaced with `"default"`, Pygments' real canonical light
+style. This also fixes a second incoherence: the requested default
+(`CODE_HIGHLIGHTING_STYLE = "github-dark"`) directly contradicted the
+user's own standing constraint ("light background... never dark mode")
+-- the real default here is `"default"` (light), never a dark style,
+even though `"github-dark"`/`"monokai"`/`"dracula"`/`"solarized-dark"`
+stay real, available, optional styles.
+
+**Security (vision critique) -- is code escaped before highlighting?**
+Yes, always: Pygments' own real `HtmlFormatter` HTML-escapes every
+token internally before wrapping it in a real `<span class="...">` --
+this module never concatenates raw user code into HTML itself.
+
+**Honest limitation observed (not a bug, a real heuristic limit)**:
+`detect_code_language` can misfire on a very short/ambiguous snippet
+(observed: a 2-line Python snippet detected as `teratermmacro`) -- an
+inherent limit of `guess_lexer`, already documented in the module's own
+docstring as "never a fabricated guess", so a real, honest failure
+rather than something requiring a silent fix.
+
+**Real verification**: 13 tests, see `tests/test_code_highlighter.py`.
+
+**Full regression sweep (8.1.2 + 8.1.3)**: 48 tests
+(`test_code_highlighter.py` + `test_markdown_renderer.py` +
+`test_markdown_extraction.py`, to confirm no interference with the
+shared `markdown-it-py` dependency), zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/
