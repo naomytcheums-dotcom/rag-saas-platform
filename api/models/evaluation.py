@@ -149,3 +149,34 @@ class BenchmarkVersion(Base):
         Index("ix_benchmark_versions_dataset_id", "dataset_id"),
         UniqueConstraint("dataset_id", "version_number", name="uq_benchmark_versions_dataset_version"),
     )
+
+
+class EvaluationResult(Base):
+    """Partie 7.2.1 -- one real, persisted outcome of actually running
+    a real question against a real (or real, candidate) model/agent
+    configuration: what was really retrieved, what was really
+    answered, how long it really took, and every real Partie 7.2
+    metric computed from that -- see
+    `api/services/evaluation_results.py`'s own module docstring for
+    the real orchestrator (`run_evaluation`) that produces one of
+    these rows."""
+
+    __tablename__ = "evaluation_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_questions.id", ondelete="CASCADE"), nullable=False)
+    # Nullable: a real evaluation run can test a raw model_config with
+    # no real Agent behind it at all (same optionality as
+    # AgentRunRecord's own real, optional agent linkage elsewhere).
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    model_config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    retrieved_documents: Mapped[list] = mapped_column(JSON, nullable=False)
+    retrieved_chunks: Mapped[list] = mapped_column(JSON, nullable=False)
+    actual_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSON, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_evaluation_results_question_id", "question_id"),
+    )

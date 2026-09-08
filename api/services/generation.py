@@ -31,7 +31,7 @@ from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.retrieval_pipeline import search_with_context
 
-_CITATION_INSTRUCTIONS = (
+CITATION_INSTRUCTIONS = (
     "Answer the question using only the context below. Cite your sources "
     "inline using [1], [2], etc., matching the numbered context entries."
 )
@@ -53,7 +53,7 @@ async def generate_response(
     context_text = None
     if chunks:
         context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(chunks, start=1))
-        system_prompt = f"{system_prompt}\n\n{_CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
+        system_prompt = f"{system_prompt}\n\n{CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
 
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": query}]
     answer = await chat_completion(

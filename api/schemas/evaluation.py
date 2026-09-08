@@ -5,7 +5,7 @@ api/routers/question_sets.py, and api/routers/benchmark_versions.py
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DatasetCreateRequest(BaseModel):
@@ -162,3 +162,42 @@ class BenchmarkVersionCompareResponse(BaseModel):
 
 class RollbackRequest(BaseModel):
     version_number: int
+
+
+class RunEvaluationRequest(BaseModel):
+    agent_id: uuid.UUID | None = None
+    model_config_override: dict | None = None
+
+
+class EvaluationResultResponse(BaseModel):
+    # Same real alias precedent as api/schemas/agents.py's own
+    # AgentResponse -- a plain field cannot be named `model_config` on
+    # a Pydantic model (Pydantic itself reserves that name), so the
+    # ORM's own `model_config_json` column is exposed to API callers
+    # under its real, clean `model_config` JSON key via this alias.
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    question_id: uuid.UUID
+    agent_id: uuid.UUID | None
+    model_config_data: dict = Field(validation_alias="model_config_json", serialization_alias="model_config")
+    retrieved_documents: list
+    actual_answer: str
+    metrics: dict
+    latency_ms: int
+    created_at: dt.datetime
+
+
+class EvaluationResultListResponse(BaseModel):
+    items: list[EvaluationResultResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class MetricsSummaryResponse(BaseModel):
+    metric: str
+    count: int
+    average: float | None
+    min: float | None
+    max: float | None

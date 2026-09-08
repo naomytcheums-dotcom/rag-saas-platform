@@ -100,10 +100,14 @@ def validate_semantic(answer: str, expected: str, threshold: float | None = None
         return False
     threshold = threshold if threshold is not None else settings.GROUND_TRUTH_SEMANTIC_THRESHOLD
     embeddings = generate_embeddings([answer, expected], settings.HF_EMBEDDING_MODEL)
-    return _cosine_similarity(embeddings[0], embeddings[1]) >= threshold
+    return cosine_similarity(embeddings[0], embeddings[1]) >= threshold
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Public (not private to this module) -- Partie 7.2.9's own real
+    `answer_quality_metrics.py` reuses this exact real cosine-similarity
+    formula for its own `semantic_similarity` factor, rather than a
+    second, hand-rolled copy."""
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = sum(x * x for x in a) ** 0.5
     norm_b = sum(y * y for y in b) ** 0.5

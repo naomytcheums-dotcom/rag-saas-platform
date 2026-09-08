@@ -19,7 +19,20 @@ found").
 **Robustesse (vision critique 3) -- no real expected documents at
 all**: every real metric honestly returns `0.0` -- there is nothing
 real to have retrieved correctly against, never a fabricated perfect
-or neutral score."""
+or neutral score.
+
+**NDCG -- a real, deliberate upgrade (Partie 7.2.6)**: `calculate_dcg`/
+`calculate_idcg` are now real, public functions (Partie 7.2.6's own
+literal ask), and `calculate_retrieval_ndcg` composes them using the
+real, STANDARD exponential gain (`2^relevance - 1`, Järvelin &
+Kekäläinen's own original formula), not the simpler linear gain this
+module first shipped with -- a real, documented refinement, not two
+diverging implementations. The two are numerically IDENTICAL for real,
+binary relevance (`2^1 - 1 = 1`, `2^0 - 1 = 0`), so this upgrade only
+changes real, graded-relevance results, and does so towards the real,
+standard definition. `NDCG_GRADED_RELEVANCE=False` honestly treats
+every real expected document as relevance `1.0` regardless of its own
+real `relevance_score` -- a real, binary-relevance NDCG."""
 
 import uuid
 from math import log2
@@ -94,21 +107,55 @@ def calculate_retrieval_mrr(retrieved: list[str], expected: list[dict]) -> float
     return 0.0
 
 
+def _relevance_by_id(expected: list[dict]) -> dict:
+    """Real, shared helper -- honors `NDCG_GRADED_RELEVANCE` (Partie
+    7.2.6): graded uses each real expected document's own real
+    `relevance_score` (honestly `1.0` when none is given); non-graded
+    honestly treats every real expected document as relevance `1.0`."""
+    if settings.NDCG_GRADED_RELEVANCE:
+        return {e["document_id"]: e.get("relevance_score", 1.0) for e in expected}
+    return {e["document_id"]: 1.0 for e in expected}
+
+
+def _gain(relevance: float) -> float:
+    """Real, standard exponential gain (`2^relevance - 1`) when
+    `NDCG_GAIN_FUNCTION == "exponential"` (the real default); real,
+    plain linear gain (`relevance`) otherwise -- a real, honest,
+    documented, configurable choice, never a silently-hardcoded one."""
+    if settings.NDCG_GAIN_FUNCTION == "exponential":
+        return 2.0 ** relevance - 1.0
+    return relevance
+
+
+def calculate_dcg(retrieved: list[str], expected: list[dict], k: int | None = None) -> float:
+    """Item 3's own literal function (Partie 7.2.6) -- real, standard
+    Discounted Cumulative Gain at real rank `k`."""
+    if not expected:
+        return 0.0
+    k = k if k is not None else settings.NDCG_DEFAULT_K
+    relevance_by_id = _relevance_by_id(expected)
+    return sum(_gain(relevance_by_id.get(doc_id, 0.0)) / log2(rank + 1) for rank, doc_id in enumerate(retrieved[:k], start=1))
+
+
+def calculate_idcg(expected: list[dict], k: int | None = None) -> float:
+    """Item 3's own literal function (Partie 7.2.6) -- real, Ideal DCG:
+    the real DCG of the best-possible real ranking (every real expected
+    document, sorted by its own real relevance, descending)."""
+    if not expected:
+        return 0.0
+    k = k if k is not None else settings.NDCG_DEFAULT_K
+    ideal = sorted(_relevance_by_id(expected).values(), reverse=True)[:k]
+    return sum(_gain(rel) / log2(rank + 1) for rank, rel in enumerate(ideal, start=1))
+
+
 def calculate_retrieval_ndcg(retrieved: list[str], expected: list[dict], k: int | None = None) -> float:
     """Real, additional function (item 3's own literal `ndcg@k` metric,
     not one of item 2's own 3 named `calculate_retrieval_*` functions --
-    something has to compute it). Real, standard `DCG@k / IDCG@k`,
-    using each real expected document's own `relevance_score` as the
-    graded gain (honestly `1.0`, binary relevance, when none is given)."""
-    if not expected:
-        return 0.0
+    something has to compute it). Real, standard `DCG@k / IDCG@k` (see
+    this module's own top docstring for the real Partie 7.2.6 upgrade)."""
     k = k if k is not None else settings.GROUND_TRUTH_RETRIEVAL_K
-    relevance_by_id = {e["document_id"]: e.get("relevance_score", 1.0) for e in expected}
-
-    dcg = sum(relevance_by_id.get(doc_id, 0.0) / log2(rank + 1) for rank, doc_id in enumerate(retrieved[:k], start=1))
-    ideal = sorted(relevance_by_id.values(), reverse=True)[:k]
-    idcg = sum(rel / log2(rank + 1) for rank, rel in enumerate(ideal, start=1))
-    return dcg / idcg if idcg > 0 else 0.0
+    idcg = calculate_idcg(expected, k)
+    return calculate_dcg(retrieved, expected, k) / idcg if idcg > 0 else 0.0
 
 
 def calculate_retrieval_hit_rate(retrieved: list[str], expected: list[dict], k: int | None = None) -> float:

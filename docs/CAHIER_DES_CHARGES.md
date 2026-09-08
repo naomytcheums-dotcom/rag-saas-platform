@@ -1606,9 +1606,59 @@ Tests réels dédiés (10 + 4 tests), voir `tests/test_benchmark_versions.py` + 
 
 **Régression complète** (104+ tests sur les 6 nouveaux modules + endpoints + `test_password_similarity.py`) : zéro échec.
 
-### 7.2+ — le reste de l'Evaluation Lab — ⬜ NON COMMENCÉ
+### 7.2 Evaluation runs & metrics — ✅ COMPLET (9/9)
 
-Recall@1/3/10, NDCG multi-modèles, comparaisons multi-modèles, A/B testing : ⬜ (prompts non encore reçus).
+**Réutilisation réelle, pas 9 fonctions indépendantes (décision autonome)** : ces 9 étapes redemandent en grande partie des métriques déjà construites en 7.1.4 (precision/recall/mrr/ndcg génériques à `k`) et 6.2.11 (faithfulness) -- résolu par une architecture de consolidation documentée : `api/services/retrieval_metrics.py` (wrappers fins à `k` fixe + résumés dataset) et `api/services/answer_quality_metrics.py` (faithfulness/answer_relevance, sur chaînes/dicts plutôt que sur des lignes ORM `Response`/`Citation`, car l'Evaluation Lab teste une configuration hypothétique, pas une réponse réellement servie et persistée).
+
+**Nouveau vrai modèle** `EvaluationResult` (migration 0072) : un vrai résultat persisté d'un run réel (documents/chunks récupérés, réponse générée, métriques calculées, latence).
+
+**`extend_evaluation_metrics`, UNE vraie fonction partagée, pas 7 identiques** : les étapes 7.2.2 à 7.2.9 redéclarent toutes le même nom littéral `extend_evaluation_metrics(question_id)` -- construite une seule fois dans `api/services/evaluation_results.py`, elle recalcule TOUTES les métriques réelles de ce lot pour chaque résultat déjà enregistré d'une question, contre sa vraie ground truth ACTUELLE (utile pour re-scorer après un changement de `set_ground_truth`/`set_ground_truth_documents`).
+
+#### Partie 7.2.1 — Recall@1 (run_evaluation)
+
+✅ **Nouveau module réel** `api/services/evaluation_results.py` : `run_evaluation`, `get_evaluation_results`, `get_metrics_summary`, `extend_evaluation_metrics`, `calculate_recall_at_1` (réexportée depuis `retrieval_metrics.py`) + 3 nouveaux endpoints réels Admin+ (`POST /questions/{id}/run`, `GET /questions/{id}/results`, `GET /datasets/{id}/metrics/{metric}`, `api/routers/evaluation_results.py`).
+
+⚠️ **Cohérence (vision critique 1) -- réutilise les mêmes briques que `generate_response` (6.1.1), délibérément SANS l'appeler** : `run_evaluation` réutilise `search_with_context`/`resolve_llm_config`/`chat_completion` (et même le vrai `CITATION_INSTRUCTIONS`, rendu public depuis `generation.py`, pour que le prompt réel d'évaluation reflète fidèlement ce que la production enverrait réellement) -- mais un run d'évaluation teste une configuration CANDIDATE (potentiellement différente de la config par défaut de l'organisation), et son résultat appartient à `EvaluationResult`, jamais aux tables `Response`/`Citation` réellement servies.
+
+✅ **Performance (vision critique 1) -- vrai timeout honnête** : `EVALUATION_TIMEOUT` borne le vrai appel retrieval+génération via `asyncio.wait_for` (même précédent que `AgentOrchestrator.run_agent`) -- une vraie réponse vide honnête est enregistrée en cas de dépassement, jamais un run bloqué indéfiniment.
+
+Tests réels dédiés (8 + 5 tests), voir `tests/test_evaluation_results.py` + `tests/test_evaluation_results_endpoints.py`.
+
+#### Partie 7.2.2 / 7.2.3 / 7.2.4 — Recall@3 / Recall@5 / Recall@10
+
+✅ `calculate_recall_at_3`/`_5`/`_10` (`api/services/retrieval_metrics.py`) : vrais wrappers fins autour de `calculate_retrieval_recall` (7.1.4), qui calcule déjà le recall réel à N'IMPORTE QUEL `k` -- pas 3 réimplémentations de la même vraie métrique. `get_recall_summary(dataset_id, k)` est UNE seule vraie fonction paramétrée par `k`, réutilisée identiquement par les 3 étapes.
+
+#### Partie 7.2.5 — MRR
+
+✅ `calculate_mrr` : réexport direct de `calculate_retrieval_mrr` (7.1.4, ne prend déjà aucun `k`). `get_mrr_summary`.
+
+#### Partie 7.2.6 — NDCG
+
+⚠️ **Vraie amélioration mathématique appliquée à la fonction existante, pas dupliquée** : le littéral de cette étape (gain exponentiel, pertinence graduée configurable) a révélé que le NDCG de 7.1.4 utilisait un gain linéaire, alors que la définition standard (Järvelin & Kekäläinen) utilise `2^pertinence - 1`. Mise à niveau réelle de `calculate_retrieval_ndcg`, nouvelles fonctions publiques `calculate_dcg`/`calculate_idcg`, configurables via `NDCG_GAIN_FUNCTION`/`NDCG_GRADED_RELEVANCE`/`NDCG_DEFAULT_K`. Vérifié : zéro régression sur les 14 tests existants de `tests/test_ground_truth_documents.py` (gain exponentiel et linéaire sont mathématiquement identiques pour une pertinence binaire, et "ordre idéal = 1.0" reste vrai pour toute fonction de gain monotone).
+
+#### Partie 7.2.7 — Precision
+
+✅ `calculate_precision` : réutilise `calculate_retrieval_precision`, avec son propre réglage indépendant `PRECISION_DEFAULT_K` (distinct de `GROUND_TRUTH_RETRIEVAL_K`).
+
+#### Partie 7.2.8 — Faithfulness (evaluation runs)
+
+✅ **Nouveau module réel** `api/services/answer_quality_metrics.py` : `calculate_faithfulness` (4 facteurs réels : `claim_support`, `source_alignment`, `context_usage`, `hallucination_absence`, pondérés via `EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS`).
+
+⚠️ **Cohérence -- réutilise les mêmes primitives que 6.2.11, sans réimplémentation** : `jaccard_similarity`/`extract_claims`/`find_contradiction` (6.2.5/6.2.7) opèrent déjà sur de simples chaînes -- aucun adaptateur nécessaire pour les réutiliser ici, malgré l'architecture délibérément différente (chaînes/dicts, pas `Response`/`Citation` ORM).
+
+#### Partie 7.2.9 — Answer relevance
+
+✅ `calculate_answer_relevance` (4 facteurs réels : `question_coverage`, `key_terms_presence`, `semantic_similarity`, `length_adequacy`, pondérés via `ANSWER_RELEVANCE_FACTORS_WEIGHTS`).
+
+⚠️ **`ANSWER_RELEVANCE_USE_LLM`, honnêtement PAS ENCORE implémenté** : même précédent réel que `CLAIM_VERIFICATION_USE_LLM` (6.2.6) -- un vrai appel LLM par réponse coûte un vrai crédit API, la même vraie contrainte documentée dans toute la section 6.2. `NotImplementedError` explicite, jamais un faux repli silencieux.
+
+✅ **Robustesse (vision critique 3)** : `semantic_similarity` réutilise directement `ground_truth_answers.cosine_similarity` (rendue publique) -- vrais embeddings réels justifiés ici car l'Evaluation Lab est un contexte HORS LIGNE (même raisonnement que 7.1.3), contrairement aux vérifications 6.2 en direct qui les évitent délibérément.
+
+**Régression complète** (43 tests sur les 4 nouveaux fichiers `test_retrieval_metrics.py`/`test_answer_quality_metrics.py`/`test_evaluation_results.py`/`test_evaluation_results_endpoints.py`, plus zéro régression sur `test_ground_truth_documents.py`/`test_ground_truth_answers.py`/`test_generation.py`/`test_agent_orchestrator.py`) : zéro échec.
+
+### 7.3+ — comparaisons multi-modèles, A/B testing — ⬜ NON COMMENCÉ
+
+⬜ (prompts non encore reçus).
 
 ---
 

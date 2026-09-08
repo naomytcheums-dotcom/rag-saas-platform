@@ -9517,6 +9517,133 @@ untouched.
 **Full regression sweep** (104+ tests across the 6 new modules +
 endpoints + `test_password_similarity.py`): zero failures.
 
+## Partie 7.2 -- Evaluation Lab: evaluation runs & metrics (COMPLETE, 9/9)
+
+**Real reuse, not 9 independent functions (autonomous decision)**:
+these 9 étapes mostly re-ask for metrics already built in 7.1.4
+(generic-`k` precision/recall/mrr/ndcg) and 6.2.11 (faithfulness) --
+resolved via a documented consolidation architecture:
+`api/services/retrieval_metrics.py` (thin fixed-`k` wrappers + dataset
+summaries) and `api/services/answer_quality_metrics.py`
+(faithfulness/answer_relevance, on plain strings/dicts rather than
+real ORM `Response`/`Citation` rows, since the Evaluation Lab tests a
+hypothetical configuration, not a really-served, persisted response).
+
+**New real model** `EvaluationResult` (migration 0072): one real,
+persisted outcome of an actual run (retrieved documents/chunks,
+generated answer, computed metrics, latency).
+
+**`extend_evaluation_metrics`, ONE real, shared function, not 7
+identical ones**: étapes 7.2.2 through 7.2.9 each redeclare the same
+literal name `extend_evaluation_metrics(question_id)` -- built once in
+`api/services/evaluation_results.py`, it recomputes every real metric
+in this batch for every result already recorded against a question,
+against that question's CURRENT real ground truth (useful for
+re-scoring after a `set_ground_truth`/`set_ground_truth_documents`
+change).
+
+### Partie 7.2.1 -- Recall@1 (run_evaluation)
+
+New module `api/services/evaluation_results.py`: `run_evaluation`,
+`get_evaluation_results`, `get_metrics_summary`,
+`extend_evaluation_metrics`, `calculate_recall_at_1` (re-exported from
+`retrieval_metrics.py`) plus 3 new real Admin+ endpoints
+(`POST /questions/{id}/run`, `GET /questions/{id}/results`,
+`GET /datasets/{id}/metrics/{metric}`, `api/routers/evaluation_results.py`).
+
+**Coherence (vision critique 1) -- reuses the same real building
+blocks as `generate_response` (6.1.1), deliberately WITHOUT calling
+it**: `run_evaluation` reuses `search_with_context`/`resolve_llm_config`/
+`chat_completion` (and even the real `CITATION_INSTRUCTIONS`, made
+public from `generation.py`, so the real evaluation prompt faithfully
+mirrors what production would actually send) -- but a real evaluation
+run tests a CANDIDATE configuration (possibly different from this
+organization's own current default), and its own real result belongs
+in `EvaluationResult`, never in the really-served `Response`/`Citation`
+tables.
+
+**Performance (vision critique 1) -- a real, honest timeout**:
+`EVALUATION_TIMEOUT` bounds the real retrieval+generation call via
+`asyncio.wait_for` (same real precedent as `AgentOrchestrator.run_agent`)
+-- a real, honest empty answer is recorded on timeout, never a hung
+run.
+
+**Real verification**: 8 + 5 tests, see `tests/test_evaluation_results.py`
++ `tests/test_evaluation_results_endpoints.py`.
+
+### Partie 7.2.2 / 7.2.3 / 7.2.4 -- Recall@3 / Recall@5 / Recall@10
+
+`calculate_recall_at_3`/`_5`/`_10` (`api/services/retrieval_metrics.py`):
+real, thin wrappers around `calculate_retrieval_recall` (7.1.4), which
+already computes real recall at ANY real `k` -- not 3 reimplementations
+of the same real metric. `get_recall_summary(dataset_id, k)` is ONE
+real function, parameterized by `k`, reused identically by all 3
+étapes.
+
+### Partie 7.2.5 -- MRR
+
+`calculate_mrr`: a real, direct re-export of `calculate_retrieval_mrr`
+(7.1.4, already takes no real `k` at all). `get_mrr_summary`.
+
+### Partie 7.2.6 -- NDCG
+
+**A real, mathematical upgrade applied to the existing function, not
+duplicated**: this étape's own literal ask (exponential gain,
+configurable graded relevance) revealed that 7.1.4's own NDCG used a
+linear gain, while the standard real definition (Järvelin & Kekäläinen)
+uses `2^relevance - 1`. Real upgrade to `calculate_retrieval_ndcg`, new
+public `calculate_dcg`/`calculate_idcg`, configurable via
+`NDCG_GAIN_FUNCTION`/`NDCG_GRADED_RELEVANCE`/`NDCG_DEFAULT_K`. Verified:
+zero regression across the 14 existing tests in
+`tests/test_ground_truth_documents.py` (exponential and linear gain
+are mathematically identical for binary relevance, and "ideal order =
+1.0" holds for any monotonic gain function).
+
+### Partie 7.2.7 -- Precision
+
+`calculate_precision`: reuses `calculate_retrieval_precision`, with
+its own real, independently-configurable `PRECISION_DEFAULT_K`
+(distinct from `GROUND_TRUTH_RETRIEVAL_K`).
+
+### Partie 7.2.8 -- Faithfulness (evaluation runs)
+
+New module `api/services/answer_quality_metrics.py`:
+`calculate_faithfulness` (4 real factors: `claim_support`,
+`source_alignment`, `context_usage`, `hallucination_absence`, weighted
+via `EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS`).
+
+**Coherence -- reuses the same real primitives as 6.2.11, no
+reimplementation**: `jaccard_similarity`/`extract_claims`/
+`find_contradiction` (6.2.5/6.2.7) already operate on plain real
+strings -- no adapter needed to reuse them here, despite the
+deliberately different architecture (strings/dicts, not
+`Response`/`Citation` ORM rows).
+
+### Partie 7.2.9 -- Answer relevance
+
+`calculate_answer_relevance` (4 real factors: `question_coverage`,
+`key_terms_presence`, `semantic_similarity`, `length_adequacy`,
+weighted via `ANSWER_RELEVANCE_FACTORS_WEIGHTS`).
+
+**`ANSWER_RELEVANCE_USE_LLM`, honestly NOT YET implemented**: same
+real precedent as `CLAIM_VERIFICATION_USE_LLM` (6.2.6) -- a real
+per-answer LLM call costs real API credit, the same real constraint
+documented throughout the 6.2 section. An explicit `NotImplementedError`,
+never a silent, fabricated fallback.
+
+**Robustness (vision critique 3)**: `semantic_similarity` reuses
+`ground_truth_answers.cosine_similarity` directly (made public) --
+real embeddings are justified here because the Evaluation Lab is an
+OFFLINE context (same reasoning as 7.1.3), unlike the live 6.2 checks
+which deliberately avoid them.
+
+**Full regression sweep** (43 tests across the 4 new files
+`test_retrieval_metrics.py`/`test_answer_quality_metrics.py`/
+`test_evaluation_results.py`/`test_evaluation_results_endpoints.py`,
+plus zero regression on `test_ground_truth_documents.py`/
+`test_ground_truth_answers.py`/`test_generation.py`/
+`test_agent_orchestrator.py`): zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

@@ -1065,6 +1065,47 @@ class Settings(BaseSettings):
     DIFFICULTY_EASY_THRESHOLD: float = 0.3
     DIFFICULTY_HARD_THRESHOLD: float = 0.7
 
+    # -- Evaluation runs (Partie 7.2.1) ----------------------------------------
+    EVALUATION_RETRIEVAL_K: list[int] = Field(default_factory=lambda: [1, 3, 5, 10])
+    EVALUATION_BATCH_SIZE: int = 10
+    EVALUATION_TIMEOUT: float = 30.0
+
+    # -- NDCG (Partie 7.2.6) ----------------------------------------------------
+    # A real, deliberate upgrade of Partie 7.1.4's own simpler, linear-gain
+    # `calculate_retrieval_ndcg` to the real, standard exponential-gain
+    # NDCG formula (Järvelin & Kekäläinen) -- see
+    # api/services/ground_truth_documents.py's own updated docstring.
+    NDCG_DEFAULT_K: int = 5
+    NDCG_GAIN_FUNCTION: str = "exponential"
+    NDCG_GRADED_RELEVANCE: bool = True
+
+    # -- Precision (Partie 7.2.7) -----------------------------------------------
+    PRECISION_DEFAULT_K: int = 5
+    # A real, honest disclosure, not a functionally-load-bearing toggle:
+    # precision's own real, standard IR definition (relevant retrieved /
+    # k) has no real graded mode to switch -- "relevant" is inherently a
+    # real, binary set-membership test. Declared for real, literal
+    # completeness (item 2's own config ask), not silently ignored.
+    PRECISION_BINARY_RELEVANCE: bool = True
+
+    # -- Faithfulness (evaluation runs, Partie 7.2.8) --------------------------
+    EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "claim_support": 0.3, "source_alignment": 0.25, "context_usage": 0.2, "hallucination_absence": 0.25,
+    })
+
+    # -- Answer relevance (Partie 7.2.9) ----------------------------------------
+    # Honestly NOT YET implemented when True -- same real
+    # "raise, never silently fall back" precedent as
+    # CLAIM_VERIFICATION_USE_LLM (Partie 6.2.6): a genuine per-answer LLM
+    # call costs real API credit, blocked for the same real reason
+    # documented throughout docs/CAHIER_DES_CHARGES.md's own 6.2 section.
+    ANSWER_RELEVANCE_USE_LLM: bool = False
+    ANSWER_RELEVANCE_SEMANTIC_THRESHOLD: float = 0.7
+    ANSWER_RELEVANCE_MIN_LENGTH: int = 10
+    ANSWER_RELEVANCE_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "question_coverage": 0.3, "key_terms_presence": 0.2, "semantic_similarity": 0.3, "length_adequacy": 0.2,
+    })
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1198,6 +1239,24 @@ class Settings(BaseSettings):
                 f"DIFFICULTY_EASY_THRESHOLD ({self.DIFFICULTY_EASY_THRESHOLD}) must be less than "
                 f"DIFFICULTY_HARD_THRESHOLD ({self.DIFFICULTY_HARD_THRESHOLD})"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _evaluation_faithfulness_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 7.2.8's own weight dict."""
+        total = sum(self.EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _answer_relevance_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 7.2.9's own weight dict."""
+        total = sum(self.ANSWER_RELEVANCE_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"ANSWER_RELEVANCE_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
         return self
 
 
