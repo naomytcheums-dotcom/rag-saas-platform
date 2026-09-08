@@ -74,6 +74,15 @@ async def test_run_evaluation_persists_a_real_result_with_real_metrics(monkeypat
     assert result.metrics["mrr"] == 1.0
     assert set(result.metrics["faithfulness_factors"]) == {"claim_support", "source_alignment", "context_usage", "hallucination_absence"}
     assert set(result.metrics["answer_relevance_factors"]) == {"question_coverage", "key_terms_presence", "semantic_similarity", "length_adequacy"}
+    # Partie 7.2.10-7.2.15 -- every later étape's own metric is also
+    # populated by this same, single real run.
+    assert set(result.metrics["context_relevance_factors"]) == {"context_coverage", "chunk_relevance_avg", "redundancy_score", "information_density"}
+    assert set(result.metrics["citation_correctness_factors"]) == {"citation_presence", "citation_accuracy", "citation_format", "citation_completeness"}
+    assert set(result.metrics["hallucination_rate_factors"]) == {"unsupported_claims_ratio", "contradiction_rate", "source_coverage", "confidence_estimation"}
+    assert "reliable" not in result.metrics  # the per-key "reliable" flag is named hallucination_rate_reliable, not bare
+    assert "hallucination_rate_reliable" in result.metrics
+    assert "token_usage" in result.metrics
+    assert "cost_per_request_detail" in result.metrics
 
 
 async def test_run_evaluation_is_honestly_none_for_an_unknown_question(db_session):

@@ -81,6 +81,24 @@ async def test_get_metrics_summary_endpoint_works(monkeypatch, client, db_sessio
     assert response.json()["count"] == 1
 
 
+async def test_get_metrics_summary_endpoint_works_for_every_partie_7_2_10_to_15_metric(monkeypatch, client, db_session, register_payload):
+    """Validation criterion: the generic /metrics/{metric} endpoint
+    (built for Partie 7.2.1) already exposes every one of Partie
+    7.2.10-7.2.15's own new metrics -- no new, dedicated endpoint
+    needed for any of them."""
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setattr("api.services.evaluation_results.search_with_context", AsyncMock(return_value=[]))
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("An answer.")))
+
+    owner_token, _org_id, dataset, question = await _make_org_dataset_and_question(client, db_session, register_payload, "Eval Metrics 7.2.10-15 Org")
+    await client.post(f"/questions/{question['id']}/run", json={}, headers=_auth_header(owner_token))
+
+    for metric in ("context_relevance", "citation_correctness", "hallucination_rate", "total_tokens", "cost_per_request"):
+        response = await client.get(f"/datasets/{dataset['id']}/metrics/{metric}", headers=_auth_header(owner_token))
+        assert response.status_code == 200
+        assert response.json()["count"] == 1, f"metric={metric!r} body={response.json()!r}"
+
+
 async def test_run_evaluation_endpoint_respects_permissions(client, db_session, register_payload):
     """Validation criterion: les permissions sont respectées."""
     owner_token, _org_id, _dataset, question = await _make_org_dataset_and_question(client, db_session, register_payload, "Eval Perms Org")
@@ -96,4 +114,28 @@ async def test_get_evaluation_results_endpoint_respects_permissions(client, db_s
     other_token, _other = await _register(client, db_session, "non-admin-eval-results-2@example.com")
 
     response = await client.get(f"/questions/{question['id']}/results", headers=_auth_header(other_token))
+    assert response.status_code == 404
+
+
+async def test_measure_latency_endpoint_works(monkeypatch, client, db_session, register_payload):
+    """Validation criterion (7.2.13): la mesure de latence fonctionne."""
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setattr(settings, "LATENCY_WARMUP_RUNS", 0)
+    monkeypatch.setattr(settings, "LATENCY_MEASUREMENT_RUNS", 1)
+    monkeypatch.setattr("api.services.evaluation_results.search_with_context", AsyncMock(return_value=[]))
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("An answer.")))
+
+    owner_token, _org_id, _dataset, question = await _make_org_dataset_and_question(client, db_session, register_payload, "Latency Endpoint Org")
+    response = await client.post(f"/questions/{question['id']}/latency", json={}, headers=_auth_header(owner_token))
+
+    assert response.status_code == 201
+    assert response.json()["sample_size"] == 1
+
+
+async def test_measure_latency_endpoint_respects_permissions(client, db_session, register_payload):
+    """Validation criterion: les permissions sont respectées."""
+    owner_token, _org_id, _dataset, question = await _make_org_dataset_and_question(client, db_session, register_payload, "Latency Perms Org")
+    other_token, _other = await _register(client, db_session, "non-admin-latency@example.com")
+
+    response = await client.post(f"/questions/{question['id']}/latency", json={}, headers=_auth_header(other_token))
     assert response.status_code == 404

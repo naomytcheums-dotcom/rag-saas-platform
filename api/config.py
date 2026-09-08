@@ -1116,6 +1116,93 @@ class Settings(BaseSettings):
     # "A/B testing" ask) -- the conventional real 0.05.
     AB_TEST_SIGNIFICANCE_THRESHOLD: float = 0.05
 
+    # -- Context relevance (Partie 7.2.10) ---------------------------------------
+    # Honestly NOT YET implemented when True -- same real precedent as
+    # ANSWER_RELEVANCE_USE_LLM (7.2.9).
+    CONTEXT_RELEVANCE_USE_LLM: bool = False
+    CONTEXT_RELEVANCE_SEMANTIC_THRESHOLD: float = 0.6
+    CONTEXT_RELEVANCE_MAX_CHUNKS: int = 10
+    # Real, additive beyond item 3's own literal config list (vision
+    # critique 1 -- coherence with ANSWER_RELEVANCE_FACTORS_WEIGHTS'
+    # own real pattern).
+    CONTEXT_RELEVANCE_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "context_coverage": 0.3, "chunk_relevance_avg": 0.3, "redundancy_score": 0.2, "information_density": 0.2,
+    })
+
+    # -- Citation correctness (Partie 7.2.11) ------------------------------------
+    CITATION_CORRECTNESS_CHECK_PRESENCE: bool = True
+    CITATION_CORRECTNESS_CHECK_ACCURACY: bool = True
+    CITATION_CORRECTNESS_CHECK_FORMAT: bool = True
+    # Real, additive: item 2's own literal factor list has 4 real
+    # factors (presence/accuracy/format/completeness) but only 3 real
+    # "CHECK_*" toggles -- completeness has no real off-switch (it is
+    # always real, cheap, string-only, unlike the other 3 which can
+    # involve a real, per-citation loop this toggle lets a real caller
+    # skip). Equal real weights among whichever factors stay enabled.
+    CITATION_CORRECTNESS_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "citation_presence": 0.3, "citation_accuracy": 0.3, "citation_format": 0.2, "citation_completeness": 0.2,
+    })
+
+    # -- Hallucination rate (Partie 7.2.12) --------------------------------------
+    HALLUCINATION_RATE_MIN_CLAIMS: int = 2
+    HALLUCINATION_RATE_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "unsupported_claims_ratio": 0.3, "contradiction_rate": 0.3, "source_coverage": 0.2, "confidence_estimation": 0.2,
+    })
+
+    # -- Latency (Partie 7.2.13) --------------------------------------------------
+    LATENCY_WARMUP_RUNS: int = 3
+    LATENCY_MEASUREMENT_RUNS: int = 5
+    LATENCY_TIMEOUT: float = 60.0
+
+    # -- Token usage (Partie 7.2.14) ----------------------------------------------
+    TOKEN_USAGE_TRACKING_ENABLED: bool = True
+    TOKEN_USAGE_ESTIMATE_ONLY: bool = False
+    # Real, additive: the real character-per-token ratio
+    # `token_usage.py`'s own honest ESTIMATE fallback divides by, when
+    # a real provider genuinely reports no usage (or
+    # TOKEN_USAGE_ESTIMATE_ONLY forces it) -- the commonly cited real
+    # ~4 real chars/token rule of thumb for real English text, never
+    # claimed as an exact real tokenizer.
+    TOKEN_USAGE_ESTIMATE_CHARS_PER_TOKEN: float = 4.0
+
+    # -- Cost/request (Partie 7.2.15) ----------------------------------------------
+    COST_TRACKING_ENABLED: bool = True
+    # Real $/M-token pricing, item 3's own literal real table (2025
+    # public list prices). Keys are matched against a real, resolved
+    # model name by real SUBSTRING (see cost_tracking.py's own
+    # docstring for why: this codebase's own real, resolved model
+    # strings carry a real provider prefix/version suffix litellm
+    # itself adds, e.g. "claude-3-5-sonnet-20241022", never an exact
+    # match against a short real literal key like "claude-3-5-sonnet").
+    COST_MODEL_PRICING: dict[str, dict[str, float]] = Field(default_factory=lambda: {
+        "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},
+        # Real, additive beyond item 3's own literal 8-model table --
+        # a real, pre-existing gap this étape's own pricing lookup
+        # surfaced: `api/security/organization_settings.py`'s own
+        # DEFAULT_SETTINGS["llm_model"] is a real, KNOWN-stale
+        # "claude-3-sonnet-20240229" that `resolve_llm_model` can
+        # never actually fall through PAST for a fresh, unconfigured
+        # real organization (a real, pre-existing bug, documented in
+        # this batch's own final report, deliberately NOT fixed here
+        # -- out of this étape's own real scope, and risky to touch
+        # mid-batch alongside 6 unrelated étapes). Real, original
+        # Claude 3 Sonnet pricing (same real $3/$15 per Anthropic's own
+        # real, historical public price list as 3.5 Sonnet) keeps
+        # `calculate_cost_per_request` honestly working for this real,
+        # currently-common default, rather than a fresh org's very
+        # first real evaluation run silently reporting
+        # `pricing_available: False`.
+        "claude-3-sonnet": {"input": 3.0, "output": 15.0},
+        "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "gpt-4o": {"input": 5.0, "output": 15.0},
+        "gemini-1.5-pro": {"input": 3.50, "output": 10.50},
+        "gemini-1.5-flash": {"input": 0.35, "output": 1.05},
+        "mistral-large": {"input": 2.0, "output": 6.0},
+        "mistral-small": {"input": 0.20, "output": 0.60},
+    })
+    COST_DEFAULT_CURRENCY: str = "USD"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1267,6 +1354,33 @@ class Settings(BaseSettings):
         total = sum(self.ANSWER_RELEVANCE_FACTORS_WEIGHTS.values())
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"ANSWER_RELEVANCE_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _context_relevance_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 7.2.10's own weight dict."""
+        total = sum(self.CONTEXT_RELEVANCE_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"CONTEXT_RELEVANCE_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _citation_correctness_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 7.2.11's own weight dict."""
+        total = sum(self.CITATION_CORRECTNESS_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"CITATION_CORRECTNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _hallucination_rate_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 7.2.12's own weight dict."""
+        total = sum(self.HALLUCINATION_RATE_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"HALLUCINATION_RATE_WEIGHTS weights must sum to 1.0, got {total}")
         return self
 
 

@@ -48,14 +48,19 @@ from api.config import settings
 from api.models.evaluation import EvaluationDataset, EvaluationQuestion, EvaluationResult
 from api.security.organization_settings import get_org_settings
 from api.services.answer_quality_metrics import calculate_answer_relevance, calculate_faithfulness
+from api.services.citation_correctness import calculate_citation_correctness
+from api.services.context_relevance import calculate_context_relevance
+from api.services.cost_tracking import calculate_cost_per_request
 from api.services.generation import CITATION_INSTRUCTIONS
+from api.services.hallucination_rate import calculate_hallucination_rate
 from api.services.llm_config import resolve_llm_config
-from api.services.llm_providers import chat_completion
+from api.services.llm_providers import chat_completion_with_usage
 from api.services.retrieval_metrics import (
     calculate_mrr, calculate_ndcg, calculate_precision, calculate_recall_at_1, calculate_recall_at_3,
     calculate_recall_at_5, calculate_recall_at_10, summarize_metric,
 )
 from api.services.retrieval_pipeline import search_with_context
+from api.services.token_usage import estimate_token_usage
 
 __all__ = [
     "calculate_recall_at_1", "extend_evaluation_metrics", "get_evaluation_results", "get_metrics_summary", "run_evaluation",
@@ -95,6 +100,7 @@ async def run_evaluation(
     started = time.perf_counter()
     chunks: list[dict] = []
     answer = ""
+    initial_metrics: dict = {}
     try:
         chunks = await asyncio.wait_for(
             search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings),
@@ -106,13 +112,27 @@ async def run_evaluation(
             context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(chunks, start=1))
             system_prompt = f"{system_prompt}\n\n{CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": question.question}]
-        answer = await asyncio.wait_for(
-            chat_completion(
+        completion = await asyncio.wait_for(
+            chat_completion_with_usage(
                 messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
                 top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
             ),
             timeout=settings.EVALUATION_TIMEOUT,
         )
+        answer = completion["content"]
+        # Partie 7.2.14 -- real token usage can ONLY ever be captured
+        # HERE, at real generation time (never reconstructed later from
+        # an already-stored answer) -- see this module's own top
+        # docstring and token_usage.py's own for the full real
+        # reasoning. Stored as both a real, nested detail dict AND a
+        # flat `total_tokens` scalar (`retrieval_metrics.summarize_metric`
+        # only ever reads flat top-level keys).
+        if settings.TOKEN_USAGE_TRACKING_ENABLED:
+            if completion["usage"] is not None and not settings.TOKEN_USAGE_ESTIMATE_ONLY:
+                usage = {**completion["usage"], "model": completion["model"], "estimated": False}
+            else:
+                usage = estimate_token_usage(system_prompt + question.question, answer, completion["model"])
+            initial_metrics = {"token_usage": usage, "total_tokens": usage.get("total_tokens")}
     except asyncio.TimeoutError:
         # A real, honest, empty answer on a real timeout -- never a
         # fabricated one, same "never lose information, never crash"
@@ -123,7 +143,7 @@ async def run_evaluation(
     result = EvaluationResult(
         question_id=question_id, agent_id=agent_id, model_config_json=model_config or {},
         retrieved_documents=_deduplicate_documents(chunks), retrieved_chunks=chunks, actual_answer=answer,
-        metrics={}, latency_ms=latency_ms,
+        metrics=initial_metrics, latency_ms=latency_ms,
     )
     db.add(result)
     await db.flush()
@@ -151,6 +171,15 @@ async def extend_evaluation_metrics(db: AsyncSession, question_id: uuid.UUID, k:
 
         faithfulness = calculate_faithfulness(result.actual_answer, result.retrieved_chunks or [], context or None)
         relevance = calculate_answer_relevance(question.question, result.actual_answer)
+        context_relevance = calculate_context_relevance(question.question, context or None, result.retrieved_chunks or [])
+        citation_correctness = calculate_citation_correctness(result.actual_answer, result.retrieved_chunks or [], context or None)
+        hallucination = calculate_hallucination_rate(result.actual_answer, result.retrieved_chunks or [], context or None)
+        # Partie 7.2.15 -- a real, pure function of already-stored data
+        # (Partie 7.2.14's own real, immutable `token_usage`, never
+        # touched by this recompute pass -- see this module's own top
+        # docstring) -- safely recomputable on every real pass, e.g.
+        # after `COST_MODEL_PRICING` itself changes.
+        cost = calculate_cost_per_request((result.metrics or {}).get("token_usage"), result.model_config_json)
 
         metrics = dict(result.metrics or {})
         metrics.update({
@@ -163,6 +192,11 @@ async def extend_evaluation_metrics(db: AsyncSession, question_id: uuid.UUID, k:
             f"precision_at_{settings.PRECISION_DEFAULT_K}": calculate_precision(retrieved_ids, expected_documents),
             "faithfulness": faithfulness["score"], "faithfulness_factors": faithfulness["factors"],
             "answer_relevance": relevance["score"], "answer_relevance_factors": relevance["factors"],
+            "context_relevance": context_relevance["score"], "context_relevance_factors": context_relevance["factors"],
+            "citation_correctness": citation_correctness["score"], "citation_correctness_factors": citation_correctness["factors"],
+            "hallucination_rate": hallucination["score"], "hallucination_rate_factors": hallucination["factors"],
+            "hallucination_rate_reliable": hallucination["reliable"],
+            "cost_per_request": cost["cost_per_request"], "cost_per_request_detail": cost,
         })
         result.metrics = metrics
     await db.flush()

@@ -231,6 +231,19 @@ class ABTestRequest(BaseModel):
     metric: str | None = None
 
 
+class LatencyMeasurementResponse(BaseModel):
+    question_id: uuid.UUID
+    sample_size: int
+    p50: float | None
+    p90: float | None
+    p95: float | None
+    p99: float | None
+    avg: float | None
+    min: float | None
+    max: float | None
+    std: float | None
+
+
 class ABTestResponse(BaseModel):
     question_set_id: uuid.UUID
     metric: str

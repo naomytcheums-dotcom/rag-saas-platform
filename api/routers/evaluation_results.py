@@ -11,9 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.evaluation import EvaluationDataset, EvaluationQuestion
 from api.models.organization import OrganizationMember
-from api.schemas.evaluation import EvaluationResultListResponse, EvaluationResultResponse, MetricsSummaryResponse, RunEvaluationRequest
+from api.schemas.evaluation import (
+    EvaluationResultListResponse, EvaluationResultResponse, LatencyMeasurementResponse, MetricsSummaryResponse,
+    RunEvaluationRequest,
+)
 from api.security.evaluation import require_dataset_admin, require_question_admin
 from api.services.evaluation_results import get_evaluation_results, get_metrics_summary, run_evaluation
+from api.services.latency_metrics import measure_latency
 
 router = APIRouter(tags=["evaluation-results"])
 
@@ -47,3 +51,23 @@ async def get_metrics_summary_endpoint(
 ):
     dataset, _caller = dataset_ctx
     return await get_metrics_summary(db, dataset.id, metric)
+
+
+@router.post("/questions/{question_id}/latency", response_model=LatencyMeasurementResponse, status_code=status.HTTP_201_CREATED)
+async def measure_latency_endpoint(
+    payload: RunEvaluationRequest = RunEvaluationRequest(),
+    question_ctx: tuple[EvaluationQuestion, OrganizationMember] = Depends(require_question_admin), db: AsyncSession = Depends(get_db),
+):
+    """Partie 7.2.13's own dedicated benchmark endpoint -- every other
+    real Partie 7.2.10-7.2.15 metric is already surfaced through the
+    existing `POST /questions/{id}/run` (its own `metrics` dict) and
+    `GET /datasets/{id}/metrics/{metric}` (already generic over ANY
+    real, flat metric key -- `context_relevance`/`citation_correctness`/
+    `hallucination_rate`/`cost_per_request`/`total_tokens` all just
+    work there already, no new dedicated endpoint needed). Latency is
+    the one real exception: its own real signal is a real, MULTI-RUN
+    distribution, not a single stored result."""
+    question, _caller = question_ctx
+    result = await measure_latency(db, question.id, agent_id=payload.agent_id, model_config=payload.model_config_override)
+    await db.commit()
+    return result

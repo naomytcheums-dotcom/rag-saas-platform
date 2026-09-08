@@ -46,7 +46,7 @@ from api.services.text_similarity import jaccard_similarity, tokenize_words
 _CAPITALIZED_WORD = re.compile(r"[A-Za-z]+")
 
 
-def _citation_text(citation: dict) -> str:
+def citation_text(citation: dict) -> str:
     """Real, flexible accessor -- a real Evaluation Lab "citation" is a
     real, plain dict (chunk- or document-shaped), never a real
     `Citation` ORM row -- accepts either a real `text` or `content`
@@ -54,7 +54,7 @@ def _citation_text(citation: dict) -> str:
     return citation.get("text") or citation.get("content") or ""
 
 
-def _claim_support(answer: str, citations: list[dict]) -> float:
+def claim_support(answer: str, citations: list[dict]) -> float:
     """Real, factor 1 of `calculate_faithfulness` -- real fraction of
     claims with real, word-overlapping support from at least one real
     citation. Reuses `UNSUPPORTED_CLAIM_SIMILARITY_THRESHOLD` (Partie
@@ -65,7 +65,7 @@ def _claim_support(answer: str, citations: list[dict]) -> float:
         return 0.0
     supported = sum(
         1 for claim in claims
-        if any(jaccard_similarity(claim, _citation_text(c)) >= settings.UNSUPPORTED_CLAIM_SIMILARITY_THRESHOLD for c in citations)
+        if any(jaccard_similarity(claim, citation_text(c)) >= settings.UNSUPPORTED_CLAIM_SIMILARITY_THRESHOLD for c in citations)
     )
     return supported / len(claims)
 
@@ -75,7 +75,7 @@ def _source_alignment(answer: str, citations: list[dict]) -> float:
     answer and every real citation's own text, combined."""
     if not citations:
         return 0.0
-    combined = " ".join(_citation_text(c) for c in citations)
+    combined = " ".join(citation_text(c) for c in citations)
     return jaccard_similarity(answer, combined)
 
 
@@ -93,20 +93,20 @@ def _context_usage(answer: str, context: str | None) -> float:
     return len(context_tokens & tokenize_words(answer)) / len(context_tokens)
 
 
-def _hallucination_absence(answer: str, citations: list[dict]) -> float:
+def hallucination_absence(answer: str, citations: list[dict]) -> float:
     """Real, factor 4 -- the one genuinely NEW factor: real fraction of
     claims with NO real citation contradicting them (`contradiction_detection.find_contradiction`,
     Partie 6.2.7, reused directly -- it already operates on plain real
     strings). Honestly `1.0` (vacuously true -- nothing real to
     contradict) when the real answer has no real, substantive claims
     at all -- a real, deliberate, DIFFERENT convention from
-    `_claim_support`'s own honest `0.0` in that same case (support
+    `claim_support`'s own honest `0.0` in that same case (support
     needs something real to point to; absence-of-contradiction is
     naturally satisfied when there is nothing real to disagree with)."""
     claims = extract_claims(answer)
     if not claims:
         return 1.0
-    contradicted = sum(1 for claim in claims if any(find_contradiction(claim, _citation_text(c)) is not None for c in citations))
+    contradicted = sum(1 for claim in claims if any(find_contradiction(claim, citation_text(c)) is not None for c in citations))
     return 1.0 - (contradicted / len(claims))
 
 
@@ -119,8 +119,8 @@ def calculate_faithfulness(answer: str, citations: list[dict], context: str | No
         return {"score": 0.0, "factors": factors}
 
     factors = {
-        "claim_support": _claim_support(answer, citations), "source_alignment": _source_alignment(answer, citations),
-        "context_usage": _context_usage(answer, context), "hallucination_absence": _hallucination_absence(answer, citations),
+        "claim_support": claim_support(answer, citations), "source_alignment": _source_alignment(answer, citations),
+        "context_usage": _context_usage(answer, context), "hallucination_absence": hallucination_absence(answer, citations),
     }
     weights = settings.EVALUATION_FAITHFULNESS_FACTORS_WEIGHTS
     score = max(0.0, min(1.0, sum(factors[name] * weight for name, weight in weights.items())))

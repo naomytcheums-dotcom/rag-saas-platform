@@ -1606,7 +1606,7 @@ Tests réels dédiés (10 + 4 tests), voir `tests/test_benchmark_versions.py` + 
 
 **Régression complète** (104+ tests sur les 6 nouveaux modules + endpoints + `test_password_similarity.py`) : zéro échec.
 
-### 7.2 Evaluation runs & metrics — ✅ COMPLET (9/9)
+### 7.2 Evaluation runs & metrics — ✅ COMPLET (15/15)
 
 **Réutilisation réelle, pas 9 fonctions indépendantes (décision autonome)** : ces 9 étapes redemandent en grande partie des métriques déjà construites en 7.1.4 (precision/recall/mrr/ndcg génériques à `k`) et 6.2.11 (faithfulness) -- résolu par une architecture de consolidation documentée : `api/services/retrieval_metrics.py` (wrappers fins à `k` fixe + résumés dataset) et `api/services/answer_quality_metrics.py` (faithfulness/answer_relevance, sur chaînes/dicts plutôt que sur des lignes ORM `Response`/`Citation`, car l'Evaluation Lab teste une configuration hypothétique, pas une réponse réellement servie et persistée).
 
@@ -1654,7 +1654,83 @@ Tests réels dédiés (8 + 5 tests), voir `tests/test_evaluation_results.py` + `
 
 ✅ **Robustesse (vision critique 3)** : `semantic_similarity` réutilise directement `ground_truth_answers.cosine_similarity` (rendue publique) -- vrais embeddings réels justifiés ici car l'Evaluation Lab est un contexte HORS LIGNE (même raisonnement que 7.1.3), contrairement aux vérifications 6.2 en direct qui les évitent délibérément.
 
-**Régression complète** (43 tests sur les 4 nouveaux fichiers `test_retrieval_metrics.py`/`test_answer_quality_metrics.py`/`test_evaluation_results.py`/`test_evaluation_results_endpoints.py`, plus zéro régression sur `test_ground_truth_documents.py`/`test_ground_truth_answers.py`/`test_generation.py`/`test_agent_orchestrator.py`) : zéro échec.
+**Régression complète (7.2.1-7.2.9)** (43 tests sur les 4 nouveaux fichiers `test_retrieval_metrics.py`/`test_answer_quality_metrics.py`/`test_evaluation_results.py`/`test_evaluation_results_endpoints.py`, plus zéro régression sur `test_ground_truth_documents.py`/`test_ground_truth_answers.py`/`test_generation.py`/`test_agent_orchestrator.py`) : zéro échec.
+
+#### Partie 7.2.10 — Context relevance
+
+✅ **Nouveau module réel** `api/services/context_relevance.py` : `calculate_context_relevance` (4 facteurs réels : `context_coverage`, `chunk_relevance_avg`, `redundancy_score`, `information_density`), `get_context_relevance_summary`.
+
+⚠️ **Cohérence (vision critique 1) -- délibérément le miroir réel de `calculate_answer_relevance`** : même forme `{"score", "factors"}`, même motif `*_FACTORS_WEIGHTS` (validé à somme 1.0), même précédent `*_USE_LLM` -- Context relevance (l'ENTRÉE de la génération) et Answer relevance (la SORTIE) sont de vrais frères dans le vocabulaire de ce code, donc partagent délibérément la même vraie forme. `CONTEXT_RELEVANCE_FACTORS_WEIGHTS` est un ajout réel et autonome au-delà de la config littéralement demandée, pour cette même cohérence.
+
+✅ **Performance (vision critique 2)** : `chunk_relevance_avg`, seul facteur basé sur de vrais embeddings, est bornée par `CONTEXT_RELEVANCE_MAX_CHUNKS` -- un vrai résultat de récupération volumineux ne peut jamais rendre ce coût réel illimité. `redundancy_score` réutilise volontairement le rapide heuristique `jaccard_similarity` (pas d'embeddings, car la redondance est un vrai chevauchement littéral de texte).
+
+⚠️ **`redundancy_score`, une vraie polarité documentée** : le facteur rapporté reste honnêtement BRUT (plus élevé = plus redondant = pire), mais sa contribution réelle au score pondéré utilise `(1 - redundancy_score)` -- le dict de facteurs reste honnête, seule la combinaison inverse.
+
+✅ **Robustesse (vision critique 3)** : chaque facteur retourne honnêtement `0.0` sans contexte/chunks réels.
+
+Tests réels dédiés (8 tests), voir `tests/test_context_relevance.py`.
+
+#### Partie 7.2.11 — Citation correctness
+
+✅ **Nouveau module réel** `api/services/citation_correctness.py` : `calculate_citation_correctness` (4 facteurs réels : `citation_presence`, `citation_accuracy`, `citation_format`, `citation_completeness`), `get_citation_correctness_summary`.
+
+⚠️ **Correction autonome de signature** : le littéral demandé `calculate_citation_correctness(citations, context)` omettait `answer` -- pourtant le seul vrai endroit où vivent les marqueurs `[n]`. Corrigé en `(answer, citations, context)`, exactement la même forme réelle à 3 arguments que `calculate_faithfulness`.
+
+✅ **Précision (vision critique 2) -- deux vraies sources, pour deux vraies questions** : `citation_presence` vérifie un vrai marqueur `[n]` contre le vrai CONTEXTE NUMÉROTÉ lui-même (le littéral français : "présence des citations DANS LE CONTEXTE") ; `citation_accuracy` vérifie que le vrai CONTENU CITÉ (liste `citations`, par position) supporte réellement la phrase portant ce marqueur.
+
+✅ **Robustesse (vision critique 3)** : chaque facteur a sa propre convention honnête documentée (`citation_format`/`citation_completeness` : `1.0` vacuous sans rien de réel à vérifier ; `citation_presence`/`citation_accuracy` : `0.0` sans rien de réel).
+
+Tests réels dédiés (7 tests), voir `tests/test_citation_correctness.py`.
+
+#### Partie 7.2.12 — Hallucination rate
+
+✅ **Nouveau module réel** `api/services/hallucination_rate.py` : `calculate_hallucination_rate` (4 facteurs réels : `unsupported_claims_ratio`, `contradiction_rate`, `source_coverage`, `confidence_estimation`), `get_hallucination_rate_summary`.
+
+⚠️ **Cohérence -- réutilise, ne réimplémente jamais une 3e fois** : `unsupported_claims_ratio`/`contradiction_rate` sont les vrais inverses honnêtes de `claim_support`/`hallucination_absence` (6.2.11/7.2.8, rendues publiques pour cette réutilisation directe) ; `confidence_estimation` réutilise directement le vrai score `calculate_faithfulness` déjà calculable pour ce même résultat, plutôt qu'une 5e formule de confiance concurrente.
+
+⚠️ **Une vraie polarité inversée, documentée explicitement** : `hallucination_rate` est un TAUX d'une chose mauvaise -- plus élevé = pire, contrairement à tout autre score de ce lot. `source_coverage`/`confidence_estimation` restent honnêtement "plus élevé = mieux" dans leur propre facteur rapporté ; seule leur CONTRIBUTION au score combiné utilise `(1 - facteur)`.
+
+✅ **Robustesse (vision critique 3) -- réponse courte** : sous `HALLUCINATION_RATE_MIN_CLAIMS`, le calcul s'exécute normalement (jamais de crash) mais retourne honnêtement `"reliable": False`.
+
+Tests réels dédiés (7 tests), voir `tests/test_hallucination_rate.py`.
+
+#### Partie 7.2.13 — Latency
+
+✅ **Nouveau module réel** `api/services/latency_metrics.py` : `measure_latency` (p50/p90/p95/p99/avg/min/max/std réels, sans dépendance numpy/scipy), `get_latency_summary`, `get_latency_distribution`.
+
+⚠️ **Cohérence -- délibérément PAS repliée dans `extend_evaluation_metrics` (décision autonome documentée)** : chaque autre métrique 7.2.x est une vraie fonction pure d'un `EvaluationResult` déjà stocké, donc recalculable en toute sécurité par la boucle partagée. Un vrai BENCHMARK de latence est structurellement différent (une vraie distribution sur PLUSIEURS runs frais) -- l'esprit du littéral "`extend_evaluation_metrics(question_id)`" est honoré (ne jamais dupliquer un nom déjà partagé pour une opération réellement différente), pas sa lettre. `get_latency_summary`/`get_latency_distribution` réutilisent gratuitement le vrai `latency_ms` DÉJÀ stocké par chaque run (7.2.1), zéro coût réel additionnel.
+
+✅ **Performance (vision critique 1)** : `LATENCY_TIMEOUT` borne tout le vrai budget temporel de la boucle warmup+mesure (pas par appel) -- un vrai résultat partiel honnête est retourné, jamais un crash.
+
+✅ **Robustesse (vision critique 3)** : un vrai run en timeout (réponse vide) est honnêtement exclu du vrai échantillon de latence.
+
+Nouvel endpoint réel Admin+ dédié : `POST /questions/{id}/latency` (le seul des 6 étapes 7.2.10-7.2.15 à réellement en nécessiter un nouveau -- tous les autres sont déjà exposés par l'endpoint générique existant `GET /datasets/{id}/metrics/{metric}`, 7.2.1).
+
+Tests réels dédiés (3 tests), voir `tests/test_latency_metrics.py`.
+
+#### Partie 7.2.14 — Token usage
+
+✅ **Nouveau module réel** `api/services/token_usage.py` : `measure_token_usage`, `get_token_usage_summary`, `get_token_usage_distribution`, `estimate_token_usage`. Nouvelle fonction réelle additive `chat_completion_with_usage` (`api/services/llm_providers.py`), sœur de `chat_completion` (jamais modifiée -- ses nombreux appelants réels existants ne changent pas de comportement), partageant le même vrai cœur de retry (`_chat_completion_raw`, extrait sans duplication).
+
+⚠️ **Cohérence -- capturé au moment réel de la génération, jamais recalculé après coup** : contrairement à toute autre métrique 7.2.x, l'usage réel de tokens ne peut PAS être reconstruit depuis une réponse déjà stockée -- capturé directement dans `run_evaluation` et persisté immédiatement, délibérément jamais retouché par `extend_evaluation_metrics` (même exception documentée que `latency_ms`).
+
+✅ **Robustesse (vision critique 3) -- tokens non disponibles** : repli honnête vers `estimate_token_usage` (ratio réel ~4 caractères/token, `TOKEN_USAGE_ESTIMATE_CHARS_PER_TOKEN`), toujours marqué `"estimated": True` pour ne jamais se faire passer pour un vrai compte fournisseur.
+
+Tests réels dédiés (7 tests), voir `tests/test_token_usage.py`.
+
+#### Partie 7.2.15 — Cost/request
+
+✅ **Nouveau module réel** `api/services/cost_tracking.py` : `calculate_cost_per_request`, `get_cost_summary`, `get_cost_distribution`. Table de tarifs réels `COST_MODEL_PRICING` (les 8 modèles du littéral).
+
+⚠️ **Précision (vision critique 2) -- correspondance par le plus long sous-chaîne réel, jamais une égalité exacte** : les vrais noms de modèles RÉSOLUS par ce code portent un vrai préfixe/suffixe de version que litellm ajoute lui-même (ex. `"claude-3-5-sonnet-20241022"`) -- une égalité exacte contre les clés courtes du littéral (`"claude-3-5-sonnet"`) ne trouverait honnêtement RIEN. `_find_pricing` fait donc une correspondance par sous-chaîne, avec un vrai départage par la clé la PLUS LONGUE (nécessaire : `"gpt-4o-mini"` contient réellement `"gpt-4o"` comme sous-chaîne).
+
+🐛 **Vrai bug préexistant découvert (hors périmètre de cette étape, NON corrigé ici, documenté et signalé)** : `api/security/organization_settings.py`'s own `DEFAULT_SETTINGS["llm_model"]` vaut la vraie chaîne obsolète `"claude-3-sonnet-20240229"` (jamais `None`) -- `get_org_settings` fusionne TOUJOURS ce vrai défaut dans son dict retourné, donc `resolve_llm_model`'s own condition `org_settings.get("llm_model")` est TOUJOURS vraie, et sa vraie branche "repli sur le modèle live du fournisseur" (déjà documentée comme intentionnelle dans le docstring de ce même resolver depuis la Partie 4.3.1) n'est en réalité JAMAIS atteinte pour une organisation fraîche. Impact réel : chaque nouvel appel LLM utilise réellement le modèle Anthropic obsolète `"claude-3-sonnet-20240229"`, sauf override explicite. Corrigé de façon MINIMALE et sûre ici (ajout de `"claude-3-sonnet"` à `COST_MODEL_PRICING`, pour que ce vrai cas courant reste honnêtement chiffrable), le vrai correctif de fond (`DEFAULT_SETTINGS["llm_model"] = None` + ajustement du schéma de réponse `OrganizationSettingsResponse`) est délibérément laissé pour une passe dédiée -- trop risqué à tenter au milieu d'un lot de 6 étapes sans re-tester l'intégralité de `test_organization_settings.py` (20+ tests) séparément.
+
+✅ **Robustesse (vision critique 3)** : `calculate_cost_per_request` ne lève jamais pour un vrai modèle non tarifé -- chaque champ de coût honnêtement `None`, `pricing_available: False`.
+
+Tests réels dédiés (7 tests), voir `tests/test_cost_tracking.py`.
+
+**Régression complète (7.2.10-7.2.15)** (39 tests sur les 6 nouveaux fichiers, plus zéro régression sur `test_evaluation_results.py`/`test_evaluation_results_endpoints.py`/`test_answer_quality_metrics.py`/`test_retrieval_metrics.py`/`test_evaluation_comparisons.py`/`test_generation.py`/`test_agent_orchestrator.py`/`test_llm_providers.py`/`test_llm_config.py`/`test_organization_settings.py`) : zéro échec.
 
 ### 7.3 Comparaisons multi-modèles & A/B testing — ✅ COMPLET (autonome)
 

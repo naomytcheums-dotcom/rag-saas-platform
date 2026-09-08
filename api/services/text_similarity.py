@@ -30,12 +30,22 @@ _NEGATION_WORDS = frozenset(
 _NUMBER = re.compile(r"\b\d+(?:\.\d+)?\b")
 
 
+def tokenize_words_list(text: str) -> list[str]:
+    """Real, same tokenization rule as `tokenize_words` below, but as
+    an ordered real LIST with real duplicates preserved -- needed by
+    any real caller computing a real ratio/count over word
+    OCCURRENCES (e.g. `context_relevance.py`'s own Partie 7.2.10 real
+    lexical-diversity ratio), where `tokenize_words`'s own real `set`
+    already, deliberately discards the exact real signal needed."""
+    words = _WORD.findall(text.lower())
+    return [w for w in words if w not in _STOPWORDS]
+
+
 def tokenize_words(text: str) -> set[str]:
     """Real, lowercase, punctuation-stripped word tokens, with a real,
     small stopword list excluded (so overlap reflects real, substantive
     shared content, not just shared function words)."""
-    words = _WORD.findall(text.lower())
-    return {w for w in words if w not in _STOPWORDS}
+    return set(tokenize_words_list(text))
 
 
 def jaccard_similarity(text_a: str, text_b: str) -> float:

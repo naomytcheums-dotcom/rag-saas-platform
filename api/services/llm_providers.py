@@ -161,23 +161,24 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
     return kwargs
 
 
-async def chat_completion(messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs) -> str:
-    """Item 3's own literal function (4.1.7) -- the real, single call
-    site every real provider function below routes through. Real
-    retries (real exponential backoff) only for real, transient
+async def _chat_completion_raw(
+    messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs
+) -> tuple:
+    """Real, shared retry/error-handling core (Partie 4.1.7) every real
+    public `chat_completion`/`chat_completion_with_usage` routes
+    through -- returns the real, raw litellm `ModelResponse` (carrying
+    BOTH real content and real token usage) plus the real, resolved
+    model name string actually used, so `chat_completion_with_usage`
+    (Partie 7.2.14) needs no second, duplicated retry loop of its own.
+
+    Real retries (real exponential backoff) only for real, transient
     failures (`LLMRateLimitError`/`LLMTimeoutError`) -- never for
     `LLMAuthenticationError` (a real bad/missing key that retrying can
-    never fix) or a generic `LLMProviderError`.
-
-    `max_retries` -- a real, additive parameter beyond this item's own
-    literal signature (Partie 5.1.1): defaults to the real, global
-    `settings.LLM_MAX_RETRIES` when not given, but lets a real caller
-    (`api.services.agent_orchestrator`'s own real `AGENT_MAX_RETRIES`)
-    genuinely override it per real call, rather than that setting
-    staying real but never actually wired anywhere."""
+    never fix) or a generic `LLMProviderError`."""
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
     call_kwargs.update(kwargs)  # a real, explicit caller override always wins
+    resolved_model = call_kwargs["model"]
     max_retries = max_retries if max_retries is not None else settings.LLM_MAX_RETRIES
 
     last_error: LLMError | None = None
@@ -186,7 +187,7 @@ async def chat_completion(messages: list[dict], provider: str | None = None, mod
             response = await asyncio.wait_for(
                 litellm.acompletion(messages=messages, **call_kwargs), timeout=settings.LLM_TIMEOUT,
             )
-            return response.choices[0].message.content
+            return response, resolved_model
         except asyncio.TimeoutError as exc:
             last_error = LLMTimeoutError(f"{provider} timed out after {settings.LLM_TIMEOUT}s")
             last_error.__cause__ = exc
@@ -206,6 +207,49 @@ async def chat_completion(messages: list[dict], provider: str | None = None, mod
             await asyncio.sleep(2 ** attempt)
 
     raise last_error
+
+
+async def chat_completion(messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs) -> str:
+    """Item 3's own literal function (4.1.7) -- the real, single call
+    site every real provider function below routes through.
+
+    `max_retries` -- a real, additive parameter beyond this item's own
+    literal signature (Partie 5.1.1): defaults to the real, global
+    `settings.LLM_MAX_RETRIES` when not given, but lets a real caller
+    (`api.services.agent_orchestrator`'s own real `AGENT_MAX_RETRIES`)
+    genuinely override it per real call, rather than that setting
+    staying real but never actually wired anywhere."""
+    response, _resolved_model = await _chat_completion_raw(messages, provider=provider, model=model, max_retries=max_retries, **kwargs)
+    return response.choices[0].message.content
+
+
+async def chat_completion_with_usage(
+    messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs
+) -> dict:
+    """Partie 7.2.14's own real function -- the exact same real call,
+    same real retry/error handling as `chat_completion` (via the
+    shared `_chat_completion_raw` above), but additionally surfaces
+    the real, provider-reported token usage litellm's own
+    `ModelResponse.usage` already carries. `chat_completion` itself
+    discards it -- every one of its many existing real callers
+    (`generate_response`, `AgentOrchestrator`, ...) only ever needed
+    the real text, and this real, additive, sibling function was built
+    rather than changing `chat_completion`'s own real, widely-depended-on
+    return shape.
+
+    Honestly `usage=None` when a real provider genuinely doesn't report
+    it -- `token_usage.py`'s own real caller (Partie 7.2.14) falls back
+    to an honest, documented character-count ESTIMATE in that real
+    case, or whenever `TOKEN_USAGE_ESTIMATE_ONLY` is set."""
+    response, resolved_model = await _chat_completion_raw(messages, provider=provider, model=model, max_retries=max_retries, **kwargs)
+    usage = getattr(response, "usage", None)
+    usage_dict = None
+    if usage is not None:
+        usage_dict = {
+            "prompt_tokens": getattr(usage, "prompt_tokens", None), "completion_tokens": getattr(usage, "completion_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+        }
+    return {"content": response.choices[0].message.content, "usage": usage_dict, "model": resolved_model}
 
 
 async def completion(prompt: str, provider: str | None = None, model: str | None = None, **kwargs) -> str:
