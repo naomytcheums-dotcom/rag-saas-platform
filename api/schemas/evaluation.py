@@ -468,3 +468,69 @@ class DeployAgentResponse(BaseModel):
     reason: str | None = None
     evaluation_id: uuid.UUID | None = None
     version: str | None = None
+
+
+class ABTestCreateRequest(BaseModel):
+    name: str
+    description: str | None = None
+    variant_a: dict
+    variant_b: dict
+    traffic_split: int = Field(default=50, ge=0, le=100)
+
+
+class ABTestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    name: str
+    description: str | None
+    variant_a: dict
+    variant_b: dict
+    traffic_split: int
+    status: str
+    metrics: dict | None
+    start_date: dt.datetime | None
+    end_date: dt.datetime | None
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class ABTestListResponse(BaseModel):
+    items: list[ABTestResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ABTestVariantRequest(BaseModel):
+    request_id: str
+
+
+class ABTestVariantResponse(BaseModel):
+    variant: str
+
+
+class ABTestTrackMetricRequest(BaseModel):
+    variant: str = Field(pattern="^(a|b)$")
+    metric: str
+    value: float
+
+
+class ABTestChooseWinnerRequest(BaseModel):
+    variant: str = Field(pattern="^(a|b)$")
+
+
+class ABTestMetricResult(BaseModel):
+    variant_a: dict
+    variant_b: dict
+    lift: float | None
+    p_value: float | None
+    significant: bool | None
+
+
+class ABTestResultsResponse(BaseModel):
+    test_id: uuid.UUID
+    status: str
+    metrics: dict[str, ABTestMetricResult]

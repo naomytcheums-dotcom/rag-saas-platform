@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.evaluation import (
-    BenchmarkVersion, ComparisonJob, DeploymentEvaluation, EvaluationDataset, EvaluationJob, EvaluationQuestion,
+    ABTest, BenchmarkVersion, ComparisonJob, DeploymentEvaluation, EvaluationDataset, EvaluationJob, EvaluationQuestion,
     ManualEvaluation, QuestionSet, RegressionDetection, RegressionThreshold,
 )
 from api.models.agent import Agent
@@ -240,3 +240,16 @@ async def require_deployment_evaluation_manager(
         raise _NOT_FOUND
     membership = await _membership_for(agent.organization_id, current_user, db)
     return evaluation, _require_manager(membership)
+
+
+async def require_ab_test_admin(
+    test_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[ABTest, OrganizationMember]:
+    """Partie 7.3.10 -- real, single-resource routes; the real, org-scoped
+    `POST/GET /organizations/{org_id}/ab-tests` routes instead reuse
+    `require_org_admin` directly."""
+    test = await db.get(ABTest, test_id)
+    if test is None:
+        raise _NOT_FOUND
+    membership = await _membership_for(test.organization_id, current_user, db)
+    return test, _require_admin(membership)

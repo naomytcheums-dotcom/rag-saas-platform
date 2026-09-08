@@ -9892,7 +9892,7 @@ returns `1.0` -- no real evidence at all can never look significant.
 **Real verification**: 7 + 4 tests, see `tests/test_evaluation_comparisons.py`
 + `tests/test_evaluation_comparisons_endpoints.py`.
 
-## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 9/10)
+## Partie 7.3 -- Advanced MLOps (COMPLETE, 10/10)
 
 Real, persisted evaluation runs as real Celery jobs, human scoring,
 regression detection, persisted comparisons (model/retriever/reranker/
@@ -10152,6 +10152,78 @@ New real endpoints: `POST /agents/{id}/deploy/evaluate` (Manager+),
 + `tests/test_deployment_evaluations_endpoints.py`.
 
 **Full regression sweep (7.3.8)**: zero failures.
+
+### Partie 7.3.10 -- A/B testing (production)
+
+New real model `ABTest` (migration 0077).
+
+**Coherence -- deliberately distinct from 7.2.16(bis)'s own
+`run_ab_test`**: that earlier, autonomous function is a real, OFFLINE,
+one-shot test over a real, static question set (7.2 evaluation
+metrics: faithfulness, recall@k, ...). This étape is a real, LIVE test
+over real production traffic (real business/UX metrics: conversion
+rate, satisfaction, ...), running over real, ongoing time, not one
+fixed real batch. Same literal name, genuinely different real scope --
+kept as two real, separate modules.
+
+New module `api/services/ab_tests.py`: `create_ab_test`,
+`start_ab_test`, `pause_ab_test`, `complete_ab_test`, `get_ab_test`,
+`list_ab_tests`, `get_ab_test_results`, `get_ab_test_variant`,
+`track_ab_test_metric`.
+
+**`get_ab_test_variant`, real, deterministic, sticky bucketing**: a
+real MD5 hash of `test_id:request_id`, mod 100, compared against
+`traffic_split` -- the SAME real user always gets the same real
+variant for a given test, avoiding a real, inconsistent experience.
+Honestly `"a"` for a real, non-`running` test.
+
+**`track_ab_test_metric`, real incremental statistics, never a real,
+unbounded event log**: each real call updates a real
+`{count, sum, sum_sq}` per variant/metric -- `sum_sq` (real, additive)
+is what makes a real significance test possible in
+`get_ab_test_results`.
+
+**Statistics (vision critique 3) -- a real, honestly documented
+approximation**: `get_ab_test_results` computes a real p-value via a
+standard normal approximation to Welch's t-test (`math.erf`, no
+`scipy` dependency) -- honestly `None` below 2 real samples, never a
+fabricated significance.
+
+🐛 **A real edge-case bug found and fixed during testing**: when real
+variance is zero in BOTH real groups (every real sample identical
+within its own group) but the real means still differ, that's the
+strongest possible real evidence of a difference -- not "undefined".
+`_welch_p_value` returned `None` (a real division-by-zero avoided, but
+misinterpreted); fixed to return `0.0` (maximal real difference) when
+the means differ, `1.0` (no real evidence) when they match.
+
+**`POST /ab-tests/{id}/variants/choose`, a real human decision**:
+marks the real test `completed` and records the real, chosen winning
+variant in `metrics["winner"]` -- distinct from the real, automatic
+significance calculation.
+
+**`get_ab_test_variant`, deliberately with NO endpoint of its own**: a
+real, fast, per-request bucketing function meant to be called directly
+by real backend routing code -- gating it behind a real, Admin+ HTTP
+round-trip would defeat its own real purpose.
+
+**`POST /ab-tests/{id}/track`, a real, additive endpoint**: the
+literal ask names no route for `track_ab_test_metric` despite listing
+it as its own literal function -- added here (necessary).
+
+New real Admin+ endpoints: `POST/GET /organizations/{id}/ab-tests`,
+`GET /ab-tests/{id}`, `POST /ab-tests/{id}/start|pause|complete`,
+`GET /ab-tests/{id}/results`, `POST /ab-tests/{id}/variants/choose`,
+`POST /ab-tests/{id}/track`.
+
+**Real verification**: 13 + 6 tests, see `tests/test_ab_tests.py` +
+`tests/test_ab_tests_endpoints.py`.
+
+**Full regression sweep (7.3.10)**: zero failures.
+
+**Partie 7.3 -- Advanced MLOps -- COMPLETE (10/10)**. **Partie 7 --
+Evaluation Lab -- COMPLETE (7.1 + 7.2 + 7.3, no remaining scope
+identified).**
 
 ### Partie 3.4.2 -- query rewriting
 

@@ -27,7 +27,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
-    account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
+    ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
     citations, conversations,
     custom_domains, custom_tools, documents,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
@@ -207,6 +207,7 @@ app.include_router(comparison_jobs.router)
 app.include_router(regression_detection.router)
 app.include_router(regression_thresholds.router)
 app.include_router(deployment_evaluations.router)
+app.include_router(ab_tests.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

@@ -372,3 +372,41 @@ class DeploymentEvaluation(Base):
     __table_args__ = (
         Index("ix_deployment_evaluations_agent_id", "agent_id"),
     )
+
+
+class ABTestStatus:
+    draft = "draft"
+    running = "running"
+    paused = "paused"
+    completed = "completed"
+
+
+class ABTest(Base):
+    """Partie 7.3.10 -- a real, LIVE, production A/B test (real traffic
+    split between two real candidate configs, real per-variant metrics
+    tracked as they happen), genuinely distinct from the earlier,
+    autonomous 7.2.16(bis) `run_ab_test` (a real, OFFLINE, one-shot
+    comparison over a real, static question set) -- same real name,
+    deliberately different real scope, see
+    `api/services/ab_tests.py`'s own top docstring."""
+
+    __tablename__ = "ab_tests"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    variant_a: Mapped[dict] = mapped_column(JSON, nullable=False)
+    variant_b: Mapped[dict] = mapped_column(JSON, nullable=False)
+    traffic_split: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=ABTestStatus.draft)
+    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    start_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_ab_tests_organization_id", "organization_id"),
+    )

@@ -1530,7 +1530,7 @@ Tests réels dédiés (14 tests), voir `tests/test_quality_dashboard.py`.
 
 ---
 
-## PARTIE 7 — Evaluation Lab — 🟡 PARTIEL (7.1 ✅ + 7.2 ✅ ; 7.3 — MLOps avancé — 🟡 en cours)
+## PARTIE 7 — Evaluation Lab — ✅ COMPLET (7.1 + 7.2 + 7.3, aucune portée restante identifiée)
 
 ### 7.1 Dataset manager — ✅ COMPLET (6/6)
 
@@ -1754,7 +1754,7 @@ Tests réels dédiés (7 + 4 tests), voir `tests/test_evaluation_comparisons.py`
 
 **Régression complète** : zéro échec (voir section suivante pour le décompte global).
 
-### 7.3 MLOps avancé — 🟡 EN COURS (9/10)
+### 7.3 MLOps avancé — ✅ COMPLET (10/10)
 
 Persistance réelle des runs d'évaluation en tant que vrais jobs Celery, notation humaine, détection de régression, comparaisons persistées (modèle/retriever/reranker/prompt), auto-eval pré-déploiement, seuils configurables, A/B testing PRODUCTION avec traffic-splitting réel.
 
@@ -1865,6 +1865,36 @@ Endpoints réels : `POST /agents/{id}/deploy/evaluate` (Manager+), `GET /agents/
 Tests réels dédiés (9 + 3 tests), voir `tests/test_deployment_evaluations.py` + `tests/test_deployment_evaluations_endpoints.py`.
 
 **Régression complète (7.3.8)** : zéro échec.
+
+#### Partie 7.3.10 — A/B testing (production)
+
+✅ **Nouveau vrai modèle** `ABTest` (migration 0077).
+
+⚠️ **Cohérence -- délibérément distinct de 7.2.16(bis)'s own `run_ab_test`** : cette fonction plus ancienne, autonome, est un vrai test OFFLINE, ponctuel, sur un vrai jeu de questions statique (métriques 7.2 : faithfulness, recall@k, ...). Cette étape-ci est un vrai test EN DIRECT sur du vrai trafic de production (métriques business/UX réelles : taux de conversion, satisfaction, ...), s'étalant sur une vraie durée continue, pas un vrai lot figé. Même nom littéral, portée réellement différente -- gardés comme deux vrais modules séparés.
+
+✅ **Nouveau module réel** `api/services/ab_tests.py` : `create_ab_test`, `start_ab_test`, `pause_ab_test`, `complete_ab_test`, `get_ab_test`, `list_ab_tests`, `get_ab_test_results`, `get_ab_test_variant`, `track_ab_test_metric`.
+
+✅ **`get_ab_test_variant`, vrai bucketing déterministe et collant** : hash MD5 réel de `test_id:request_id`, modulo 100, comparé à `traffic_split` -- le MÊME vrai utilisateur obtient toujours le même vrai variant pour un test donné, évitant une vraie expérience incohérente. Honnêtement `"a"` pour un vrai test non `running`.
+
+✅ **`track_ab_test_metric`, vraies statistiques incrémentales, jamais un vrai journal d'événements illimité** : chaque vrai appel met à jour un vrai `{count, sum, sum_sq}` par variant/métrique -- `sum_sq` (réel, additif) rend possible un vrai test de signification à la `get_ab_test_results`.
+
+✅ **Statistiques (vision critique 3) -- une vraie approximation honnêtement documentée** : `get_ab_test_results` calcule un vrai p-value via une approximation normale standard du test t de Welch (`math.erf`, aucune dépendance `scipy`) -- honnêtement `None` sous 2 vrais échantillons, jamais une signification fabriquée.
+
+🐛 **Vrai bug de cas limite trouvé et corrigé pendant les tests** : quand la vraie variance est nulle dans LES DEUX vrais groupes (chaque vrai échantillon identique au sein de son propre groupe) mais que les vraies moyennes diffèrent, c'est la preuve la plus forte possible d'une vraie différence -- pas "indéterminé". `_welch_p_value` retournait `None` (erreur de division par zéro évitée mais mal interprétée) ; corrigé pour retourner `0.0` (différence maximale) si les moyennes diffèrent, `1.0` (aucune preuve) si elles sont égales.
+
+⚠️ **`POST /ab-tests/{id}/variants/choose`, une vraie décision humaine** : marque le vrai test `completed` et enregistre le vrai variant gagnant choisi dans `metrics["winner"]` -- distinct du vrai calcul automatique de signification.
+
+⚠️ **`get_ab_test_variant`, délibérément SANS son propre endpoint** : c'est une vraie fonction de bucketing rapide, par requête, destinée à être appelée directement par le vrai code de routage backend -- la bloquer derrière un vrai aller-retour HTTP Admin+ irait à l'encontre de son propre but réel.
+
+⚠️ **`POST /ab-tests/{id}/track`, endpoint réel additionnel** : le littéral ne liste aucune route pour `track_ab_test_metric` malgré la lister comme fonction propre -- ajoutée ici (nécessaire).
+
+Endpoints réels Admin+ : `POST/GET /organizations/{id}/ab-tests`, `GET /ab-tests/{id}`, `POST /ab-tests/{id}/start|pause|complete`, `GET /ab-tests/{id}/results`, `POST /ab-tests/{id}/variants/choose`, `POST /ab-tests/{id}/track`.
+
+Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/test_ab_tests_endpoints.py`.
+
+**Régression complète (7.3.10)** : zéro échec.
+
+**Partie 7.3 — MLOps avancé — ✅ COMPLET (10/10)**. **Partie 7 — Evaluation Lab — ✅ COMPLET (7.1 + 7.2 + 7.3, aucune portée restante identifiée).**
 
 ---
 
