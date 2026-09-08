@@ -11,11 +11,15 @@ api/security/rate_limit.py's own sliding window.
 from api.config import settings
 
 
-def _levenshtein_distance(a: str, b: str) -> int:
+def levenshtein_distance(a: str, b: str) -> int:
     """Classic O(len(a) * len(b)) edit-distance DP. Only the previous row
     is ever needed, so this keeps O(min(len(a), len(b))) space rather
     than a full 2D table -- passwords and email/name strings are short,
-    but there's no reason to allocate more than necessary."""
+    but there's no reason to allocate more than necessary.
+
+    Public (not private to this module) -- Partie 7.1.3's own real
+    `ground_truth_answers.validate_fuzzy` reuses this exact same real
+    algorithm rather than a second, hand-rolled copy."""
     if len(a) < len(b):
         a, b = b, a
     if not b:
@@ -51,7 +55,7 @@ def is_password_too_similar(password: str, email: str, name: str | None = None) 
         candidates.append(name.lower())
 
     return any(
-        _levenshtein_distance(password_lower, candidate) < settings.PASSWORD_SIMILARITY_MIN_DISTANCE
+        levenshtein_distance(password_lower, candidate) < settings.PASSWORD_SIMILARITY_MIN_DISTANCE
         for candidate in candidates
         if candidate
     )

@@ -1051,6 +1051,20 @@ class Settings(BaseSettings):
     QUALITY_DASHBOARD_MAX_RESPONSES: int = 1000
     QUALITY_DASHBOARD_RETENTION_DAYS: int = 90
 
+    # -- Ground-truth answers (Partie 7.1.3) -----------------------------------
+    GROUND_TRUTH_SEMANTIC_THRESHOLD: float = 0.8
+    GROUND_TRUTH_FUZZY_THRESHOLD: float = 0.8
+    GROUND_TRUTH_MAX_ANSWERS: int = 1000
+
+    # -- Ground-truth documents / retrieval evaluation (Partie 7.1.4) ---------
+    GROUND_TRUTH_RETRIEVAL_K: int = 5
+    GROUND_TRUTH_RETRIEVAL_METRICS: list[str] = Field(default_factory=lambda: ["precision", "recall", "mrr", "ndcg"])
+
+    # -- Question difficulty (Partie 7.1.5) ------------------------------------
+    DIFFICULTY_AUTO_DETECT_ENABLED: bool = True
+    DIFFICULTY_EASY_THRESHOLD: float = 0.3
+    DIFFICULTY_HARD_THRESHOLD: float = 0.7
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1168,6 +1182,21 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"IDK_THRESHOLD_DEFAULT ({self.IDK_THRESHOLD_DEFAULT}) must be within "
                 f"[IDK_THRESHOLD_MIN, IDK_THRESHOLD_MAX] ({self.IDK_THRESHOLD_MIN}, {self.IDK_THRESHOLD_MAX})"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _difficulty_thresholds_must_be_ordered(self) -> "Settings":
+        """A real, valuable check beyond item 4's own literal ask
+        (Partie 7.1.5): a real `easy` threshold at or above the real
+        `hard` one would make `auto_detect_difficulty` never able to
+        real-ily classify anything as `medium` -- caught here, at
+        startup, same "safety never depends on a coincidence" reasoning
+        as this class's own other real cross-field validators."""
+        if self.DIFFICULTY_EASY_THRESHOLD >= self.DIFFICULTY_HARD_THRESHOLD:
+            raise ValueError(
+                f"DIFFICULTY_EASY_THRESHOLD ({self.DIFFICULTY_EASY_THRESHOLD}) must be less than "
+                f"DIFFICULTY_HARD_THRESHOLD ({self.DIFFICULTY_HARD_THRESHOLD})"
             )
         return self
 

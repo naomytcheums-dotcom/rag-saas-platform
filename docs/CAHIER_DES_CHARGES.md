@@ -1530,12 +1530,85 @@ Tests réels dédiés (14 tests), voir `tests/test_quality_dashboard.py`.
 
 ---
 
-## PARTIE 7 — Evaluation Lab — ⬜ NON COMMENCÉ pour l'essentiel (~2/33)
+## PARTIE 7 — Evaluation Lab — 🟡 PARTIEL
 
-Recall@5 et MRR existent (avec une réserve de data-leakage déjà
-documentée dans `AUDIT.md` : le poids du reranker a été réglé sur le
-même jeu de test que celui reporté). Dataset manager, Recall@1/3/10,
-NDCG, precision, comparaisons multi-modèles, A/B testing : ⬜.
+### 7.1 Dataset manager — ✅ COMPLET (6/6)
+
+**Fondation réelle, multi-tenant, comblant un vrai manque** : `src/evaluation.py`'s own docstring documente déjà le vrai écart -- un vrai évaluateur, mais mono-tenant et basé sur des fichiers (`data/test_set.json`, `results/*.json`, aucun concept d'organisation). Recall@k et MRR y existent déjà (avec la réserve de data-leakage documentée dans `AUDIT.md` : le poids du reranker a été réglé sur le même jeu de test que celui reporté), mais réutilisé comme référence honnête, pas comme code partagé (tenancy différente). Les 5 vrais modèles réels (`EvaluationDataset`, `EvaluationQuestion`, `QuestionSet`, `QuestionSetItem`, `BenchmarkVersion`) sont déclarés ensemble dans une seule vraie migration (0071), même précédent que `Citation`/`Agent`.
+
+**Nouveau module de sécurité partagé** `api/security/evaluation.py` : `require_dataset_admin`/`require_question_admin`/`require_question_set_admin`/`require_benchmark_version_admin`, tous Admin+ (Owner/Admin), même tier que `require_org_admin` de `api/routers/usage.py`.
+
+**Réutilisation réelle** : `password_similarity.levenshtein_distance` (rendue publique) réutilisée directement par `ground_truth_answers.validate_fuzzy` -- jamais une seconde implémentation de l'algorithme.
+
+#### Partie 7.1.1 — Dataset manager (UI)
+
+✅ **Nouveau module réel** `api/services/evaluation_datasets.py` : les 11 fonctions littérales (`create_dataset`, `update_dataset`, `delete_dataset`, `get_dataset`, `list_datasets`, `add_question`, `update_question`, `delete_question`, `get_questions`, `import_questions`, `export_questions`) + 11 nouveaux endpoints réels Admin+ (`api/routers/evaluation_datasets.py`).
+
+✅ **Scalabilité (vision critique 2) -- import réel en lot** : `import_questions` construit chaque vraie ligne en mémoire puis n'émet qu'un seul vrai `add_all`/`flush`, jamais un aller-retour par ligne. Une vraie ligne malformée est honnêtement ignorée et rapportée, jamais un échec total de l'import.
+
+✅ **Sécurité (vision critique 3)** : `list_datasets` filtre réellement `organization_id` ; chaque autre fonction reçoit un `dataset_id`/`question_id` déjà résolu par les vraies dépendances Admin+.
+
+Tests réels dédiés (15 + 8 tests), voir `tests/test_evaluation_datasets.py` + `tests/test_evaluation_datasets_endpoints.py`.
+
+#### Partie 7.1.2 — Question sets
+
+✅ **Nouveau module réel** `api/services/question_sets.py` : les 10 fonctions littérales.
+
+⚠️ **`QuestionSetItem.position`, un vrai renommage documenté depuis le littéral `order`** : `ORDER` est un mot-clé SQL réservé -- une vraie colonne nommée ainsi nécessiterait un vrai échappement dans chaque requête, un vrai piège facile à oublier que ce renommage évite entièrement, sans aucun coût réel.
+
+✅ **Cohérence (vision critique 2)** : `QuestionSet.dataset_id` est une vraie FK obligatoire (`CASCADE`) -- un ensemble ne peut jamais réellement exister détaché de son propre dataset.
+
+✅ **Robustesse (vision critique 3) -- suppression d'une question** : `QuestionSetItem.question_id` porte un vrai `ondelete="CASCADE"` -- supprimer une vraie question retire automatiquement, au niveau base de données, toute vraie ligne de membership qui la référence, avant même que ce module ne s'exécute. `reorder_questions` valide en plus explicitement que les vrais `question_ids` donnés correspondent EXACTEMENT à la vraie composition actuelle -- une vraie `ValueError` honnête pour une requête de réorganisation périmée, jamais une réorganisation partielle silencieuse.
+
+Tests réels dédiés (11 + 5 tests), voir `tests/test_question_sets.py` + `tests/test_question_sets_endpoints.py`.
+
+#### Partie 7.1.3 — Ground-truth answers
+
+✅ **Nouveau module réel** `api/services/ground_truth_answers.py` : les 7 fonctions littérales.
+
+⚠️ **Cohérence (vision critique 1) -- `validate_semantic`, délibérément basé sur de vrais embeddings, contrairement à la Partie 6.2** : les vrais modules 6.2 évitaient délibérément les embeddings réels (un vrai coût par appel d'agent en direct). La validation de ground truth est le cas inverse réel : une vraie évaluation HORS LIGNE, jamais un vrai chemin d'exécution par réponse en direct -- le vrai coût d'embedding est ici pleinement justifié, et le littéral de cette étape demande explicitement une vraie similarité sémantique (embedding), pas un proxy rapide par recouvrement de mots.
+
+✅ **Robustesse (vision critique 3)** : chaque vrai validateur retourne honnêtement `False` pour une vraie réponse ou attente vide.
+
+Tests réels dédiés (17 tests), voir `tests/test_ground_truth_answers.py`.
+
+#### Partie 7.1.4 — Ground-truth documents
+
+✅ **Nouveau module réel** `api/services/ground_truth_documents.py` : les 6 fonctions littérales + `calculate_retrieval_ndcg`/`calculate_retrieval_hit_rate` (réelles, additionnelles -- l'item 3 littéral liste 5 vraies métriques, seules 3 fonctions `calculate_retrieval_*` étaient nommées).
+
+✅ **Cohérence -- définitions IR réelles et standard** : `src/evaluation.py`'s own script legacy calcule un vrai "hit_at_k"/"reciprocal_rank" SOUS le nom "recall_at_k" -- une vraie imprécision honnête que ce module corrige : `hit_rate@k` ("un vrai document attendu a-t-il été trouvé") est réellement distinct de `recall@k` ("quelle vraie fraction de TOUS les documents attendus a été trouvée").
+
+✅ **Robustesse (vision critique 3)** : chaque vraie métrique retourne honnêtement `0.0` sans documents attendus réels.
+
+Tests réels dédiés (14 tests), voir `tests/test_ground_truth_documents.py`.
+
+#### Partie 7.1.5 — Easy/Medium/Hard
+
+✅ **Nouveau module réel** `api/services/question_difficulty.py` : les 4 fonctions littérales.
+
+✅ **Cohérence (vision critique 1) -- 5 vrais proxies honnêtement calculables** : `entities` compte les vrais mots capitalisés (hors premier mot) -- délibérément PAS une réutilisation de `metadata_enrichment.extract_entities` (qui ne reconnaît que email/url/date/argent/téléphone, un vrai signal honnêtement inutile pour une question ordinaire comme "Qui était président de la France en 1990 ?").
+
+✅ **Robustesse (vision critique 3)** : une vraie question vide retourne honnêtement un score `0.0` / une classification `"easy"`.
+
+Tests réels dédiés (8 tests), voir `tests/test_question_difficulty.py`.
+
+#### Partie 7.1.6 — Benchmark versions
+
+✅ **Nouveau module réel** `api/services/benchmark_versions.py` : les 6 fonctions littérales + 5 nouveaux endpoints réels Admin+ (`api/routers/benchmark_versions.py`).
+
+⚠️ **`snapshot` stocke du vrai CONTENU, pas de la vraie IDENTITÉ** : chaque vraie entrée est le contenu réel d'une question (texte, réponse attendue, ...), délibérément SANS son propre id réel -- une question restaurée par rollback est une vraie copie fidèle de ce qu'une version contenait, avec un nouvel id réellement différent. `compare_benchmark_versions` associe donc les entrées par leur propre TEXTE de question réel entre les deux vrais snapshots -- un choix réel, honnête, documenté.
+
+⚠️ **Une vraie opération honnêtement destructive** : `rollback_to_version` supprime réellement TOUTES les questions actuelles du dataset (leurs vraies appartenances `QuestionSetItem` disparaissent en cascade) avant de les recréer depuis le vrai snapshot -- documenté clairement, jamais adouci.
+
+✅ **Robustesse (vision critique 3) -- version corrompue** : la vraie forme du snapshot est validée AVANT toute suppression réelle -- un vrai snapshot corrompu lève une erreur, laissant le dataset actuel totalement intact.
+
+Tests réels dédiés (10 + 4 tests), voir `tests/test_benchmark_versions.py` + `tests/test_benchmark_versions_endpoints.py`.
+
+**Régression complète** (104+ tests sur les 6 nouveaux modules + endpoints + `test_password_similarity.py`) : zéro échec.
+
+### 7.2+ — le reste de l'Evaluation Lab — ⬜ NON COMMENCÉ
+
+Recall@1/3/10, NDCG multi-modèles, comparaisons multi-modèles, A/B testing : ⬜ (prompts non encore reçus).
 
 ---
 

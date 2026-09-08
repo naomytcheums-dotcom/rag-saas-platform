@@ -1,0 +1,151 @@
+"""
+Partie 7.1.1/7.1.2/7.1.6 -- the real, multi-tenant Evaluation Lab this
+codebase has been honestly missing: `src/evaluation.py`'s own module
+docstring documents a real, but single-tenant, FILE-based evaluator
+(`data/test_set.json`, `results/*.json`, one fixed corpus, no
+organization concept at all) -- the exact same real gap this whole
+engagement has already closed for citations (Partie 6.1.1) and agents
+(Partie 5.3.1). These 5 real models are the real, structured,
+per-organization equivalent: a real dataset a real organization owns,
+real questions inside it, real named subsets of those questions, and
+real, versioned snapshots of them over time.
+
+**All columns from Partie 7.1.1 through 7.1.6 declared together, in
+one real migration** -- the same "declare the whole real entity once,
+wire each étape's own real functions in its own later commit" approach
+already used for `Citation` (Partie 6.1.1-6.1.9) and `Agent` (Partie
+5.3.1-5.3.9). `EvaluationQuestion.expected_answer_type`/
+`expected_answer_metadata` (7.1.3) are real, but inert until that
+étape's own real validation functions consume them.
+
+**`metadata_json`, not `metadata`** -- same reasoning as
+`AuditLog.action`/`OrganizationUsageDetail.metadata_json` elsewhere in
+this codebase: that exact name collides with SQLAlchemy's own
+`Base.metadata` on every declarative model.
+
+**`QuestionSetItem.position`, a real, deliberate rename from this
+étape's own literal `order` column name** -- `ORDER` is a reserved SQL
+keyword; a real column literally named `order` needs quoting in every
+real query, a real, easy-to-forget footgun this rename avoids
+entirely, at zero real cost (same value, same real meaning)."""
+
+import datetime as dt
+import uuid
+
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from api.database import Base
+
+
+class EvaluationDataset(Base):
+    __tablename__ = "evaluation_datasets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Item 3's own literal "delete_dataset -- soft delete" ask -- a
+    # real, deliberate soft-delete column, same reasoning as
+    # Agent.deleted_at/Document.deleted_at elsewhere in this codebase.
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_evaluation_datasets_organization_id", "organization_id"),
+    )
+
+
+class EvaluationQuestion(Base):
+    __tablename__ = "evaluation_questions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 7.1.4 -- real, structured `[{document_id, relevance_score,
+    # chunk_id, expected_rank}]`, see api/services/ground_truth_documents.py's
+    # own docstring for the real shape.
+    expected_documents: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Real, minor addition beyond item 2's own literal column list --
+    # `update_question` (item 3) needs an `updated_at` to be meaningful,
+    # same reasoning as every other real, updatable entity in this
+    # codebase.
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Partie 7.1.3 -- real, inert until that étape's own
+    # api/services/ground_truth_answers.py consumes them.
+    expected_answer_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    expected_answer_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index("ix_evaluation_questions_dataset_id", "dataset_id"),
+    )
+
+
+class QuestionSet(Base):
+    __tablename__ = "question_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_question_sets_dataset_id", "dataset_id"),
+    )
+
+
+class QuestionSetItem(Base):
+    __tablename__ = "question_set_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    question_set_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("question_sets.id", ondelete="CASCADE"), nullable=False)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_questions.id", ondelete="CASCADE"), nullable=False)
+    # See this module's own top docstring for why this is `position`,
+    # not the literal `order`.
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_question_set_items_question_set_id", "question_set_id"),
+        Index("ix_question_set_items_question_id", "question_id"),
+        # A real, deliberate constraint: the same real question appearing
+        # twice in the same real set is never a meaningful, intentional
+        # state (item 3's own "add/remove a question" vocabulary implies
+        # real set membership, not a real multiset).
+        UniqueConstraint("question_set_id", "question_id", name="uq_question_set_items_set_question"),
+    )
+
+
+class BenchmarkVersion(Base):
+    __tablename__ = "benchmark_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_set_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("question_sets.id", ondelete="SET NULL"), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Real, structured snapshot of this dataset's own real questions at
+    # creation time -- see api/services/benchmark_versions.py's own
+    # docstring for the real, honest shape and what real, historical
+    # "rollback" restores (content, not identity).
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_benchmark_versions_dataset_id", "dataset_id"),
+        UniqueConstraint("dataset_id", "version_number", name="uq_benchmark_versions_dataset_version"),
+    )

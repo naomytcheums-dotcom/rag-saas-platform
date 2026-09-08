@@ -6,30 +6,30 @@ test_password_strength.py's neighbor test_recovery_codes.py.
 """
 
 from api.config import settings
-from api.security.password_similarity import _levenshtein_distance, is_password_too_similar
+from api.security.password_similarity import levenshtein_distance, is_password_too_similar
 
 
-def test_levenshtein_distance_of_identical_strings_is_zero():
-    assert _levenshtein_distance("janedoe", "janedoe") == 0
+def testlevenshtein_distance_of_identical_strings_is_zero():
+    assert levenshtein_distance("janedoe", "janedoe") == 0
 
 
-def test_levenshtein_distance_counts_single_character_edits():
-    assert _levenshtein_distance("janedoe", "janedoe1") == 1  # one insertion
-    assert _levenshtein_distance("janedoe", "janedo") == 1  # one deletion
-    assert _levenshtein_distance("janedoe", "janedof") == 1  # one substitution
+def testlevenshtein_distance_counts_single_character_edits():
+    assert levenshtein_distance("janedoe", "janedoe1") == 1  # one insertion
+    assert levenshtein_distance("janedoe", "janedo") == 1  # one deletion
+    assert levenshtein_distance("janedoe", "janedof") == 1  # one substitution
 
 
-def test_levenshtein_distance_of_completely_different_strings_is_large():
-    assert _levenshtein_distance("correct-horse-battery-staple", "xyz") >= 3
+def testlevenshtein_distance_of_completely_different_strings_is_large():
+    assert levenshtein_distance("correct-horse-battery-staple", "xyz") >= 3
 
 
-def test_levenshtein_distance_against_an_empty_string_is_the_other_length():
-    assert _levenshtein_distance("abc", "") == 3
-    assert _levenshtein_distance("", "") == 0
+def testlevenshtein_distance_against_an_empty_string_is_the_other_length():
+    assert levenshtein_distance("abc", "") == 3
+    assert levenshtein_distance("", "") == 0
 
 
-def test_levenshtein_distance_is_symmetric():
-    assert _levenshtein_distance("kitten", "sitting") == _levenshtein_distance("sitting", "kitten")
+def testlevenshtein_distance_is_symmetric():
+    assert levenshtein_distance("kitten", "sitting") == levenshtein_distance("sitting", "kitten")
 
 
 def test_password_matching_the_email_local_part_is_too_similar():
