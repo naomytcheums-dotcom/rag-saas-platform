@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (17/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (19/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -2054,7 +2054,23 @@ Tests réels dédiés (10 tests), voir `tests/test_i18n.py`.
 
 **Régression complète (8.1.17-8.1.19)** : 97 tests, zéro échec.
 
-**Partie 8.1 — Chat Interface — backend ✅ COMPLET (17/19 ; 8.1.4 et 8.1.5 restent en attente du scaffold React).** Prochaine étape : scaffold Next.js/React/TypeScript, puis les ~17 composants React (dont 8.1.4/8.1.5) contre cette API désormais stable et complète.
+### Scaffold Next.js/React/TypeScript + composants (complète Partie 8.1.4-8.1.19 côté frontend)
+
+✅ **Stack confirmée** : `frontend/` -- Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4. Un vrai framework moderne et recherché, jamais du HTML/CSS brut -- répond directement à la contrainte de valeur de revente demandée par l'utilisateur.
+
+✅ **Thème réel, exclusivement clair** (`frontend/app/globals.css`) : dégradé blanc-orange élégant, palette de tokens CSS (`--accent`, `--surface`, `--border`, etc.) réutilisée par chaque composant via les classes Tailwind générées (`bg-accent`, `text-foreground-muted`, ...) -- **aucune media query `prefers-color-scheme: dark`, aucun toggle** -- conforme à la contrainte permanente de l'utilisateur, vérifié visuellement dans le navigateur.
+
+✅ **18 composants réels créés**, tous câblés contre l'API FastAPI déjà construite (`frontend/lib/api.ts`, un vrai client fetch typé) : `Citation`/`CitationTooltip`/`CitationModal`/`CitationList` (8.1.4), `CopyButton` (8.1.5), `RegenerateButton` (8.1.6), `EditQuestion` (8.1.7), `RetryButton` (8.1.8), `FeedbackButtons` (8.1.9), `ConversationList`/`ConversationItem` (8.1.10), `RenameConversation` (8.1.11), `ConversationSearch` (8.1.12), `DeleteConversation` (8.1.13), `ShareConversation` (8.1.15), `LanguageSwitcher` (8.1.19), `SuggestedQuestions` (8.1.17), `FollowUpQuestions` (8.1.18).
+
+🐛 **Bugs réels trouvés et corrigés pendant la vérification visuelle dans le navigateur** (voir `<verification_workflow>`) :
+- **Erreur d'hydratation React réelle** : `CitationModal`/`CitationTooltip` peuvent apparaître inline dans le texte d'une vraie réponse (dans un `<p>`) -- le HTML interdit du contenu de bloc (`<div>`, `<h2>`, `<blockquote>`, `<dl>`) à l'intérieur d'un `<p>`. Corrigé via `createPortal` (rendu réel dans `document.body`), le positionnement du tooltip recalculé via `getBoundingClientRect()` de l'élément déclencheur.
+- **`react-hooks/refs` réel** : lire `ref.current` pendant le rendu (pas dans un gestionnaire d'événement) est désormais interdit par la règle ESLint de ce projet -- corrigé en déplaçant la lecture dans `onMouseEnter`/`onFocus`.
+- **Dépassement d'écran réel du tooltip** : une citation proche du bord droit centrait un tooltip de 288px partiellement hors écran -- corrigé par un vrai clampage sur la largeur de la fenêtre.
+- **Rejet de promesse non intercepté réel** (`LanguageSwitcher`) : un appel API échoué (backend non démarré) remontait comme `Uncaught (in promise)` -- corrigé avec un `.catch()` honnête (repli silencieux, pas de plantage).
+
+✅ **Vérifié directement dans le navigateur** (Next.js dev server réel, port 3011) : thème clair confirmé visuellement, clic sur citation → modale réelle avec passage/source/lien, survol → tooltip réel avec score de pertinence, zéro erreur console après corrections, `tsc --noEmit` et `eslint` tous deux à zéro erreur.
+
+**Partie 8.1 — Chat Interface — ✅ COMPLET (19/19).**
 
 ---
 

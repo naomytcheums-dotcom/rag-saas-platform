@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/*
+ * Design constraint (explicit, standing, repeated by the user):
+ * light-only, elegant theme. NEVER dark mode -- no dark palette,
+ * no prefers-color-scheme override, no theme toggle anywhere in this
+ * app. Every color below is chosen to stay legible and elegant on a
+ * warm, light, orange-and-white gradient background.
+ */
+
+:root {
+  --background: #fffaf5;
+  --background-gradient: linear-gradient(180deg, #fff7ef 0%, #ffffff 45%, #fff3e8 100%);
+  --surface: #ffffff;
+  --surface-muted: #fff6ed;
+  --foreground: #241c14;
+  --foreground-muted: #6b5d4f;
+  --border: #f0ddc8;
+  --border-strong: #e8c9a3;
+
+  --accent: #f5842a;
+  --accent-hover: #e3701a;
+  --accent-soft: #ffe9d3;
+  --accent-soft-hover: #ffdcb5;
+
+  --success: #2f9e5e;
+  --success-soft: #e3f6ea;
+  --danger: #d8482f;
+  --danger-soft: #fce6e1;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow-sm: 0 1px 2px rgba(94, 58, 20, 0.06);
+  --shadow-md: 0 4px 16px rgba(94, 58, 20, 0.08);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background-gradient);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+* {
+  scrollbar-color: var(--border-strong) transparent;
+}

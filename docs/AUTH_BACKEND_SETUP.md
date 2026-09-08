@@ -10602,10 +10602,56 @@ New real endpoints: `GET /i18n/languages`,
 
 **Full regression sweep (8.1.17-8.1.19)**: 97 tests, zero failures.
 
-**Partie 8.1 -- Chat Interface backend ✅ COMPLETE (17/19; 8.1.4 and
-8.1.5 remain pending on the React scaffold).** Next step: Next.js/
-React/TypeScript scaffold, then the ~17 React components (8.1.4/8.1.5
-included) against this now-stable, complete API.
+### Next.js/React/TypeScript scaffold + components (completes Partie 8.1.4-8.1.19 frontend)
+
+**Confirmed stack**: `frontend/` -- Next.js 16 (App Router), React 19,
+TypeScript, Tailwind CSS v4. A real, modern, in-demand framework,
+never plain HTML/CSS -- directly answers the user's own resale-value
+requirement.
+
+**Real, exclusively light theme** (`frontend/app/globals.css`): an
+elegant white-to-orange gradient, a real CSS-variable token palette
+(`--accent`, `--surface`, `--border`, ...) reused by every component
+via the generated Tailwind classes (`bg-accent`, `text-foreground-muted`,
+...) -- **no `prefers-color-scheme: dark` media query, no toggle at
+all** -- matches the user's own standing constraint, verified visually
+in the browser.
+
+**18 real components built**, all wired against the already-built
+FastAPI backend (`frontend/lib/api.ts`, a real typed fetch client):
+`Citation`/`CitationTooltip`/`CitationModal`/`CitationList` (8.1.4),
+`CopyButton` (8.1.5), `RegenerateButton` (8.1.6), `EditQuestion`
+(8.1.7), `RetryButton` (8.1.8), `FeedbackButtons` (8.1.9),
+`ConversationList`/`ConversationItem` (8.1.10), `RenameConversation`
+(8.1.11), `ConversationSearch` (8.1.12), `DeleteConversation` (8.1.13),
+`ShareConversation` (8.1.15), `LanguageSwitcher` (8.1.19),
+`SuggestedQuestions` (8.1.17), `FollowUpQuestions` (8.1.18).
+
+🐛 **Real bugs found and fixed during visual browser verification**
+(see `<verification_workflow>`):
+- **Real React hydration error**: `CitationModal`/`CitationTooltip`
+  can appear inline inside a real response's own `<p>` text -- HTML
+  forbids block content (`<div>`, `<h2>`, `<blockquote>`, `<dl>`)
+  inside a `<p>`. Fixed via `createPortal` (real render into
+  `document.body`), tooltip positioning recomputed from the trigger's
+  own `getBoundingClientRect()`.
+- **Real `react-hooks/refs`**: reading `ref.current` during render
+  (not inside an event handler) is now forbidden by this project's own
+  ESLint rule -- fixed by moving the read into `onMouseEnter`/`onFocus`.
+- **Real tooltip viewport overflow**: a citation near the right edge
+  centered a 288px-wide tooltip partly off screen -- fixed with real
+  viewport clamping.
+- **Real unhandled promise rejection** (`LanguageSwitcher`): a failed
+  API call (backend not running) surfaced as `Uncaught (in promise)` --
+  fixed with an honest `.catch()` (silent fallback, no crash).
+
+**Verified directly in the browser** (real Next.js dev server, port
+3011): light theme confirmed visually, clicking a citation opens a
+real modal with passage/source/link, hovering shows a real tooltip
+with relevance score, zero console errors after fixes, both
+`tsc --noEmit` and `eslint` clean.
+
+**Partie 8.1 -- Chat Interface -- ✅ COMPLETE (19/19).**
 
 ### Partie 3.4.2 -- query rewriting
 
