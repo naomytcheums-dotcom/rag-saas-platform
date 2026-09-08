@@ -339,3 +339,36 @@ class RegressionDetection(Base):
     __table_args__ = (
         Index("ix_regression_detections_job_id", "job_id"),
     )
+
+
+class DeploymentEvaluationStatus:
+    pending = "pending"
+    running = "running"
+    passed = "passed"
+    failed = "failed"
+
+
+class DeploymentEvaluation(Base):
+    """Partie 7.3.8 -- one real, automatic evaluation gate before
+    deploying a real agent version, reusing `EvaluationJob` (7.3.1)
+    directly (`evaluation_job_id`, real, additive traceability beyond
+    item 1's own literal column list) rather than a second, parallel
+    evaluation-running mechanism."""
+
+    __tablename__ = "deployment_evaluations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False)
+    evaluation_job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("evaluation_jobs.id", ondelete="SET NULL"), nullable=True)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=DeploymentEvaluationStatus.pending)
+    results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    thresholds: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_deployment_evaluations_agent_id", "agent_id"),
+    )

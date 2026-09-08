@@ -31,6 +31,7 @@ celery_app = Celery(
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
         "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
+        "api.tasks.deployment_evaluations",
     ],
 )
 

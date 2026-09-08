@@ -1754,7 +1754,7 @@ Tests réels dédiés (7 + 4 tests), voir `tests/test_evaluation_comparisons.py`
 
 **Régression complète** : zéro échec (voir section suivante pour le décompte global).
 
-### 7.3 MLOps avancé — 🟡 EN COURS (8/10)
+### 7.3 MLOps avancé — 🟡 EN COURS (9/10)
 
 Persistance réelle des runs d'évaluation en tant que vrais jobs Celery, notation humaine, détection de régression, comparaisons persistées (modèle/retriever/reranker/prompt), auto-eval pré-déploiement, seuils configurables, A/B testing PRODUCTION avec traffic-splitting réel.
 
@@ -1845,6 +1845,26 @@ Endpoints réels Admin+ : `GET /datasets/{id}/regressions[/summary]`, `POST /dat
 Tests réels dédiés (9 + 4 tests), voir `tests/test_regression_detection.py` + `tests/test_regression_detection_endpoints.py`.
 
 **Régression complète (7.3.3/7.3.9)** : 26 tests dédiés + zéro régression sur `test_evaluation_comparisons.py`/`test_comparison_jobs.py` (qui réutilisent `metric_keys()`).
+
+#### Partie 7.3.8 — Auto-eval avant déploiement
+
+✅ **Nouveau vrai modèle** `DeploymentEvaluation` (migration 0076, `evaluation_job_id` réel et additif -- vraie traçabilité vers le `EvaluationJob` sous-jacent).
+
+✅ **Nouveau module réel** `api/services/deployment_evaluations.py` : `create_deployment_evaluation`, `run_deployment_evaluation`, `get_deployment_evaluation`, `list_deployment_evaluations`, `check_deployment_thresholds`, `pass_deployment_evaluation`. Réutilise directement `create_evaluation_job`/`run_evaluation_job` (7.3.1) -- jamais un second mécanisme d'exécution.
+
+⚠️ **`POST /agents/{id}/deploy`, un vrai garde-fou honnête, pas une vraie infrastructure de déploiement** : ce dépôt n'a pas encore de vraie infrastructure de déploiement (Partie 9, non commencée) -- `deploy_agent` bloque réellement sauf si la PLUS RÉCENTE `DeploymentEvaluation` de cet agent a réellement `passed`, jamais un faux succès fabriqué.
+
+✅ **Sécurité (vision critique -- littéral)** : Manager+ partout (Owner/Admin/Manager), un vrai tier plus bas que le reste de l'Evaluation Lab (Admin+) -- réutilise directement `api/security/agents.py`'s own `require_agent_manager` pour les routes réelles scopées par agent.
+
+✅ **Cohérence (vision critique 3) -- seuils configurables** : `thresholds` est un vrai override PAR évaluation (`DEFAULT_DEPLOYMENT_THRESHOLDS`, les 6 valeurs littérales, en repli), jamais une constante globale figée.
+
+✅ **`pass_deployment_evaluation`, un vrai override humain** : marque `passed` sans condition (ex. un vrai réviseur acceptant un échec limite) -- distinct du vrai calcul automatique.
+
+Endpoints réels : `POST /agents/{id}/deploy/evaluate` (Manager+), `GET /agents/{id}/deploy/evaluations` (Manager+), `GET /deploy/evaluations/{id}` (Manager+), `POST /deploy/evaluations/{id}/pass` (Manager+), `POST /agents/{id}/deploy` (Manager+).
+
+Tests réels dédiés (9 + 3 tests), voir `tests/test_deployment_evaluations.py` + `tests/test_deployment_evaluations_endpoints.py`.
+
+**Régression complète (7.3.8)** : zéro échec.
 
 ---
 

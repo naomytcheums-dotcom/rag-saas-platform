@@ -25,9 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.evaluation import (
-    BenchmarkVersion, ComparisonJob, EvaluationDataset, EvaluationJob, EvaluationQuestion, ManualEvaluation, QuestionSet,
-    RegressionDetection, RegressionThreshold,
+    BenchmarkVersion, ComparisonJob, DeploymentEvaluation, EvaluationDataset, EvaluationJob, EvaluationQuestion,
+    ManualEvaluation, QuestionSet, RegressionDetection, RegressionThreshold,
 )
+from api.models.agent import Agent
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 
@@ -48,6 +49,14 @@ async def _membership_for(organization_id: uuid.UUID, current_user: User, db: As
 def _require_admin(membership: OrganizationMember) -> OrganizationMember:
     if membership.role not in (OrganizationRole.owner, OrganizationRole.admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin access required")
+    return membership
+
+
+def _require_manager(membership: OrganizationMember) -> OrganizationMember:
+    """Partie 7.3.8's own literal "Manager+" tier -- same real check as
+    `api/security/agents.py`'s own `require_agent_manager`."""
+    if membership.role not in (OrganizationRole.owner, OrganizationRole.admin, OrganizationRole.manager):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization manager access required")
     return membership
 
 
@@ -213,3 +222,21 @@ async def require_regression_admin(
         raise _NOT_FOUND
     membership = await _membership_for(dataset.organization_id, current_user, db)
     return regression, _require_admin(membership)
+
+
+async def require_deployment_evaluation_manager(
+    evaluation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[DeploymentEvaluation, OrganizationMember]:
+    """Partie 7.3.8 -- `GET /deploy/evaluations/{id}`/`POST /deploy/evaluations/{id}/pass`;
+    the real, agent-scoped routes (`POST /agents/{id}/deploy/evaluate`,
+    `GET /agents/{id}/deploy/evaluations`, `POST /agents/{id}/deploy`)
+    instead reuse `api/security/agents.py`'s own `require_agent_manager`
+    directly (they already carry a real `{agent_id}` path param)."""
+    evaluation = await db.get(DeploymentEvaluation, evaluation_id)
+    if evaluation is None:
+        raise _NOT_FOUND
+    agent = await db.get(Agent, evaluation.agent_id)
+    if agent is None:
+        raise _NOT_FOUND
+    membership = await _membership_for(agent.organization_id, current_user, db)
+    return evaluation, _require_manager(membership)

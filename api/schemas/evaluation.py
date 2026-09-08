@@ -432,3 +432,39 @@ class RegressionSummaryResponse(BaseModel):
     total: int
     by_severity: dict[str, int]
     unresolved: int
+
+
+class DeploymentEvaluationCreateRequest(BaseModel):
+    dataset_id: uuid.UUID
+    version: str
+    thresholds: dict[str, float] | None = None
+
+
+class DeploymentEvaluationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    dataset_id: uuid.UUID
+    evaluation_job_id: uuid.UUID | None
+    version: str
+    status: str
+    results: dict | None
+    thresholds: dict
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    completed_at: dt.datetime | None
+
+
+class DeploymentEvaluationListResponse(BaseModel):
+    items: list[DeploymentEvaluationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class DeployAgentResponse(BaseModel):
+    deployed: bool
+    reason: str | None = None
+    evaluation_id: uuid.UUID | None = None
+    version: str | None = None

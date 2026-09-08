@@ -9892,7 +9892,7 @@ returns `1.0` -- no real evidence at all can never look significant.
 **Real verification**: 7 + 4 tests, see `tests/test_evaluation_comparisons.py`
 + `tests/test_evaluation_comparisons_endpoints.py`.
 
-## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 8/10)
+## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 9/10)
 
 Real, persisted evaluation runs as real Celery jobs, human scoring,
 regression detection, persisted comparisons (model/retriever/reranker/
@@ -10108,6 +10108,50 @@ New real Admin+ endpoints: `GET /datasets/{id}/regressions[/summary]`,
 **Full regression sweep (7.3.3/7.3.9)**: 26 dedicated tests, plus zero
 regression on `test_evaluation_comparisons.py`/`test_comparison_jobs.py`
 (both reuse `metric_keys()`).
+
+### Partie 7.3.8 -- Auto-eval before deployment
+
+New real model `DeploymentEvaluation` (migration 0076, a real,
+additive `evaluation_job_id` -- real traceability to the underlying
+`EvaluationJob`).
+
+New module `api/services/deployment_evaluations.py`:
+`create_deployment_evaluation`, `run_deployment_evaluation`,
+`get_deployment_evaluation`, `list_deployment_evaluations`,
+`check_deployment_thresholds`, `pass_deployment_evaluation`. Reuses
+`create_evaluation_job`/`run_evaluation_job` (7.3.1) directly -- never
+a second execution mechanism.
+
+**`POST /agents/{id}/deploy`, a real, honest gate, not real deployment
+infrastructure**: this repo has no real deployment infrastructure yet
+(Partie 9, not started) -- `deploy_agent` really blocks unless this
+agent's own MOST RECENT `DeploymentEvaluation` really `passed`, never
+a fabricated success.
+
+**Security (vision critique -- literal)**: Manager+ throughout
+(Owner/Admin/Manager), a real, lower tier than the rest of the
+Evaluation Lab (Admin+) -- reuses `api/security/agents.py`'s own
+`require_agent_manager` directly for the real, agent-scoped routes.
+
+**Coherence (vision critique 3) -- configurable thresholds**:
+`thresholds` is a real, PER-EVALUATION override
+(`DEFAULT_DEPLOYMENT_THRESHOLDS`, the 6 literal values, as fallback),
+never a frozen global constant.
+
+**`pass_deployment_evaluation`, a real human override**: unconditionally
+marks `passed` (e.g. a real reviewer accepting a borderline failure)
+-- distinct from the real automatic check.
+
+New real endpoints: `POST /agents/{id}/deploy/evaluate` (Manager+),
+`GET /agents/{id}/deploy/evaluations` (Manager+),
+`GET /deploy/evaluations/{id}` (Manager+),
+`POST /deploy/evaluations/{id}/pass` (Manager+),
+`POST /agents/{id}/deploy` (Manager+).
+
+**Real verification**: 9 + 3 tests, see `tests/test_deployment_evaluations.py`
++ `tests/test_deployment_evaluations_endpoints.py`.
+
+**Full regression sweep (7.3.8)**: zero failures.
 
 ### Partie 3.4.2 -- query rewriting
 
