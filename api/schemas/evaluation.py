@@ -201,3 +201,43 @@ class MetricsSummaryResponse(BaseModel):
     average: float | None
     min: float | None
     max: float | None
+
+
+class MultiModelComparisonRequest(BaseModel):
+    model_configs: list[dict]
+
+
+class ComparisonConfigResult(BaseModel):
+    # Named `model_config_used`, not `model_config` -- a brand-new
+    # field this étape introduces itself (no pre-existing literal name
+    # to mirror), so it sidesteps Pydantic's own reserved `model_config`
+    # class attribute entirely rather than needing an alias.
+    model_config_used: dict
+    result_ids: list[uuid.UUID]
+    metrics: dict[str, MetricsSummaryResponse]
+
+
+class MultiModelComparisonResponse(BaseModel):
+    question_set_id: uuid.UUID
+    sample_size: int
+    rank_metric: str
+    ranking: list[int]
+    configs: list[ComparisonConfigResult]
+
+
+class ABTestRequest(BaseModel):
+    model_config_a: dict
+    model_config_b: dict
+    metric: str | None = None
+
+
+class ABTestResponse(BaseModel):
+    question_set_id: uuid.UUID
+    metric: str
+    sample_size: int
+    wins_a: int
+    wins_b: int
+    ties: int
+    average_delta: float
+    p_value: float
+    significant: bool

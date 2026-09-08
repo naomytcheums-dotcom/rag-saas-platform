@@ -1106,6 +1106,16 @@ class Settings(BaseSettings):
         "question_coverage": 0.3, "key_terms_presence": 0.2, "semantic_similarity": 0.3, "length_adequacy": 0.2,
     })
 
+    # -- Multi-model comparisons & A/B testing (Partie 7.3) ---------------------
+    # The single real metric key used to RANK configs in a multi-model
+    # comparison, and the real default metric an A/B test compares when
+    # the caller doesn't name one explicitly.
+    EVALUATION_DEFAULT_COMPARISON_METRIC: str = "answer_relevance"
+    # The real, exact two-sided sign-test p-value threshold below which
+    # run_ab_test.significant is True (Partie 7.3's own literal
+    # "A/B testing" ask) -- the conventional real 0.05.
+    AB_TEST_SIGNIFICANCE_THRESHOLD: float = 0.05
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

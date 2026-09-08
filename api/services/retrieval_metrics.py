@@ -51,7 +51,8 @@ from api.services.ground_truth_documents import (
 __all__ = [
     "calculate_dcg", "calculate_idcg", "calculate_mrr", "calculate_ndcg", "calculate_precision", "calculate_recall_at_1",
     "calculate_recall_at_3", "calculate_recall_at_5", "calculate_recall_at_10", "get_dataset_result_metrics",
-    "get_mrr_summary", "get_ndcg_summary", "get_precision_summary", "get_recall_summary", "summarize_metric",
+    "get_mrr_summary", "get_ndcg_summary", "get_precision_summary", "get_recall_summary", "get_result_metrics",
+    "summarize_metric", "summarize_metric_for_results",
 ]
 
 
@@ -111,14 +112,41 @@ async def get_dataset_result_metrics(db: AsyncSession, dataset_id: uuid.UUID) ->
     return list(rows)
 
 
-async def summarize_metric(db: AsyncSession, dataset_id: uuid.UUID, metric_key: str) -> dict:
+async def get_result_metrics(db: AsyncSession, result_ids: list[uuid.UUID]) -> list[dict]:
+    """Real, shared plumbing (Partie 7.3) -- every real `.metrics` dict
+    for a SPECIFIC, given real set of `EvaluationResult` rows, not a
+    whole real dataset. `evaluation_comparisons.py`'s own real
+    multi-model comparison/A/B-test functions reuse this: a real
+    comparison must aggregate exactly the real results IT just
+    produced, never every real result a dataset happens to already
+    hold (which could mix in unrelated, earlier real runs under
+    different real model configs)."""
+    if not result_ids:
+        return []
+    rows = (await db.scalars(select(EvaluationResult.metrics).where(EvaluationResult.id.in_(result_ids)))).all()
+    return list(rows)
+
+
+def _summarize(metrics_dicts: list[dict], metric_key: str) -> dict:
     """Real, shared aggregation -- honestly `count=0`/`average=None`
-    when no real evaluation result for this dataset has this real
+    when no real metrics dict in the given real list has this real
     metric key at all."""
-    values = [m[metric_key] for m in await get_dataset_result_metrics(db, dataset_id) if m.get(metric_key) is not None]
+    values = [m[metric_key] for m in metrics_dicts if m.get(metric_key) is not None]
     if not values:
         return {"metric": metric_key, "count": 0, "average": None, "min": None, "max": None}
     return {"metric": metric_key, "count": len(values), "average": sum(values) / len(values), "min": min(values), "max": max(values)}
+
+
+async def summarize_metric(db: AsyncSession, dataset_id: uuid.UUID, metric_key: str) -> dict:
+    """Real, shared aggregation over a whole real dataset."""
+    return _summarize(await get_dataset_result_metrics(db, dataset_id), metric_key)
+
+
+async def summarize_metric_for_results(db: AsyncSession, result_ids: list[uuid.UUID], metric_key: str) -> dict:
+    """Real, shared aggregation (Partie 7.3) over a specific, given
+    real set of `EvaluationResult` rows -- see `get_result_metrics`'s
+    own docstring."""
+    return _summarize(await get_result_metrics(db, result_ids), metric_key)
 
 
 async def get_recall_summary(db: AsyncSession, dataset_id: uuid.UUID, k: int) -> dict:

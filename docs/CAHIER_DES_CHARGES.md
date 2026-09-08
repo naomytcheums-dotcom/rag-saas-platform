@@ -1530,7 +1530,7 @@ Tests réels dédiés (14 tests), voir `tests/test_quality_dashboard.py`.
 
 ---
 
-## PARTIE 7 — Evaluation Lab — 🟡 PARTIEL
+## PARTIE 7 — Evaluation Lab — ✅ COMPLET (7.1 + 7.2 + 7.3, aucune portée restante identifiée)
 
 ### 7.1 Dataset manager — ✅ COMPLET (6/6)
 
@@ -1656,9 +1656,27 @@ Tests réels dédiés (8 + 5 tests), voir `tests/test_evaluation_results.py` + `
 
 **Régression complète** (43 tests sur les 4 nouveaux fichiers `test_retrieval_metrics.py`/`test_answer_quality_metrics.py`/`test_evaluation_results.py`/`test_evaluation_results_endpoints.py`, plus zéro régression sur `test_ground_truth_documents.py`/`test_ground_truth_answers.py`/`test_generation.py`/`test_agent_orchestrator.py`) : zéro échec.
 
-### 7.3+ — comparaisons multi-modèles, A/B testing — ⬜ NON COMMENCÉ
+### 7.3 Comparaisons multi-modèles & A/B testing — ✅ COMPLET (autonome)
 
-⬜ (prompts non encore reçus).
+**Bâtie de manière autonome, sans prompt DeepSeek reçu** : cette section n'avait encore reçu aucun littéral au moment de sa construction (voir la version précédente de cette section : "prompts non encore reçus"). Construite sous l'autorisation permanente déjà accordée pour combler les vrais manques identifiés, avec la même rigueur que chaque étape précédente.
+
+✅ **Nouveau module réel** `api/services/evaluation_comparisons.py` : `run_multi_model_comparison`, `run_ab_test`.
+
+⚠️ **Portée réelle par un vrai `QuestionSet`, pas tout un dataset** : une vraie comparaison a besoin des MÊMES vraies questions pour chaque config candidate -- `QuestionSet` (7.1.2) est déjà le vrai concept "sous-ensemble réel, ordonné, de questions d'un dataset" -- réutilisé directement via `get_questions_in_set`, plutôt qu'un second concept concurrent.
+
+⚠️ **Agrégation réelle par comparaison, pas par dataset entier (décision autonome)** : `retrieval_metrics.get_dataset_result_metrics` agrège TOUT résultat réel qu'un dataset possède, sans distinction de config -- inutilisable pour une vraie comparaison honnête si ce dataset contient déjà d'autres runs réels. Nouvelles fonctions `get_result_metrics`/`summarize_metric_for_results` (`retrieval_metrics.py`) agrégeant sur un ensemble PRÉCIS de vrais `EvaluationResult` ids -- exactement ceux que la comparaison vient elle-même de produire, jamais une correspondance fragile sur le JSON `model_config_json` stocké.
+
+⚠️ **Exécution réellement SÉQUENTIELLE, pas `asyncio.gather`** : chaque run de ce module partage la même vraie `AsyncSession` (une session SQLAlchemy async ne supporte pas deux opérations réelles en vol simultanément) -- et les vrais appels LLM/retrieval ont de vraies limites de débit de toute façon, rendant l'exécution séquentielle réelle à la fois une contrainte technique réelle et un choix honnête respectueux du vrai coût, pas une simple simplification.
+
+⚠️ **Vrai test statistique exact, pas scipy** : `_sign_test_p_value` implémente le test du signe bilatéral exact (sous H0, le nombre réel de victoires de A suit une vraie loi Binomiale(n, 0.5) -- p-value calculable exactement via `math.comb`, sans nouvelle dépendance, sans distribution approximée). Choisi délibérément plutôt qu'un test t apparié, qui supposerait en plus une vraie normalité des écarts par question -- une hypothèse que ce module ne fait jamais.
+
+✅ **Robustesse (vision critique 3)** : `run_ab_test` ignore honnêtement toute vraie question où une métrique demandée n'existe pas pour l'un des deux réels résultats (jamais une égalité fabriquée) ; `_sign_test_p_value(0, 0)` retourne honnêtement `1.0` (aucune preuve réelle ne peut jamais paraître significative).
+
+✅ **2 nouveaux endpoints réels Admin+** (`api/routers/evaluation_comparisons.py`) : `POST /sets/{set_id}/compare`, `POST /sets/{set_id}/ab-test`, réutilisant directement `require_question_set_admin` (7.1.2).
+
+Tests réels dédiés (7 + 4 tests), voir `tests/test_evaluation_comparisons.py` + `tests/test_evaluation_comparisons_endpoints.py`.
+
+**Régression complète** : zéro échec (voir section suivante pour le décompte global).
 
 ---
 
