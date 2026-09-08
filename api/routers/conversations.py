@@ -10,7 +10,7 @@ else's conversation, the same anti-enumeration reasoning
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -35,6 +35,11 @@ from api.services.conversation_management import (
 )
 from api.services.conversation_management import delete_conversation as soft_delete_conversation
 from api.services.conversation_management import highlight_matches
+from api.services.conversation_export import ExportError, export_to_docx, export_to_json, export_to_markdown, export_to_pdf
+from api.schemas.conversation_sharing import ShareCreateRequest, ShareResponse, VisibilityUpdateRequest
+from api.services.conversation_sharing import (
+    SharingError, create_share_link, list_public_conversations, list_share_links, set_conversation_visibility,
+)
 from api.services.message_actions import (
     MessageActionError, edit_question, get_edit_history, get_retry_count, regenerate_from_edited_question,
     regenerate_response, retry_message, revert_to_version,
@@ -112,6 +117,14 @@ async def list_deleted_conversations_endpoint(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     return await list_deleted_conversations(db, current_user.id, limit=limit, offset=offset)
+
+
+@router.get("/public", response_model=list[ConversationResponse])
+async def list_public_conversations_endpoint(
+    organization_id: uuid.UUID, limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    return await list_public_conversations(db, organization_id, limit=limit, offset=offset)
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)
@@ -205,6 +218,97 @@ async def permanently_delete_conversation_endpoint(
     if not deleted:
         raise _NOT_FOUND
     await db.commit()
+
+
+# --------------------------------------------------------------------- Partie 8.1.14 (Export)
+
+
+@router.get("/{conversation_id}/export/pdf")
+async def export_conversation_pdf_endpoint(
+    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        pdf_bytes = await export_to_pdf(db, conversation_id, current_user.id)
+    except ExportError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{conversation_id}.pdf"'})
+
+
+@router.get("/{conversation_id}/export/docx")
+async def export_conversation_docx_endpoint(
+    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        docx_bytes = await export_to_docx(db, conversation_id, current_user.id)
+    except ExportError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return Response(
+        content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{conversation_id}.docx"'},
+    )
+
+
+@router.get("/{conversation_id}/export/json")
+async def export_conversation_json_endpoint(
+    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await export_to_json(db, conversation_id, current_user.id)
+    except ExportError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/{conversation_id}/export/markdown")
+async def export_conversation_markdown_endpoint(
+    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        markdown_text = await export_to_markdown(db, conversation_id, current_user.id)
+    except ExportError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return Response(content=markdown_text, media_type="text/markdown", headers={"Content-Disposition": f'attachment; filename="{conversation_id}.md"'})
+
+
+# ------------------------------------------------------------ Partie 8.1.15 (Share) + 8.1.16 (Public/Private)
+
+
+@router.post("/{conversation_id}/share", response_model=ShareResponse)
+async def create_share_link_endpoint(
+    conversation_id: uuid.UUID, payload: ShareCreateRequest = ShareCreateRequest(),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        share = await create_share_link(db, conversation_id, current_user.id, expires_at=payload.expires_at, max_views=payload.max_views)
+    except SharingError as exc:
+        await db.rollback()
+        raise _NOT_FOUND from exc
+    await db.commit()
+    return share
+
+
+@router.get("/{conversation_id}/shares", response_model=list[ShareResponse])
+async def list_share_links_endpoint(
+    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await list_share_links(db, conversation_id, current_user.id)
+    except SharingError as exc:
+        raise _NOT_FOUND from exc
+
+
+@router.patch("/{conversation_id}/visibility", response_model=ConversationResponse)
+async def update_conversation_visibility_endpoint(
+    conversation_id: uuid.UUID, payload: VisibilityUpdateRequest,
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    try:
+        conversation = await set_conversation_visibility(db, conversation_id, current_user.id, payload.is_public)
+    except SharingError as exc:
+        await db.rollback()
+        raise _NOT_FOUND from exc
+    await db.commit()
+    await db.refresh(conversation)
+    return conversation
 
 
 # ---------------------------------------------------------------- Partie 8.1.6/8.1.7/8.1.8

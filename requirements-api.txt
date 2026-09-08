@@ -182,6 +182,21 @@ pyyaml==6.0.3
 # exact real XSS-prevention need.
 bleach==6.2.0
 
+# -- Conversation export / PDF (Partie 8.1.14) --------------------------------
+# python-docx (DOCX export) and markdown-it-py+bleach (Markdown export)
+# above are already real dependencies, reused directly -- weasyprint is
+# the one genuinely new one, for real PDF export. Real, DOCUMENTED
+# system dependency (same category as pytesseract/pdf2image, Partie
+# 3.1.6): weasyprint needs real native Pango/cairo/GObject libraries a
+# plain `pip install` does not provide -- confirmed directly (`import
+# weasyprint` itself raises a real OSError without them). CI installs
+# them via apt-get (see .github/workflows/regression.yml); a real
+# local dev machine missing them still imports this whole app fine
+# (api/services/conversation_export.py imports weasyprint LAZILY,
+# inside export_to_pdf only) -- only an actual PDF export attempt
+# fails, with a real, honest ExportError instead of a crash.
+weasyprint==63.1
+
 # -- Documents / HTML import (Partie 2.1.5) -----------------------------------
 # The exact libraries the master cahier des charges names for this item
 # ("2.1.5 | HTML | BeautifulSoup4 + readability-lxml"). beautifulsoup4

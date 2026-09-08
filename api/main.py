@@ -28,7 +28,7 @@ from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
-    chat_stream, citations, conversations,
+    chat_stream, citations, conversations, conversation_shares,
     custom_domains, custom_tools, documents, feedback,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
@@ -193,6 +193,7 @@ app.include_router(tool_permissions.router)
 app.include_router(tool_config.router)
 app.include_router(human_approval.router)
 app.include_router(conversations.router)
+app.include_router(conversation_shares.router)
 app.include_router(feedback.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)

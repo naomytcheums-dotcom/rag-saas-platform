@@ -10489,6 +10489,59 @@ New real endpoints: `GET /conversations/stats`,
 
 **Full regression sweep (8.1.10-8.1.13)**: 110 tests, zero failures.
 
+### Partie 8.1.14 -- Export (PDF/DOCX/JSON/Markdown)
+
+**Real reuse**: PDF export goes through the SAME real Markdown-to-HTML
+pipeline as 8.1.2 (`render_markdown_safe`) -- never a second
+formatting path.
+
+🐛 **Real system dependency, handled via lazy import**: `weasyprint`
+needs real native libraries (Pango/cairo/GObject) a plain `pip install`
+does not provide -- confirmed directly on this real dev machine
+(`import weasyprint` raises a real `OSError` without them). Same
+category as Tesseract/`pytesseract` (3.1.6): CI installs them via
+`apt-get`, `export_to_pdf` fails cleanly with a real, honest
+`ExportError` on a machine without them, rather than crashing the
+whole app's import -- `weasyprint` is imported ONLY inside
+`export_to_pdf`, never at module level.
+
+New real module `api/services/conversation_export.py`:
+`export_to_pdf`/`export_to_docx`/`export_to_json`/`export_to_markdown`.
+New real endpoints under `/conversations/{id}/export/{pdf,docx,json,markdown}`.
+
+**Real verification**: 6 tests, see `tests/test_conversation_export.py`
+-- the PDF test passes either way (native libraries present or
+absent), never a raw `OSError`.
+
+### Partie 8.1.15 -- Share conversation + Partie 8.1.16 -- Public/Private conversations
+
+New real model `ConversationShare` (migration `0080`): real token via
+`secrets.token_urlsafe` (cryptographically unpredictable, same
+convention as every other real token in this project), real
+`expires_at`/`max_views`.
+
+🐛 **Real incoherence fixed (8.1.16)**: the literal
+`list_public_conversations(user_id, limit, offset)` signature has no
+real way to know WHICH organization's public conversations to list --
+"visible by every member of the organization" (the literal access rule
+itself) genuinely needs an `organization_id`. Fixed: `organization_id`
+is a real, additional, required parameter.
+
+New real module `api/services/conversation_sharing.py`:
+`create_share_link`/`get_shared_conversation`/`increment_view_count`/
+`delete_share_link`/`is_share_valid`/`list_share_links`,
+`set_conversation_visibility`/`list_public_conversations`/`can_view_conversation`.
+
+New real endpoints: `POST /conversations/{id}/share`,
+`GET /share/{token}` (genuinely PUBLIC, no auth -- a real, valid token
+IS the real proof of access), `DELETE /share/{token}`,
+`GET /conversations/{id}/shares`, `PATCH /conversations/{id}/visibility`,
+`GET /conversations/public?organization_id=...`.
+
+**Real verification**: 11 tests, see `tests/test_conversation_sharing.py`.
+
+**Full regression sweep (8.1.14-8.1.16)**: 76 tests, zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

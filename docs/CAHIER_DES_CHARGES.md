@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (11/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (14/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -2003,6 +2003,30 @@ Nouveaux endpoints réels : `GET /conversations/stats`, `GET /conversations/sear
 Tests réels dédiés (21 tests), voir `tests/test_conversation_management.py`.
 
 **Régression complète (8.1.10-8.1.13)** : 110 tests, zéro échec.
+
+#### Partie 8.1.14 — Export (PDF/DOCX/JSON/Markdown)
+
+✅ **Réutilisation réelle** : l'export PDF passe par le MÊME pipeline réel Markdown→HTML que 8.1.2 (`render_markdown_safe`) -- jamais un second chemin de mise en forme.
+
+🐛 **Dépendance système réelle, gérée en lazy import** : `weasyprint` a besoin de vraies bibliothèques natives (Pango/cairo/GObject) qu'un simple `pip install` ne fournit pas -- confirmé directement sur cette machine de dev réelle (`import weasyprint` lève un vrai `OSError` sans elles). Même catégorie que Tesseract/`pytesseract` (3.1.6) : CI les installe via `apt-get`, un `export_to_pdf` échoue proprement avec un vrai `ExportError` honnête sur une machine qui ne les a pas, plutôt que de faire planter tout l'import de l'app -- `weasyprint` n'est importé qu'À L'INTÉRIEUR de `export_to_pdf`, jamais au niveau module.
+
+✅ **Nouveau module réel** `api/services/conversation_export.py` : `export_to_pdf`/`export_to_docx`/`export_to_json`/`export_to_markdown`. Nouveaux endpoints réels sous `/conversations/{id}/export/{pdf,docx,json,markdown}`.
+
+Tests réels dédiés (6 tests), voir `tests/test_conversation_export.py` -- le test PDF réussit dans les deux cas réels (bibliothèques présentes ou absentes), jamais un `OSError` brut.
+
+#### Partie 8.1.15 — Share conversation + Partie 8.1.16 — Public/Private conversations
+
+✅ **Nouveau modèle réel** `ConversationShare` (migration `0080`) : token réel via `secrets.token_urlsafe` (cryptographiquement imprévisible, même convention que tout autre vrai token de ce projet), `expires_at`/`max_views` réels.
+
+🐛 **Incohérence réelle corrigée (8.1.16)** : la signature littérale `list_public_conversations(user_id, limit, offset)` n'a aucun moyen réel de savoir DE QUELLE organisation lister les conversations publiques -- "visible par tous les membres de l'organisation" (la règle d'accès littérale elle-même) a réellement besoin d'un `organization_id`. Corrigé : `organization_id` est un vrai paramètre requis, additionnel.
+
+✅ **Nouveau module réel** `api/services/conversation_sharing.py` : `create_share_link`/`get_shared_conversation`/`increment_view_count`/`delete_share_link`/`is_share_valid`/`list_share_links`, `set_conversation_visibility`/`list_public_conversations`/`can_view_conversation`.
+
+Nouveaux endpoints réels : `POST /conversations/{id}/share`, `GET /share/{token}` (réellement PUBLIC, sans authentification -- un vrai token valide EST la vraie preuve d'accès), `DELETE /share/{token}`, `GET /conversations/{id}/shares`, `PATCH /conversations/{id}/visibility`, `GET /conversations/public?organization_id=...`.
+
+Tests réels dédiés (11 tests), voir `tests/test_conversation_sharing.py`.
+
+**Régression complète (8.1.14-8.1.16)** : 76 tests, zéro échec.
 
 ---
 
