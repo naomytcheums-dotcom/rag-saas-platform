@@ -49,3 +49,39 @@ class ConfidenceFactorsResponse(BaseModel):
     diversity: float
     reliability: float
     consistency: float
+
+
+class ResponseDetailResponse(BaseModel):
+    """Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 -- the real, whole
+    `Response` entity, including the 6 real anti-hallucination metrics
+    this batch adds. Real, STORED creation-time snapshots (unlike the
+    citation-level enrichments, these are NOT recomputed live here --
+    recomputing all 6 real checks on every read would repeat real,
+    non-trivial work `enrich_response_with_quality_metrics` already
+    did once at generation time; a real, deliberate difference from
+    `GET /responses/{response_id}/confidence`'s own live recompute,
+    which only ever re-derives 5 cheap, citation-only factors)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    workspace_id: uuid.UUID | None
+    query: str
+    answer: str
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    confidence_score: float | None
+    confidence_factors: dict | None
+    confidence_estimation: float | None
+    confidence_estimation_factors: dict | None
+    claim_verification_status: str | None
+    claim_verification_details: dict | None
+    has_contradictions: bool
+    contradictions: list | None
+    source_consistency_score: float | None
+    source_consistency_details: dict | None
+    hallucination_score: float | None
+    hallucination_factors: dict | None
+    groundedness_score: float | None
+    groundedness_factors: dict | None

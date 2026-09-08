@@ -28,6 +28,7 @@ from api.services.citations import add_citations_to_response
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import chat_completion
 from api.services.response_confidence import enrich_response_with_confidence
+from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.retrieval_pipeline import search_with_context
 
 _CITATION_INSTRUCTIONS = (
@@ -49,6 +50,7 @@ async def generate_response(
     llm_cfg = resolve_llm_config(org_settings)
 
     system_prompt = llm_cfg["system_prompt"]
+    context_text = None
     if chunks:
         context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(chunks, start=1))
         system_prompt = f"{system_prompt}\n\n{_CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
@@ -70,4 +72,8 @@ async def generate_response(
     # Partie 6.1.10 -- real, creation-time confidence snapshot, from
     # these SAME real, just-created citations.
     enrich_response_with_confidence(response, citations)
+    # Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 -- real, creation-time
+    # anti-hallucination metrics, from these SAME real citations and
+    # the SAME real context block the LLM was actually given.
+    await enrich_response_with_quality_metrics(db, response, citations, context=context_text)
     return response

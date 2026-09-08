@@ -28,7 +28,15 @@ as every enrichment above, particularly meaningful here since a
 citation's own `document_id` can go real `NULL` after its source
 document is later deleted (Partie 6.1.1's own `ondelete="SET NULL"`),
 which should honestly lower a live-recomputed `reliability` factor,
-not silently keep reporting stale, over-confident numbers."""
+not silently keep reporting stale, over-confident numbers.
+
+Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 -- `GET /responses/{response_id}`
+below is a real, natural addition (none of those 6 étapes' own
+literal asks requested a new endpoint) so their real, persisted
+metrics are actually reachable through this same, already-established
+`require_response_member` permission boundary -- unlike the confidence
+endpoints above, this one returns the real, STORED creation-time
+snapshot (see `ResponseDetailResponse`'s own docstring for why)."""
 
 import uuid
 
@@ -40,7 +48,7 @@ from api.models.citation import Citation
 from api.models.document import Document
 from api.models.organization import OrganizationMember
 from api.models.response import Response
-from api.schemas.citations import CitationResponse, ConfidenceFactorsResponse, ConfidenceResponse
+from api.schemas.citations import CitationResponse, ConfidenceFactorsResponse, ConfidenceResponse, ResponseDetailResponse
 from api.security.citations import require_citation_member, require_document_citations_member, require_response_member
 from api.services.citation_chunk import enrich_citation_with_chunk, enrich_citations_with_chunk
 from api.services.citation_documents import enrich_citation_with_document, enrich_citations_with_documents
@@ -54,6 +62,14 @@ from api.services.response_confidence import (
 )
 
 router = APIRouter(tags=["citations"])
+
+
+@router.get("/responses/{response_id}", response_model=ResponseDetailResponse)
+async def get_response_endpoint(
+    response_ctx: tuple[Response, OrganizationMember] = Depends(require_response_member),
+):
+    response, _caller = response_ctx
+    return response
 
 
 @router.get("/responses/{response_id}/citations", response_model=list[CitationResponse])

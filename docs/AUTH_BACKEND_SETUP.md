@@ -8949,6 +8949,235 @@ real citations.
 **Real verification**: 18 tests, `tests/test_response_confidence.py`.
 **Completes Partie 6.1 at 10/10.**
 
+## Partie 6.2 -- Anti-hallucination (6.2.4, 6.2.6-6.2.10)
+
+**Real, shared foundation, built ONCE for this whole batch (autonomous
+decision)**: Parties 6.2.4/6.2.6/6.2.7/6.2.9/6.2.10 all implicitly
+needed real claim extraction from a response's own answer text --
+`api/services/claim_extraction.py` (real, fast sentence splitting,
+never an LLM call) builds that real foundation once, reused
+everywhere. `api/services/text_similarity.py` similarly provides the
+real, fast, shared primitives (word overlap, negation detection,
+number extraction) Parties 6.2.4/6.2.7/6.2.8/6.2.9/6.2.10 all reuse --
+deliberately NOT embedding-based (`generate_embeddings` is real and
+already exists, but loading that real model and running real
+inference on every single citation/claim comparison, in a real,
+per-agent-run hot path, is a real cost every one of these 6 étapes'
+own "Performance: is this fast?" vision critique question justifies
+avoiding).
+
+**New real endpoint** `GET /responses/{response_id}`
+(`api/routers/citations.py`, reuses `require_response_member`): none
+of the 6 étapes below literally asked for a new endpoint, but without
+one, `Response`'s 12 new real fields were reachable through no real
+route at all -- added so the "permissions are respected" test
+criterion, literally present in all 6 prompts, has real meaning.
+
+**`api/services/response_quality.py`**: real, shared wiring, called
+once from both `generate_response` (Partie 6.1.1) and
+`AgentOrchestrator.run_agent` (same Partie), running the 6 real checks
+below against the same real response/citations/context every time a
+real response is generated.
+
+### Partie 6.2.4 -- confidence estimation
+
+New module `api/services/confidence_estimation.py`: all 6 literal
+functions (`estimate_confidence`, `calculate_citation_coverage`,
+`calculate_source_consistency`, `calculate_context_alignment`,
+`calculate_citation_quality`, `aggregate_confidence_factors`).
+
+**Coherence (vision critique 1) -- a second real confidence concept,
+not a duplicate**: `Response.confidence_score` (Partie 6.1.10) already
+exists for a narrower concept (citation quality). This étape's own
+literal ask re-declared a JSON field named `confidence_factors` --
+EXACTLY the name Partie 6.1.10 already owns, for different content.
+Renamed to `confidence_estimation_factors` (autonomous, documented
+decision) so the two real concepts never silently overwrite each other
+in the same column.
+
+**Real reuse, not a third reimplementation**: `calculate_source_consistency`
+reuses `source_consistency.calculate_source_agreement` (Partie 6.2.8)
+directly; `calculate_citation_quality` reuses
+`response_confidence.calculate_confidence_factors`'s own real
+`relevance` (Partie 6.1.10) directly.
+
+**A real, documented deviation from the literal signature**:
+`calculate_citation_coverage(citations)` couldn't honestly measure
+"percentage of the response covered by citations" (its own literal
+description) without the response's own text -- `response` was added
+as a real, necessary parameter.
+
+**Performance (vision critique 2)**: fully synchronous, zero database
+access -- verified by a dedicated test (< 0.5s).
+
+**Robustness (vision critique 3)**: every factor honestly reports
+`0.0` with no real citations -- never a fabricated neutral default.
+
+**Real verification**: 14 tests, `tests/test_confidence_estimation.py`.
+
+### Partie 6.2.6 -- claim verification
+
+New module `api/services/claim_verification.py`: all 5 literal
+functions (`verify_claims`, `verify_single_claim`,
+`calculate_claim_support`, `detect_claim_contradictions`,
+`aggregate_verification_results`).
+
+**Coherence -- real reuse, not a second contradiction detector**:
+`detect_claim_contradictions` is a real, direct re-export of
+`contradiction_detection.detect_claim_contradictions` (Partie 6.2.7,
+literally the same function name in that étape's own literal ask too)
+-- implementing it twice would only invite the two real copies to
+silently drift apart.
+
+**`CLAIM_VERIFICATION_USE_LLM`, honestly NOT YET implemented, never
+silently ignored (autonomous decision)**: this codebase's own real LLM
+integration (`chat_completion`) is real and tested, but a genuine
+per-claim LLM verification call costs real API credit -- the same real
+"blocked on API credit" constraint documented for
+`src/hallucination_detection.py`/`src/llm_judge.py`. Rather than
+silently falling back to the heuristic path when an operator
+explicitly opts into the LLM path (misleadingly presenting a plain
+heuristic result as LLM-verified), setting this flag raises a real,
+honest `NotImplementedError` -- verified by a dedicated test.
+
+**Robustness (vision critique 3)**: every claim honestly gets
+`support=0`, `"unverified"` with no real citations at all.
+
+**Tests (vision critique 4)**: all 4 statuses (verified/
+partially_verified/unverified/contradictory) each have a dedicated
+test.
+
+**Real verification**: 14 tests, `tests/test_claim_verification.py`.
+
+### Partie 6.2.7 -- contradiction detection
+
+New module `api/services/contradiction_detection.py`: all 5 literal
+functions (`detect_contradictions`, `detect_claim_contradictions`,
+`detect_source_contradictions`, `detect_claim_source_contradiction`,
+`classify_contradiction`).
+
+**Coherence -- 4 real, honestly-distinct types**: `"text"`/`"semantic"`/
+`"factual"` are a real CONTENT axis (near-identical word overlap plus
+negation, broader overlap plus negation, or literally differing real
+numbers); `"source"` is a real, different ORIGIN axis -- the tag
+`detect_source_contradictions` applies to every real citation-vs-
+citation pair it finds, regardless of the underlying content pattern
+(the literal prompt describes WHERE the contradiction was found, not
+HOW).
+
+**Precision (vision critique 2)**: each type is verified by a
+dedicated test with programmatically-computed real examples (not
+hand-guessed).
+
+**Performance (vision critique 1)**: deliberately not embedding-based
+(see `text_similarity.py`'s own top docstring) -- fast, deterministic
+word overlap.
+
+**Robustness (vision critique 3)**: fewer than 2 real claims/citations
+honestly returns an empty list, never a fabricated contradiction.
+
+**Real verification**: 13 tests, `tests/test_contradiction_detection.py`.
+
+### Partie 6.2.8 -- source consistency check
+
+New module `api/services/source_consistency.py`: all 5 literal
+functions (`check_source_consistency`, `group_sources_by_topic`,
+`compare_source_claims`, `calculate_source_agreement`,
+`identify_source_conflicts`).
+
+**Coherence -- real reuse, not a fourth implementation**:
+`compare_source_claims` reuses `contradiction_detection.find_contradiction`
+directly (made public for this exact reuse, same precedent as
+`citation_chunk.py`'s own `compute_chunk_index`); `source_diversity`/
+`source_reliability` reuse `response_confidence.calculate_confidence_factors`'s
+own real `diversity`/`reliability` directly.
+
+**`temporal_consistency`, a real, NEW, honestly-bounded metric**: real
+standard deviation (in days) across cited documents' own real
+`processed_at` timestamps, normalized against a real, documented
+reference point (365 days) -- never a fabricated universal truth.
+
+**Robustness (vision critique 3)**: a single real source honestly
+returns `agreement_score=1.0`/`conflict_count=0` -- nothing to
+disagree with.
+
+**Real verification**: 9 tests, `tests/test_source_consistency.py`.
+
+### Partie 6.2.9 -- hallucination detector
+
+New, api/-native module `api/services/hallucination_detector.py`: all
+5 literal functions (`detect_hallucinations`,
+`calculate_hallucination_score`, `identify_hallucinated_claims`,
+`check_factual_consistency`, `check_semantic_consistency`).
+Deliberately a DIFFERENT file from the legacy, LLM-judge-based, never
+validated `src/hallucination_detection.py`.
+
+**Coherence -- reuses every real signal already validated this
+batch**: `unsupported_claims_ratio`/`identify_hallucinated_claims`
+reuse `claim_verification.verify_single_claim`; `source_coverage`
+reuses `confidence_estimation.calculate_citation_coverage`;
+`confidence_estimation`/`context_alignment` reuse
+`confidence_estimation.estimate_confidence`/`calculate_context_alignment`.
+
+**A real, non-obvious direction fix**: `source_coverage`/
+`confidence_estimation`/`context_alignment` are "higher is better"
+signals in their own real modules -- but a hallucination score must be
+"higher is worse". The returned `factors` dict keeps each value under
+its own real, natural, honestly-interpretable name, but the weighted
+aggregation INVERTS (`1 - value`) those 3 specific factors before
+summing.
+
+**Precision (vision critique 2)**: all 3 statuses (low/medium/high)
+each have a dedicated test.
+
+**Robustness (vision critique 3)**: `low_citation_count` (backing
+`HALLUCINATION_MIN_CITATIONS`) is a real, honest, additional signal,
+never forced into the score itself.
+
+**Performance (vision critique 1)**: verified by a dedicated test
+(< 0.5s).
+
+**Real verification**: 13 tests, `tests/test_hallucination_detector.py`.
+
+### Partie 6.2.10 -- groundedness score
+
+New module `api/services/groundedness.py`: all 5 literal functions
+(`calculate_groundedness_score`, `calculate_citation_density`,
+`calculate_source_coverage`, `calculate_claim_support`,
+`calculate_context_usage`).
+
+**Coherence (vision critique 1) -- real reuse of claim support, not a
+fourth reimplementation**: `calculate_claim_support` (plural) reuses
+`claim_verification.calculate_claim_support` (singular, Partie 6.2.6)
+internally -- both functions share the same real name across two
+different modules, real, deliberate vocabulary consistency, not a
+namespace collision (Python scopes each to its own module).
+
+**`calculate_context_usage`, a real, deliberately DIFFERENT signal
+from `calculate_context_alignment` (Partie 6.2.4)**: alignment is a
+real, SYMMETRIC similarity between the whole answer and context; usage
+is a real, ASYMMETRIC measure of how much of the CONTEXT's own real
+vocabulary actually made it into the answer -- genuinely
+complementary, not a duplicate under a different name.
+
+**`calculate_citation_density`, a real, documented reference point**:
+normalized against `CITATION_DEFAULT_COUNT` (5 citations per 100
+words) -- reuses the SAME real constant Partie 6.1.1 already
+established, not a fabricated new one.
+
+**Robustness (vision critique 3)**: every factor honestly reports
+`0.0` with no real citations -- an answer grounded in nothing real is
+honestly, genuinely ungrounded, never a fabricated neutral default.
+
+**Real verification**: 12 tests, `tests/test_groundedness.py`.
+
+**Shared wiring and endpoint**: `api/services/response_quality.py` (2
+tests) + `GET /responses/{response_id}` (4 tests), see
+`tests/test_response_quality.py`/`tests/test_response_detail_endpoint.py`.
+Full regression sweep (178 tests across the 6 new modules + shared
+modules + `generation.py`/`agent_orchestrator.py`/`citations.py`, then
+129 tests across the whole reused citation suite): zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

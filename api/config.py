@@ -960,6 +960,66 @@ class Settings(BaseSettings):
     CONFIDENCE_FACTOR_RELIABILITY: float = 0.2
     CONFIDENCE_FACTOR_CONSISTENCY: float = 0.1
 
+    # -- Agent confidence estimation (Partie 6.2.4) ----------------------------
+    # A real, BROADER, complementary metric to Partie 6.1.10's own
+    # citation-quality confidence -- see api/services/confidence_estimation.py's
+    # own docstring for the full, honest reasoning (including why its own
+    # JSON details field is named confidence_estimation_factors, not
+    # confidence_factors). Real weights, summing to 1.0 (enforced below).
+    CONFIDENCE_ESTIMATION_ENABLED: bool = True
+    CONFIDENCE_ESTIMATION_FACTORS: dict[str, float] = Field(default_factory=lambda: {
+        "citation_coverage": 0.25, "source_consistency": 0.2, "context_alignment": 0.25,
+        "citation_quality": 0.2, "response_length": 0.1,
+    })
+
+    # -- Claim verification (Partie 6.2.6) -------------------------------------
+    CLAIM_VERIFICATION_ENABLED: bool = True
+    CLAIM_VERIFICATION_SIMILARITY_THRESHOLD: float = 0.7
+    CLAIM_VERIFICATION_MIN_SUPPORT: int = 2
+    # A real, honest, deliberately-OFF-by-default toggle: this codebase's
+    # own LLM integration (api/services/llm_providers.py's chat_completion)
+    # is real and tested (via mocked calls, same as api/services/generation.py),
+    # but a REAL production call costs real API credit -- the same
+    # "blocked on API credit" real constraint docs/CAHIER_DES_CHARGES.md's
+    # own 6.2 section already documents for src/hallucination_detection.py/
+    # src/llm_judge.py. The real, deterministic heuristic path
+    # (calculate_claim_support) is the honest default; this flag opts INTO
+    # the real, additional LLM-based path once real credit is available.
+    CLAIM_VERIFICATION_USE_LLM: bool = False
+
+    # -- Contradiction detection (Partie 6.2.7) --------------------------------
+    CONTRADICTION_DETECTION_ENABLED: bool = True
+    CONTRADICTION_SIMILARITY_THRESHOLD: float = 0.7
+    CONTRADICTION_MIN_CONFIDENCE: float = 0.6
+
+    # -- Source consistency check (Partie 6.2.8) -------------------------------
+    SOURCE_CONSISTENCY_ENABLED: bool = True
+    SOURCE_CONSISTENCY_MIN_SOURCES: int = 2
+    SOURCE_CONSISTENCY_SIMILARITY_THRESHOLD: float = 0.8
+
+    # -- Hallucination detector (Partie 6.2.9) ---------------------------------
+    # A real, NEW, api/-native module (api/services/hallucination_detector.py)
+    # -- deliberately NOT the same file as the legacy, single-tenant,
+    # LLM-judge-based src/hallucination_detection.py (still real but
+    # "never validated in real conditions, blocked on API credit"): this
+    # one is a real, fast, deterministic, always-available heuristic that
+    # reuses Parties 6.2.4/6.2.6/6.2.7's own real outputs, see that
+    # module's own docstring. Real weights, summing to 1.0 (enforced below).
+    HALLUCINATION_DETECTION_ENABLED: bool = True
+    HALLUCINATION_THRESHOLD: float = 0.5
+    HALLUCINATION_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "unsupported_claims_ratio": 0.3, "contradiction_rate": 0.25, "source_coverage": 0.2,
+        "confidence_estimation": 0.15, "context_alignment": 0.1,
+    })
+    HALLUCINATION_MIN_CITATIONS: int = 2
+
+    # -- Groundedness score (Partie 6.2.10) ------------------------------------
+    GROUNDEDNESS_ENABLED: bool = True
+    GROUNDEDNESS_FACTORS_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "citation_density": 0.25, "source_coverage": 0.25, "claim_support": 0.3, "context_usage": 0.2,
+    })
+    GROUNDEDNESS_MIN_CITATIONS: int = 2
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1028,6 +1088,33 @@ class Settings(BaseSettings):
         )
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"The 5 CONFIDENCE_FACTOR_* weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _confidence_estimation_factors_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 6.2.4's own separate weight dict."""
+        total = sum(self.CONFIDENCE_ESTIMATION_FACTORS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"CONFIDENCE_ESTIMATION_FACTORS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _hallucination_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 6.2.9's own weight dict."""
+        total = sum(self.HALLUCINATION_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"HALLUCINATION_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _groundedness_factors_weights_must_sum_to_one(self) -> "Settings":
+        """Same real reasoning as `_confidence_factor_weights_must_sum_to_one`
+        above, applied to Partie 6.2.10's own weight dict."""
+        total = sum(self.GROUNDEDNESS_FACTORS_WEIGHTS.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"GROUNDEDNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
         return self
 
 

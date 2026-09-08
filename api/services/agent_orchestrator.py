@@ -79,6 +79,7 @@ from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion
 from api.services.response_confidence import enrich_response_with_confidence
+from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
 from api.services.tool_selection import select_tools
 from api.services.tools import ToolSpec
@@ -355,6 +356,16 @@ class AgentOrchestrator:
                         # Partie 6.1.10 -- real, creation-time confidence
                         # snapshot, same as generate_response's own.
                         enrich_response_with_confidence(response_row, citations_row)
+                        # Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 --
+                        # real, creation-time anti-hallucination metrics.
+                        # The real context text here is these SAME real
+                        # citation_chunks' own content, joined the same
+                        # way generate_response's own system prompt
+                        # builds its context block -- NOT this method's
+                        # own, differently-scoped `context` kwarg
+                        # (Partie 5.1.1's own agent run context).
+                        quality_context = "\n\n".join(c["content"] for c in citation_chunks) if citation_chunks else None
+                        await enrich_response_with_quality_metrics(db, response_row, citations_row, context=quality_context)
                         run_row = await get_run(db, run.id)
                         run_row.response_id = response_row.id
                     await db.commit()
