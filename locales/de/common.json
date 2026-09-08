@@ -1,0 +1,17 @@
+{
+  "app_name": "RAG SaaS Platform",
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "delete": "Löschen",
+  "confirm": "Bestätigen",
+  "loading": "Wird geladen…",
+  "search": "Suchen",
+  "settings": "Einstellungen",
+  "logout": "Abmelden",
+  "back": "Zurück",
+  "yes": "Ja",
+  "no": "Nein",
+  "new_conversation": "Neue Unterhaltung",
+  "welcome": "Willkommen, {name}!",
+  "language": "Sprache"
+}

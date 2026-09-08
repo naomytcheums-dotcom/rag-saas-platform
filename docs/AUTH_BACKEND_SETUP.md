@@ -10542,6 +10542,71 @@ IS the real proof of access), `DELETE /share/{token}`,
 
 **Full regression sweep (8.1.14-8.1.16)**: 76 tests, zero failures.
 
+### Partie 8.1.17 -- Suggested questions + Partie 8.1.18 -- Follow-up questions
+
+🐛 **Real incoherence fixed (8.1.17)**: the prompt lists TWO endpoints
+for the same real feature -- `GET /conversations/suggested-questions`
+(no real organization scope at all) and
+`GET /organizations/{org_id}/suggested-questions` (real, properly
+scoped). Only the second is kept: suggested questions are real,
+organization-scoped data (`get_popular_questions`/`get_recent_questions`
+both genuinely need an `organization_id`) -- an unscoped duplicate
+would either be meaningless or silently guess an organization.
+
+New real module `api/services/suggested_questions.py`: an honest
+fallback chain -- real LLM generation (if enabled and real context is
+given) → real popular questions → real recent questions -- never an
+empty result while the organization has real history, never an
+uncaught real LLM failure surfacing here.
+
+New real model `FollowUpQuestion` (migration `0081`): follow-up
+questions really persisted after generation, with real click tracking
+(`clicked`).
+
+New real endpoints: `GET /organizations/{org_id}/suggested-questions`,
+`POST /messages/{id}/follow-up`, `GET /messages/{id}/follow-up`.
+
+**Real verification**: 21 tests, see `tests/test_suggested_questions.py`.
+
+### Partie 8.1.19 -- Multi-langue UI (i18n)
+
+**Real, honest scope (vision critique -- coherence)**: only the
+`common` category (`locales/{lang}/common.json`) exists for now, real
+and complete for all 6 really-supported languages -- the other 6
+categories the prompt names (`chat`, `documents`, `agents`, `settings`,
+`errors`, `auth`) are added incrementally, each alongside the real UI
+area it actually belongs to (the React scaffold is still pending in
+this same Partie 8) -- shipping 6 empty/speculative category files
+today would just be real dead weight, guessing at keys a not-yet-built
+UI hasn't settled on. Same "backend before frontend" discipline
+already applied to every other Partie 8.1 étape this session.
+
+🐛 **`set_user_language` -- a real design decision**: a UI language
+preference is real, lightweight, per-browser state -- a real cookie
+(`UI_LANGUAGE_COOKIE_NAME`) is the appropriate real persistence layer
+here, not a new column on the central `users` table (a real,
+unnecessary schema risk for a real UI preference this codebase can
+already express without one).
+
+New real module `api/services/i18n.py`:
+`get_translation`/`get_all_translations`/`detect_user_language`/
+`get_supported_languages`, an honest fallback chain (requested
+language → `UI_DEFAULT_LANGUAGE` → the raw key -- never a real
+exception surfacing over one missing string).
+
+New real endpoints: `GET /i18n/languages`,
+`GET /i18n/translations/{language}`, `GET /i18n/detect`,
+`POST /i18n/language`.
+
+**Real verification**: 10 tests, see `tests/test_i18n.py`.
+
+**Full regression sweep (8.1.17-8.1.19)**: 97 tests, zero failures.
+
+**Partie 8.1 -- Chat Interface backend ✅ COMPLETE (17/19; 8.1.4 and
+8.1.5 remain pending on the React scaffold).** Next step: Next.js/
+React/TypeScript scaffold, then the ~17 React components (8.1.4/8.1.5
+included) against this now-stable, complete API.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

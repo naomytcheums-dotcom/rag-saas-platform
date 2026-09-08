@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (14/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (17/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -2027,6 +2027,34 @@ Nouveaux endpoints réels : `POST /conversations/{id}/share`, `GET /share/{token
 Tests réels dédiés (11 tests), voir `tests/test_conversation_sharing.py`.
 
 **Régression complète (8.1.14-8.1.16)** : 76 tests, zéro échec.
+
+#### Partie 8.1.17 — Suggested questions + Partie 8.1.18 — Follow-up questions
+
+🐛 **Incohérence réelle corrigée (8.1.17)** : le prompt liste DEUX endpoints pour la même fonctionnalité réelle -- `GET /conversations/suggested-questions` (sans aucune vraie portée organisation) et `GET /organizations/{org_id}/suggested-questions` (réel, correctement scopé). Seul le second est gardé : les questions suggérées sont des données réellement scopées à une organisation (`get_popular_questions`/`get_recent_questions` ont toutes deux réellement besoin d'un `organization_id`) -- un doublon non scopé serait soit dénué de sens, soit devrait deviner silencieusement une organisation.
+
+✅ **Nouveau module réel** `api/services/suggested_questions.py` : chaîne de repli honnête -- génération LLM réelle (si activée et un contexte réel est fourni) → questions populaires réelles → questions récentes réelles -- jamais un résultat vide tant que l'organisation a un vrai historique, jamais un vrai échec LLM non intercepté qui remonte ici.
+
+✅ **Nouveau modèle réel** `FollowUpQuestion` (migration `0081`) : questions de suivi réellement persistées après génération, avec un vrai suivi de clic (`clicked`).
+
+Nouveaux endpoints réels : `GET /organizations/{org_id}/suggested-questions`, `POST /messages/{id}/follow-up`, `GET /messages/{id}/follow-up`.
+
+Tests réels dédiés (21 tests), voir `tests/test_suggested_questions.py`.
+
+#### Partie 8.1.19 — Multi-langue UI (i18n)
+
+⚠️ **Portée réelle, honnête (vision critique -- cohérence)** : seule la catégorie `common` (`locales/{lang}/common.json`) existe pour l'instant, réelle et complète pour les 6 langues réellement supportées -- les 6 autres catégories nommées par le prompt (`chat`, `documents`, `agents`, `settings`, `errors`, `auth`) seront ajoutées au fur et à mesure que chaque zone d'interface réelle correspondante sera réellement construite (le scaffold React reste à venir dans cette même Partie 8) -- livrer aujourd'hui 6 fichiers de catégories vides/spéculatifs aurait été du vrai poids mort, devinant des clés qu'une interface pas encore construite n'a pas encore fixées. Même discipline "backend avant frontend, jamais construire en avance sur une surface stable" déjà appliquée à chaque étape 8.1 de cette session.
+
+🐛 **`set_user_language` -- une vraie décision de conception** : une préférence de langue UI est un vrai état léger, par navigateur -- un vrai cookie (`UI_LANGUAGE_COOKIE_NAME`) est la vraie couche de persistance appropriée ici, pas une nouvelle colonne sur la table centrale `users` (un vrai risque de schéma inutile pour une vraie préférence UI que ce projet peut déjà exprimer sans cela).
+
+✅ **Nouveau module réel** `api/services/i18n.py` : `get_translation`/`get_all_translations`/`detect_user_language`/`get_supported_languages`, repli honnête (langue demandée → `UI_DEFAULT_LANGUAGE` → clé brute -- jamais une vraie exception qui remonte pour une chaîne manquante).
+
+Nouveaux endpoints réels : `GET /i18n/languages`, `GET /i18n/translations/{language}`, `GET /i18n/detect`, `POST /i18n/language`.
+
+Tests réels dédiés (10 tests), voir `tests/test_i18n.py`.
+
+**Régression complète (8.1.17-8.1.19)** : 97 tests, zéro échec.
+
+**Partie 8.1 — Chat Interface — backend ✅ COMPLET (17/19 ; 8.1.4 et 8.1.5 restent en attente du scaffold React).** Prochaine étape : scaffold Next.js/React/TypeScript, puis les ~17 composants React (dont 8.1.4/8.1.5) contre cette API désormais stable et complète.
 
 ---
 
