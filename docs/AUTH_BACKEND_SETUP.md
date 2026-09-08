@@ -10451,6 +10451,44 @@ a real trap found while testing: SQLite doesn't always return
 
 **Full regression sweep (8.1.6-8.1.9)**: 89 tests, zero failures.
 
+### Partie 8.1.10 -- Conversation history + Partie 8.1.11 -- Rename + Partie 8.1.12 -- Search + Partie 8.1.13 -- Delete
+
+**Real coherence found -- 8.1.10 was already largely done**:
+`GET /conversations`, `GET /conversations/{id}`,
+`GET /conversations/{id}/messages` already existed, real and working,
+since Partie 5.1.12 -- only `get_conversation_stats` (new) was
+genuinely missing.
+
+New real module `api/services/conversation_management.py`:
+`get_conversation_stats`, `validate_title`/`auto_generate_title`/
+`rename_conversation`, `search_conversations`/`search_in_messages`/
+`highlight_matches`/`rank_search_results`, `delete_conversation`
+(soft)/`restore_conversation`/`permanently_delete_conversation`/
+`list_deleted_conversations`/`purge_deleted_conversations`.
+
+🐛 **Real, deliberate behavior change (8.1.13)**: `DELETE /conversations/{id}`
+used to do a real, immediate hard delete (Partie 5.1.12). This étape
+explicitly asks for a reversible soft delete -- fixed: new
+`deleted_at`/`is_public` columns (migration `0079`), the endpoint now
+calls the new soft `delete_conversation` in `conversation_management.py`,
+never the old hard-delete in `security/conversations.py` (unchanged,
+now only reused by `permanently_delete_conversation` and the Celery
+purge).
+
+New real Celery task `api/tasks/conversation_cleanup.py::purge_deleted_conversations_task`,
+scheduled daily (celery beat, 05:30 UTC), real, batched
+(`CONVERSATION_DELETION_BATCH_SIZE`), idempotent.
+
+New real endpoints: `GET /conversations/stats`,
+`GET /conversations/search?q=...`, `GET /conversations/deleted`,
+`POST /conversations/{id}/restore`, `DELETE /conversations/{id}/permanent`.
+`PATCH /conversations/{id}` (rename) now goes through real validation
+(`CONVERSATION_TITLE_MIN_LENGTH`/`_MAX_LENGTH`).
+
+**Real verification**: 21 tests, see `tests/test_conversation_management.py`.
+
+**Full regression sweep (8.1.10-8.1.13)**: 110 tests, zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

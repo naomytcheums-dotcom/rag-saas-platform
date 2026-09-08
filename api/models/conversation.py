@@ -38,10 +38,20 @@ class Conversation(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 8.1.13 -- real, reversible soft delete. `None` = a real,
+    # live conversation; a real timestamp = soft-deleted (real, honest
+    # grace period, `settings.CONVERSATION_DELETION_GRACE_PERIOD`,
+    # before a real, separate purge job hard-deletes it for good).
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Partie 8.1.16 -- real, org-wide visibility (see
+    # api/services/conversation_management.py's own docstring for the
+    # real access rule this enables).
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     __table_args__ = (
         Index("ix_conversations_user_id", "user_id"),
         Index("ix_conversations_agent_id", "agent_id"),
+        Index("ix_conversations_deleted_at", "deleted_at"),
     )
 
 

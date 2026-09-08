@@ -31,7 +31,7 @@ celery_app = Celery(
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
         "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
-        "api.tasks.deployment_evaluations",
+        "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup",
     ],
 )
 
@@ -115,5 +115,11 @@ celery_app.conf.beat_schedule = {
     "check-scheduled-reindexes": {
         "task": "api.tasks.reindex_schedule.check_scheduled_reindexes_task",
         "schedule": timedelta(minutes=1),
+    },
+    # Partie 8.1.13 -- same low-traffic window, offset again. Idempotent
+    # (see api/tasks/conversation_cleanup.py's own docstring).
+    "purge-deleted-conversations-daily": {
+        "task": "api.tasks.conversation_cleanup.purge_deleted_conversations_task",
+        "schedule": crontab(hour=5, minute=30),
     },
 }

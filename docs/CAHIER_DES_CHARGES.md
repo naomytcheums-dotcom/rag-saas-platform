@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (7/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (11/32)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -1987,6 +1987,22 @@ Nouveaux endpoints réels : `POST /messages/{id}/feedback`, `GET /messages/{id}/
 Tests réels dédiés (25 tests), voir `tests/test_message_actions.py`.
 
 **Régression complète (8.1.6-8.1.9)** : 89 tests, zéro échec.
+
+#### Partie 8.1.10 — Historique de conversations + Partie 8.1.11 — Rename + Partie 8.1.12 — Search + Partie 8.1.13 — Delete
+
+✅ **Cohérence réelle trouvée -- 8.1.10 était déjà largement fait** : `GET /conversations`, `GET /conversations/{id}`, `GET /conversations/{id}/messages` existaient déjà, réels et fonctionnels, depuis la Partie 5.1.12 -- seule `get_conversation_stats` (nouvelle) manquait réellement.
+
+✅ **Nouveau module réel** `api/services/conversation_management.py` : `get_conversation_stats`, `validate_title`/`auto_generate_title`/`rename_conversation`, `search_conversations`/`search_in_messages`/`highlight_matches`/`rank_search_results`, `delete_conversation` (soft)/`restore_conversation`/`permanently_delete_conversation`/`list_deleted_conversations`/`purge_deleted_conversations`.
+
+🐛 **Changement de comportement réel, délibéré (8.1.13)** : `DELETE /conversations/{id}` faisait auparavant un vrai hard delete immédiat (Partie 5.1.12). L'étape 8.1.13 demande explicitement un soft delete réversible -- corrigé : nouvelles colonnes `deleted_at`/`is_public` (migration `0079`), l'endpoint appelle maintenant le nouveau `delete_conversation` (soft) de `conversation_management.py`, jamais l'ancien hard-delete de `security/conversations.py` (celui-ci reste inchangé, réutilisé uniquement par `permanently_delete_conversation` et la purge Celery).
+
+✅ **Nouvelle tâche Celery réelle** `api/tasks/conversation_cleanup.py::purge_deleted_conversations_task`, planifiée quotidiennement (`celery beat`, 05h30 UTC), réelle, batchée (`CONVERSATION_DELETION_BATCH_SIZE`), idempotente.
+
+Nouveaux endpoints réels : `GET /conversations/stats`, `GET /conversations/search?q=...`, `GET /conversations/deleted`, `POST /conversations/{id}/restore`, `DELETE /conversations/{id}/permanent`. `PATCH /conversations/{id}` (rename) passe maintenant par la vraie validation (`CONVERSATION_TITLE_MIN_LENGTH`/`_MAX_LENGTH`).
+
+Tests réels dédiés (21 tests), voir `tests/test_conversation_management.py`.
+
+**Régression complète (8.1.10-8.1.13)** : 110 tests, zéro échec.
 
 ---
 
