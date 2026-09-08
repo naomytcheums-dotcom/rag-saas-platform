@@ -84,11 +84,21 @@ def _deduplicate_documents(chunks: list[dict]) -> list[dict]:
 
 async def run_evaluation(
     db: AsyncSession, question_id: uuid.UUID, agent_id: uuid.UUID | None = None, model_config: dict | None = None,
+    retrieval_overrides: dict | None = None,
 ) -> EvaluationResult | None:
     """Item 2's own literal function -- real retrieval, real
     generation, real timing, then real metric computation via
     `extend_evaluation_metrics`. Honestly `None` for an unknown
-    question or one whose dataset no longer real-ily exists."""
+    question or one whose dataset no longer real-ily exists.
+
+    `retrieval_overrides` -- a real, additive parameter beyond this
+    item's own literal 7.2.1 signature: `search_with_context` already
+    accepts real `strategy`/`reranker`/`top_k`/`score_threshold`
+    overrides directly -- forwarded here unchanged so Partie 7.3's own
+    real retriever/reranker comparisons (`comparison_jobs.py`) can test
+    a real, CANDIDATE retrieval configuration the exact same way
+    `model_config` already tests a real, candidate LLM configuration,
+    without a second, parallel retrieval+generation implementation."""
     question = await db.get(EvaluationQuestion, question_id)
     if question is None:
         return None
@@ -103,7 +113,7 @@ async def run_evaluation(
     initial_metrics: dict = {}
     try:
         chunks = await asyncio.wait_for(
-            search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings),
+            search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings, **(retrieval_overrides or {})),
             timeout=settings.EVALUATION_TIMEOUT,
         )
         llm_cfg = resolve_llm_config(org_settings, overrides=model_config)

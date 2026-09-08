@@ -56,7 +56,7 @@ from api.services.question_sets import get_questions_in_set
 from api.services.retrieval_metrics import summarize_metric_for_results
 
 
-def _metric_keys() -> tuple[str, ...]:
+def metric_keys() -> tuple[str, ...]:
     """Real, shared list of every real metric key
     `evaluation_results.extend_evaluation_metrics` writes -- computed
     fresh from `settings` on every real call (never a frozen,
@@ -91,7 +91,7 @@ async def run_multi_model_comparison(db: AsyncSession, question_set_id: uuid.UUI
     summaries plus a real `ranking` (config indices, best real
     `EVALUATION_DEFAULT_COMPARISON_METRIC` average first)."""
     questions = await get_questions_in_set(db, question_set_id)
-    metric_keys = _metric_keys()
+    keys = metric_keys()
 
     configs = []
     for model_config in model_configs:
@@ -100,7 +100,7 @@ async def run_multi_model_comparison(db: AsyncSession, question_set_id: uuid.UUI
             result = await run_evaluation(db, question.id, model_config=model_config)
             if result is not None:
                 result_ids.append(result.id)
-        metrics = {key: await summarize_metric_for_results(db, result_ids, key) for key in metric_keys}
+        metrics = {key: await summarize_metric_for_results(db, result_ids, key) for key in keys}
         configs.append({"model_config_used": model_config, "result_ids": result_ids, "metrics": metrics})
 
     rank_metric = settings.EVALUATION_DEFAULT_COMPARISON_METRIC

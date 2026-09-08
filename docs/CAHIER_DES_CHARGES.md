@@ -1754,7 +1754,7 @@ Tests réels dédiés (7 + 4 tests), voir `tests/test_evaluation_comparisons.py`
 
 **Régression complète** : zéro échec (voir section suivante pour le décompte global).
 
-### 7.3 MLOps avancé — 🟡 EN COURS (2/10)
+### 7.3 MLOps avancé — 🟡 EN COURS (6/10)
 
 Persistance réelle des runs d'évaluation en tant que vrais jobs Celery, notation humaine, détection de régression, comparaisons persistées (modèle/retriever/reranker/prompt), auto-eval pré-déploiement, seuils configurables, A/B testing PRODUCTION avec traffic-splitting réel.
 
@@ -1791,6 +1791,30 @@ Nouveaux endpoints réels : `POST /questions/{id}/evaluate` (Member+), `GET /que
 Tests réels dédiés (8 + 5 tests), voir `tests/test_manual_evaluations.py` + `tests/test_manual_evaluations_endpoints.py`.
 
 **Régression complète (7.3.1/7.3.2)** : 26 tests dédiés + zéro régression sur `test_batch_jobs.py`/`test_question_sets.py`/`test_evaluation_datasets.py`/`test_evaluation_results.py`.
+
+#### Partie 7.3.4/7.3.5/7.3.6/7.3.7 — Model/Retriever/Reranker/Prompt comparison
+
+⚠️ **Consolidation réelle et autonome majeure** : ces 4 étapes ont une liste de colonnes littérales STRUCTURELLEMENT IDENTIQUE (`id`, `dataset_id`, `name`, une vraie liste de candidats, `results`, `created_by`, `created_at`, `completed_at`) et la MÊME liste de 6 fonctions littérales (`create_*`, `run_*`, `get_*`, `list_*`, `compare_*`, `get_*_results`) sous 4 noms différents. Construites comme UN SEUL vrai modèle `ComparisonJob` (migration 0074, colonne `comparison_type` distinguant les 4 vrais types) + UN SEUL vrai moteur partagé `run_comparison_job` (`api/services/comparison_jobs.py`), avec les 24 fonctions littérales exposées comme de vrais alias fins par-type -- jamais 4 modèles et 4 moteurs quasi-identiques.
+
+✅ **`run_evaluation` étendu (7.2.1)** : nouveau paramètre réel `retrieval_overrides`, transmis directement à `search_with_context` (qui accepte déjà `strategy`/`reranker`/`top_k`/`score_threshold`) -- rend les comparaisons retriever/reranker possibles sans une deuxième pipeline réelle de retrieval+génération.
+
+⚠️ **Cohérence (vision critique) -- un vrai variant reranker n'a d'effet que sous `hybrid_reranked`** : `search()`'s own real dispatch ne transmet `reranker` au réel strategy function QUE si `strategy == "hybrid_reranked"` -- une comparaison de rerankers normalise donc automatiquement chaque vrai variant en `{"strategy": "hybrid_reranked", "reranker": variant}`, pour ne jamais livrer une comparaison silencieusement inerte.
+
+✅ **Prompt comparison, zéro nouvelle machinerie** : un variant "prompt" est une simple vraie chaîne, devenant `model_config={"system_prompt": variant}` -- `resolve_system_prompt` (7.2.9) résout déjà cet override réel.
+
+✅ **`compare_*`/`run_*`, deux vrais noms honnêtes pour une seule vraie opération** : même précédent réel que `process_batch_job_task`/`resume_batch_job_task` (2.2.16) -- le littéral de chaque étape demande LES DEUX fonctions avec la même signature réelle `(comparison_id)`.
+
+✅ **Robustesse (vision critique 3)** : même vraie résilience par variant/question que `run_evaluation_job` (7.3.1) -- un vrai échec est journalisé et ignoré, jamais fatal pour toute la comparaison. `create_retriever_comparison` valide chaque vraie stratégie contre les 5 vraies stratégies connues.
+
+✅ **Scalabilité (vision critique)** : chaque `create_*` planifie immédiatement une vraie exécution Celery (`api/tasks/comparison_jobs.py`, UNE seule vraie tâche partagée par les 4 types) -- satisfait le "exécutées de manière asynchrone" des 4 étapes, même si seule 7.3.4 nomme littéralement un endpoint `POST /comparisons/{id}/run` séparé (conservé ici comme un vrai déclencheur additionnel, ex. pour relancer après un échec Celery transitoire).
+
+🐛 **Vrai piège de mock découvert et corrigé pendant les tests (leçon méthodologique, pas un bug de production)** : `unittest.mock.patch("api.services.X.schedule_Y")` ne suffit PAS quand le routeur importe `schedule_Y` via `from api.services.X import schedule_Y` -- l'attribut patché sur le module source ne touche jamais le nom déjà lié dans l'espace de noms du routeur. Corrigé en patchant `api.routers.X.schedule_Y` à la place -- corrige AUSSI un vrai ralentissement de suite de tests (chaque patch inefficace déclenchait un vrai essai de connexion Celery/Redis réel, ~15-20s de retries par appel).
+
+Endpoints réels Admin+ (17 au total) : `POST/GET /datasets/{id}/compare|comparisons`, `GET/POST /comparisons/{id}[/results|/run]` (7.3.4) ; `POST/GET /datasets/{id}/retrievers/compare|comparisons`, `GET /retriever-comparisons/{id}[/results]` (7.3.5) ; mêmes formes pour `/rerankers/` (7.3.6) et `/prompts/` (7.3.7).
+
+Tests réels dédiés (10 + 13 tests), voir `tests/test_comparison_jobs.py` + `tests/test_comparison_jobs_endpoints.py`.
+
+**Régression complète (7.3.4-7.3.7)** : zéro échec.
 
 ---
 

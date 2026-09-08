@@ -9892,7 +9892,7 @@ returns `1.0` -- no real evidence at all can never look significant.
 **Real verification**: 7 + 4 tests, see `tests/test_evaluation_comparisons.py`
 + `tests/test_evaluation_comparisons_endpoints.py`.
 
-## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 2/10)
+## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 6/10)
 
 Real, persisted evaluation runs as real Celery jobs, human scoring,
 regression detection, persisted comparisons (model/retriever/reranker/
@@ -9975,6 +9975,75 @@ point), `GET /evaluations/{id}` (Member+), `PATCH /evaluations/{id}`
 **Full regression sweep (7.3.1/7.3.2)**: 26 dedicated tests, plus zero
 regression on `test_batch_jobs.py`/`test_question_sets.py`/
 `test_evaluation_datasets.py`/`test_evaluation_results.py`.
+
+### Partie 7.3.4/7.3.5/7.3.6/7.3.7 -- Model/Retriever/Reranker/Prompt comparison
+
+**Major real, autonomous consolidation**: these 4 étapes have a
+STRUCTURALLY IDENTICAL literal column list (`id`, `dataset_id`,
+`name`, a real candidate list, `results`, `created_by`, `created_at`,
+`completed_at`) and the SAME 6 literal functions (`create_*`, `run_*`,
+`get_*`, `list_*`, `compare_*`, `get_*_results`) under 4 different
+names. Built as ONE real model `ComparisonJob` (migration 0074, a real
+`comparison_type` column distinguishing the 4 real types) + ONE real,
+shared engine `run_comparison_job` (`api/services/comparison_jobs.py`),
+with all 24 literal functions exposed as real, thin per-type aliases
+-- never 4 near-identical real models and engines.
+
+`run_evaluation` extended (7.2.1): new real `retrieval_overrides`
+parameter, forwarded directly to `search_with_context` (which already
+accepts real `strategy`/`reranker`/`top_k`/`score_threshold`) -- makes
+retriever/reranker comparisons possible with no second real
+retrieval+generation pipeline.
+
+**Coherence -- a real reranker variant only takes effect under
+`hybrid_reranked`**: `search()`'s own real dispatch only forwards
+`reranker` to the real strategy function when
+`strategy == "hybrid_reranked"` -- a reranker comparison therefore
+automatically normalizes each real variant to
+`{"strategy": "hybrid_reranked", "reranker": variant}`, so it is never
+a silently inert real comparison.
+
+**Prompt comparison, zero new machinery**: a real "prompt" variant is
+a plain real string, becoming `model_config={"system_prompt": variant}`
+-- `resolve_system_prompt` (7.2.9) already resolves this exact real
+override.
+
+**`compare_*`/`run_*`, two real, honest names for one real
+operation**: same real precedent as `process_batch_job_task`/
+`resume_batch_job_task` (2.2.16) -- each étape's own literal ask lists
+BOTH functions with the identical real `(comparison_id)` signature.
+
+**Robustness (vision critique 3)**: same real, per-variant/question
+resilience as `run_evaluation_job` (7.3.1) -- a real failure is logged
+and skipped, never fatal to the whole real comparison.
+`create_retriever_comparison` validates every real strategy against
+the 5 real, known strategies.
+
+**Scalability (vision critique)**: every `create_*` immediately
+schedules a real Celery run (`api/tasks/comparison_jobs.py`, ONE real,
+shared task for all 4 types) -- satisfies every one of these 4
+étapes' own "asynchronous" requirement, even though only 7.3.4's own
+literal ask names a separate `POST /comparisons/{id}/run` endpoint
+(kept here too, as a real, additional trigger -- e.g. to retry after a
+transient real Celery failure).
+
+🐛 **A real mocking pitfall found and fixed during testing (a
+methodology lesson, not a production bug)**: `unittest.mock.patch("api.services.X.schedule_Y")`
+does NOT work when the router imports `schedule_Y` via
+`from api.services.X import schedule_Y` -- patching the source
+module's own attribute never reaches the router's own, already-bound
+name. Fixed by patching `api.routers.X.schedule_Y` instead -- this ALSO
+fixed a real test-suite slowdown (every ineffective patch triggered a
+real Celery/Redis connection attempt, ~15-20s of retries per call).
+
+17 real Admin+ endpoints total: `POST/GET /datasets/{id}/compare|comparisons`,
+`GET/POST /comparisons/{id}[/results|/run]` (7.3.4); same real shape
+for `/retrievers/` (7.3.5), `/rerankers/` (7.3.6), `/prompts/` (7.3.7).
+
+**Real verification**: 10 + 13 tests, see `tests/test_comparison_jobs.py`
++ `tests/test_comparison_jobs_endpoints.py`.
+
+**Full regression sweep (7.3.4-7.3.7)**: zero failures.
 
 ### Partie 3.4.2 -- query rewriting
 

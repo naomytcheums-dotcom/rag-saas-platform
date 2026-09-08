@@ -24,7 +24,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
-from api.models.evaluation import BenchmarkVersion, EvaluationDataset, EvaluationJob, EvaluationQuestion, ManualEvaluation, QuestionSet
+from api.models.evaluation import (
+    BenchmarkVersion, ComparisonJob, EvaluationDataset, EvaluationJob, EvaluationQuestion, ManualEvaluation, QuestionSet,
+)
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 
@@ -161,3 +163,19 @@ async def require_manual_evaluation_access(
         raise _NOT_FOUND
     membership = await _membership_for(dataset.organization_id, current_user, db)
     return evaluation, _require_member_excluding_viewer(membership)
+
+
+async def require_comparison_admin(
+    comparison_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[ComparisonJob, OrganizationMember]:
+    """Partie 7.3.4/7.3.5/7.3.6/7.3.7 -- real, shared across all 4
+    comparison types (`ComparisonJob.comparison_type` distinguishes
+    them, this real dependency doesn't need to)."""
+    comparison = await db.get(ComparisonJob, comparison_id)
+    if comparison is None:
+        raise _NOT_FOUND
+    dataset = await db.get(EvaluationDataset, comparison.dataset_id)
+    if dataset is None or dataset.deleted_at is not None:
+        raise _NOT_FOUND
+    membership = await _membership_for(dataset.organization_id, current_user, db)
+    return comparison, _require_admin(membership)

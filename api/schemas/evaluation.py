@@ -335,3 +335,29 @@ class ManualEvaluationStatsResponse(BaseModel):
     count: int
     average_score: float | None
     criteria_averages: dict[str, float | None]
+
+
+class ComparisonJobCreateRequest(BaseModel):
+    name: str
+    variants: list
+
+
+class ComparisonJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    comparison_type: str
+    name: str
+    variants: list
+    results: dict | None
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    completed_at: dt.datetime | None
+
+
+class ComparisonJobListResponse(BaseModel):
+    items: list[ComparisonJobResponse]
+    total: int
+    limit: int
+    offset: int

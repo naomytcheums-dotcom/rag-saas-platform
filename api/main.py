@@ -30,8 +30,8 @@ from api.routers import (
     account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
     citations, conversations,
     custom_domains, custom_tools, documents,
-    email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets, evaluation_jobs, evaluation_results,
-    external_sources, human_approval, invitations, manual_evaluations, oauth,
+    comparison_jobs, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets, evaluation_jobs,
+    evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, quality_dashboard,
     question_sets, quotas, reindex_schedules,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, two_factor,
@@ -203,6 +203,7 @@ app.include_router(evaluation_results.router)
 app.include_router(evaluation_comparisons.router)
 app.include_router(evaluation_jobs.router)
 app.include_router(manual_evaluations.router)
+app.include_router(comparison_jobs.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

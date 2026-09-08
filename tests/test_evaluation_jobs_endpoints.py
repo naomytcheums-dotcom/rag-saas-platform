@@ -32,7 +32,7 @@ async def _make_org_and_dataset(client, db_session, register_payload, name):
 async def test_create_evaluation_job_endpoint_works(client, db_session, register_payload):
     """Validation criterion: la création de job fonctionne."""
     owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Endpoint Org")
-    with patch("api.services.evaluation_jobs.schedule_evaluation_job_processing"):
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
         response = await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))
 
     assert response.status_code == 201
@@ -41,7 +41,7 @@ async def test_create_evaluation_job_endpoint_works(client, db_session, register
 
 async def test_list_evaluation_jobs_endpoint_works(client, db_session, register_payload):
     owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job List Endpoint Org")
-    with patch("api.services.evaluation_jobs.schedule_evaluation_job_processing"):
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
         await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))
 
     response = await client.get(f"/datasets/{dataset['id']}/jobs", headers=_auth_header(owner_token))
@@ -52,7 +52,7 @@ async def test_list_evaluation_jobs_endpoint_works(client, db_session, register_
 async def test_cancel_evaluation_job_endpoint_works(client, db_session, register_payload):
     """Validation criterion: l'annulation fonctionne."""
     owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Cancel Endpoint Org")
-    with patch("api.services.evaluation_jobs.schedule_evaluation_job_processing"):
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
         job = (await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))).json()
 
     response = await client.post(f"/jobs/{job['id']}/cancel", headers=_auth_header(owner_token))
@@ -72,7 +72,7 @@ async def test_create_evaluation_job_endpoint_respects_permissions(client, db_se
 async def test_get_evaluation_job_endpoint_respects_permissions(client, db_session, register_payload):
     """Validation criterion: les permissions sont respectées."""
     owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Get Perms Org")
-    with patch("api.services.evaluation_jobs.schedule_evaluation_job_processing"):
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
         job = (await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))).json()
     other_token, _other = await _register(client, db_session, "non-admin-eval-job-get@example.com")
 
