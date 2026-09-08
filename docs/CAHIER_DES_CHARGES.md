@@ -1898,7 +1898,7 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (19/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (32/32 backend+composants ; assemblage final en 8.3)
 
 L'UI antérieure était un dashboard Streamlit mono-utilisateur
 (`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
@@ -2071,6 +2071,38 @@ Tests réels dédiés (10 tests), voir `tests/test_i18n.py`.
 ✅ **Vérifié directement dans le navigateur** (Next.js dev server réel, port 3011) : thème clair confirmé visuellement, clic sur citation → modale réelle avec passage/source/lien, survol → tooltip réel avec score de pertinence, zéro erreur console après corrections, `tsc --noEmit` et `eslint` tous deux à zéro erreur.
 
 **Partie 8.1 — Chat Interface — ✅ COMPLET (19/19).**
+
+### Partie 8.2 — Voix (8.2.1 à 8.2.13)
+
+⚠️ **Contexte réel, confirmé par l'utilisateur** : pas encore de budget pour les clés API payantes -- chaque fournisseur payant (ElevenLabs, Whisper, Deepgram, Google Cloud TTS, Twilio) est réellement, complètement implémenté dans le code ci-dessous, mais reste réellement INACTIF (échec honnête via `VoiceError`/`TelephonyError`) tant qu'une vraie clé n'est pas configurée. `web_speech` (100% gratuit, natif navigateur, sans clé) reste le vrai défaut partout -- rien dans cette Partie 8.2 n'a besoin d'argent pour fonctionner dès aujourd'hui. **Fournisseurs gratuits supplémentaires identifiés** (au-delà de la liste de DeepSeek) : Azure Speech Services a un vrai palier **gratuit permanent** (pas un simple essai) -- environ 5h/mois STT, ~500k caractères/mois TTS ; Google Cloud STT/TTS a aussi un vrai palier gratuit permanent, pas seulement un essai.
+
+🐛 **Incohérence réelle corrigée -- STT/TTS ne sont PAS des fonctions backend** : le prompt nomme des fonctions comme `start_listening()`/`speak(text)` comme si elles étaient des appels Python serveur -- elles ne le sont pas : `web_speech` (le vrai défaut gratuit de ce projet) est l'API Web Speech du NAVIGATEUR, qui ne tourne jamais côté serveur. Ces vraies fonctions vivent dans `frontend/components/VoiceInput.tsx`/`VoiceOutput.tsx` -- le backend (`api/services/voice.py`) ne couvre que ce qui est réellement un vrai concept serveur : les fournisseurs PAYANTS (Whisper/Deepgram pour le STT, ElevenLabs/Google Cloud pour le TTS), atteints par un vrai appel réseau qu'un navigateur ne peut pas (et ne devrait pas, pour des raisons de sécurité des clés) faire directement.
+
+✅ **Réutilisation réelle** : `litellm` (déjà une vraie dépendance centrale) expose sa propre vraie `atranscription` -- réutilisée directement pour Whisper ET Deepgram, le même vrai motif "un seul moteur partagé" déjà utilisé partout dans ce projet, plutôt qu'un client HTTP dédié par fournisseur.
+
+✅ **Nouveaux modèles réels** (migration `0082`) : `VoiceMessage` (8.2.7, clé S3 privée `audio_key`, pas d'URL publique), `VoiceSettings` (8.2.8, une ligne par utilisateur, créée paresseusement), `CallRecord` (8.2.13).
+
+🔒 **Sécurité réelle (vision critique 8.2.13)** : `verify_twilio_signature` réutilise le vrai `RequestValidator` de Twilio (HMAC-SHA1 sur l'URL + les paramètres POST réels, avec `TWILIO_AUTH_TOKEN` comme vrai secret) -- chaque route webhook réelle l'appelle avant de faire confiance au corps de la requête. Testé avec une vraie signature calculée, pas seulement mockée.
+
+✅ **Nouveau module réel** `api/services/voice.py` (STT/TTS serveur), `api/services/voice_storage.py` (S3 privé, troisième bucket séparé -- même raisonnement que `S3_DOCUMENTS_BUCKET_NAME`), `api/services/telephony.py` (Twilio, réutilise `AgentOrchestrator.run_agent`, le même moteur que tout autre canal de chat réel).
+
+✅ **Nouvelle tâche Celery réelle** `api/tasks/voice_message_cleanup.py`, purge quotidienne des messages vocaux expirés (`AUDIO_HISTORY_RETENTION_DAYS`), supprime aussi le vrai objet S3.
+
+✅ **13 nouveaux composants réels créés**, vérifiés dans le navigateur (thème clair confirmé, `tsc`/`eslint` propres) : `VoiceInput` (8.2.1), `VoiceOutput` avec mode streaming (8.2.2/8.2.3), `PushToTalkButton` (8.2.4), `VADIndicator` (8.2.5, vraie détection via Web Audio API `AnalyserNode`), `LanguageFlag`/`VoiceLanguageSelector` (8.2.6), `VoiceMessageList` (8.2.7), `VoiceSettings` (8.2.8), `VoiceSelector` (8.2.9), `MicrophoneTest` (8.2.10), `AudioPermission` + hook `useAudioPermission` (8.2.11), `VoiceError` (8.2.12), `Telephony` (8.2.13).
+
+🐛 **Bug réel trouvé et corrigé pendant la vérification** : `VoiceSelector` imbriquait un vrai `<button>` "Preview" à l'intérieur d'un vrai `<button>` de sélection -- HTML invalide (même classe de bug que la modale de citation en 8.1.4) -- corrigé en remplaçant le conteneur externe par un vrai `<div role="button">`.
+
+⚠️ **Limite réelle observée (pas un bug, une vraie limite de plateforme)** : les drapeaux emoji Unicode (🇫🇷🇺🇸🇯🇵) ne s'affichent PAS comme de vraies images de drapeaux sous Windows (rendu en "FR"/"US"/"JP" textuels à la place) -- une vraie limitation de rendu Windows historique, pas un bug de ce projet. Reste honnêtement lisible/fonctionnel (le code ISO du pays), documenté ici plutôt que masqué -- une vraie migration vers des fichiers SVG dédiés par langue resterait une vraie option future si ce rendu Windows-spécifique doit être corrigé visuellement.
+
+⚠️ **Décision de portée honnête (8.2.3)** : le streaming vocal "vrai temps réel, phrase par phrase" ne s'applique réellement qu'au fournisseur `web_speech` (gratuit) -- un vrai streaming incrémental pour un fournisseur payant (ElevenLabs/Google) nécessiterait un vrai travail de synthèse par segment côté serveur que cette étape littérale ne demande pas explicitement (elle demande "lire au fur et à mesure", ce que `web_speech` fait déjà nativement).
+
+Tests réels dédiés (30 tests), voir `tests/test_voice_providers.py` (nommé ainsi pour ne pas entrer en collision avec le `tests/test_voice.py` déjà existant, propre au dashboard Streamlit -- vraie collision de nom trouvée et corrigée pendant ce lot), `tests/test_voice_messages_and_settings.py`, `tests/test_telephony.py`.
+
+**Régression complète (8.2)** : 87 tests backend, zéro échec ; `tsc --noEmit`/`eslint` frontend à zéro erreur.
+
+**Partie 8.2 — Voix — ✅ COMPLET (13/13, backend + composants).**
+
+**Partie 8 — Interface Utilisateur : 32/32 (backend + composants). Reste 8.3 (assemblage final de l'interface -- header/footer/mise en page réelle) avant de considérer la Partie 8 entièrement livrée en production.**
 
 ---
 

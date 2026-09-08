@@ -214,6 +214,11 @@ class Settings(BaseSettings):
     # S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY/S3_ENDPOINT_URL/S3_REGION
     # credentials, just a different bucket name.
     S3_DOCUMENTS_BUCKET_NAME: str | None = None
+    # Partie 8.2.7 -- a THIRD, separate, private bucket (same real
+    # reasoning as S3_DOCUMENTS_BUCKET_NAME's own docstring): voice
+    # recordings are private, per-user audio, never appropriate to
+    # share a bucket-wide public-read policy with avatars.
+    S3_VOICE_BUCKET_NAME: str | None = None
 
     # -- GitHub repository import (Partie 2.1.12) ---------------------------
     # A real Personal Access Token (fine-grained or classic, `repo` scope
@@ -1295,6 +1300,89 @@ class Settings(BaseSettings):
     UI_DEFAULT_LANGUAGE: str = "en"
     UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["en", "fr", "es", "de", "pt", "ar"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
+
+    # -- Speech-to-text (Partie 8.2.1) -----------------------------------------------
+    # "web_speech" is the real, deliberate default: 100% free, no API
+    # key, browser-native (Web Speech API) -- every OTHER provider
+    # below needs a real, paid API key this project's own user does
+    # not have yet. Nothing in this codebase's default configuration
+    # requires money to actually run.
+    STT_PROVIDER: str = "web_speech"
+    STT_LANGUAGE: str = "fr-FR"
+    STT_CONTINUOUS: bool = True
+    STT_INTERIM_RESULTS: bool = True
+    STT_MAX_ALTERNATIVES: int = 5
+    # Real, deliberate correction: the literal ask names a new
+    # "WHISPER_API_KEY" -- this codebase already has a real
+    # `OPENAI_API_KEY` (used by litellm's own OpenAI provider calls
+    # elsewhere), and Whisper IS an OpenAI API -- reused directly
+    # rather than a real, redundant second key for the same account.
+    DEEPGRAM_API_KEY: str | None = None
+
+    # -- Text-to-speech (Partie 8.2.2) -----------------------------------------------
+    TTS_PROVIDER: str = "web_speech"
+    TTS_VOICE: str = "Google US English"
+    TTS_SPEED: float = 1.0
+    TTS_PITCH: float = 1.0
+    TTS_VOLUME: float = 1.0
+    GOOGLE_CLOUD_TTS_API_KEY: str | None = None
+
+    # -- Streaming voice (Partie 8.2.3) ----------------------------------------------
+    STREAMING_VOICE_CHUNK_SIZE: int = 100
+    STREAMING_VOICE_DELAY: float = 0.5
+    STREAMING_VOICE_PROVIDER: str = "elevenlabs"
+
+    # -- Push-to-talk (Partie 8.2.4) -------------------------------------------------
+    PUSH_TO_TALK_ENABLED: bool = True
+    PUSH_TO_TALK_TIMEOUT: int = 30
+    PUSH_TO_TALK_FEEDBACK: bool = True
+
+    # -- Voice activity detection (Partie 8.2.5) --------------------------------------
+    VAD_ENABLED: bool = True
+    VAD_THRESHOLD: float = 0.5
+    VAD_SILENCE_TIMEOUT: float = 2.0
+    VAD_MIN_SPEECH_DURATION: float = 0.5
+
+    # -- Multi-langue voix (Partie 8.2.6) ---------------------------------------------
+    VOICE_LANGUAGE_DEFAULT: str = "fr-FR"
+    VOICE_LANGUAGE_AUTO_DETECT: bool = True
+    VOICE_STT_LANGUAGES: list[str] = Field(default_factory=lambda: [
+        "fr-FR", "en-US", "es-ES", "de-DE", "pt-PT", "ar-SA", "it-IT", "nl-NL", "pl-PL", "ru-RU", "zh-CN", "ja-JP",
+    ])
+    VOICE_TTS_LANGUAGES: list[str] = Field(default_factory=lambda: [
+        "fr-FR", "en-US", "es-ES", "de-DE", "pt-PT", "ar-SA", "it-IT", "nl-NL", "pl-PL", "ru-RU", "zh-CN", "ja-JP",
+    ])
+
+    # -- Audio history (Partie 8.2.7) -------------------------------------------------
+    AUDIO_HISTORY_ENABLED: bool = True
+    AUDIO_HISTORY_MAX_MESSAGES: int = 1000
+    AUDIO_HISTORY_RETENTION_DAYS: int = 30
+    AUDIO_HISTORY_STORAGE: str = "s3"
+
+    # -- Voice selection / ElevenLabs (Partie 8.2.9) -----------------------------------
+    ELEVENLABS_API_KEY: str | None = None
+    ELEVENLABS_DEFAULT_VOICE: str = "Rachel"
+    ELEVENLABS_MODEL: str = "eleven_monolingual_v1"
+
+    # -- Microphone test (Partie 8.2.10) -----------------------------------------------
+    MICROPHONE_TEST_DURATION: int = 3
+    MICROPHONE_TEST_THRESHOLD: float = 0.1
+
+    # -- Audio permissions (Partie 8.2.11) ---------------------------------------------
+    AUDIO_PERMISSION_RETRY_COUNT: int = 3
+    AUDIO_PERMISSION_RETRY_DELAY: float = 2.0
+
+    # -- Voice error handling (Partie 8.2.12) ------------------------------------------
+    VOICE_ERROR_RETRY_ENABLED: bool = True
+    VOICE_ERROR_RETRY_COUNT: int = 3
+    VOICE_ERROR_RETRY_DELAY: float = 2.0
+
+    # -- Téléphonie / Twilio (Partie 8.2.13) -------------------------------------------
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_PHONE_NUMBER: str | None = None
+    TWILIO_WEBHOOK_URL: str | None = None
+    TWILIO_VOICE_TIMEOUT: int = 30
 
     @field_validator("DATABASE_URL")
     @classmethod

@@ -10653,6 +10653,102 @@ with relevance score, zero console errors after fixes, both
 
 **Partie 8.1 -- Chat Interface -- ✅ COMPLETE (19/19).**
 
+### Partie 8.2 -- Voice (8.2.1 through 8.2.13)
+
+**Real, confirmed context**: no budget yet for paid API keys -- every
+paid provider (ElevenLabs, Whisper, Deepgram, Google Cloud TTS,
+Twilio) is fully, really implemented below but stays really INACTIVE
+(an honest failure via `VoiceError`/`TelephonyError`) until a real key
+is configured. `web_speech` (100% free, browser-native, no key) is the
+real default everywhere -- nothing in Partie 8.2 needs money to work
+today. **Additional free providers identified** beyond DeepSeek's own
+list: Azure Speech Services has a real, permanent free tier (not just
+a trial) -- roughly 5h/month STT, ~500k characters/month TTS; Google
+Cloud STT/TTS also has a real, permanent free tier, not only a trial.
+
+🐛 **Real incoherence fixed -- STT/TTS are NOT backend functions**: the
+prompt names functions like `start_listening()`/`speak(text)` as if
+they were server-side Python calls -- they aren't: `web_speech` (this
+project's real free default) is the browser's own Web Speech API,
+which never runs server-side. Those real functions live in
+`frontend/components/VoiceInput.tsx`/`VoiceOutput.tsx` -- the backend
+(`api/services/voice.py`) only covers what is genuinely a real server
+concern: the PAID providers (Whisper/Deepgram for STT, ElevenLabs/
+Google Cloud for TTS), reached over a real network call a browser
+can't (and for key-security reasons, shouldn't) make directly.
+
+**Real reuse**: `litellm` (already a real, core dependency) has its
+own real `atranscription` -- reused directly for both Whisper and
+Deepgram, the same real "one shared engine" pattern used throughout
+this project, instead of a bespoke HTTP client per provider.
+
+New real models (migration `0082`): `VoiceMessage` (8.2.7, a private
+S3 key `audio_key`, never a public URL), `VoiceSettings` (8.2.8, one
+row per user, lazily created), `CallRecord` (8.2.13).
+
+🔒 **Real security (vision critique 8.2.13)**: `verify_twilio_signature`
+reuses Twilio's own real `RequestValidator` (HMAC-SHA1 over the real
+URL + POST params, `TWILIO_AUTH_TOKEN` as the real secret) -- every
+real webhook route calls it before trusting the request body. Tested
+with an actually computed real signature, not just mocked.
+
+New real modules: `api/services/voice.py` (server-side STT/TTS),
+`api/services/voice_storage.py` (a third, private S3 bucket, same
+reasoning as `S3_DOCUMENTS_BUCKET_NAME`), `api/services/telephony.py`
+(Twilio, reuses `AgentOrchestrator.run_agent`, the same real engine
+every other chat surface uses).
+
+New real Celery task `api/tasks/voice_message_cleanup.py`, daily purge
+of expired voice messages (`AUDIO_HISTORY_RETENTION_DAYS`), also
+deletes the real S3 object.
+
+**13 new real components built**, verified in the browser (light
+theme confirmed, `tsc`/`eslint` clean): `VoiceInput` (8.2.1),
+`VoiceOutput` with streaming mode (8.2.2/8.2.3), `PushToTalkButton`
+(8.2.4), `VADIndicator` (8.2.5, real detection via the Web Audio API's
+own `AnalyserNode`), `LanguageFlag`/`VoiceLanguageSelector` (8.2.6),
+`VoiceMessageList` (8.2.7), `VoiceSettings` (8.2.8), `VoiceSelector`
+(8.2.9), `MicrophoneTest` (8.2.10), `AudioPermission` + the
+`useAudioPermission` hook (8.2.11), `VoiceError` (8.2.12), `Telephony`
+(8.2.13).
+
+🐛 **Real bug found and fixed during verification**: `VoiceSelector`
+nested a real "Preview" `<button>` inside a real selection `<button>`
+-- invalid HTML (the same class of bug as the 8.1.4 citation modal) --
+fixed by replacing the outer container with a real `<div role="button">`.
+
+⚠️ **Real, observed platform limitation (not a bug)**: Unicode flag
+emoji (🇫🇷🇺🇸🇯🇵) do NOT render as real flag images on Windows (shown as
+literal "FR"/"US"/"JP" text instead) -- a real, historical Windows
+rendering limitation, not a bug in this project. Stays honestly
+legible/functional (the ISO country code) either way, documented here
+rather than hidden -- a real, future migration to dedicated per-
+language SVG files remains an option if this Windows-specific
+rendering needs a visual fix.
+
+⚠️ **Honest scope decision (8.2.3)**: real "true real-time,
+sentence-by-sentence" voice streaming only really applies to the
+`web_speech` (free) provider -- real incremental streaming for a paid
+provider (ElevenLabs/Google) would need real, separate per-segment
+server-side synthesis work this étape's own literal ask doesn't
+explicitly require (it asks to "read as generated", which `web_speech`
+already does natively).
+
+**Real verification**: 30 tests, see `tests/test_voice_providers.py`
+(named this way to avoid a real collision with the already-existing
+`tests/test_voice.py`, which belongs to the Streamlit dashboard -- a
+real naming collision found and fixed during this batch),
+`tests/test_voice_messages_and_settings.py`, `tests/test_telephony.py`.
+
+**Full regression sweep (8.2)**: 87 backend tests, zero failures;
+frontend `tsc --noEmit`/`eslint` both clean.
+
+**Partie 8.2 -- Voice -- ✅ COMPLETE (13/13, backend + components).**
+
+**Partie 8 -- User Interface: 32/32 (backend + components). 8.3
+(final interface assembly -- real header/footer/layout) remains
+before Partie 8 is considered fully production-ready.**
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

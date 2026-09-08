@@ -197,6 +197,12 @@ bleach==6.2.0
 # fails, with a real, honest ExportError instead of a crash.
 weasyprint==63.1
 
+# -- Téléphonie / Twilio (Partie 8.2.13) --------------------------------------
+# Real, genuinely new dependency: Twilio's own official SDK, both to
+# validate real inbound webhook signatures (RequestValidator) and to
+# build real TwiML responses / place real outbound calls.
+twilio==9.11.0
+
 # -- Documents / HTML import (Partie 2.1.5) -----------------------------------
 # The exact libraries the master cahier des charges names for this item
 # ("2.1.5 | HTML | BeautifulSoup4 + readability-lxml"). beautifulsoup4
