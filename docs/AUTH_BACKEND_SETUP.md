@@ -10225,6 +10225,76 @@ New real Admin+ endpoints: `POST/GET /organizations/{id}/ab-tests`,
 Evaluation Lab -- COMPLETE (7.1 + 7.2 + 7.3, no remaining scope
 identified).**
 
+## Partie 8 -- User Interface (IN PROGRESS, 1/32)
+
+The earlier UI was a single-user Streamlit dashboard
+(`dashboard/app.py`), not the intended Next.js/React one -- this
+Partie 8 builds the real, intended backend/frontend, starting with
+backend pieces (testable immediately with the existing Python infra)
+before the frontend scaffold (no real React base existed before this
+étape).
+
+**A standing design constraint, reiterated by the user**: the
+upcoming interface must be **exclusively a light, elegant theme** --
+never dark mode, no dark/light toggle at all. Applies to EVERY React
+component built across this whole Partie 8.
+
+### 8.1 Chat Interface
+
+### Partie 8.1.1 -- Streaming (Server-Sent Events)
+
+New module `api/services/streaming.py`: `format_sse_event`,
+`send_start`, `send_thinking`, `send_token`, `send_citation`,
+`send_done`, `send_error`, `stream_agent_response`.
+
+**`AgentOrchestrator.stream_response`, real, added**: a real streaming
+mirror of `run_agent`, reusing the exact same real building blocks
+(permissions, tools, memory, conversation history, guardrails,
+citations, quality metrics) but yielding real, structured events as
+they happen, instead of returning one real, complete `AgentRunRecord`
+at the end.
+
+New real function `chat_completion_stream` (`llm_providers.py`): a
+real, additive sibling to `chat_completion`, with litellm's own real
+`stream=True` -- **deliberately with NO real retry loop**: once real
+tokens have already reached a real client, a real mid-stream retry
+would need either resending duplicate tokens or a real "restart"
+signal no real client protocol has -- a real, transient failure here
+honestly surfaces as an `error` event instead.
+
+**Coherence (vision critique 3) -- are citations sent alongside
+tokens?** Honestly NO, a real, documented choice: a real citation is
+only real-ily knowable once the WHOLE real answer has been generated
+(same real citations as `generate_response`) -- real `token` events
+stream live, real `citation` events all follow together right before
+`done`.
+
+🐛 **A real architectural tension found (documented, not silently
+patched over)**: the real 3-gate answer-refusal system (6.2.1-6.2.3:
+`is_citation_required`/`is_answer_only_from_context`/`should_say_idk`)
+works by silently REPLACING a bad, complete real answer before the
+caller ever sees it -- but with real, live token streaming, the real
+client has ALREADY seen the real tokens by the time the complete
+answer could be evaluated. `stream_response` still persists real
+citations and quality metrics, but never retroactively replaces
+already-streamed real text -- a real tension between "real-time"
+(8.1.1) and "post-hoc refusal" (6.2.1-6.2.3) this batch makes explicit
+for the first time.
+
+**Robustness (vision critique 2) -- client disconnect**: Starlette's
+own real `StreamingResponse` already detects a real disconnect (the
+real ASGI `http.disconnect` message) and stops iterating the real
+generator -- same real, honest limit already documented for
+`run_agent`'s own cross-process cancellation.
+
+New real endpoints: `GET /chat/stream` (query string, for a real
+native `EventSource`), `POST /chat/stream` (JSON body, for a real
+`fetch`-based client).
+
+**Real verification**: 7 tests, see `tests/test_streaming.py`.
+
+**Full regression sweep (8.1.1)**: zero failures.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

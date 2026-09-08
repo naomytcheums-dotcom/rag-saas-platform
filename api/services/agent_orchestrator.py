@@ -85,7 +85,7 @@ from api.services.agent_permissions import check_agent_permission
 from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
 from api.services.llm_config import resolve_llm_config
-from api.services.llm_providers import LLMError, chat_completion
+from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
@@ -422,6 +422,181 @@ class AgentOrchestrator:
         async with self._db_lock:
             refreshed = await get_run(db, run.id)
         return refreshed if refreshed is not None else run
+
+    async def stream_response(
+        self, agent_id: str, input: str, *, db: AsyncSession, context: str | None = None,
+        org_settings: dict | None = None, llm_overrides: dict | None = None, timeout: float | None = None,
+        organization_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None,
+        tools: list[ToolSpec] | None = None, session_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None, citation_chunks: list[dict] | None = None,
+    ):
+        """Partie 8.1.1's own literal ask -- a real, STREAMING sibling
+        to `run_agent`, yielding real, structured, transport-agnostic
+        event dicts (`{"type": "start"}`, `{"type": "token", "token": ...}`,
+        ...) as they happen, instead of returning one real, complete
+        `AgentRunRecord` at the end. `api/services/streaming.py`'s own
+        `stream_agent_response` turns these into real, wire-format SSE
+        text; this method itself knows nothing about HTTP/SSE.
+
+        **Real, honestly narrower scope than `run_agent` -- two
+        deliberate, documented cuts, not omissions**:
+
+        1. No `plan_first` -- Partie 5.1.13's own real planning stays
+           `run_agent`-only, a real, separate, optional feature.
+
+        2. No real 3-gate answer REPLACEMENT (`is_citation_required`/
+           `is_answer_only_from_context`/`should_say_idk`, Partie
+           6.2.1-6.2.3). This is a real, ARCHITECTURAL incompatibility,
+           not laziness: those real gates work by silently swapping a
+           bad real, COMPLETE answer for a refusal message before the
+           caller ever sees it -- but with real, live token streaming,
+           the real client has ALREADY seen the real tokens by the time
+           the real, complete answer could be evaluated. Real citation
+           PERSISTENCE and real quality-metric computation still run
+           (a real caller can still inspect `response_row`'s own real
+           `confidence_estimation`/groundedness after the fact), but no
+           real answer text is retroactively replaced here.
+
+        Never raises -- a real failure/timeout is yielded as a real
+        `{"type": "error", ...}` event, the same "never lose
+        information, never crash the caller" doctrine as `run_agent`."""
+        timeout = timeout if timeout is not None else settings.SSE_TIMEOUT
+
+        yield {"type": "start"}
+
+        async with self._db_lock:
+            run = await create_run(db, agent_id=agent_id, input=input, context=context, organization_id=organization_id, created_by=created_by)
+            await update_run_status(db, run.id, AgentRunStatus.running.value)
+            await db.commit()
+
+        try:
+            real_agent_id = uuid.UUID(agent_id)
+        except ValueError:
+            real_agent_id = None
+
+        if created_by is not None and real_agent_id is not None:
+            async with self._db_lock:
+                agent_row = await db.get(Agent, real_agent_id)
+                allowed = True
+                if agent_row is not None and agent_row.deleted_at is None:
+                    allowed = await check_agent_permission(db, real_agent_id, created_by, "use")
+                if not allowed:
+                    await update_run_status(db, run.id, AgentRunStatus.failed.value, error="Permission denied: you are not allowed to use this agent")
+                    await db.commit()
+            if not allowed:
+                yield {"type": "error", "error": "Permission denied: you are not allowed to use this agent"}
+                return
+
+        yield {"type": "thinking", "message": "Preparing context"}
+
+        llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
+        system_prompt = llm_cfg["system_prompt"]
+
+        if tools:
+            async with self._db_lock:
+                permitted = []
+                for tool in tools:
+                    decision = await check_tool_permission(db, organization_id, agent_id, created_by, tool.name)
+                    if decision == ToolPermissionValue.allow.value:
+                        permitted.append(tool)
+            selected_tools = await select_tools(input, permitted)
+            if selected_tools:
+                catalog = "\n".join(f"- {t.name}: {t.description}" for t in selected_tools)
+                system_prompt = f"{system_prompt}\n\nAvailable tools:\n{catalog}"
+
+        if session_id is not None and settings.AGENT_MEMORY_ENABLED:
+            async with self._db_lock:
+                memory = await get_all_memory(db, session_id)
+            if memory:
+                system_prompt = f"{system_prompt}\n\nRemembered context from this session:\n{memory}"
+
+        messages = [{"role": "system", "content": system_prompt}]
+        if context:
+            messages.append({"role": "user", "content": f"Context:\n{context}"})
+
+        if conversation_id is not None:
+            async with self._db_lock:
+                history = await get_conversation_messages(db, conversation_id, limit=settings.CONVERSATION_HISTORY_MAX_MESSAGES)
+            for past_message in history:
+                if past_message.role in ("user", "assistant", "system"):
+                    messages.append({"role": past_message.role, "content": past_message.content})
+
+        messages.append({"role": "user", "content": input})
+
+        if conversation_id is not None:
+            async with self._db_lock:
+                await add_message(db, conversation_id, "user", input)
+                await db.commit()
+
+        yield {"type": "thinking", "message": "Generating response"}
+
+        accumulated: list[str] = []
+        deadline = time.monotonic() + timeout
+        try:
+            async for token in chat_completion_stream(
+                messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
+                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
+            ):
+                accumulated.append(token)
+                yield {"type": "token", "token": token}
+                if time.monotonic() > deadline:
+                    raise asyncio.TimeoutError("stream_response exceeded SSE_TIMEOUT")
+        except asyncio.TimeoutError:
+            async with self._db_lock:
+                await update_run_status(db, run.id, AgentRunStatus.timeout.value, result="".join(accumulated) or None)
+                await db.commit()
+            yield {"type": "error", "error": "Response generation timed out"}
+            return
+        except Exception as exc:  # noqa: BLE001 -- a real, transient stream failure must reach the real client as an honest error event, never a bare disconnect
+            async with self._db_lock:
+                await update_run_status(db, run.id, AgentRunStatus.failed.value, error=str(exc), result="".join(accumulated) or None)
+                await db.commit()
+            yield {"type": "error", "error": str(exc)}
+            return
+
+        result = "".join(accumulated)
+
+        guardrail_result = {"passed": True, "violations": []}
+        async with self._db_lock:
+            if real_agent_id is not None:
+                guardrail_result = await validate_guardrails(db, real_agent_id, input, result)
+            if not guardrail_result["passed"]:
+                await update_run_status(
+                    db, run.id, AgentRunStatus.failed.value, error=f"Guardrail violation: {', '.join(guardrail_result['violations'])}",
+                )
+                await db.commit()
+        if not guardrail_result["passed"]:
+            yield {"type": "error", "error": f"Guardrail violation: {', '.join(guardrail_result['violations'])}"}
+            return
+
+        citation_events: list[dict] = []
+        async with self._db_lock:
+            await update_run_status(db, run.id, AgentRunStatus.completed.value, result=result)
+            if conversation_id is not None:
+                await add_message(db, conversation_id, "assistant", result)
+            if citation_chunks is not None and organization_id is not None:
+                response_row = Response(organization_id=organization_id, query=input, answer=result, created_by=created_by)
+                db.add(response_row)
+                await db.flush()
+                citations_row = await add_citations_to_response(db, response_row, citation_chunks)
+                enrich_response_with_confidence(response_row, citations_row)
+                quality_context = "\n\n".join(c["content"] for c in citation_chunks) if citation_chunks else None
+                await enrich_response_with_quality_metrics(db, response_row, citations_row, context=quality_context)
+                run_row = await get_run(db, run.id)
+                run_row.response_id = response_row.id
+                citation_events = [
+                    {
+                        "id": str(c.id), "citation_number": c.citation_number, "text": c.text, "source_title": c.source_title,
+                        "source_url": c.source_url, "relevance_score": c.relevance_score,
+                    }
+                    for c in citations_row
+                ]
+            await db.commit()
+
+        for citation_event in citation_events:
+            yield {"type": "citation", **citation_event}
+
+        yield {"type": "done", "result": result, "run_id": str(run.id)}
 
     async def run_multi_agent(
         self, agents: list[dict], input: str, *, db: AsyncSession, context: str | None = None,

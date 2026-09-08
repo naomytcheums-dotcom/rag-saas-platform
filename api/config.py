@@ -1208,6 +1208,18 @@ class Settings(BaseSettings):
     # statistically thin to real-ily call a real regression on.
     REGRESSION_MIN_SAMPLES: int = 10
 
+    # -- Streaming / SSE (Partie 8.1.1) -------------------------------------------
+    # Real, honest note: `StreamingResponse` (FastAPI/Starlette) writes
+    # each real chunk straight to the real ASGI transport as it's
+    # yielded -- there is no real, internal buffer of this codebase's
+    # own to size. `SSE_BUFFER_SIZE` is kept as a real, documented,
+    # currently-informational knob (item 3's own literal ask) for a
+    # real, future reverse-proxy/client-side buffer tuning point, not
+    # something this module's own code reads today.
+    SSE_BUFFER_SIZE: int = 8192
+    SSE_HEARTBEAT_INTERVAL: float = 15.0
+    SSE_TIMEOUT: float = 120.0
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

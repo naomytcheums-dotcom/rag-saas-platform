@@ -37,7 +37,7 @@ from api.services.agent_tools import validate_tools_list
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
-async def _resolve_agent_and_membership(agent_id: uuid.UUID, current_user: User, db: AsyncSession) -> tuple[Agent, OrganizationMember]:
+async def resolve_agent_and_membership(agent_id: uuid.UUID, current_user: User, db: AsyncSession) -> tuple[Agent, OrganizationMember]:
     agent = await db.get(Agent, agent_id)
     if agent is None or agent.deleted_at is not None:
         raise _NOT_FOUND
@@ -56,14 +56,14 @@ async def require_agent_member(
     agent_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> tuple[Agent, OrganizationMember]:
     """Real dependency -- any real role in the agent's own organization."""
-    return await _resolve_agent_and_membership(agent_id, current_user, db)
+    return await resolve_agent_and_membership(agent_id, current_user, db)
 
 
 async def require_agent_manager(
     agent_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> tuple[Agent, OrganizationMember]:
     """Real dependency -- Owner/Admin/Manager in the agent's own organization."""
-    agent, membership = await _resolve_agent_and_membership(agent_id, current_user, db)
+    agent, membership = await resolve_agent_and_membership(agent_id, current_user, db)
     if membership.role not in (OrganizationRole.owner, OrganizationRole.admin, OrganizationRole.manager):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization manager access required")
     return agent, membership

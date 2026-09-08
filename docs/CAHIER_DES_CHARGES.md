@@ -1898,12 +1898,37 @@ Tests réels dédiés (13 + 6 tests), voir `tests/test_ab_tests.py` + `tests/tes
 
 ---
 
-## PARTIE 8 — Interface Utilisateur — ⬜ NON COMMENCÉ (0/32)
+## PARTIE 8 — Interface Utilisateur — 🟡 EN COURS (1/32)
 
-L'UI actuelle est un dashboard Streamlit mono-utilisateur
-(`dashboard/app.py`), pas le Next.js/React prévu. Aucun streaming SSE,
-pas de feedback structuré, pas d'historique de conversations en DB, pas
-de Voice AI.
+L'UI antérieure était un dashboard Streamlit mono-utilisateur
+(`dashboard/app.py`), pas le Next.js/React prévu -- cette Partie 8
+construit le vrai backend Next.js/React attendu, en commençant par le
+backend (testable immédiatement avec l'infra Python existante) avant
+le scaffold frontend (aucune base React n'existait avant cette étape).
+
+⚠️ **Contrainte de conception permanente, rappelée par l'utilisateur** : l'interface à venir doit être **exclusivement en thème clair, élégant** -- jamais de mode sombre, aucun toggle dark/light. S'applique à CHAQUE composant React construit dans cette Partie 8.
+
+### 8.1 Chat Interface
+
+#### Partie 8.1.1 — Streaming (Server-Sent Events)
+
+✅ **Nouveau module réel** `api/services/streaming.py` : `format_sse_event`, `send_start`, `send_thinking`, `send_token`, `send_citation`, `send_done`, `send_error`, `stream_agent_response`.
+
+✅ **`AgentOrchestrator.stream_response`, réel, ajouté** : miroir en streaming de `run_agent`, réutilisant les mêmes vraies briques (permissions, tools, mémoire, historique de conversation, guardrails, citations, métriques de qualité) mais yielding de vrais événements structurés au fur et à mesure, plutôt que de retourner un seul `AgentRunRecord` complet à la fin.
+
+✅ **Nouvelle fonction réelle** `chat_completion_stream` (`llm_providers.py`) : sœur réelle et additive de `chat_completion`, avec `stream=True` de litellm -- **délibérément sans la boucle de réessai réelle** : une fois de vrais tokens déjà envoyés à un vrai client, un vrai réessai en cours de stream nécessiterait soit un renvoi de tokens dupliqués, soit un signal "redémarrage" qu'aucun vrai protocole client ne gère -- une vraie panne transitoire ici remonte honnêtement comme un événement `error`.
+
+⚠️ **Cohérence (vision critique 3) -- les citations sont-elles envoyées en même temps que les tokens ?** Honnêtement NON, et c'est un choix réel et documenté : une vraie citation n'est réellement connaissable qu'une fois la réponse ENTIÈRE générée (mêmes citations que `generate_response`) -- les événements `token` streament en direct, les événements `citation` suivent tous ensemble juste avant `done`.
+
+🐛 **Incohérence architecturale réelle découverte (documentée, pas corrigée en douce)** : les 3 vraies portes de refus (6.2.1-6.2.3 : `is_citation_required`/`is_answer_only_from_context`/`should_say_idk`) fonctionnent en remplaçant silencieusement une réponse COMPLÈTE avant que l'appelant ne la voie -- mais avec un vrai streaming token par token, le vrai client a DÉJÀ vu les vrais tokens au moment où la réponse complète pourrait être évaluée. `stream_response` persiste toujours les vraies citations et métriques de qualité, mais ne remplace JAMAIS le texte de réponse déjà streamé -- une vraie tension entre "temps réel" (8.1.1) et "refus a posteriori" (6.2.1-6.2.3) que ce lot rend explicite pour la première fois.
+
+✅ **Robustesse (vision critique 2) -- déconnexion client** : le vrai `StreamingResponse` de Starlette détecte déjà une vraie déconnexion (message ASGI `http.disconnect`) et arrête d'itérer le vrai générateur -- même limite honnête déjà documentée pour l'annulation cross-process de `run_agent`.
+
+Nouveaux endpoints réels : `GET /chat/stream` (query string, pour un vrai `EventSource` natif), `POST /chat/stream` (JSON body, pour un vrai client `fetch`).
+
+Tests réels dédiés (7 tests), voir `tests/test_streaming.py`.
+
+**Régression complète (8.1.1)** : zéro échec.
 
 ---
 

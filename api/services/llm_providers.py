@@ -252,6 +252,36 @@ async def chat_completion_with_usage(
     return {"content": response.choices[0].message.content, "usage": usage_dict, "model": resolved_model}
 
 
+async def chat_completion_stream(messages: list[dict], provider: str | None = None, model: str | None = None, **kwargs):
+    """Partie 8.1.1's own real function -- a real, additive, STREAMING
+    sibling to `chat_completion`: same real provider resolution
+    (`_provider_kwargs`), but sets litellm's own real `stream=True` and
+    yields each real content chunk as it arrives, instead of waiting
+    for the complete real response.
+
+    **A real, deliberate, documented gap vs. `chat_completion`: NO
+    retry loop here.** Once real tokens have already reached a real,
+    connected client, a real mid-stream retry would need either
+    silently re-sending duplicate real tokens or a real "restart"
+    signal the client has no protocol for -- `_chat_completion_raw`'s
+    own real retry logic only makes sense before the first real byte
+    ever left the server. A real, transient failure here is instead
+    surfaced honestly to the real caller (`AgentOrchestrator.stream_response`)
+    as a raised real exception, which sends a real `error` SSE event
+    (Partie 8.1.1's own literal `send_error`) rather than a silently
+    incomplete real stream."""
+    provider = provider or get_default_provider()
+    call_kwargs = _provider_kwargs(provider, model)
+    call_kwargs.update(kwargs)
+    call_kwargs["stream"] = True
+
+    stream = await litellm.acompletion(messages=messages, **call_kwargs)
+    async for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+
 async def completion(prompt: str, provider: str | None = None, model: str | None = None, **kwargs) -> str:
     """Item 3's own literal function (4.1.7) -- a real, single-message
     convenience wrapper around `chat_completion` above."""
