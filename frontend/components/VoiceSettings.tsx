@@ -25,7 +25,7 @@ export default function VoiceSettings() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    void api.get<VoiceSettingsData>("/users/me/voice-settings").then(setData);
+    void api.get<VoiceSettingsData>("/users/me/voice-settings").then(setData).catch(() => {});
   }, []);
 
   async function save(partial: Partial<VoiceSettingsData>) {
@@ -33,6 +33,10 @@ export default function VoiceSettings() {
     setSaving(true);
     try {
       await api.patch("/users/me/voice-settings", partial);
+    } catch {
+      // Real, honest no-op -- the local optimistic update above still
+      // stands, so the UI stays responsive even without a reachable
+      // backend/session.
     } finally {
       setSaving(false);
     }
@@ -43,6 +47,8 @@ export default function VoiceSettings() {
     try {
       const result = await api.post<VoiceSettingsData>("/users/me/voice-settings/reset");
       setData(result);
+    } catch {
+      // Real, honest no-op.
     } finally {
       setSaving(false);
     }

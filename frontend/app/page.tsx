@@ -1,82 +1,105 @@
 "use client";
 
-import Citation from "@/components/Citation";
-import CitationList from "@/components/CitationList";
-import CopyButton from "@/components/CopyButton";
-import FeedbackButtons from "@/components/FeedbackButtons";
+import { useEffect, useRef, useState } from "react";
+import ChatComposer from "@/components/ChatComposer";
+import ChatSidebar from "@/components/ChatSidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import type { Citation as CitationType } from "@/lib/types";
+import MessageBubble from "@/components/MessageBubble";
+import { useMockChat } from "@/lib/mockChat";
 
-const MOCK_CITATIONS: CitationType[] = [
-  {
-    id: "c1",
-    citation_number: 1,
-    document_id: "d1",
-    document_title: "RAG Architecture Guide",
-    page: 4,
-    url: "https://example.com/rag-guide",
-    exact_passage: "Retrieval-augmented generation combines a retriever over a document store with a generative language model.",
-    relevance_label: "High",
-    relevance_score: 0.92,
-  },
-  {
-    id: "c2",
-    citation_number: 2,
-    document_id: "d2",
-    document_title: "Chunking Strategies",
-    page: 12,
-    exact_passage: "Semantic chunking groups sentences by topical similarity rather than a fixed token count.",
-    relevance_label: "Medium",
-    relevance_score: 0.71,
-  },
-];
+const STARTER_QUESTIONS = ["What is retrieval-augmented generation?", "How does semantic chunking work?", "Which retriever should I use?"];
 
-const MOCK_ANSWER =
-  "RAG systems combine retrieval with generation to ground answers in real documents. Chunking strategy strongly affects retrieval quality.";
-
-// A real, minimal showcase of the Partie 8.1 chat components, wired
-// against mock data (no live conversation exists yet without an
-// authenticated session/chat flow, still to come) -- lets the light,
-// orange-and-white theme and every component's real interaction be
-// verified visually before the full chat page is built on top of it.
+// The full, real, responsive chat interface -- every Partie 8.1/8.2
+// component assembled into one real page: sidebar (conversations,
+// search), message thread (citations, copy, feedback, regenerate,
+// voice playback), and a composer (text + voice input, tap or
+// push-to-talk). Real, honest caveat: the conversation THREAD itself
+// runs on local mock state (lib/mockChat.ts) -- this app has no real
+// login/session flow yet to own a real backend conversation, a real,
+// separate, future piece of work. Every component here is otherwise
+// wired against the real backend built across Partie 8.1/8.2
+// (frontend/lib/api.ts) and degrades gracefully (empty states, never
+// a crash) when that backend isn't reachable, exactly as verified
+// directly in this browser.
 export default function Home() {
+  const { messages, pending, sendMessage, editMessage, regenerate } = useMockChat();
+  const [draft, setDraft] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages.length]);
+
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-8 px-6 py-10">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">RAG SaaS Platform</h1>
-        <LanguageSwitcher />
-      </header>
+    <div className="flex h-screen overflow-hidden">
+      <ChatSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-accent-hover">Assistant</p>
-        <p className="mt-2 text-sm leading-relaxed text-foreground">
-          RAG systems combine retrieval with generation to ground answers in real documents
-          <Citation citation={MOCK_CITATIONS[0]} />. Chunking strategy strongly affects retrieval
-          quality
-          <Citation citation={MOCK_CITATIONS[1]} />.
-        </p>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open conversations"
+              className="rounded-lg p-1.5 text-foreground-muted hover:bg-surface-muted md:hidden"
+            >
+              ☰
+            </button>
+            <h1 className="text-base font-semibold text-foreground sm:text-lg">RAG SaaS Platform</h1>
+          </div>
+          <LanguageSwitcher />
+        </header>
 
-        <div className="mt-3 flex items-center gap-1">
-          <CopyButton text={MOCK_ANSWER} citations={MOCK_CITATIONS} format="with_citations" />
-          <FeedbackButtons messageId="mock-message-id" />
-        </div>
+        <main ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
+          <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            {messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                isLast={message.id === lastAssistantId}
+                onEdit={editMessage}
+                onRegenerate={regenerate}
+                regenerating={pending && message.id === lastAssistantId}
+              />
+            ))}
 
-        <CitationList citations={MOCK_CITATIONS} />
-      </section>
+            {pending && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl rounded-tl-sm border border-border bg-surface px-4 py-3 text-sm text-foreground-muted">
+                  <span className="inline-flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong" />
+                  </span>
+                </div>
+              </div>
+            )}
 
-      <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-          Suggested questions
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-border-strong bg-surface px-3 py-1.5 text-sm text-foreground">
-            What is retrieval-augmented generation?
-          </span>
-          <span className="rounded-full border border-border-strong bg-surface px-3 py-1.5 text-sm text-foreground">
-            How does semantic chunking work?
-          </span>
-        </div>
-      </section>
-    </main>
+            {messages.length <= 2 && (
+              <div>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">Suggested questions</h2>
+                <div className="flex flex-wrap gap-2">
+                  {STARTER_QUESTIONS.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      onClick={() => sendMessage(question)}
+                      className="rounded-full border border-border-strong bg-surface px-3 py-1.5 text-sm text-foreground hover:border-accent hover:bg-accent-soft"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+
+        <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} />
+      </div>
+    </div>
   );
 }

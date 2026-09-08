@@ -36,19 +36,38 @@ export const settings = {
   VOICE_ERROR_RETRY_DELAY_MS: 2000,
 } as const;
 
+// `country` is the real ISO 3166-1 alpha-2 code country-flag-icons
+// indexes its real SVGs by -- derived from each locale's own region
+// subtag (e.g. "fr-FR" -> "FR"), kept explicit here rather than
+// parsed at render time.
 export const VOICE_LANGUAGES = [
-  { code: "fr-FR", name: "Français", flag: "🇫🇷" },
-  { code: "en-US", name: "English", flag: "🇺🇸" },
-  { code: "es-ES", name: "Español", flag: "🇪🇸" },
-  { code: "de-DE", name: "Deutsch", flag: "🇩🇪" },
-  { code: "pt-PT", name: "Português", flag: "🇵🇹" },
-  { code: "ar-SA", name: "العربية", flag: "🇸🇦" },
-  { code: "it-IT", name: "Italiano", flag: "🇮🇹" },
-  { code: "nl-NL", name: "Nederlands", flag: "🇳🇱" },
-  { code: "pl-PL", name: "Polski", flag: "🇵🇱" },
-  { code: "ru-RU", name: "Русский", flag: "🇷🇺" },
-  { code: "zh-CN", name: "中文", flag: "🇨🇳" },
-  { code: "ja-JP", name: "日本語", flag: "🇯🇵" },
+  { code: "fr-FR", name: "Français", country: "FR" },
+  { code: "en-US", name: "English", country: "US" },
+  { code: "es-ES", name: "Español", country: "ES" },
+  { code: "de-DE", name: "Deutsch", country: "DE" },
+  { code: "pt-PT", name: "Português", country: "PT" },
+  { code: "ar-SA", name: "العربية", country: "SA" },
+  { code: "it-IT", name: "Italiano", country: "IT" },
+  { code: "nl-NL", name: "Nederlands", country: "NL" },
+  { code: "pl-PL", name: "Polski", country: "PL" },
+  { code: "ru-RU", name: "Русский", country: "RU" },
+  { code: "zh-CN", name: "中文", country: "CN" },
+  { code: "ja-JP", name: "日本語", country: "JP" },
 ] as const;
+
+// The shorter UI language codes (api/config.py's own UI_SUPPORTED_LANGUAGES)
+// mapped to a real, representative country flag -- "language" has no
+// real flag of its own (e.g. Arabic/English are spoken across many
+// real countries), so this picks one real, well-recognized country
+// per language, the same real, honest simplification every other
+// real language-flag picker (browsers, OS settings) makes too.
+export const UI_LANGUAGE_FLAGS: Record<string, { name: string; country: string }> = {
+  en: { name: "English", country: "US" },
+  fr: { name: "Français", country: "FR" },
+  es: { name: "Español", country: "ES" },
+  de: { name: "Deutsch", country: "DE" },
+  pt: { name: "Português", country: "PT" },
+  ar: { name: "العربية", country: "SA" },
+};
 
 export type VoiceLanguage = (typeof VOICE_LANGUAGES)[number];

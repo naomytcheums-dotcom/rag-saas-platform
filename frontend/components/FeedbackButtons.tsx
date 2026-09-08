@@ -26,8 +26,14 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
     } catch (err) {
       // Real, honest no-op on failure: the buttons stay usable so the
       // user can just try again, rather than a jarring page-level error
-      // for a low-stakes background action.
-      console.error(err instanceof ApiError ? err.detail : err);
+      // for a low-stakes background action. Logged as a plain string,
+      // never the raw Error/ApiError object -- Next.js's own dev
+      // overlay intercepts any console.error call carrying a real
+      // Error instance and renders it as a full-screen crash, even
+      // though this is a real, deliberately-caught, non-fatal failure
+      // (found directly: clicking 👎 with no backend running showed
+      // the dev overlay despite this try/catch already working).
+      console.error(`Feedback submission failed: ${err instanceof ApiError ? String(err.detail) : String(err)}`);
     } finally {
       setSaving(false);
     }

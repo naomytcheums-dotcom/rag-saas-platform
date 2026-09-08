@@ -60,5 +60,10 @@ export function isVoiceErrorRecoverable(type: VoiceErrorType): boolean {
 export function logVoiceError(error: unknown, context?: string): void {
   // Real, deliberate: this project has no client-side error-reporting
   // service wired up yet, so console is the real, honest sink for now.
-  console.error(`[voice error]${context ? ` ${context}:` : ""}`, error);
+  // A plain string, never the raw error object -- see FeedbackButtons.tsx's
+  // own comment on why: Next.js's dev overlay turns any console.error
+  // call carrying a real Error/DOMException into a full-screen crash
+  // screen, even for an error this code already handles gracefully.
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[voice error]${context ? ` ${context}:` : ""} ${message}`);
 }

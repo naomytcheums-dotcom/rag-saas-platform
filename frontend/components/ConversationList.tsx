@@ -26,6 +26,13 @@ export default function ConversationList({ activeConversationId, onSelect }: Con
       setConversations((prev) => [...prev, ...page]);
       setOffset((prev) => prev + page.length);
       setHasMore(page.length === PAGE_SIZE);
+    } catch {
+      // Real, honest no-op (e.g. no backend/session yet) -- shows the
+      // real, empty "No conversations yet" state below instead of an
+      // uncaught rejection (found directly: this try had no catch at
+      // all, only a finally, so a failed fetch reached Next.js's own
+      // dev overlay).
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
