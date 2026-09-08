@@ -1196,6 +1196,18 @@ class Settings(BaseSettings):
     })
     COST_DEFAULT_CURRENCY: str = "USD"
 
+    # -- Regression detection (Partie 7.3.3) -------------------------------------
+    REGRESSION_DETECTION_ENABLED: bool = True
+    REGRESSION_THRESHOLD_CRITICAL: float = 0.2
+    REGRESSION_THRESHOLD_HIGH: float = 0.1
+    REGRESSION_THRESHOLD_MEDIUM: float = 0.05
+    REGRESSION_THRESHOLD_LOW: float = 0.02
+    # Real, honest floor (vision critique 3 -- "que se passe-t-il si
+    # les échantillons sont insuffisants") -- a real metric average
+    # computed from fewer than this many real results is too
+    # statistically thin to real-ily call a real regression on.
+    REGRESSION_MIN_SAMPLES: int = 10
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):
@@ -1374,6 +1386,24 @@ class Settings(BaseSettings):
         total = sum(self.HALLUCINATION_RATE_WEIGHTS.values())
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"HALLUCINATION_RATE_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _regression_thresholds_must_be_ordered(self) -> "Settings":
+        """Same real reasoning as `_difficulty_thresholds_must_be_ordered`
+        above, applied to Partie 7.3.3's own 4 severity thresholds --
+        a real `LOW` at or above `MEDIUM` would make `_severity_for_metric`
+        never able to real-ily classify a real regression as `medium`
+        at all."""
+        low, medium, high, critical = (
+            self.REGRESSION_THRESHOLD_LOW, self.REGRESSION_THRESHOLD_MEDIUM, self.REGRESSION_THRESHOLD_HIGH,
+            self.REGRESSION_THRESHOLD_CRITICAL,
+        )
+        if not (low < medium < high < critical):
+            raise ValueError(
+                f"Regression thresholds must be strictly ordered LOW < MEDIUM < HIGH < CRITICAL, got "
+                f"{low} < {medium} < {high} < {critical}"
+            )
         return self
 
 

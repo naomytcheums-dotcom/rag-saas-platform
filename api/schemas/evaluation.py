@@ -361,3 +361,74 @@ class ComparisonJobListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class RegressionThresholdCreateRequest(BaseModel):
+    metric: str
+    threshold: float
+    severity: str = Field(pattern="^(low|medium|high|critical)$")
+
+
+class RegressionThresholdUpdateRequest(BaseModel):
+    threshold: float | None = None
+    severity: str | None = Field(default=None, pattern="^(low|medium|high|critical)$")
+    enabled: bool | None = None
+
+
+class RegressionThresholdResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    metric: str
+    threshold: float
+    severity: str
+    enabled: bool
+    created_by: uuid.UUID | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class RegressionThresholdCheckRequest(BaseModel):
+    metrics: dict[str, float]
+
+
+class RegressionThresholdViolation(BaseModel):
+    metric: str
+    value: float
+    threshold: float
+    severity: str
+
+
+class RegressionDetectionRequest(BaseModel):
+    job_id: uuid.UUID
+    previous_job_id: uuid.UUID
+
+
+class RegressionDetectionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    job_id: uuid.UUID
+    metric: str
+    previous_value: float
+    current_value: float
+    change_percentage: float
+    severity: str
+    detected_at: dt.datetime
+    resolved_at: dt.datetime | None
+    resolved_by: uuid.UUID | None
+
+
+class RegressionDetectionListResponse(BaseModel):
+    items: list[RegressionDetectionResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class RegressionSummaryResponse(BaseModel):
+    dataset_id: uuid.UUID
+    total: int
+    by_severity: dict[str, int]
+    unresolved: int

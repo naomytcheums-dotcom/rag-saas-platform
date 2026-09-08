@@ -32,7 +32,7 @@ entirely, at zero real cost (same value, same real meaning)."""
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -291,4 +291,51 @@ class ComparisonJob(Base):
 
     __table_args__ = (
         Index("ix_comparison_jobs_dataset_id", "dataset_id"),
+    )
+
+
+class RegressionThreshold(Base):
+    """Partie 7.3.9 -- one real, per-organization, per-metric floor/
+    ceiling. Real, org-scoped configuration (`api/security/organization_settings.py`'s
+    own real precedent) rather than a real, global constant -- a real
+    organization's own real quality bar for "faithfulness" is not
+    every organization's."""
+
+    __tablename__ = "regression_thresholds"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    metric: Mapped[str] = mapped_column(String(50), nullable=False)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_regression_thresholds_organization_id", "organization_id"),
+        UniqueConstraint("organization_id", "metric", name="uq_regression_thresholds_org_metric"),
+    )
+
+
+class RegressionDetection(Base):
+    """Partie 7.3.3 -- one real, detected regression between two real
+    `EvaluationJob` runs on the same real metric."""
+
+    __tablename__ = "regression_detections"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_jobs.id", ondelete="CASCADE"), nullable=False)
+    metric: Mapped[str] = mapped_column(String(50), nullable=False)
+    previous_value: Mapped[float] = mapped_column(Float, nullable=False)
+    current_value: Mapped[float] = mapped_column(Float, nullable=False)
+    change_percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    detected_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    __table_args__ = (
+        Index("ix_regression_detections_job_id", "job_id"),
     )

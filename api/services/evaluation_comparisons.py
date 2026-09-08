@@ -62,11 +62,21 @@ def metric_keys() -> tuple[str, ...]:
     fresh from `settings` on every real call (never a frozen,
     module-level constant), since `NDCG_DEFAULT_K`/`PRECISION_DEFAULT_K`
     are real, live-configurable knobs a real caller (or a real test's
-    own `monkeypatch`) can change at runtime."""
+    own `monkeypatch`) can change at runtime.
+
+    Real, kept in sync with `extend_evaluation_metrics` -- this list
+    was originally written for Partie 7.2.1-7.2.9 and only later
+    discovered to be stale when Partie 7.3.3's own `regression_detection.py`
+    (reusing this exact real function for the SAME real reason --
+    "every metric key worth comparing") found `hallucination_rate`
+    honestly missing. Now includes every real 7.2.1-7.2.15 metric key
+    except `total_tokens`/`token_usage` (a real resource/usage figure,
+    not a real quality signal comparable/regressable the same way)."""
     return (
         "recall_at_1", "recall_at_3", "recall_at_5", "recall_at_10", "mrr",
         f"ndcg_at_{settings.NDCG_DEFAULT_K}", f"precision_at_{settings.PRECISION_DEFAULT_K}",
-        "faithfulness", "answer_relevance",
+        "faithfulness", "answer_relevance", "context_relevance", "citation_correctness", "hallucination_rate",
+        "cost_per_request",
     )
 
 

@@ -9892,7 +9892,7 @@ returns `1.0` -- no real evidence at all can never look significant.
 **Real verification**: 7 + 4 tests, see `tests/test_evaluation_comparisons.py`
 + `tests/test_evaluation_comparisons_endpoints.py`.
 
-## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 6/10)
+## Partie 7.3 -- Advanced MLOps (IN PROGRESS, 8/10)
 
 Real, persisted evaluation runs as real Celery jobs, human scoring,
 regression detection, persisted comparisons (model/retriever/reranker/
@@ -10044,6 +10044,70 @@ for `/retrievers/` (7.3.5), `/rerankers/` (7.3.6), `/prompts/` (7.3.7).
 + `tests/test_comparison_jobs_endpoints.py`.
 
 **Full regression sweep (7.3.4-7.3.7)**: zero failures.
+
+### Partie 7.3.9 -- Regression thresholds
+
+New real model `RegressionThreshold` (migration 0075,
+`UniqueConstraint(organization_id, metric)`).
+
+New module `api/services/regression_thresholds.py`:
+`set_regression_threshold` (real UPSERT, never a real duplicate),
+`get_regression_thresholds`, `check_regression_thresholds`,
+`update_regression_threshold`, `delete_regression_threshold`.
+`LOWER_IS_BETTER_METRICS` (`hallucination_rate`/`latency`/
+`cost_per_request`) reused directly by 7.3.3.
+
+**Robustness (vision critique 3) -- a missing metric**:
+`check_regression_thresholds` honestly skips any real metric with no
+real configured threshold, or absent from the given dict -- never a
+fabricated verdict.
+
+New real Admin+ endpoints: `POST/GET /organizations/{id}/thresholds`,
+`GET/PATCH/DELETE /thresholds/{id}`, `POST /organizations/{id}/thresholds/check`.
+
+**Real verification**: 9 + 4 tests, see `tests/test_regression_thresholds.py`
++ `tests/test_regression_thresholds_endpoints.py`.
+
+### Partie 7.3.3 -- Regression detection
+
+New real model `RegressionDetection` (same migration 0075).
+
+New module `api/services/regression_detection.py`:
+`detect_regressions`, `get_regressions`, `get_regression_summary`,
+`resolve_regression`, `get_regression_alert`. Reuses
+`retrieval_metrics.summarize_metric_for_results` directly over each
+real job's own already-stored real `result_ids` (7.3.1) -- never a
+real average recomputed and frozen at job-completion time (real
+ground truth can change afterward).
+
+🐛 **A real bug found and fixed during testing, with real impact on
+7.3 (Group B, already shipped)**: `metric_keys()` (`evaluation_comparisons.py`,
+reused by both comparisons AND this étape) had stayed frozen at the
+7.2.1-7.2.9 real list -- `hallucination_rate`/`context_relevance`/
+`citation_correctness`/`cost_per_request` (7.2.10-7.2.15) were honestly
+missing from it. Fixed to include every real, relevant quality metric
+-- retroactively benefits the already-shipped 7.3.4-7.3.7 comparisons
+too (no migration needed, a pure Python change).
+
+**Robustness (vision critique 3) -- insufficient samples**: every real
+average reuses `REGRESSION_MIN_SAMPLES` (7.3.3) -- a real metric below
+that real threshold is honestly excluded from any real comparison,
+never a statistically fragile verdict.
+
+**A real, additive endpoint**: the literal ask names no endpoint to
+trigger `detect_regressions` itself -- `POST /datasets/{id}/regressions/detect`
+added (real, necessary) so a real caller can name the two real jobs to
+compare.
+
+New real Admin+ endpoints: `GET /datasets/{id}/regressions[/summary]`,
+`POST /datasets/{id}/regressions/detect`, `POST /regressions/{id}/resolve`.
+
+**Real verification**: 9 + 4 tests, see `tests/test_regression_detection.py`
++ `tests/test_regression_detection_endpoints.py`.
+
+**Full regression sweep (7.3.3/7.3.9)**: 26 dedicated tests, plus zero
+regression on `test_evaluation_comparisons.py`/`test_comparison_jobs.py`
+(both reuse `metric_keys()`).
 
 ### Partie 3.4.2 -- query rewriting
 

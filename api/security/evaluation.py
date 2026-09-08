@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_current_user, get_db
 from api.models.evaluation import (
     BenchmarkVersion, ComparisonJob, EvaluationDataset, EvaluationJob, EvaluationQuestion, ManualEvaluation, QuestionSet,
+    RegressionDetection, RegressionThreshold,
 )
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
@@ -179,3 +180,36 @@ async def require_comparison_admin(
         raise _NOT_FOUND
     membership = await _membership_for(dataset.organization_id, current_user, db)
     return comparison, _require_admin(membership)
+
+
+async def require_regression_threshold_admin(
+    threshold_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[RegressionThreshold, OrganizationMember]:
+    """Partie 7.3.9 -- real, single-resource routes
+    (`GET/PATCH/DELETE /thresholds/{threshold_id}`); the real, org-scoped
+    `POST/GET /organizations/{org_id}/thresholds` routes instead reuse
+    `api/security/organizations.py`'s own `require_org_admin` directly
+    (they already carry a real `{org_id}` path param that dependency
+    needs)."""
+    threshold = await db.get(RegressionThreshold, threshold_id)
+    if threshold is None:
+        raise _NOT_FOUND
+    membership = await _membership_for(threshold.organization_id, current_user, db)
+    return threshold, _require_admin(membership)
+
+
+async def require_regression_admin(
+    regression_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[RegressionDetection, OrganizationMember]:
+    """Partie 7.3.3 -- `POST /regressions/{regression_id}/resolve`."""
+    regression = await db.get(RegressionDetection, regression_id)
+    if regression is None:
+        raise _NOT_FOUND
+    job = await db.get(EvaluationJob, regression.job_id)
+    if job is None:
+        raise _NOT_FOUND
+    dataset = await db.get(EvaluationDataset, job.dataset_id)
+    if dataset is None or dataset.deleted_at is not None:
+        raise _NOT_FOUND
+    membership = await _membership_for(dataset.organization_id, current_user, db)
+    return regression, _require_admin(membership)
