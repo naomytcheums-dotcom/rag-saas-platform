@@ -100,7 +100,20 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chunk_overlap": 50,
     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "llm_provider": "anthropic",
-    "llm_model": "claude-3-sonnet-20240229",
+    # Real, deliberate `None` -- Partie 7.2.15's own cost-tracking work
+    # surfaced a real, genuine bug this fixes: `resolve_llm_model`
+    # (`api/services/llm_config.py`) already documented, since Partie
+    # 4.3.1, that it falls back to the resolved PROVIDER's own real,
+    # LIVE default model (`api.config.settings.ANTHROPIC_MODEL`, etc.)
+    # rather than a real, stale, hardcoded model name here -- but that
+    # fallback branch (`if org_settings.get("llm_model"): ...`) could
+    # NEVER actually fire for any real organization, because
+    # `get_org_settings` always merges this real dict in, and a real,
+    # non-empty STRING here (`"claude-3-sonnet-20240229"`, retired by
+    # Anthropic) was always truthy. `None` is the one real value that
+    # lets that already-documented, already-intended fallback finally
+    # run for a fresh, unconfigured real organization.
+    "llm_model": None,
     "temperature": 0.7,
     # Partie 4.3.3 -- real, applied by api/services/llm_config.py's own
     # resolve_top_p, real 0.0-1.0 bounds (real nucleus-sampling

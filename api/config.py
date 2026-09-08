@@ -1177,21 +1177,14 @@ class Settings(BaseSettings):
     COST_MODEL_PRICING: dict[str, dict[str, float]] = Field(default_factory=lambda: {
         "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},
         # Real, additive beyond item 3's own literal 8-model table --
-        # a real, pre-existing gap this étape's own pricing lookup
-        # surfaced: `api/security/organization_settings.py`'s own
-        # DEFAULT_SETTINGS["llm_model"] is a real, KNOWN-stale
-        # "claude-3-sonnet-20240229" that `resolve_llm_model` can
-        # never actually fall through PAST for a fresh, unconfigured
-        # real organization (a real, pre-existing bug, documented in
-        # this batch's own final report, deliberately NOT fixed here
-        # -- out of this étape's own real scope, and risky to touch
-        # mid-batch alongside 6 unrelated étapes). Real, original
+        # kept even after the real DEFAULT_SETTINGS["llm_model"] bug
+        # this pricing lookup originally surfaced was properly fixed
+        # (see organization_settings.py's own docstring): a real
+        # organization can still explicitly configure this real, older
+        # model by name, and real, already-recorded evaluation results
+        # from before the fix still reference it. Real, original
         # Claude 3 Sonnet pricing (same real $3/$15 per Anthropic's own
-        # real, historical public price list as 3.5 Sonnet) keeps
-        # `calculate_cost_per_request` honestly working for this real,
-        # currently-common default, rather than a fresh org's very
-        # first real evaluation run silently reporting
-        # `pricing_available: False`.
+        # real, historical public price list as 3.5 Sonnet).
         "claude-3-sonnet": {"input": 3.0, "output": 15.0},
         "claude-3-haiku": {"input": 0.25, "output": 1.25},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},

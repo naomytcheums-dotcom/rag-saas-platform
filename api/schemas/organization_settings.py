@@ -16,7 +16,13 @@ class OrganizationSettingsResponse(BaseModel):
     chunk_overlap: int
     embedding_model: str
     llm_provider: str
-    llm_model: str
+    # Real `| None` -- honestly reflects DEFAULT_SETTINGS["llm_model"]'s
+    # own real `None` (Partie 7.3's own bug fix, see
+    # organization_settings.py's own docstring): `null` here means "no
+    # real, explicit override -- this organization's own real calls
+    # resolve to its provider's own live default model", never a
+    # fabricated placeholder string.
+    llm_model: str | None
     temperature: float
     top_p: float
     top_k: int

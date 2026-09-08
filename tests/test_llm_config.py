@@ -44,7 +44,20 @@ def test_resolve_llm_model_falls_back_to_the_real_providers_own_live_default():
     a real, deliberate improvement over the stale table default."""
     model = resolve_llm_model({"llm_provider": "anthropic"})
     assert model == settings.ANTHROPIC_MODEL
-    assert model != DEFAULT_SETTINGS["llm_model"]  # the real, known-stale table value
+
+
+def test_resolve_llm_model_falls_back_correctly_against_the_real_fused_get_org_settings_shape():
+    """Validation criterion: robustesse -- reproduces the exact real
+    dict shape `get_org_settings` actually returns for a fresh
+    organization (every DEFAULT_SETTINGS key always present, including
+    `llm_model`), not an artificial dict missing that key entirely.
+    Regression test for the real bug this étape fixed: DEFAULT_SETTINGS["llm_model"]
+    used to be a real, non-empty, stale string -- always truthy, so
+    this exact real fallback branch could never actually fire for any
+    real organization."""
+    org_settings = {**DEFAULT_SETTINGS, "llm_provider": "anthropic"}
+    assert org_settings["llm_model"] is None  # the real, fused shape a fresh org actually gets
+    assert resolve_llm_model(org_settings) == settings.ANTHROPIC_MODEL
 
 
 def test_resolve_llm_model_reads_from_real_organization_settings():
