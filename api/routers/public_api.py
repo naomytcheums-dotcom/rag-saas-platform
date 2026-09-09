@@ -42,6 +42,7 @@ from api.services.public_api import (
     PublicAPIError, handle_public_agent_run, handle_public_agents_list, handle_public_analytics, handle_public_chat,
     handle_public_conversations_list, handle_public_document_upload, handle_public_documents_list,
     handle_public_embed, handle_public_kb_creation, handle_public_kb_list, handle_public_search, handle_public_usage,
+    require_owner,
 )
 
 router = APIRouter(tags=["Public API"])
@@ -256,7 +257,7 @@ async def update_key_scopes_endpoint(
 @router.post("/v1/chat", response_model=ChatResponse)
 async def public_chat_endpoint(payload: ChatRequest, key_row: OrganizationAPIKey = Depends(require_public_api_scope("chat:write")), db: AsyncSession = Depends(get_db)):
     try:
-        result = await handle_public_chat(db, key_row, payload.message, payload.agent_id, payload.conversation_id)
+        result = await handle_public_chat(db, key_row.organization_id, require_owner(key_row), payload.message, payload.agent_id, payload.conversation_id)
     except PublicAPIError as exc:
         await db.rollback()
         raise _to_http_error(exc) from exc

@@ -1,0 +1,9 @@
+{
+  "send": "Envoyer",
+  "close": "Fermer",
+  "placeholder": "Tapez votre message...",
+  "welcome_default": "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
+  "error_generic": "Une erreur est survenue. Veuillez réessayer.",
+  "error_limit_reached": "Limite de messages atteinte pour cette session.",
+  "thinking": "Réflexion en cours..."
+}

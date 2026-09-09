@@ -1,0 +1,18 @@
+<!-- Partie 9.3.1/9.3.13 -- real widget iframe content, served at
+     GET /widget/iframe?key=wgt_... (api/routers/widget.py). -->
+<title>Chat</title>
+<link rel="stylesheet" href="/widget/styles.css">
+<div class="rw-app">
+  <div class="rw-header">
+    <div id="rw-avatar"></div>
+    <div id="rw-name" class="rw-name">Assistant</div>
+    <button id="rw-close" type="button" aria-label="Close">&times;</button>
+  </div>
+  <div id="rw-messages" class="rw-messages"></div>
+  <div id="rw-suggested" class="rw-suggested"></div>
+  <div class="rw-input-row">
+    <input id="rw-input" type="text" placeholder="Type your message..." autocomplete="off">
+    <button id="rw-send" type="button">Send</button>
+  </div>
+</div>
+<script src="/widget/chat.js"></script>

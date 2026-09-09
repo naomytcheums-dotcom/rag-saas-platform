@@ -29,6 +29,7 @@ from api.monitoring import render_prometheus_metrics, track_request_duration_mid
 from api.routers import (
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, batch_jobs,
     benchmark_versions,
+    chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     chat_stream, citations, conversations, conversation_shares,
     custom_domains, custom_tools, documents, feedback, i18n,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
@@ -36,7 +37,7 @@ from api.routers import (
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
-    usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, workflows,
+    usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
@@ -131,6 +132,12 @@ app.add_middleware(
 # these are five static header assignments, not a library's worth of
 # behavior.
 _DOCS_PATHS = {"/docs", "/redoc", "/openapi.json"}
+# Partie 9.3.13 -- the ONE real, deliberate exception to "never
+# frameable": the widget's own iframe page exists specifically to be
+# embedded on an arbitrary third-party site (that's the whole point of
+# an iframe-embed integration option, see docs/widget/IFRAME.md) --
+# every other real endpoint in this app keeps the strict 'none' below.
+_WIDGET_FRAMEABLE_PATH = "/widget/iframe"
 
 
 @app.middleware("http")
@@ -146,10 +153,13 @@ async def _security_headers(request: Request, call_next):
             "style-src 'self' cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' fastapi.tiangolo.com data:; "
             "font-src cdn.jsdelivr.net"
         )
+    elif request.url.path == _WIDGET_FRAMEABLE_PATH:
+        response.headers["Content-Security-Policy"] = "frame-ancestors *"
     else:
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path != _WIDGET_FRAMEABLE_PATH:
+        response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # CI/CD audit finding: OWASP ZAP's real API scan against a live
     # instance flagged this as missing on every response. "same-site"
@@ -159,12 +169,55 @@ async def _security_headers(request: Request, call_next):
     # can actually read a cross-origin response; this only blocks
     # cross-SITE embedding (a different registrable domain), matching
     # the SameSite=lax policy already used on every cookie this app sets.
-    response.headers["Cross-Origin-Resource-Policy"] = "same-site"
+    # The widget's own real endpoints are the ONE deliberate exception:
+    # a third-party site embedding the widget is, by definition, a
+    # different site than this API's own -- "cross-origin" (readable by
+    # any origin) rather than "same-site" is the real, correct policy
+    # here, same real reasoning as the CORS carve-out just above.
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin" if request.url.path.startswith("/widget/") else "same-site"
     # Only meaningful -- and only safe to promise -- once the app is
     # actually deployed behind HTTPS, same flag that already gates
     # COOKIE_SECURE and SessionMiddleware's https_only above.
     if settings.COOKIE_SECURE:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+
+# Partie 9.3 -- the widget's own real, SEPARATE CORS policy (vision
+# critique -- "les CORS sont-ils configurés ?"). The app-wide
+# CORSMiddleware above only ever allows `settings.FRONTEND_URL` -- by
+# design, for every real, authenticated endpoint. A widget embedded on
+# an arbitrary third-party site is a genuinely different, deliberately
+# open case (`WIDGET_CORS_ALLOWED_ORIGINS`, default `["*"]`): without
+# this, a third-party page's own `fetch("/widget/config")` would 200
+# at the HTTP level but the BROWSER would still refuse to let that
+# page's own JS read the response (no matching
+# Access-Control-Allow-Origin), silently breaking the entire feature.
+# Registered as its own, separate `@app.middleware` (Starlette makes
+# each subsequent one OUTERMOST) rather than a second CORSMiddleware
+# instance -- Starlette only supports configuring one -- so this one
+# handles `/widget/*` preflights itself, before the global
+# CORSMiddleware above ever gets a chance to reject them for not
+# matching FRONTEND_URL.
+@app.middleware("http")
+async def _widget_cors(request: Request, call_next):
+    if not request.url.path.startswith("/widget/"):
+        return await call_next(request)
+
+    origin = request.headers.get("origin")
+    allowed = "*" in settings.WIDGET_CORS_ALLOWED_ORIGINS or (origin and origin in settings.WIDGET_CORS_ALLOWED_ORIGINS)
+    allow_origin_header = origin if (origin and allowed) else ("*" if "*" in settings.WIDGET_CORS_ALLOWED_ORIGINS else None)
+
+    if request.method == "OPTIONS":
+        response = Response(status_code=204)
+    else:
+        response = await call_next(request)
+
+    if allow_origin_header:
+        response.headers["Access-Control-Allow-Origin"] = allow_origin_header
+        response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
 
@@ -239,6 +292,10 @@ app.include_router(twilio.router)
 app.include_router(public_api.router)
 app.include_router(webhooks.router)
 app.include_router(api_versioning.router)
+app.include_router(widget.router)
+app.include_router(chat_integrations_slack.router)
+app.include_router(chat_integrations_teams.router)
+app.include_router(chat_integrations_discord.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)
 app.include_router(agent_api_keys.router)

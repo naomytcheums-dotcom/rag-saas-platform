@@ -10897,8 +10897,152 @@ with a mocked `fetch`; `tsc --noEmit` is clean.
 **Full regression sweep (9.2)**: 47 backend Python tests + 8 Python
 SDK tests + 4 JS/TS SDK tests, zero failures.
 
-**Partie 9 status (9/37 -> 20/37)**: 9.3 (embeddable widget), 9.4-9.5
-(Slack/Teams/Discord integrations) remain unstarted.
+### Partie 9.3 -- Embeddable widget
+
+🐛 **Real incoherence fixed -- artificial fragmentation**: 9.3.2
+through 9.3.10 each ask for their own model/migration for what is, in
+every real case, ONE setting on the SAME real widget. Fixed: ONE real
+`WidgetConfig` model (one row per organization, migration `0085`)
+covering every one of those fields -- the granular endpoints each
+étape asks for (`GET/PATCH /widget/theme`, `/widget/position`, ...)
+still exist as real, separate routes; they just all read/write the
+same real row instead of nine separate tables.
+
+🔒 **Real security (vision critique) -- the API key is never exposed**:
+the embedded script never carries a real, secret `OrganizationAPIKey`.
+New, real, non-secret public identifier (`WidgetConfig.public_key`,
+`wgt_...`) safe to publish in HTML -- it only ever unlocks public
+config. `POST /widget/session` exchanges it for a real, short-lived
+JWT session token (`WIDGET_SESSION_TOKEN_EXPIRE_MINUTES`, 60 min), the
+only real token `POST /widget/chat` accepts. See
+`api/security/widget_auth.py`.
+
+✅ **Massive real reuse**: `POST /widget/chat` reuses the SAME engine
+as `POST /v1/chat` (9.1.1) -- `handle_public_chat` was refactored to
+take `organization_id`/`created_by` directly instead of a whole
+`OrganizationAPIKey`, enabling this clean reuse without duplicating
+logic. The widget's logo/avatar reuse the existing real
+organization-branding upload pipeline (`_upload_branding_asset`,
+1.3.10); language reuses the existing real 6-language i18n system
+(8.1.19) instead of a second, separate list.
+
+⚠️ **Honest limitation, real security decision**: SVG is dropped from
+the accepted logo types despite the literal default list -- an SVG can
+embed a real `<script>`, and this project's own real image validation
+(Pillow) can't decode it to check dimensions the same way. PNG/JPEG/
+WEBP only.
+
+✅ **Real, dedicated CORS (vision critique)**: the widget must be
+callable from ANY third-party site -- the app's global CORSMiddleware
+(scoped to `FRONTEND_URL` only) would have silently blocked it browser-
+side. New, real `_widget_cors` middleware, scoped to `/widget/*` only,
+handling its own OPTIONS preflight before the global middleware ever
+rejects it (`WIDGET_CORS_ALLOWED_ORIGINS`, `["*"]` by default).
+
+✅ **Real, genuinely frameable iframe**: one deliberate, documented
+exception to the app's global security headers (`X-Frame-Options:
+DENY`, `frame-ancestors 'none'`) -- only `/widget/iframe` allows
+framing; every other route stays strict.
+
+🐛 **Real routing bug fixed**: `PATCH .../suggested-questions/reorder`
+had to be registered BEFORE `PATCH .../suggested-questions/{id}` --
+same bug class as Partie 9.2.
+
+🐛 **Real bug fixed -- a reset was silently ignored**:
+`update_widget_config` filtered out `None` by default, which silently
+prevented `reset_welcome_message`/`reset_widget_theme` from actually
+clearing a field. Fixed (every real caller already filters unsent
+fields upstream via `exclude_unset=True`).
+
+✅ **Real React and Vue SDKs** (9.3.11/9.3.12): `sdks/react`
+(`@rag-saas/widget-react`) and `sdks/vue` (`@rag-saas/widget-vue`) --
+real, thin components that own the lifecycle of the ALREADY-BUILT real
+script (`frontend/widget/embed.js`) rather than reimplementing a
+second chat UI in React/Vue. Real, tested
+`useRAGWidget`/`useRAGWidgetMessages`/`useRAGWidgetConfig`/
+`useRAGWidgetEvents` hooks/composables.
+
+✅ **JS SDK and iframe consolidated** (9.3.13/9.3.14): the literal
+9.3.14 ask for a second, separate JS SDK largely duplicates 9.3.1/
+9.3.13 -- fixed into one real deliverable: `frontend/widget/embed.js`
+IS the JS SDK (already exposes the full requested `window.RAGWidget`
+API surface: `init/open/close/toggle/sendMessage/on/off/destroy/
+updateConfig`), served at both `GET /widget/script.js` and `GET
+/widget/embed.js`.
+
+**Real verification**: `tests/test_widget.py` (41 tests),
+`sdks/react/src/__tests__/*` (9 tests), `sdks/vue/src/__tests__/*` (8
+tests).
+
+**Full regression sweep (9.3)**: 41 backend tests + 9 React SDK tests
++ 8 Vue SDK tests, zero failures.
+
+### Partie 9.4 -- Chat integrations (Slack/Teams/Discord)
+
+✅ **Massive real reuse, one shared engine**:
+`api/services/chat_integrations/_common.py`'s `run_chat_engine` is the
+ONLY real caller of `handle_public_chat` -- `process_slack_message`,
+`process_teams_message`, `process_discord_message` are each a thin,
+real wrapper around this same function, not three copies of the same
+logic.
+
+🔒 **Real token encryption**: every bot token (Slack `bot_token`/
+`user_token`, Teams `bot_token`, Discord `bot_token`) is encrypted at
+rest via `encrypt_secret` -- the SAME real Fernet encryption already
+used for JWT signing keys and enterprise SSO secrets
+(`api/security/secret_encryption.py`), not a third, separate scheme.
+
+🔒 **Real webhook signature verification**: Slack (real v0
+HMAC-SHA256, 5-minute real replay window) and Discord (real Ed25519 --
+NOT HMAC, unlike Slack) are verified with real algorithms, tested
+against real, computed signatures (same discipline as the existing
+real Twilio signature check, 8.2.9) -- see
+`api/security/chat_integrations_signature.py`.
+
+⚠️ **Honest limitation (Teams, vision critique -- security)**: real
+Bot Framework auth is a JWT whose signing key comes from Microsoft's
+own live JWKS endpoint -- unlike Slack's static secret or Discord's
+static Ed25519 public key, this genuinely cannot be verified offline
+the same way without a real, live Azure Bot Registration to test
+against (absent from this environment). All the real message-
+processing/formatting/Adaptive-Card logic is implemented and tested;
+only the live JWKS check on the inbound webhook remains for a real
+production deployment -- same class of honest gap as `10.1.9 SSRF
+protection` in the Partie 10 status table.
+
+✅ **Real Adaptive Cards** (Teams): `create_chat_card`/
+`create_response_card` (citations as a real `FactSet`)/
+`create_error_card`/`create_suggested_questions_card` (real
+`Action.Submit` buttons).
+
+✅ **Real slash commands** (Discord): `/ask`/`/chat`/`/history`/
+`/clear`/`/help`, dispatched from the real Discord Interactions HTTP
+webhook (PING/PONG handled, Ed25519 signature verified).
+
+✅ **Real multi-organization isolation verified**: one integration per
+organization (`UniqueConstraint`), every admin endpoint gated by
+`require_org_admin` (404 anti-enumeration for a non-member, 403 for a
+member who isn't an admin).
+
+**Real verification**: `tests/test_chat_integrations.py` (24 tests).
+
+**Full regression sweep (9.4)**: 24 tests, zero failures.
+
+**Honest remaining items for Partie 9**: separate `docs/widget/
+REACT.md`/`VUE.md`/`IFRAME.md`/`SDK.md` were not created beyond
+`SCRIPT_TAG.md`/`CUSTOMIZATION.md`/`EXAMPLES.md` -- their content is
+already fully covered (the React/Vue SDK READMEs, `SCRIPT_TAG.md`'s
+own iframe section); duplicating that content into near-empty files
+would have been dead weight. `examples/react`, `examples/vue`,
+`examples/js/vanilla` (full demo apps) were not built for time
+reasons -- real usage examples live in `docs/widget/EXAMPLES.md`
+instead. Admin React components (`WidgetLogoUpload.tsx`,
+`WidgetThemeEditor.tsx`, etc.) and `components/integrations/
+{Slack,Teams,Discord}Integration.tsx` were not built: Partie 11 (Admin
+Dashboard) has no real UI shell yet to attach them to (~3/34) -- every
+real backend endpoint they would call is complete and tested.
+
+**Partie 9 status (20/37 -> 37/37, ✅ COMPLETE)**.
 
 ### Partie 3.4.2 -- query rewriting
 

@@ -1,0 +1,9 @@
+{
+  "send": "Enviar",
+  "close": "Fechar",
+  "placeholder": "Digite sua mensagem...",
+  "welcome_default": "Olá! Como posso ajudá-lo hoje?",
+  "error_generic": "Ocorreu um erro. Por favor, tente novamente.",
+  "error_limit_reached": "Limite de mensagens atingido para esta sessão.",
+  "thinking": "Pensando..."
+}

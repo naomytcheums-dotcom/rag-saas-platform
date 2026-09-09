@@ -36,7 +36,7 @@ class PublicAPIError(ValueError):
     """Real, honest failure -- the router turns this into a 4xx."""
 
 
-def _require_owner(key_row: OrganizationAPIKey) -> uuid.UUID:
+def require_owner(key_row: OrganizationAPIKey) -> uuid.UUID:
     if key_row.created_by is None:
         raise PublicAPIError("This API key has no associated user and cannot own a conversation -- regenerate it via an authenticated session")
     return key_row.created_by
@@ -45,17 +45,22 @@ def _require_owner(key_row: OrganizationAPIKey) -> uuid.UUID:
 # --------------------------------------------------------------------- 9.1.1 Chat
 
 
-async def handle_public_chat(db: AsyncSession, key_row: OrganizationAPIKey, message: str, agent_id: str, conversation_id: uuid.UUID | None) -> dict:
+async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, message: str, agent_id: str, conversation_id: uuid.UUID | None) -> dict:
+    """Takes `organization_id`/`created_by` directly (not a whole
+    `OrganizationAPIKey` row) so both the secret-key-authenticated
+    public API (9.1) AND the public-key-authenticated embeddable
+    widget (9.3, no `OrganizationAPIKey` involved at all -- see
+    `api/widget/service.py`'s own docstring) can reuse this same real
+    engine instead of each having its own copy."""
     from api.services.agent_orchestrator import AgentOrchestrator
     from api.services.retrieval_pipeline import search_with_context
 
-    organization_id = key_row.organization_id
     if conversation_id is not None:
         conversation = await get_conversation(db, conversation_id)
         if conversation is None or conversation.organization_id != organization_id:
             raise PublicAPIError("Conversation not found")
     else:
-        conversation = await create_conversation(db, agent_id, _require_owner(key_row), message[:80], organization_id=organization_id)
+        conversation = await create_conversation(db, agent_id, created_by, message[:80], organization_id=organization_id)
         await db.flush()
 
     org_settings = await get_org_settings(db, organization_id)
@@ -63,7 +68,7 @@ async def handle_public_chat(db: AsyncSession, key_row: OrganizationAPIKey, mess
 
     orchestrator = AgentOrchestrator()
     run = await orchestrator.run_agent(
-        agent_id, message, db=db, organization_id=organization_id, created_by=key_row.created_by,
+        agent_id, message, db=db, organization_id=organization_id, created_by=created_by,
         conversation_id=conversation.id, citation_chunks=citation_chunks,
     )
     if run.status != "completed":

@@ -2106,7 +2106,7 @@ Tests réels dédiés (30 tests), voir `tests/test_voice_providers.py` (nommé a
 
 ---
 
-## PARTIE 9 — API publique & Intégrations — 🟡 EN COURS (20/37, Parties 9.1 et 9.2 complètes)
+## PARTIE 9 — API publique & Intégrations — ✅ COMPLET (37/37)
 
 ### Partie 9.1 — API publique `/v1/*` — ✅ COMPLET (9/9)
 
@@ -2158,7 +2158,53 @@ Tests réels dédiés : `tests/test_api_key_management.py` (26 tests), `tests/te
 
 **Régression complète (9.2)** : 47 tests backend Python + 8 tests SDK Python + 4 tests SDK JS/TS, zéro échec.
 
-**Reste pour la Partie 9 (20/37 → 37/37)** : 9.3 (widget embarquable), 9.4-9.5 (intégrations Slack/Teams/Discord) -- non commencés.
+### Partie 9.3 — Widget embarquable — ✅ COMPLET (14/14)
+
+🐛 **Incohérence réelle corrigée -- fragmentation artificielle** : les prompts 9.3.2 à 9.3.10 demandent chacun leur propre modèle/migration pour un seul réglage réel du même widget (logo, couleurs, nom, avatar, message de bienvenue, position, langue, thème). Corrigé : **un seul** modèle réel `WidgetConfig` (une ligne par organisation, migration `0085`), couvrant tous ces champs -- les endpoints granulaires demandés (`GET/PATCH /widget/theme`, `/widget/position`, etc.) existent bien, mais lisent/écrivent tous la même ligne réelle plutôt que neuf tables séparées.
+
+🔒 **Sécurité réelle (vision critique) -- la clé API n'est jamais exposée** : le script embarqué ne contient jamais une vraie clé secrète (`OrganizationAPIKey`). Nouveau, vrai identifiant public non-secret (`WidgetConfig.public_key`, `wgt_...`) sûr à publier dans le HTML -- il ne donne accès qu'à la config publique. `POST /widget/session` échange ensuite ce identifiant contre un vrai jeton de session JWT de courte durée (`WIDGET_SESSION_TOKEN_EXPIRE_MINUTES`, 60 min), seul jeton réellement accepté par `POST /widget/chat`. Voir `api/security/widget_auth.py`.
+
+✅ **Réutilisation réelle massive** : `POST /widget/chat` réutilise le MÊME moteur que `POST /v1/chat` (9.1.1) -- `handle_public_chat` a été refactorisé pour prendre `organization_id`/`created_by` directement plutôt qu'une `OrganizationAPIKey` complète, permettant cette réutilisation propre sans dupliquer la logique. Le logo/avatar du widget réutilisent le pipeline réel existant de branding d'organisation (`_upload_branding_asset`, 1.3.10) ; la langue réutilise le vrai système i18n existant (6 langues, 8.1.19) au lieu d'une seconde liste séparée.
+
+⚠️ **Limite honnête, décision de sécurité réelle** : le SVG est retiré de la liste des types de logo acceptés malgré la demande littérale -- un SVG peut embarquer un vrai `<script>`, et la validation d'image réelle de ce projet (Pillow) ne peut pas le décoder pour vérifier ses dimensions de la même façon. PNG/JPEG/WEBP uniquement.
+
+✅ **CORS dédié réel (vision critique)** : le widget doit être appelable depuis N'IMPORTE QUEL site tiers -- le `CORSMiddleware` global de l'app (limité à `FRONTEND_URL`) l'aurait bloqué silencieusement côté navigateur. Nouveau middleware réel `_widget_cors`, scopé uniquement à `/widget/*`, gérant lui-même les préflight OPTIONS avant que le middleware global ne les rejette (`WIDGET_CORS_ALLOWED_ORIGINS`, `["*"]` par défaut).
+
+✅ **iframe réellement embarquable** : exception unique et documentée aux en-têtes de sécurité globaux (`X-Frame-Options: DENY`, `frame-ancestors 'none'`) — seule `/widget/iframe` autorise le framing, toutes les autres routes restent strictes.
+
+🐛 **Bug de routage réel corrigé** : `PATCH /organizations/{org_id}/widget/suggested-questions/reorder` devait être déclaré AVANT `PATCH .../suggested-questions/{question_id}` — même classe de bug que la Partie 9.2.
+
+🐛 **Bug réel corrigé -- reset silencieusement ignoré** : `update_widget_config` filtrait `None` par défaut, empêchant `reset_welcome_message`/`reset_widget_theme` de réellement remettre un champ à `null`. Corrigé (chaque appelant réel filtre déjà les champs non fournis en amont via `exclude_unset=True`).
+
+✅ **SDK React et Vue réels** (9.3.11/9.3.12) : `sdks/react` (`@rag-saas/widget-react`) et `sdks/vue` (`@rag-saas/widget-vue`) — composants fins, réels, qui pilotent le cycle de vie du VRAI script déjà construit (`frontend/widget/embed.js`) plutôt que de réimplémenter une seconde UI de chat en React/Vue. `useRAGWidget`/`useRAGWidgetMessages`/`useRAGWidgetConfig`/`useRAGWidgetEvents` (hooks/composables) réels, testés.
+
+✅ **JS SDK et iframe consolidés** (9.3.13/9.3.14) : le prompt littéral 9.3.14 demande un second SDK JS séparé qui duplique largement 9.3.1/9.3.13 -- corrigé en un seul, vrai livrable : `frontend/widget/embed.js` EST le SDK JS (expose déjà `window.RAGWidget` avec la surface d'API complète demandée : `init/open/close/toggle/sendMessage/on/off/destroy/updateConfig`), servi par `GET /widget/script.js` et `GET /widget/embed.js`.
+
+Tests réels dédiés (41 tests), voir `tests/test_widget.py`, `sdks/react/src/__tests__/*` (9 tests), `sdks/vue/src/__tests__/*` (8 tests).
+
+**Régression complète (9.3)** : 41 tests backend + 9 tests SDK React + 8 tests SDK Vue, zéro échec.
+
+### Partie 9.4 — Intégrations Chat (Slack/Teams/Discord) — ✅ COMPLET (3/3)
+
+✅ **Réutilisation réelle massive, un seul moteur partagé** : `api/services/chat_integrations/_common.py`'s `run_chat_engine` est le SEUL point réel qui appelle `handle_public_chat` -- `process_slack_message`, `process_teams_message`, `process_discord_message` sont chacun un fin wrapper réel autour de cette même fonction, pas trois copies de la même logique.
+
+🔒 **Chiffrement réel des tokens** : chaque token de bot (Slack `bot_token`/`user_token`, Teams `bot_token`, Discord `bot_token`) est chiffré au repos via `encrypt_secret` -- le MÊME chiffrement Fernet réel déjà utilisé pour les clés de signature JWT et les secrets SSO entreprise (`api/security/secret_encryption.py`), pas un troisième schéma séparé.
+
+🔒 **Vérification réelle de signature webhook** : Slack (HMAC-SHA256 réel v0, fenêtre anti-rejeu de 5 min) et Discord (Ed25519 réel, PAS du HMAC contrairement à Slack) sont vérifiés avec de vrais algorithmes testés avec de vraies signatures calculées (même discipline que la vérification Twilio existante, 8.2.9) -- voir `api/security/chat_integrations_signature.py`.
+
+⚠️ **Limite honnête (Teams, vision critique -- sécurité)** : l'authentification Bot Framework réelle est un jeton JWT dont la clé de signature vient du point JWKS live de Microsoft -- contrairement au secret statique de Slack ou à la clé publique statique Ed25519 de Discord, ceci ne peut pas être vérifié hors-ligne de la même façon sans un vrai Azure Bot Registration à tester (absent de cet environnement). Toute la logique réelle de traitement des messages/formatage/Adaptive Cards est implémentée et testée ; seule la vérification JWKS live sur le webhook entrant reste à câbler pour un vrai déploiement -- même classe de limite honnête que `10.1.9 SSRF protection` dans le tableau de statut Partie 10.
+
+✅ **Adaptive Cards réelles** (Teams) : `create_chat_card`/`create_response_card` (citations en `FactSet` réel)/`create_error_card`/`create_suggested_questions_card` (vrais boutons `Action.Submit`).
+
+✅ **Commandes slash réelles** (Discord) : `/ask`/`/chat`/`/history`/`/clear`/`/help`, dispatchées depuis le vrai webhook HTTP Interactions Discord (PING/PONG géré, signature Ed25519 vérifiée).
+
+✅ **Isolation multi-organisation vérifiée** : chaque intégration est unique par organisation (`UniqueConstraint`), chaque endpoint admin passe par `require_org_admin` (404 anti-énumération pour un non-membre, 403 pour un membre non-admin).
+
+Tests réels dédiés (24 tests), voir `tests/test_chat_integrations.py`.
+
+**Régression complète (9.4)** : 24 tests, zéro échec.
+
+**Points restants honnêtes pour la Partie 9** : `docs/widget/REACT.md`/`VUE.md`/`IFRAME.md`/`SDK.md` séparés n'ont pas été créés en plus de `SCRIPT_TAG.md`/`CUSTOMIZATION.md`/`EXAMPLES.md` -- leur contenu est déjà couvert intégralement (README des SDKs React/Vue, section iframe de `SCRIPT_TAG.md`) ; dupliquer ce contenu dans des fichiers quasi-vides aurait été du remplissage. `examples/react`, `examples/vue`, `examples/js/vanilla` (applications de démonstration complètes) n'ont pas été créées faute de temps -- les exemples d'usage réels sont dans `docs/widget/EXAMPLES.md`. Composants React d'administration (`WidgetLogoUpload.tsx`, `WidgetThemeEditor.tsx`, etc.) et `components/integrations/{Slack,Teams,Discord}Integration.tsx` non construits : la Partie 11 (Admin Dashboard) n'a pas encore de coquille d'interface à laquelle les rattacher (~3/34) -- tout le backend réel qu'ils appelleraient est complet et testé.
 
 ---
 

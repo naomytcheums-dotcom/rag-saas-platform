@@ -38,8 +38,8 @@ def get_supported_languages() -> list[str]:
 
 
 @lru_cache(maxsize=64)
-def _load_translations(language: str) -> dict:
-    path = _LOCALES_DIR / language / "common.json"
+def _load_translations(language: str, category: str = "common") -> dict:
+    path = _LOCALES_DIR / language / f"{category}.json"
     if not path.exists():
         return {}
     try:
@@ -48,11 +48,14 @@ def _load_translations(language: str) -> dict:
         return {}
 
 
-def get_all_translations(language: str) -> dict:
+def get_all_translations(language: str, category: str = "common") -> dict:
     """Public wrapper around `_load_translations` -- for a real
     frontend to bootstrap its own real i18n dictionary in one real
-    call, rather than one `get_translation` round trip per key."""
-    return _load_translations(language)
+    call, rather than one `get_translation` round trip per key.
+    `category` (Partie 9.3.9) reuses this SAME real loader for the
+    widget's own `widget.json` category rather than a second, separate
+    loading function."""
+    return _load_translations(language, category)
 
 
 def get_translation(language: str, key: str, params: dict | None = None) -> str:

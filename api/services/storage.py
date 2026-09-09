@@ -138,6 +138,24 @@ def upload_organization_favicon(organization_id: uuid.UUID, content: bytes) -> s
     return _upload_branding_asset(organization_id, content, asset_name="favicon", max_bytes=MAX_FAVICON_BYTES, max_dimension_px=MAX_FAVICON_DIMENSION_PX)
 
 
+# Partie 9.3.2/9.3.5 -- the embeddable widget's own logo/avatar reuse
+# this SAME real branding-asset pipeline (validation + S3 upload) as
+# an organization's own logo/favicon above -- a widget logo IS an
+# organization branding asset, just displayed in a different real UI
+# surface (the widget header) rather than a second, parallel image
+# pipeline duplicating every real check `_validate_branding_image`
+# already does.
+MAX_WIDGET_AVATAR_DIMENSION_PX = 800
+
+
+def upload_widget_logo(organization_id: uuid.UUID, content: bytes, *, max_bytes: int, max_dimension_px: int) -> str:
+    return _upload_branding_asset(organization_id, content, asset_name="widget-logo", max_bytes=max_bytes, max_dimension_px=max_dimension_px)
+
+
+def upload_widget_avatar(organization_id: uuid.UUID, content: bytes, *, max_bytes: int) -> str:
+    return _upload_branding_asset(organization_id, content, asset_name="widget-avatar", max_bytes=max_bytes, max_dimension_px=MAX_WIDGET_AVATAR_DIMENSION_PX)
+
+
 def upload_avatar(user_id: uuid.UUID, content: bytes) -> str:
     """
     Validates and uploads one avatar image, returning its public URL.

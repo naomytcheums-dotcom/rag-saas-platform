@@ -1434,6 +1434,77 @@ class Settings(BaseSettings):
     SDK_JS_OUTPUT_DIR: str = "./sdks/js"
     SDK_JS_PACKAGE_NAME: str = "rag-saas-sdk"
 
+    # -- Widget (Partie 9.3) -----------------------------------------------------------------
+    WIDGET_SCRIPT_CACHE_TIME: int = 3600
+    WIDGET_MAX_MESSAGES: int = 50
+    WIDGET_IFRAME_ALLOWED_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
+    WIDGET_DEFAULT_POSITION: str = "bottom-right"
+    WIDGET_DEFAULT_THEME: str = "auto"
+    WIDGET_CORS_ALLOWED_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
+    WIDGET_SESSION_TOKEN_EXPIRE_MINUTES: int = 60
+
+    WIDGET_LOGO_MAX_SIZE: int = 5 * 1024 * 1024
+    # 9.3.2's own literal default list includes "image/svg+xml" --
+    # deliberately dropped here (real security decision, vision
+    # critique): an SVG is XML, can embed a real <script>/event-handler
+    # payload, and this project's own real image validation
+    # (_validate_branding_image, api/services/storage.py) decodes
+    # every upload with Pillow to check real pixel dimensions -- Pillow
+    # doesn't rasterize SVG, so it can't be checked the same real way
+    # without a second, separate sanitization pipeline this codebase
+    # doesn't have yet. PNG/JPEG/WEBP is what upload_widget_logo()
+    # actually accepts; see docs/widget/CUSTOMIZATION.md.
+    WIDGET_LOGO_ALLOWED_TYPES: list[str] = Field(default_factory=lambda: ["image/png", "image/jpeg", "image/webp"])
+    WIDGET_LOGO_DIMENSIONS: tuple[int, int] = (200, 200)
+
+    WIDGET_AVATAR_MAX_SIZE: int = 2 * 1024 * 1024
+    WIDGET_AVATAR_ALLOWED_TYPES: list[str] = Field(default_factory=lambda: ["image/png", "image/jpeg", "image/webp"])
+    WIDGET_AVATAR_DIMENSIONS: tuple[int, int] = (200, 200)
+    WIDGET_AVATAR_THUMBNAIL_SIZE: tuple[int, int] = (80, 80)
+
+    WIDGET_POSITIONS: list[str] = Field(default_factory=lambda: ["bottom-right", "bottom-left", "top-right", "top-left"])
+    WIDGET_OFFSET_MIN: int = 0
+    WIDGET_OFFSET_MAX: int = 100
+
+    # Reuses the app's own existing 6 real supported UI languages
+    # (UI_SUPPORTED_LANGUAGES, Partie 8.1.19) rather than a second,
+    # separate widget-only language list -- see api/services/widget.py's
+    # own docstring on this real reuse decision.
+    WIDGET_THEMES: list[str] = Field(default_factory=lambda: ["light", "dark", "auto"])
+    WIDGET_CUSTOM_CSS_MAX_SIZE: int = 10_000
+
+    WIDGET_NAME_MIN_LENGTH: int = 2
+    WIDGET_NAME_MAX_LENGTH: int = 50
+
+    WELCOME_MESSAGE_MIN_LENGTH: int = 10
+    WELCOME_MESSAGE_MAX_LENGTH: int = 500
+    WELCOME_MESSAGE_ALLOWED_TAGS: list[str] = Field(default_factory=lambda: ["p", "br", "strong", "em"])
+
+    SUGGESTED_WIDGET_QUESTIONS_MAX: int = 6
+
+    # -- Chat platform integrations (Partie 9.4) --------------------------------------------
+    SLACK_CLIENT_ID: str | None = None
+    SLACK_CLIENT_SECRET: str | None = None
+    SLACK_REDIRECT_URI: str | None = None
+    SLACK_SCOPES: list[str] = Field(default_factory=lambda: ["chat:write", "app_mentions:read", "channels:read", "commands"])
+    SLACK_SIGNING_SECRET: str | None = None
+    SLACK_MAX_MESSAGE_LENGTH: int = 4000
+    SLACK_RESPONSE_TIMEOUT: int = 30
+
+    TEAMS_BOT_ID: str | None = None
+    TEAMS_BOT_TOKEN: str | None = None
+    TEAMS_APP_PASSWORD: str | None = None
+    TEAMS_MAX_MESSAGE_LENGTH: int = 4000
+    TEAMS_RESPONSE_TIMEOUT: int = 30
+
+    DISCORD_BOT_TOKEN: str | None = None
+    DISCORD_CLIENT_ID: str | None = None
+    DISCORD_CLIENT_SECRET: str | None = None
+    DISCORD_PUBLIC_KEY: str | None = None
+    DISCORD_MAX_MESSAGE_LENGTH: int = 2000
+    DISCORD_RESPONSE_TIMEOUT: int = 30
+    DISCORD_USE_THREADS: bool = True
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

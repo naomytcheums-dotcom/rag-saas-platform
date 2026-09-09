@@ -1,0 +1,9 @@
+{
+  "send": "Send",
+  "close": "Close",
+  "placeholder": "Type your message...",
+  "welcome_default": "Hi! How can I help you today?",
+  "error_generic": "Something went wrong. Please try again.",
+  "error_limit_reached": "Message limit reached for this session.",
+  "thinking": "Thinking..."
+}

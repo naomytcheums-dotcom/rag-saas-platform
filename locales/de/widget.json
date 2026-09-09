@@ -1,0 +1,9 @@
+{
+  "send": "Senden",
+  "close": "Schließen",
+  "placeholder": "Schreiben Sie Ihre Nachricht...",
+  "welcome_default": "Hallo! Wie kann ich Ihnen heute helfen?",
+  "error_generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+  "error_limit_reached": "Nachrichtenlimit für diese Sitzung erreicht.",
+  "thinking": "Denke nach..."
+}
