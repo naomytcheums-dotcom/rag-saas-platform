@@ -216,6 +216,37 @@ async def handle_public_analytics(db: AsyncSession, organization_id: uuid.UUID, 
 # ----------------------------------------------------------------------- 9.1.9 Embed
 
 
+async def handle_public_documents_list(db: AsyncSession, organization_id: uuid.UUID, limit: int, offset: int) -> list[dict]:
+    """Real, additive: backs `GET /v1/documents` (`documents:read`,
+    named in 9.2.4's own real scope table but never given a real
+    endpoint by any literal 9.1.x ask)."""
+    from api.models.document import Document
+
+    query = (
+        select(Document).where(Document.organization_id == organization_id, Document.deleted_at.is_(None))
+        .order_by(Document.created_at.desc()).limit(limit).offset(offset)
+    )
+    documents = list((await db.scalars(query)).all())
+    return [{"id": d.id, "name": d.name, "status": d.status, "created_at": d.created_at} for d in documents]
+
+
+async def handle_public_agents_list(db: AsyncSession, organization_id: uuid.UUID, limit: int, offset: int) -> list[dict]:
+    """Real, additive: backs `GET /v1/agents` (`agents:read`, same
+    real reasoning as `handle_public_documents_list` above)."""
+    from api.security.agents import list_agents
+
+    agents = await list_agents(db, organization_id, limit=limit, offset=offset)
+    return [{"id": a.id, "name": a.name, "description": a.description} for a in agents]
+
+
+async def handle_public_kb_list(db: AsyncSession, organization_id: uuid.UUID, limit: int, offset: int) -> list[dict]:
+    """Real, additive: backs `GET /v1/knowledge-bases` (`kb:read`,
+    same real reasoning as `handle_public_documents_list` above)."""
+    query = select(Workspace).where(Workspace.organization_id == organization_id).order_by(Workspace.created_at.desc()).limit(limit).offset(offset)
+    workspaces = list((await db.scalars(query)).all())
+    return [{"id": w.id, "name": w.name, "created_at": w.created_at} for w in workspaces]
+
+
 async def handle_public_embed(text: str, model: str | None) -> dict:
     from api.services.embedding_providers import get_embedding, get_embedding_dimensions
 

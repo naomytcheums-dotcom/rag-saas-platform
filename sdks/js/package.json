@@ -1,0 +1,19 @@
+{
+  "name": "rag-saas-sdk",
+  "version": "0.1.0",
+  "description": "Official JavaScript/TypeScript SDK for the RAG SaaS Platform public API",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "files": ["dist"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

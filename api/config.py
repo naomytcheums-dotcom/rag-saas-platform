@@ -1391,6 +1391,49 @@ class Settings(BaseSettings):
     PUBLIC_API_RATE_LIMIT_MAX: int = 60
     PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # -- Key rotation (Partie 9.2.2) ---------------------------------------------------
+    KEY_ROTATION_GRACE_PERIOD_HOURS: int = 24
+    KEY_ROTATION_AUTO_ENABLED: bool = False
+    KEY_ROTATION_INTERVAL_DAYS: int = 90
+
+    # -- Key expiration (Partie 9.2.3) --------------------------------------------------
+    KEY_EXPIRATION_DEFAULT_DAYS: int = 365
+    KEY_EXPIRATION_REMINDER_DAYS: list[int] = Field(default_factory=lambda: [30, 7, 1])
+    KEY_EXPIRATION_AUTO_REMOVE: bool = True
+
+    # -- Rate limits (Partie 9.2.5) ------------------------------------------------------
+    RATE_LIMIT_DEFAULT: int = 60
+    RATE_LIMIT_MAX: int = 10000
+    RATE_LIMIT_MIN: int = 1
+    RATE_LIMIT_STORAGE: str = "redis"
+
+    # -- Quotas (Partie 9.2.6) ------------------------------------------------------------
+    QUOTA_DEFAULT_LIMIT: int = 10000
+    QUOTA_MAX_LIMIT: int = 1000000
+    QUOTA_MIN_LIMIT: int = 100
+
+    # -- API versioning (Partie 9.2.8) ----------------------------------------------------
+    API_VERSION_CURRENT: str = "v1"
+    API_VERSION_SUPPORTED: list[str] = Field(default_factory=lambda: ["v1"])
+    API_VERSION_DEPRECATED: list[str] = Field(default_factory=list)
+    API_VERSION_DEFAULT: str = "v1"
+
+    # -- OpenAPI/Swagger (Partie 9.2.9) ----------------------------------------------------
+    OPENAPI_TITLE: str = "RAG SaaS Platform API"
+    OPENAPI_DESCRIPTION: str = "Public API for the RAG SaaS Platform"
+    OPENAPI_VERSION: str = "1.0.0"
+    OPENAPI_CONTACT_NAME: str | None = None
+    OPENAPI_CONTACT_EMAIL: str | None = None
+    OPENAPI_CONTACT_URL: str | None = None
+    OPENAPI_LICENSE_NAME: str | None = None
+    OPENAPI_LICENSE_URL: str | None = None
+
+    # -- SDKs (Partie 9.2.10/9.2.11) -------------------------------------------------------
+    SDK_PYTHON_VERSION: str = "0.1.0"
+    SDK_JS_VERSION: str = "0.1.0"
+    SDK_JS_OUTPUT_DIR: str = "./sdks/js"
+    SDK_JS_PACKAGE_NAME: str = "rag-saas-sdk"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

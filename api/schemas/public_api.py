@@ -177,9 +177,101 @@ class OrganizationAPIKeyResponse(BaseModel):
     name: str
     key_prefix: str
     scopes: list[str]
+    is_active: bool
     expires_at: dt.datetime | None
     last_used_at: dt.datetime | None
     created_at: dt.datetime
     revoked_at: dt.datetime | None
+    rate_limit: int | None
+    rate_limit_period: str | None
+    quota_limit: int | None
+    quota_period: str | None
+    quota_used: int
+    quota_reset_at: dt.datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class OrganizationAPIKeyUpdateRequest(BaseModel):
+    name: str | None = None
+    scopes: list[str] | None = None
+    is_active: bool | None = None
+
+
+# ------------------------------------------------------------------ 9.2.2 Key rotation
+
+
+class RotateKeyRequest(BaseModel):
+    reason: str | None = None
+
+
+class RotateKeyResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    key: str
+    key_prefix: str
+    scopes: list[str]
+    expires_at: dt.datetime | None
+    created_at: dt.datetime
+
+
+class ScheduleRotationRequest(BaseModel):
+    rotate_at: dt.datetime
+
+
+class KeyRotationHistoryResponse(BaseModel):
+    id: uuid.UUID
+    key_id: uuid.UUID
+    rotated_from: uuid.UUID | None
+    rotated_to: uuid.UUID | None
+    rotated_by: uuid.UUID | None
+    rotated_at: dt.datetime
+    reason: str | None
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------- 9.2.3 Key expiration
+
+
+class SetExpirationRequest(BaseModel):
+    expires_at: dt.datetime
+
+
+# -------------------------------------------------------------------- 9.2.5 Rate limits
+
+
+class RateLimitRequest(BaseModel):
+    limit: int | None = None
+    period: str | None = None
+
+
+class RateLimitResponse(BaseModel):
+    rate_limit: int
+    rate_limit_period: str
+
+
+# ------------------------------------------------------------------------ 9.2.6 Quotas
+
+
+class QuotaRequest(BaseModel):
+    limit: int | None = None
+    period: str | None = None
+
+
+class QuotaStatusResponse(BaseModel):
+    quota_limit: int | None
+    quota_period: str | None
+    quota_used: int
+    quota_reset_at: dt.datetime | None
+
+
+# ------------------------------------------------------------------------- 9.2.4 Scopes
+
+
+class ScopesUpdateRequest(BaseModel):
+    scopes: list[str]
+
+
+class AvailableScopesResponse(BaseModel):
+    scopes: list[str]

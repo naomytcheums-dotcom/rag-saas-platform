@@ -32,6 +32,7 @@ celery_app = Celery(
         "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
+        "api.tasks.api_key_maintenance", "api.tasks.webhooks",
     ],
 )
 
@@ -127,5 +128,27 @@ celery_app.conf.beat_schedule = {
     "purge-expired-voice-messages-daily": {
         "task": "api.tasks.voice_message_cleanup.purge_expired_voice_messages_task",
         "schedule": crontab(hour=5, minute=45),
+    },
+    # Partie 9.2.2/9.2.3/9.2.6 -- same low-traffic window, offset again.
+    # All 4 real, idempotent (see api/tasks/api_key_maintenance.py's
+    # own docstrings).
+    "check-expiring-api-keys-daily": {
+        "task": "api.tasks.api_key_maintenance.check_expiring_keys_task",
+        "schedule": crontab(hour=6, minute=0),
+    },
+    "auto-remove-expired-api-keys-daily": {
+        "task": "api.tasks.api_key_maintenance.auto_remove_expired_keys_task",
+        "schedule": crontab(hour=6, minute=15),
+    },
+    # A genuine fixed-interval poll (every hour) rather than a daily
+    # crontab -- a real, scheduled rotation set for e.g. "in 2 hours"
+    # shouldn't have to wait until the next day's low-traffic window.
+    "execute-scheduled-api-key-rotations": {
+        "task": "api.tasks.api_key_maintenance.execute_scheduled_rotation_task",
+        "schedule": timedelta(hours=1),
+    },
+    "reset-api-key-quotas-hourly": {
+        "task": "api.tasks.api_key_maintenance.reset_quotas_task",
+        "schedule": timedelta(hours=1),
     },
 }

@@ -2106,7 +2106,7 @@ Tests réels dédiés (30 tests), voir `tests/test_voice_providers.py` (nommé a
 
 ---
 
-## PARTIE 9 — API publique & Intégrations — 🟡 EN COURS (9/37, Partie 9.1 complète)
+## PARTIE 9 — API publique & Intégrations — 🟡 EN COURS (20/37, Parties 9.1 et 9.2 complètes)
 
 ### Partie 9.1 — API publique `/v1/*` — ✅ COMPLET (9/9)
 
@@ -2128,7 +2128,37 @@ Tests réels dédiés (20 tests), voir `tests/test_public_api.py`.
 
 **Régression complète (9.1)** : 20 tests, zéro échec.
 
-**Reste pour la Partie 9 (0/37 → 9/37)** : 9.2 (webhooks), 9.3 (SDK généré), 9.4 (widget embarquable), 9.5 (intégrations Slack/Teams/Discord) -- non commencés.
+### Partie 9.2 — Gestion avancée des clés, webhooks, versioning, OpenAPI, SDKs — ✅ COMPLET (11/11)
+
+✅ **Extension réelle du modèle existant plutôt que duplication** (9.2.1) : le prompt littéral demande un nouveau modèle `APIKey` -- quasi-doublon exact d'`OrganizationAPIKey` (9.1). Corrigé : extension de l'existant (`is_active`, `rate_limit`/`rate_limit_period`, `quota_limit`/`quota_period`/`quota_used`/`quota_reset_at`, `scheduled_rotation_at`) plutôt qu'une table parallèle.
+
+✅ **Rotation réelle de clés** (9.2.2) : `rotate_api_key` crée une nouvelle clé avec les mêmes scopes/expiration, révoque l'ancienne, journalise dans `KeyRotationHistory` (nouvelle table, migration `0084`). Rotation planifiée (`schedule_key_rotation`/`execute_scheduled_rotation`) + tâche Celery horaire.
+
+✅ **Expiration réelle** (9.2.3) : `is_key_expired`, `set/remove/extend_key_expiration`. 🐛 **Faille de sécurité réelle corrigée** : `get_expiring_keys` n'avait **aucun filtre d'organisation** -- n'importe quel admin authentifié pouvait voir les clés expirant de TOUTES les autres organisations. Corrigé : paramètre `organization_id` obligatoire via le routeur (`GET /organizations/{org_id}/api-keys/expiring`), optionnel uniquement pour la tâche Celery qui a légitimement besoin de toutes les organisations.
+
+🐛 **Incohérence réelle corrigée -- table de scopes** (9.2.4) : la table de scopes granulaire de 9.2.4 (12 scopes : `chat:read`/`chat:write`/`documents:read`/`documents:write`/`search:read`/`agents:read`/`agents:run`/`kb:read`/`kb:write`/`usage:read`/`analytics:read`/`embed:write`) remplace les scopes plus grossiers posés en 9.1 (`"chat"`, `"search"`, etc.) -- la demande la plus récente et la plus précise l'emporte ; tous les endpoints 9.1 ont été mis à jour pour utiliser les nouveaux noms de scopes.
+
+✅ **Rate limiting par clé réel** (9.2.5) : réutilise le vrai limiteur Redis à fenêtre glissante (`api/security/rate_limit.py`), override par clé sinon la limite globale par défaut.
+
+✅ **Quotas réels avec enforcement HTTP** (9.2.6) : `check_quota` lève un vrai `429` quand `quota_used >= quota_limit`, `increment_quota` appelé après validation du scope (pas avant, pour ne jamais compter une requête refusée). Tâche Celery horaire pour la remise à zéro périodique.
+
+✅ **Webhooks réels avec livraison fiable** (9.2.7) : nouveau modèle `Webhook`/`WebhookDelivery` (migration `0084`), signature HMAC-SHA256 (`X-Webhook-Signature`, JSON à clés triées pour une signature stable), livraison via une vraie tâche Celery synchrone (`httpx.post` réel) avec retry exponentiel (jusqu'à `retry_count`, backoff `2**tentative`). `trigger_webhook` fait un vrai fan-out par organisation vers chaque webhook actif et abonné à l'événement. 🐛 **Bug SQLAlchemy réel corrigé** : double déclaration d'index (`index=True` sur la colonne + `Index()` explicite du même nom dans `__table_args__`) causait une erreur "index already exists" à la création des tables SQLite -- corrigé en retirant les déclarations `Index()` redondantes.
+
+✅ **Auth réelle pour les endpoints scopés à une clé, pas une org** (9.2.1-9.2.7) : les routes `/api-keys/{key_id}/...` n'ont **aucun `org_id` dans leur chemin**, rendant `require_org_admin` inutilisable (422, paramètre manquant). Nouvelle dépendance réelle `require_key_org_admin` (et son équivalent `_require_webhook_org_admin` pour les webhooks) : charge la clé/le webhook d'abord, dérive et vérifie l'appartenance admin depuis son `organization_id` propre. 🐛 **Bug de routage réel corrigé** : les routes statiques (`/api-keys/scopes`, `/organizations/{org_id}/api-keys/expiring`) doivent être déclarées AVANT les routes dynamiques de même profondeur (`/api-keys/{key_id}`), sinon FastAPI tente de parser le segment statique comme le paramètre dynamique (échec 422).
+
+✅ **Versioning d'API réel, honnêtement minimal** (9.2.8) : `GET /api/versions`, `GET /api/versions/{version}`, en-tête `API-Version` sur chaque réponse. ⚠️ **Limite honnête** : une seule version (`v1`) existe réellement -- le versioning est prêt pour l'avenir, pas pour un vrai changement breaking déjà géré.
+
+✅ **OpenAPI/Swagger** (9.2.9) : déjà pleinement fonctionnel nativement via FastAPI (`/docs`, `/redoc`, `/openapi.json`) -- le vrai manque était uniquement les métadonnées (titre/description/contact/licence), maintenant configurées via `api/config.py` (`OPENAPI_*`). Pas de nouvelle ingénierie nécessaire au-delà.
+
+✅ **SDK Python réel** (9.2.10) : package `sdks/python/rag_saas_sdk` (`httpx` comme seule dépendance réelle), méthodes `chat.send`, `documents.upload`, `search.query`, `agents.run`, `usage.get`, `analytics.get`, `embed.generate`, `RagSaasAPIError` sur toute réponse non-2xx. 8 tests réels via `httpx.MockTransport`.
+
+✅ **SDK JS/TS réel** (9.2.11) : package `sdks/js` (TypeScript strict, zéro dépendance runtime -- `fetch` natif), même surface de méthodes que le SDK Python. 🐛 **Bug réel corrigé pendant les tests** : lecture de `response.json()` puis, en cas d'échec, `response.text()` sur la MÊME réponse -- le corps ne peut être lu qu'une fois (`TypeError: Body is unusable`). Corrigé via `response.clone()`. 4 tests réels via `vitest` + `fetch` mocké, `tsc --noEmit` propre.
+
+Tests réels dédiés : `tests/test_api_key_management.py` (26 tests), `tests/test_webhooks.py` (11 tests), `tests/test_api_versioning.py` (10 tests), `sdks/python/tests/test_client.py` (8 tests), `sdks/js/tests/*.test.ts` (4 tests).
+
+**Régression complète (9.2)** : 47 tests backend Python + 8 tests SDK Python + 4 tests SDK JS/TS, zéro échec.
+
+**Reste pour la Partie 9 (20/37 → 37/37)** : 9.3 (widget embarquable), 9.4-9.5 (intégrations Slack/Teams/Discord) -- non commencés.
 
 ---
 

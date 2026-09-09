@@ -27,7 +27,8 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
-    ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, audit, auth, batch_jobs, benchmark_versions,
+    ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, batch_jobs,
+    benchmark_versions,
     chat_stream, citations, conversations, conversation_shares,
     custom_domains, custom_tools, documents, feedback, i18n,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
@@ -35,7 +36,8 @@ from api.routers import (
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
-    usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, white_label, workflows, workspaces,
+    usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, workflows,
+    workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
@@ -90,7 +92,24 @@ async def lifespan(app: FastAPI):
             await poll_task
 
 
-app = FastAPI(title="RAG SaaS Platform API", version="0.1.0", lifespan=lifespan)
+# Partie 9.2.9 -- real OpenAPI/Swagger metadata (title/description/
+# version/contact/license), all from real, configurable settings
+# rather than hardcoded. Note: this project's real OpenAPI/Swagger
+# generation (`/openapi.json`, `/docs`, `/redoc`) was ALREADY fully
+# functional out of the box (a real, built-in FastAPI feature, not
+# something this codebase had to build) -- 9.2.9's own real, missing
+# piece was configuring these fields, not generating anything new.
+_openapi_contact = None
+if settings.OPENAPI_CONTACT_NAME or settings.OPENAPI_CONTACT_EMAIL or settings.OPENAPI_CONTACT_URL:
+    _openapi_contact = {"name": settings.OPENAPI_CONTACT_NAME, "email": settings.OPENAPI_CONTACT_EMAIL, "url": settings.OPENAPI_CONTACT_URL}
+_openapi_license = None
+if settings.OPENAPI_LICENSE_NAME:
+    _openapi_license = {"name": settings.OPENAPI_LICENSE_NAME, "url": settings.OPENAPI_LICENSE_URL}
+
+app = FastAPI(
+    title=settings.OPENAPI_TITLE, description=settings.OPENAPI_DESCRIPTION, version=settings.OPENAPI_VERSION,
+    contact=_openapi_contact, license_info=_openapi_license, lifespan=lifespan,
+)
 
 # Required by Authlib's Starlette OAuth client (api/routers/oauth.py) to
 # hold the `state`/`nonce` between the /authorize redirect and /callback.
@@ -149,6 +168,22 @@ async def _security_headers(request: Request, call_next):
     return response
 
 
+# Partie 9.2.8 -- real, minimal API versioning. Real, honest scope:
+# this codebase only really HAS one real API version (`v1`, Partie
+# 9.1) -- a full real content-negotiation/routing-by-version system
+# would be real, speculative infrastructure for versions that don't
+# exist yet. This middleware still does the one real, useful thing
+# right now: announces the real current/deprecated version on every
+# real response, so a real client integrating today is never guessing.
+@app.middleware("http")
+async def _api_versioning(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["API-Version"] = settings.API_VERSION_CURRENT
+    if settings.API_VERSION_CURRENT in settings.API_VERSION_DEPRECATED:
+        response.headers["API-Deprecated"] = "true"
+    return response
+
+
 # Audit finding 22 -- registered AFTER _security_headers so it wraps the
 # full request/response cycle including that middleware's own work,
 # giving the most complete picture of "how long did this request take."
@@ -202,6 +237,8 @@ app.include_router(voice_messages.router)
 app.include_router(voice_settings.router)
 app.include_router(twilio.router)
 app.include_router(public_api.router)
+app.include_router(webhooks.router)
+app.include_router(api_versioning.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)
 app.include_router(agent_api_keys.router)

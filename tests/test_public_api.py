@@ -60,7 +60,7 @@ async def _make_org_with_api_key(client, db_session, register_payload, scopes):
 async def test_generate_and_verify_organization_api_key(db_session):
     """Validation criterion: les clés API sont correctement validées."""
     org_id = uuid.uuid4()
-    row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat"])
+    row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat:write"])
     await db_session.commit()
 
     verified = await verify_api_key(db_session, plaintext)
@@ -75,7 +75,7 @@ async def test_verify_api_key_rejects_unknown_key(db_session):
 
 async def test_verify_api_key_rejects_revoked_key(db_session):
     org_id = uuid.uuid4()
-    row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat"])
+    row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat:write"])
     await db_session.commit()
 
     await revoke_api_key(db_session, row.id)
@@ -91,7 +91,7 @@ async def test_validate_scopes_rejects_unknown_scope():
 
 async def test_get_organization_from_api_key(db_session):
     org_id = uuid.uuid4()
-    _row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat"])
+    _row, plaintext = await generate_organization_api_key(db_session, org_id, "key-1", ["chat:write"])
     await db_session.commit()
 
     assert await get_organization_from_api_key(db_session, plaintext) == org_id
@@ -102,7 +102,7 @@ async def test_get_organization_from_api_key(db_session):
 
 async def test_create_and_list_api_keys_endpoint(client, db_session, register_payload):
     """Validation criterion: la gestion des clés API fonctionne."""
-    token, org_id, _api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat"])
+    token, org_id, _api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat:write"])
 
     listing = await client.get(f"/organizations/{org_id}/api-keys", headers=_auth_header(token))
     assert listing.status_code == 200
@@ -122,7 +122,7 @@ async def test_public_endpoint_rejects_invalid_api_key(client):
 
 async def test_public_endpoint_rejects_wrong_scope(client, db_session, register_payload):
     """Validation criterion: sécurité -- les scopes sont respectés."""
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat:write"])
     response = await client.post("/v1/embed", json={"text": "hello"}, headers=_api_key_header(api_key))
     assert response.status_code == 403
 
@@ -135,7 +135,7 @@ async def test_public_chat_endpoint(monkeypatch, client, db_session, register_pa
     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Hello from the public API!")))
     monkeypatch.setattr("api.services.retrieval_pipeline.search_with_context", AsyncMock(return_value=[]))
 
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat:write"])
     response = await client.post("/v1/chat", json={"message": "Hi", "agent_id": "agent-1"}, headers=_api_key_header(api_key))
 
     assert response.status_code == 200
@@ -147,7 +147,7 @@ async def test_public_chat_endpoint_reuses_existing_conversation(monkeypatch, cl
     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("First")))
     monkeypatch.setattr("api.services.retrieval_pipeline.search_with_context", AsyncMock(return_value=[]))
 
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat:write"])
     first = await client.post("/v1/chat", json={"message": "Hi", "agent_id": "agent-1"}, headers=_api_key_header(api_key))
     conversation_id = first.json()["conversation_id"]
 
@@ -183,7 +183,7 @@ async def test_public_document_upload_endpoint(monkeypatch, client, db_session, 
 
 async def test_public_kb_creation_endpoint(client, db_session, register_payload):
     """Validation criterion: la création de KB publique fonctionne."""
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["knowledge_bases:write"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["kb:write"])
     response = await client.post("/v1/knowledge-bases", json={"name": "My KB"}, headers=_api_key_header(api_key))
 
     assert response.status_code == 200
@@ -198,7 +198,7 @@ async def test_public_conversations_list_endpoint(monkeypatch, client, db_sessio
     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("Answer")))
     monkeypatch.setattr("api.services.retrieval_pipeline.search_with_context", AsyncMock(return_value=[]))
 
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat", "conversations:read"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["chat:write", "chat:read"])
     await client.post("/v1/chat", json={"message": "Hi", "agent_id": "agent-1"}, headers=_api_key_header(api_key))
 
     response = await client.get("/v1/conversations", headers=_api_key_header(api_key))
@@ -212,7 +212,7 @@ async def test_public_conversations_list_endpoint(monkeypatch, client, db_sessio
 async def test_public_search_endpoint(monkeypatch, client, db_session, register_payload):
     """Validation criterion: la recherche publique fonctionne."""
     monkeypatch.setattr("api.services.retrieval_pipeline.search_with_context", AsyncMock(return_value=[{"text": "chunk", "score": 0.9}]))
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["search"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["search:read"])
 
     response = await client.post("/v1/search", json={"query": "test query"}, headers=_api_key_header(api_key))
     assert response.status_code == 200
@@ -271,7 +271,7 @@ async def test_public_analytics_endpoint(client, db_session, register_payload):
 async def test_public_embed_endpoint(monkeypatch, client, db_session, register_payload):
     """Validation criterion: l'endpoint d'embedding public fonctionne."""
     monkeypatch.setattr("api.services.embedding_providers.get_embedding", AsyncMock(return_value=[0.1, 0.2, 0.3]))
-    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["embed"])
+    _token, _org_id, api_key = await _make_org_with_api_key(client, db_session, register_payload, ["embed:write"])
 
     response = await client.post("/v1/embed", json={"text": "hello world"}, headers=_api_key_header(api_key))
     assert response.status_code == 200

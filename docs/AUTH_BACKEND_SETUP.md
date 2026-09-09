@@ -10799,9 +10799,106 @@ never says how to actually get a key).
 
 **Full regression sweep (9.1)**: 20 tests, zero failures.
 
-**Partie 9 status (0/37 -> 9/37)**: 9.2 (webhooks), 9.3 (generated
-SDK), 9.4 (embeddable widget), 9.5 (Slack/Teams/Discord integrations)
-remain unstarted.
+### Partie 9.2 -- Advanced key management, webhooks, versioning, OpenAPI, SDKs
+
+✅ **Real model extension instead of duplication (9.2.1)**: the
+literal prompt asks for a new `APIKey` model -- a near-exact duplicate
+of `OrganizationAPIKey` (9.1). Fixed: extended the existing model
+(`is_active`, `rate_limit`/`rate_limit_period`, `quota_limit`/
+`quota_period`/`quota_used`/`quota_reset_at`,
+`scheduled_rotation_at`) instead of a parallel table.
+
+✅ **Real key rotation (9.2.2)**: `rotate_api_key` creates a new key
+with the same scopes/expiry, revokes the old one, logs to a new
+`KeyRotationHistory` table (migration `0084`). Scheduled rotation
+(`schedule_key_rotation`/`execute_scheduled_rotation`) + an hourly
+Celery task.
+
+✅ **Real expiration (9.2.3)**: `is_key_expired`,
+`set/remove/extend_key_expiration`. 🐛 **Real security gap fixed**:
+`get_expiring_keys` had NO organization filter at all -- any
+authenticated admin could see every OTHER organization's expiring
+keys. Fixed: a required `organization_id` parameter via the router
+(`GET /organizations/{org_id}/api-keys/expiring`), optional only for
+the Celery task which legitimately needs every organization.
+
+🐛 **Real incoherence fixed -- scope table (9.2.4)**: 9.2.4's own
+granular 12-scope table (`chat:read`/`chat:write`/`documents:read`/
+`documents:write`/`search:read`/`agents:read`/`agents:run`/`kb:read`/
+`kb:write`/`usage:read`/`analytics:read`/`embed:write`) replaces the
+coarser scopes set in 9.1 (`"chat"`, `"search"`, etc.) -- the later,
+more carefully specified ask wins; every 9.1 endpoint's required scope
+string was updated to match.
+
+✅ **Real per-key rate limiting (9.2.5)**: reuses the real, existing
+Redis sliding-window limiter (`api/security/rate_limit.py`), with a
+per-key override falling back to the global default.
+
+✅ **Real quotas with HTTP enforcement (9.2.6)**: `check_quota` raises
+a real `429` once `quota_used >= quota_limit`; `increment_quota` runs
+only after the scope check passes (so a rejected request is never
+counted). An hourly Celery task handles periodic reset.
+
+✅ **Real webhooks with reliable delivery (9.2.7)**: new `Webhook`/
+`WebhookDelivery` models (migration `0084`), HMAC-SHA256 signing
+(`X-Webhook-Signature`, sorted-keys JSON for a stable signature), real
+delivery via a synchronous Celery task (real `httpx.post`) with
+exponential-backoff retry (up to `retry_count`, `2**attempt`
+backoff). `trigger_webhook` does a real per-organization fan-out to
+every active, subscribed webhook. 🐛 **Real SQLAlchemy bug fixed**:
+declaring both `index=True` on a column AND an explicit,
+same-named `Index()` in `__table_args__` caused an "index already
+exists" error at SQLite table-creation time -- fixed by removing the
+redundant explicit `Index()` declarations.
+
+✅ **Real auth for key-scoped (not org-scoped) endpoints
+(9.2.1-9.2.7)**: `/api-keys/{key_id}/...` routes have NO `org_id`
+anywhere in their path, making `require_org_admin` unusable (422,
+missing required param). New, real `require_key_org_admin` dependency
+(and its webhook equivalent, `_require_webhook_org_admin`): loads the
+key/webhook first, then derives and checks org-admin membership from
+its own `organization_id`. 🐛 **Real routing bug fixed**: static
+routes (`/api-keys/scopes`, `/organizations/{org_id}/api-keys/expiring`)
+must be registered BEFORE dynamic routes at the same depth
+(`/api-keys/{key_id}`), or FastAPI tries to parse the static segment
+as the dynamic param (422).
+
+✅ **Real, honestly minimal API versioning (9.2.8)**: `GET
+/api/versions`, `GET /api/versions/{version}`, an `API-Version` header
+on every response. ⚠️ **Honest limitation**: only one version (`v1`)
+actually exists -- this is forward-ready scaffolding, not a real
+breaking-change migration already handled.
+
+✅ **OpenAPI/Swagger (9.2.9)**: already fully functional out of the
+box via FastAPI (`/docs`, `/redoc`, `/openapi.json`) -- the real gap
+was only missing metadata (title/description/contact/license), now
+configured via `api/config.py` (`OPENAPI_*`). No new engineering
+needed beyond that.
+
+✅ **Real Python SDK (9.2.10)**: `sdks/python/rag_saas_sdk` package
+(`httpx` as its only real dependency), with `chat.send`,
+`documents.upload`, `search.query`, `agents.run`, `usage.get`,
+`analytics.get`, `embed.generate` methods, raising `RagSaasAPIError`
+on any non-2xx response. 8 real tests via `httpx.MockTransport`.
+
+✅ **Real JS/TS SDK (9.2.11)**: `sdks/js` package (strict TypeScript,
+zero runtime dependencies -- native `fetch`), the same method surface
+as the Python SDK. 🐛 **Real bug fixed while testing**: reading
+`response.json()` then, on failure, `response.text()` on the SAME
+response -- a body can only be read once (`TypeError: Body is
+unusable`). Fixed via `response.clone()`. 4 real tests via `vitest`
+with a mocked `fetch`; `tsc --noEmit` is clean.
+
+**Real verification**: `tests/test_api_key_management.py` (26 tests),
+`tests/test_webhooks.py` (11 tests), `tests/test_api_versioning.py`
+(10 tests), `sdks/python/tests/test_client.py` (8 tests),
+`sdks/js/tests/*.test.ts` (4 tests).
+
+**Full regression sweep (9.2)**: 47 backend Python tests + 8 Python
+SDK tests + 4 JS/TS SDK tests, zero failures.
+
+**Partie 9 status (9/37 -> 20/37)**: 9.3 (embeddable widget), 9.4-9.5
+(Slack/Teams/Discord integrations) remain unstarted.
 
 ### Partie 3.4.2 -- query rewriting
 
