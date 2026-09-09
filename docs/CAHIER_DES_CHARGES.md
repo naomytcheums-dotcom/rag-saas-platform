@@ -2106,12 +2106,29 @@ Tests réels dédiés (30 tests), voir `tests/test_voice_providers.py` (nommé a
 
 ---
 
-## PARTIE 9 — API publique & Intégrations — ⬜ NON COMMENCÉ (0/37)
+## PARTIE 9 — API publique & Intégrations — 🟡 EN COURS (9/37, Partie 9.1 complète)
 
-`api/` ne contient QUE l'authentification (Partie 1.1). Aucun endpoint
-`/v1/chat`, `/v1/documents`, `/v1/agents/run`. Pas de clés API, pas de
-webhooks, pas de SDK généré, pas de widget embarquable, pas
-d'intégration Slack/Teams/Discord.
+### Partie 9.1 — API publique `/v1/*` — ✅ COMPLET (9/9)
+
+✅ **Nouveau modèle réel** `OrganizationAPIKey` (migration `0083`) : clés API réelles, révocables, **scopées à l'organisation entière** (pas à un seul agent) -- même vraie discipline de hash (`SHA-256`, révélation en clair une seule fois) que `AgentAPIKey` (5.3.10), mais un modèle réel séparé.
+
+🐛 **Incohérence réelle corrigée** : `AgentAPIKey` (5.3.10) est scopée à UN seul agent (`POST /api/agents/run`) -- les 9 endpoints de la Partie 9.1 couvrent toute une organisation (n'importe quel agent, documents, knowledge bases, recherche, usage, embeddings). Une vraie portée différente, pas la même entité réutilisée de force.
+
+🔒 **Sécurité + rate limiting réels (vision critique, chaque étape)** : `require_organization_api_key` réutilise le vrai limiteur à fenêtre glissante déjà construit (`api/security/rate_limit.py`, Redis) -- chaque clé API a sa propre vraie limite (60 req/min par défaut), et chaque endpoint est en plus scope-gated (`require_public_api_scope`).
+
+🐛 **Incohérence réelle corrigée -- une conversation a besoin d'un vrai propriétaire** : `Conversation.user_id` est un vrai FK NOT NULL (ressource personnelle, Partie 5.1.12) -- mais une clé API publique est scopée à l'organisation, pas à un utilisateur. Corrigé : une conversation créée via l'API publique est attribuée au vrai membre qui a généré la clé (`OrganizationAPIKey.created_by`).
+
+✅ **Réutilisation réelle massive, aucune logique dupliquée** : `POST /v1/chat` et `POST /v1/agents/run` réutilisent `AgentOrchestrator.run_agent` (le même moteur que le chat interne et la téléphonie Twilio) ; `POST /v1/chat` et `POST /v1/search` réutilisent `search_with_context` (même pipeline RAG que la recherche interne) ; `POST /v1/documents` réutilise `upload_document` ; `GET /v1/usage` et `GET /v1/analytics` réutilisent `get_usage_summary` ; `POST /v1/embed` réutilise `get_embedding`.
+
+⚠️ **Limite honnête (9.1.8, vision critique)** : la Partie 11 (Admin Dashboard & Analytics) n'a réellement AUCUNE infrastructure d'agrégation avancée (clusters de questions, lacunes de connaissances -- rien). `GET /v1/analytics` expose donc honnêtement les seules vraies données agrégées existantes (l'usage, comme 9.1.7), avec un vrai message explicite plutôt que des métriques fabriquées.
+
+✅ **Endpoints réels ajoutés** (en plus des 9 littéraux) : `POST/GET/DELETE /organizations/{org_id}/api-keys` -- sans eux, l'API publique entière serait réelle mais définitivement inatteignable (le prompt littéral ne dit jamais comment obtenir une clé).
+
+Tests réels dédiés (20 tests), voir `tests/test_public_api.py`.
+
+**Régression complète (9.1)** : 20 tests, zéro échec.
+
+**Reste pour la Partie 9 (0/37 → 9/37)** : 9.2 (webhooks), 9.3 (SDK généré), 9.4 (widget embarquable), 9.5 (intégrations Slack/Teams/Discord) -- non commencés.
 
 ---
 

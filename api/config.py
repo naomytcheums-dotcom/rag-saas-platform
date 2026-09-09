@@ -1384,6 +1384,13 @@ class Settings(BaseSettings):
     TWILIO_WEBHOOK_URL: str | None = None
     TWILIO_VOICE_TIMEOUT: int = 30
 
+    # -- Public API (Partie 9.1) -----------------------------------------------------
+    # Real, per-API-key rate limit -- see api/security/public_api_auth.py's
+    # own docstring for why this reuses the existing sliding-window
+    # limiter rather than a new one.
+    PUBLIC_API_RATE_LIMIT_MAX: int = 60
+    PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _require_asyncpg_driver(cls, value):

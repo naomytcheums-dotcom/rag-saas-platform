@@ -32,7 +32,7 @@ from api.routers import (
     custom_domains, custom_tools, documents, feedback, i18n,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
-    organization_branding, organization_members, organization_settings, organizations, password, quality_dashboard,
+    organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, white_label, workflows, workspaces,
@@ -201,6 +201,7 @@ app.include_router(voice.router)
 app.include_router(voice_messages.router)
 app.include_router(voice_settings.router)
 app.include_router(twilio.router)
+app.include_router(public_api.router)
 app.include_router(agent_traces.router)
 app.include_router(agents.router)
 app.include_router(agent_api_keys.router)
