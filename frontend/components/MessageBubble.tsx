@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 import type { MockMessage } from "@/lib/mockChat";
 import CitationList from "./CitationList";
 import CopyButton from "./CopyButton";
@@ -26,6 +27,7 @@ interface MessageBubbleProps {
 // them here against a fake id would just fail every time, which is
 // less honest than this real, working, local equivalent.
 export default function MessageBubble({ message, isLast, onEdit, onRegenerate, regenerating }: MessageBubbleProps) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
 
@@ -42,7 +44,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
                 className="w-64 max-w-full resize-none rounded-lg border border-white/30 bg-white/10 p-2 text-sm text-white outline-none placeholder:text-white/60"
               />
               <div className="flex justify-end gap-2 text-xs">
-                <button type="button" onClick={() => setEditing(false)} className="text-white/80 hover:underline">Cancel</button>
+                <button type="button" onClick={() => setEditing(false)} className="text-white/80 hover:underline">{t("cancel")}</button>
                 <button
                   type="button"
                   onClick={() => {
@@ -51,7 +53,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
                   }}
                   className="rounded-md bg-white/20 px-2 py-1 font-medium hover:bg-white/30"
                 >
-                  Save &amp; resend
+                  {t("save_and_resend")}
                 </button>
               </div>
             </div>
@@ -59,7 +61,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
             <>
               <p>{message.content}</p>
               <button type="button" onClick={() => setEditing(true)} className="mt-1 text-xs text-white/70 hover:text-white hover:underline">
-                Edit
+                {t("edit")}
               </button>
             </>
           )}
@@ -71,7 +73,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
   return (
     <div className="flex justify-start">
       <div className="max-w-[90%] rounded-2xl rounded-tl-sm border border-border bg-surface p-4 shadow-sm sm:max-w-[80%]">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent-hover">Assistant</p>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent-hover">{t("assistant")}</p>
         <MessageContent text={message.content} citations={message.citations} />
 
         <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -85,7 +87,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
               disabled={regenerating}
               className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-muted hover:bg-accent-soft hover:text-accent-hover disabled:opacity-50"
             >
-              {regenerating ? "Regenerating…" : "Regenerate"}
+              {regenerating ? t("regenerating") : t("regenerate")}
             </button>
           )}
         </div>

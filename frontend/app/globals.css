@@ -27,6 +27,8 @@
   --success-soft: #e3f6ea;
   --danger: #d8482f;
   --danger-soft: #fce6e1;
+  --warning: #b8791a;
+  --warning-soft: #fdf1de;
 
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -47,7 +49,11 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

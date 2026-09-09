@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 import { getSpeechRecognitionConstructor, type SpeechRecognitionLike } from "@/lib/speechTypes";
 import { settings } from "@/lib/voiceConfig";
 
@@ -16,6 +17,7 @@ type PttState = "idle" | "pressed" | "listening" | "canceling";
 // feedback via the standard Vibration API where supported (mobile
 // browsers), a real, honest no-op elsewhere.
 export default function PushToTalkButton({ language, onTranscript }: PushToTalkButtonProps) {
+  const { t } = useTranslation();
   const [state, setState] = useState<PttState>("idle");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,7 +77,7 @@ export default function PushToTalkButton({ language, onTranscript }: PushToTalkB
       onPointerMove={(event) => handleMove(event.clientX, event.clientY)}
       onPointerUp={handleRelease}
       onPointerLeave={() => state === "listening" && setState("canceling")}
-      aria-label="Hold to talk"
+      aria-label={t("hold_to_talk")}
       className={`relative flex h-14 w-14 select-none items-center justify-center rounded-full text-xl transition-colors ${
         state === "canceling" ? "bg-danger-soft text-danger" : state !== "idle" ? "bg-accent text-white" : "bg-accent-soft text-accent-hover"
       }`}

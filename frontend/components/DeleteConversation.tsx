@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 interface DeleteConversationProps {
   conversationId: string;
@@ -14,6 +15,7 @@ interface DeleteConversationProps {
 // this is a real destructive-looking action from the user's own point
 // of view even though it's reversible server-side.
 export default function DeleteConversation({ conversationId, onDeleted }: DeleteConversationProps) {
+  const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState(false);
@@ -31,18 +33,18 @@ export default function DeleteConversation({ conversationId, onDeleted }: Delete
   }
 
   if (notice) {
-    return <span className="text-xs text-success">Conversation deleted</span>;
+    return <span className="text-xs text-success">{t("conversation_deleted")}</span>;
   }
 
   if (confirming) {
     return (
       <span className="inline-flex items-center gap-2 text-xs">
-        <span className="text-foreground-muted">Delete this conversation?</span>
+        <span className="text-foreground-muted">{t("delete_this_conversation")}</span>
         <button type="button" onClick={handleDelete} className="font-medium text-danger hover:underline">
-          Delete
+          {t("delete")}
         </button>
         <button type="button" onClick={() => setConfirming(false)} className="text-foreground-muted hover:underline">
-          Cancel
+          {t("cancel")}
         </button>
       </span>
     );
@@ -53,10 +55,10 @@ export default function DeleteConversation({ conversationId, onDeleted }: Delete
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        aria-label="Delete conversation"
+        aria-label={t("delete_conversation")}
         className="rounded-lg px-2 py-1 text-xs text-foreground-muted hover:bg-danger-soft hover:text-danger"
       >
-        Delete
+        {t("delete")}
       </button>
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>

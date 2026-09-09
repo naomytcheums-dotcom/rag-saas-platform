@@ -116,6 +116,25 @@ async def test_trigger_webhook_skips_unsubscribed_event(db_session):
     assert deliveries == []
 
 
+async def test_send_test_delivery_dispatches_regardless_of_event_subscription(db_session):
+    """Validation criterion: le bouton "Test" du dashboard fonctionne
+    même pour un webhook non abonné à un vrai événement -- un test
+    manuel est un envoi délibéré, pas un vrai événement plateforme."""
+    from api.services.webhooks import send_test_delivery
+
+    org_id = uuid.uuid4()
+    webhook = await create_webhook(db_session, org_id, "My webhook", "https://example.com/hook", ["document.uploaded"])
+    await db_session.commit()
+
+    with patch("api.tasks.webhooks.deliver_webhook_task.delay") as mock_delay:
+        delivery = await send_test_delivery(db_session, webhook)
+        await db_session.commit()
+
+    assert delivery.event == "test"
+    assert delivery.webhook_id == webhook.id
+    mock_delay.assert_called_once_with(str(delivery.id))
+
+
 # ---------------------------------------------------------------------- Endpoints
 
 
@@ -154,3 +173,23 @@ async def test_webhook_endpoints_reject_non_admin_of_other_org(client, db_sessio
     other_token, _other_user = await _register(client, db_session, "other-webhook@example.com")
     response = await client.get(f"/webhooks/{webhook_id}", headers=_auth_header(other_token))
     assert response.status_code == 404
+
+
+async def test_webhook_test_endpoint(client, db_session, register_payload, monkeypatch):
+    """Validation criterion: real, end-to-end -- POST /webhooks/{id}/test
+    creates a real delivery row and dispatches it, mocked here the same
+    way test_webhook_crud_endpoints's own sibling tests mock Celery."""
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr("api.tasks.webhooks.deliver_webhook_task.delay", MagicMock())
+
+    token, org_id, _user = await _make_org(client, db_session, register_payload)
+    created = await client.post(
+        f"/organizations/{org_id}/webhooks", json={"name": "hook1", "url": "https://example.com/hook", "events": ["message.created"]},
+        headers=_auth_header(token),
+    )
+    webhook_id = created.json()["id"]
+
+    response = await client.post(f"/webhooks/{webhook_id}/test", headers=_auth_header(token))
+    assert response.status_code == 200
+    assert response.json()["event"] == "test"

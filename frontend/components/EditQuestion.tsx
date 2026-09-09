@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { ConversationMessage } from "@/lib/types";
 
 interface EditQuestionProps {
@@ -15,6 +16,7 @@ interface EditQuestionProps {
 // Partie 8.1.7 -- edits a user question, then regenerates the answer.
 // Ctrl+Enter saves, Escape cancels (the literal ask's own shortcuts).
 export default function EditQuestion({ conversationId, messageId, initialContent, onSaved, onCancel }: EditQuestionProps) {
+  const { t } = useTranslation();
   const [content, setContent] = useState(initialContent);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +51,10 @@ export default function EditQuestion({ conversationId, messageId, initialContent
         className="w-full resize-none rounded-lg border border-border bg-background p-2 text-sm text-foreground outline-none focus:border-accent"
       />
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-foreground-muted">Ctrl+Enter to save · Esc to cancel</span>
+        <span className="text-xs text-foreground-muted">{t("ctrl_enter_save_esc_cancel")}</span>
         <div className="flex gap-2">
           <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1 text-xs font-medium text-foreground-muted hover:bg-surface-muted">
-            Cancel
+            {t("cancel")}
           </button>
           <button
             type="button"
@@ -60,7 +62,7 @@ export default function EditQuestion({ conversationId, messageId, initialContent
             disabled={loading || content.trim() === ""}
             className="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
           >
-            {loading ? "Saving…" : "Save"}
+            {loading ? t("saving") : t("save")}
           </button>
         </div>
       </div>

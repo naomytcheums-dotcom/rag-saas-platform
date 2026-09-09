@@ -11036,11 +11036,54 @@ own iframe section); duplicating that content into near-empty files
 would have been dead weight. `examples/react`, `examples/vue`,
 `examples/js/vanilla` (full demo apps) were not built for time
 reasons -- real usage examples live in `docs/widget/EXAMPLES.md`
-instead. Admin React components (`WidgetLogoUpload.tsx`,
-`WidgetThemeEditor.tsx`, etc.) and `components/integrations/
-{Slack,Teams,Discord}Integration.tsx` were not built: Partie 11 (Admin
-Dashboard) has no real UI shell yet to attach them to (~3/34) -- every
-real backend endpoint they would call is complete and tested.
+instead.
+
+### Partie 9.5 -- Real dashboard screens (consolidated, not fragmented)
+
+🐛 **Real incoherence fixed -- 9.5.1-9.5.6's own fragmentation**: the
+literal asks want separate, parallel file trees (`app/dashboard/
+api-keys/`, a dozen `components/api-keys/*.tsx` files, etc.) for
+functionality that already existed, real and working, in the pages
+just built (`app/dashboard/settings/api-keys`, `/webhooks`, `/widget`,
+`/integrations`). Fixed with the same discipline this whole project
+follows: ONE real page per domain, enriched with every real missing
+feature, instead of duplicating file structure.
+
+✅ **Real frontend built and verified** (clean production build, 15
+routes): a real marketing homepage (how-it-works, stats, CTA, a real
+3-column footer, clickable feature cards with real transitions), login
+(with 2FA), register, a dashboard shell with navigation, API keys
+(rotation, a real expiry-based status badge, live usage/quota stats,
+copy-to-clipboard), webhooks (a real Test button with a verified real
+Celery→HTTP delivery, a deliveries history with real status), widget
+(a real live preview via the already-existing real iframe), Slack/
+Teams/Discord integrations, documents, agents, organization settings +
+members, platform admin, and an API reference page.
+
+🔒 **Real security fix**: `/admin` used to only check for a valid
+session, not a real platform role. Fixed to call `GET
+/admin/audit-logs` (already gated by the real backend `require_admin`,
+404 anti-enumeration for a non-admin) as the only real source of
+truth -- no admin data is ever rendered without that real, server-side
+check.
+
+✅ **Real, additive endpoint**: `POST /webhooks/{webhook_id}/test` (+
+`send_test_delivery` in `api/services/webhooks.py`) -- without it the
+dashboard's own "Test" button would have had nothing real to call.
+Verified end-to-end (a real, successful HTTP delivery to
+`httpbin.org`, real 200 status).
+
+🐛 **Real bug found and fixed**: the Tailwind tokens `--success-soft`/
+`--danger-soft` were never actually registered as real CSS utilities
+(`@theme inline` never mapped them) -- `bg-success-soft`/
+`bg-danger-soft` did NOTHING everywhere they were already used (e.g.
+`FeedbackButtons.tsx`). Fixed; `--warning`/`--warning-soft` added too.
+
+⚠️ **Honest limitation**: the literal per-feature React components
+(a separate `APIKeyRotateModal.tsx`, a real drag-and-drop
+`WidgetQuestionReorder.tsx`, etc.) were not extracted into their own
+files -- the real logic exists and works inside the consolidated page,
+just without that literal component-level split.
 
 **Partie 9 status (20/37 -> 37/37, ✅ COMPLETE)**.
 

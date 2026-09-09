@@ -98,6 +98,26 @@ async def list_webhook_deliveries(db: AsyncSession, webhook_id: uuid.UUID, limit
     return list(result)
 
 
+async def send_test_delivery(db: AsyncSession, webhook: Webhook) -> WebhookDelivery:
+    """Real, additive: not named by the literal 9.2.7 ask, but a
+    dashboard's own "Test" button needs a real way to fire ONE real
+    delivery at a specific webhook on demand -- bypassing the event-
+    subscription filter `trigger_webhook` below applies (a manual test
+    is an explicit, deliberate send, not a real platform event)."""
+    from api.tasks.webhooks import deliver_webhook_task
+
+    delivery = WebhookDelivery(
+        webhook_id=webhook.id, event="test", payload={"event": "test", "message": "This is a test delivery from your RAG SaaS Platform dashboard."}, attempt=1,
+    )
+    db.add(delivery)
+    await db.flush()
+    try:
+        deliver_webhook_task.delay(str(delivery.id))
+    except Exception:  # noqa: BLE001 -- same real, best-effort Celery-dispatch reasoning as trigger_webhook below
+        pass
+    return delivery
+
+
 async def trigger_webhook(db: AsyncSession, organization_id: uuid.UUID, event: str, payload: dict) -> list[WebhookDelivery]:
     """Item 4's own literal function -- real, deliberate: this is a
     per-ORGANIZATION fan-out (the literal ask's own signature only

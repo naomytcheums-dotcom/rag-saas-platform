@@ -244,7 +244,16 @@ class LatencyMeasurementResponse(BaseModel):
     std: float | None
 
 
-class ABTestResponse(BaseModel):
+class PairedComparisonABTestResponse(BaseModel):
+    """A real, one-off statistical comparison result (Partie 7.3's own
+    `run_ab_test`) -- deliberately renamed from the ambiguous
+    `ABTestResponse` this module used to also declare a second, later,
+    completely different class as (Partie 10's own PERSISTED growth-
+    experiment `ABTest` entity, api/routers/ab_tests.py). Python let
+    the later definition silently shadow this one at module level --
+    every real caller of THIS class (evaluation_comparisons.py) was
+    unknowingly validating against the wrong, unrelated schema."""
+
     question_set_id: uuid.UUID
     metric: str
     sample_size: int

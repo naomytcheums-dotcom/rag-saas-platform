@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 import type { Citation as CitationType } from "@/lib/types";
 import CitationModal from "./CitationModal";
 
@@ -12,6 +13,7 @@ interface CitationListProps {
 // (not just inline) so a user can scan sources without re-reading the
 // answer, and jump between them.
 export default function CitationList({ citations }: CitationListProps) {
+  const { t } = useTranslation();
   const [active, setActive] = useState<CitationType | null>(null);
 
   if (citations.length === 0) return null;
@@ -19,7 +21,7 @@ export default function CitationList({ citations }: CitationListProps) {
   return (
     <div className="mt-3 border-t border-border pt-3">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-        Sources ({citations.length})
+        {t("sources", { count: citations.length })}
       </h3>
       <ul className="space-y-1.5">
         {citations.map((citation) => (
@@ -32,7 +34,7 @@ export default function CitationList({ citations }: CitationListProps) {
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-hover">
                 {citation.citation_number}
               </span>
-              <span className="truncate text-foreground">{citation.document_title ?? "Untitled document"}</span>
+              <span className="truncate text-foreground">{citation.document_title ?? t("untitled_document")}</span>
               {citation.page != null && <span className="shrink-0 text-xs text-foreground-muted">p.{citation.page}</span>}
             </button>
           </li>

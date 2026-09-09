@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { Conversation } from "@/lib/types";
 
 interface RenameConversationProps {
@@ -12,6 +13,7 @@ interface RenameConversationProps {
 // Partie 8.1.11 -- double-click the title to edit, Enter to save, Esc
 // to cancel (the literal ask's own interaction spec).
 export default function RenameConversation({ conversation, onRenamed }: RenameConversationProps) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(conversation.title);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function RenameConversation({ conversation, onRenamed }: RenameCo
         type="button"
         onDoubleClick={() => setEditing(true)}
         className="truncate text-left text-sm font-medium text-foreground"
-        title="Double-click to rename"
+        title={t("double_click_to_rename")}
       >
         {conversation.title}
       </button>

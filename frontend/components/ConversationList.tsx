@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { Conversation } from "@/lib/types";
 import ConversationItem from "./ConversationItem";
 
@@ -14,6 +15,7 @@ const PAGE_SIZE = 20;
 
 // Partie 8.1.10 -- GET /conversations, paginated ("load more").
 export default function ConversationList({ activeConversationId, onSelect }: ConversationListProps) {
+  const { t } = useTranslation();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -62,7 +64,7 @@ export default function ConversationList({ activeConversationId, onSelect }: Con
       ))}
 
       {conversations.length === 0 && !loading && (
-        <p className="px-3 py-6 text-center text-sm text-foreground-muted">No conversations yet</p>
+        <p className="px-3 py-6 text-center text-sm text-foreground-muted">{t("no_conversations_yet")}</p>
       )}
 
       {hasMore && (

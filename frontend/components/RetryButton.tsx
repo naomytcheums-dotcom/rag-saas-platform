@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { ConversationMessage } from "@/lib/types";
 
 interface RetryButtonProps {
@@ -16,6 +17,7 @@ interface RetryButtonProps {
 // (the retry_count comes back on the request body's own response, see
 // RetryResponse in api/schemas/message_actions.py).
 export default function RetryButton({ conversationId, messageId, maxAttempts = 3, onRetried }: RetryButtonProps) {
+  const { t } = useTranslation();
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function RetryButton({ conversationId, messageId, maxAttempts = 3
         disabled={loading || exhausted}
         className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-muted hover:bg-accent-soft hover:text-accent-hover disabled:opacity-50"
       >
-        {loading ? "Retrying…" : exhausted ? "Retry limit reached" : `Retry (${attempts}/${maxAttempts})`}
+        {loading ? t("retrying") : exhausted ? t("retry_limit_reached") : t("retry_with_count", { attempts, max: maxAttempts })}
       </button>
       {error && <span className="text-xs text-danger">{error}</span>}
     </div>

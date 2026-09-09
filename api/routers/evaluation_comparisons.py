@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.evaluation import QuestionSet
 from api.models.organization import OrganizationMember
-from api.schemas.evaluation import ABTestRequest, ABTestResponse, MultiModelComparisonRequest, MultiModelComparisonResponse
+from api.schemas.evaluation import (
+    ABTestRequest, MultiModelComparisonRequest, MultiModelComparisonResponse, PairedComparisonABTestResponse,
+)
 from api.security.evaluation import require_question_set_admin
 from api.services.evaluation_comparisons import run_ab_test, run_multi_model_comparison
 
@@ -31,7 +33,7 @@ async def run_multi_model_comparison_endpoint(
     return comparison
 
 
-@router.post("/sets/{set_id}/ab-test", response_model=ABTestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/sets/{set_id}/ab-test", response_model=PairedComparisonABTestResponse, status_code=status.HTTP_201_CREATED)
 async def run_ab_test_endpoint(
     payload: ABTestRequest, set_ctx: tuple[QuestionSet, OrganizationMember] = Depends(require_question_set_admin),
     db: AsyncSession = Depends(get_db),

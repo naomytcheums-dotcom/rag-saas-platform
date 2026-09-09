@@ -46,11 +46,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.text()) as unknown as T;
 }
 
+async function requestForm<T>(path: string, method: string, file: File): Promise<T> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const form = new FormData();
+  form.set("file", file);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: form, credentials: "include" });
+  if (!response.ok) {
+    let detail: unknown;
+    try {
+      detail = (await response.json()).detail;
+    } catch {
+      detail = await response.text();
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: body !== undefined ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  postFile: <T>(path: string, file: File) => requestForm<T>(path, "POST", file),
 };
 
 export function fileUrl(path: string): string {

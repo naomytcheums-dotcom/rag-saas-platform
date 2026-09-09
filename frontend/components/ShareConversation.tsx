@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { ConversationShare } from "@/lib/types";
 
 interface ShareConversationProps {
@@ -11,6 +12,7 @@ interface ShareConversationProps {
 // Partie 8.1.15 -- creates a public share link, lets the user copy it
 // and optionally set an expiry.
 export default function ShareConversation({ conversationId }: ShareConversationProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [share, setShare] = useState<ConversationShare | null>(null);
   const [expiresInDays, setExpiresInDays] = useState<number | "">("");
@@ -65,7 +67,7 @@ export default function ShareConversation({ conversationId }: ShareConversationP
                 disabled={loading}
                 className="w-full rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
               >
-                {loading ? "Creating…" : "Create link"}
+                {loading ? t("creating") : t("create_link")}
               </button>
               {error && <p className="mt-1 text-xs text-danger">{error}</p>}
             </>
@@ -81,7 +83,7 @@ export default function ShareConversation({ conversationId }: ShareConversationP
                 }}
                 className="w-full rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
               >
-                {copied ? "Copied!" : "Copy link"}
+                {copied ? t("copied") : t("copy_link")}
               </button>
             </>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 import type { Citation } from "@/lib/types";
 
 interface CopyButtonProps {
@@ -14,12 +15,13 @@ interface CopyButtonProps {
 // the Clipboard API isn't available (e.g. an insecure/non-HTTPS
 // context) instead of silently doing nothing.
 export default function CopyButton({ text, citations = [], format = "plain" }: CopyButtonProps) {
+  const { t } = useTranslation();
   const [state, setState] = useState<"idle" | "copied" | "error">("idle");
 
   function buildContent(): string {
     if (format === "with_citations" && citations.length > 0) {
       const sources = citations
-        .map((c) => `[${c.citation_number}] ${c.document_title ?? "Untitled document"}${c.url ? ` — ${c.url}` : ""}`)
+        .map((c) => `[${c.citation_number}] ${c.document_title ?? t("untitled_document")}${c.url ? ` — ${c.url}` : ""}`)
         .join("\n");
       return `${text}\n\nSources:\n${sources}`;
     }
@@ -43,10 +45,10 @@ export default function CopyButton({ text, citations = [], format = "plain" }: C
     <button
       type="button"
       onClick={handleCopy}
-      aria-label="Copy response"
+      aria-label={t("copy")}
       className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-muted hover:bg-accent-soft hover:text-accent-hover"
     >
-      {state === "copied" ? "Copied!" : state === "error" ? "Couldn't copy" : "Copy"}
+      {state === "copied" ? t("copied") : state === "error" ? t("copy_failed") : t("copy")}
     </button>
   );
 }

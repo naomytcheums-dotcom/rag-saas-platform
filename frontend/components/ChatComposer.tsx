@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 import PushToTalkButton from "./PushToTalkButton";
 import VoiceInput from "./VoiceInput";
 
@@ -16,6 +17,7 @@ interface ChatComposerProps {
 // side -- both real, independent ways to fill the same real text
 // field, Enter (without Shift) sends.
 export default function ChatComposer({ value, onChange, onSend, disabled }: ChatComposerProps) {
+  const { t } = useTranslation();
   const [voiceMode, setVoiceMode] = useState<"tap" | "hold">("tap");
 
   function send() {
@@ -34,7 +36,7 @@ export default function ChatComposer({ value, onChange, onSend, disabled }: Chat
             aria-pressed={voiceMode === "tap"}
             className={`rounded-full px-2 py-1 text-xs ${voiceMode === "tap" ? "bg-accent text-white" : "text-foreground-muted"}`}
           >
-            Tap
+            {t("tap")}
           </button>
           <button
             type="button"
@@ -42,7 +44,7 @@ export default function ChatComposer({ value, onChange, onSend, disabled }: Chat
             aria-pressed={voiceMode === "hold"}
             className={`rounded-full px-2 py-1 text-xs ${voiceMode === "hold" ? "bg-accent text-white" : "text-foreground-muted"}`}
           >
-            Hold
+            {t("hold")}
           </button>
         </div>
 
@@ -61,7 +63,7 @@ export default function ChatComposer({ value, onChange, onSend, disabled }: Chat
               send();
             }
           }}
-          placeholder="Ask anything…"
+          placeholder={t("ask_placeholder")}
           rows={1}
           disabled={disabled}
           className="max-h-32 flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent disabled:opacity-50"
@@ -71,7 +73,7 @@ export default function ChatComposer({ value, onChange, onSend, disabled }: Chat
           type="button"
           onClick={send}
           disabled={disabled || !value.trim()}
-          aria-label="Send"
+          aria-label={t("send")}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-50"
         >
           ➤

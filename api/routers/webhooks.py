@@ -14,7 +14,7 @@ from api.models.user import User
 from api.models.webhook import Webhook
 from api.schemas.webhooks import WebhookCreateRequest, WebhookDeliveryResponse, WebhookResponse, WebhookUpdateRequest
 from api.security.organizations import require_org_admin
-from api.services.webhooks import WebhookError, create_webhook, delete_webhook, list_webhook_deliveries, list_webhooks, update_webhook
+from api.services.webhooks import WebhookError, create_webhook, delete_webhook, list_webhook_deliveries, list_webhooks, send_test_delivery, update_webhook
 
 router = APIRouter(tags=["Webhooks"])
 
@@ -79,3 +79,11 @@ async def delete_webhook_endpoint(webhook: Webhook = Depends(_require_webhook_or
 @router.get("/webhooks/{webhook_id}/deliveries", response_model=list[WebhookDeliveryResponse])
 async def list_webhook_deliveries_endpoint(webhook: Webhook = Depends(_require_webhook_org_admin), db: AsyncSession = Depends(get_db)):
     return await list_webhook_deliveries(db, webhook.id)
+
+
+@router.post("/webhooks/{webhook_id}/test", response_model=WebhookDeliveryResponse)
+async def test_webhook_endpoint(webhook: Webhook = Depends(_require_webhook_org_admin), db: AsyncSession = Depends(get_db)):
+    delivery = await send_test_delivery(db, webhook)
+    await db.commit()
+    await db.refresh(delivery)
+    return delivery

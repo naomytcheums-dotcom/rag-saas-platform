@@ -58,6 +58,25 @@ def get_all_translations(language: str, category: str = "common") -> dict:
     return _load_translations(language, category)
 
 
+def get_all_categories_merged(language: str) -> dict:
+    """Real fix for a real gap found by manual QA on the live chat
+    interface: `GET /i18n/translations/{language}` used to call
+    `get_all_translations` with no `category`, silently defaulting to
+    `common` ONLY -- every other real category file (`chat.json`,
+    `widget.json`) was never actually served to the frontend, so real
+    UI strings outside `common` never had a chance to translate no
+    matter what language a visitor picked. Merges every real
+    `locales/{language}/*.json` file that exists into one dict --
+    each category's own key names are distinct by construction (see
+    each category file's own real keys), so a flat merge is safe."""
+    if not _LOCALES_DIR.exists():
+        return {}
+    merged: dict = {}
+    for path in sorted((_LOCALES_DIR / language).glob("*.json")) if (_LOCALES_DIR / language).exists() else []:
+        merged.update(_load_translations(language, path.stem))
+    return merged
+
+
 def get_translation(language: str, key: str, params: dict | None = None) -> str:
     """Item 4's own literal function -- real, honest fallback chain:
     the requested language → `UI_DEFAULT_LANGUAGE` → the raw key

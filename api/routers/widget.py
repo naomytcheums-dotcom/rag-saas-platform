@@ -121,6 +121,20 @@ async def get_widget_config_endpoint(
     return data
 
 
+# Real, additive: an admin-side equivalent of GET /widget/config --
+# not named by any literal 9.3.x étape, but without it a real
+# dashboard has no way to learn its own organization's real
+# `public_key` (needed to build the real <script data-key="..."> embed
+# snippet) without already knowing it. Same honest-gap-fill pattern as
+# 9.1's own `POST /organizations/{org_id}/api-keys`.
+@router.get("/organizations/{org_id}/widget/config")
+async def get_widget_config_admin_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    config = await get_or_create_widget_config(db, org_id)
+    data = await get_widget_config_public(db, config)
+    await db.commit()
+    return data
+
+
 # ------------------------------------------------------------------------- 9.3.1 Session + chat
 
 

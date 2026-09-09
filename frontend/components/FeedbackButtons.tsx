@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { MessageFeedback } from "@/lib/types";
 
 interface FeedbackButtonsProps {
@@ -13,6 +14,7 @@ interface FeedbackButtonsProps {
 // modal for the comment", not which rating triggers it; a negative
 // vote is the one real case where asking why is actually useful).
 export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
+  const { t } = useTranslation();
   const [rating, setRating] = useState<"positive" | "negative" | null>(null);
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [comment, setComment] = useState("");
@@ -55,7 +57,7 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
           onClick={() => handleClick("positive")}
           disabled={saving}
           aria-pressed={rating === "positive"}
-          aria-label="Good response"
+          aria-label={t("good_response")}
           className={`rounded-lg px-2 py-1 text-sm ${rating === "positive" ? "bg-success-soft text-success" : "text-foreground-muted hover:bg-accent-soft"}`}
         >
           👍
@@ -65,7 +67,7 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
           onClick={() => handleClick("negative")}
           disabled={saving}
           aria-pressed={rating === "negative"}
-          aria-label="Bad response"
+          aria-label={t("bad_response")}
           className={`rounded-lg px-2 py-1 text-sm ${rating === "negative" ? "bg-danger-soft text-danger" : "text-foreground-muted hover:bg-accent-soft"}`}
         >
           👎
@@ -77,13 +79,13 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="What went wrong? (optional)"
+            placeholder={t("what_went_wrong")}
             rows={2}
             className="w-full resize-none rounded-md border border-border bg-background p-1.5 text-xs text-foreground outline-none focus:border-accent"
           />
           <div className="mt-1.5 flex justify-end gap-2">
             <button type="button" onClick={() => setShowCommentBox(false)} className="text-xs text-foreground-muted hover:underline">
-              Skip
+              {t("skip")}
             </button>
             <button
               type="button"
@@ -93,7 +95,7 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
               }}
               className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover"
             >
-              Send
+              {t("send")}
             </button>
           </div>
         </div>

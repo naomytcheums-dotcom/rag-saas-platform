@@ -202,7 +202,7 @@ def test_extract_document_content_appends_real_docx_footnotes_as_their_own_secti
     """Partie 3.1.3 -- real footnote content is appended as a real,
     distinct, clearly-marked section, not silently merged into body
     text."""
-    from tests.test_docx_extraction import _docx_bytes_with_real_footnote
+    from test_docx_extraction import _docx_bytes_with_real_footnote
 
     path = tmp_path / "with_footnote.docx"
     path.write_bytes(_docx_bytes_with_real_footnote())

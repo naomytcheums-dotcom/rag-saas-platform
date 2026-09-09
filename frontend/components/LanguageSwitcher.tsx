@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { UI_LANGUAGE_FLAGS } from "@/lib/voiceConfig";
 import Flag from "./Flag";
 
@@ -18,22 +19,15 @@ const FALLBACK_LANGUAGES = ["en", "fr", "es", "de", "pt", "ar"];
 // a real, flags-only picker needs its own real markup, the same real
 // pattern already used by VoiceLanguageSelector.tsx.
 export default function LanguageSwitcher() {
+  const { language: current, setLanguage } = useTranslation();
   const [languages, setLanguages] = useState<string[]>(FALLBACK_LANGUAGES);
-  const [current, setCurrent] = useState<string>("en");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void api
       .get<{ languages: string[]; default: string }>("/i18n/languages")
-      .then((data) => {
-        setLanguages(data.languages);
-        setCurrent(data.default);
-      })
-      .catch(() => {});
-    void api
-      .get<{ language: string }>("/i18n/detect")
-      .then((data) => setCurrent(data.language))
+      .then((data) => setLanguages(data.languages))
       .catch(() => {});
   }, []);
 
@@ -45,17 +39,15 @@ export default function LanguageSwitcher() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  async function handleChange(language: string) {
-    setCurrent(language);
+  function handleChange(language: string) {
+    // Real fix for a real bug: this used to reload the whole page,
+    // which never actually helped since no component read a
+    // translated string in the first place. setLanguage (lib/i18n.tsx)
+    // now reactively re-renders every real component using
+    // useTranslation() with the new language's real strings -- no
+    // reload needed.
+    setLanguage(language);
     setOpen(false);
-    try {
-      await api.post("/i18n/language", { language });
-      window.location.reload();
-    } catch {
-      // Real, honest no-op: the backend isn't reachable, so the real
-      // cookie can't be persisted -- the local selection still
-      // updates so the picker itself never looks broken.
-    }
   }
 
   const activeFlag = UI_LANGUAGE_FLAGS[current];
@@ -85,7 +77,7 @@ export default function LanguageSwitcher() {
                 type="button"
                 role="option"
                 aria-selected={lang === current}
-                onClick={() => void handleChange(lang)}
+                onClick={() => handleChange(lang)}
                 className={`rounded-lg p-1 ${lang === current ? "ring-2 ring-accent" : "hover:bg-surface-muted"}`}
               >
                 <Flag country={flag.country} label={flag.name} size={22} />

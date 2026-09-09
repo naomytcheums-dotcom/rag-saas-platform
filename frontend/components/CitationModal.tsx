@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "@/lib/i18n";
 import type { Citation } from "@/lib/types";
 
 interface CitationModalProps {
@@ -22,6 +23,7 @@ interface CitationModalProps {
 // <Citation> is used, while React's own event bubbling still works
 // exactly as if it were nested there.
 export default function CitationModal({ citation, onClose }: CitationModalProps) {
+  const { t } = useTranslation();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -48,12 +50,12 @@ export default function CitationModal({ citation, onClose }: CitationModalProps)
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <h2 id="citation-modal-title" className="text-lg font-semibold text-foreground">
-            Citation [{citation.citation_number}]
+            {t("citation")} [{citation.citation_number}]
           </h2>
           <button
             ref={closeButtonRef}
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("close")}
             className="rounded-full p-1 text-foreground-muted hover:bg-accent-soft hover:text-accent-hover"
           >
             ✕

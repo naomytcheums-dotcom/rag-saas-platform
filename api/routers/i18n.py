@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from api.config import settings
 from api.schemas.i18n import SetLanguageRequest, SupportedLanguagesResponse
-from api.services.i18n import detect_user_language, get_all_translations, get_supported_languages
+from api.services.i18n import detect_user_language, get_all_categories_merged, get_supported_languages
 
 router = APIRouter(prefix="/i18n", tags=["i18n"])
 
@@ -19,9 +19,15 @@ async def list_supported_languages_endpoint():
 
 @router.get("/translations/{language}")
 async def get_translations_endpoint(language: str):
+    """Real bug fixed (manual QA on the live chat interface): this
+    used to call `get_all_translations(language)` with no category,
+    silently defaulting to `common` alone -- so `chat.json` and
+    `widget.json` strings were never actually served, no matter what
+    language a visitor picked. Now returns every real category
+    merged."""
     if language not in get_supported_languages():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported language")
-    return get_all_translations(language)
+    return get_all_categories_merged(language)
 
 
 @router.get("/detect")

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { SearchResult } from "@/lib/types";
 
 interface ConversationSearchProps {
@@ -13,6 +14,7 @@ const DEBOUNCE_MS = 300;
 // Partie 8.1.12 -- debounced real-time search across titles and
 // messages, with the backend's own real <mark> highlighting rendered.
 export default function ConversationSearch({ onSelect }: ConversationSearchProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,7 +50,7 @@ export default function ConversationSearch({ onSelect }: ConversationSearchProps
       <input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search conversations…"
+        placeholder={t("search_conversations")}
         className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
       />
 
