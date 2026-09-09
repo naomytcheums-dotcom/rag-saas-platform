@@ -43,15 +43,23 @@ REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/"
 
 
-def set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
+def set_refresh_cookie(response: Response, raw_refresh_token: str, *, remember_me: bool = True) -> None:
     """Sets the refresh-token cookie with all its security flags in one
     place, so every call site (register/login/refresh/OAuth callback)
     gets the exact same settings -- httpOnly (invisible to JS), Secure
-    (HTTPS only, except in local dev via COOKIE_SECURE=False), SameSite=lax."""
+    (HTTPS only, except in local dev via COOKIE_SECURE=False), SameSite=lax.
+
+    `remember_me=False` (real "Remember me" checkbox, unchecked) omits
+    `max_age` entirely -- a real, browser-enforced SESSION cookie the
+    browser itself deletes on close, rather than a real 30-day
+    (REFRESH_TOKEN_EXPIRE_DAYS) persistent one. The underlying `Session`
+    row (api/models/session.py) still lives for the full 30 days either
+    way -- this only controls how long the BROWSER keeps offering the
+    cookie back, not the server's own real revocation window."""
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=raw_refresh_token,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600 if remember_me else None,
         path=REFRESH_COOKIE_PATH,
         domain=settings.COOKIE_DOMAIN,
         secure=settings.COOKIE_SECURE,
@@ -109,7 +117,8 @@ async def enforce_concurrent_session_limit(db: AsyncSession, user_id: uuid.UUID)
 
 
 async def issue_session(
-    db: AsyncSession, response: Response, request: Request, user_id: uuid.UUID, *, notify_new_device_email: str | None = None,
+    db: AsyncSession, response: Response, request: Request, user_id: uuid.UUID, *,
+    notify_new_device_email: str | None = None, remember_me: bool = True,
 ) -> TokenResponse:
     """
     Creates a new Session row (a fresh refresh token) and sets it as an
@@ -177,7 +186,7 @@ async def issue_session(
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send new-login notification to %s: %s", notify_new_device_email, exc)
 
-    set_refresh_cookie(response, raw_refresh_token)
+    set_refresh_cookie(response, raw_refresh_token, remember_me=remember_me)
     set_csrf_cookie(response, generate_csrf_token())
     return TokenResponse(
         access_token=access_token,

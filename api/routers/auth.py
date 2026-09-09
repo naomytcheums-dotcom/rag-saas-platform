@@ -254,7 +254,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             available_methods.append("webauthn")
         return MFARequiredResponse(mfa_token=create_mfa_pending_token(user.id), available_methods=available_methods)
 
-    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email)
+    tokens = await issue_session(db, response, request, user.id, notify_new_device_email=user.email, remember_me=payload.remember_me)
     await log_audit_action(db, user_id=user.id, action=AuditAction.LOGIN_SUCCESS, ip=ip, user_agent=user_agent, success=True)
     await db.commit()
     return tokens

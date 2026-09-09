@@ -163,6 +163,28 @@ async def test_login_success(client, register_payload):
     assert response.json()["access_token"]
 
 
+async def test_login_remember_me_true_sets_a_persistent_refresh_cookie(client, register_payload):
+    """Validation criterion: real "Remember me" -- checked (the
+    default) sets a real Max-Age on the refresh cookie."""
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"], "remember_me": True})
+    assert response.status_code == 200
+    set_cookie_headers = response.headers.get_list("set-cookie") if hasattr(response.headers, "get_list") else [response.headers.get("set-cookie", "")]
+    refresh_cookie = next((h for h in set_cookie_headers if h.startswith("refresh_token=")), "")
+    assert "Max-Age=" in refresh_cookie
+
+
+async def test_login_remember_me_false_sets_a_session_only_refresh_cookie(client, register_payload):
+    """Validation criterion: real "Remember me" -- unchecked omits
+    Max-Age entirely, a real browser-session-only cookie."""
+    await client.post("/auth/register", json=register_payload)
+    response = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"], "remember_me": False})
+    assert response.status_code == 200
+    set_cookie_headers = response.headers.get_list("set-cookie") if hasattr(response.headers, "get_list") else [response.headers.get("set-cookie", "")]
+    refresh_cookie = next((h for h in set_cookie_headers if h.startswith("refresh_token=")), "")
+    assert "Max-Age=" not in refresh_cookie
+
+
 async def test_login_wrong_password_returns_generic_401(client, register_payload):
     await client.post("/auth/register", json=register_payload)
     response = await client.post("/auth/login", json={"email": register_payload["email"], "password": "not-the-password"})

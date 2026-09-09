@@ -39,6 +39,13 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+    # Real "Remember me" checkbox -- see set_refresh_cookie's own
+    # docstring (api/security/sessions.py) for what this actually
+    # controls (a persistent vs. session-only browser cookie, not the
+    # server-side session lifetime, which stays REFRESH_TOKEN_EXPIRE_DAYS
+    # either way). Defaults True so an existing caller that never sends
+    # this field keeps today's real behavior unchanged.
+    remember_me: bool = True
 
 
 class TokenResponse(BaseModel):

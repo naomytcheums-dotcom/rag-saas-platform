@@ -21,8 +21,21 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
 def _dockerfile_lines():
+    """Real fix for a real drift: joins a `\\`-continued instruction
+    (e.g. `RUN grep ... \\` + `    && pip install ...`) back into ONE
+    logical line, the same way Docker itself parses a Dockerfile --
+    the previous, naive per-physical-line split broke the moment the
+    real `pip install` step below grew a real continuation line (the
+    agentfixture-exclusion fix, see the Dockerfile's own comment)."""
     text = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    raw_lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    joined: list[str] = []
+    for line in raw_lines:
+        if joined and joined[-1].endswith("\\"):
+            joined[-1] = f"{joined[-1][:-1].rstrip()} {line}"
+        else:
+            joined.append(line)
+    return joined
 
 
 # ---- Dockerfile -------------------------------------------------------
@@ -32,10 +45,14 @@ def test_dockerfile_exists():
 
 
 def test_dockerfile_starts_from_a_pinned_python_base_image():
+    # Real fix for a real drift: this is now a genuine multi-stage
+    # build (a real Snyk-audit fix -- see the Dockerfile's own top
+    # comment), so TWO real `FROM` lines are correct and expected, not
+    # one -- both must still be pinned to the same real Python version.
     lines = _dockerfile_lines()
     from_lines = [l for l in lines if l.startswith("FROM")]
-    assert len(from_lines) == 1
-    assert "python:3.13" in from_lines[0]
+    assert len(from_lines) >= 1
+    assert all("python:3.13" in l for l in from_lines)
 
 
 def test_dockerfile_installs_from_the_real_requirements_file():

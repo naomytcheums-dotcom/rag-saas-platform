@@ -13,7 +13,7 @@ export interface CurrentUser {
 interface AuthContextValue {
   user: CurrentUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ mfaRequired: boolean; mfaToken?: string }>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ mfaRequired: boolean; mfaToken?: string }>;
   register: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -49,8 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshUser().finally(() => setLoading(false));
   }, [refreshUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await api.post<{ access_token?: string; mfa_token?: string }>("/auth/login", { email, password });
+  const login = useCallback(async (email: string, password: string, rememberMe = true) => {
+    const result = await api.post<{ access_token?: string; mfa_token?: string }>("/auth/login", { email, password, remember_me: rememberMe });
     if (result.mfa_token) return { mfaRequired: true, mfaToken: result.mfa_token };
     if (result.access_token) saveToken(result.access_token);
     await refreshUser();

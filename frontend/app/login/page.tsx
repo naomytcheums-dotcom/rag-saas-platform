@@ -11,6 +11,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, rememberMe);
       if (result.mfaRequired && result.mfaToken) {
         setMfaToken(result.mfaToken);
       } else {
@@ -99,6 +100,13 @@ export default function LoginPage() {
                 placeholder="••••••••"
               />
             </label>
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-foreground-muted">
+                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-border-strong" />
+                Remember me
+              </label>
+              <Link href="/forgot-password" className="text-accent hover:underline">Forgot password?</Link>
+            </div>
             <button type="submit" disabled={loading} className="mt-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
               {loading ? "Signing in…" : "Sign in"}
             </button>

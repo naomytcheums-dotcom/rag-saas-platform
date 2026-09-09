@@ -5,6 +5,18 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Real bug fixed: this Dockerfile serves the Streamlit app
+# (dashboard/app.py) only -- it never needs the Next.js frontend
+# (Partie 8+) or any SDK's own node_modules/build output at all.
+# Left un-excluded, `frontend/node_modules/` and `frontend/.next/`'s
+# own binary Turbopack cache made the build context huge enough to
+# fail outright ("read-only file system" while writing the overlay
+# snapshot -- a real, reproducible failure, not a fluke).
+frontend/
+sdks/*/node_modules/
+sdks/*/dist/
+sdks/python/*.egg-info/
+
 # Version control and CI, not runtime
 .git/
 .github/
