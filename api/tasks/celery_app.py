@@ -35,6 +35,7 @@ celery_app = Celery(
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
+        "api.tasks.integrations",
     ],
 )
 
@@ -206,6 +207,11 @@ celery_app.conf.beat_schedule = {
     "check-alert-rules": {
         "task": "api.tasks.alerting.check_alert_rules",
         "schedule": timedelta(seconds=settings.ALERTING_CHECK_INTERVAL_SECONDS),
+    },
+    # Partie 15.1 -- same low-traffic window, offset again.
+    "cleanup-integration-logs-daily": {
+        "task": "api.tasks.integrations.cleanup_integration_logs",
+        "schedule": crontab(hour=8, minute=30),
     },
 }
 

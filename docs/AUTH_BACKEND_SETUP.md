@@ -11857,6 +11857,24 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   `vault` are config values with no real backend behind them yet in
   this environment.
 
+## Partie 15 (bis) -- Advanced integrations: universal inbound (Zapier/Make/n8n), Airbyte
+
+Full write-up: [`docs/integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md`](integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md).
+Numbering collision, same as every prior batch -- this repo's real
+master cahier des charges already has a "Partie 15 -- Human-in-the-loop"
+(itself incomplete/truncated) -- documented as "Partie 15 (bis)" there
+rather than renumbered. Summary: outbound (notify Zapier/Make/n8n of a
+platform event) already existed for real since Partie 9.2.7
+(`Webhook`/`WebhookDelivery`) -- not duplicated. Real, new work is the
+inbound direction: `IntegrationConnection` (real bearer token, real
+field mapping/normalization, one real configured action --
+`ingest_document`, which reuses the real document/RAG upload pipeline,
+or `log_only`), verified live end-to-end (a real payload became a real
+Document). A real Airbyte API client honestly 501s without a real
+Airbyte instance configured (none exists in this environment) --
+Airbyte itself provides the 300+ real source connectors, none
+reimplemented here.
+
 ## Partie 13 (bis) -- Monitoring & Observability: metrics, structured logging, alerting, tracing, UI
 
 Full write-up: [`docs/monitoring/PARTIE_13_OBSERVABILITY.md`](monitoring/PARTIE_13_OBSERVABILITY.md).

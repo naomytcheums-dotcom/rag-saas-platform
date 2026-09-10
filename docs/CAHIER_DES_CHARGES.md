@@ -2397,6 +2397,10 @@ Le message original s'arrête à "15.1.1 Ticke..." — la suite n'a jamais
 été retrouvée. Ce qu'on sait : l'outil "Human Escalation" existe déjà
 côté agent (voir 5.2.9). **À compléter si tu retrouves la suite.**
 
+🐛 **Incohérence réelle relevée** : un second lot de prompts DeepSeek a réutilisé le numéro "Partie 15" pour un sujet totalement différent (Intégrations avancées CRM/ERP : connecteurs universels, Zapier/Make/n8n, Airbyte) — collision avec cette vraie section préexistante du cahier des charges (déjà elle-même incomplète). Documenté séparément ci-dessous plutôt que renuméroté, même discipline que pour toutes les collisions précédentes (Partie 10/11/12/13).
+
+✅ **Partie 15 (bis) — Intégrations avancées (CRM/ERP) — 🟡 PARTIEL (~5/~40)** — voir [`docs/integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md`](integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md). Résumé honnête : le sortant (notifier Zapier/Make/n8n d'un événement de cette app) existe déjà réellement depuis la Partie 9.2.7 (`Webhook`/`WebhookDelivery`) — pas dupliqué. Ce qui est réellement nouveau : un vrai récepteur entrant (`IntegrationConnection`, jeton bearer réel, mapping de champs réel, action réelle "ingérer comme document" réutilisant le vrai pipeline RAG existant), vérifié en direct de bout en bout (payload envoyé → document réel créé). Un vrai client Airbyte (appelle la vraie API REST d'une vraie instance Airbyte) répond honnêtement `501` tant qu'aucune instance réelle n'est configurée — aucun des 300+ connecteurs Airbyte n'est réimplémenté ici, Airbyte lui-même les fournit.
+
 ---
 
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)

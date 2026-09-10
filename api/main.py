@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n, observability,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, observability,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
@@ -341,6 +341,8 @@ app.include_router(admin_subscriptions.router)
 app.include_router(billing.router)
 app.include_router(billing.org_router)
 app.include_router(observability.router)
+app.include_router(integrations_universal.router)
+app.include_router(integrations_universal.org_router)
 app.include_router(ab_tests.router)
 
 

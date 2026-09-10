@@ -1825,5 +1825,18 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_TRACES_SAMPLER_ARG: float = 0.1
 
+    # -- Partie 15.1/15.2: universal inbound integrations -----------------------
+    INTEGRATIONS_ENABLED: bool = True
+    INTEGRATIONS_MAX_CONNECTIONS: int = 10
+    INTEGRATION_LOG_RETENTION_DAYS: int = 90
+
+    # -- Partie 15.3: Airbyte -- honestly absent in this environment (no real
+    # Airbyte instance deployed here); every field defaults to None so
+    # api/services/airbyte_client.py can detect "not configured" and return
+    # a real 501 rather than pretending to reach a server that isn't there.
+    AIRBYTE_API_URL: str | None = None
+    AIRBYTE_API_KEY: str | None = None
+    AIRBYTE_WORKSPACE_ID: str | None = None
+
 
 settings = Settings()
