@@ -43,7 +43,6 @@ export default function AdminPage() {
   if (access === "denied") {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
-        <span className="text-3xl" aria-hidden="true">🔒</span>
         <h1 className="text-lg font-semibold text-foreground">Access restricted</h1>
         <p className="max-w-sm text-sm text-foreground-muted">
           This area is reserved for platform administrators. Your account does not have that role.

@@ -83,7 +83,15 @@ export default function PushToTalkButton({ language, onTranscript }: PushToTalkB
       }`}
     >
       {state === "listening" && <span className="absolute inset-0 animate-ping rounded-full bg-accent opacity-30" aria-hidden="true" />}
-      <span aria-hidden="true">{state === "canceling" ? "✕" : "🎙"}</span>
+      {state === "canceling" ? (
+        <span aria-hidden="true" className="text-lg leading-none">&times;</span>
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3" />
+          <path d="M5 10a7 7 0 0 0 14 0" />
+          <line x1="12" y1="19" x2="12" y2="22" />
+        </svg>
+      )}
     </button>
   );
 }

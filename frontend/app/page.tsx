@@ -1,12 +1,12 @@
 import Link from "next/link";
 
 const FEATURES = [
-  { icon: "💬", title: "Chat propulsé par le RAG", description: "Des réponses ancrées dans vos propres documents, avec de vraies citations.", href: "/chat" },
-  { icon: "🤖", title: "Agents IA personnalisés", description: "Configurez un prompt, des garde-fous et les outils autorisés selon vos besoins.", href: "/dashboard/agents" },
-  { icon: "🧩", title: "Widget embarquable", description: "Une seule balise script à ajouter sur n'importe quel site.", href: "/dashboard/settings/widget" },
-  { icon: "🔌", title: "Slack, Teams, Discord", description: "Vos agents directement dans les outils que votre équipe utilise déjà.", href: "/dashboard/settings/integrations" },
-  { icon: "🔑", title: "API publique", description: "Construisez sur votre propre base de connaissances avec une vraie API REST.", href: "/dashboard/settings/api-keys" },
-  { icon: "🔗", title: "Webhooks", description: "Des événements en temps réel livrés directement à vos systèmes.", href: "/dashboard/settings/webhooks" },
+  { title: "Chat propulsé par le RAG", description: "Des réponses ancrées dans vos propres documents, avec de vraies citations.", href: "/chat" },
+  { title: "Agents IA personnalisés", description: "Configurez un prompt, des garde-fous et les outils autorisés selon vos besoins.", href: "/dashboard/agents" },
+  { title: "Widget embarquable", description: "Une seule balise script à ajouter sur n'importe quel site.", href: "/dashboard/settings/widget" },
+  { title: "Slack, Teams, Discord", description: "Vos agents directement dans les outils que votre équipe utilise déjà.", href: "/dashboard/settings/integrations" },
+  { title: "API publique", description: "Construisez sur votre propre base de connaissances avec une vraie API REST.", href: "/dashboard/settings/api-keys" },
+  { title: "Webhooks", description: "Des événements en temps réel livrés directement à vos systèmes.", href: "/dashboard/settings/webhooks" },
 ];
 
 const STEPS = [
@@ -53,8 +53,7 @@ export default function LandingPage() {
               href={feature.href}
               className="group rounded-xl border border-border bg-surface p-5 transition-all duration-200 hover:-translate-y-1 hover:border-accent hover:shadow-lg"
             >
-              <span className="text-2xl" aria-hidden="true">{feature.icon}</span>
-              <h3 className="mt-2 text-sm font-semibold text-foreground group-hover:text-accent-hover">{feature.title}</h3>
+              <h3 className="text-sm font-semibold text-foreground group-hover:text-accent-hover">{feature.title}</h3>
               <p className="mt-1 text-sm text-foreground-muted">{feature.description}</p>
               <span className="mt-2 inline-block text-xs font-medium text-accent opacity-0 transition-opacity group-hover:opacity-100">
                 Explorer →

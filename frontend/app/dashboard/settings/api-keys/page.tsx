@@ -44,15 +44,9 @@ function KeyUsageStats({ keyId }: { keyId: string }) {
 
   const pct = Math.min(100, Math.round((quota.quota_used / quota.quota_limit) * 100));
   return (
-    <div>
-      <div className="flex justify-between text-xs text-foreground-muted">
-        <span>{quota.quota_used} / {quota.quota_limit} requests ({quota.quota_period})</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
+    <p className="text-xs text-foreground-muted">
+      {quota.quota_used} / {quota.quota_limit} requests ({quota.quota_period}) — {pct}%
+    </p>
   );
 }
 

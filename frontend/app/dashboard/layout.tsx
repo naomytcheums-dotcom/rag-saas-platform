@@ -10,40 +10,40 @@ const NAV_SECTIONS = [
   {
     label: "Workspace",
     items: [
-      { href: "/dashboard", label: "Overview", icon: "🏠" },
-      { href: "/chat", label: "Chat", icon: "💬" },
-      { href: "/dashboard/documents", label: "Documents", icon: "📄" },
-      { href: "/dashboard/agents", label: "Agents", icon: "🤖" },
+      { href: "/dashboard", label: "Overview" },
+      { href: "/chat", label: "Chat" },
+      { href: "/dashboard/documents", label: "Documents" },
+      { href: "/dashboard/agents", label: "Agents" },
     ],
   },
   {
     label: "Developer",
     items: [
-      { href: "/dashboard/settings/api-keys", label: "API keys", icon: "🔑" },
-      { href: "/dashboard/settings/webhooks", label: "Webhooks", icon: "🔗" },
-      { href: "/dashboard/api-docs", label: "API docs", icon: "📚" },
+      { href: "/dashboard/settings/api-keys", label: "API keys" },
+      { href: "/dashboard/settings/webhooks", label: "Webhooks" },
+      { href: "/dashboard/api-docs", label: "API docs" },
     ],
   },
   {
     label: "Widget & integrations",
     items: [
-      { href: "/dashboard/settings/widget", label: "Widget", icon: "🧩" },
-      { href: "/dashboard/settings/integrations", label: "Integrations", icon: "🔌" },
+      { href: "/dashboard/settings/widget", label: "Widget" },
+      { href: "/dashboard/settings/integrations", label: "Integrations" },
     ],
   },
   {
     label: "Account",
     items: [
-      { href: "/dashboard/profile", label: "Profile", icon: "👤" },
-      { href: "/dashboard/settings/organization", label: "Organization", icon: "⚙️" },
+      { href: "/dashboard/profile", label: "Profile" },
+      { href: "/dashboard/settings/organization", label: "Organization" },
     ],
   },
   {
     label: "Platform",
     items: [
-      { href: "/dashboard/billing", label: "Billing", icon: "💳" },
-      { href: "/dashboard/security", label: "Security", icon: "🔒" },
-      { href: "/admin", label: "Admin", icon: "🛠️" },
+      { href: "/dashboard/billing", label: "Billing" },
+      { href: "/dashboard/security", label: "Security" },
+      { href: "/admin", label: "Admin" },
     ],
   },
 ];
@@ -79,7 +79,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                         active ? "bg-accent-soft font-medium text-accent-hover" : "text-foreground hover:bg-surface-muted"
                       }`}
                     >
-                      <span aria-hidden="true">{item.icon}</span>
                       {item.label}
                     </Link>
                   );

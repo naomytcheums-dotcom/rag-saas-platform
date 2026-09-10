@@ -69,7 +69,6 @@ export default function DocumentsPage() {
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       <label className="mt-6 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface p-8 text-center hover:border-accent">
-        <span className="text-2xl" aria-hidden="true">📤</span>
         <span className="text-sm font-medium text-foreground">{uploading ? "Uploading…" : "Click to upload a document"}</span>
         <span className="text-xs text-foreground-muted">PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, and more</span>
         <input type="file" className="hidden" disabled={uploading} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />

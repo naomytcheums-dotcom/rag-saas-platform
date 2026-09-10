@@ -97,7 +97,6 @@ export default function IntegrationsPage() {
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xl" aria-hidden="true">💬</span>
               <h2 className="text-sm font-semibold text-foreground">Slack</h2>
             </div>
             {slack.config.connected ? (
@@ -111,7 +110,6 @@ export default function IntegrationsPage() {
 
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl" aria-hidden="true">👥</span>
             <h2 className="text-sm font-semibold text-foreground">Microsoft Teams</h2>
           </div>
           <p className="mt-1 text-xs text-foreground-muted">{teams.loading ? "Checking…" : teams.config.connected ? "Connected" : "Not connected"}</p>
@@ -127,7 +125,6 @@ export default function IntegrationsPage() {
 
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl" aria-hidden="true">🎮</span>
             <h2 className="text-sm font-semibold text-foreground">Discord</h2>
           </div>
           <p className="mt-1 text-xs text-foreground-muted">{discord.loading ? "Checking…" : discord.config.connected ? "Connected" : "Not connected"}</p>

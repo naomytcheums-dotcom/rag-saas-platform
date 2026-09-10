@@ -91,7 +91,15 @@ export default function VoiceInput({ language, onTranscript }: VoiceInputProps) 
           <span className="absolute inset-0 animate-ping rounded-full bg-accent opacity-40" aria-hidden="true" />
         )}
         <span className="relative" aria-hidden="true">
-          {state === "processing" ? "…" : "🎤"}
+          {state === "processing" ? (
+            "…"
+          ) : (
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          )}
         </span>
       </button>
 

@@ -76,7 +76,7 @@ export default function MicrophoneTest() {
       <p className="text-sm text-foreground">
         {state === "idle" && "Test your microphone before using voice features."}
         {state === "testing" && "Speak now…"}
-        {state === "success" && "✅ Your microphone is working."}
+        {state === "success" && "Your microphone is working."}
         {state === "failed" && "We didn't detect any sound."}
       </p>
 

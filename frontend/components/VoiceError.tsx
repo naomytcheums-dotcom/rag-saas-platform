@@ -12,7 +12,6 @@ interface VoiceErrorProps {
 export default function VoiceError({ type, onRetry }: VoiceErrorProps) {
   return (
     <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-soft bg-danger-soft/60 p-3 text-sm">
-      <span aria-hidden="true">⚠️</span>
       <div className="flex-1">
         <p className="font-medium text-danger">{getVoiceErrorMessage(type)}</p>
         <p className="text-foreground-muted">{getVoiceErrorAction(type)}</p>
