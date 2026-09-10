@@ -51,13 +51,37 @@ async def get_or_create_subscription(db: AsyncSession, organization_id: uuid.UUI
     return sub
 
 
-async def list_plans(db: AsyncSession) -> list[Plan]:
+async def list_plans(db: AsyncSession, *, include_inactive: bool = False) -> list[Plan]:
     await ensure_free_plan_seeded(db)
-    return list((await db.scalars(select(Plan).order_by(Plan.monthly_price_cents))).all())
+    stmt = select(Plan).order_by(Plan.monthly_price_cents)
+    if not include_inactive:
+        stmt = stmt.where(Plan.is_active.is_(True))
+    return list((await db.scalars(stmt)).all())
 
 
-async def create_plan(db: AsyncSession, *, key: str, name: str, monthly_price_cents: int, max_documents: int | None, max_agents: int | None, max_members: int | None) -> Plan:
-    plan = Plan(key=key, name=name, monthly_price_cents=monthly_price_cents, max_documents=max_documents, max_agents=max_agents, max_members=max_members)
+async def get_plan(db: AsyncSession, plan_id: uuid.UUID) -> Plan:
+    plan = await db.get(Plan, plan_id)
+    if plan is None:
+        raise PlanNotFoundError(str(plan_id))
+    return plan
+
+
+async def get_plan_by_key(db: AsyncSession, key: str) -> Plan | None:
+    return await db.scalar(select(Plan).where(Plan.key == key))
+
+
+async def create_plan(
+    db: AsyncSession, *, key: str, name: str, monthly_price_cents: int, yearly_price_cents: int = 0,
+    max_documents: int | None = None, max_agents: int | None = None, max_members: int | None = None,
+    max_api_keys: int | None = None, max_webhooks: int | None = None, max_requests_per_month: int | None = None,
+    priority_support: bool = False, advanced_features: bool = False, sla: bool = False,
+) -> Plan:
+    plan = Plan(
+        key=key, name=name, monthly_price_cents=monthly_price_cents, yearly_price_cents=yearly_price_cents,
+        max_documents=max_documents, max_agents=max_agents, max_members=max_members,
+        max_api_keys=max_api_keys, max_webhooks=max_webhooks, max_requests_per_month=max_requests_per_month,
+        priority_support=priority_support, advanced_features=advanced_features, sla=sla,
+    )
     db.add(plan)
     await db.flush()
     return plan
@@ -93,12 +117,26 @@ async def get_subscription(db: AsyncSession, sub_id: uuid.UUID) -> Subscription:
     return sub
 
 
-async def update_subscription(db: AsyncSession, sub_id: uuid.UUID, *, plan_id: uuid.UUID | None = None, status_value: SubscriptionStatus | None = None) -> Subscription:
+async def update_subscription(
+    db: AsyncSession, sub_id: uuid.UUID, *, plan_id: uuid.UUID | None = None,
+    status_value: SubscriptionStatus | None = None, billing_period: str | None = None,
+) -> Subscription:
     sub = await get_subscription(db, sub_id)
     if plan_id is not None:
         sub.plan_id = plan_id
     if status_value is not None:
         sub.status = status_value
+    if billing_period is not None:
+        sub.billing_period = billing_period
+    await db.flush()
+    return sub
+
+
+async def reactivate_subscription(db: AsyncSession, sub_id: uuid.UUID) -> Subscription:
+    sub = await get_subscription(db, sub_id)
+    sub.status = SubscriptionStatus.active
+    sub.canceled_at = None
+    sub.cancel_reason = None
     await db.flush()
     return sub
 

@@ -197,6 +197,13 @@ bleach==6.2.0
 # fails, with a real, honest ExportError instead of a crash.
 weasyprint==63.1
 
+# Partie 12.2 -- Stripe SDK. Real dependency, genuinely used by
+# api/services/billing_stripe.py -- but every function there checks
+# settings.STRIPE_SECRET_KEY first and raises a real, honest
+# StripeNotConfiguredError (-> 501) when it's unset, which it is in
+# this environment (no real Stripe account exists here).
+stripe==11.4.1
+
 # -- Téléphonie / Twilio (Partie 8.2.13) --------------------------------------
 # Real, genuinely new dependency: Twilio's own official SDK, both to
 # validate real inbound webhook signatures (RequestValidator) and to

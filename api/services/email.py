@@ -749,6 +749,22 @@ def send_organization_member_removed_email(to_email: str, organization_name: str
     )
 
 
+def send_invoice_email(to_email: str, invoice_number: str, total_display: str, organization_name: str) -> None:
+    """Partie 12.4 -- notifies that a real invoice is ready. Deliberately
+    does not attach the PDF inline (Resend's REST API supports
+    attachments, but keeping this consistent with every other
+    notification-only email here means the recipient always fetches the
+    real, current PDF via GET /organizations/{id}/billing/invoices/{id}/pdf
+    rather than trusting a copy that could go stale)."""
+    subject = f"Invoice {invoice_number} for {organization_name}"
+    _send(to_email, subject, f"<p>Your invoice <strong>{html.escape(invoice_number)}</strong> ({html.escape(total_display)}) is ready. Sign in to your billing dashboard to view or download it.</p>")
+
+
+def send_invoice_reminder_email(to_email: str, invoice_number: str, total_display: str, days_overdue: int) -> None:
+    subject = f"Reminder: invoice {invoice_number} is overdue"
+    _send(to_email, subject, f"<p>Invoice <strong>{html.escape(invoice_number)}</strong> ({html.escape(total_display)}) is now {days_overdue} day(s) overdue. Please arrange payment.</p>")
+
+
 def send_via_custom_email_domain(domain_row: CustomDomain, from_local_part: str, to_email: str, subject: str, html_body: str) -> None:
     """
     Partie 1.4.5, item 6's literal "l'envoi d'email avec un domaine

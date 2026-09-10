@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
+from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.services.storage import delete_avatar
 from api.tasks.celery_app import celery_app
@@ -55,6 +56,24 @@ def purge_deleted_accounts() -> int:
             # explicitly here or it's orphaned forever.
             if user.avatar_url:
                 delete_avatar(user.avatar_url)
+
+            # organizations.id has no owner FK, so ON DELETE CASCADE never
+            # reaches it -- an org whose only member was this user would
+            # otherwise survive forever with zero members and no possible
+            # owner. Delete it now, before the membership row itself is
+            # cascaded away by the user delete below.
+            member_org_ids = db.scalars(
+                select(OrganizationMember.organization_id).where(OrganizationMember.user_id == user.id)
+            ).all()
+            for org_id in member_org_ids:
+                other_members = db.scalar(
+                    select(OrganizationMember.id)
+                    .where(OrganizationMember.organization_id == org_id, OrganizationMember.user_id != user.id)
+                    .limit(1)
+                )
+                if other_members is None:
+                    db.execute(delete(Organization).where(Organization.id == org_id))
+
             db.execute(delete(User).where(User.id == user.id))
             purged += 1
         db.commit()

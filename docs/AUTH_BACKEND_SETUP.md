@@ -11857,6 +11857,29 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   `vault` are config values with no real backend behind them yet in
   this environment.
 
+## Partie 12 -- Billing: plans, Stripe, credits/usage, invoices, billing UI
+
+Full write-up: [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md).
+Summary: `Plan`/`Subscription` (Partie 11.4) extended with annual
+pricing and feature flags; real Stripe SDK integration
+(`api/services/billing_stripe.py`) that honestly 501s until a real
+`STRIPE_SECRET_KEY` is configured (none exists in this environment);
+real `Credit`/`CreditTransaction` built on top of the already-real
+per-organization usage ledger (`api/security/usage.py`, Partie 1.3.8)
+rather than a second counter; real `Invoice`/`InvoiceLine` with
+sequential numbering and PDF generation (WeasyPrint, same pattern as
+conversation export); one consolidated `/dashboard/billing` page (6
+tabs), verified end-to-end in a real browser. One real bug found and
+fixed: `get_db()` never auto-commits, so nearly every mutating billing
+endpoint was silently rolling back on session close (same class of bug
+as Partie 10.1's RBAC permission catalog) -- fixed with explicit
+`db.commit()` calls, re-verified live. A second, unrelated real bug was
+also found and fixed while investigating stale-looking data in the real
+dev database: `organizations` has no owner FK, so a purged user's sole
+organization survived forever as an orphan (`api/tasks/account_purge.py`)
+-- 108 such rows (all e2e-test-created, not fabricated numbers) were
+cleaned up after explicit user confirmation.
+
 ## Partie 11 -- Admin dashboard: stats globales, organisations, utilisateurs, abonnements, monitoring, logs
 
 Full write-up: [`docs/admin/PARTIE_11_ADMIN_DASHBOARD.md`](admin/PARTIE_11_ADMIN_DASHBOARD.md).

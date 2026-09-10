@@ -33,7 +33,7 @@ celery_app = Celery(
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
-        "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan",
+        "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing",
     ],
 )
 
@@ -178,5 +178,24 @@ celery_app.conf.beat_schedule = {
     "run-scheduled-security-scans-daily": {
         "task": "api.tasks.security_scan.run_scheduled_security_scans",
         "schedule": crontab(hour=7, minute=30),
+    },
+    # Partie 12.4 -- real, idempotent (see api/tasks/billing.py's own
+    # docstrings): a real invoice per genuinely-paid active subscription,
+    # once a month; overdue-marking and reminders run daily.
+    "generate-monthly-invoices": {
+        "task": "api.tasks.billing.generate_monthly_invoices",
+        "schedule": crontab(hour=2, minute=0, day_of_month=1),
+    },
+    "mark-overdue-invoices-daily": {
+        "task": "api.tasks.billing.mark_overdue_invoices",
+        "schedule": crontab(hour=7, minute=45),
+    },
+    "send-invoice-reminders-daily": {
+        "task": "api.tasks.billing.send_invoice_reminders",
+        "schedule": crontab(hour=8, minute=0),
+    },
+    "auto-refill-credits-daily": {
+        "task": "api.tasks.billing.auto_refill_credits",
+        "schedule": crontab(hour=8, minute=15),
     },
 }

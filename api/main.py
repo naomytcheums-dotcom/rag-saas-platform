@@ -28,7 +28,7 @@ from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, batch_jobs,
-    benchmark_versions,
+    benchmark_versions, billing,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
@@ -326,6 +326,8 @@ app.include_router(admin_dashboard.router)
 app.include_router(admin_organizations.router)
 app.include_router(admin_users_management.router)
 app.include_router(admin_subscriptions.router)
+app.include_router(billing.router)
+app.include_router(billing.org_router)
 app.include_router(ab_tests.router)
 
 

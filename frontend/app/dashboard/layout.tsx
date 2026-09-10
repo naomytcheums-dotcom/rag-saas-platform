@@ -41,6 +41,7 @@ const NAV_SECTIONS = [
   {
     label: "Platform",
     items: [
+      { href: "/dashboard/billing", label: "Billing", icon: "💳" },
       { href: "/dashboard/security", label: "Security", icon: "🔒" },
       { href: "/admin", label: "Admin", icon: "🛠️" },
     ],

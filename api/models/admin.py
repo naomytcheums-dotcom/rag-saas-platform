@@ -49,9 +49,26 @@ class Plan(Base):
     key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # "free" | "pro" | "enterprise"
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     monthly_price_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Partie 12.1 -- annual price is its own column, not "monthly * 12",
+    # so a real discount can be offered on the yearly cycle without a
+    # second Plan row (a real "$290/yr on a $29/mo plan" is a genuine
+    # ~17% discount, not derivable from monthly_price_cents alone).
+    yearly_price_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_documents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_agents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_members: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_api_keys: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_webhooks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_requests_per_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    priority_support: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    advanced_features: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sla: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Populated only by a real sync_stripe_products/sync_stripe_prices
+    # call (api/services/billing_stripe_sync.py) -- NULL until Stripe is
+    # actually configured and synced.
+    stripe_product_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    stripe_price_id_monthly: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    stripe_price_id_yearly: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -63,6 +80,13 @@ class Subscription(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
     plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
     status: Mapped[SubscriptionStatus] = mapped_column(nullable=False, default=SubscriptionStatus.active)
+    # Partie 12.1/12.2 -- "monthly" or "yearly", which of Plan's two real
+    # prices this subscription is actually billed at.
+    billing_period: Mapped[str] = mapped_column(String(10), nullable=False, default="monthly")
+    # Set only once a real Stripe subscription exists for this org (see
+    # api/services/billing_stripe.py) -- NULL for every subscription in
+    # an environment with no Stripe account configured, honestly.
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)

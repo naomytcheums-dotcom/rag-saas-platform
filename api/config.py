@@ -1769,5 +1769,41 @@ class Settings(BaseSettings):
     SECURITY_ALERT_THRESHOLD: str = "medium"
     SECURITY_REPORT_RECIPIENTS: str = ""
 
+    # -- Partie 12.1: Billing plans ------------------------------------------
+    BILLING_ENABLED: bool = True
+    BILLING_CURRENCY: str = "EUR"
+    BILLING_DEFAULT_PLAN: str = "free"
+    BILLING_TRIAL_DAYS: int = 14
+    BILLING_GRACE_PERIOD_DAYS: int = 7
+
+    # -- Partie 12.2: Stripe -- honestly absent in this environment (no
+    # real Stripe account/keys exist here); every field below defaults to
+    # None/empty so api/services/billing_stripe.py can detect "not
+    # configured" and return a real, honest 501 rather than pretending to
+    # charge a card with a fake key. ------------------------------------
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_PUBLISHABLE_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    STRIPE_API_VERSION: str = "2024-12-18.acacia"
+    STRIPE_SUCCESS_URL: str = "http://localhost:3000/dashboard/billing?checkout=success"
+    STRIPE_CANCEL_URL: str = "http://localhost:3000/dashboard/billing?checkout=canceled"
+    STRIPE_PORTAL_RETURN_URL: str = "http://localhost:3000/dashboard/billing"
+
+    # -- Partie 12.3: Credits / usage ----------------------------------------
+    CREDITS_ENABLED: bool = True
+    CREDITS_DEFAULT_AMOUNT: int = 1000
+    CREDITS_CURRENCY: str = "EUR"
+    CREDITS_ALERT_THRESHOLDS: str = "50,80,95"
+    CREDITS_AUTO_REFILL: bool = False
+    CREDITS_REFILL_THRESHOLD: int = 100
+    CREDITS_REFILL_AMOUNT: int = 1000
+
+    # -- Partie 12.4: Invoices ------------------------------------------------
+    INVOICE_PREFIX: str = "INV"
+    INVOICE_DUE_DAYS: int = 30
+    INVOICE_CURRENCY: str = "EUR"
+    INVOICE_VAT_RATE: float = 20.0
+    INVOICE_REMINDER_DAYS: str = "7,14,30"
+
 
 settings = Settings()

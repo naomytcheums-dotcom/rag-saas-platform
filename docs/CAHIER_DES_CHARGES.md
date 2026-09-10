@@ -2336,15 +2336,31 @@ filtre actif (au-delà de 10.1.8's code non branché).
 
 ✅ **11.6 Logs système** -- un vrai `logging.Handler` (`api/security/system_log_handler.py`) capture chaque ligne WARNING+ réellement émise par ce processus dans une vraie table `system_logs`, vérifié par un test direct (un vrai `logger.warning(...)` devient une vraie ligne).
 
-✅ **Écran admin réel et consolidé** (`/admin`, route déjà existante -- pas de nouveau `/dashboard/admin` dupliqué) -- 6 onglets, vérifié de bout en bout dans un vrai navigateur avec de vraies données (108 organisations et 3 utilisateurs réellement présents dans la base de développement).
+✅ **Écran admin réel et consolidé** (`/admin`, route déjà existante -- pas de nouveau `/dashboard/admin` dupliqué) -- 6 onglets, vérifié de bout en bout dans un vrai navigateur avec de vraies données.
+
+🐛 **Bug réel trouvé et corrigé (2026-09-10)** : `organizations` n'a aucune FK "propriétaire", donc `ON DELETE CASCADE` ne l'atteint jamais quand son unique membre est purgé (`api/tasks/account_purge.py`) -- une organisation devenait orpheline pour toujours (0 membre, aucun propriétaire possible). 108 lignes de test (créées par les suites d'intégration e2e qui tournent contre la vraie base Supabase, jamais nettoyées) s'étaient accumulées et remontaient dans le tableau de bord admin, donnant l'illusion de fausses données. Nettoyées après confirmation utilisateur ; la base réelle affiche maintenant 0 organisation, 1 utilisateur réel. Le purge task supprime désormais aussi toute organisation dont le membre purgé était le seul membre.
 
 ⚠️ **Limite honnête** : les ~60 fichiers de composants et les graphiques (Line/Bar/Pie/Area/Donut charts) littéralement demandés n'ont pas été construits séparément -- les statistiques s'affichent en vraies cartes chiffrées, pas encore en graphiques visuels. Choix de portée délibéré face à l'ampleur du lot, pas un oubli silencieux.
 
 ---
 
-## PARTIE 12 — Facturation & Monétisation — ⬜ NON COMMENCÉ (0/23)
+## PARTIE 12 — Facturation & Monétisation — 🟡 PARTIEL (~18/23)
 
-Aucune intégration Paystack, aucune table plans/subscriptions/credits.
+Voir [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md) pour le guide consolidé.
+
+✅ **12.1 Plans tarifaires** -- `Plan`/`Subscription` (déjà réels depuis 11.4) étendus avec prix annuel, `max_api_keys`/`max_webhooks`/`max_requests_per_month`, `priority_support`/`advanced_features`/`sla`. `GET /billing/plans` et `/billing/plans/{id}` publics (catalogue, pas de données d'organisation) ; `POST/PATCH/DELETE` restent sur `/admin/plans` (11.4) -- pas de duplication. `POST .../subscribe|upgrade|downgrade|cancel|reactivate` sous `/organizations/{org_id}/billing/...` (Owner uniquement).
+
+✅ **12.2 Abonnements (Stripe)** -- intégration Stripe réelle (`api/services/billing_stripe.py`, SDK `stripe==11.4.1`) : checkout, portail client, méthodes de paiement, webhook avec vérification de signature et idempotence (`StripeEvent`). **Portée honnête** : `STRIPE_SECRET_KEY` n'est pas configuré dans cet environnement (aucun compte Stripe réel) -- chaque fonction renvoie un vrai `501 Not Implemented` plutôt que de simuler un paiement, vérifié par test (`test_stripe_checkout_honestly_501s_without_configured_keys`).
+
+✅ **12.3 Crédits / utilisation** -- `Credit`/`CreditTransaction` réels, 4 packs fixes (Starter/Pro/Business/Enterprise), taux de conversion réels. Réutilise le vrai système d'usage déjà existant (`api/security/usage.py`, Partie 1.3.8) plutôt que de dupliquer un second compteur -- `check_limits` vérifie contre les vraies limites du `Plan`.
+
+✅ **12.4 Factures** -- `Invoice`/`InvoiceLine` réels, numérotation séquentielle, PDF généré via WeasyPrint (même pattern que l'export de conversation, Partie 8). Génération mensuelle automatique (Celery) pour tout abonnement réellement payant (`monthly_price_cents > 0`) -- jamais de facture sur un plan gratuit.
+
+✅ **12.5 Écran de facturation** -- page consolidée `/dashboard/billing` (6 onglets : Overview/Plans/Usage/Credits/Invoices/Payment), même discipline que Security (10.6) et Admin (11) -- pas de fragmentation en dizaines de composants. Vérifié en direct dans un vrai navigateur : abonnement, crédits (octroi de bienvenue réel, achat de pack réel), facture générée.
+
+🐛 **Bug réel trouvé et corrigé** : `get_db()` n'auto-commit jamais (`api/database.py`) -- presque tous les endpoints mutants de `api/routers/billing.py` créaient/modifiaient des lignes qui étaient silencieusement annulées à la fermeture de la session (même classe de bug que le catalogue RBAC en Partie 10.1). Trouvé en testant en direct : le solde de crédits affichait 1000 mais aucune transaction ne persistait. Corrigé en ajoutant `await db.commit()` explicite sur chaque endpoint mutant, vérifié en re-testant en direct (transaction "Grant — Signup Allotment" puis achat de pack, toutes deux persistées).
+
+⬜ **Restant (~5/23)** : synchronisation Stripe Products/Prices non testée contre une vraie API Stripe (code réel mais jamais exécuté avec de vraies clés) ; pas de relances automatiques testées en conditions réelles (dépend d'un vrai Celery beat en production) ; pas de composants frontend séparés pour chaque sous-élément (page consolidée à la place, même choix que 10.6/11).
 
 ---
 
@@ -3143,8 +3159,7 @@ Partie, pour mémoire :
 - Partie 7 (Evaluation Lab), le reste -- attention au data-leakage déjà documenté dans AUDIT.md
 - Partie 8 (Interface Utilisateur) -- Streamlit actuel n'est PAS le Next.js/React prévu
 - Partie 9 (API publique) -- aucun endpoint `/v1/*` au-delà de l'auth
-- Partie 11 (Admin Dashboard & Analytics), le reste -- health/ready/metrics existent, le reste non
-- Partie 12 (Facturation) -- aucune intégration paiement
+- Partie 12 (Facturation) -- sync Stripe Products/Prices jamais testée contre une vraie clé API
 - Partie 14 (Documentation), le reste -- guide admin, guide utilisateur, FAQ
 - Partie 15 (Human-in-the-loop) -- dès que le contenu complet du cahier des charges original est retrouvé
 
