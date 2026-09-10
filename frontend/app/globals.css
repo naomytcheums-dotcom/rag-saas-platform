@@ -64,3 +64,37 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
 }
+
+/* Google Translate widget (components/GoogleTranslate.tsx) -- hide the
+   full-width banner iframe it injects at the top of <body> and the
+   highlight it puts on translated text, so it blends into this app's
+   own light/orange design instead of looking like a bolted-on tool. */
+body {
+  top: 0 !important;
+}
+.goog-te-banner-frame.skiptranslate,
+#goog-gt-tt,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+.goog-text-highlight {
+  background: none !important;
+  box-shadow: none !important;
+}
+.google-translate-widget .goog-te-gadget {
+  font-size: 0;
+}
+.google-translate-widget .goog-te-gadget > span > a {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-size: 0.75rem;
+  color: var(--foreground-muted);
+}
+.google-translate-widget select {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--foreground);
+  background: var(--surface);
+}
