@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n, observability,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
@@ -44,7 +44,9 @@ from api.routers import (
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.security.rbac import init_rbac
+from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
 from api.security.system_log_handler import install_system_log_handler
+from api.security.tracing import setup_tracing, tracing_status
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,15 @@ async def lifespan(app: FastAPI):
     # installed under the fast test suite (tests/conftest.py's `client`
     # fixture never runs this lifespan at all).
     install_system_log_handler()
+
+    # Partie 13.2 -- request-id correlation filter (always) + JSON
+    # console formatter (only when LOG_FORMAT=json).
+    configure_structured_logging(settings.LOG_FORMAT)
+
+    # Partie 13.4 -- real OpenTelemetry instrumentation, a real no-op
+    # unless OTEL_ENABLED is set (see api/security/tracing.py's own
+    # docstring for why that's the honest default in this environment).
+    setup_tracing(app)
 
     async def _poll_jwt_key_cache() -> None:
         while True:
@@ -248,6 +259,7 @@ async def _api_versioning(request: Request, call_next):
 # full request/response cycle including that middleware's own work,
 # giving the most complete picture of "how long did this request take."
 app.middleware("http")(track_request_duration_middleware)
+app.middleware("http")(request_correlation_middleware)
 
 app.include_router(auth.router)
 app.include_router(password.router)
@@ -328,6 +340,7 @@ app.include_router(admin_users_management.router)
 app.include_router(admin_subscriptions.router)
 app.include_router(billing.router)
 app.include_router(billing.org_router)
+app.include_router(observability.router)
 app.include_router(ab_tests.router)
 
 

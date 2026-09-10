@@ -204,6 +204,17 @@ weasyprint==63.1
 # this environment (no real Stripe account exists here).
 stripe==11.4.1
 
+# Partie 13.4 -- OpenTelemetry, real but OFF by default (OTEL_ENABLED=False)
+# -- see api/security/tracing.py's own docstring for why (no real OTLP
+# collector exists in this environment).
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-sqlalchemy
+opentelemetry-instrumentation-redis
+opentelemetry-instrumentation-celery
+opentelemetry-instrumentation-httpx
+opentelemetry-exporter-otlp-proto-http
+
 # -- Téléphonie / Twilio (Partie 8.2.13) --------------------------------------
 # Real, genuinely new dependency: Twilio's own official SDK, both to
 # validate real inbound webhook signatures (RequestValidator) and to

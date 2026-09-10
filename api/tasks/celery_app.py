@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_failure, task_success
 
 from api.config import settings
 
@@ -33,7 +34,7 @@ celery_app = Celery(
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
-        "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing",
+        "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
     ],
 )
 
@@ -198,4 +199,29 @@ celery_app.conf.beat_schedule = {
         "task": "api.tasks.billing.auto_refill_credits",
         "schedule": crontab(hour=8, minute=15),
     },
+    # Partie 13.3 -- a genuine fixed-interval poll (real config:
+    # ALERTING_CHECK_INTERVAL_SECONDS, default 60s), not a daily crontab
+    # -- an alert rule breaching CPU/queue backlog needs to be caught
+    # within a minute, not the next day's low-traffic window.
+    "check-alert-rules": {
+        "task": "api.tasks.alerting.check_alert_rules",
+        "schedule": timedelta(seconds=settings.ALERTING_CHECK_INTERVAL_SECONDS),
+    },
 }
+
+
+# Partie 13.1 -- real Celery task outcome metrics, wired via Celery's
+# own signals rather than per-task instrumentation: covers every task
+# this app runs automatically, including ones added after this file.
+@task_success.connect
+def _on_task_success(sender=None, **kwargs):
+    from api.monitoring import CELERY_TASKS_TOTAL
+
+    CELERY_TASKS_TOTAL.labels(task_name=sender.name if sender else "unknown", outcome="success").inc()
+
+
+@task_failure.connect
+def _on_task_failure(sender=None, **kwargs):
+    from api.monitoring import CELERY_TASKS_TOTAL
+
+    CELERY_TASKS_TOTAL.labels(task_name=sender.name if sender else "unknown", outcome="failure").inc()

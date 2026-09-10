@@ -13,7 +13,7 @@ interface AuditLogEntry {
 
 type AccessState = "checking" | "granted" | "denied";
 
-const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs"] as const;
+const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminPage() {
@@ -79,6 +79,7 @@ export default function AdminPage() {
         {tab === "Subscriptions" && <SubscriptionsTab />}
         {tab === "Monitoring" && <MonitoringTab />}
         {tab === "Logs" && <LogsTab />}
+        {tab === "Alerting" && <AlertingTab />}
       </div>
     </div>
   );
@@ -280,11 +281,15 @@ function MonitoringTab() {
   const [health, setHealth] = useState<any>(null);
   const [resources, setResources] = useState<any>(null);
   const [queues, setQueues] = useState<any>(null);
+  const [metrics, setMetrics] = useState<any>(null);
+  const [tracing, setTracing] = useState<any>(null);
 
   useEffect(() => {
     void api.get("/admin/monitoring/health").then(setHealth).catch(() => {});
     void api.get("/admin/monitoring/resources").then(setResources).catch(() => {});
     void api.get("/admin/monitoring/queues").then(setQueues).catch(() => {});
+    void api.get("/monitoring/metrics").then(setMetrics).catch(() => {});
+    void api.get("/monitoring/tracing/status").then(setTracing).catch(() => {});
   }, []);
 
   return (
@@ -310,11 +315,156 @@ function MonitoringTab() {
           <StatCard label="Reserved tasks" value={queues.reserved_tasks} />
         </div>
       )}
+      {metrics && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Business metrics</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Organizations" value={metrics.business.organizations} />
+            <StatCard label="Users" value={metrics.business.users} />
+            <StatCard label="Conversations" value={metrics.business.conversations} />
+            <StatCard label="Active subscriptions" value={metrics.business.active_subscriptions} />
+          </div>
+        </div>
+      )}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <p className="text-xs font-semibold uppercase text-foreground-muted">Distributed tracing (OpenTelemetry)</p>
+        <p className="mt-1 text-sm text-foreground">
+          {tracing ? (tracing.active ? `Active — exporting to ${tracing.exporter}` : "Disabled (no OTEL_EXPORTER_OTLP_ENDPOINT configured)") : "…"}
+        </p>
+      </div>
       <div className="rounded-xl border border-border bg-surface p-4">
         <p className="text-xs font-semibold uppercase text-foreground-muted">API documentation</p>
         <a href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/docs`} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-accent hover:underline">
           Open Swagger UI →
         </a>
+        <a href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/metrics`} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-accent hover:underline">
+          Open Prometheus /metrics →
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function AlertingTab() {
+  const [rules, setRules] = useState<any[]>([]);
+  const [channels, setChannels] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [newRule, setNewRule] = useState({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
+  const [newChannel, setNewChannel] = useState({ name: "", type: "email", value: "" });
+
+  const load = useCallback(() => {
+    void api.get<any[]>("/alerting/rules").then(setRules).catch(() => {});
+    void api.get<any[]>("/alerting/channels").then(setChannels).catch(() => {});
+    void api.get<any[]>("/alerting/history").then(setHistory).catch(() => {});
+    void api.get<any[]>("/alerting/incidents").then(setIncidents).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function createChannel() {
+    if (!newChannel.name.trim() || !newChannel.value.trim()) return;
+    const config = newChannel.type === "email" ? { email: newChannel.value } : { webhook_url: newChannel.value };
+    await api.post("/alerting/channels", { name: newChannel.name, type: newChannel.type, config });
+    setNewChannel({ name: "", type: "email", value: "" });
+    load();
+  }
+
+  async function createRule() {
+    if (!newRule.name.trim()) return;
+    await api.post("/alerting/rules", { name: newRule.name, metric: newRule.metric, operator: newRule.operator, threshold: Number(newRule.threshold) });
+    setNewRule({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
+    load();
+  }
+
+  async function deleteRule(id: string) {
+    await api.delete(`/alerting/rules/${id}`);
+    load();
+  }
+
+  async function resolveIncident(id: string) {
+    await api.post(`/alerting/incidents/${id}/resolve`);
+    load();
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Notification channels</p>
+        <div className="flex flex-col gap-2">
+          {channels.map((c) => (
+            <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
+              <span>{c.name} ({c.type})</span>
+              <span className="text-xs text-foreground-muted">{c.enabled ? "enabled" : "disabled"}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <input value={newChannel.name} onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })} placeholder="Channel name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <select value={newChannel.type} onChange={(e) => setNewChannel({ ...newChannel, type: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
+            <option value="email">Email</option>
+            <option value="webhook">Webhook (Slack/Teams/Discord/PagerDuty)</option>
+          </select>
+          <input value={newChannel.value} onChange={(e) => setNewChannel({ ...newChannel, value: e.target.value })} placeholder={newChannel.type === "email" ? "ops@example.com" : "https://hooks..."} className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <button type="button" onClick={() => void createChannel()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Alert rules</p>
+        <div className="flex flex-col gap-2">
+          {rules.map((r) => (
+            <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
+              <span>{r.name}: {r.metric} {r.operator} {r.threshold}</span>
+              <button type="button" onClick={() => void deleteRule(r.id)} className="text-xs font-medium text-danger hover:underline">Delete</button>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <input value={newRule.name} onChange={(e) => setNewRule({ ...newRule, name: e.target.value })} placeholder="Rule name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <select value={newRule.metric} onChange={(e) => setNewRule({ ...newRule, metric: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
+            <option value="cpu_percent">CPU %</option>
+            <option value="memory_percent">Memory %</option>
+            <option value="disk_percent">Disk %</option>
+            <option value="celery_queue_backlog">Celery queue backlog</option>
+            <option value="http_5xx_total">HTTP 5xx total</option>
+          </select>
+          <select value={newRule.operator} onChange={(e) => setNewRule({ ...newRule, operator: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
+            <option value="gt">&gt;</option>
+            <option value="gte">&ge;</option>
+            <option value="lt">&lt;</option>
+            <option value="lte">&le;</option>
+          </select>
+          <input value={newRule.threshold} onChange={(e) => setNewRule({ ...newRule, threshold: e.target.value })} placeholder="Threshold" className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <button type="button" onClick={() => void createRule()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Recent alert history</p>
+        {history.length === 0 ? <p className="text-sm text-foreground-muted">No alerts triggered yet.</p> : (
+          <div className="flex flex-col gap-2">
+            {history.map((h) => (
+              <div key={h.id} className="rounded-lg border border-border bg-surface p-3 text-sm">{h.message}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Incidents</p>
+        {incidents.length === 0 ? <p className="text-sm text-foreground-muted">No incidents.</p> : (
+          <div className="flex flex-col gap-2">
+            {incidents.map((i) => (
+              <div key={i.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
+                <span>{i.title} — {i.severity} — {i.status}</span>
+                {i.status !== "resolved" && <button type="button" onClick={() => void resolveIncident(i.id)} className="text-xs font-medium text-accent hover:underline">Resolve</button>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

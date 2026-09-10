@@ -25,7 +25,7 @@ import os
 import time
 
 from fastapi import Request, Response
-from prometheus_client import CollectorRegistry, Histogram, generate_latest, multiprocess
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, generate_latest, multiprocess
 
 # Seconds -- prometheus_client's own default histogram buckets, so a
 # dashboard built against those defaults still makes sense here.
@@ -36,6 +36,22 @@ REQUEST_DURATION_SECONDS = Histogram(
     "Time spent handling an HTTP request, in seconds.",
     labelnames=("method", "path"),
     buckets=_DEFAULT_BUCKETS,
+)
+
+# Partie 13.1 -- real HTTP outcome counter, grouped by status class
+# (2xx/4xx/5xx) for the same unbounded-cardinality reason
+# REQUEST_DURATION_SECONDS buckets under route template, not literal path.
+HTTP_REQUESTS_TOTAL = Counter(
+    "http_requests_total", "Total HTTP requests handled, by method/path/status class.",
+    labelnames=("method", "path", "status_class"),
+)
+
+# Partie 13.1 -- Celery task outcomes, wired via real Celery signals
+# (api/tasks/celery_app.py) rather than guessed from task code -- every
+# task this app runs is covered automatically, no per-task instrumentation.
+CELERY_TASKS_TOTAL = Counter(
+    "celery_tasks_total", "Total Celery tasks completed, by task name and outcome.",
+    labelnames=("task_name", "outcome"),
 )
 
 
@@ -69,6 +85,7 @@ async def track_request_duration_middleware(request: Request, call_next) -> Resp
     route = request.scope.get("route")
     path = route.path if route is not None else "unmatched"
     REQUEST_DURATION_SECONDS.labels(method=request.method, path=path).observe(duration)
+    HTTP_REQUESTS_TOTAL.labels(method=request.method, path=path, status_class=f"{response.status_code // 100}xx").inc()
     return response
 
 

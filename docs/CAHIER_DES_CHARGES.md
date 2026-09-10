@@ -2374,6 +2374,10 @@ Voir [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md) pour le
 | 13.4 Déploiement (12 items) | ⬜ (Docker existe et testé en CI ; Terraform/K8s/Helm/multi-cloud : rien) |
 | 13.5 Observabilité (12 items) | Couvert par 10.3 |
 
+🐛 **Incohérence réelle relevée** : un second lot de prompts DeepSeek a réutilisé le numéro "Partie 13" pour un sujet totalement différent (Monitoring & Observabilité : métriques Prometheus, logging structuré, alerting, tracing OpenTelemetry, écran de monitoring) — y compris ses propres sous-numéros 13.1 à 13.5, qui collisionnent aussi avec les 5 lignes réelles ci-dessus. Ce second lot est réel et livré — voir [`docs/monitoring/PARTIE_13_OBSERVABILITY.md`](monitoring/PARTIE_13_OBSERVABILITY.md) — mais documenté séparément plutôt que de renuméroter cette section réelle, préexistante, du cahier des charges (même discipline que pour toutes les collisions Partie 10/11/12 précédentes).
+
+✅ **Partie 13 (bis) — Monitoring & Observabilité — 🟡 PARTIEL (~18/23)** — real Prometheus counters HTTP+Celery, corrélation request_id réelle (bug trouvé : `system_logs.request_id` n'était jamais rempli, corrigé), logging JSON structuré, alerting réel (règles/canaux/historique/incidents) évalué contre de vraies données (psutil/Celery), vérifié en direct (règle créée, déclenchée réellement, visible dans l'historique). OpenTelemetry réel mais désactivé par défaut (aucun collecteur OTLP réel dans cet environnement). Écran : onglets "Monitoring" et "Alerting" ajoutés à `/admin` (pas de nouvelle page séparée, même discipline anti-duplication que 10.6/11/12.5).
+
 ---
 
 ## PARTIE 14 — Documentation & Livrables — 🟡 PARTIEL (~5/33)

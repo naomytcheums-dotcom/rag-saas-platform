@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.admin import SystemLog
+from api.security.logging_correlation import get_request_id, mask_sensitive
 
 _sync_engine = None
 
@@ -34,8 +35,9 @@ class SystemLogHandler(logging.Handler):
         try:
             with SyncSession(_get_sync_engine()) as db:
                 db.add(SystemLog(
-                    level=record.levelname, logger_name=record.name, message=self.format(record),
+                    level=record.levelname, logger_name=record.name, message=mask_sensitive(self.format(record)),
                     module=record.module, function=record.funcName, line=record.lineno,
+                    request_id=get_request_id(),
                 ))
                 db.commit()
         except Exception:  # noqa: BLE001 -- logging itself must never raise; a failed log write is silently dropped

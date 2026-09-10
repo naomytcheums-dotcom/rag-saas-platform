@@ -1805,5 +1805,25 @@ class Settings(BaseSettings):
     INVOICE_VAT_RATE: float = 20.0
     INVOICE_REMINDER_DAYS: str = "7,14,30"
 
+    # -- Partie 13.1: Metrics --------------------------------------------------
+    PROMETHEUS_NAMESPACE: str = "rag_saas"
+    METRICS_RETENTION_DAYS: int = 30
+
+    # -- Partie 13.2: Structured logging ---------------------------------------
+    LOG_FORMAT: str = "text"  # "text" (default, unchanged console output) | "json"
+    LOG_RETENTION_DAYS: int = 30
+    LOG_CORRELATION_ENABLED: bool = True
+
+    # -- Partie 13.3: Alerting --------------------------------------------------
+    ALERTING_ENABLED: bool = True
+    ALERTING_CHECK_INTERVAL_SECONDS: int = 60
+    ALERTING_SILENCE_MINUTES: int = 5
+
+    # -- Partie 13.4: Distributed tracing (OpenTelemetry) ------------------------
+    OTEL_ENABLED: bool = False
+    OTEL_SERVICE_NAME: str = "rag-saas-api"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    OTEL_TRACES_SAMPLER_ARG: float = 0.1
+
 
 settings = Settings()

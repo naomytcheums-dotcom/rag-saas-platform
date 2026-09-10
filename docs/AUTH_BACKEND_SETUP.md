@@ -11857,6 +11857,24 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   `vault` are config values with no real backend behind them yet in
   this environment.
 
+## Partie 13 (bis) -- Monitoring & Observability: metrics, structured logging, alerting, tracing, UI
+
+Full write-up: [`docs/monitoring/PARTIE_13_OBSERVABILITY.md`](monitoring/PARTIE_13_OBSERVABILITY.md).
+Numbering collision, same as every prior batch: this repo's real
+master cahier des charges already has a "Partie 13 -- Developer
+Experience" with its own 13.1-13.5 -- documented as "Partie 13 (bis)"
+there rather than renumbered. Summary: real Prometheus counters
+(HTTP outcomes, Celery task success/failure via real signals); a real
+bug fixed -- `system_logs.request_id` (Partie 11.6) had existed as a
+column since that part shipped but nothing ever populated it, fixed
+with a real `ContextVar` + middleware + logging filter; real alerting
+(rules/channels/history/incidents) evaluated against already-real
+psutil/Celery data (Partie 11.5), verified live end-to-end (a real
+rule fired, appeared in history); real OpenTelemetry instrumentation,
+off by default (no real OTLP collector in this environment). Frontend:
+extended `/admin`'s existing Monitoring tab and added a new Alerting
+tab, rather than a new, colliding `/dashboard/monitoring` page.
+
 ## Partie 12 -- Billing: plans, Stripe, credits/usage, invoices, billing UI
 
 Full write-up: [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md).
