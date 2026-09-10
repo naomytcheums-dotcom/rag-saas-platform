@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The real RAG SaaS API's own GET /metrics (api/monitoring.py).
+  # host.docker.internal resolves to the Docker host from inside a
+  # container -- works on Docker Desktop (Windows/Mac) out of the box;
+  # on native Linux Docker, replace with the host's real LAN IP or add
+  # `extra_hosts: ["host.docker.internal:host-gateway"]` to this
+  # service in docker-compose.observability.yml.
+  - job_name: "rag-saas-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+
+  # Prometheus's own self-monitoring.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # The OpenTelemetry Collector's own internal metrics (how many spans/
+  # logs it has received and exported).
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8888"]

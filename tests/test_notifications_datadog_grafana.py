@@ -25,7 +25,7 @@ async def test_loki_status_reflects_real_config_state(client, db_session, regist
     token = await _make_admin(client, db_session, register_payload)
     response = await client.get("/monitoring/loki/status", headers=_auth_header(token))
     assert response.status_code == 200
-    assert response.json()["configured"] == bool(settings.LOKI_HOST and settings.LOKI_USERNAME and settings.LOKI_PASSWORD)
+    assert response.json()["configured"] == bool(settings.LOKI_HOST)
 
 
 async def test_datadog_status_reflects_real_config_state(client, db_session, register_payload):

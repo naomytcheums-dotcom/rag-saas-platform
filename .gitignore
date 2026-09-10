@@ -11,3 +11,8 @@ data/telemetry.jsonl
 dump.rdb
 .coverage
 htmlcov/
+
+# Local observability stack (docker-compose.observability.yml) -- bind-mounted
+# data, if ever added instead of the named Docker volumes this file uses today.
+observability/data/
+observability/*/data/

@@ -48,7 +48,7 @@ class LokiHandler(logging.Handler):
                 ns = str(int(timestamp * 1_000_000_000))
                 httpx.post(
                     f"{settings.LOKI_HOST}/loki/api/v1/push",
-                    auth=(settings.LOKI_USERNAME, settings.LOKI_PASSWORD),
+                    auth=_loki_auth(),
                     json={"streams": [{"stream": {"level": level, "logger": logger_name, "service": "rag-saas-api"}, "values": [[ns, message]]}]},
                     timeout=5.0,
                 )
@@ -56,12 +56,23 @@ class LokiHandler(logging.Handler):
                 pass
 
 
+def _loki_auth() -> tuple[str, str] | None:
+    """Grafana Cloud Loki needs real Basic Auth (username = the real
+    per-stack instance id, password = the real API token). A LOCAL Loki
+    (docker-compose.observability.yml's own loki-config.yml has
+    auth_enabled: false) needs none -- real, honest branch on whether a
+    username was actually given, not a hardcoded assumption either way."""
+    if settings.LOKI_USERNAME and settings.LOKI_PASSWORD:
+        return (settings.LOKI_USERNAME, settings.LOKI_PASSWORD)
+    return None
+
+
 def install_loki_handler() -> bool:
     """Returns whether it actually installed -- real, honest signal for
     GET /monitoring/loki/status rather than a fire-and-forget with no
     way to tell if it worked."""
     global _installed
-    if not settings.LOKI_HOST or not settings.LOKI_USERNAME or not settings.LOKI_PASSWORD:
+    if not settings.LOKI_HOST:
         return False
     if _installed:
         return True
@@ -81,7 +92,7 @@ def send_test_log_synchronously() -> dict:
     background handler's own broad `except Exception: pass` meant a
     real, persistent 401 from Grafana Cloud was invisible until checked
     this way."""
-    if not settings.LOKI_HOST or not settings.LOKI_USERNAME or not settings.LOKI_PASSWORD:
+    if not settings.LOKI_HOST:
         return {"sent": False, "reason": "not configured"}
     import time
 
@@ -89,7 +100,7 @@ def send_test_log_synchronously() -> dict:
     try:
         response = httpx.post(
             f"{settings.LOKI_HOST}/loki/api/v1/push",
-            auth=(settings.LOKI_USERNAME, settings.LOKI_PASSWORD),
+            auth=_loki_auth(),
             json={"streams": [{"stream": {"level": "WARNING", "logger": "monitoring.loki.test", "service": "rag-saas-api"}, "values": [[ns, "Real synchronous test log from GET /monitoring/loki/test"]]}]},
             timeout=10.0,
         )
@@ -102,7 +113,8 @@ def send_test_log_synchronously() -> dict:
 
 def loki_status() -> dict:
     return {
-        "configured": bool(settings.LOKI_HOST and settings.LOKI_USERNAME and settings.LOKI_PASSWORD),
+        "configured": bool(settings.LOKI_HOST),
+        "authenticated": bool(settings.LOKI_USERNAME and settings.LOKI_PASSWORD),
         "installed": _installed,
         "host": settings.LOKI_HOST,
     }
