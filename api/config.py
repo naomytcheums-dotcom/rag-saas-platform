@@ -1838,6 +1838,10 @@ class Settings(BaseSettings):
     AIRBYTE_API_KEY: str | None = None
     AIRBYTE_WORKSPACE_ID: str | None = None
 
+    # -- n8n -- e.g. http://localhost:5678 once docker-compose.observability.yml's
+    # own n8n service is running.
+    N8N_URL: str | None = None
+
     # -- Grafana Cloud (Loki/Tempo) -- honestly incomplete until LOKI_HOST/
     # LOKI_USERNAME and TEMPO_HOST/TEMPO_USERNAME (the real per-service
     # instance IDs from the Grafana Cloud portal) are filled in -- the
@@ -1856,9 +1860,14 @@ class Settings(BaseSettings):
     DD_SITE: str = "datadoghq.com"
     DD_LLMOBS_ML_APP: str = "rag-saas-platform"
 
-    # -- Twilio (SMS/WhatsApp) --
+    # -- Twilio (SMS/WhatsApp) -- either TWILIO_AUTH_TOKEN (classic) OR
+    # TWILIO_API_KEY_SID/TWILIO_API_KEY_SECRET (Twilio's own recommended,
+    # revocable alternative -- real, both are valid ways to authenticate
+    # the same Client, see api/services/twilio_sms.py's own _client()).
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_API_KEY_SID: str | None = None
+    TWILIO_API_KEY_SECRET: str | None = None
     TWILIO_FROM_NUMBER: str | None = None
     TWILIO_WHATSAPP_FROM_NUMBER: str | None = None
 

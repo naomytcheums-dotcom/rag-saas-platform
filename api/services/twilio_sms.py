@@ -22,14 +22,25 @@ class SmsMessageNotFoundError(Exception):
 
 
 def _client():
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
+    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_FROM_NUMBER:
         raise TwilioNotConfiguredError(
-            "Twilio is not configured on this deployment -- set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
-            "and TWILIO_FROM_NUMBER in .env to enable real SMS/WhatsApp sending."
+            "Twilio is not configured on this deployment -- set TWILIO_ACCOUNT_SID, TWILIO_FROM_NUMBER, "
+            "and either TWILIO_AUTH_TOKEN or TWILIO_API_KEY_SID/TWILIO_API_KEY_SECRET in .env."
         )
     from twilio.rest import Client
 
-    return Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+    if settings.TWILIO_API_KEY_SID and settings.TWILIO_API_KEY_SECRET:
+        # Twilio's own recommended, revocable-without-rotating-the-whole-
+        # account alternative to the classic Auth Token -- same real
+        # Client, authenticated with (api_key_sid, api_key_secret) instead
+        # of (account_sid, auth_token).
+        return Client(settings.TWILIO_API_KEY_SID, settings.TWILIO_API_KEY_SECRET, settings.TWILIO_ACCOUNT_SID)
+    if settings.TWILIO_AUTH_TOKEN:
+        return Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+    raise TwilioNotConfiguredError(
+        "Twilio is not configured on this deployment -- set either TWILIO_AUTH_TOKEN or "
+        "TWILIO_API_KEY_SID/TWILIO_API_KEY_SECRET in .env."
+    )
 
 
 async def send_sms(db: AsyncSession, organization_id: uuid.UUID, *, to: str, message: str, user_id: uuid.UUID | None) -> SmsMessage:

@@ -90,3 +90,15 @@ async def test_airbyte_honestly_501s_without_configured_instance(client, registe
     token, org_id = await _register_and_create_org(client, register_payload)
     response = await client.get(f"/organizations/{org_id}/integrations/airbyte/source-definitions", headers=_auth_header(token))
     assert response.status_code == 501
+
+
+async def test_n8n_status_honestly_unconfigured_by_default(client):
+    response = await client.get("/integrations/n8n/status")
+    assert response.status_code == 200
+    assert response.json() == {"configured": False, "reachable": False}
+
+
+async def test_airbyte_status_honestly_unconfigured_by_default(client):
+    response = await client.get("/integrations/airbyte/status")
+    assert response.status_code == 200
+    assert response.json() == {"configured": False, "reachable": False}

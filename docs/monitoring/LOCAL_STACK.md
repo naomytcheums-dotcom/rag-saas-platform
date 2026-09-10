@@ -46,6 +46,11 @@ of the stack needed for that side).
 | Tempo | http://localhost:3200 | No UI of its own — query it from Grafana Explore, or use Jaeger below |
 | Jaeger | http://localhost:16686 | A second, independent trace UI — the same traces also land here via its own OTLP receiver |
 | OTel Collector health | http://localhost:13133 | `{"status":"Server available"}` when healthy |
+| n8n | http://localhost:5678 | `docker compose -f docker-compose.observability.yml up -d n8n n8n-postgres` — see `docs/integrations/N8N.md` |
+
+Airbyte is **not** part of this compose file — see
+`docs/integrations/AIRBYTE.md` for why (its real, current self-hosting
+method is `abctl`, not docker-compose) and how to install it.
 
 ## Test in real time
 

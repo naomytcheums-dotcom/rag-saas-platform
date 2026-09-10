@@ -80,6 +80,38 @@ services:
       - loki
     restart: unless-stopped
 
+  n8n-postgres:
+    image: postgres:16-alpine
+    container_name: rag_saas_n8n_postgres
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=n8n_password
+    volumes:
+      - n8n-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.65.2
+    container_name: rag_saas_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-postgres
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_password
+      - WEBHOOK_URL=http://localhost:5678/
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      - n8n-postgres
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:11.3.1
     container_name: rag_saas_grafana
@@ -105,3 +137,14 @@ volumes:
   prometheus-data:
   tempo-data:
   grafana-data:
+  n8n-data:
+  n8n-postgres-data:
+
+# Airbyte is deliberately NOT included as a plain docker-compose service
+# here -- honest, real reason: Airbyte OSS deprecated its old
+# docker-compose deployment in favor of `abctl` (their own CLI, which
+# provisions a local Kubernetes cluster via kind). Shipping the old
+# compose-based setup would install an unsupported, no-longer-maintained
+# version -- see docs/integrations/AIRBYTE.md for the real, current
+# install command (`abctl local install`) and how it plugs into this
+# app's own real Airbyte API client (api/services/airbyte_client.py).

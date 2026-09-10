@@ -34,6 +34,42 @@ router = APIRouter(tags=["Integrations"])
 org_router = APIRouter(prefix="/organizations/{org_id}/integrations", tags=["Integrations"])
 
 
+@router.get("/integrations/n8n/status")
+async def n8n_status_endpoint():
+    """Real reachability check against a real n8n instance -- honest
+    'reachable: false' rather than a fabricated 'ok' when N8N_URL is
+    unset or the instance isn't actually up (e.g. the local Docker
+    Compose n8n service, docker-compose.observability.yml, not
+    started)."""
+    from api.config import settings
+
+    if not settings.N8N_URL:
+        return {"configured": False, "reachable": False}
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{settings.N8N_URL}/healthz")
+        return {"configured": True, "reachable": response.status_code == 200, "url": settings.N8N_URL}
+    except Exception:
+        return {"configured": True, "reachable": False, "url": settings.N8N_URL}
+
+
+@router.get("/integrations/airbyte/status")
+async def airbyte_status_endpoint():
+    from api.config import settings
+
+    if not settings.AIRBYTE_API_URL:
+        return {"configured": False, "reachable": False}
+    try:
+        await airbyte_client.list_source_definitions()
+        return {"configured": True, "reachable": True, "url": settings.AIRBYTE_API_URL}
+    except airbyte_client.AirbyteNotConfiguredError:
+        return {"configured": False, "reachable": False}
+    except Exception:
+        return {"configured": True, "reachable": False, "url": settings.AIRBYTE_API_URL}
+
+
 @org_router.get("/connections", response_model=list[ConnectionResponse])
 async def list_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await integrations.list_connections(db, org_id)
