@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, observability,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, notifications, observability,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
@@ -45,6 +45,8 @@ from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
+from api.security.datadog_llmobs import setup_llm_observability
+from api.security.loki_handler import install_loki_handler
 from api.security.system_log_handler import install_system_log_handler
 from api.security.tracing import setup_tracing, tracing_status
 
@@ -87,6 +89,8 @@ async def lifespan(app: FastAPI):
     # Partie 13.2 -- request-id correlation filter (always) + JSON
     # console formatter (only when LOG_FORMAT=json).
     configure_structured_logging(settings.LOG_FORMAT)
+    install_loki_handler()
+    setup_llm_observability()
 
     # Partie 13.4 -- real OpenTelemetry instrumentation, a real no-op
     # unless OTEL_ENABLED is set (see api/security/tracing.py's own
@@ -343,6 +347,7 @@ app.include_router(billing.org_router)
 app.include_router(observability.router)
 app.include_router(integrations_universal.router)
 app.include_router(integrations_universal.org_router)
+app.include_router(notifications.router)
 app.include_router(ab_tests.router)
 
 

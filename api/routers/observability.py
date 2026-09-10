@@ -18,6 +18,8 @@ from api.schemas.observability import (
     AlertRuleCreateRequest, AlertRuleResponse, AlertRuleTestResponse, AlertRuleUpdateRequest,
     IncidentCreateRequest, IncidentResponse, IncidentUpdateRequest, MetricsSummaryResponse,
 )
+from api.security.datadog_llmobs import llm_observability_status
+from api.security.loki_handler import loki_status
 from api.security.tracing import tracing_status
 from api.services import alerting, app_metrics
 
@@ -32,6 +34,27 @@ async def get_metrics_summary_endpoint(_admin: User = Depends(require_admin), db
 @router.get("/monitoring/tracing/status")
 async def get_tracing_status_endpoint(_admin: User = Depends(require_admin)):
     return tracing_status()
+
+
+@router.get("/monitoring/loki/status")
+async def get_loki_status_endpoint(_admin: User = Depends(require_admin)):
+    return loki_status()
+
+
+@router.get("/monitoring/loki/test")
+async def test_loki_endpoint(_admin: User = Depends(require_admin)):
+    import logging
+
+    status_before = loki_status()
+    if not status_before["configured"]:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Loki is not configured -- set LOKI_HOST/LOKI_USERNAME/LOKI_PASSWORD")
+    logging.getLogger("api.monitoring.loki_test").warning("Real test log line from GET /monitoring/loki/test")
+    return {"sent": True, "note": "a real WARNING was emitted -- check Grafana Cloud Explore (Loki) for {service=\"rag-saas-api\"}"}
+
+
+@router.get("/monitoring/datadog/status")
+async def get_datadog_status_endpoint(_admin: User = Depends(require_admin)):
+    return llm_observability_status()
 
 
 # -- 13.3 alert channels --------------------------------------------------

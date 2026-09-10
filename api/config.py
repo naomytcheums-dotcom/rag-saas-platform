@@ -1838,5 +1838,29 @@ class Settings(BaseSettings):
     AIRBYTE_API_KEY: str | None = None
     AIRBYTE_WORKSPACE_ID: str | None = None
 
+    # -- Grafana Cloud (Loki/Tempo) -- honestly incomplete until LOKI_HOST/
+    # LOKI_USERNAME and TEMPO_HOST/TEMPO_USERNAME (the real per-service
+    # instance IDs from the Grafana Cloud portal) are filled in -- the
+    # password alone is not enough to know WHICH Grafana Cloud stack to
+    # push to.
+    LOKI_HOST: str | None = None
+    LOKI_USERNAME: str | None = None
+    LOKI_PASSWORD: str | None = None
+    TEMPO_HOST: str | None = None
+    TEMPO_USERNAME: str | None = None
+    TEMPO_PASSWORD: str | None = None
+
+    # -- Datadog LLM Observability --
+    DD_API_KEY: str | None = None
+    DD_APP_KEY: str | None = None
+    DD_SITE: str = "datadoghq.com"
+    DD_LLMOBS_ML_APP: str = "rag-saas-platform"
+
+    # -- Twilio (SMS/WhatsApp) --
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_NUMBER: str | None = None
+    TWILIO_WHATSAPP_FROM_NUMBER: str | None = None
+
 
 settings = Settings()

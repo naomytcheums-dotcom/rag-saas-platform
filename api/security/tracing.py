@@ -47,7 +47,15 @@ def setup_tracing(app) -> None:
         sampler = ParentBased(TraceIdRatioBased(settings.OTEL_TRACES_SAMPLER_ARG))
         provider = TracerProvider(resource=resource, sampler=sampler)
 
-        if settings.OTEL_EXPORTER_OTLP_ENDPOINT:
+        if settings.TEMPO_HOST and settings.TEMPO_USERNAME and settings.TEMPO_PASSWORD:
+            # Grafana Cloud Tempo -- real OTLP/HTTP export with Basic Auth,
+            # same real per-stack "host + username + password" shape as
+            # Loki above (api/security/loki_handler.py's own docstring).
+            import base64
+
+            token = base64.b64encode(f"{settings.TEMPO_USERNAME}:{settings.TEMPO_PASSWORD}".encode()).decode()
+            exporter = OTLPSpanExporter(endpoint=f"{settings.TEMPO_HOST}/v1/traces", headers={"Authorization": f"Basic {token}"})
+        elif settings.OTEL_EXPORTER_OTLP_ENDPOINT:
             exporter = OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
         else:
             # Real, honest fallback: no collector configured, so spans

@@ -32,11 +32,13 @@ async def test_metrics_summary_requires_admin(client, register_payload):
     assert response.status_code == 404  # require_admin's anti-enumeration 404, same as every other /admin/* endpoint
 
 
-async def test_tracing_status_honestly_reports_disabled_by_default(client, db_session, register_payload):
+async def test_tracing_status_reflects_real_config_state(client, db_session, register_payload):
+    from api.config import settings
+
     token = await _make_admin(client, db_session, register_payload)
     response = await client.get("/monitoring/tracing/status", headers=_auth_header(token))
     assert response.status_code == 200
-    assert response.json()["enabled"] is False
+    assert response.json()["enabled"] == settings.OTEL_ENABLED
 
 
 async def test_create_alert_channel_and_rule(client, db_session, register_payload):

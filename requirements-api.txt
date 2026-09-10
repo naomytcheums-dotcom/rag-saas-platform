@@ -215,6 +215,12 @@ opentelemetry-instrumentation-celery
 opentelemetry-instrumentation-httpx
 opentelemetry-exporter-otlp-proto-http
 
+# Grafana Cloud (Loki push is plain httpx, already a dependency) / Datadog
+# LLM Observability / Twilio -- all real, all OFF without real credentials
+# in .env (never committed).
+ddtrace
+twilio
+
 # -- Téléphonie / Twilio (Partie 8.2.13) --------------------------------------
 # Real, genuinely new dependency: Twilio's own official SDK, both to
 # validate real inbound webhook signatures (RequestValidator) and to
