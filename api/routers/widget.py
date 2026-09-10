@@ -17,12 +17,13 @@ entirely.
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
+from api.models.audit_log import AuditAction
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.models.widget import WidgetConfig
@@ -33,7 +34,9 @@ from api.schemas.widget import (
     WidgetPositionResponse, WidgetPositionUpdateRequest, WidgetPublicConfigResponse, WidgetSessionRequest,
     WidgetSessionResponse, WidgetThemeResponse, WidgetThemeUpdateRequest, WidgetWelcomeUpdateRequest,
 )
+from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_member
+from api.utils import client_ip
 from api.security.widget_auth import (
     WidgetAuthError, WidgetSession, create_widget_session_token, get_widget_config_by_public_key,
     require_widget_public_key, require_widget_session,
@@ -195,13 +198,17 @@ async def reset_widget_theme_endpoint(org_id: uuid.UUID, caller: OrganizationMem
 
 
 @router.patch("/organizations/{org_id}/widget/config")
-async def update_widget_colors_endpoint(org_id: uuid.UUID, payload: WidgetConfigUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_colors_endpoint(org_id: uuid.UUID, payload: WidgetConfigUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     data = payload.model_dump(exclude_unset=True)
     try:
         validate_theme_colors(data)
         config = await update_widget_config(db, org_id, data, caller.user_id)
     except WidgetError as exc:
         raise _to_http_error(exc) from exc
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.WIDGET_UPDATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="widget", resource_id=str(org_id),
+    )
     await db.commit()
     return {"css_variables": generate_css_variables(config)}
 

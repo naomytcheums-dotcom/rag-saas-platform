@@ -10,11 +10,12 @@ those (`GET/PATCH/DELETE /agents/{agent_id}`) carry no `{org_id}`.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.agent import Agent
+from api.models.audit_log import AuditAction
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
@@ -29,6 +30,8 @@ from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
     require_agent_member, update_agent,
 )
+from api.security.audit_log import log_audit_action
+from api.utils import client_ip
 from api.security.organizations import require_org_manager, require_org_member
 from api.security.quotas import require_quota_available
 from api.services.agent_guardrails import AgentGuardrailError, get_agent_guardrails, set_agent_guardrails
@@ -54,7 +57,7 @@ router = APIRouter(tags=["agents"])
 
 @router.post("/organizations/{org_id}/agents", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent_endpoint(
-    org_id: uuid.UUID, payload: AgentCreateRequest,
+    org_id: uuid.UUID, payload: AgentCreateRequest, request: Request,
     caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     await require_quota_available(db, org_id, "agents")  # Partie 1.3.6, real live count since Partie 5.3.1
@@ -62,6 +65,10 @@ async def create_agent_endpoint(
         agent = await create_agent(db, org_id, payload.model_dump(by_alias=True), caller.user_id)
     except (AgentKnowledgeBaseError, AgentToolError, AgentMemoryConfigError, AgentPermissionError, AgentGuardrailError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.AGENT_CREATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="agent", resource_id=str(agent.id), metadata={"name": agent.name},
+    )
     await db.commit()
     await db.refresh(agent)
     return agent
@@ -104,10 +111,14 @@ async def update_agent_endpoint(
 
 @router.delete("/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent_endpoint(
-    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+    request: Request, agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
 ):
-    agent, _caller = agent_ctx
+    agent, caller = agent_ctx
     await delete_agent(db, agent.id)
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.AGENT_DELETED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=agent.organization_id, resource_type="agent", resource_id=str(agent.id),
+    )
     await db.commit()
 
 

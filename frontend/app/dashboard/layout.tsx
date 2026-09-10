@@ -40,7 +40,10 @@ const NAV_SECTIONS = [
   },
   {
     label: "Platform",
-    items: [{ href: "/admin", label: "Admin", icon: "🛠️" }],
+    items: [
+      { href: "/dashboard/security", label: "Security", icon: "🔒" },
+      { href: "/admin", label: "Admin", icon: "🛠️" },
+    ],
   },
 ];
 

@@ -30,19 +30,21 @@ from api.routers import (
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, batch_jobs,
     benchmark_versions,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
-    chat_stream, citations, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, feedback, i18n,
+    admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
+    chat_stream, citations, compliance, conversations, conversation_shares,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
-    question_sets, questions, quotas, reindex_schedules, regression_detection, regression_thresholds,
-    resource_permissions, search, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
+    question_sets, questions, quotas, rbac, reindex_schedules, regression_detection, regression_thresholds,
+    resource_permissions, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.security.rbac import init_rbac
+from api.security.system_log_handler import install_system_log_handler
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,11 @@ async def lifespan(app: FastAPI):
     # (policies are static/seeded, not expected to change without a
     # deploy that reseeds them).
     await init_rbac()
+
+    # Partie 11.6 -- real WARNING+ log capture into system_logs. Never
+    # installed under the fast test suite (tests/conftest.py's `client`
+    # fixture never runs this lifespan at all).
+    install_system_log_handler()
 
     async def _poll_jwt_key_cache() -> None:
         while True:
@@ -311,6 +318,14 @@ app.include_router(comparison_jobs.router)
 app.include_router(regression_detection.router)
 app.include_router(regression_thresholds.router)
 app.include_router(deployment_evaluations.router)
+app.include_router(rbac.router)
+app.include_router(compliance.router)
+app.include_router(encryption.router)
+app.include_router(security_scan.router)
+app.include_router(admin_dashboard.router)
+app.include_router(admin_organizations.router)
+app.include_router(admin_users_management.router)
+app.include_router(admin_subscriptions.router)
 app.include_router(ab_tests.router)
 
 

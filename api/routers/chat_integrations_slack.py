@@ -7,11 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
+from api.models.audit_log import AuditAction
 from api.models.chat_integrations import SlackIntegration
 from api.models.organization import OrganizationMember
 from api.schemas.chat_integrations import SlackConfigResponse, SlackConfigureRequest, SlackSendMessageRequest
+from api.security.audit_log import log_audit_action
 from api.security.chat_integrations_signature import verify_slack_signature
 from api.security.organizations import require_org_admin
+from api.utils import client_ip
 from api.services.chat_integrations.slack import (
     SlackIntegrationError, get_oauth_url, handle_oauth_callback, process_slack_message, save_integration,
     send_slack_response, validate_slack_config,
@@ -47,7 +50,7 @@ async def slack_oauth_callback_endpoint(code: str, state: str, db: AsyncSession 
 
 
 @router.post("/organizations/{org_id}/integrations/slack/configure", response_model=SlackConfigResponse)
-async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     data = payload.model_dump(exclude_unset=True)
     try:
@@ -56,6 +59,10 @@ async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureReq
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     for key, value in data.items():
         setattr(integration, key, value)
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.INTEGRATION_CONNECTED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="slack_integration", resource_id=str(org_id),
+    )
     await db.commit()
     return integration
 
@@ -66,9 +73,13 @@ async def slack_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMembe
 
 
 @router.delete("/organizations/{org_id}/integrations/slack")
-async def slack_delete_integration_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     await db.delete(integration)
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.INTEGRATION_DISCONNECTED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="slack_integration", resource_id=str(org_id),
+    )
     await db.commit()
     return {"deleted": True}
 

@@ -7,11 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
+from api.models.audit_log import AuditAction
 from api.models.chat_integrations import DiscordIntegration
 from api.models.organization import OrganizationMember
 from api.schemas.chat_integrations import DiscordConfigResponse, DiscordConfigureRequest, DiscordSendMessageRequest
+from api.security.audit_log import log_audit_action
 from api.security.chat_integrations_signature import verify_discord_signature
 from api.security.organizations import require_org_admin
+from api.utils import client_ip
 from api.services.chat_integrations.discord import (
     DiscordIntegrationError, handle_command, process_discord_message, save_discord_integration,
     send_discord_response,
@@ -29,11 +32,15 @@ async def _get_integration(db: AsyncSession, org_id: uuid.UUID) -> DiscordIntegr
 
 
 @router.post("/organizations/{org_id}/integrations/discord/configure", response_model=DiscordConfigResponse)
-async def discord_configure_endpoint(org_id: uuid.UUID, payload: DiscordConfigureRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_configure_endpoint(org_id: uuid.UUID, payload: DiscordConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     try:
         integration = await save_discord_integration(db, org_id, payload.model_dump(exclude_unset=True), caller.user_id)
     except DiscordIntegrationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.INTEGRATION_CONNECTED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="discord_integration", resource_id=str(org_id),
+    )
     await db.commit()
     return integration
 
@@ -44,9 +51,13 @@ async def discord_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMem
 
 
 @router.delete("/organizations/{org_id}/integrations/discord")
-async def discord_delete_integration_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     await db.delete(integration)
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.INTEGRATION_DISCONNECTED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="discord_integration", resource_id=str(org_id),
+    )
     await db.commit()
     return {"deleted": True}
 

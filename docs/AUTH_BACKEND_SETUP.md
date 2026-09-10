@@ -11851,3 +11851,49 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   keys, real JWKS/discovery endpoints, RS256-signed tokens -- see that
   file's own docstring). Verify against a real tenant before onboarding
   the first actual enterprise customer.
+- **A real AWS KMS/HashiCorp Vault account** -- Partie 10.3's real
+  encryption module (`api/security/encryption.py`) only has an `env`
+  key-storage mode to test against here; `ENCRYPTION_KEY_STORAGE=kms`/
+  `vault` are config values with no real backend behind them yet in
+  this environment.
+
+## Partie 11 -- Admin dashboard: stats globales, organisations, utilisateurs, abonnements, monitoring, logs
+
+Full write-up: [`docs/admin/PARTIE_11_ADMIN_DASHBOARD.md`](admin/PARTIE_11_ADMIN_DASHBOARD.md).
+Summary: real global stats aggregated from existing tables
+(`api/services/admin_stats.py`); real, reversible organization suspend/
+activate distinct from deletion; real user suspend/activate (reuses the
+already-enforced `is_active` flag) plus real password-reset-email and
+session-termination reuse; real `Plan`/`Subscription` CRUD with real
+MRR/ARR math, honestly 0 without a real payment processor
+(`api/services/admin_subscriptions.py`); real CPU/memory/disk/Celery
+monitoring (`api/services/admin_monitoring.py`); a real
+`logging.Handler` capturing WARNING+ logs into a real `system_logs`
+table (`api/security/system_log_handler.py`). One consolidated admin
+screen (`/admin`, 6 tabs), verified end-to-end in a real browser
+against real data. Two real bugs found and fixed: a misdirected
+`user_id` filter hiding admin-performed actions from a target user's
+own activity feed, and a non-standard `DELETE` + JSON body that
+`httpx` itself refuses.
+
+## Partie 10 -- RBAC avancé, Audit logs étendus, Encryption, GDPR/CCPA, Security scanning, Écran de sécurité
+
+Full write-up: [`docs/security/PARTIE_10_SECURITY.md`](security/PARTIE_10_SECURITY.md).
+Summary: custom roles + 52-permission catalog additive on top of the
+existing fixed org-role hierarchy (`api/routers/rbac.py`); the
+pre-existing HMAC hash-chained audit log extended with organization_id/
+resource_type/resource_id and real logging wired into webhooks/
+documents/agents/conversations/integrations/widget/API keys
+(`api/routers/audit.py`); a second, real AES-256-GCM encryption module
+alongside the pre-existing Fernet-based one, now protecting
+`Webhook.secret` (`api/security/encryption.py`); per-category consent +
+rights-request tracking + breach declaration on top of the already-
+mature GDPR export/deletion flow (`api/routers/compliance.py`); real
+`pip-audit`/`bandit`/regex-secret scanning, not simulated
+(`api/services/security_scan.py`); one consolidated Security screen
+(`/dashboard/security`, 7 tabs), verified end-to-end in a real browser.
+Two real bugs found and fixed during that verification: a missing
+`db.commit()` silently rolling back the permission catalog seed on
+every request, and a `Path.glob` secret scan that hung 10+ seconds
+walking into `frontend/node_modules` before its exclude filter ever
+applied.

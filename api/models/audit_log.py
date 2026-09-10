@@ -67,6 +67,64 @@ class AuditAction(StrEnum):
     INVITATION_CANCELLED = "invitation_cancelled"
     INVITATION_ACCEPTED = "invitation_accepted"
 
+    # -- Partie 10.2 -- resource-level actions, added on top of the
+    # security/account-lifecycle actions above. Each one also populates
+    # this row's (new, non-checksummed) resource_type/resource_id
+    # columns -- see this module's AuditLog class docstring.
+    API_KEY_CREATED = "api_key_created"
+    API_KEY_ROTATED = "api_key_rotated"
+    API_KEY_DELETED = "api_key_deleted"
+    WEBHOOK_CREATED = "webhook_created"
+    WEBHOOK_DELETED = "webhook_deleted"
+    DOCUMENT_UPLOADED = "document_uploaded"
+    DOCUMENT_DELETED = "document_deleted"
+    AGENT_CREATED = "agent_created"
+    AGENT_UPDATED = "agent_updated"
+    AGENT_DELETED = "agent_deleted"
+    CONVERSATION_CREATED = "conversation_created"
+    CONVERSATION_DELETED = "conversation_deleted"
+    INTEGRATION_CONNECTED = "integration_connected"
+    INTEGRATION_DISCONNECTED = "integration_disconnected"
+    WIDGET_UPDATED = "widget_updated"
+    DATA_EXPORT = "data_export"
+    DATA_DELETE = "data_delete"
+
+    # -- Partie 11.2/11.3 -- platform-admin actions on an organization/
+    # user that isn't the actor's own.
+    ORGANIZATION_SUSPENDED = "organization_suspended"
+    ORGANIZATION_ACTIVATED = "organization_activated"
+    USER_SUSPENDED = "user_suspended"
+    USER_ACTIVATED = "user_activated"
+
+
+class AuditLogArchive(Base):
+    """Partie 10.2 -- a cold-storage copy of a row moved out of the live
+    `audit_logs` table by api/tasks/audit.py's archive_logs job (config:
+    AUDIT_ARCHIVE_MONTHS). Same columns as AuditLog, `checksum` included
+    verbatim so an archived row's own place in the original chain stays
+    verifiable by inspection even after it leaves the live table --
+    though verify_audit_log_integrity() itself only ever walks the live
+    table, by design (an archived row is understood to be outside that
+    live chain's scope once moved)."""
+
+    __tablename__ = "audit_logs_archive"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    original_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    timestamp: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    archived_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -76,6 +134,15 @@ class AuditLog(Base):
     # to attach to -- the attempted email is recorded in `metadata_json`
     # instead, never fabricated into a fake user_id.
     user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Partie 10.2 -- pure metadata, added after the fact: deliberately
+    # NOT part of the HMAC checksum below (see api/security/audit_log.py's
+    # _compute_checksum, unchanged) so adding them here doesn't retroactively
+    # invalidate the checksum of any of the ~40 action types logged before
+    # this column existed. Lets GET /audit/resource/{type}/{id} and
+    # org-scoped listing filter without parsing metadata_json.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)  # IPv6-safe length, same as Session.ip_address
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)

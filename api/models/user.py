@@ -61,6 +61,17 @@ class User(Base):
     # inventing it under production data. See UserRole above.
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user, nullable=False)
 
+    # Partie 11.3 -- a real platform-admin suspend/reactivate. Reuses the
+    # existing `is_active` flag (already checked on every login/token
+    # validation, see that column's own comment above) rather than
+    # inventing a second boolean an admin suspend and the real, existing
+    # soft-delete flow (DELETE /account/me) could disagree about --
+    # `suspended_at`/`suspended_reason` exist only to distinguish "an
+    # admin suspended this account" from "the user deleted their own
+    # account" (deleted_at below) for real, since both set is_active=False.
+    suspended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # -- 1.1.7 2FA (TOTP) ----------------------------------------------------
     # The shared secret used to generate/verify 6-digit codes. Set by
     # /auth/2fa/setup but only *enforced* once totp_enabled is True (see

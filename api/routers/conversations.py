@@ -10,12 +10,15 @@ else's conversation, the same anti-enumeration reasoning
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
+from api.models.audit_log import AuditAction
 from api.models.conversation import Conversation
 from api.models.user import User
+from api.security.audit_log import log_audit_action
+from api.utils import client_ip
 from api.schemas.conversation_management import ConversationStatsResponse, DeletedConversationResponse, SearchResultResponse
 from api.schemas.conversations import (
     ConversationCreateRequest, ConversationMessageCreateRequest, ConversationMessageResponse, ConversationResponse,
@@ -63,10 +66,14 @@ async def _get_owned_conversation(db: AsyncSession, conversation_id: uuid.UUID, 
 
 @router.post("", response_model=ConversationResponse)
 async def create_conversation_endpoint(
-    payload: ConversationCreateRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    payload: ConversationCreateRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     conversation = await create_conversation(
         db, payload.agent_id, current_user.id, payload.title, organization_id=payload.organization_id,
+    )
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.CONVERSATION_CREATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=payload.organization_id, resource_type="conversation", resource_id=str(conversation.id),
     )
     await db.commit()
     return conversation
@@ -212,11 +219,15 @@ async def restore_conversation_endpoint(
 
 @router.delete("/{conversation_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
 async def permanently_delete_conversation_endpoint(
-    conversation_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    conversation_id: uuid.UUID, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     deleted = await permanently_delete_conversation(db, conversation_id, current_user.id)
     if not deleted:
         raise _NOT_FOUND
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.CONVERSATION_DELETED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, resource_type="conversation", resource_id=str(conversation_id),
+    )
     await db.commit()
 
 

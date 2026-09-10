@@ -14,10 +14,11 @@ would be real but permanently unreachable.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
+from api.models.audit_log import AuditAction
 from api.models.organization import OrganizationMember
 from api.models.organization_api_key import OrganizationAPIKey
 from api.schemas.public_api import (
@@ -30,8 +31,10 @@ from api.schemas.public_api import (
 )
 from api.dependencies import get_current_user
 from api.models.user import User
+from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_admin
 from api.security.public_api_auth import require_key_org_admin, require_public_api_scope
+from api.utils import client_ip
 from api.services.organization_api_keys import (
     generate_organization_api_key, get_available_scopes, get_expiring_keys,
     get_key_rotation_history, get_quota_status, get_rate_limit_status, list_api_keys, OrganizationAPIKeyError,
@@ -57,11 +60,15 @@ def _to_http_error(exc: PublicAPIError) -> HTTPException:
 
 @router.post("/organizations/{org_id}/api-keys", response_model=OrganizationAPIKeyCreateResponse)
 async def create_organization_api_key_endpoint(
-    org_id: uuid.UUID, payload: OrganizationAPIKeyCreateRequest,
+    org_id: uuid.UUID, payload: OrganizationAPIKeyCreateRequest, request: Request,
     caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     row, plaintext_key = await generate_organization_api_key(
         db, org_id, payload.name, payload.scopes, expires_at=payload.expires_at, created_by=caller.user_id,
+    )
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.API_KEY_CREATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="api_key", resource_id=str(row.id), metadata={"name": row.name},
     )
     await db.commit()
     return OrganizationAPIKeyCreateResponse(
@@ -79,11 +86,16 @@ async def list_organization_api_keys_endpoint(
 
 @router.delete("/organizations/{org_id}/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_organization_api_key_endpoint(
-    org_id: uuid.UUID, key_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, key_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     revoked = await revoke_api_key(db, key_id)
     if not revoked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.API_KEY_DELETED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="api_key", resource_id=str(key_id),
+    )
+    await db.commit()
 
 
 _KEY_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -139,6 +151,7 @@ async def update_api_key_endpoint(
 
 @router.post("/api-keys/{key_id}/rotate", response_model=RotateKeyResponse)
 async def rotate_api_key_endpoint(
+    request: Request,
     payload: RotateKeyRequest = RotateKeyRequest(),
     key_row: OrganizationAPIKey = Depends(require_key_org_admin), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
@@ -146,6 +159,10 @@ async def rotate_api_key_endpoint(
     if result is None:
         raise _KEY_NOT_FOUND
     new_row, plaintext_key = result
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.API_KEY_ROTATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=key_row.organization_id, resource_type="api_key", resource_id=str(new_row.id),
+    )
     await db.commit()
     return RotateKeyResponse(
         id=new_row.id, name=new_row.name, key=plaintext_key, key_prefix=new_row.key_prefix, scopes=new_row.scopes,

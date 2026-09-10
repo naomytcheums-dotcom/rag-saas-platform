@@ -29,12 +29,13 @@ Member can't delete someone ELSE's document.
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
+from api.models.audit_log import AuditAction
 from api.models.document import Document, DocumentTag
 from api.models.document_image import DocumentImage
 from api.models.organization import OrganizationMember, OrganizationRole
@@ -74,6 +75,8 @@ from api.schemas.documents import (
     SitemapImportResponse,
 )
 import api.security.documents as documents_security
+from api.security.audit_log import log_audit_action
+from api.utils import client_ip
 from api.security.documents import (
     check_document_modified,
     deduplicate_organization,
@@ -217,7 +220,7 @@ def _tag_to_response(tag: DocumentTag) -> DocumentTagResponse:
 
 @router.post("/organizations/{org_id}/documents", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
-    org_id: uuid.UUID, response: Response, file: UploadFile, workspace_id: uuid.UUID | None = None,
+    org_id: uuid.UUID, response: Response, request: Request, file: UploadFile, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
@@ -229,6 +232,11 @@ async def create_document(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
+    if not is_duplicate:
+        await log_audit_action(
+            db, user_id=current_user.id, action=AuditAction.DOCUMENT_UPLOADED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+            success=True, organization_id=org_id, resource_type="document", resource_id=str(document.id), metadata={"filename": file.filename},
+        )
     await db.commit()
     await db.refresh(document)
     if is_duplicate:
@@ -644,7 +652,7 @@ async def stream_document_processing_progress(
 
 @router.delete("/documents/{document_id}")
 async def delete_document(
-    document_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    document_id: uuid.UUID, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.2.8, item 3's own literal ask -- this route is now a
     real SOFT delete (`soft_delete_document`), not the real, permanent
@@ -659,6 +667,10 @@ async def delete_document(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete documents you uploaded yourself")
 
     await soft_delete_document(db, document.id, current_user.id)
+    await log_audit_action(
+        db, user_id=current_user.id, action=AuditAction.DOCUMENT_DELETED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=document.organization_id, resource_type="document", resource_id=str(document.id),
+    )
     await db.commit()
     return {"message": "Document deleted"}
 

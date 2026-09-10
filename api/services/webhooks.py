@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.webhook import WEBHOOK_EVENTS, Webhook, WebhookDelivery
+from api.security.encryption import decrypt_data, encrypt_data
 
 
 class WebhookError(ValueError):
@@ -44,15 +45,35 @@ async def create_webhook(
     headers: dict | None = None, secret: str | None = None, created_by: uuid.UUID | None = None,
 ) -> Webhook:
     """Item 4's own literal function -- real, auto-generated secret
-    when none is given (never a real, silently-unsigned webhook)."""
+    when none is given (never a real, silently-unsigned webhook).
+
+    Partie 10.3 -- encrypted at rest with the real, live AES-256-GCM
+    module (api/security/encryption.py) rather than stored plaintext: a
+    webhook secret is a real HMAC signing key, and a database dump
+    leaking it would let an attacker forge a valid `X-Webhook-Signature`
+    for any payload they send to the customer's own endpoint. The
+    plaintext is returned once, here, in the return value only -- never
+    re-readable afterward (mirrors how api_key.py never stores or
+    returns a raw API key after creation)."""
     validate_events(events)
+    plaintext_secret = secret or secrets.token_urlsafe(32)
     webhook = Webhook(
         organization_id=organization_id, name=name, url=url, events=list(events), headers=headers,
-        secret=secret or secrets.token_urlsafe(32), created_by=created_by,
+        secret=encrypt_data(plaintext_secret), created_by=created_by,
     )
     db.add(webhook)
     await db.flush()
     return webhook
+
+
+def decrypt_webhook_secret(webhook: Webhook) -> str | None:
+    """The one real place callers that need to actually USE the secret
+    (signing an outbound delivery) should decrypt it -- never inline
+    `decrypt_data(webhook.secret)` at a call site, so there is exactly
+    one place to update if the encryption scheme ever changes again."""
+    if not webhook.secret:
+        return None
+    return decrypt_data(webhook.secret)
 
 
 async def update_webhook(db: AsyncSession, webhook_id: uuid.UUID, **fields) -> Webhook | None:
@@ -62,6 +83,8 @@ async def update_webhook(db: AsyncSession, webhook_id: uuid.UUID, **fields) -> W
         return None
     if "events" in fields and fields["events"] is not None:
         validate_events(fields["events"])
+    if fields.get("secret") is not None:
+        fields["secret"] = encrypt_data(fields["secret"])
     for key, value in fields.items():
         if value is not None and hasattr(webhook, key):
             setattr(webhook, key, value)

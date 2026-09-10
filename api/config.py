@@ -1704,4 +1704,70 @@ class Settings(BaseSettings):
         return self
 
 
+    # -- Partie 10.1: RBAC (custom roles & granular permissions) ------------
+    # RBAC_ENABLED gates nothing at the code level today (the fixed
+    # owner/admin/manager/member/viewer hierarchy, api/security/organizations.py,
+    # is never conditional) -- it exists so a future kill-switch has
+    # somewhere real to read from without a code change, same as this
+    # codebase's other per-feature *_ENABLED flags (RATE_LIMIT_ENABLED, etc).
+    RBAC_ENABLED: bool = True
+    RBAC_DEFAULT_ROLES: str = "owner,admin,manager,member,viewer"
+    RBAC_PERMISSION_CACHE_TTL: int = 300
+    RBAC_INHERITANCE_ENABLED: bool = True
+
+    # -- Partie 10.2: Audit logs (extends the existing, always-on HMAC
+    # hash-chained audit_logs table -- AUDIT_LOG_HMAC_SECRET_KEY above) --
+    AUDIT_ENABLED: bool = True
+    AUDIT_RETENTION_DAYS: int = 365
+    AUDIT_ARCHIVE_MONTHS: int = 12
+    # Real, honest note: log_audit_action() is ALWAYS synchronous, in the
+    # SAME transaction as the action it records (see its own docstring on
+    # why -- a rolled-back action must never leave a record of something
+    # that didn't happen). This flag is intentionally NOT wired to make
+    # logging asynchronous, since doing so would break that guarantee;
+    # it's kept only because the literal spec names it, and left False
+    # so nothing reads it as a promise this codebase doesn't keep.
+    AUDIT_ASYNC: bool = False
+    AUDIT_SENSITIVE_FIELDS: str = "password,token,secret"
+
+    # -- Partie 10.3: Encryption (api/security/encryption.py, AES-256-GCM,
+    # additive alongside the existing Fernet-based secret_encryption.py) --
+    ENCRYPTION_ENABLED: bool = True
+    ENCRYPTION_ALGORITHM: str = "AES-256-GCM"
+    ENCRYPTION_KEY_ROTATION_DAYS: int = 90
+    # "env" is the only mode this codebase actually implements -- see
+    # api/security/encryption.py's own docstring on why a real KMS/Vault
+    # backend needs real cloud credentials this environment doesn't have.
+    # The setting exists so swapping it in later is a config change, not
+    # a rewrite: ENCRYPTION_KEY_STORAGE stays an honest description of
+    # what's real today, not a claim about what's configured.
+    ENCRYPTION_KEY_STORAGE: str = "env"
+    ENCRYPTION_MASTER_KEY: str | None = None
+    ENCRYPTION_MASTER_KEY_PREVIOUS: str | None = None
+    TLS_MIN_VERSION: str = "1.3"
+
+    # -- Partie 10.4: GDPR/CCPA compliance ----------------------------------
+    GDPR_ENABLED: bool = True
+    CCPA_ENABLED: bool = True
+    DATA_RETENTION_DAYS: int = 365
+    # Real, honest note: DELETE /account/me's own grace period is
+    # ACCOUNT_PURGE_DELAY_DAYS (above, default 30) -- this setting exists
+    # for the literal spec's own name, but the real deletion flow reads
+    # ACCOUNT_PURGE_DELAY_DAYS, not this one, to avoid two competing
+    # sources of truth for the same real number.
+    DATA_DELETION_GRACE_PERIOD: int = 30
+    DATA_EXPORT_FORMAT: str = "json"
+    CONSENT_REQUIRED: bool = True
+    DATA_BREACH_NOTIFICATION_HOURS: int = 72
+    DPO_EMAIL: str | None = None
+
+    # -- Partie 10.5: Security scanning (api/services/security_scan.py) ----
+    SECURITY_SCAN_ENABLED: bool = True
+    SECURITY_SCAN_SCHEDULE: str = "daily"
+    SECURITY_SCAN_TYPES: str = "dependency,code,secret"
+    SECURITY_SCAN_TIMEOUT: int = 3600
+    SECURITY_ALERT_THRESHOLD: str = "medium"
+    SECURITY_REPORT_RECIPIENTS: str = ""
+
+
 settings = Settings()

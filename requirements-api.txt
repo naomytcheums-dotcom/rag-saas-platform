@@ -376,3 +376,12 @@ litellm==1.99.0
 aiosqlite==0.22.1
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
+
+# -- Security scanning (Partie 10.5, api/services/security_scan.py) ----------
+# Real, locally-runnable scanners this environment can actually execute
+# without a paid SaaS account (Snyk/Trivy licensing, a cloud KMS, etc.):
+# bandit is a real Python SAST tool (hardcoded secrets, SQL string
+# building, eval/exec, etc.), pip-audit resolves every installed
+# dependency against the real, public OSV/PyPI advisory database.
+bandit==1.9.4
+pip-audit==2.10.1

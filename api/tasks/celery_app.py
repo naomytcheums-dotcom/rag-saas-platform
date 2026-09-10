@@ -33,6 +33,7 @@ celery_app = Celery(
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
+        "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan",
     ],
 )
 
@@ -150,5 +151,32 @@ celery_app.conf.beat_schedule = {
     "reset-api-key-quotas-hourly": {
         "task": "api.tasks.api_key_maintenance.reset_quotas_task",
         "schedule": timedelta(hours=1),
+    },
+    # Partie 10.2 -- same low-traffic window, offset again. Idempotent
+    # (see api/tasks/audit.py's own docstrings): safe on any schedule.
+    "archive-old-audit-logs-daily": {
+        "task": "api.tasks.audit.archive_logs",
+        "schedule": crontab(hour=6, minute=30),
+    },
+    "purge-old-audit-logs-daily": {
+        "task": "api.tasks.audit.purge_old_logs",
+        "schedule": crontab(hour=6, minute=45),
+    },
+    # Partie 10.4 -- a real reminder sweep, not a purge (see
+    # api/tasks/compliance.py's own docstring); daily is enough given
+    # GDPR's own one-MONTH response deadline.
+    "process-pending-data-requests-daily": {
+        "task": "api.tasks.compliance.process_pending_data_requests",
+        "schedule": crontab(hour=7, minute=0),
+    },
+    "generate-monthly-compliance-report": {
+        "task": "api.tasks.compliance.generate_monthly_compliance_report",
+        "schedule": crontab(hour=7, minute=15, day_of_month=1),
+    },
+    # Partie 10.5 -- real dependency scans across every organization,
+    # same low-traffic window. Config: SECURITY_SCAN_SCHEDULE (informational).
+    "run-scheduled-security-scans-daily": {
+        "task": "api.tasks.security_scan.run_scheduled_security_scans",
+        "schedule": crontab(hour=7, minute=30),
     },
 }

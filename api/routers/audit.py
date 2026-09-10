@@ -14,20 +14,25 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user, get_db, require_admin
+from api.dependencies import get_current_user, get_db, require_admin, require_superadmin
 from api.models.audit_log import AuditAction, AuditLog
 from api.models.jwt_signing_key import JWTSigningKey
 from api.models.user import User
 from api.schemas.audit import (
+    AuditActionEntry,
+    AuditActionsResponse,
     AuditLogEntry,
     AuditLogIntegrityResponse,
     AuditLogListResponse,
+    AuditStatsResponse,
     FailedLoginCount,
     FailedLoginStatsResponse,
     JWTSigningKeyEntry,
     JWTSigningKeyListResponse,
+    PurgeResultResponse,
 )
 from api.security.audit_log import verify_audit_log_integrity
+from api.security.organizations import require_org_admin as _require_org_admin_for_audit
 
 router = APIRouter(tags=["audit"])
 
@@ -44,7 +49,7 @@ def _to_entry(row: AuditLog) -> AuditLogEntry:
 
 async def _list_audit_logs(
     db: AsyncSession, *, user_id: uuid.UUID | None, action: str | None, since: dt.datetime | None,
-    until: dt.datetime | None, limit: int, offset: int,
+    until: dt.datetime | None, limit: int, offset: int, organization_id: uuid.UUID | None = None,
 ) -> AuditLogListResponse:
     filters = []
     if user_id is not None:
@@ -55,6 +60,8 @@ async def _list_audit_logs(
         filters.append(AuditLog.timestamp >= since)
     if until is not None:
         filters.append(AuditLog.timestamp <= until)
+    if organization_id is not None:
+        filters.append(AuditLog.organization_id == organization_id)
 
     total = await db.scalar(select(func.count()).select_from(AuditLog).where(*filters)) or 0
     rows = (await db.scalars(
@@ -97,6 +104,25 @@ async def get_all_audit_logs(
     """Audit finding 19's optional admin half -- every account's rows,
     optionally narrowed to one user_id."""
     return await _list_audit_logs(db, user_id=user_id, action=action, since=since, until=until, limit=limit, offset=offset)
+
+
+@router.get("/organizations/{org_id}/audit-logs", response_model=AuditLogListResponse)
+async def get_organization_audit_logs(
+    org_id: uuid.UUID, action: str | None = None, since: dt.datetime | None = None, until: dt.datetime | None = None,
+    limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    _caller=Depends(_require_org_admin_for_audit), db: AsyncSession = Depends(get_db),
+):
+    """Partie 10.2/10.6 -- an org-scoped view for the Security screen,
+    gated by that ORGANIZATION's own Admin/Owner (require_org_admin) --
+    deliberately NOT the same tier as GET /admin/audit-logs above
+    (a global platform admin, unrelated to any one organization). Only
+    rows carrying this org's organization_id (populated going forward
+    by the specific actions this étape wired -- webhooks, documents,
+    agents, conversations, integrations, widget, API keys) are visible
+    here; older, pre-existing action types never populate that column
+    and so never appear in this org-scoped view (see AuditLog's own
+    docstring)."""
+    return await _list_audit_logs(db, user_id=None, action=action, since=since, until=until, limit=limit, offset=offset, organization_id=org_id)
 
 
 @router.get("/admin/failed-logins", response_model=FailedLoginStatsResponse)
@@ -156,6 +182,113 @@ async def verify_audit_logs_integrity(_admin: User = Depends(require_admin), db:
     """
     intact, first_tampered_id = await verify_audit_log_integrity(db)
     return AuditLogIntegrityResponse(intact=intact, first_tampered_entry_id=first_tampered_id)
+
+
+@router.get("/audit/stats", response_model=AuditStatsResponse)
+async def get_audit_stats_endpoint(
+    since: dt.datetime | None = None, until: dt.datetime | None = None,
+    _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+):
+    """Partie 10.2 -- a real aggregate over the same rows GET
+    /admin/audit-logs paginates through, so a dashboard can show
+    "1,204 events, 12 failed" without fetching every page itself."""
+    filters = []
+    if since is not None:
+        filters.append(AuditLog.timestamp >= since)
+    if until is not None:
+        filters.append(AuditLog.timestamp <= until)
+
+    total = await db.scalar(select(func.count()).select_from(AuditLog).where(*filters)) or 0
+    successful = await db.scalar(select(func.count()).select_from(AuditLog).where(*filters, AuditLog.success.is_(True))) or 0
+    by_action_rows = (await db.execute(
+        select(AuditLog.action, func.count()).where(*filters).group_by(AuditLog.action)
+    )).all()
+    return AuditStatsResponse(
+        total=total, successful=successful, failed=total - successful,
+        by_action={action: count for action, count in by_action_rows},
+    )
+
+
+@router.get("/audit/actions", response_model=AuditActionsResponse)
+async def get_audit_actions_endpoint(_admin: User = Depends(require_admin)):
+    """Partie 10.2 -- the full, real, fixed list of action types this
+    codebase's log_audit_action() can ever write (api/models/audit_log.py's
+    AuditAction enum), not a distinct list maintained by hand."""
+    return AuditActionsResponse(items=[AuditActionEntry(key=action.value) for action in AuditAction])
+
+
+@router.get("/audit/export")
+async def export_audit_logs_endpoint(
+    fmt: str = Query(default="json", pattern="^(json|csv)$"),
+    user_id: uuid.UUID | None = None, action: str | None = None,
+    since: dt.datetime | None = None, until: dt.datetime | None = None,
+    _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+):
+    """Partie 10.2 -- exports every matching row (up to a real, fixed
+    10,000-row safety cap -- a genuine export, not a paginated listing
+    reused as-is) as real JSON or CSV."""
+    from fastapi.responses import Response
+
+    listing = await _list_audit_logs(db, user_id=user_id, action=action, since=since, until=until, limit=10000, offset=0)
+    if fmt == "csv":
+        import csv
+        import io
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["id", "user_id", "action", "ip", "user_agent", "timestamp", "success", "failure_reason"])
+        for entry in listing.items:
+            writer.writerow([entry.id, entry.user_id, entry.action, entry.ip, entry.user_agent, entry.timestamp.isoformat(), entry.success, entry.failure_reason])
+        return Response(content=buffer.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=audit-logs.csv"})
+
+    return Response(content=json.dumps([entry.model_dump(mode="json") for entry in listing.items]), media_type="application/json")
+
+
+@router.get("/audit/user/{user_id}", response_model=AuditLogListResponse)
+async def get_user_audit_logs_endpoint(
+    user_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+):
+    return await _list_audit_logs(db, user_id=user_id, action=None, since=None, until=None, limit=limit, offset=offset)
+
+
+@router.get("/audit/resource/{resource_type}/{resource_id}", response_model=AuditLogListResponse)
+async def get_resource_audit_logs_endpoint(
+    resource_type: str, resource_id: str, limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+):
+    """Partie 10.2 -- only finds rows logged AFTER the resource_type/
+    resource_id columns were added (see AuditLog's own docstring);
+    older rows for the same resource, if any, are still visible via
+    GET /admin/audit-logs?action=... using metadata_json instead."""
+    filters = [AuditLog.resource_type == resource_type, AuditLog.resource_id == resource_id]
+    total = await db.scalar(select(func.count()).select_from(AuditLog).where(*filters)) or 0
+    rows = (await db.scalars(
+        select(AuditLog).where(*filters).order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
+    )).all()
+    return AuditLogListResponse(items=[_to_entry(r) for r in rows], total=total, limit=limit, offset=offset)
+
+
+@router.delete("/audit/logs/purge", response_model=PurgeResultResponse)
+async def purge_audit_logs_endpoint(
+    older_than_days: int = Query(ge=1), _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    """Partie 10.2 -- superadmin-only (platform-wide, irreversible,
+    same tier as PATCH /admin/users/{id}/role): deletes every row older
+    than `older_than_days`. Breaks the real hash chain for every row
+    still remaining after the purge point -- by design (a purge is a
+    deliberate, explicit exception to "the log is append-only", not
+    something that silently happens); GET /admin/audit-logs/verify-integrity
+    will correctly report the chain as broken starting at the oldest
+    surviving row after this runs, which is the honest, expected result
+    of a real purge, not a bug to hide."""
+    threshold = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=older_than_days)
+    rows = (await db.scalars(select(AuditLog).where(AuditLog.timestamp < threshold))).all()
+    count = len(rows)
+    for row in rows:
+        await db.delete(row)
+    await db.commit()
+    return PurgeResultResponse(deleted=count)
 
 
 @router.get("/admin/jwt-keys", response_model=JWTSigningKeyListResponse)

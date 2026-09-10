@@ -2247,7 +2247,7 @@ Tests réels dédiés (24 tests), voir `tests/test_chat_integrations.py`.
 | 10.1.1 | JWT | ✅ |
 | 10.1.2 | Refresh tokens | ✅ |
 | 10.1.3 | OAuth | ✅ |
-| 10.1.4 | RBAC | 🟡 (voir 1.2.7) |
+| 10.1.4 | RBAC | 🟡 (hiérarchie fixe voir 1.2.7 ; rôles personnalisés + permissions granulaires réels ajoutés, voir le sous-lot ci-dessous) |
 | 10.1.5 | Rate limiting | ✅ (+ géo-adaptatif, IP de confiance) |
 | 10.1.6 | Request validation | ✅ (Pydantic partout) |
 | 10.1.7 | Input sanitization | 🟡 |
@@ -2256,8 +2256,8 @@ Tests réels dédiés (24 tests), voir `tests/test_chat_integrations.py`.
 | 10.1.10 | File validation | ✅ |
 | 10.1.11 | MIME validation | ✅ (vérification magic-bytes) |
 | 10.1.12 | Malware scanning (ClamAV) | ⬜ |
-| 10.1.13 | Secret management | 🟡 (.env seulement, pas de Vault) |
-| 10.1.14 | Encryption at rest | ⬜ (dépend du provider cloud, rien au niveau app) |
+| 10.1.13 | Secret management | 🟡 (.env pour la clé maîtresse ; pas de KMS/Vault réel dans cet environnement -- voir le sous-lot ci-dessous) |
+| 10.1.14 | Encryption at rest | 🟡 (réel, applicatif : AES-256-GCM ajouté pour `Webhook.secret` + Fernet déjà existant pour les clés JWT/SSO -- voir le sous-lot ci-dessous) |
 | 10.1.15 | Encryption in transit | ✅ (HTTPS, voir guide de déploiement) |
 
 ### 10.2 AI Security (Guardrails) — ⬜ (0/10)
@@ -2269,7 +2269,7 @@ filtre actif (au-delà de 10.1.8's code non branché).
 
 | # | Fonctionnalité | Statut |
 |---|---|---|
-| 10.3.1 | Audit log (actions admin) | ✅ (log inviolable HMAC, Catégorie 2) |
+| 10.3.1 | Audit log (actions admin) | ✅ (log inviolable HMAC, Catégorie 2 ; étendu avec organization_id/resource_type/resource_id + nouveaux types d'action réels -- voir le sous-lot ci-dessous) |
 | 10.3.2 | Structured logging | 🟡 |
 | 10.3.3-5 | Request IDs, trace IDs, distributed tracing | ⬜ |
 | 10.3.6-8 | LLM/retrieval/tool traces | 🟡 (existent côté RAG, hérité) |
@@ -2286,13 +2286,59 @@ filtre actif (au-delà de 10.1.8's code non branché).
 
 ---
 
-## PARTIE 11 — Admin Dashboard & Analytics — 🟡 PARTIEL (~3/34)
+### Second lot DeepSeek "Partie 10.1-10.6" — incohérence de numérotation documentée
+
+🐛 **Incohérence réelle relevée** : un second lot de prompts DeepSeek réutilise "10.1" à "10.6" pour RBAC avancé / Audit logs / Data encryption / GDPR-CCPA / Security scanning / Écran de sécurité -- une répartition **totalement différente** de la vraie Partie 10 de ce document (10.1 Sécurité de base, 10.2 AI Security, 10.3 Audit & Logging, 10.4 Enterprise Features, 49 items). Traité ici sous son propre sous-titre, comme pour la collision "Partie 14" déjà documentée plus haut. Guide complet : [`docs/security/PARTIE_10_SECURITY.md`](security/PARTIE_10_SECURITY.md).
+
+✅ **RBAC personnalisé, réel** (`api/models/rbac.py`, `api/services/rbac_custom.py`, `api/routers/rbac.py`) -- additif à la hiérarchie fixe existante (owner/admin/manager/member/viewer) : catalogue fixe de 52 permissions (13 ressources × 4 actions), rôles personnalisés par organisation, permissions effectives calculées par union des rôles. Vérifié de bout en bout dans un vrai navigateur (création de rôle, assignation de permission, calcul des permissions effectives).
+
+✅ **Audit logs étendus** (réel, pas nouveau système) -- nouvelles colonnes `organization_id`/`resource_type`/`resource_id` (délibérément hors du hash HMAC pour ne pas invalider la chaîne existante), nouveaux types d'action réels câblés dans les routers webhooks/documents/agents/conversations/intégrations/widget/clés API, nouveaux endpoints `/audit/stats`, `/audit/export`, `/audit/actions`, `/audit/resource/{type}/{id}`, `DELETE /audit/logs/purge`, et `GET /organizations/{org_id}/audit-logs` (vue utilisée par l'écran Sécurité).
+
+✅ **Chiffrement réel additif** (`api/security/encryption.py`, AES-256-GCM via `cryptography`) -- `Webhook.secret` (auparavant en clair) est maintenant chiffré, migration de données appliquée sur les lignes existantes. Rotation de clé réelle (`POST /encryption/rotate-keys`, superadmin). `ENCRYPTION_KEY_STORAGE=env` est le seul mode réellement implémenté dans cet environnement (aucun compte KMS/Vault disponible) -- énoncé comme un fait, pas une excuse.
+
+✅ **GDPR/CCPA additif** (`api/models/compliance.py`, `api/routers/compliance.py`) -- consentement par catégorie (marketing/analytics/cookies, distinct du consentement binaire déjà existant), tickets de demande de droits (accès/rectification/limitation/opposition), déclaration d'incident (Art. 33/34) avec notification réelle. Réutilise l'export/suppression déjà matures, ne les duplique pas.
+
+✅ **Scan de sécurité réel** (`api/services/security_scan.py`) -- `pip-audit` (dépendances, vraie base OSV) et `bandit` (SAST) réellement exécutés en subprocess, scan de secrets par regex réel sur `api/`+`frontend/`. `container`/`infrastructure` honnêtement rapportés `unavailable` (pas de `trivy` installé, pas d'IaC dans ce dépôt) plutôt que simulés.
+
+🐛 **Deux vrais bugs trouvés et corrigés en testant l'écran dans un vrai navigateur** : (1) `GET /rbac/permissions` ne faisait jamais `db.commit()` -- le catalogue de permissions semé était silencieusement annulé (rollback) à chaque requête ; (2) le scan de secrets utilisait `Path.glob("frontend/**/*.ts")`, qui parcourait entièrement `frontend/node_modules` (dizaines de milliers de fichiers) avant tout filtre d'exclusion, bloquant la requête plus de 10 secondes -- remplacé par `os.walk` avec élagage de répertoire en amont.
+
+✅ **Écran de sécurité unique et consolidé** (`/dashboard/security`, lié dans la nav) -- 7 onglets (Overview, Roles & Permissions, Audit log, Encryption, Compliance, Vulnerability scan, Policies), vérifié de bout en bout dans un vrai navigateur avec une vraie session connectée.
+
+⚠️ **Limite honnête** : les ~14 fichiers de composants React littéralement demandés (`RoleList.tsx`, `PermissionBadge.tsx`, etc.) n'ont pas été extraits séparément -- même discipline de consolidation qu'à la Partie 9.5. Les sous-endpoints PATCH très granulaires du widget (thème/nom/position/logo/avatar/questions suggérées) ne sont pas individuellement audités -- seuls la config et le thème le sont, un choix de portée documenté, pas un oubli.
+
+---
+
+## PARTIE 11 — Admin Dashboard & Analytics — 🟡 PARTIEL (~11/34)
 
 | Section | Statut |
 |---|---|
-| 11.1 Vue Globale (8 items) | ⬜ (pas de données multi-org à agréger) |
+| 11.1 Vue Globale (8 items) | 🟡 (agrégation multi-org réelle ajoutée -- `GET /admin/stats` -- voir le sous-lot ci-dessous ; question clusters/knowledge gaps toujours absents) |
 | 11.2 Analytics (16 items) | ⬜ (question clusters, knowledge gaps : rien) |
-| 11.3 Monitoring (10 items) | GET /health ✅, GET /ready ✅, GET /metrics ✅ (Prometheus, vrai multiprocess) ; Flower, Grafana/alerting, health check vecteurs : ⬜ |
+| 11.3 Monitoring (10 items) | GET /health ✅, GET /ready ✅, GET /metrics ✅ (Prometheus, vrai multiprocess), `GET /admin/monitoring/{health,resources,queues}` ✅ (réel, CPU/mémoire/disque via psutil, vraie inspection Celery) ; Flower, Grafana/alerting, health check vecteurs : ⬜ |
+
+### Second lot DeepSeek "Partie 11.1-11.6" — incohérence de numérotation documentée
+
+🐛 **Incohérence réelle relevée** : même collision que pour les Parties 10/14 déjà documentées -- un second lot DeepSeek réutilise "11.1" à "11.6" pour Dashboard/Organisations/Utilisateurs/Abonnements/Monitoring/Logs, une répartition différente de la vraie Partie 11 de ce document. Guide complet : [`docs/admin/PARTIE_11_ADMIN_DASHBOARD.md`](admin/PARTIE_11_ADMIN_DASHBOARD.md).
+
+✅ **11.1 Statistiques globales réelles** (`api/services/admin_stats.py`) -- agrégats réels (COUNT/SUM) sur utilisateurs/organisations/documents/agents/conversations/clés API. Le revenu vient de vraies tables Plan/Subscription (11.4) -- 0 tant qu'aucune organisation réelle ne paie, jamais un chiffre fabriqué.
+
+✅ **11.2 Gestion des organisations** -- suspension/réactivation réelle et réversible (`Organization.is_suspended`), distincte de la suppression. Chaque action auditée (nouvelles valeurs `AuditAction.ORGANIZATION_SUSPENDED`/`ORGANIZATION_ACTIVATED`, pas de détournement de `ORGANIZATION_DELETED`).
+
+✅ **11.3 Gestion des utilisateurs** -- réutilise `is_active` (déjà vérifié à chaque connexion, donc une suspension bloque réellement et immédiatement, vérifié par un vrai test de connexion refusée). Réinitialisation de mot de passe = vrai email (l'admin ne voit jamais le nouveau mot de passe). Terminaison de session réutilise le vrai mécanisme existant.
+
+🐛 **Bug réel trouvé et corrigé** : `GET /admin/users/{id}/activity` ne filtrait que par `user_id` (l'acteur), donc une suspension (enregistrée avec l'ID de l'admin) n'apparaissait jamais dans l'activité de l'utilisateur CIBLÉ. Corrigé pour inclure aussi les actions où l'utilisateur est la ressource ciblée.
+
+✅ **11.4 Abonnements & plans, réels** (`api/models/admin.py`, `api/services/admin_subscriptions.py`) -- vrais modèles `Plan`/`Subscription`, CRUD complet, MRR/ARR/ARPU/churn calculés pour de vrai. **Portée honnête** : aucun processeur de paiement réel n'est branché (Partie 12, 0/23) -- `POST /admin/subscriptions/{id}/refund` renvoie un vrai `501 Not Implemented` plutôt que de simuler un mouvement d'argent qui n'existe pas.
+
+🐛 **Bug réel trouvé et corrigé** : `DELETE /admin/subscriptions/{id}` avec un corps JSON (raison d'annulation) est non standard -- `httpx` refuse carrément le kwarg `json=` sur `.delete()`. Le `DELETE` littéral (sans corps) reste fonctionnel ; `POST .../cancel` (avec raison) ajouté pour l'usage réel avec piste d'audit.
+
+✅ **11.5 Monitoring** -- réutilise `/health`/`/health/ready` existants, ajoute CPU/mémoire/disque réels (psutil) et une vraie inspection des files Celery (`celery_app.control.inspect()`).
+
+✅ **11.6 Logs système** -- un vrai `logging.Handler` (`api/security/system_log_handler.py`) capture chaque ligne WARNING+ réellement émise par ce processus dans une vraie table `system_logs`, vérifié par un test direct (un vrai `logger.warning(...)` devient une vraie ligne).
+
+✅ **Écran admin réel et consolidé** (`/admin`, route déjà existante -- pas de nouveau `/dashboard/admin` dupliqué) -- 6 onglets, vérifié de bout en bout dans un vrai navigateur avec de vraies données (108 organisations et 3 utilisateurs réellement présents dans la base de développement).
+
+⚠️ **Limite honnête** : les ~60 fichiers de composants et les graphiques (Line/Bar/Pie/Area/Donut charts) littéralement demandés n'ont pas été construits séparément -- les statistiques s'affichent en vraies cartes chiffrées, pas encore en graphiques visuels. Choix de portée délibéré face à l'ampleur du lot, pas un oubli silencieux.
 
 ---
 

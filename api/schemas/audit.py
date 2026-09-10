@@ -73,3 +73,25 @@ class JWTSigningKeyEntry(BaseModel):
 
 class JWTSigningKeyListResponse(BaseModel):
     items: list[JWTSigningKeyEntry]
+
+
+class AuditStatsResponse(BaseModel):
+    """Partie 10.2 -- GET /audit/stats. `by_action` covers the whole
+    window queried (`since`/`until`, same as GET /admin/audit-logs)."""
+
+    total: int
+    successful: int
+    failed: int
+    by_action: dict[str, int]
+
+
+class AuditActionEntry(BaseModel):
+    key: str
+
+
+class AuditActionsResponse(BaseModel):
+    items: list[AuditActionEntry]
+
+
+class PurgeResultResponse(BaseModel):
+    deleted: int

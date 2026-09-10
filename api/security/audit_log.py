@@ -46,6 +46,7 @@ def _compute_checksum(*, previous_checksum: str, user_id: uuid.UUID | None, acti
 async def log_audit_action(
     db: AsyncSession, *, user_id: uuid.UUID | None, action: AuditAction, ip: str | None, user_agent: str | None,
     success: bool, metadata: dict | None = None, failure_reason: str | None = None,
+    organization_id: uuid.UUID | None = None, resource_type: str | None = None, resource_id: str | None = None,
 ) -> AuditLog:
     """Writes one row. Caller commits (same convention as every other
     write helper in this codebase, e.g. api/services/password_reset.py) --
@@ -78,6 +79,7 @@ async def log_audit_action(
     row = AuditLog(
         user_id=user_id, action=action.value, ip=ip, user_agent=user_agent, timestamp=now,
         metadata_json=metadata_json, success=success, failure_reason=failure_reason, checksum=checksum,
+        organization_id=organization_id, resource_type=resource_type, resource_id=resource_id,
     )
     db.add(row)
     await db.flush()

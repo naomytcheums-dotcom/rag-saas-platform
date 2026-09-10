@@ -48,6 +48,13 @@ class Organization(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Partie 11.2 -- a real platform-admin suspend/reactivate, distinct
+    # from deletion (no grace-period/purge machinery for organizations
+    # exists the way it does for User -- suspension is reversible by
+    # design, a deliberately softer action).
+    is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    suspended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     members: Mapped[list["OrganizationMember"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
