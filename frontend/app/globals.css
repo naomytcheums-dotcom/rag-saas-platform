@@ -72,29 +72,30 @@ body {
 body {
   top: 0 !important;
 }
-.goog-te-banner-frame.skiptranslate,
+/* Google renames this banner iframe's class on every release (seen as
+   .goog-te-banner-frame in older docs, .VIpgJd-ZVi9od-ORHb-OEVmcd in the
+   current one) -- targeting any top-level iframe carrying its one
+   stable class, "skiptranslate", is what actually stays correct across
+   Google's own changes. */
+iframe.skiptranslate,
 #goog-gt-tt,
 .goog-tooltip,
 .goog-tooltip:hover {
   display: none !important;
+  height: 0 !important;
 }
 .goog-text-highlight {
   background: none !important;
   box-shadow: none !important;
 }
-.google-translate-widget .goog-te-gadget {
-  font-size: 0;
-}
-.google-translate-widget .goog-te-gadget > span > a {
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  font-size: 0.75rem;
-  color: var(--foreground-muted);
-}
-.google-translate-widget select {
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.75rem;
-  color: var(--foreground);
-  background: var(--surface);
+/* The real widget lives only to hold Google's hidden <select> --
+   components/GoogleTranslate.tsx drives it from its own styled flags
+   dropdown, so Google's own UI (banner, "Powered by Google" gadget,
+   the plain select itself) is never shown. */
+.google-translate-widget {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
