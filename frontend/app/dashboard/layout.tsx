@@ -32,8 +32,11 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: "Organization",
-    items: [{ href: "/dashboard/settings/organization", label: "Settings", icon: "⚙️" }],
+    label: "Account",
+    items: [
+      { href: "/dashboard/profile", label: "Profile", icon: "👤" },
+      { href: "/dashboard/settings/organization", label: "Organization", icon: "⚙️" },
+    ],
   },
   {
     label: "Platform",

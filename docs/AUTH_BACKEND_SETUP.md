@@ -11087,6 +11087,74 @@ just without that literal component-level split.
 
 **Partie 9 status (20/37 -> 37/37, ✅ COMPLETE)**.
 
+### Frontend follow-up batch (second DeepSeek "Partie 14.1-14.20" prompt set) -- real numbering collision documented
+
+🐛 **Real incoherence found**: a second DeepSeek prompt batch, pasted in
+the same window, reuses "Partie 14.1" through "14.20" for landing page/
+auth pages/profile/org settings/documents/agents/billing/admin/support/
+notifications/i18n/SEO/error pages/production optimization -- this
+directly collides with this same repo's real "PARTIE 14 -- Documentation
+& Livrables" (see `docs/CAHIER_DES_CHARGES.md`, a completely different
+topic: README/architecture/deployment/API docs/FAQ). This second batch's
+actual content maps to Partie 8 (User Interface) and to real Partie
+14.3 (Landing page), not to Partie 14 Documentation. Logged under its
+own heading here rather than corrupting the real Partie 14 entry.
+
+✅ **Landing page rewritten**: the French hero title/subtitle were kept
+verbatim per explicit user instruction ("Créez un assistant RAG pour
+votre entreprise..."), everything else rewritten -- no fixed navbar
+(just two small Login/Register links top-right), natural fluid scroll
+with no progress bar (explicit user constraint), real clickable feature
+cards (a real bug fix -- they used to be non-interactive `<div>`s), a
+3-column footer (Product/Developers/Account) with **no Admin link
+exposed** (removed after an explicit user security flag -- an admin
+link must never be publicly visible in a marketing page's footer).
+
+✅ **`frontend/app/dashboard/profile/page.tsx` (new)**: a real 4-tab
+profile page (Information, Security, Preferences, Danger zone) wired to
+already-existing, already-tested real endpoints (`GET/PATCH
+/account/me`, `/profile`, `POST /account/avatar`, `PATCH
+/account/preferences`, `POST /account/change-password`, `GET
+/sessions`, `DELETE /sessions/{id}`, `DELETE /account/me`) -- no new
+backend endpoint was needed, which is exactly why this was the
+user-chosen priority after the rest of the second batch's scope proved
+unrealistic to build in full (no real backend exists yet for billing/
+Stripe, multi-org admin analytics, or WebSocket notifications -- see
+Partie 12, 0/23). Account deletion is gated by a real confirmation
+input (the user must retype their own email). Verified: clean
+production build (18 routes), `npx tsc --noEmit` clean, 42 backend
+regression tests passing.
+
+🔒 **"Remember me" actually wired** (an explicit user request, not just
+a checkbox for show): the real 30-day httpOnly refresh-token cookie
+already existed server-side, but the frontend never called `POST
+/auth/refresh` -- fixed with a real transparent refresh-on-401 pattern
+in `lib/api.ts` (a deduplicated `refreshPromise` singleton, reading the
+`csrf_token` cookie, retrying the original request once). A real
+backend `remember_me: bool` flag was also added (`LoginRequest` ->
+`issue_session` -> `set_refresh_cookie`), controlling whether the
+refresh cookie persists or is session-only -- so the checkbox's state
+genuinely changes real server behavior, not just UI.
+
+🐛 **Real root-cause bug found and fixed, explaining reported
+registration failures**: `FRONTEND_URL` defaulted to
+`http://localhost:3000` but the real dev frontend runs on port `3011`
+-- `CORSMiddleware` silently rejected every real browser request at the
+network level (no JSON error body, the fetch failed before the browser
+would let JS read any response), hiding the real backend error
+("password appeared in a data breach") behind a generic frontend
+message. Fixed in `.env`/`.env.example`; verified with a real CORS
+preflight curl showing the correct `access-control-allow-origin`.
+
+⚠️ **Honest limitation on this second batch's full scope**: its literal
+14.1-14.20 breadth (Stripe billing, multi-org admin analytics, real-time
+WebSocket notifications, full SEO/sitemap, custom error pages,
+production Lighthouse optimization) is not realistic to deliver in full
+in this window -- several of those items have no real backend
+infrastructure behind them at all yet. Handled by continuing to
+prioritize the items whose real backend already exists, rather than
+fabricating a non-real 100%-done claim.
+
 ### Partie 3.4.2 -- query rewriting
 
 New module `api/services/query_rewriting.py`: `normalize_query`/

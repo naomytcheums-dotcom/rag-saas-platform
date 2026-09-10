@@ -2222,6 +2222,22 @@ Tests réels dédiés (24 tests), voir `tests/test_chat_integrations.py`.
 
 ---
 
+### Refonte frontend (second lot DeepSeek "Partie 14.1-14.20") — incohérence de numérotation documentée
+
+🐛 **Incohérence réelle relevée** : un second lot de prompts DeepSeek, collé dans cette même fenêtre, réutilise la numérotation "Partie 14.1" à "14.20" pour un tout autre contenu (landing page, pages d'auth, layout, profil, organisation, documents, agents, évaluation, facturation, sécurité/audit, admin, support, notifications, thème/i18n, SEO, pages d'erreur, optimisation production) -- ceci **entre en collision directe** avec la vraie "PARTIE 14 — Documentation & Livrables" de ce document (14.1 à 14.4, voir plus bas), qui est un sujet totalement différent. Ce second lot correspond en réalité, item par item, à la vraie Partie 8 (Interface Utilisateur, ci-dessus) et à 14.3 (Landing page). Traité ici sous son propre intitulé pour éviter de corrompre la vraie Partie 14.
+
+✅ **Page d'accueil (landing) réécrite** : titre/sous-titre héros français conservés à l'identique sur demande explicite de l'utilisateur ("Créez un assistant RAG pour votre entreprise..."), tout le reste réécrit -- sans barre de navigation fixe (juste deux liens Connexion/Inscription en haut à droite), scroll naturel et fluide sans barre de progression (contrainte explicite utilisateur), cartes de fonctionnalités réellement cliquables (bug réel corrigé -- c'étaient des `<div>` non interactifs), footer à 3 colonnes (Produit/Développeurs/Compte) **sans lien Admin visible** (retiré sur alerte sécurité explicite de l'utilisateur -- un lien d'administration ne doit jamais être exposé publiquement dans le footer d'une page marketing).
+
+✅ **`frontend/app/dashboard/profile/page.tsx` (nouveau)** : page de profil réelle à 4 onglets (Informations, Sécurité, Préférences, Zone dangereuse), câblée aux vrais endpoints déjà existants et déjà testés (`GET/PATCH /account/me`, `/profile`, `POST /account/avatar`, `PATCH /account/preferences`, `POST /account/change-password`, `GET /sessions`, `DELETE /sessions/{id}`, `DELETE /account/me`) -- aucun nouvel endpoint backend requis, ce choix de priorité (validé par l'utilisateur) a justement été fait parce que tout son backend était déjà réel et complet. Suppression de compte protégée par une vraie saisie de confirmation (l'utilisateur doit retaper son propre email). Build de production vérifié propre (18 routes), `npx tsc --noEmit` sans erreur, 42 tests backend de régression passants.
+
+🔒 **"Se souvenir de moi" réellement câblé** (demande explicite utilisateur, pas un simple habillage de case à cocher) : le vrai cookie de refresh-token httpOnly (30 jours) existait déjà côté backend, mais le frontend n'appelait jamais `POST /auth/refresh` -- corrigé via un vrai pattern de refresh transparent sur 401 dans `lib/api.ts` (singleton dédupliqué `refreshPromise`, lit le cookie CSRF `csrf_token`, réessaie une seule fois la requête d'origine). Ajout d'un vrai flag backend `remember_me: bool` (`LoginRequest` → `issue_session` → `set_refresh_cookie`) contrôlant si le cookie de refresh est persistant ou expire à la fermeture du navigateur -- la case à cocher fait donc réellement quelque chose de différent selon son état, pas juste une UI cosmétique.
+
+🐛 **Bug réel racine, trouvé et corrigé, expliquant les échecs d'inscription rapportés** : `FRONTEND_URL` valait par défaut `http://localhost:3000` mais le vrai frontend de dev tourne sur le port `3011` -- `CORSMiddleware` bloquait donc silencieusement chaque requête navigateur au niveau réseau (aucun corps JSON d'erreur, le fetch échouait avant même qu'une réponse HTTP soit lisible par le JS), ce qui masquait le vrai message d'erreur backend ("password appeared in a data breach") derrière un message générique frontend. Corrigé dans `.env`/`.env.example`, vérifié par un vrai preflight CORS curl.
+
+⚠️ **Limite honnête sur l'ampleur du second lot DeepSeek** : la portée littérale complète de ses 14.1-14.20 (facturation/Stripe, analytics admin multi-org, notifications WebSocket temps réel, SEO/sitemap complet, pages d'erreur personnalisées, optimisation Lighthouse production) n'est pas réaliste à livrer intégralement dans cette fenêtre -- plusieurs de ces items n'ont aucune infrastructure backend réelle sous-jacente (voir Partie 12, Facturation, 0/23). Traité en continuant à prioriser les items dont le backend réel existe déjà, plutôt que de fabriquer une complétion à 100% non réelle.
+
+---
+
 ## PARTIE 10 — Sécurité & Governance — 🟡 PARTIEL (~10/49)
 
 ### 10.1 Sécurité de base
