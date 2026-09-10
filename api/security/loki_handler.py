@@ -74,6 +74,32 @@ def install_loki_handler() -> bool:
     return True
 
 
+def send_test_log_synchronously() -> dict:
+    """Real, synchronous push (unlike LokiHandler.emit's fire-and-forget
+    background delivery) so GET /monitoring/loki/test can report the
+    REAL HTTP outcome -- found directly why this was needed: the
+    background handler's own broad `except Exception: pass` meant a
+    real, persistent 401 from Grafana Cloud was invisible until checked
+    this way."""
+    if not settings.LOKI_HOST or not settings.LOKI_USERNAME or not settings.LOKI_PASSWORD:
+        return {"sent": False, "reason": "not configured"}
+    import time
+
+    ns = str(int(time.time() * 1_000_000_000))
+    try:
+        response = httpx.post(
+            f"{settings.LOKI_HOST}/loki/api/v1/push",
+            auth=(settings.LOKI_USERNAME, settings.LOKI_PASSWORD),
+            json={"streams": [{"stream": {"level": "WARNING", "logger": "monitoring.loki.test", "service": "rag-saas-api"}, "values": [[ns, "Real synchronous test log from GET /monitoring/loki/test"]]}]},
+            timeout=10.0,
+        )
+        if response.status_code == 204:
+            return {"sent": True}
+        return {"sent": False, "status_code": response.status_code, "body": response.text[:500]}
+    except Exception as exc:
+        return {"sent": False, "error": str(exc)}
+
+
 def loki_status() -> dict:
     return {
         "configured": bool(settings.LOKI_HOST and settings.LOKI_USERNAME and settings.LOKI_PASSWORD),

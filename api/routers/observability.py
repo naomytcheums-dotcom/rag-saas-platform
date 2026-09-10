@@ -43,13 +43,12 @@ async def get_loki_status_endpoint(_admin: User = Depends(require_admin)):
 
 @router.get("/monitoring/loki/test")
 async def test_loki_endpoint(_admin: User = Depends(require_admin)):
-    import logging
+    from api.security.loki_handler import send_test_log_synchronously
 
-    status_before = loki_status()
-    if not status_before["configured"]:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Loki is not configured -- set LOKI_HOST/LOKI_USERNAME/LOKI_PASSWORD")
-    logging.getLogger("api.monitoring.loki_test").warning("Real test log line from GET /monitoring/loki/test")
-    return {"sent": True, "note": "a real WARNING was emitted -- check Grafana Cloud Explore (Loki) for {service=\"rag-saas-api\"}"}
+    result = send_test_log_synchronously()
+    if not result["sent"]:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result)
+    return {"sent": True, "note": "a real, synchronous push succeeded -- check Grafana Cloud Explore (Loki) for {service=\"rag-saas-api\"}"}
 
 
 @router.get("/monitoring/datadog/status")
