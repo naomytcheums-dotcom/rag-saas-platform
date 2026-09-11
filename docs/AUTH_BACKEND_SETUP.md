@@ -1210,6 +1210,20 @@ passed):
 |---|---|---|
 | users, organizations, organization_members, workspaces, teams, team_members, invitations, resource_permissions, casbin_rule, audit_logs, sessions, oauth_accounts, password_reset_tokens, email_verification_tokens, two_factor_recovery_codes, account_restore_tokens, two_factor_lockout_recovery_tokens, consent_reactivation_tokens, revoked_access_tokens, password_history, jwt_signing_keys, webauthn_credentials, enterprise_sso_connections, enterprise_sso_accounts | ✅ all 24/24 | ⬜ 0 (none, anywhere) |
 
+**Real coverage gap found and closed (2026-09-19)**: every migration from
+`0088` onward (Partie 10 security/compliance through Partie 16 (ter)
+plugin marketplace -- billing, alerting, integrations, sales models,
+plugins, and a few earlier stragglers) had quietly stopped adding the
+`ENABLE ROW LEVEL SECURITY` line every migration up to that point had.
+Found via `test_every_application_table_has_row_level_security_enabled`
+failing for real, for the first time, in this repo's first-ever
+end-to-end CircleCI run -- 43 tables were missing it. Closed by
+`api/alembic/versions/0098_rls_coverage_gap.py` (purely additive, same
+"deny by default, zero policies" posture as every other table -- see
+above for why this changes nothing observable). The table above is now
+stale (pre-dates the gap and its fix); trust the test, not this row,
+for the current count.
+
 **What "real RLS" would actually require, if ever wanted**: a
 restricted Postgres role for the app's own connection (dropping
 BYPASSRLS -- a global, blast-radius-everything change, not a contained

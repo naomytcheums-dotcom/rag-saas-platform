@@ -3262,7 +3262,16 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             elif document.file_type == TXT_CONTENT_TYPE:
                 structure = detect_structure_text("\n\n".join(s["text"] for s in extracted["sections"]))
             else:
-                structure = []
+                # No headings-outline signal for these formats (see comment
+                # above) -- `None` here (not `[]`) is a real, deliberate
+                # sentinel: some of these formats' own extractors already
+                # populate a format-specific "structure" key in
+                # extracted["metadata"] with a different, non-outline shape
+                # (JSON: a string like "nested_array"; XML: an
+                # attributes/nesting dict) -- overwriting it unconditionally
+                # below would silently clobber that real value with an
+                # empty list, which is exactly the bug this sentinel fixes.
+                structure = None
 
             # Partie 3.1.10 -- real metadata enrichment. Bounded to the
             # first _MAX_ENRICHMENT_INPUT_CHARS of the real, combined
@@ -3286,7 +3295,7 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             document.metadata_json = {
                 **extracted["metadata"], "table_count": len(extracted["tables"]), "tables": tables_for_metadata,
                 "image_count": extracted["image_count"], "chunk_count": len(chunk_records), "language": document_language,
-                "structure": structure_to_json(structure)[:_MAX_STRUCTURE_ELEMENTS_IN_METADATA],
+                **({"structure": structure_to_json(structure)[:_MAX_STRUCTURE_ELEMENTS_IN_METADATA]} if structure is not None else {}),
                 "summary": extract_summary(full_text), "topics": extract_topics(full_text),
                 "reading_time_minutes": extract_reading_time(full_text), "complexity_score": extract_complexity_score(full_text),
             }
