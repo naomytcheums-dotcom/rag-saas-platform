@@ -29,6 +29,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/dashboard/settings/widget", label: "Widget" },
       { href: "/dashboard/settings/integrations", label: "Integrations" },
+      { href: "/dashboard/marketplace", label: "Marketplace" },
     ],
   },
   {

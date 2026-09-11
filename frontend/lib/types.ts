@@ -119,3 +119,49 @@ export interface ConnectionTestResult {
   mapped_payload: Record<string, unknown>;
   would_run_action: string;
 }
+
+// Partie 16 (ter) -- plugin marketplace, api/schemas/plugins.py.
+export interface Plugin {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  description: string;
+  manifest: { name: string; version: string; entry_point: string; description: string; permissions: string[] };
+  version: string;
+  code_size_bytes: number;
+  status: "pending" | "approved" | "rejected" | "suspended";
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PluginInstallation {
+  id: string;
+  plugin_id: string;
+  organization_id: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  installed_at: string;
+}
+
+export interface PluginReview {
+  id: string;
+  plugin_id: string;
+  organization_id: string;
+  user_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PluginRatingSummary {
+  average_rating: number | null;
+  review_count: number;
+}
+
+export interface PluginPermission {
+  id: string;
+  label: string;
+}

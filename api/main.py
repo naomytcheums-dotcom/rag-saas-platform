@@ -33,6 +33,7 @@ from api.routers import (
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
     custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, notifications, observability,
+    plugins,
     sales,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
@@ -351,6 +352,9 @@ app.include_router(integrations_universal.org_router)
 app.include_router(notifications.router)
 app.include_router(sales.router)
 app.include_router(sales.org_router)
+app.include_router(plugins.marketplace_router)
+app.include_router(plugins.org_router)
+app.include_router(plugins.admin_router)
 app.include_router(ab_tests.router)
 
 

@@ -1,0 +1,169 @@
+version: 2.1
+
+# Real, free CI for this PRIVATE repo -- GitHub Actions is currently
+# unusable here (account billing issue, unrelated to this repo's code:
+# every job fails in ~2s with "recent account payments have failed or
+# your spending limit needs to be increased"). CircleCI's free tier
+# (6,000 build-minutes/month on Linux, no card required, works on
+# private repos) replaces it. Deliberately mirrors
+# .github/workflows/regression.yml's two most important jobs
+# (the RAG pipeline regression check, and the real Postgres/Redis/MinIO
+# -backed api/ auth-backend suite) rather than every job that file has --
+# docker-build and the Snyk/OWASP ZAP security-scan job are lower
+# priority (they scan/build, they don't verify correctness) and are
+# left for a later pass; see docs/ci/CIRCLECI_SETUP.md.
+
+jobs:
+  rag-pipeline-regression:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (requirements.txt, minus the unpublished agentfixture private package -- same filter as regression.yml)
+          command: grep -v '^agentfixture$' requirements.txt > requirements-runtime.txt && pip install -r requirements-runtime.txt
+      - run:
+          name: Run unit tests (ingestion + retrieval pure functions)
+          command: pytest tests_pipeline/test_ingestion.py tests_pipeline/test_retrieval.py -v
+      - run:
+          name: Rebuild chunks and vector store from committed data/processed/fastapi_docs.json
+          command: python src/indexing.py
+      - run:
+          name: Run regression check against results/regression_baseline.json
+          command: python tests/test_regression.py
+
+  api-tests:
+    docker:
+      - image: cimg/python:3.13
+      - image: cimg/postgres:16.4
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_saas_test
+      - image: cimg/redis:7.4
+      - image: minio/minio:latest
+        command: ["server", "/data"]
+    environment:
+      # CI-only values -- never real secrets, this is a throwaway
+      # Postgres/Redis/MinIO stack that only exists for this job's
+      # duration. Real deployments get every one of these from an
+      # actual secret store; see .env.example. Identical to
+      # regression.yml's api-tests job, so behavior stays comparable
+      # between the two CI providers.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+      SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+      SUPPORT_EMAIL: support@ci-test.invalid
+      RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+      EMAIL_FROM_ADDRESS: onboarding@resend.dev
+      COOKIE_SECURE: "False"
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+      RATE_LIMIT_ENABLED: "True"
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_BUCKET_NAME: avatars
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_PUBLIC_BASE_URL: http://localhost:9000/public/avatars
+      S3_DOCUMENTS_BUCKET_NAME: documents
+      S3_VOICE_BUCKET_NAME: voice
+      GOOGLE_OAUTH_CLIENT_ID: ci-only-google-client-id-never-real
+      GOOGLE_OAUTH_CLIENT_SECRET: ci-only-google-client-secret-never-real
+      GITHUB_OAUTH_CLIENT_ID: ci-only-github-client-id-never-real
+      GITHUB_OAUTH_CLIENT_SECRET: ci-only-github-client-secret-never-real
+      SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
+    steps:
+      - checkout
+      - run:
+          name: Wait for Postgres
+          command: |
+            for i in $(seq 1 30); do
+              pg_isready -h localhost -p 5432 -U postgres && break
+              sleep 1
+            done
+      - run:
+          name: Wait for Redis
+          command: |
+            sudo apt-get update && sudo apt-get install -y redis-tools
+            for i in $(seq 1 30); do
+              redis-cli -h localhost ping && break
+              sleep 1
+            done
+      - run:
+          name: Wait for MinIO
+          command: |
+            for i in $(seq 1 30); do
+              curl -sf http://localhost:9000/minio/health/live && break
+              sleep 1
+            done
+      - run:
+          name: Install api/ dependencies
+          command: pip install -r requirements-api.txt
+      - run:
+          name: Install real Tesseract OCR + poppler (Partie 3.1.6) and Pango/cairo for WeasyPrint (Partie 8.1.14)
+          command: |
+            sudo apt-get install -y tesseract-ocr tesseract-ocr-fra poppler-utils \
+              libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libcairo2 libffi-dev shared-mime-info
+      - run:
+          name: Create the avatars/documents/voice buckets (avatars public-read, the other two stay private)
+          command: |
+            python - <<'PYEOF'
+            import boto3
+            client = boto3.client(
+                "s3", endpoint_url="http://localhost:9000",
+                aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
+                region_name="us-east-1",
+            )
+            client.create_bucket(Bucket="avatars")
+            client.put_bucket_policy(Bucket="avatars", Policy="""{
+                "Version": "2012-10-17",
+                "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::avatars/*"}]
+            }""")
+            client.create_bucket(Bucket="documents")
+            client.create_bucket(Bucket="voice")
+            PYEOF
+      - run:
+          name: Run Alembic migrations against the fresh Postgres container
+          command: python -m alembic upgrade head
+      - run:
+          name: Start a live Celery worker in the background (needed by tests/test_e2e_lifecycle.py's real trigger -> Redis -> worker -> task chain)
+          command: |
+            nohup python -m celery -A api.tasks.celery_app worker --loglevel=info > celery-worker.log 2>&1 &
+            sleep 5
+          background: true
+      - run:
+          name: Run the full api/ test suite with coverage
+          command: >
+            pytest
+            tests/test_auth_api.py tests/test_auth_security.py tests/test_config.py
+            tests/test_email_service.py tests/test_recovery_codes.py tests/test_password_strength.py
+            tests/test_password_similarity.py tests/test_storage.py tests/test_audit_log.py tests/test_security_alerts.py
+            tests/test_monitoring.py tests/test_trusted_ips_and_geoip.py tests/test_roles_and_permissions.py
+            tests/test_organizations.py tests/test_organization_members.py tests/test_workspaces.py tests/test_resource_permissions.py tests/test_teams.py tests/test_invitations.py tests/test_quotas.py tests/test_user_limits.py tests/test_usage.py tests/test_organization_settings.py tests/test_organization_branding.py tests/test_custom_domains.py tests/test_ssl_certificates.py tests/test_domain_verification.py tests/test_email_domains.py tests/test_white_label.py tests/test_pdf_extraction.py tests/test_docx_extraction.py tests/test_txt_extraction.py tests/test_markdown_extraction.py tests/test_html_extraction.py tests/test_csv_extraction.py tests/test_json_extraction.py tests/test_xml_extraction.py tests/test_epub_extraction.py tests/test_url_fetching.py tests/test_url_extraction.py tests/test_sitemap_extraction.py tests/test_github_extraction.py tests/test_google_drive_extraction.py tests/test_notion_extraction.py tests/test_confluence_extraction.py tests/test_onedrive_extraction.py tests/test_zip_extraction.py tests/test_metadata_normalization.py tests/test_document_progress.py tests/test_reindex.py tests/test_document_audit.py tests/test_document_status.py tests/test_document_duplicates.py tests/test_document_modification_check.py tests/test_external_sources.py tests/test_reindex_schedules.py tests/test_batch_jobs.py tests/test_text_cleaning.py tests/test_text_normalization.py tests/test_table_transformation.py tests/test_image_extraction.py tests/test_ocr.py tests/test_language_detection.py tests/test_headings_extraction.py tests/test_structure_detection.py tests/test_metadata_enrichment.py tests/test_chunking.py tests/test_semantic_chunking.py tests/test_markdown_chunking.py tests/test_code_chunking.py tests/test_sentence_chunking.py tests/test_paragraph_chunking.py tests/test_parent_child_chunking.py tests/test_chunk_config.py tests/test_embedding_config.py tests/test_retrieval_config.py tests/test_retrieval_pipeline.py tests/test_search.py tests/test_llm_providers.py tests/test_metadata_filtering.py tests/test_semantic_filtering.py tests/test_duplicate_removal.py tests/test_mmr.py tests/test_query_rewriting.py tests/test_hyde.py tests/test_multi_query.py tests/test_context_compression.py tests/test_embedding_providers.py tests/test_llm_config.py tests/test_agent_orchestrator.py tests/test_tools.py tests/test_tool_selection.py tests/test_tool_permissions.py tests/test_tool_timeout.py tests/test_tool_budget.py tests/test_retry.py tests/test_fallback.py tests/test_parallel_tools.py tests/test_tool_validation.py tests/test_human_approval.py tests/test_agent_memory.py tests/test_conversations.py tests/test_task_planning.py tests/test_agent_traces.py tests/test_search_kb_tool.py tests/test_github_tools.py tests/test_web_search.py tests/test_sql_tool.py tests/test_calculator_tool.py tests/test_url_reader.py tests/test_calendar_tools.py tests/test_email_tools.py tests/test_human_escalation.py tests/test_custom_tools.py tests/test_agents.py tests/test_agent_prompts.py tests/test_agent_models.py tests/test_agent_knowledge_base.py tests/test_agent_tools.py tests/test_agent_memory_config.py tests/test_agent_permissions.py tests/test_agent_guardrails.py tests/test_agent_api_keys.py tests/test_workflows.py tests/test_workflow_triggers.py tests/test_template_rendering.py tests/test_workflow_block_llm.py tests/test_workflow_block_rag.py tests/test_workflow_block_search.py tests/test_workflow_block_http.py tests/test_workflow_block_condition.py tests/test_workflow_block_code.py tests/test_workflow_block_human.py tests/test_workflow_block_email.py tests/test_workflow_block_calendar.py tests/test_workflow_block_database.py tests/test_workflow_versions.py tests/test_citations.py tests/test_generation.py tests/test_citation_documents.py tests/test_citation_location.py tests/test_citation_url.py tests/test_citation_chunk.py tests/test_citation_relevance.py tests/test_citation_passage.py tests/test_citation_preview.py tests/test_citation_secondary.py tests/test_response_confidence.py tests/test_claim_extraction.py tests/test_text_similarity.py tests/test_contradiction_detection.py tests/test_source_consistency.py tests/test_confidence_estimation.py tests/test_claim_verification.py tests/test_hallucination_detector.py tests/test_groundedness.py tests/test_response_quality.py tests/test_response_detail_endpoint.py tests/test_agent_citation_required.py tests/test_agent_context_only.py tests/test_agent_idk.py tests/test_unsupported_claims.py tests/test_faithfulness.py tests/test_quality_dashboard.py tests/test_question_difficulty.py tests/test_evaluation_datasets.py tests/test_evaluation_datasets_endpoints.py tests/test_question_sets.py tests/test_question_sets_endpoints.py tests/test_ground_truth_answers.py tests/test_ground_truth_documents.py tests/test_benchmark_versions.py tests/test_benchmark_versions_endpoints.py tests/test_retrieval_metrics.py tests/test_answer_quality_metrics.py tests/test_evaluation_results.py tests/test_evaluation_results_endpoints.py tests/test_evaluation_comparisons.py tests/test_evaluation_comparisons_endpoints.py tests/test_context_relevance.py tests/test_citation_correctness.py tests/test_hallucination_rate.py tests/test_latency_metrics.py tests/test_token_usage.py tests/test_cost_tracking.py tests/test_evaluation_jobs.py tests/test_evaluation_jobs_endpoints.py tests/test_manual_evaluations.py tests/test_manual_evaluations_endpoints.py tests/test_comparison_jobs.py tests/test_comparison_jobs_endpoints.py tests/test_regression_detection.py tests/test_regression_detection_endpoints.py tests/test_regression_thresholds.py tests/test_regression_thresholds_endpoints.py tests/test_deployment_evaluations.py tests/test_deployment_evaluations_endpoints.py tests/test_ab_tests.py tests/test_ab_tests_endpoints.py tests/test_streaming.py tests/test_code_highlighter.py tests/test_markdown_renderer.py tests/test_message_actions.py tests/test_conversation_management.py tests/test_conversation_export.py tests/test_conversation_sharing.py tests/test_suggested_questions.py tests/test_i18n.py tests/test_voice_providers.py tests/test_voice_messages_and_settings.py tests/test_telephony.py tests/test_public_api.py tests/test_api_key_management.py tests/test_webhooks.py tests/test_inbound_webhooks.py tests/test_api_versioning.py tests/test_widget.py tests/test_chat_integrations.py tests/test_document_extraction.py tests/test_documents.py tests/test_google_docs_integration.py tests/test_notion_integration.py tests/test_confluence_integration.py tests/test_onedrive_integration.py tests/test_zip_integration.py tests/test_document_batch_integration.py
+            tests/test_postgres_integration.py tests/test_rbac_integration.py tests/test_oauth_logic_integration.py
+            tests/test_rate_limiting_integration.py tests/test_avatar_storage_integration.py tests/test_branding_storage_integration.py
+            tests/test_dns_verification_integration.py tests/test_acme_integration.py tests/test_ssl_certificate_renewal_integration.py tests/test_domain_verification_integration.py tests/test_email_domains_integration.py tests/test_documents_integration.py tests/test_url_fetching_integration.py tests/test_sitemap_extraction_integration.py tests/test_sitemap_integration.py tests/test_github_extraction_integration.py tests/test_github_integration.py tests/test_google_drive_extraction_integration.py tests/test_google_drive_integration.py tests/test_notion_extraction_integration.py tests/test_onedrive_extraction_integration.py
+            tests/test_geo_adaptive_rate_limit_integration.py tests/test_webauthn_integration.py
+            tests/test_jwt_key_rotation_integration.py tests/test_enterprise_sso_integration.py
+            tests/test_celery_integration.py tests/test_e2e_lifecycle.py
+            tests/test_connections.py tests/test_mappings.py tests/test_transformations.py
+            tests/test_sales_models.py tests/test_notifications_datadog_grafana.py
+            --cov=api --cov-report=term-missing --cov-report=xml
+            --cov-fail-under=75
+            -v
+      - run:
+          name: Show the Celery worker's log if anything failed
+          command: cat celery-worker.log || true
+          when: on_fail
+      - store_artifacts:
+          path: coverage.xml
+          destination: api-coverage-report
+
+workflows:
+  regression-check:
+    jobs:
+      - rag-pipeline-regression
+      - api-tests

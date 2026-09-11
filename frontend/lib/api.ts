@@ -113,12 +113,32 @@ async function requestForm<T>(path: string, method: string, file: File, _retried
   return (await response.json()) as T;
 }
 
+async function requestMultipart<T>(path: string, method: string, fields: Record<string, string>, files: Record<string, File | Blob>, _retried = false): Promise<T> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  for (const [key, value] of Object.entries(files)) form.set(key, value);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: form, credentials: "include" });
+
+  if (response.status === 401 && !_retried) {
+    if (await refreshAccessToken()) return requestMultipart<T>(path, method, fields, files, true);
+  }
+
+  if (!response.ok) throw new ApiError(response.status, await parseErrorDetail(response));
+  return (await response.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: body !== undefined ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   postFile: <T>(path: string, file: File) => requestForm<T>(path, "POST", file),
+  postMultipart: <T>(path: string, fields: Record<string, string>, files: Record<string, File | Blob>) => requestMultipart<T>(path, "POST", fields, files),
+  putMultipart: <T>(path: string, fields: Record<string, string>, files: Record<string, File | Blob>) => requestMultipart<T>(path, "PUT", fields, files),
 };
 
 export function fileUrl(path: string): string {

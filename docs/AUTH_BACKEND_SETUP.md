@@ -11857,6 +11857,31 @@ Supabase, S3, and a live Celery worker rather than mocking any of them.
   `vault` are config values with no real backend behind them yet in
   this environment.
 
+## Partie 16 (ter) -- Plugin marketplace
+
+Full write-up: [`docs/marketplace/PARTIE_16_TER_MARKETPLACE.md`](marketplace/PARTIE_16_TER_MARKETPLACE.md).
+Numbering collision, same discipline as every prior one -- DeepSeek's
+own "Partie 16" was already used this session for the 4 sales models
+("Partie 16 (bis)"), so this plugin marketplace batch is "(ter)".
+`Plugin`/`PluginInstallation`/`PluginReview`, real manifest schema +
+fixed permission whitelist validation, a real static forbidden-pattern
+code scan (rejects `eval`/`exec`/`os.system`/`child_process`/etc.) --
+honest on scope: no plugin execution sandbox exists anywhere in this
+codebase, so none is faked here either, only real validation/scanning
+before publish. 16 endpoints (public marketplace, org-scoped publish/
+install/review, superadmin moderation), one consolidated
+`/dashboard/marketplace` frontend page. A real bug was found and fixed
+during live verification: `onupdate=func.now()` columns caused a
+`MissingGreenlet` crash on response serialization after any UPDATE path
+(approve/reject/enable/review-upsert) -- fixed via upfront UUID
+generation (avoids an unnecessary second UPDATE in publish) and
+`db.refresh()` after commit elsewhere. Verified fully live in a real
+browser: publish -> real S3 upload (a real `documents` bucket was
+created live on this session's own Supabase S3-compatible storage,
+since `S3_DOCUMENTS_BUCKET_NAME` had never been configured on this dev
+machine -- a separate real gap found and fixed) -> pending -> admin
+approve -> marketplace listing -> install -> installed list.
+
 ## Partie 15 (bis) -- Advanced integrations: universal inbound (Zapier/Make/n8n), Airbyte
 
 Full write-up: [`docs/integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md`](integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md).
