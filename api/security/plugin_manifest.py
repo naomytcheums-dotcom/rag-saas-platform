@@ -1,22 +1,20 @@
 """
 Partie 16 (ter) -- plugin manifest validation + static code scan.
 
-Honest scope on "sandbox": no plugin RUNTIME exists anywhere in this
-codebase (nothing here ever `eval`s, `exec`s, or otherwise executes
-uploaded third-party code) -- so there is no real process to sandbox. A
-genuine, safe execution sandbox (an isolated V8/WASM/Docker-per-plugin
-runtime) is a real, separate engineering effort this pass does not
-build, and faking one (e.g. a `try/except` around a real `exec()` call)
-would be exactly the kind of fabricated completeness this project's
-whole discipline exists to avoid. What IS real here: (1) strict
-manifest schema + a fixed permission whitelist (same static-catalog
-pattern as api/security/permission_catalog.py -- a plugin cannot
-declare a permission this platform doesn't actually recognize), and
-(2) a real static regex scan of the uploaded code for a fixed list of
-dangerous call patterns, rejecting publication outright rather than
-silently flagging -- the same class of real-but-simple pattern matching
-api/services/security_scan.py's own secret scan already uses, not a
-full taint-analysis tool.
+Real, two-layer defense before ANY plugin code is even eligible to run
+(api/security/plugin_sandbox.py is the real, separate execution layer,
+added in a later pass -- this module never executes anything itself):
+(1) strict manifest schema + a fixed permission/hook whitelist (same
+static-catalog pattern as api/security/permission_catalog.py -- a
+plugin cannot declare a permission or hook this platform doesn't
+actually recognize), and (2) a real static regex scan of the uploaded
+code for a fixed list of dangerous call patterns, rejecting publication
+outright rather than silently flagging -- the same class of
+real-but-simple pattern matching api/services/security_scan.py's own
+secret scan already uses, not a full taint-analysis tool. Passing both
+gates does not itself run the code -- see plugin_sandbox.py's own
+docstring for the real, honest scope of what "sandboxed" means once a
+plugin IS actually invoked.
 """
 
 import re
@@ -25,18 +23,37 @@ MAX_PLUGIN_CODE_BYTES = 1 * 1024 * 1024  # 1 MB -- a plugin is UI glue/a small h
 MAX_MANIFEST_NAME_LENGTH = 200
 MAX_MANIFEST_DESCRIPTION_LENGTH = 2000
 
-# Fixed, real whitelist -- same reasoning as permission_catalog.py's own
-# top docstring: a permission this list doesn't name is not something
-# any router actually checks for, so a manifest declaring one would be
-# a permission that LOOKS granted but does nothing real.
+# Fixed, real whitelist, same "resource:action" naming convention as
+# api/security/permission_catalog.py's own 52-entry catalog -- a
+# permission this list doesn't name is not something any router
+# actually checks for, so a manifest declaring one would be a
+# permission that LOOKS granted but does nothing real. What "granted"
+# actually means for a plugin: api/services/plugin_hooks.py's own
+# trigger_hook decides what data goes INTO the sandboxed payload based
+# on these -- the sandboxed process itself has no ambient access to
+# anything (api/security/plugin_sandbox.py's own docstring).
 ALLOWED_PLUGIN_PERMISSIONS: list[dict] = [
-    {"id": "read_documents", "label": "Read this organization's documents"},
-    {"id": "read_conversations", "label": "Read this organization's conversations"},
-    {"id": "read_agents", "label": "Read this organization's agents"},
-    {"id": "send_notifications", "label": "Send notifications on this organization's behalf"},
-    {"id": "read_analytics", "label": "Read this organization's usage analytics"},
+    {"id": "read:documents", "label": "Read this organization's documents"},
+    {"id": "write:documents", "label": "Create or modify this organization's documents"},
+    {"id": "read:conversations", "label": "Read this organization's conversations"},
+    {"id": "write:conversations", "label": "Create or modify this organization's conversations"},
+    {"id": "read:agents", "label": "Read this organization's agents"},
+    {"id": "write:agents", "label": "Create or modify this organization's agents"},
+    {"id": "read:users", "label": "Read this organization's member list"},
+    {"id": "write:users", "label": "Modify this organization's members"},
+    {"id": "send:notifications", "label": "Send notifications on this organization's behalf"},
+    {"id": "access:external_api", "label": "Access external APIs (declared only -- see plugin_sandbox.py's own docstring: no real outbound network path is granted in this pass)"},
 ]
 _ALLOWED_PERMISSION_IDS = {p["id"] for p in ALLOWED_PLUGIN_PERMISSIONS}
+
+# The real, fixed set of platform events a plugin may ask to be called
+# on (api/services/plugin_hooks.py's own PluginHook). Kept as a plain
+# string list here (not importing the enum) to avoid a real circular
+# import (plugin_hooks -> plugins service -> plugin_manifest).
+ALLOWED_PLUGIN_HOOKS = {
+    "on_message_received", "on_message_sent", "on_document_uploaded", "on_agent_created",
+    "on_conversation_started", "on_error", "on_schedule",
+}
 
 REQUIRED_MANIFEST_FIELDS = ("name", "version", "entry_point", "description", "permissions")
 
@@ -106,6 +123,16 @@ def validate_manifest(manifest: dict, *, slug: str) -> None:
 
     if not _SLUG_PATTERN.match(slug):
         raise PluginManifestError("plugin slug must be 3-100 lowercase alphanumeric characters or hyphens, not starting/ending with a hyphen")
+
+    # Optional -- a plugin that only exposes a manual POST .../execute
+    # action (no automatic platform event) legitimately declares none.
+    hooks = manifest.get("hooks")
+    if hooks is not None:
+        if not isinstance(hooks, list) or not all(isinstance(h, str) for h in hooks):
+            raise PluginManifestError("manifest 'hooks', if present, must be a list of hook name strings")
+        unknown_hooks = sorted(set(hooks) - ALLOWED_PLUGIN_HOOKS)
+        if unknown_hooks:
+            raise PluginManifestError(f"manifest declares unknown hook(s): {', '.join(unknown_hooks)} -- allowed: {', '.join(sorted(ALLOWED_PLUGIN_HOOKS))}")
 
 
 def scan_plugin_code(content: bytes) -> None:

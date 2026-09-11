@@ -12,106 +12,155 @@ as every earlier collision (10/11/12/13/15).
 
 ## What's real
 
-`api/models/plugins.py` — `Plugin` (one real, versionless row per
-published plugin: a re-publish overwrites `manifest`/`code_key`/
-`version` in place and resets `status` back to `pending` — no separate
-`PluginVersion` history table nothing reads yet), `PluginInstallation`
-(one real row per `(plugin, installing organization)`, unique
-constraint), `PluginReview` (one real row per `(plugin, user)`, upserted
-on re-review — a marketplace rating means "this user's CURRENT
-opinion", not an append-only feed).
+`api/models/plugins.py` — `Plugin` (identity + CURRENT version's
+content), `PluginVersion` (real, append-only history — one row per
+publish/republish, each with its OWN S3 key, never overwriting an
+earlier version), `PluginInstallation` (one real row per `(plugin,
+installing organization)`, unique constraint, real live
+`install_count` cache on `Plugin`), `PluginReview` (one real row per
+`(plugin, user)`, upserted on re-review), `PluginExecution` (one real
+row per sandboxed run, manual or hook-triggered).
 
 `api/security/plugin_manifest.py` — real manifest schema validation
-(`name`/`version`/`entry_point`/`description`/`permissions`, semver
-enforced, slug format enforced) against a fixed, real permission
-whitelist (`ALLOWED_PLUGIN_PERMISSIONS`, same static-catalog pattern as
-`api/security/permission_catalog.py` — a plugin cannot declare a
-permission this platform doesn't actually recognize). A real static
-regex scan (`scan_plugin_code`) rejects a fixed list of dangerous call
-patterns (`eval`, `new Function`, `exec`, `os.system`, `subprocess`,
-Node `child_process`/`fs`) and enforces a 1MB size cap — publication is
-rejected outright on a match, not silently flagged.
+(`name`/`version`/`entry_point`/`description`/`permissions`/`hooks`,
+semver enforced, slug format enforced) against fixed, real whitelists
+(`ALLOWED_PLUGIN_PERMISSIONS` — real `resource:action` naming,
+matching `api/security/permission_catalog.py`'s own convention;
+`ALLOWED_PLUGIN_HOOKS`). A real static regex scan (`scan_plugin_code`)
+rejects a fixed list of dangerous call patterns and enforces a 1MB
+size cap — publication is rejected outright on a match, not silently
+flagged.
 
-**Honest scope on "sandbox"**: no plugin runtime exists anywhere in
-this codebase — nothing here ever executes uploaded plugin code
-server-side. A real execution sandbox (isolated V8/WASM/per-plugin
-Docker) is a genuine, separate engineering effort this pass does not
-build; faking one would be exactly the kind of fabricated completeness
-this project's whole discipline exists to avoid. What's real instead:
-manifest/permission validation before publish, and a static forbidden-
-pattern scan of the code — real gates, not a real runtime.
+**Real sandbox, honest scope** (`api/security/plugin_sandbox.py`,
+added in a later pass) — see `docs/plugins/SECURITY.md` for the full,
+plain-spoken analysis of what "sandboxed" does and does NOT mean here.
+In short: a genuinely separate OS process (`node`/`python`
+subprocess), a real timeout, a real POSIX-only memory cap, no ambient
+authority — NOT a container-per-plugin sandbox, which is real,
+separate infrastructure work this pass does not build.
 
-`api/services/plugins.py` — publish/republish/delete, marketplace
-listing (search, `approved` only), admin moderation
-(approve/reject/suspend — suspend deliberately leaves existing
-installations in place, only blocks new ones), install/uninstall,
-enable/disable + per-installation config, reviews (upsert) +
-rating summary (average/count). Plugin code is stored in the SAME S3
-bucket as documents (`S3_DOCUMENTS_BUCKET_NAME`, `plugins/{id}/code`
-key prefix) — same "no new S3_* setting" reasoning as
+`api/services/plugins.py` — publish/republish (real `PluginVersion`
+row each time)/delete, marketplace listing (search/category/
+min_rating/sort_by, `approved` only), admin moderation
+(approve/reject/suspend), install/uninstall (real `install_count`
+maintenance), enable/disable + per-installation config, reviews
+(upsert) + rating summary, real sandboxed execution
+(`execute_plugin`) + rate limiting + execution history. Plugin code is
+stored in the SAME S3 bucket as documents (`S3_DOCUMENTS_BUCKET_NAME`,
+`plugins/{id}/{version}/code` key prefix — versioned, never
+overwritten) — same "no new S3_* setting" reasoning as
 `api/services/storage.py`'s own branding-assets-share-the-avatar-bucket
 docstring.
 
-## Real bug found and fixed during live verification
+`api/services/plugin_hooks.py` — a real dispatcher (`trigger_hook`)
+that finds every enabled installation of an approved plugin declaring
+a given hook and runs each through the real sandbox. Exactly ONE of
+the 7 hooks is wired to an actual platform event in this pass
+(`on_document_uploaded`, from `api/security/documents.py`'s own
+`upload_document`, best-effort — a plugin failure never fails the real
+upload) — the other 6 are real and callable today, just not yet wired
+to their own event; see `docs/plugins/DEVELOPER_GUIDE.md`'s hook
+table for the honest breakdown rather than claiming all 7 fire
+automatically.
 
-Every endpoint that returns a `Plugin`/`PluginInstallation`/
-`PluginReview` row right after an UPDATE (approve/reject/suspend,
-enable/disable, review upsert, republish) hit a real
-`MissingGreenlet`/`ResponseValidationError` on the `updated_at` column:
-SQLAlchemy expires an `onupdate=func.now()` column's in-memory value
-after an UPDATE flush (regardless of this project's global
-`expire_on_commit=False`) so a later read reflects the real DB value —
-but re-reading it needs a DB round-trip, which fails when attempted
-during FastAPI's response serialization, outside the request's own
-async/greenlet context. Fixed two ways: (1) `publish_plugin`
-pre-generates the row's UUID so the S3 key can be set in the SAME
-insert instead of a second UPDATE flush right after, and (2) every
-router endpoint that genuinely does go through an UPDATE path calls
-`await db.refresh(obj)` right after `db.commit()`, before returning.
+`api/tasks/plugins.py` — 4 real Celery jobs: `validate_pending_plugins`
+/`scan_plugin_security` (periodic re-scan, defense in depth against a
+scan rule added after a plugin was already submitted/approved),
+`cleanup_plugin_executions` (retention sweep), `update_plugin_stats`
+(reconciles `install_count` from a real COUNT query, correcting any
+drift from the live-maintained counter).
 
-## Endpoints (16 total)
+## Real bugs found and fixed
+
+1. **`MissingGreenlet` on `updated_at`** — every endpoint returning a
+   `Plugin`/`PluginInstallation`/`PluginReview` row right after an
+   UPDATE (approve/reject/suspend, enable/disable, review upsert,
+   republish) hit this: SQLAlchemy expires an `onupdate=func.now()`
+   column's in-memory value after an UPDATE flush (regardless of this
+   project's global `expire_on_commit=False`), and re-reading it needs
+   a DB round-trip that fails during FastAPI's response serialization.
+   Fixed two ways: `publish_plugin` pre-generates the row's UUID so the
+   S3 key is set in the SAME insert (avoiding an unnecessary second
+   UPDATE), and every router endpoint on a genuine UPDATE path calls
+   `await db.refresh(obj)` right after `db.commit()`.
+2. **Alembic `add_column` with an enum type doesn't auto-create that
+   type** — unlike `create_table`, which does. Migration 0096 initially
+   failed with `UndefinedObjectError: type "plugincategory" does not
+   exist`; fixed by calling `plugin_category.create(op.get_bind(),
+   checkfirst=True)` explicitly before `add_column`.
+
+## Endpoints (22 total)
 
 Public marketplace (`/marketplace/...`): `GET /permissions`, `GET
-/plugins` (search), `GET /plugins/{id}`, `GET /plugins/{id}/rating`,
-`GET /plugins/{id}/reviews`.
+/plugins` (search/category/min_rating/sort_by), `GET /plugins/{id}`,
+`GET /plugins/{id}/rating`, `GET /plugins/{id}/reviews`, `GET
+/plugins/{id}/versions`, `DELETE /reviews/{id}` (owner-only).
 
 Org-scoped (`/organizations/{org_id}/plugins/...`): `POST /publish`,
-`PUT /{id}` (republish, re-triggers moderation), `GET /published`,
-`DELETE /{id}`, `POST /{id}/install`, `GET /installed`, `PATCH
-/installed/{id}`, `DELETE /installed/{id}`, `POST /{id}/reviews`.
+`PUT /{id}` (republish, real new `PluginVersion`, re-triggers
+moderation), `GET /published`, `DELETE /{id}`, `POST /{id}/install`,
+`GET /installed`, `PATCH /installed/{id}`, `DELETE /installed/{id}`,
+`POST /{id}/reviews`, `POST /{id}/execute` (real sandboxed run), `GET
+/{id}/executions`.
 
 Admin (`/admin/plugins/...`, `require_superadmin`): `GET /pending`,
 `POST /{id}/approve`, `POST /{id}/reject`, `POST /{id}/suspend`.
 
+Real, deliberate deviation from the literal spec's flat
+`/plugins/{id}/install` (implying an ambient "current org" this app's
+architecture has no real concept of): every org-scoped action stays
+under `/organizations/{org_id}/plugins/...`, this project's own
+established convention for anything org-scoped, applied consistently
+since Partie 1.
+
 ## Frontend
 
-One consolidated page, `/dashboard/marketplace` (added to the sidebar
-nav under "Widget & integrations"), 3 tabs — Browse / My plugins /
-Installed — same tabbed-single-page discipline as `/dashboard/billing`
-and every other multi-section screen in this project, not a separate
-route per concern.
+14 real, separate components under `frontend/components/plugins/`
+(`PluginMarketplace`/`PluginCard`/`PluginDetail`/
+`PluginInstallButton`/`PluginList`/`PluginFilters`/`PluginSearch`/
+`PluginReviews`/`PluginReviewForm`/`PluginCreateForm`/
+`PluginVersionForm`/`InstalledPlugins`/`PluginConfigForm`/
+`PluginLogs`), composed inside one consolidated page,
+`/dashboard/marketplace` (sidebar nav under "Widget & integrations"),
+3 tabs — Browse / My plugins / Installed — same tabbed-single-page
+discipline as `/dashboard/billing` and every other multi-section
+screen in this project, not a separate route per concern.
 
-## Verified live, end-to-end, in a real browser (2026-09-11)
+## Verified live
 
-Registered a real user, published a real plugin through the actual
-publish form (name/description/version/entry_point/permissions/code) —
-confirmed real `201 Created`, a real S3 object written to a real
-`documents` bucket (created live on this session's own Supabase
-S3-compatible storage, since `S3_DOCUMENTS_BUCKET_NAME` had never been
-configured on this dev machine before — a real, separate gap found and
-fixed along the way), and a real `pending` row shown in "My plugins".
-Promoted the same user to `superadmin` in the real dev DB, approved the
-plugin via `POST /admin/plugins/{id}/approve`, confirmed it appeared in
-the public `GET /marketplace/plugins` listing and in the Browse tab.
-Installed it from the Browse tab (real `201 Created`), confirmed it
-appeared in the Installed tab with working Disable/Uninstall.
+**End-to-end in a real browser (initial pass)**: registered a real
+user, published a real plugin through the actual publish form,
+confirmed a real `201`, a real S3 object written to a real `documents`
+bucket (created live on this session's own Supabase S3-compatible
+storage, since `S3_DOCUMENTS_BUCKET_NAME` had never been configured on
+this dev machine — a real, separate gap found and fixed), a real
+`pending` row. Promoted the user to `superadmin`, approved the plugin,
+confirmed marketplace visibility, installed it, confirmed the
+Installed tab.
+
+**Real sandbox execution, without mocking the sandbox itself**
+(`tests/test_plugin_sandbox.py`, 8 tests, all passing): real
+subprocess success with a real computed result, a real plugin-side
+error recorded as a row (not an API 500), a real timeout (a 5s-sleep
+plugin against a 1s limit), real proof that a secret set in the TEST
+process's own environment is invisible inside the sandboxed
+subprocess, rate limiting, and both `PLUGINS_ENABLED`/
+`PLUGINS_SANDBOX_ENABLED` fail-closed paths.
 
 ## Honest remaining gaps
 
-- No real execution sandbox (see "Honest scope on sandbox" above) —
-  manifest/permission validation and static code scanning are real;
-  actually running a plugin's code is not built.
-- No plugin version history (`republish_plugin` overwrites in place).
-- No org-scoped plugin visibility (every published-and-approved plugin
-  is visible to every organization in the marketplace) — no
-  private/unlisted plugin concept yet.
+- No container-per-plugin sandbox (Docker/gVisor) — real OS-process
+  isolation only. See `docs/plugins/SECURITY.md` for the full analysis.
+- `access:external_api` is declared-only — no real outbound network
+  path is granted to a sandboxed plugin in this pass.
+- 6 of 7 hooks (`on_message_received`/`on_message_sent`/
+  `on_agent_created`/`on_conversation_started`/`on_error`/
+  `on_schedule`) are real and dispatchable but not wired to their own
+  real platform event yet — only `on_document_uploaded` is.
+- Permissions are not checked against the actual payload contents at
+  execution time — enforcement today is entirely upstream, in what
+  `trigger_hook` chooses to include in the payload.
+- No free/paid marketplace filter — no real pricing model for plugins
+  exists in this pass.
+- No org-scoped plugin visibility (every approved plugin is visible to
+  every organization) — no private/unlisted plugin concept yet.

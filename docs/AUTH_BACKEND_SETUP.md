@@ -11882,6 +11882,43 @@ since `S3_DOCUMENTS_BUCKET_NAME` had never been configured on this dev
 machine -- a separate real gap found and fixed) -> pending -> admin
 approve -> marketplace listing -> install -> installed list.
 
+Extended in a later pass: real versioning (`PluginVersion`, an
+append-only history row per publish/republish, each with its own S3
+key -- never overwrites an earlier version's code), a real execution
+log (`PluginExecution`), and a real sandbox
+(`api/security/plugin_sandbox.py`) -- a genuinely separate OS process
+per run (`node`/`python` subprocess), a real wall-clock timeout, a
+real POSIX-only memory cap (`RLIMIT_AS` -- not enforced on Windows,
+documented rather than hidden), and no ambient authority (near-empty
+environment). Verified live WITHOUT mocking the sandbox itself --
+`tests/test_plugin_sandbox.py` spawns real subprocesses and proves:
+success, a plugin-side error recorded (not raised), a real timeout
+(5s sleep against a 1s limit), and that a real secret set in the test
+process's own environment is NOT visible inside the sandboxed
+subprocess. A real hook system (`api/services/plugin_hooks.py`, 7
+hooks) with exactly ONE wired to a real platform event
+(`on_document_uploaded`, from `api/security/documents.py`'s own
+`upload_document`) -- the other 6 are real and dispatchable but not
+yet wired to their own event, stated plainly rather than claimed done.
+Real per-plugin invocation-rate limiting, 4 Celery jobs (periodic
+re-scan of pending/approved plugin code, execution-log cleanup,
+install_count reconciliation), real category/rating/popularity
+filtering and sorting in the marketplace listing. Permission catalog
+corrected to this project's own real `resource:action` naming
+convention (matching `api/security/permission_catalog.py`) instead of
+an earlier underscore-style list. A second real migration bug was
+found and fixed: `add_column` with an enum type does NOT auto-create
+that type the way `create_table` does -- fixed by creating the enum
+explicitly first. Frontend split into the real, separate 14 named
+components (`PluginMarketplace`/`PluginCard`/`PluginDetail`/
+`PluginInstallButton`/`PluginList`/`PluginFilters`/`PluginSearch`/
+`PluginReviews`/`PluginReviewForm`/`PluginCreateForm`/
+`PluginVersionForm`/`InstalledPlugins`/`PluginConfigForm`/
+`PluginLogs`), composed in the same one consolidated
+`/dashboard/marketplace` page. Full write-up of the real, honest
+security scope (what "sandboxed" does and does NOT mean here) in
+`docs/plugins/SECURITY.md`.
+
 ## Partie 15 (bis) -- Advanced integrations: universal inbound (Zapier/Make/n8n), Airbyte
 
 Full write-up: [`docs/integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md`](integrations/PARTIE_15_ADVANCED_INTEGRATIONS.md).

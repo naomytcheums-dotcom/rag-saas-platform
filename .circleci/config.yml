@@ -108,6 +108,11 @@ jobs:
             sudo apt-get install -y tesseract-ocr tesseract-ocr-fra poppler-utils \
               libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libcairo2 libffi-dev shared-mime-info
       - run:
+          name: Install Node.js (Partie 16 ter -- api/security/plugin_sandbox.py runs .js plugins via a real `node` subprocess; tests/test_plugin_sandbox.py needs it installed, not mocked)
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+      - run:
           name: Create the avatars/documents/voice buckets (avatars public-read, the other two stay private)
           command: |
             python - <<'PYEOF'
@@ -149,8 +154,9 @@ jobs:
             tests/test_geo_adaptive_rate_limit_integration.py tests/test_webauthn_integration.py
             tests/test_jwt_key_rotation_integration.py tests/test_enterprise_sso_integration.py
             tests/test_celery_integration.py tests/test_e2e_lifecycle.py
-            tests/test_connections.py tests/test_mappings.py tests/test_transformations.py
+            tests/test_connections.py tests/test_mappings.py tests/test_transformations.py tests/test_inbound_webhooks.py
             tests/test_sales_models.py tests/test_notifications_datadog_grafana.py
+            tests/test_plugins.py tests/test_plugin_marketplace.py tests/test_plugin_reviews.py tests/test_plugin_sandbox.py
             --cov=api --cov-report=term-missing --cov-report=xml
             --cov-fail-under=75
             -v

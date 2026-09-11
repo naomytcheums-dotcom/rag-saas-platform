@@ -1830,6 +1830,16 @@ class Settings(BaseSettings):
     INTEGRATIONS_MAX_CONNECTIONS: int = 10
     INTEGRATION_LOG_RETENTION_DAYS: int = 90
 
+    # -- Partie 16 (ter): plugin marketplace + sandboxed execution ---------------
+    PLUGINS_ENABLED: bool = True
+    PLUGINS_SANDBOX_ENABLED: bool = True
+    PLUGINS_MAX_EXECUTION_TIME: int = 30  # seconds, real subprocess timeout
+    PLUGINS_MAX_MEMORY: int = 256  # MB -- enforced via RLIMIT_AS on POSIX only, see plugin_sandbox.py's own docstring
+    PLUGINS_MAX_API_CALLS: int = 100  # per plugin per minute -- real invocation-rate limit, see plugin_sandbox.py
+    PLUGINS_MARKETPLACE_ENABLED: bool = True
+    PLUGINS_REVIEW_REQUIRED: bool = True
+    PLUGIN_EXECUTION_LOG_RETENTION_DAYS: int = 30
+
     # -- Partie 15.3: Airbyte -- honestly absent in this environment (no real
     # Airbyte instance deployed here); every field defaults to None so
     # api/services/airbyte_client.py can detect "not configured" and return

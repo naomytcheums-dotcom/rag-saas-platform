@@ -121,19 +121,47 @@ export interface ConnectionTestResult {
 }
 
 // Partie 16 (ter) -- plugin marketplace, api/schemas/plugins.py.
+export type PluginCategory = "analytics" | "automation" | "communication" | "data" | "integration" | "productivity" | "security" | "other";
+
 export interface Plugin {
   id: string;
   organization_id: string;
   name: string;
   slug: string;
   description: string;
-  manifest: { name: string; version: string; entry_point: string; description: string; permissions: string[] };
+  category: PluginCategory;
+  manifest: { name: string; version: string; entry_point: string; description: string; permissions: string[]; hooks?: string[] };
   version: string;
   code_size_bytes: number;
   status: "pending" | "approved" | "rejected" | "suspended";
   rejection_reason: string | null;
+  install_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface PluginVersion {
+  id: string;
+  plugin_id: string;
+  version: string;
+  manifest: Plugin["manifest"];
+  code_size_bytes: number;
+  changelog: string | null;
+  created_at: string;
+}
+
+export interface PluginExecution {
+  id: string;
+  plugin_id: string;
+  organization_id: string;
+  installation_id: string | null;
+  hook: string | null;
+  status: "success" | "error" | "timeout";
+  input_payload: Record<string, unknown>;
+  output_payload: Record<string, unknown> | null;
+  error_message: string | null;
+  duration_ms: number | null;
+  created_at: string;
 }
 
 export interface PluginInstallation {

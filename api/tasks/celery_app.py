@@ -35,7 +35,7 @@ celery_app = Celery(
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
-        "api.tasks.integrations",
+        "api.tasks.integrations", "api.tasks.plugins",
     ],
 )
 
@@ -230,6 +230,23 @@ celery_app.conf.beat_schedule = {
     "sync-airbyte-integrations": {
         "task": "api.tasks.integrations.sync_integrations",
         "schedule": crontab(minute=0, hour="*/6"),
+    },
+    # Partie 16 (ter) -- plugin marketplace periodic jobs.
+    "validate-pending-plugins-hourly": {
+        "task": "api.tasks.plugins.validate_pending_plugins",
+        "schedule": crontab(minute=15),
+    },
+    "scan-plugin-security-daily": {
+        "task": "api.tasks.plugins.scan_plugin_security",
+        "schedule": crontab(hour=9, minute=0),
+    },
+    "cleanup-plugin-executions-daily": {
+        "task": "api.tasks.plugins.cleanup_plugin_executions",
+        "schedule": crontab(hour=9, minute=15),
+    },
+    "update-plugin-stats-hourly": {
+        "task": "api.tasks.plugins.update_plugin_stats",
+        "schedule": crontab(minute=45),
     },
 }
 

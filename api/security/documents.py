@@ -608,6 +608,20 @@ async def upload_document(
     else:
         schedule_document_processing(document.id)
     await log_document_action(db, document.id, created_by, ACTION_CREATED)
+
+    # Partie 16 (ter) -- the one real, wired on_document_uploaded hook
+    # call site (api/services/plugin_hooks.py's own trigger_hook docstring
+    # explains why only this ONE of the 7 real hooks is actually fired
+    # from a platform event in this pass). Best-effort: a misbehaving
+    # plugin must never fail a real document upload, same reasoning as
+    # schedule_document_processing's own fire-and-forget dispatch above.
+    try:
+        from api.services.plugin_hooks import PluginHook, trigger_hook
+
+        await trigger_hook(db, organization_id, PluginHook.on_document_uploaded, {"document_id": str(document.id), "filename": filename})
+    except Exception as exc:  # noqa: BLE001 -- a plugin hook failure must never fail the real document upload that triggered it
+        logger.warning("upload_document: on_document_uploaded hook dispatch failed: %s", exc)
+
     return document, False
 
 
