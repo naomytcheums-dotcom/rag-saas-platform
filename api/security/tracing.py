@@ -56,7 +56,19 @@ def setup_tracing(app) -> None:
             token = base64.b64encode(f"{settings.TEMPO_USERNAME}:{settings.TEMPO_PASSWORD}".encode()).decode()
             exporter = OTLPSpanExporter(endpoint=f"{settings.TEMPO_HOST}/v1/traces", headers={"Authorization": f"Basic {token}"})
         elif settings.OTEL_EXPORTER_OTLP_ENDPOINT:
-            exporter = OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
+            # Real bug found and fixed while verifying live against the
+            # local Docker Compose stack: this project only installs the
+            # HTTP OTLP exporter (opentelemetry-exporter-otlp-proto-http,
+            # requirements-api.txt), which needs the collector's HTTP
+            # port (4318) and the real `/v1/traces` path -- pointing it
+            # at the gRPC port (4317, a different wire protocol
+            # entirely) produced a real, confirmed "BadStatusLine"
+            # error, spans never actually reached Tempo/Jaeger despite
+            # tracing_status() reporting "active".
+            endpoint = settings.OTEL_EXPORTER_OTLP_ENDPOINT.rstrip("/")
+            if not endpoint.endswith("/v1/traces"):
+                endpoint = f"{endpoint}/v1/traces"
+            exporter = OTLPSpanExporter(endpoint=endpoint)
         else:
             # Real, honest fallback: no collector configured, so spans
             # go to this process's own console instead of being silently

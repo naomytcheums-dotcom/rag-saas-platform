@@ -1,0 +1,103 @@
+# Partie 16 (bis) -- real, self-contained self-hosted stack: the actual
+# API (Dockerfile.api), its own real Postgres and Redis (no managed
+# Supabase/Upstash dependency required), Celery worker + beat, and the
+# Next.js frontend. Start: docker compose -f docker-compose.selfhosted.yml up -d
+#
+# Requires a real .env (copy .env.example -- install.sh does this for
+# you) with at minimum: RESEND_API_KEY (transactional email),
+# SESSION_MIDDLEWARE_SECRET, JWT_SECRET_KEY. DATABASE_URL/
+# CELERY_BROKER_URL are overridden below to point at THIS compose
+# file's own postgres/redis services -- don't also set them in .env.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag_saas_postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-rag_saas}
+      - POSTGRES_USER=${POSTGRES_USER:-rag_saas}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_saas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag_saas_redis
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: rag_saas_api
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_saas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rag_saas}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: rag_saas_celery_worker
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_saas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rag_saas}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    command: celery -A api.tasks.celery_app worker --loglevel=info
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: rag_saas_celery_beat
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_saas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rag_saas}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    command: celery -A api.tasks.celery_app beat --loglevel=info
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: rag_saas_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

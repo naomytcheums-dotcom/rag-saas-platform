@@ -9,7 +9,7 @@ for why that would duplicate real, already-working machinery.
 import datetime as dt
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.admin import Plan, Subscription
@@ -92,6 +92,44 @@ async def delete_usage_alert(db: AsyncSession, organization_id: uuid.UUID, alert
         raise ValueError("alert not found")
     await db.delete(alert)
     await db.flush()
+
+
+async def check_plan_resource_limit(db: AsyncSession, organization_id: uuid.UUID, resource_type: str) -> tuple[bool, int | None, int | None]:
+    """Partie 16 (bis) -- real SaaS plan enforcement: a direct COUNT of
+    the real resource row (documents/agents/members) against the real
+    Plan.max_* column, not the usage ledger above (which nothing
+    populates for these specific metrics today -- counting the real
+    rows directly is more honest than gating on a number nobody writes
+    yet). Returns (within_limit, current_count, limit) -- limit is None
+    for an unlimited plan (Enterprise), current_count is None if
+    resource_type isn't a real, gated resource."""
+    from api.models.agent import Agent
+    from api.models.document import Document
+    from api.models.organization import OrganizationMember
+
+    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
+    if sub is None:
+        return True, None, None
+    plan = await db.get(Plan, sub.plan_id)
+    if plan is None:
+        return True, None, None
+
+    if resource_type == "documents":
+        limit = plan.max_documents
+        count = await db.scalar(select(func.count()).select_from(Document).where(Document.organization_id == organization_id))
+    elif resource_type == "agents":
+        limit = plan.max_agents
+        count = await db.scalar(select(func.count()).select_from(Agent).where(Agent.organization_id == organization_id))
+    elif resource_type == "members":
+        limit = plan.max_members
+        count = await db.scalar(select(func.count()).select_from(OrganizationMember).where(OrganizationMember.organization_id == organization_id))
+    else:
+        return True, None, None
+
+    count = count or 0
+    if limit is None:
+        return True, count, None
+    return count < limit, count, limit
 
 
 async def check_usage_alerts(db: AsyncSession, organization_id: uuid.UUID) -> list[dict]:

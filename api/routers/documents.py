@@ -224,6 +224,12 @@ async def create_document(
     _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    from api.services.billing_usage import check_plan_resource_limit
+
+    within_limit, count, limit = await check_plan_resource_limit(db, org_id, "documents")
+    if not within_limit:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"This organization's plan allows {limit} documents (currently {count}). Upgrade the plan to upload more.")
+
     content = await file.read()
     try:
         document, is_duplicate = await upload_document(db, org_id, workspace_id, current_user.id, file.filename or "document.pdf", content)

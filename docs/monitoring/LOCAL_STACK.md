@@ -23,7 +23,7 @@ In `.env`:
 
 ```
 OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   # HTTP port -- see the compose file's own comment on why 4317 (gRPC) fails
 LOKI_HOST=http://localhost:3100
 # LOKI_USERNAME / LOKI_PASSWORD stay empty for the local stack --
 # loki-config.yml has auth_enabled: false, same as this stack's other

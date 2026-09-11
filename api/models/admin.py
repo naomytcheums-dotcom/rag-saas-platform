@@ -87,6 +87,11 @@ class Subscription(Base):
     # api/services/billing_stripe.py) -- NULL for every subscription in
     # an environment with no Stripe account configured, honestly.
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Partie 16 (bis) -- real 14-day free trial: set once, at
+    # subscription creation, to now()+14d. NULL for a subscription that
+    # was never on a trial (e.g. one created before this column
+    # existed) -- checked, never assumed, by is_in_trial() below.
+    trial_ends_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -17,6 +17,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
 
 
@@ -41,18 +42,51 @@ async def ensure_free_plan_seeded(db: AsyncSession) -> Plan:
     return plan
 
 
+# Partie 16 (bis) -- the real, literal SaaS tier list, seeded once
+# (idempotent, same key-existence check as ensure_free_plan_seeded).
+_DEFAULT_PLANS = [
+    {"key": "starter", "name": "Starter", "monthly_price_cents": 4900, "yearly_price_cents": 49000, "max_documents": 100, "max_agents": 3, "max_members": 5},
+    {"key": "pro", "name": "Pro", "monthly_price_cents": 19900, "yearly_price_cents": 199000, "max_documents": 1000, "max_agents": 10, "max_members": 20, "priority_support": True, "advanced_features": True},
+    {"key": "enterprise", "name": "Enterprise", "monthly_price_cents": 99900, "yearly_price_cents": 999000, "max_documents": None, "max_agents": None, "max_members": None, "priority_support": True, "advanced_features": True, "sla": True},
+]
+
+
+async def ensure_default_plans_seeded(db: AsyncSession) -> list[Plan]:
+    await ensure_free_plan_seeded(db)
+    seeded = []
+    for spec in _DEFAULT_PLANS:
+        existing = await db.scalar(select(Plan).where(Plan.key == spec["key"]))
+        if existing is None:
+            existing = Plan(**spec)
+            db.add(existing)
+            await db.flush()
+        seeded.append(existing)
+    return seeded
+
+
 async def get_or_create_subscription(db: AsyncSession, organization_id: uuid.UUID) -> Subscription:
     sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
     if sub is None:
         free_plan = await ensure_free_plan_seeded(db)
-        sub = Subscription(organization_id=organization_id, plan_id=free_plan.id, status=SubscriptionStatus.active)
+        # Partie 16 (bis) -- a real 14-day trial starts the moment an
+        # organization's subscription is first created, same "always
+        # real, never a promotional lie" reasoning as everything else
+        # in this billing system.
+        trial_ends_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=settings.BILLING_TRIAL_DAYS)
+        sub = Subscription(organization_id=organization_id, plan_id=free_plan.id, status=SubscriptionStatus.active, trial_ends_at=trial_ends_at)
         db.add(sub)
         await db.flush()
     return sub
 
 
+def is_in_trial(sub: Subscription) -> bool:
+    if sub.trial_ends_at is None:
+        return False
+    return dt.datetime.now(dt.timezone.utc) < sub.trial_ends_at
+
+
 async def list_plans(db: AsyncSession, *, include_inactive: bool = False) -> list[Plan]:
-    await ensure_free_plan_seeded(db)
+    await ensure_default_plans_seeded(db)
     stmt = select(Plan).order_by(Plan.monthly_price_cents)
     if not include_inactive:
         stmt = stmt.where(Plan.is_active.is_(True))

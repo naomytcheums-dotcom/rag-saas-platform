@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Local observability stack -- Loki (logs), Prometheus (metrics), Tempo
 # (traces), Grafana (dashboards), Jaeger (trace UI), OpenTelemetry
 # Collector (receives OTLP from api/, fans out to Tempo/Prometheus).
@@ -12,7 +10,11 @@ version: "3.8"
 # docker-compose.yml / local uvicorn workflow) -- this stack only adds
 # observability backends. Point the API at it via .env:
 #   OTEL_ENABLED=true
-#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   (HTTP port -- this
+#     project's OTel exporter is HTTP-only, opentelemetry-exporter-otlp-
+#     proto-http; the collector's 4317 below is gRPC, a different wire
+#     protocol that exporter can't speak -- real bug found and fixed
+#     while verifying this live against this exact stack)
 #   LOG_FORMAT=json   (optional -- JSON console output Promtail-style
 #                       shippers can also scrape, independent of Loki)
 
@@ -57,7 +59,7 @@ services:
     restart: unless-stopped
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:1.76.0
     container_name: rag_saas_jaeger
     ports:
       - "16686:16686"  # Jaeger UI
@@ -70,8 +72,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.112.0
     container_name: rag_saas_otel_collector
     ports:
-      - "4317:4317"   # OTLP gRPC -- point OTEL_EXPORTER_OTLP_ENDPOINT here
-      - "4318:4318"   # OTLP HTTP
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP -- point OTEL_EXPORTER_OTLP_ENDPOINT here (this project's exporter is HTTP-only)
     volumes:
       - ./observability/otel/otel-config.yml:/etc/otel-collector-config.yml:ro
     command: ["--config=/etc/otel-collector-config.yml"]
