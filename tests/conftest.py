@@ -70,6 +70,37 @@ async def _fake_not_breached(password: str) -> bool:
 
 
 @pytest.fixture(autouse=True)
+def _blank_twilio_credentials_by_default(monkeypatch):
+    """
+    A real, confirmed incident (2026-09-11) is why this exists:
+    api/services/twilio_sms.py's _client() reads settings.TWILIO_*
+    directly, and this deployment's real .env carries the user's own
+    real, live Twilio Account SID + API Key (added earlier in this
+    project for real production use) -- with no test-time override,
+    tests/test_notifications_datadog_grafana.py's own
+    test_send_sms_honestly_501s_without_full_twilio_config (which
+    expects a 501, i.e. assumes Twilio is unconfigured) instead hit the
+    REAL Twilio API with the REAL live credentials, attempting to send
+    an SMS to a fake +15551234567 number -- confirmed via Twilio's own
+    message history: a real, non-zero charge (-$0.001) for a message
+    that failed Twilio's own validation (error 21211, invalid 'To').
+
+    Same pattern as rate limiting/HIBP above: blank by default so the
+    whole test suite can never touch the real Twilio API without an
+    explicit, deliberate opt-in. The one test that legitimately
+    exercises a real send (test_send_sms_succeeds_with_mocked_twilio_client)
+    already monkeypatches twilio_sms._client itself to a fake, so it is
+    unaffected by this also blanking the raw settings values.
+    """
+    monkeypatch.setattr(settings, "TWILIO_ACCOUNT_SID", None)
+    monkeypatch.setattr(settings, "TWILIO_AUTH_TOKEN", None)
+    monkeypatch.setattr(settings, "TWILIO_API_KEY_SID", None)
+    monkeypatch.setattr(settings, "TWILIO_API_KEY_SECRET", None)
+    monkeypatch.setattr(settings, "TWILIO_FROM_NUMBER", None)
+    monkeypatch.setattr(settings, "TWILIO_WHATSAPP_FROM_NUMBER", None)
+
+
+@pytest.fixture(autouse=True)
 def _stub_out_domain_verification_scheduling_by_default(monkeypatch):
     """
     Partie 1.4.4's api/security/custom_domains.py's add_custom_domain

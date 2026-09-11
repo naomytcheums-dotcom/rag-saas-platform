@@ -24,8 +24,8 @@ from api.models.integrations import AirbyteConnection
 from api.models.organization import OrganizationMember
 from api.schemas.integrations_universal import (
     AirbyteConnectionResponse, AirbyteCreateConnectionRequest, AirbyteCreateSourceRequest, AirbyteSourceDefinitionResponse,
-    ConnectionCreateRequest, ConnectionCreateResponse, ConnectionResponse, ConnectionUpdateRequest,
-    LogResponse, MappingCreateRequest, MappingResponse,
+    ConnectionCreateRequest, ConnectionCreateResponse, ConnectionResponse, ConnectionTestResponse, ConnectionUpdateRequest,
+    LogResponse, MappingCreateRequest, MappingResponse, MappingUpdateRequest, ProviderResponse,
 )
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import airbyte_client, integrations
@@ -70,9 +70,22 @@ async def airbyte_status_endpoint():
         return {"configured": True, "reachable": False, "url": settings.AIRBYTE_API_URL}
 
 
+@router.get("/integrations/providers", response_model=list[ProviderResponse])
+async def list_providers_endpoint():
+    return integrations.list_integration_providers()
+
+
 @org_router.get("/connections", response_model=list[ConnectionResponse])
 async def list_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await integrations.list_connections(db, org_id)
+
+
+@org_router.get("/connections/{connection_id}", response_model=ConnectionResponse)
+async def get_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    try:
+        return await integrations.get_connection(db, org_id, connection_id)
+    except integrations.ConnectionNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
 
 @org_router.post("/connections", response_model=ConnectionCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -110,6 +123,42 @@ async def get_connection_logs_endpoint(org_id: uuid.UUID, connection_id: uuid.UU
     return await integrations.get_logs(db, connection_id)
 
 
+@org_router.post("/connections/{connection_id}/test", response_model=ConnectionTestResponse)
+async def test_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    try:
+        connection = await integrations.get_connection(db, org_id, connection_id)
+    except integrations.ConnectionNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    return await integrations.test_connection(db, connection)
+
+
+@org_router.post("/connections/{connection_id}/sync", response_model=list[LogResponse])
+async def sync_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Real, honest scope: this connection type is push-only (nothing
+    external to pull from) -- 'sync' here means re-running the
+    connection's current action against every previously FAILED
+    payload (api/services/integrations.py's own docstring on why)."""
+    try:
+        connection = await integrations.get_connection(db, org_id, connection_id)
+    except integrations.ConnectionNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    results = await integrations.retry_failed_logs(db, connection)
+    await db.commit()
+    return results
+
+
+@org_router.get("/connections/{connection_id}/syncs", response_model=list[LogResponse])
+async def get_connection_syncs_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    """Real alias over this connection's own log ledger -- there is no
+    separate 'sync run' concept for a push-only connection, see
+    sync_connection_endpoint's own docstring."""
+    try:
+        await integrations.get_connection(db, org_id, connection_id)
+    except integrations.ConnectionNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    return await integrations.get_logs(db, connection_id)
+
+
 @org_router.get("/connections/{connection_id}/mappings", response_model=list[MappingResponse])
 async def list_mappings_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     try:
@@ -126,6 +175,16 @@ async def create_mapping_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, b
     except integrations.ConnectionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
     mapping = await integrations.create_mapping(db, connection_id, source_field=body.source_field, target_field=body.target_field, transform=body.transform)
+    await db.commit()
+    return mapping
+
+
+@org_router.patch("/mappings/{mapping_id}", response_model=MappingResponse)
+async def update_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, body: MappingUpdateRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    try:
+        mapping = await integrations.update_mapping(db, mapping_id, **body.model_dump())
+    except integrations.MappingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapping not found")
     await db.commit()
     return mapping
 

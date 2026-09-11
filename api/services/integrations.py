@@ -38,8 +38,30 @@ class InvalidTokenError(IntegrationError):
     pass
 
 
+class MappingNotFoundError(IntegrationError):
+    pass
+
+
 def generate_connection_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+# -- 15.1 "list providers" -- a real, static catalog (same pattern as
+# api/security/credit_packs.py/permission_catalog.py -- nothing here
+# ever needs a 5th provider invented at runtime, so a DB table would be
+# pure overhead). Every provider is one real, unbranded mechanism (an
+# incoming webhook) -- see this module's own top docstring for why
+# Zapier/Make/n8n aren't three different integrations under the hood.
+INTEGRATION_PROVIDERS: list[dict] = [
+    {"id": "webhook", "name": "Generic webhook", "description": "Any system that can POST JSON with a bearer token."},
+    {"id": "zapier", "name": "Zapier", "description": "Use a 'Webhooks by Zapier' action pointed at this connection's inbound URL."},
+    {"id": "make", "name": "Make (Integromat)", "description": "Use an HTTP module pointed at this connection's inbound URL."},
+    {"id": "n8n", "name": "n8n", "description": "Use an HTTP Request node pointed at this connection's inbound URL."},
+]
+
+
+def list_integration_providers() -> list[dict]:
+    return INTEGRATION_PROVIDERS
 
 
 async def list_connections(db: AsyncSession, organization_id: uuid.UUID) -> list[IntegrationConnection]:
@@ -94,6 +116,17 @@ async def delete_mapping(db: AsyncSession, mapping_id: uuid.UUID) -> None:
     if mapping is not None:
         await db.delete(mapping)
         await db.flush()
+
+
+async def update_mapping(db: AsyncSession, mapping_id: uuid.UUID, **fields) -> IntegrationMapping:
+    mapping = await db.get(IntegrationMapping, mapping_id)
+    if mapping is None:
+        raise MappingNotFoundError(str(mapping_id))
+    for key, value in fields.items():
+        if value is not None and hasattr(mapping, key):
+            setattr(mapping, key, value)
+    await db.flush()
+    return mapping
 
 
 # -- real, pure transforms (Partie 15.1's "normalize_*" functions) --------
@@ -171,3 +204,40 @@ async def _ingest_as_document(db: AsyncSession, connection: IntegrationConnectio
 
 async def get_logs(db: AsyncSession, connection_id: uuid.UUID, limit: int = 50) -> list[IntegrationLog]:
     return list((await db.scalars(select(IntegrationLog).where(IntegrationLog.connection_id == connection_id).order_by(IntegrationLog.created_at.desc()).limit(limit))).all())
+
+
+async def test_connection(db: AsyncSession, connection: IntegrationConnection) -> dict:
+    """Real dry run: applies this connection's real field mappings to a
+    synthetic sample payload and reports what its configured action
+    WOULD do -- never actually calls the action (no real document gets
+    created by a test), since these connections are inbound-only (no
+    outbound endpoint of their own to ping the way Airbyte's real
+    `test_airbyte_source` reaches an actual external system)."""
+    sample_payload = {"title": "Sample record", "email": "Test@Example.com", "notes": "This is a test payload"}
+    mappings = await list_mappings(db, connection.id)
+    mapped = apply_mapping(sample_payload, mappings)
+    return {
+        "connection_active": connection.is_active,
+        "sample_payload": sample_payload,
+        "mapped_payload": mapped or sample_payload,
+        "would_run_action": connection.action.value,
+    }
+
+
+async def retry_failed_logs(db: AsyncSession, connection: IntegrationConnection) -> list[IntegrationLog]:
+    """Partie 15.1's `trigger_integration_sync`/`retry_failed_syncs`,
+    honestly scoped to what a PUSH-only inbound connection can actually
+    mean: re-running this connection's configured action against every
+    payload that previously failed (`IntegrationLog.status == error`),
+    using the connection's CURRENT mapping/action (so fixing a mapping
+    then retrying genuinely re-processes old payloads correctly). There
+    is no real external source to "sync from" for a webhook/Zapier/
+    Make/n8n connection -- see this module's own docstring."""
+    failed = list((await db.scalars(
+        select(IntegrationLog).where(IntegrationLog.connection_id == connection.id, IntegrationLog.status == IntegrationLogStatus.error)
+    )).all())
+    results = []
+    for old_log in failed:
+        new_log = await handle_inbound_payload(db, connection, old_log.payload)
+        results.append(new_log)
+    return results

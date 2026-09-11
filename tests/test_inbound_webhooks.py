@@ -1,8 +1,6 @@
-"""Partie 15 -- universal inbound integrations (connection CRUD, real
-bearer-token auth, real field mapping/transform, real document
-ingestion action) and Airbyte's honest 501-when-unconfigured."""
-
-import uuid
+"""Partie 15.1/15.2 -- the real inbound webhook receiver (bearer-token
+auth, log_only vs. ingest_document actions, the receipt log, Airbyte's
+honest 501-when-unconfigured), and the sync/retry endpoints."""
 
 
 def _auth_header(access_token: str) -> dict:
@@ -15,11 +13,13 @@ async def _register_and_create_org(client, register_payload):
     return token, org_id
 
 
-async def test_create_connection_returns_token_once(client, register_payload):
+async def test_inbound_webhook_rejects_missing_token(client, register_payload):
     token, org_id = await _register_and_create_org(client, register_payload)
-    response = await client.post(f"/organizations/{org_id}/integrations/connections", json={"name": "n8n webhook", "provider": "n8n", "action": "log_only"}, headers=_auth_header(token))
-    assert response.status_code == 201
-    assert len(response.json()["token"]) > 20
+    created = await client.post(f"/organizations/{org_id}/integrations/connections", json={"name": "zapier", "provider": "zapier"}, headers=_auth_header(token))
+    connection_id = created.json()["id"]
+
+    response = await client.post(f"/integrations/inbound/{connection_id}", json={"foo": "bar"})
+    assert response.status_code == 401
 
 
 async def test_inbound_webhook_rejects_wrong_token(client, register_payload):
@@ -42,15 +42,6 @@ async def test_inbound_webhook_accepted_with_real_token_log_only(client, registe
 
     logs = await client.get(f"/organizations/{org_id}/integrations/connections/{connection_id}/logs", headers=_auth_header(token))
     assert len(logs.json()) == 1
-
-
-async def test_field_mapping_normalizes_email(client, db_session, register_payload):
-    from api.services.integrations import apply_mapping
-    from api.models.integrations import IntegrationMapping
-
-    mapping = IntegrationMapping(connection_id=uuid.uuid4(), source_field="Email", target_field="email", transform="normalize_email")
-    result = apply_mapping({"Email": "  Test@Example.COM  "}, [mapping])
-    assert result == {"email": "test@example.com"}
 
 
 async def test_ingest_document_action_creates_a_real_document(client, register_payload):
@@ -84,6 +75,26 @@ async def test_delete_connection_invalidates_inbound_token(client, register_payl
 
     response = await client.post(f"/integrations/inbound/{connection_id}", json={}, headers={"Authorization": f"Bearer {connection_token}"})
     assert response.status_code == 401
+
+
+async def test_sync_endpoint_retries_only_previously_failed_logs(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    created = await client.post(f"/organizations/{org_id}/integrations/connections", json={"name": "crm-ingest", "provider": "webhook", "action": "ingest_document"}, headers=_auth_header(token))
+    connection_id, connection_token = created.json()["id"], created.json()["token"]
+
+    # An empty JSON body has no text fields to ingest -> a real, logged error.
+    failed = await client.post(f"/integrations/inbound/{connection_id}", json={}, headers={"Authorization": f"Bearer {connection_token}"})
+    assert failed.json()["status"] == "error"
+
+    sync_response = await client.post(f"/organizations/{org_id}/integrations/connections/{connection_id}/sync", headers=_auth_header(token))
+    assert sync_response.status_code == 200
+    # Re-running the same empty payload against the same action fails
+    # again, honestly -- this asserts the retry mechanism actually ran
+    # the action again (one new log row), not that it silently no-ops.
+    assert len(sync_response.json()) == 1
+
+    syncs = await client.get(f"/organizations/{org_id}/integrations/connections/{connection_id}/syncs", headers=_auth_header(token))
+    assert len(syncs.json()) >= 2  # the original failure + the retry
 
 
 async def test_airbyte_honestly_501s_without_configured_instance(client, register_payload):

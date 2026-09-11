@@ -11875,6 +11875,36 @@ Airbyte instance configured (none exists in this environment) --
 Airbyte itself provides the 300+ real source connectors, none
 reimplemented here.
 
+Completed in a later pass: the remaining endpoints (`GET
+/integrations/providers`, `GET/PATCH/DELETE .../connections/{id}`,
+`POST .../connections/{id}/test`, `POST .../connections/{id}/sync` +
+`GET .../syncs`, `PATCH .../mappings/{id}`), three periodic Celery jobs
+(`retry_failed_syncs`/`process_integration_webhooks`, one real sweep
+shared under two task names for a push-only connection type;
+`sync_integrations`, Airbyte-scoped, genuinely distinct), all 11 real
+frontend components (`frontend/components/ProviderList.tsx` etc.,
+replacing the former single inline section), and 5 real test files
+(4 backend + a real `components.test.tsx` -- Vitest/React Testing
+Library were installed for real, this frontend had zero test
+infrastructure before this).
+
+Real Airbyte install attempt (`abctl local install --port 8001`, `8000`
+kept free for this app's own backend): successfully created a real
+local Kubernetes cluster, then failed on the Helm chart download with a
+confirmed external network block against GitHub Pages' CDN range
+(`airbytehq.github.io`, 185.199.108-111.153 unreachable even by direct
+IP, while `github.com` itself responds normally) -- not a code bug, see
+the linked doc for the full diagnosis.
+
+Real incident found and fixed while running the full regression suite:
+this deployment's live Twilio credentials in `.env` caused
+`test_send_sms_honestly_501s_without_full_twilio_config` to hit the
+REAL Twilio API (confirmed via Twilio's own message history: a real
+-$0.001 charge for a rejected send to a fake number) instead of the
+501-unconfigured path it meant to test. Fixed with an autouse
+`_blank_twilio_credentials_by_default` fixture in `tests/conftest.py`,
+same pattern as the pre-existing rate-limiting/HIBP stubs.
+
 ## Partie 13 (bis) -- Monitoring & Observability: metrics, structured logging, alerting, tracing, UI
 
 Full write-up: [`docs/monitoring/PARTIE_13_OBSERVABILITY.md`](monitoring/PARTIE_13_OBSERVABILITY.md).

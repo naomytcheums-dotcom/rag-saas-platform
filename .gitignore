@@ -16,3 +16,8 @@ htmlcov/
 # data, if ever added instead of the named Docker volumes this file uses today.
 observability/data/
 observability/*/data/
+
+# Local-only CLI tools downloaded during setup (e.g. abctl for Airbyte) --
+# real binaries, never source, never committed.
+.tools/
+snyk.exe

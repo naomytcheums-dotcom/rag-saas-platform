@@ -85,3 +85,37 @@ export interface SearchResult {
   matched_message: ConversationMessage | null;
   highlighted_snippet: string | null;
 }
+
+// Partie 15.1/15.2 -- universal inbound integrations (Zapier/Make/n8n/
+// any webhook-capable CRM), api/schemas/integrations_universal.py.
+export interface UniversalConnection {
+  id: string;
+  name: string;
+  provider: string;
+  action: string;
+  is_active: boolean;
+  created_at: string;
+  token?: string; // only present in the create-response, shown once
+}
+
+export interface IntegrationMapping {
+  id: string;
+  source_field: string;
+  target_field: string;
+  transform: string | null;
+}
+
+export interface IntegrationLog {
+  id: string;
+  status: "accepted" | "rejected" | "error";
+  payload: Record<string, unknown>;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface ConnectionTestResult {
+  connection_active: boolean;
+  sample_payload: Record<string, unknown>;
+  mapped_payload: Record<string, unknown>;
+  would_run_action: string;
+}

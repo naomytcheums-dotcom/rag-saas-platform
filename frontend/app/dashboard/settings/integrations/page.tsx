@@ -3,19 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import ConnectionList from "@/components/ConnectionList";
 
 interface IntegrationConfig {
   connected: boolean;
   [key: string]: unknown;
-}
-
-interface UniversalConnection {
-  id: string;
-  name: string;
-  provider: string;
-  action: string;
-  is_active: boolean;
-  token?: string;
 }
 
 function useIntegration(orgId: string | undefined, key: "slack" | "teams" | "discord") {
@@ -148,91 +140,7 @@ export default function IntegrationsPage() {
           )}
         </div>
 
-        <UniversalIntegrationsSection orgId={org?.id} onError={setError} />
-      </div>
-    </div>
-  );
-}
-
-function UniversalIntegrationsSection({ orgId, onError }: { orgId: string | undefined; onError: (e: string) => void }) {
-  const [connections, setConnections] = useState<UniversalConnection[]>([]);
-  const [newName, setNewName] = useState("");
-  const [newProvider, setNewProvider] = useState("webhook");
-  const [newAction, setNewAction] = useState("log_only");
-  const [justCreatedToken, setJustCreatedToken] = useState<{ id: string; token: string } | null>(null);
-
-  const load = useCallback(async () => {
-    if (!orgId) return;
-    try {
-      setConnections(await api.get<UniversalConnection[]>(`/organizations/${orgId}/integrations/connections`));
-    } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to load integration connections");
-    }
-  }, [orgId, onError]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function createConnection() {
-    if (!orgId || !newName.trim()) return;
-    try {
-      const created = await api.post<UniversalConnection>(`/organizations/${orgId}/integrations/connections`, { name: newName, provider: newProvider, action: newAction });
-      setJustCreatedToken({ id: created.id, token: created.token! });
-      setNewName("");
-      await load();
-    } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to create connection");
-    }
-  }
-
-  async function deleteConnection(id: string) {
-    if (!orgId) return;
-    await api.delete(`/organizations/${orgId}/integrations/connections/${id}`);
-    if (justCreatedToken?.id === id) setJustCreatedToken(null);
-    await load();
-  }
-
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold text-foreground">Zapier / Make / n8n / custom webhooks</h2>
-      <p className="mt-1 text-xs text-foreground-muted">
-        Create a connection below, then point your Zapier action, Make scenario, n8n workflow, or any CRM's outgoing
-        webhook at the URL shown — with the token as a Bearer header.
-      </p>
-
-      {justCreatedToken && (
-        <div className="mt-3 rounded-lg border border-accent bg-accent-soft/40 p-3 text-xs">
-          <p className="font-medium text-foreground">Save this token now — it won't be shown again.</p>
-          <p className="mt-1 break-all font-mono text-foreground-muted">{base}/integrations/inbound/{justCreatedToken.id}</p>
-          <p className="mt-1 break-all font-mono text-foreground-muted">Authorization: Bearer {justCreatedToken.token}</p>
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2">
-        {connections.map((c) => (
-          <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-3 text-sm">
-            <span>{c.name} — {c.provider} → {c.action}</span>
-            <button type="button" onClick={() => void deleteConnection(c.id)} className="text-xs font-medium text-danger hover:underline">Delete</button>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Connection name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
-        <select value={newProvider} onChange={(e) => setNewProvider(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
-          <option value="webhook">Generic webhook</option>
-          <option value="zapier">Zapier</option>
-          <option value="make">Make</option>
-          <option value="n8n">n8n</option>
-        </select>
-        <select value={newAction} onChange={(e) => setNewAction(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
-          <option value="log_only">Log only</option>
-          <option value="ingest_document">Ingest as a document</option>
-        </select>
-        <button type="button" onClick={() => void createConnection()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Create</button>
+        {org?.id && <ConnectionList orgId={org.id} onError={setError} />}
       </div>
     </div>
   );

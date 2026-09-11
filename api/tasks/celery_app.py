@@ -213,6 +213,24 @@ celery_app.conf.beat_schedule = {
         "task": "api.tasks.integrations.cleanup_integration_logs",
         "schedule": crontab(hour=8, minute=30),
     },
+    # Partie 15.1/15.2 -- hourly, not daily: a failed inbound payload
+    # (e.g. an external system's malformed field, fixed by an admin
+    # updating the connection's mapping) should heal within the hour,
+    # not wait for the next day's low-traffic window.
+    "retry-failed-integration-syncs-hourly": {
+        "task": "api.tasks.integrations.retry_failed_syncs",
+        "schedule": crontab(minute=5),
+    },
+    "process-integration-webhooks-hourly": {
+        "task": "api.tasks.integrations.process_integration_webhooks",
+        "schedule": crontab(minute=35),
+    },
+    # Partie 15.3 -- every 6h: Airbyte connections created without their
+    # own schedule configured directly in Airbyte still get synced.
+    "sync-airbyte-integrations": {
+        "task": "api.tasks.integrations.sync_integrations",
+        "schedule": crontab(minute=0, hour="*/6"),
+    },
 }
 
 

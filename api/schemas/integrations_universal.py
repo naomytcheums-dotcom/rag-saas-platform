@@ -8,6 +8,12 @@ from pydantic import BaseModel
 from api.models.integrations import IntegrationAction, IntegrationLogStatus, IntegrationProvider
 
 
+class ProviderResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+
+
 class ConnectionResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -35,6 +41,13 @@ class ConnectionUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
+class ConnectionTestResponse(BaseModel):
+    connection_active: bool
+    sample_payload: dict
+    mapped_payload: dict
+    would_run_action: str
+
+
 class MappingResponse(BaseModel):
     id: uuid.UUID
     source_field: str
@@ -47,6 +60,12 @@ class MappingResponse(BaseModel):
 class MappingCreateRequest(BaseModel):
     source_field: str
     target_field: str
+    transform: str | None = None
+
+
+class MappingUpdateRequest(BaseModel):
+    source_field: str | None = None
+    target_field: str | None = None
     transform: str | None = None
 
 
