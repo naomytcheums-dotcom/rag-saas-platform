@@ -1,0 +1,36 @@
+# Partie 16 (ter) -- the real, isolated image plugin code actually
+# runs inside when Docker is available (api/security/plugin_sandbox.py's
+# own run_plugin_sandboxed_docker). Both a Python and a Node.js runtime,
+# since a plugin's entry_point is always .py or .js (see
+# api/security/plugin_manifest.py's own validate_manifest) -- one
+# shared minimal image rather than two, since neither runtime is large
+# and a single image means one `docker build` to keep current.
+#
+# Deliberately NOT multi-stage / does not need to be minimal-attack-
+# surface in the way Dockerfile.api is -- this image never talks to
+# the network (run_plugin_sandboxed_docker always passes
+# `--network none`) and never persists anything (`--read-only` +
+# `--rm`), so what's installed inside it matters far less than what
+# capabilities the CONTAINER is started with, which live in Python
+# code, not here.
+
+FROM python:3.13-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# A real, non-root user -- belt and suspenders alongside the real
+# `--cap-drop ALL`/`--security-opt no-new-privileges` flags
+# run_plugin_sandboxed_docker always passes; neither replaces the
+# other.
+RUN useradd --create-home --uid 10001 plugin
+USER plugin
+WORKDIR /plugin
+
+# No ENTRYPOINT/CMD -- run_plugin_sandboxed_docker always passes the
+# real interpreter + script path explicitly (`docker run ... python
+# /plugin/entry.py` or `... node /plugin/entry.js`), same real, single
+# per-run invocation as the subprocess fallback.
