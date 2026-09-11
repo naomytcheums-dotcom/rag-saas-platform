@@ -248,6 +248,10 @@ celery_app.conf.beat_schedule = {
         "task": "api.tasks.plugins.update_plugin_stats",
         "schedule": crontab(minute=45),
     },
+    "fire-scheduled-plugin-hook-hourly": {
+        "task": "api.tasks.plugins.fire_scheduled_hook",
+        "schedule": crontab(minute=30),
+    },
 }
 
 

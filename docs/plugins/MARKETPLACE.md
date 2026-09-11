@@ -7,15 +7,20 @@
 
 - `search` — matches `name` or `description` (case-insensitive substring).
 - `category` — `analytics`/`automation`/`communication`/`data`/`integration`/`productivity`/`security`/`other`.
+- `pricing` — `free`/`paid`/`freemium`, matching each plugin's own real, declared value (see below).
 - `min_rating` — real, computed from `PluginReview.rating`, not a cached field.
-- `sort_by` — `date` (default, newest first), `popularity` (real, live `install_count`), or `rating` (real, live average).
+- `sort_by` — `date` (default, newest first), `popularity` (real, live `install_count`), `rating` (real, live average), or `price` (real, ascending — free plugins, with no price, sort first).
 - `limit`/`offset` — pagination.
 
-**No free/paid filter.** There is no real pricing/billing model for
-plugins in this pass — every published plugin is free. Adding that
-filter without a real price field behind it would be exactly the kind
-of fabricated completeness this project avoids; it's a real, honest
-gap, not an oversight.
+**Pricing is real, declared metadata — not a real transaction.** A
+publisher sets `pricing` (`free`/`paid`/`freemium`) and, for anything
+but `free`, a real `price` (validated `> 0`) at publish time. The
+marketplace filters and sorts by it for real. What does NOT exist:
+no Stripe product is created behind a `paid`/`freemium` plugin, no
+checkout flow runs, and installing one is not actually blocked by lack
+of payment — declaring `paid` today only changes what shows in the
+marketplace listing and its price tag, not what an install requires.
+See `docs/plugins/SECURITY.md`'s own note on this same honest scope.
 
 ## Installing
 

@@ -122,6 +122,7 @@ export interface ConnectionTestResult {
 
 // Partie 16 (ter) -- plugin marketplace, api/schemas/plugins.py.
 export type PluginCategory = "analytics" | "automation" | "communication" | "data" | "integration" | "productivity" | "security" | "other";
+export type PluginPricing = "free" | "paid" | "freemium";
 
 export interface Plugin {
   id: string;
@@ -130,6 +131,8 @@ export interface Plugin {
   slug: string;
   description: string;
   category: PluginCategory;
+  pricing: PluginPricing;
+  price: number | null;
   manifest: { name: string; version: string; entry_point: string; description: string; permissions: string[]; hooks?: string[] };
   version: string;
   code_size_bytes: number;

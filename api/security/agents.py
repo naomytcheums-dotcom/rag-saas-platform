@@ -104,6 +104,20 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
     )
     db.add(agent)
     await db.flush()
+
+    # Partie 16 (ter) -- the real on_agent_created hook. Best-effort,
+    # same reasoning as api/security/documents.py's own
+    # on_document_uploaded call: a misbehaving plugin must never fail a
+    # real agent creation.
+    try:
+        from api.services.plugin_hooks import PluginHook, trigger_hook
+
+        await trigger_hook(db, organization_id, PluginHook.on_agent_created, {"agent_id": str(agent.id), "name": agent.name})
+    except Exception as exc:  # noqa: BLE001 -- a plugin hook failure must never fail the real agent creation that triggered it
+        import logging
+
+        logging.getLogger(__name__).warning("create_agent: on_agent_created hook dispatch failed: %s", exc)
+
     return agent
 
 

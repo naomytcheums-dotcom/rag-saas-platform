@@ -114,22 +114,13 @@ jobs:
             sudo apt-get install -y nodejs
       - run:
           name: Create the avatars/documents/voice buckets (avatars public-read, the other two stay private)
-          command: |
-            python - <<'PYEOF'
-            import boto3
-            client = boto3.client(
-                "s3", endpoint_url="http://localhost:9000",
-                aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
-                region_name="us-east-1",
-            )
-            client.create_bucket(Bucket="avatars")
-            client.put_bucket_policy(Bucket="avatars", Policy="""{
-                "Version": "2012-10-17",
-                "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::avatars/*"}]
-            }""")
-            client.create_bucket(Bucket="documents")
-            client.create_bucket(Bucket="voice")
-            PYEOF
+          # A literal `<<` heredoc here is a real, reserved CircleCI 2.1
+          # YAML token (merge key) -- "Unclosed '<<' tag" pipeline
+          # failure, found via a real CircleCI run. Fixed by moving the
+          # script into a real repo file instead of escaping the
+          # heredoc, avoiding this whole class of bug rather than
+          # working around it.
+          command: python scripts/ci_create_buckets.py
       - run:
           name: Run Alembic migrations against the fresh Postgres container
           command: python -m alembic upgrade head

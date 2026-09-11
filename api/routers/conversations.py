@@ -75,6 +75,24 @@ async def create_conversation_endpoint(
         db, user_id=current_user.id, action=AuditAction.CONVERSATION_CREATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
         success=True, organization_id=payload.organization_id, resource_type="conversation", resource_id=str(conversation.id),
     )
+
+    # Partie 16 (ter) -- the real on_conversation_started hook. Best-
+    # effort (a misbehaving plugin must never fail a real conversation
+    # creation) and only fired when this conversation has a real
+    # organization_id -- see api/models/conversation.py's own docstring
+    # on why that field is nullable; a hook needs a real org to dispatch
+    # installations for, so a conversation with none simply has no
+    # plugins to notify.
+    if payload.organization_id is not None:
+        try:
+            from api.services.plugin_hooks import PluginHook, trigger_hook
+
+            await trigger_hook(db, payload.organization_id, PluginHook.on_conversation_started, {"conversation_id": str(conversation.id), "agent_id": str(payload.agent_id) if payload.agent_id else None})
+        except Exception as exc:  # noqa: BLE001 -- a plugin hook failure must never fail the real conversation creation that triggered it
+            import logging
+
+            logging.getLogger(__name__).warning("create_conversation_endpoint: on_conversation_started hook dispatch failed: %s", exc)
+
     await db.commit()
     return conversation
 

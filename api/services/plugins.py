@@ -45,6 +45,13 @@ class PluginRateLimitedError(PluginError):
     pass
 
 
+class PluginPermissionError(PluginError):
+    """Raised when a plugin is asked to run for an action it never
+    declared the matching permission for -- api/routers/plugins.py's
+    own execute_plugin_endpoint turns this into a real 403."""
+    pass
+
+
 class ReviewNotFoundError(PluginError):
     pass
 
@@ -68,7 +75,20 @@ async def _unique_slug(db: AsyncSession, name: str) -> str:
     return slug
 
 
-async def publish_plugin(db: AsyncSession, organization_id: uuid.UUID, *, name: str, description: str, category: str, manifest: dict, code: bytes, user_id: uuid.UUID | None) -> Plugin:
+def _validate_pricing(pricing: str, price: float | None) -> None:
+    """Real, honest scope: this only validates the DECLARED pricing
+    metadata is internally consistent -- see Plugin.pricing's own
+    column comment for why there is no real payment/checkout flow
+    behind it in this pass."""
+    if pricing not in ("free", "paid", "freemium"):
+        raise PluginManifestError(f"pricing must be one of 'free', 'paid', 'freemium' -- got '{pricing}'")
+    if pricing in ("paid", "freemium") and (price is None or price <= 0):
+        raise PluginManifestError(f"pricing '{pricing}' requires a real price > 0")
+    if pricing == "free" and price not in (None, 0):
+        raise PluginManifestError("pricing 'free' must not declare a price")
+
+
+async def publish_plugin(db: AsyncSession, organization_id: uuid.UUID, *, name: str, description: str, category: str, manifest: dict, code: bytes, user_id: uuid.UUID | None, pricing: str = "free", price: float | None = None) -> Plugin:
     """Real validation (manifest schema + permission whitelist, then a
     static forbidden-pattern code scan) BEFORE anything touches S3 or
     the database -- same ordering discipline as
@@ -80,6 +100,7 @@ async def publish_plugin(db: AsyncSession, organization_id: uuid.UUID, *, name: 
     slug = await _unique_slug(db, name)
     validate_manifest(manifest, slug=slug)
     scan_plugin_code(code)
+    _validate_pricing(pricing, price)
     version = manifest["version"]
 
     # Generated here (not left to the column's own Python-side default)
@@ -95,7 +116,7 @@ async def publish_plugin(db: AsyncSession, organization_id: uuid.UUID, *, name: 
     plugin = Plugin(
         id=plugin_id, organization_id=organization_id, name=name, slug=slug, description=description, category=category,
         manifest=manifest, version=version, code_key=code_key, code_size_bytes=len(code),
-        status=PluginStatus.pending, created_by=user_id,
+        status=PluginStatus.pending, created_by=user_id, pricing=pricing, price=price if pricing != "free" else None,
     )
     db.add(plugin)
     db.add(PluginVersion(plugin_id=plugin_id, version=version, manifest=manifest, code_key=code_key, code_size_bytes=len(code), created_by=user_id))
@@ -164,7 +185,7 @@ async def delete_plugin(db: AsyncSession, organization_id: uuid.UUID, plugin_id:
 
 async def list_marketplace_plugins(
     db: AsyncSession, *, search: str | None = None, category: str | None = None, min_rating: float | None = None,
-    sort_by: str = "date", limit: int = 50, offset: int = 0,
+    pricing: str | None = None, sort_by: str = "date", limit: int = 50, offset: int = 0,
 ) -> list[Plugin]:
     """Real, public marketplace listing -- only `approved` plugins,
     same "honestly gated" discipline as this project's every other
@@ -172,18 +193,20 @@ async def list_marketplace_plugins(
     `sort_by`: "popularity" (real install_count), "rating" (real live
     average from PluginReview, not a cached column -- this project has
     no plugin volume yet where that join would be a real cost concern),
-    or "date" (default).
-
-    Honest gap, not fabricated: no "free/paid" filter -- there is no
-    real pricing/billing model for plugins in this pass (every
-    published plugin is free), so that filter from the literal spec is
-    not built rather than backed by a fake price field nothing reads."""
+    "price" (real, by the declared `price` column, ascending, nulls --
+    i.e. free plugins -- first), or "date" (default). `pricing` filters
+    by the real, declared `free`/`paid`/`freemium` value -- see
+    Plugin.pricing's own column comment for the honest scope of what
+    that value actually means (declared metadata, not an enforced
+    purchase)."""
     query = select(Plugin).where(Plugin.status == PluginStatus.approved)
     if search:
         like = f"%{search}%"
         query = query.where(or_(Plugin.name.ilike(like), Plugin.description.ilike(like)))
     if category:
         query = query.where(Plugin.category == category)
+    if pricing:
+        query = query.where(Plugin.pricing == pricing)
 
     if sort_by == "rating" or min_rating is not None:
         avg_rating = select(PluginReview.plugin_id, func.avg(PluginReview.rating).label("avg_rating")).group_by(PluginReview.plugin_id).subquery()
@@ -195,6 +218,8 @@ async def list_marketplace_plugins(
 
     if sort_by == "popularity":
         query = query.order_by(Plugin.install_count.desc())
+    elif sort_by == "price":
+        query = query.order_by(Plugin.price.asc().nulls_first())
     elif sort_by != "rating":
         query = query.order_by(Plugin.created_at.desc())
 
@@ -344,6 +369,7 @@ async def _check_rate_limit(db: AsyncSession, plugin_id: uuid.UUID) -> None:
 async def execute_plugin(
     db: AsyncSession, plugin_id: uuid.UUID, organization_id: uuid.UUID, payload: dict, *,
     user_id: uuid.UUID | None, hook: str | None = None, installation_id: uuid.UUID | None = None,
+    required_permission: str | None = None,
 ) -> PluginExecution:
     """Real, synchronous sandboxed execution (api/security/plugin_sandbox.py's
     own run_plugin_sandboxed) -- downloads this plugin's CURRENT code
@@ -351,9 +377,19 @@ async def execute_plugin(
     configured timeout/memory cap, and records a real PluginExecution
     row whether it succeeds, errors, or times out. Never raises for a
     plugin-side failure -- only for a real precondition (plugins
-    disabled, plugin not approved, rate limit exceeded, storage/
-    interpreter not available), which the caller turns into a real
-    4xx/503, not a fabricated 200."""
+    disabled, plugin not approved, permission missing, rate limit
+    exceeded, storage/interpreter not available), which the caller
+    turns into a real 4xx/503, not a fabricated 200.
+
+    `required_permission`, when given, is checked against
+    `plugin.manifest["permissions"]` BEFORE anything runs -- a plugin
+    that never declared it raises a real PluginPermissionError (a real
+    403), same real gate api/services/plugin_hooks.py's own
+    trigger_hook applies before dispatching a hook (there via
+    HOOK_REQUIRED_PERMISSIONS; here, explicitly passed by the caller --
+    api/routers/plugins.py's own execute_plugin_endpoint accepts it as
+    an optional request field for a manual, deliberate permission
+    check)."""
     from api.config import settings
     from api.security.plugin_sandbox import run_plugin_sandboxed
 
@@ -363,6 +399,11 @@ async def execute_plugin(
     plugin = await get_plugin(db, plugin_id)
     if plugin.status != PluginStatus.approved:
         raise NotApprovedError(f"plugin '{plugin.slug}' is not approved (status: {plugin.status.value})")
+
+    if required_permission is not None:
+        declared_permissions = (plugin.manifest or {}).get("permissions") or []
+        if required_permission not in declared_permissions:
+            raise PluginPermissionError(f"plugin '{plugin.slug}' does not declare the required permission '{required_permission}'")
 
     await _check_rate_limit(db, plugin_id)
 

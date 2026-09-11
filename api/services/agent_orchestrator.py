@@ -92,6 +92,27 @@ from api.services.task_planning import get_plan_steps, plan_task
 from api.services.tool_selection import select_tools
 from api.services.tools import ToolSpec
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def _fire_message_hook(db: AsyncSession, organization_id: uuid.UUID | None, hook_name: str, *, conversation_id: uuid.UUID | None, content: str) -> None:
+    """Partie 16 (ter) -- the real on_message_received/on_message_sent
+    hooks. Best-effort (a misbehaving plugin must never fail a real
+    chat turn) and only fired when this run has a real organization_id
+    (both `run_agent` and `stream_response` accept it as optional --
+    an agent run outside any organization simply has no installed
+    plugins to notify)."""
+    if organization_id is None:
+        return
+    try:
+        from api.services.plugin_hooks import PluginHook, trigger_hook
+
+        await trigger_hook(db, organization_id, PluginHook[hook_name], {"conversation_id": str(conversation_id) if conversation_id else None, "content": content})
+    except Exception as exc:  # noqa: BLE001 -- a plugin hook failure must never fail the real chat turn that triggered it
+        logger.warning("_fire_message_hook: %s dispatch failed: %s", hook_name, exc)
+
 
 class AgentOrchestrator:
     """Item 2's own literal class -- see this module's own top
@@ -279,6 +300,7 @@ class AgentOrchestrator:
         if conversation_id is not None:
             async with self._db_lock:
                 await add_message(db, conversation_id, "user", input)
+                await _fire_message_hook(db, organization_id, "on_message_received", conversation_id=conversation_id, content=input)
                 await db.commit()
 
         async def _execute() -> None:
@@ -352,6 +374,7 @@ class AgentOrchestrator:
                         await end_trace(db, llm_trace.id, output={"result": result}, status="completed")
                     if conversation_id is not None:
                         await add_message(db, conversation_id, "assistant", result)
+                        await _fire_message_hook(db, organization_id, "on_message_sent", conversation_id=conversation_id, content=result)
                     if citation_chunks is not None and organization_id is not None:
                         # Partie 6.1.1 -- a real, additive Response +
                         # Citations for this real, completed run. Real,
@@ -526,6 +549,7 @@ class AgentOrchestrator:
         if conversation_id is not None:
             async with self._db_lock:
                 await add_message(db, conversation_id, "user", input)
+                await _fire_message_hook(db, organization_id, "on_message_received", conversation_id=conversation_id, content=input)
                 await db.commit()
 
         yield {"type": "thinking", "message": "Generating response"}
@@ -574,6 +598,7 @@ class AgentOrchestrator:
             await update_run_status(db, run.id, AgentRunStatus.completed.value, result=result)
             if conversation_id is not None:
                 await add_message(db, conversation_id, "assistant", result)
+                await _fire_message_hook(db, organization_id, "on_message_sent", conversation_id=conversation_id, content=result)
             if citation_chunks is not None and organization_id is not None:
                 response_row = Response(organization_id=organization_id, query=input, answer=result, created_by=created_by)
                 db.add(response_row)

@@ -1834,8 +1834,16 @@ class Settings(BaseSettings):
     PLUGINS_ENABLED: bool = True
     PLUGINS_SANDBOX_ENABLED: bool = True
     PLUGINS_MAX_EXECUTION_TIME: int = 30  # seconds, real subprocess timeout
-    PLUGINS_MAX_MEMORY: int = 256  # MB -- enforced via RLIMIT_AS on POSIX only, see plugin_sandbox.py's own docstring
+    PLUGINS_MAX_MEMORY: int = 256  # MB -- enforced via RLIMIT_AS (subprocess engine, POSIX only) or a real Docker --memory cgroup (Docker engine, every OS)
     PLUGINS_MAX_API_CALLS: int = 100  # per plugin per minute -- real invocation-rate limit, see plugin_sandbox.py
+    # Docker-per-execution sandbox (api/security/plugin_sandbox.py's own
+    # run_plugin_sandboxed_docker, Dockerfile.plugin-sandbox at this
+    # repo's root) -- used automatically when a real `docker` binary AND
+    # the real sandbox image are both present; the subprocess engine is
+    # the real, honest fallback otherwise. Set False to always use the
+    # subprocess engine even when Docker is available.
+    PLUGINS_DOCKER_SANDBOX_ENABLED: bool = True
+    PLUGINS_SANDBOX_CPU_LIMIT: float = 0.5  # real Docker --cpus value; unused by the subprocess engine (no real CPU-share primitive in plain subprocess.run)
     PLUGINS_MARKETPLACE_ENABLED: bool = True
     PLUGINS_REVIEW_REQUIRED: bool = True
     PLUGIN_EXECUTION_LOG_RETENTION_DAYS: int = 30
@@ -1845,8 +1853,12 @@ class Settings(BaseSettings):
     # api/services/airbyte_client.py can detect "not configured" and return
     # a real 501 rather than pretending to reach a server that isn't there.
     AIRBYTE_API_URL: str | None = None
-    AIRBYTE_API_KEY: str | None = None
+    AIRBYTE_API_KEY: str | None = None  # OSS -- static bearer token
     AIRBYTE_WORKSPACE_ID: str | None = None
+    # Airbyte Cloud -- real OAuth2 client_credentials (api/services/airbyte_client.py's
+    # own _get_cloud_access_token). Takes priority over AIRBYTE_API_KEY when both are set.
+    AIRBYTE_CLIENT_ID: str | None = None
+    AIRBYTE_CLIENT_SECRET: str | None = None
 
     # -- n8n -- e.g. http://localhost:5678 once docker-compose.observability.yml's
     # own n8n service is running.

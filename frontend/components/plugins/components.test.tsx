@@ -48,7 +48,8 @@ beforeEach(() => {
 
 const SAMPLE_PLUGIN = {
   id: "p1", organization_id: "org1", name: "My Plugin", slug: "my-plugin", description: "A test plugin.",
-  category: "productivity" as const, manifest: { name: "My Plugin", version: "1.0.0", entry_point: "index.js", description: "...", permissions: [] },
+  category: "productivity" as const, pricing: "free" as const, price: null,
+  manifest: { name: "My Plugin", version: "1.0.0", entry_point: "index.js", description: "...", permissions: [] },
   version: "1.0.0", code_size_bytes: 100, status: "approved" as const, rejection_reason: null, install_count: 3,
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
@@ -86,7 +87,7 @@ describe("PluginSearch", () => {
 describe("PluginFilters", () => {
   it("reports category/sort/rating changes", async () => {
     const onCategoryChange = vi.fn();
-    render(<PluginFilters category="" onCategoryChange={onCategoryChange} sortBy="date" onSortByChange={vi.fn()} minRating={undefined} onMinRatingChange={vi.fn()} />);
+    render(<PluginFilters category="" onCategoryChange={onCategoryChange} pricing="" onPricingChange={vi.fn()} sortBy="date" onSortByChange={vi.fn()} minRating={undefined} onMinRatingChange={vi.fn()} />);
     await userEvent.selectOptions(screen.getByDisplayValue("All categories"), "security");
     expect(onCategoryChange).toHaveBeenCalledWith("security");
   });
@@ -169,7 +170,7 @@ describe("PluginCreateForm", () => {
     await waitFor(() => expect(mockedApi.postMultipart).toHaveBeenCalled());
     const [path, fields] = mockedApi.postMultipart.mock.calls[0];
     expect(path).toBe("/organizations/org1/plugins/publish");
-    expect(fields).toEqual({ name: "New Plugin", description: "A new plugin", category: "other" });
+    expect(fields).toEqual({ name: "New Plugin", description: "A new plugin", category: "other", pricing: "free" });
     expect(onPublished).toHaveBeenCalledWith({ id: "p1", name: "New Plugin" });
   });
 });

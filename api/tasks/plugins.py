@@ -5,10 +5,12 @@ plain DB reads/writes plus calls into real, already-synchronous helpers
 api/services/plugins.py's download_plugin_code), so no async bridge is
 needed here at all."""
 
+import asyncio
 import datetime as dt
 import logging
 
 from sqlalchemy import create_engine, delete, func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
@@ -126,3 +128,49 @@ def update_plugin_stats() -> int:
         db.commit()
     logger.info("update_plugin_stats: corrected install_count drift on %d plugin(s)", updated)
     return updated
+
+
+async def _fire_scheduled_hook_async() -> dict:
+    from api.models.organization import OrganizationMember
+    from api.services.plugin_hooks import PluginHook, trigger_hook
+
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    checked_orgs = 0
+    total_executions = 0
+    try:
+        async with session_factory() as db:
+            # Real, honest scope: only organizations that actually have
+            # at least one enabled installation of an approved plugin
+            # declaring "on_schedule" -- not every organization on the
+            # platform, most of which install no plugins at all.
+            org_ids = (await db.scalars(
+                select(PluginInstallation.organization_id)
+                .join(Plugin, Plugin.id == PluginInstallation.plugin_id)
+                .where(PluginInstallation.enabled.is_(True), Plugin.status == PluginStatus.approved)
+                .distinct()
+            )).all()
+            for organization_id in org_ids:
+                checked_orgs += 1
+                try:
+                    executions = await trigger_hook(db, organization_id, PluginHook.on_schedule, {
+                        "fired_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    })
+                    await db.commit()
+                    total_executions += len(executions)
+                except Exception as exc:  # noqa: BLE001 -- one organization's plugin failure must never abort the whole sweep
+                    logger.warning("fire_scheduled_hook: on_schedule dispatch failed for org '%s': %s", organization_id, exc)
+                    await db.rollback()
+    finally:
+        await engine.dispose()
+    return {"organizations_checked": checked_orgs, "executions_fired": total_executions}
+
+
+@celery_app.task(name="api.tasks.plugins.fire_scheduled_hook")
+def fire_scheduled_hook() -> dict:
+    """The real `on_schedule` hook -- a real Celery Beat periodic task
+    (see api/tasks/celery_app.py's own beat_schedule entry,
+    `fire-scheduled-plugin-hook-hourly`), the platform's own real
+    equivalent of a cron trigger for plugins that declared interest in
+    it."""
+    return asyncio.run(_fire_scheduled_hook_async())

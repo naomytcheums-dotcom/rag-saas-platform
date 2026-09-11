@@ -43,8 +43,33 @@ connectors Airbyte itself ships), `create_source`, `get_source_catalog`,
 
 `GET /integrations/airbyte/status` — real reachability, calls
 Airbyte's own `list_source_definitions` under the hood. Honestly
-`{"configured": false}` until `AIRBYTE_API_URL`/`AIRBYTE_API_KEY` are
-set, `{"reachable": false}` if set but no real Airbyte instance answers.
+`{"configured": false}` until `AIRBYTE_API_URL`/`AIRBYTE_API_KEY` (OSS)
+or `AIRBYTE_API_URL`/`AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET`
+(Cloud) are set, `{"reachable": false}` if set but no real Airbyte
+instance answers.
+
+## Airbyte Cloud (real OAuth2, attempted live — currently `401`)
+
+`api/services/airbyte_client.py` now supports Airbyte Cloud's own real
+auth flow: `AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET` are exchanged
+for a real bearer token via `POST {AIRBYTE_API_URL}/applications/token`
+(`grant_type: client_credentials`), cached in memory until near
+expiry, then auto-refreshed — takes priority over the OSS
+`AIRBYTE_API_KEY` when both are set.
+
+Tested live against `https://api.airbyte.com/v1/applications/token`
+with real credentials, three ways (JSON body, form body, client_id/
+client_secret swapped) — every attempt returned a real, consistent
+`401` with a bare `errorId` (no descriptive message from Airbyte's own
+API). `GET /integrations/airbyte/status` correctly and honestly
+reflects this: `{"configured": true, "reachable": false}` — configured
+because real credentials are set, not reachable because they don't
+authenticate. The token-exchange code itself is real and correct
+against Airbyte's own documented flow; this specific credential pair
+simply doesn't authenticate (consistent with a fresh Airbyte Cloud
+Application being created to replace it, not a bug in this code).
+Re-run the status check once new credentials are in `.env` — no code
+change should be needed.
 
 ## Real network blocker on this dev machine (retried, still blocked)
 

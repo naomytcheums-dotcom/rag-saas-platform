@@ -103,3 +103,33 @@ async def test_uninstall_decrements_the_real_install_count(client, db_session, r
 
     after_uninstall = await client.get(f"/marketplace/plugins/{plugin_id}")
     assert after_uninstall.json()["install_count"] == 0
+
+
+async def test_filter_by_pricing_and_sort_by_price(client, db_session, register_payload):
+    from plugin_test_helpers import _files, _valid_manifest
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    free_created = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Free Plugin", "description": "..."},
+        files=_files(_valid_manifest(name="Free Plugin")), headers=_auth_header(token),
+    )
+    paid_created = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Paid Plugin", "description": "...", "pricing": "paid", "price": "9.99"},
+        files=_files(_valid_manifest(name="Paid Plugin")), headers=_auth_header(token),
+    )
+    from plugin_test_helpers import _promote_to_superadmin
+
+    await _promote_to_superadmin(db_session, register_payload["email"])
+    await client.post(f"/admin/plugins/{free_created.json()['id']}/approve", headers=_auth_header(token))
+    await client.post(f"/admin/plugins/{paid_created.json()['id']}/approve", headers=_auth_header(token))
+
+    free_only = await client.get("/marketplace/plugins?pricing=free")
+    assert {p["id"] for p in free_only.json()} == {free_created.json()["id"]}
+
+    paid_only = await client.get("/marketplace/plugins?pricing=paid")
+    assert {p["id"] for p in paid_only.json()} == {paid_created.json()["id"]}
+
+    by_price = await client.get("/marketplace/plugins?sort_by=price")
+    ids_in_order = [p["id"] for p in by_price.json()]
+    # free (price=None, sorted first via nulls_first) before the real 9.99 paid plugin
+    assert ids_in_order.index(free_created.json()["id"]) < ids_in_order.index(paid_created.json()["id"])

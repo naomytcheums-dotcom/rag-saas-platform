@@ -21,6 +21,8 @@ export default function PluginCreateForm({ orgId, onPublished, onError }: Plugin
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("other");
+  const [pricing, setPricing] = useState("free");
+  const [price, setPrice] = useState("");
   const [version, setVersion] = useState("1.0.0");
   const [entryPoint, setEntryPoint] = useState("index.js");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -42,7 +44,10 @@ export default function PluginCreateForm({ orgId, onPublished, onError }: Plugin
       const manifest = { name, version, entry_point: entryPoint, description, permissions: selectedPermissions };
       const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
       const codeBlob = new Blob([codeText], { type: "text/plain" });
-      const plugin = await createPlugin(orgId, { name, description, category, manifest: manifestBlob, code: codeBlob });
+      const plugin = await createPlugin(orgId, {
+        name, description, category, pricing, price: pricing !== "free" && price ? Number(price) : undefined,
+        manifest: manifestBlob, code: codeBlob,
+      });
       setName("");
       setDescription("");
       onPublished?.(plugin);
@@ -72,6 +77,20 @@ export default function PluginCreateForm({ orgId, onPublished, onError }: Plugin
             <option value="index.js">index.js</option>
             <option value="index.py">index.py</option>
           </select>
+        </div>
+
+        <div className="flex gap-2">
+          <select value={pricing} onChange={(e) => setPricing(e.target.value)} className="w-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+            <option value="freemium">Freemium</option>
+          </select>
+          {pricing !== "free" && (
+            <input
+              value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (EUR)" type="number" min="0.01" step="0.01"
+              className="w-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent"
+            />
+          )}
         </div>
 
         <div>

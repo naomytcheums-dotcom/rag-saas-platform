@@ -12,7 +12,8 @@ export interface PluginListFilters {
   search?: string;
   category?: string;
   min_rating?: number;
-  sort_by?: "date" | "popularity" | "rating";
+  pricing?: string;
+  sort_by?: "date" | "popularity" | "rating" | "price";
   limit?: number;
   offset?: number;
 }
@@ -40,12 +41,10 @@ export const deleteReview = (reviewId: string) => api.delete(`/marketplace/revie
 
 export const listPluginVersions = (id: string) => api.get<PluginVersion[]>(`/marketplace/plugins/${id}/versions`);
 
-export function createPlugin(orgId: string, data: { name: string; description: string; category: string; manifest: Blob; code: Blob }) {
-  return api.postMultipart<Plugin>(
-    `/organizations/${orgId}/plugins/publish`,
-    { name: data.name, description: data.description, category: data.category },
-    { manifest: data.manifest, code: data.code },
-  );
+export function createPlugin(orgId: string, data: { name: string; description: string; category: string; pricing: string; price?: number; manifest: Blob; code: Blob }) {
+  const fields: Record<string, string> = { name: data.name, description: data.description, category: data.category, pricing: data.pricing };
+  if (data.price !== undefined) fields.price = String(data.price);
+  return api.postMultipart<Plugin>(`/organizations/${orgId}/plugins/publish`, fields, { manifest: data.manifest, code: data.code });
 }
 
 export function publishVersion(orgId: string, id: string, data: { description?: string; changelog?: string; manifest: Blob; code: Blob }) {

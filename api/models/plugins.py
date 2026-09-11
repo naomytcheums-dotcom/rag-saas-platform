@@ -42,7 +42,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -66,6 +66,12 @@ class PluginCategory(str, enum.Enum):
     other = "other"
 
 
+class PluginPricing(str, enum.Enum):
+    free = "free"
+    paid = "paid"
+    freemium = "freemium"
+
+
 class PluginExecutionStatus(str, enum.Enum):
     success = "success"
     error = "error"
@@ -81,6 +87,14 @@ class Plugin(Base):
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[PluginCategory] = mapped_column(nullable=False, default=PluginCategory.other)
+    # Real, honest scope: this is real billing METADATA a plugin
+    # publisher declares -- there is no real payment/checkout flow
+    # behind `paid`/`freemium` in this pass (no Stripe product is
+    # created, no purchase is enforced before install). Real enough to
+    # filter/sort the marketplace by; not a real monetization feature.
+    # See docs/plugins/MARKETPLACE.md's own honest-gap note.
+    pricing: Mapped[PluginPricing] = mapped_column(nullable=False, default=PluginPricing.free)
+    price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     # The CURRENT version's real, validated manifest.json content (see
     # this module's own top docstring on why this stays here rather
     # than only in PluginVersion).

@@ -5,7 +5,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from api.models.plugins import PluginCategory, PluginExecutionStatus, PluginStatus
+from api.models.plugins import PluginCategory, PluginExecutionStatus, PluginPricing, PluginStatus
 
 
 class PermissionResponse(BaseModel):
@@ -20,6 +20,8 @@ class PluginResponse(BaseModel):
     slug: str
     description: str
     category: PluginCategory
+    pricing: PluginPricing
+    price: float | None
     manifest: dict
     version: str
     code_size_bytes: int
@@ -46,6 +48,13 @@ class PluginVersionResponse(BaseModel):
 
 class PluginExecutionRequest(BaseModel):
     data: dict = {}
+    # Optional -- when given, api/services/plugins.py's own
+    # execute_plugin checks this against the plugin's own declared
+    # manifest permissions BEFORE running anything, raising a real 403
+    # if missing. Left unset (None) to run without a specific
+    # permission gate, e.g. an admin manually testing their own
+    # installed plugin.
+    required_permission: str | None = None
 
 
 class PluginExecutionResponse(BaseModel):

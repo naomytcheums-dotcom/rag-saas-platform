@@ -2,13 +2,14 @@
 
 ## Why CircleCI, not GitLab CI or Google Cloud Build
 
-GitHub Actions is currently unusable here: every job on this repo fails
-in ~2 seconds with `The job was not started because recent account
+GitHub Actions is disabled outright for this repo (`.github/workflows/`
+renamed to `.github/workflows.disabled/` -- see `docs/ci/README.md`
+and `docs/ci/GITHUB_ACTIONS_BILLING.md`): every job was failing in
+~2 seconds with `The job was not started because recent account
 payments have failed or your spending limit needs to be increased` --
-a real GitHub account billing issue, unrelated to this repo's code
-(confirmed via `gh run view <run-id>`, which shows all 4 jobs blocked
-by that exact annotation, on every recent push including commits that
-predate this session).
+a real GitHub account billing issue, unrelated to this repo's code,
+and the explicit decision here is not to add a payment method.
+**CircleCI is the only CI for this repo now.**
 
 Compared:
 
@@ -31,6 +32,16 @@ Compared:
 
 **Recommendation: CircleCI.** Fewest steps, most free minutes, no
 payment method needed.
+
+## Status: already connected
+
+Confirmed connected as of 2026-09-18 -- the project
+`naomytcheums-dotcom/rag-saas-platform` is already set up in CircleCI
+(`app.circleci.com/pipelines/github/naomytcheums-dotcom/rag-saas-platform`),
+and pipeline #1 already ran against commit `7b7de8f` -- it failed on
+the real `<<` heredoc bug documented below, now fixed. The steps below
+are kept for reference (re-connecting after disconnecting, or setting
+this up on a fresh clone) -- you don't need to repeat them.
 
 ## Connection procedure (one-time, done by you -- I cannot create
 accounts or click through OAuth on your behalf)
@@ -72,6 +83,24 @@ are deliberately left out of this first pass):
   secondary containers (`cimg/postgres:16.4`, `cimg/redis:7.4`,
   `minio/minio`), same as GitHub Actions' `services:` containers --
   no mocked infrastructure.
+
+## Real bug found and fixed (first live run)
+
+The first real pipeline run failed immediately with `Error calling
+workflow: 'regression-check' ... Unclosed '<<' tag ('<<' must be
+escaped as '\<<' in config v2.1+)`, pointing at a `python -
+<<'PYEOF'` heredoc inside the `api-tests` job's own bucket-creation
+step. CircleCI 2.1 YAML reserves a literal `<<` (the merge key), so a
+shell heredoc using it breaks parsing. Fixed by moving that Python
+script into a real repo file, `scripts/ci_create_buckets.py`, and
+calling `python scripts/ci_create_buckets.py` instead -- this avoids
+the whole class of bug rather than escaping one instance of it (any
+other embedded heredoc would hit the same problem). Verified the fix
+by parsing the corrected YAML with Python's own `yaml.safe_load` (no
+syntax errors) -- the CircleCI CLI itself (`circleci config validate`)
+could not be installed in this environment (its install script
+returned a 404), so the actual next real check happens on the first
+live pipeline run once you connect the project (step below).
 
 ## Secrets
 

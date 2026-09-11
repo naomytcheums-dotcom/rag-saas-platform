@@ -147,20 +147,47 @@ process's own environment is invisible inside the sandboxed
 subprocess, rate limiting, and both `PLUGINS_ENABLED`/
 `PLUGINS_SANDBOX_ENABLED` fail-closed paths.
 
-## Honest remaining gaps
+## Extended in a later pass (2026-09-18) — the 4 remaining internal gaps closed
 
-- No container-per-plugin sandbox (Docker/gVisor) — real OS-process
-  isolation only. See `docs/plugins/SECURITY.md` for the full analysis.
-- `access:external_api` is declared-only — no real outbound network
-  path is granted to a sandboxed plugin in this pass.
-- 6 of 7 hooks (`on_message_received`/`on_message_sent`/
-  `on_agent_created`/`on_conversation_started`/`on_error`/
-  `on_schedule`) are real and dispatchable but not wired to their own
-  real platform event yet — only `on_document_uploaded` is.
-- Permissions are not checked against the actual payload contents at
-  execution time — enforcement today is entirely upstream, in what
-  `trigger_hook` chooses to include in the payload.
-- No free/paid marketplace filter — no real pricing model for plugins
-  exists in this pass.
+- **Container-per-plugin sandbox** — real, built (`Dockerfile.plugin-sandbox`,
+  `api/security/plugin_sandbox.py`'s own `run_plugin_sandboxed_docker`):
+  `--network none`, `--read-only`, `--cpus=0.5`, `--memory=256m`,
+  `--pids-limit 64`, `--cap-drop ALL`, `--security-opt no-new-privileges`,
+  non-root user. Used automatically when a real `docker` binary AND the
+  real built image are both present; the subprocess engine remains the
+  real, honest fallback otherwise (`PLUGINS_DOCKER_SANDBOX_ENABLED`).
+  Verified live: `tests/test_plugin_sandbox.py`'s own
+  `test_execute_plugin_reports_which_real_engine_ran_it`, plus every
+  other sandbox test in that file running through the real Docker path
+  on this dev machine (image built, `docker` available).
+- **All 7 hooks now wired** to a real platform event (was 1 of 7) --
+  see `docs/plugins/DEVELOPER_GUIDE.md`'s hook table for the exact real
+  call site of each.
+- **Permission enforcement at execution time** -- two real gates: hook
+  dispatch skips a subscribed plugin missing the hook's required
+  permission (`HOOK_REQUIRED_PERMISSIONS`), and manual
+  `POST .../execute` accepts a `required_permission` field, raising a
+  real `403` (`PluginPermissionError`) when the plugin hasn't declared
+  it. Still an honest, coarse gate -- the declared permission is
+  checked, not the actual payload content field-by-field.
+- **Free/paid/freemium marketplace filter** -- real `Plugin.pricing`/
+  `Plugin.price` columns, validated at publish time, filterable
+  (`?pricing=paid`) and sortable (`?sort_by=price`) in the marketplace
+  listing. Real, honest limit: no Stripe product or checkout exists
+  behind `paid`/`freemium` -- declared metadata, not an enforced
+  purchase. See `docs/plugins/SECURITY.md`/`MARKETPLACE.md` for the
+  full, explicit scope of both.
+
+## Honest remaining gaps (after this extension)
+
+- `access:external_api` is still declared-only -- the Docker engine's
+  own `--network none` makes "no real outbound path" a hard guarantee
+  now, not just an unimplemented feature.
+- Permission enforcement checks the DECLARED permission against what
+  the caller/hook claims is required, not the actual payload content
+  field-by-field.
+- No real payment/checkout flow behind `paid`/`freemium` pricing.
 - No org-scoped plugin visibility (every approved plugin is visible to
   every organization) — no private/unlisted plugin concept yet.
+- The static code scan remains real but simple regex matching, not a
+  full taint-analysis/AST-based tool.

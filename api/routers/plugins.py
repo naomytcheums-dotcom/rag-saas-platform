@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_superadmin
 from api.models.organization import OrganizationMember
-from api.models.plugins import PluginCategory
+from api.models.plugins import PluginCategory, PluginPricing
 from api.models.user import User
 from api.schemas.plugins import (
     InstallationResponse, InstallationUpdateRequest, PermissionResponse, PluginExecutionRequest, PluginExecutionResponse,
@@ -55,9 +55,9 @@ async def list_plugin_permissions_endpoint():
 @marketplace_router.get("/plugins", response_model=list[PluginResponse])
 async def list_marketplace_plugins_endpoint(
     search: str | None = None, category: PluginCategory | None = None, min_rating: float | None = None,
-    sort_by: str = "date", limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db),
+    pricing: PluginPricing | None = None, sort_by: str = "date", limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db),
 ):
-    return await plugins.list_marketplace_plugins(db, search=search, category=category, min_rating=min_rating, sort_by=sort_by, limit=limit, offset=offset)
+    return await plugins.list_marketplace_plugins(db, search=search, category=category, min_rating=min_rating, pricing=pricing, sort_by=sort_by, limit=limit, offset=offset)
 
 
 @marketplace_router.get("/plugins/{plugin_id}", response_model=PluginResponse)
@@ -99,13 +99,14 @@ async def delete_review_endpoint(review_id: uuid.UUID, user: User = Depends(get_
 @org_router.post("/publish", response_model=PluginResponse, status_code=status.HTTP_201_CREATED)
 async def publish_plugin_endpoint(
     org_id: uuid.UUID, name: str = Form(...), description: str = Form(...), category: PluginCategory = Form(PluginCategory.other),
+    pricing: PluginPricing = Form(PluginPricing.free), price: float | None = Form(None),
     manifest: UploadFile = File(...), code: UploadFile = File(...),
     caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     manifest_data = await _read_manifest(manifest)
     code_bytes = await code.read()
     try:
-        plugin = await plugins.publish_plugin(db, org_id, name=name, description=description, category=category, manifest=manifest_data, code=code_bytes, user_id=caller.user_id)
+        plugin = await plugins.publish_plugin(db, org_id, name=name, description=description, category=category, manifest=manifest_data, code=code_bytes, user_id=caller.user_id, pricing=pricing, price=price)
     except (PluginManifestError, PluginCodeSecurityError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except plugins.PluginStorageNotConfiguredError as exc:
@@ -211,11 +212,13 @@ async def submit_review_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: 
 @org_router.post("/{plugin_id}/execute", response_model=PluginExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: PluginExecutionRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     try:
-        execution = await plugins.execute_plugin(db, plugin_id, org_id, body.data, user_id=caller.user_id)
+        execution = await plugins.execute_plugin(db, plugin_id, org_id, body.data, user_id=caller.user_id, required_permission=body.required_permission)
     except plugins.PluginNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not found")
     except plugins.NotApprovedError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except plugins.PluginPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except plugins.PluginsDisabledError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except plugins.PluginRateLimitedError as exc:

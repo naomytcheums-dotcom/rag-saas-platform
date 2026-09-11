@@ -60,25 +60,25 @@ sandboxed process can reach on its own.
 
 ## Hooks
 
-| Hook | Fires when | Actually wired to a real platform event? |
-|---|---|---|
-| `on_document_uploaded` | A document finishes uploading | **Yes** — `api/security/documents.py`'s own `upload_document` |
-| `on_message_received` | A message is received | No — declared and dispatchable, not yet wired |
-| `on_message_sent` | A message is sent | No |
-| `on_agent_created` | An agent is created | No |
-| `on_conversation_started` | A conversation starts | No |
-| `on_error` | A platform error occurs | No |
-| `on_schedule` | A scheduled time is reached | No |
+| Hook | Fires when | Real call site | Required permission |
+|---|---|---|---|
+| `on_document_uploaded` | A document finishes uploading | `api/security/documents.py`'s `upload_document` | `read:documents` |
+| `on_conversation_started` | A conversation starts | `api/routers/conversations.py`'s `create_conversation_endpoint` | `read:conversations` |
+| `on_message_received` | A user message is received | `api/services/agent_orchestrator.py`'s `run_agent`/`stream_response` | `read:conversations` |
+| `on_message_sent` | The assistant's response is sent | same two methods, after the response | `read:conversations` |
+| `on_agent_created` | An agent is created | `api/security/agents.py`'s `create_agent` | `read:agents` |
+| `on_error` | An unhandled error occurs on an org-scoped route | `plugin_error_hook_middleware` (`api/main.py`) | none |
+| `on_schedule` | Hourly (Celery Beat) | `api/tasks/plugins.py`'s `fire_scheduled_hook` | none |
 
-Only `on_document_uploaded` is genuinely fired by a real platform
-event today. The other 6 are real, working, and dispatchable — any
-code can call `api.services.plugin_hooks.trigger_hook(db,
-organization_id, PluginHook.on_message_sent, payload)` right now and
-it will find and run every enabled installation of every approved
-plugin that declared that hook — but no existing module currently
-calls `trigger_hook` for those 6 events. Wiring each into its own
-business-logic module is real, separate follow-up work, tracked
-honestly rather than claimed done.
+All 7 hooks are now wired to a real platform event. A plugin only
+receives a hook if it BOTH declares that hook in `manifest.json`'s
+`hooks` list AND declares the real permission that hook requires (see
+the table above, and `docs/plugins/SECURITY.md`'s own permission-
+enforcement section) — a plugin missing the required permission is
+silently skipped for that hook, not executed with data it never asked
+to be trusted with. `on_error`/`on_conversation_started`/`on_message_*`
+only fire for requests/runs that carry a real `organization_id`; a
+request with none has no org's plugins to notify.
 
 ## Your entry-point script's contract
 
@@ -107,12 +107,31 @@ console.log(JSON.stringify(result));
 
 ## Publishing and versioning
 
-- `POST /organizations/{org_id}/plugins/publish` — first publish, always creates a `pending` plugin.
-- `PUT /organizations/{org_id}/plugins/{id}` — a new version (bumped `version`, real code/manifest change). Creates a real `PluginVersion` history row and resets moderation to `pending` — an approved plugin does not silently inherit approval for new code.
+- `POST /organizations/{org_id}/plugins/publish` — first publish, always creates a `pending` plugin. Form fields: `name`, `description`, `category`, `pricing` (`free`/`paid`/`freemium`, default `free`), `price` (required if `pricing` isn't `free`), plus the `manifest` and `code` files.
+- `PUT /organizations/{org_id}/plugins/{id}` — a new version (bumped `version`, real code/manifest change). Creates a real `PluginVersion` history row and resets moderation to `pending` — an approved plugin does not silently inherit approval for new code. `pricing`/`price` are not editable on republish in this pass (set once, at first publish).
 - `GET /marketplace/plugins/{id}/versions` — the real, full version history, including each version's own changelog.
+
+## Pricing (real metadata, not a real transaction)
+
+`pricing` is `free`, `paid`, or `freemium`; `price` is a real decimal,
+required (and validated `> 0`) for anything but `free`. This is real,
+validated, filterable, sortable metadata (`GET /marketplace/plugins?
+pricing=paid&sort_by=price`) — see `docs/plugins/SECURITY.md`'s own
+honest note: no Stripe product or checkout flow exists behind it in
+this pass, installing a `paid` plugin is not actually gated on
+payment.
+
+## Permission enforcement at execution time
+
+`POST .../execute` accepts an optional `required_permission` field —
+when given, the plugin must have declared that exact permission in its
+manifest, or the call is a real `403`. Hooks apply this automatically
+(see the Hooks table above's "Required permission" column) — you don't
+pass anything for that case, `trigger_hook` checks it before ever
+invoking your plugin.
 
 ## Real limits
 
 - Code: 1 MB max per version.
-- Execution: `PLUGINS_MAX_EXECUTION_TIME` seconds (default 30), `PLUGINS_MAX_MEMORY` MB (default 256, POSIX only — see SECURITY.md), `PLUGINS_MAX_API_CALLS` invocations/minute (default 100).
+- Execution: `PLUGINS_MAX_EXECUTION_TIME` seconds (default 30), `PLUGINS_MAX_MEMORY` MB (default 256 — a real Docker `--memory` cgroup limit when the Docker sandbox is active, `RLIMIT_AS` on POSIX only for the subprocess fallback, see SECURITY.md), `PLUGINS_MAX_API_CALLS` invocations/minute (default 100).
 - These are real platform settings (`api/config.py`), not per-plugin.

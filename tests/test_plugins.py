@@ -12,9 +12,11 @@ transformations (this project's real, flat tests/ convention, not the
 literal spec's tests/backend/plugins/ subdirectory -- kept consistent
 with every one of this repo's 200+ other test files)."""
 
+import uuid
+
 import pytest
 
-from plugin_test_helpers import _auth_header, _files, _mock_s3_fixture, _promote_to_superadmin, _register_and_create_org, _valid_manifest
+from plugin_test_helpers import _auth_header, _files, _mock_s3_fixture, _promote_to_superadmin, _publish_and_approve, _register_and_create_org, _valid_manifest
 
 _mock_s3 = pytest.fixture(autouse=True)(_mock_s3_fixture)
 
@@ -208,3 +210,80 @@ async def test_republish_rejects_a_version_already_published(client, db_session,
         files=_files(_valid_manifest(name="Dup Version Plugin", version="1.0.0")), headers=_auth_header(token),
     )
     assert response.status_code == 400
+
+
+# ------------------------------------------------------------------------ Pricing (item 6)
+
+async def test_publish_plugin_defaults_to_free(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    response = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Default Pricing Plugin", "description": "..."},
+        files=_files(_valid_manifest(name="Default Pricing Plugin")), headers=_auth_header(token),
+    )
+    assert response.status_code == 201
+    assert response.json()["pricing"] == "free"
+    assert response.json()["price"] is None
+
+
+async def test_publish_paid_plugin_requires_a_real_price(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    response = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Paid No Price Plugin", "description": "...", "pricing": "paid"},
+        files=_files(_valid_manifest(name="Paid No Price Plugin")), headers=_auth_header(token),
+    )
+    assert response.status_code == 400
+
+
+async def test_publish_paid_plugin_with_a_real_price(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    response = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Paid Plugin", "description": "...", "pricing": "paid", "price": "19.99"},
+        files=_files(_valid_manifest(name="Paid Plugin")), headers=_auth_header(token),
+    )
+    assert response.status_code == 201
+    assert response.json()["pricing"] == "paid"
+    assert float(response.json()["price"]) == 19.99
+
+
+async def test_publish_free_plugin_rejects_a_price(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    response = await client.post(
+        f"/organizations/{org_id}/plugins/publish", data={"name": "Free With Price Plugin", "description": "...", "pricing": "free", "price": "5.00"},
+        files=_files(_valid_manifest(name="Free With Price Plugin")), headers=_auth_header(token),
+    )
+    assert response.status_code == 400
+
+
+# ------------------------------------------------------------------------ Hook permission gating (item 5)
+
+async def test_hook_skips_plugin_missing_the_required_permission(client, db_session, register_payload):
+    """api/services/plugin_hooks.py's own trigger_hook: a plugin
+    subscribed to on_document_uploaded but never declaring
+    read:documents is real, valid, and installed -- but is skipped for
+    that hook, not executed with data it never asked to be trusted
+    with."""
+    token, org_id, plugin_id = await _publish_and_approve(
+        client, db_session, register_payload, name="No Permission Hook Plugin",
+        manifest_overrides={"entry_point": "index.py", "permissions": [], "hooks": ["on_document_uploaded"]},
+    )
+    await client.post(f"/organizations/{org_id}/plugins/{plugin_id}/install", headers=_auth_header(token))
+
+    from api.services.plugin_hooks import PluginHook, trigger_hook
+
+    executions = await trigger_hook(db_session, uuid.UUID(org_id), PluginHook.on_document_uploaded, {"document_id": "does-not-matter"})
+    assert executions == []
+
+
+async def test_hook_runs_plugin_that_declares_the_required_permission(client, db_session, register_payload):
+    token, org_id, plugin_id = await _publish_and_approve(
+        client, db_session, register_payload, name="Has Permission Hook Plugin",
+        manifest_overrides={"entry_point": "index.py", "permissions": ["read:documents"], "hooks": ["on_document_uploaded"]},
+        code=b"import sys, json\ndata = json.loads(sys.stdin.read())\nprint(json.dumps({\"ok\": True}))\n",
+    )
+    await client.post(f"/organizations/{org_id}/plugins/{plugin_id}/install", headers=_auth_header(token))
+
+    from api.services.plugin_hooks import PluginHook, trigger_hook
+
+    executions = await trigger_hook(db_session, uuid.UUID(org_id), PluginHook.on_document_uploaded, {"document_id": "does-not-matter"})
+    assert len(executions) == 1
+    assert executions[0].status.value == "success"

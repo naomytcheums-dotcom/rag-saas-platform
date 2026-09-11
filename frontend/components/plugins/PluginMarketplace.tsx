@@ -20,11 +20,12 @@ interface PluginMarketplaceProps {
 export default function PluginMarketplace({ orgId, currentUserId, onError }: PluginMarketplaceProps) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [pricing, setPricing] = useState("");
   const [sortBy, setSortBy] = useState("date");
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { plugins, loading, reload } = usePlugins({ search, category, sort_by: sortBy as "date" | "popularity" | "rating", min_rating: minRating });
+  const { plugins, loading, reload } = usePlugins({ search, category, pricing, sort_by: sortBy as "date" | "popularity" | "rating" | "price", min_rating: minRating });
 
   if (selectedId) {
     return (
@@ -41,7 +42,7 @@ export default function PluginMarketplace({ orgId, currentUserId, onError }: Plu
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <PluginSearch value={search} onChange={setSearch} />
-        <PluginFilters category={category} onCategoryChange={setCategory} sortBy={sortBy} onSortByChange={setSortBy} minRating={minRating} onMinRatingChange={setMinRating} />
+        <PluginFilters category={category} onCategoryChange={setCategory} pricing={pricing} onPricingChange={setPricing} sortBy={sortBy} onSortByChange={setSortBy} minRating={minRating} onMinRatingChange={setMinRating} />
       </div>
 
       {loading ? (
