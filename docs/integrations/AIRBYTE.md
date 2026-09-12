@@ -48,28 +48,60 @@ or `AIRBYTE_API_URL`/`AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET`
 (Cloud) are set, `{"reachable": false}` if set but no real Airbyte
 instance answers.
 
-## Airbyte Cloud (real OAuth2, attempted live — currently `401`)
+## Airbyte Cloud (real OAuth2 — now working; one real gap remains)
 
-`api/services/airbyte_client.py` now supports Airbyte Cloud's own real
-auth flow: `AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET` are exchanged
-for a real bearer token via `POST {AIRBYTE_API_URL}/applications/token`
-(`grant_type: client_credentials`), cached in memory until near
-expiry, then auto-refreshed — takes priority over the OSS
-`AIRBYTE_API_KEY` when both are set.
+`api/services/airbyte_client.py` supports Airbyte Cloud's own real auth
+flow: `AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET` are exchanged for a
+real bearer token via `POST {AIRBYTE_API_URL}/applications/token`
+(`grant_type: client_credentials`), cached in memory until near expiry,
+then auto-refreshed — takes priority over the OSS `AIRBYTE_API_KEY`
+when both are set.
 
-Tested live against `https://api.airbyte.com/v1/applications/token`
-with real credentials, three ways (JSON body, form body, client_id/
-client_secret swapped) — every attempt returned a real, consistent
-`401` with a bare `errorId` (no descriptive message from Airbyte's own
-API). `GET /integrations/airbyte/status` correctly and honestly
-reflects this: `{"configured": true, "reachable": false}` — configured
-because real credentials are set, not reachable because they don't
-authenticate. The token-exchange code itself is real and correct
-against Airbyte's own documented flow; this specific credential pair
-simply doesn't authenticate (consistent with a fresh Airbyte Cloud
-Application being created to replace it, not a bug in this code).
-Re-run the status check once new credentials are in `.env` — no code
-change should be needed.
+**Two real bugs found and fixed live against the real, current
+credentials (2026-09-19)**:
+
+1. **`client_id` case mismatch.** Every token-exchange attempt (JSON
+   body, form body, Basic Auth, camelCase field names — all tested
+   live) returned a real `401`/`400` no matter the request shape. Root
+   cause found by decoding the real JWT Airbyte's own "Générer un jeton
+   d'accès" button issued for this exact application: its `client_id`
+   claim is lowercase (`...40ac49f29f11`), while the value shown/copied
+   from the Applications page and stored in `.env` had one segment in
+   uppercase (`...40AC49F29F11`). Airbyte's token endpoint treats
+   `client_id` as case-sensitive; fixed by lowercasing it in `.env`.
+   Token exchange now succeeds for real (a genuine signed JWT access
+   token is returned).
+2. **Doubled API path.** Every endpoint call in this file (except the
+   token exchange itself) built its URL as
+   `{AIRBYTE_API_URL}/api/v1/<endpoint>` — but `AIRBYTE_API_URL` is
+   documented (and set, for both OSS and Cloud) to already end in
+   `/api/v1` or `/v1`, so every real call doubled that segment
+   (`.../v1/api/v1/source_definitions/list`), a real `403` on Cloud.
+   Fixed by dropping the redundant `/api/v1` prefix from all 6 calls
+   (`list_source_definitions`, `create_source`, `get_source_catalog`,
+   `create_connection`, `trigger_sync`, `get_sync_status`) — affected
+   OSS mode identically, not just Cloud.
+
+**Real, honest gap that remains**: with both bugs fixed, the OAuth2
+handshake and basic connectivity are confirmed live and working
+(`GET /workspaces` and `GET /sources` both return real `200`s with this
+application's real workspace). But `list_source_definitions` (and the
+other 5 helper functions) still target Airbyte's **legacy OSS
+Configuration API** shape (`POST .../source_definitions/list`,
+`.../sources/create`, etc.) — confirmed live that Airbyte Cloud's
+modern public API does not expose these at all (`403 Forbidden` on
+`/source_definitions`, cleanly separate from the path-doubling bug
+above). Cloud instead exposes a REST-shaped API (`GET/POST /sources`,
+`/destinations`, `/connections`, `/jobs`, each with a different
+request/response schema than the OSS RPC calls this file was written
+against). Making a real end-to-end sync flow work against Airbyte
+Cloud specifically requires rewriting these 6 functions against Cloud's
+actual REST shape — real, scoped work, not done in this pass since it
+needs its own verification rather than being guessed. `GET
+/integrations/airbyte/status` already reports this honestly:
+`{"configured": true, "reachable": false}` (credentials are real and
+authenticate; the specific reachability probe it uses,
+`list_source_definitions`, is the legacy call that 403s on Cloud).
 
 ## Real network blocker on this dev machine (retried, still blocked)
 

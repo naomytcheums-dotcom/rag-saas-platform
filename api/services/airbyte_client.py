@@ -104,14 +104,14 @@ async def list_source_definitions() -> list[dict]:
     connectors -- read from Airbyte itself, never hardcoded here (a
     static list would drift the moment Airbyte adds or removes one)."""
     async with (await _client()) as client:
-        response = await client.post("/api/v1/source_definitions/list", json={"workspaceId": settings.AIRBYTE_WORKSPACE_ID})
+        response = await client.post("/source_definitions/list", json={"workspaceId": settings.AIRBYTE_WORKSPACE_ID})
         response.raise_for_status()
         return response.json().get("sourceDefinitions", [])
 
 
 async def create_source(*, name: str, source_definition_id: str, connection_configuration: dict) -> dict:
     async with (await _client()) as client:
-        response = await client.post("/api/v1/sources/create", json={
+        response = await client.post("/sources/create", json={
             "workspaceId": settings.AIRBYTE_WORKSPACE_ID, "name": name,
             "sourceDefinitionId": source_definition_id, "connectionConfiguration": connection_configuration,
         })
@@ -121,14 +121,14 @@ async def create_source(*, name: str, source_definition_id: str, connection_conf
 
 async def get_source_catalog(source_id: str) -> dict:
     async with (await _client()) as client:
-        response = await client.post("/api/v1/sources/discover_schema", json={"sourceId": source_id})
+        response = await client.post("/sources/discover_schema", json={"sourceId": source_id})
         response.raise_for_status()
         return response.json()
 
 
 async def create_connection(*, source_id: str, destination_id: str, sync_catalog: dict) -> dict:
     async with (await _client()) as client:
-        response = await client.post("/api/v1/connections/create", json={
+        response = await client.post("/connections/create", json={
             "sourceId": source_id, "destinationId": destination_id, "syncCatalog": sync_catalog, "status": "active",
         })
         response.raise_for_status()
@@ -137,14 +137,14 @@ async def create_connection(*, source_id: str, destination_id: str, sync_catalog
 
 async def trigger_sync(airbyte_connection_id: str) -> dict:
     async with (await _client()) as client:
-        response = await client.post("/api/v1/connections/sync", json={"connectionId": airbyte_connection_id})
+        response = await client.post("/connections/sync", json={"connectionId": airbyte_connection_id})
         response.raise_for_status()
         return response.json()
 
 
 async def get_sync_status(job_id: str) -> dict:
     async with (await _client()) as client:
-        response = await client.post("/api/v1/jobs/get", json={"id": job_id})
+        response = await client.post("/jobs/get", json={"id": job_id})
         response.raise_for_status()
         return response.json()
 
