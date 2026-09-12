@@ -31,7 +31,7 @@ import datetime as dt
 import uuid
 from enum import StrEnum
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -200,7 +200,18 @@ class DocumentChunk(Base):
     __tablename__ = "document_chunks"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # Partie 22 -- made nullable, alongside the new `media_asset_id`
+    # below: a chunk of REAL, searchable text now has two possible real
+    # parents (a Document, unchanged from before, OR a standalone
+    # MediaAsset -- a transcript/description/OCR chunk with no
+    # document at all). See migration 0104's own CHECK constraint
+    # (exactly one of the two must be set) and
+    # api/services/media.py's own `index_media_in_rag`, which reuses
+    # this exact table/chunk_text/generate_embeddings pipeline for
+    # media-derived text instead of building a second, parallel vector
+    # index (this part's own audit's explicit recommendation).
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
+    media_asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media_assets.id", ondelete="CASCADE"), nullable=True)
     # Partie 3.3.4 (real multi-tenant search pipeline) -- a real,
     # deliberately DENORMALIZED copy of `Document.organization_id`
     # (migration 0047, backfilled from the real, existing
@@ -244,6 +255,8 @@ class DocumentChunk(Base):
     __table_args__ = (
         Index("ix_document_chunks_document_id", "document_id"),
         Index("ix_document_chunks_organization_id", "organization_id"),
+        Index("ix_document_chunks_media_asset_id", "media_asset_id"),
+        CheckConstraint("document_id IS NOT NULL OR media_asset_id IS NOT NULL", name="ck_document_chunks_has_a_parent"),
     )
 
 

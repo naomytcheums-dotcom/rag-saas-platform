@@ -36,6 +36,7 @@ celery_app = Celery(
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
+        "api.tasks.media",
     ],
 )
 
@@ -298,6 +299,27 @@ celery_app.conf.beat_schedule = {
     "complete-expired-ab-tests-daily": {
         "task": "api.tasks.ab_tests.complete_expired_ab_tests",
         "schedule": crontab(hour=5, minute=30),
+    },
+    # -- Partie 22: multi-modal media ------------------------------------------
+    "extract-media-transcripts-backfill-daily": {
+        "task": "api.tasks.media.extract_transcripts",
+        "schedule": crontab(hour=2, minute=0),
+    },
+    "extract-media-frames-backfill-daily": {
+        "task": "api.tasks.media.extract_frames",
+        "schedule": crontab(hour=2, minute=10),
+    },
+    "describe-media-backfill-daily": {
+        "task": "api.tasks.media.describe_media",
+        "schedule": crontab(hour=2, minute=20),
+    },
+    "index-media-in-rag-backfill-daily": {
+        "task": "api.tasks.media.index_media_in_rag_task",
+        "schedule": crontab(hour=2, minute=30),
+    },
+    "cleanup-old-media-daily": {
+        "task": "api.tasks.media.cleanup_old_media",
+        "schedule": crontab(hour=4, minute=0),
     },
 }
 

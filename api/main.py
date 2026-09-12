@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, notifications, observability,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, media, notifications, observability,
     plugins,
     sales,
     analytics,
@@ -371,6 +371,7 @@ app.include_router(plugins.marketplace_router)
 app.include_router(plugins.org_router)
 app.include_router(plugins.admin_router)
 app.include_router(ab_tests.router)
+app.include_router(media.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

@@ -6,7 +6,7 @@ in S3 alongside the document itself."""
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -31,6 +31,13 @@ class DocumentImage(Base):
     # SQLAlchemy's own Base.metadata, same reasoning as every other
     # such column in this codebase (Document.metadata_json, etc.).
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 22 -- real LLM-vision description and object list (this
+    # part's own audit confirmed no vision-LLM call existed anywhere
+    # before this), added directly to this same real, existing table
+    # rather than a parallel "MediaDescription" model -- these are the
+    # last 2 real fields an embedded document image was still missing.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    objects_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

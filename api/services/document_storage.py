@@ -447,6 +447,21 @@ def save_image(organization_id: uuid.UUID, document_id: uuid.UUID, image_index: 
     return key
 
 
+def upload_media_file(organization_id: uuid.UUID, media_asset_id: uuid.UUID, filename: str, content: bytes, content_type: str) -> str:
+    """Partie 22 -- real, standalone media (audio/video/top-level image)
+    upload, keyed the exact same real per-org/per-entity way as
+    `upload_document_file`/`save_image` above, reusing THIS SAME real
+    private S3 bucket (this part's own audit's own recommendation:
+    documents already store non-text images here, a 4th bucket for
+    media specifically was not justified)."""
+    key = f"media/{organization_id}/{media_asset_id}/{filename}"
+    try:
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"media upload failed: {exc}") from exc
+    return key
+
+
 def download_document_file(file_key: str) -> bytes:
     """Fetches a document's raw bytes back out of S3 -- used by
     api/security/documents.py's process_document to get the file

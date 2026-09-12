@@ -136,7 +136,12 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id) -> list[d
     ]
 
 
-def _cosine_similarities(query_embedding: list[float], chunk_embeddings: list[list[float]]) -> np.ndarray:
+def cosine_similarities(query_embedding: list[float], chunk_embeddings: list[list[float]]) -> np.ndarray:
+    """Made public (Partie 22, same "private helper -> public for real
+    cross-module reuse" precedent as `rank_chunks_by_embedding` below)
+    for `api.services.media.search_media`, which ranks a real,
+    media-only chunk subset the same way this module already ranks a
+    document's own chunks."""
     query = np.asarray(query_embedding, dtype=float)
     matrix = np.asarray(chunk_embeddings, dtype=float)
     query_norm = np.linalg.norm(query)
@@ -144,6 +149,9 @@ def _cosine_similarities(query_embedding: list[float], chunk_embeddings: list[li
     denom = query_norm * matrix_norms
     denom[denom == 0] = 1e-12  # a real, cheap guard against a real zero-norm embedding, never divides by 0
     return (matrix @ query) / denom
+
+
+_cosine_similarities = cosine_similarities  # internal alias, unchanged call sites below
 
 
 async def vector_search(db: AsyncSession, organization_id, query: str, top_k: int | None = None, org_settings: dict | None = None) -> list[dict]:
