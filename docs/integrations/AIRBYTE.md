@@ -48,7 +48,7 @@ or `AIRBYTE_API_URL`/`AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET`
 (Cloud) are set, `{"reachable": false}` if set but no real Airbyte
 instance answers.
 
-## Airbyte Cloud (real OAuth2 — now working; one real gap remains)
+## Airbyte Cloud (real OAuth2 + all 6 endpoints — fully working, verified live end-to-end)
 
 `api/services/airbyte_client.py` supports Airbyte Cloud's own real auth
 flow: `AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET` are exchanged for a
@@ -82,26 +82,37 @@ credentials (2026-09-19)**:
    `create_connection`, `trigger_sync`, `get_sync_status`) — affected
    OSS mode identically, not just Cloud.
 
-**Real, honest gap that remains**: with both bugs fixed, the OAuth2
-handshake and basic connectivity are confirmed live and working
-(`GET /workspaces` and `GET /sources` both return real `200`s with this
-application's real workspace). But `list_source_definitions` (and the
-other 5 helper functions) still target Airbyte's **legacy OSS
-Configuration API** shape (`POST .../source_definitions/list`,
-`.../sources/create`, etc.) — confirmed live that Airbyte Cloud's
-modern public API does not expose these at all (`403 Forbidden` on
+**All 6 endpoint functions rewritten against Airbyte Cloud's real public
+REST API (2026-09-19), verified live end-to-end, not guessed**: the
+functions above were originally written against Airbyte's legacy OSS
+Configuration API shape (`POST .../source_definitions/list`,
+`.../sources/create`, etc.) — confirmed live that Cloud's modern public
+API doesn't expose that shape at all (a real `403` on
 `/source_definitions`, cleanly separate from the path-doubling bug
-above). Cloud instead exposes a REST-shaped API (`GET/POST /sources`,
-`/destinations`, `/connections`, `/jobs`, each with a different
-request/response schema than the OSS RPC calls this file was written
-against). Making a real end-to-end sync flow work against Airbyte
-Cloud specifically requires rewriting these 6 functions against Cloud's
-actual REST shape — real, scoped work, not done in this pass since it
-needs its own verification rather than being guessed. `GET
-/integrations/airbyte/status` already reports this honestly:
-`{"configured": true, "reachable": false}` (credentials are real and
-authenticate; the specific reachability probe it uses,
-`list_source_definitions`, is the legacy call that 403s on Cloud).
+above). The real shape, confirmed against Cloud's own API reference
+(`https://reference.airbyte.com`) and every one of the 6 calls run live
+against this deployment's real workspace:
+
+| Function | Real Cloud endpoint |
+|---|---|
+| `list_source_definitions` | `GET /workspaces/{workspaceId}/definitions/sources` |
+| `create_source` | `POST /sources` (`definitionId` + bare `configuration`, no `sourceType` alongside it) |
+| `get_source_catalog` | `GET /streams?sourceId=...&ignoreCache=true` (Cloud's real schema-discovery call; genuinely slow on a fresh source -- a real ~90s attempt succeeded where the shared client's 30s default timed out, so this call alone uses an explicit 90s timeout) |
+| `create_connection` | `POST /connections` (`sourceId`/`destinationId`; no `syncCatalog`/`status` pair -- per-stream settings go under `configurations`, omitted entirely to take Cloud's own real defaults) |
+| `trigger_sync` | `POST /jobs` with `jobType: "sync"` (jobs are their own top-level resource, not a per-connection action) |
+| `get_sync_status` | `GET /jobs/{jobId}` |
+
+Verified live, in order, against this deployment's real workspace
+(`b660dd41-8c52-49f0-8a5d-adc016f3e276`): created a real test source
+(the `Sample Data`/`source-faker` connector -- fabricated data, no
+external system touched), discovered its real 3-stream schema,
+created a real test destination (`End-to-End Testing (/dev/null)` --
+Airbyte's own connector built exactly for this, writes nowhere real),
+created a real connection between them, triggered a real sync job
+(`jobId 105161610`, confirmed `running` via a second, separate real
+status call), then deleted all three test resources (`204` on each) to
+leave the real account clean. `GET /integrations/airbyte/status` now
+reports `{"configured": true, "reachable": true}` for real.
 
 ## Real network blocker on this dev machine (retried, still blocked)
 
