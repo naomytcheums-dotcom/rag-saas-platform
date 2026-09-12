@@ -21,6 +21,13 @@ class OrganizationBrandingResponse(BaseModel):
     brand_name: str | None
     custom_css: str | None
     hide_platform_branding: bool
+    # Partie 19 (white-label) -- same row, see the model's own docstring.
+    company_email: str | None
+    support_email: str | None
+    email_sender_name: str | None
+    email_sender_email: str | None
+    custom_js: str | None
+    is_active: bool
 
 
 class OrganizationBrandingUpdateRequest(BaseModel):

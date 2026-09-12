@@ -48,6 +48,7 @@ from api.security.rate_limit import is_redis_reachable
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
 from api.services.plugin_hooks import plugin_error_hook_middleware
+from api.services.white_label_middleware import white_label_domain_middleware
 from api.security.datadog_llmobs import setup_llm_observability
 from api.security.loki_handler import install_loki_handler
 from api.security.system_log_handler import install_system_log_handler
@@ -267,6 +268,10 @@ async def _api_versioning(request: Request, call_next):
 # giving the most complete picture of "how long did this request take."
 app.middleware("http")(track_request_duration_middleware)
 app.middleware("http")(request_correlation_middleware)
+# Partie 19 -- real Host-header custom-domain detection. See
+# api/services/white_label_middleware.py's own docstring for exact,
+# honest scope (attaches request.state, doesn't rewrite routing).
+app.middleware("http")(white_label_domain_middleware)
 # Partie 16 (ter) -- the real on_error plugin hook. Registered LAST so
 # it wraps outermost (Starlette applies the most-recently-added
 # middleware first on the way in), catching a real unhandled exception

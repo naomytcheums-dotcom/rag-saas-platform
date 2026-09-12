@@ -32,6 +32,13 @@ DEFAULT_BRANDING: dict[str, Any] = {
     # Partie 1.4.6 -- see api/models/organization_branding.py's own
     # comment on this column.
     "hide_platform_branding": False,
+    # Partie 19 -- white-label extension, see the model's own docstring.
+    "company_email": None,
+    "support_email": None,
+    "email_sender_name": None,
+    "email_sender_email": None,
+    "custom_js": None,
+    "is_active": True,
 }
 
 # Real, substantive checks against a stored-CSS-injection class of
@@ -54,6 +61,23 @@ def validate_custom_css(css: str) -> None:
             raise ValueError(f"custom_css contains a disallowed pattern: {pattern!r}")
 
 
+# Partie 19 -- custom_js is NOT sanitized the way custom_css is above.
+# There is no meaningful pattern-based sanitization for arbitrary
+# JavaScript (unlike CSS's narrow, historically-exploitable construct
+# list) -- a script IS arbitrary code by definition. The real security
+# boundary is who can set it (require_org_owner, same as every other
+# branding field) and where it runs (only this org's OWN white-labeled
+# page, never the platform's own pages or another organization's) --
+# the same trust model as an org owner embedding any third-party widget
+# script on their own site. Only a real length bound is enforced here.
+MAX_CUSTOM_JS_LENGTH = 20_000
+
+
+def validate_custom_js(js: str) -> None:
+    if len(js) > MAX_CUSTOM_JS_LENGTH:
+        raise ValueError(f"custom_js exceeds the maximum length of {MAX_CUSTOM_JS_LENGTH} characters")
+
+
 def get_default_branding() -> dict[str, Any]:
     """Item 2's literal function -- a fresh copy each call, so a caller
     mutating the result never corrupts the module-level DEFAULT_BRANDING."""
@@ -66,6 +90,9 @@ def _to_dict(row: OrganizationBranding) -> dict[str, Any]:
         "secondary_color": row.secondary_color, "accent_color": row.accent_color, "font_family": row.font_family,
         "brand_name": row.brand_name, "custom_css": row.custom_css,
         "hide_platform_branding": row.hide_platform_branding,
+        "company_email": row.company_email, "support_email": row.support_email,
+        "email_sender_name": row.email_sender_name, "email_sender_email": row.email_sender_email,
+        "custom_js": row.custom_js, "is_active": row.is_active,
     }
 
 

@@ -7,9 +7,18 @@ same "never without each other" reasoning as Partie 1.3.6's quotas).
 Unlike Partie 1.3.9's organization_settings (an open-ended JSON blob of
 overrides merged with defaults at read time), this is a small, fixed
 set of real, typed columns with real defaults on the row itself -- the
-same shape as OrganizationQuota, not OrganizationSettings. Branding is
-a closed set of 8 fields this step names explicitly, not something
-expected to grow arbitrarily the way configuration keys might.
+same shape as OrganizationQuota, not OrganizationSettings.
+
+Extended in Partie 19 (white-label) with 6 more real, typed columns
+(company_email/support_email/email_sender_name/email_sender_email/
+custom_js/is_active) -- still this table, deliberately: Partie 19's own
+spec asked for a brand-new `WhiteLabelConfig` model, but every single
+field it named beyond these 6 (logo_url, favicon_url, colors, name,
+custom_css, hide_branding, domain/domain_verified) already existed here
+or on CustomDomain (Partie 1.4.1). A second table would have meant two
+independent, potentially-disagreeing sources of truth for the exact
+same data -- the one mistake api/security/white_label.py's own
+docstring already documents rejecting once, for the exact same reason.
 """
 
 import datetime as dt
@@ -46,6 +55,26 @@ class OrganizationBranding(Base):
     # table was deliberately rejected rather than silently done because
     # the original spec asked for both.
     hide_platform_branding: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Partie 19 -- white-label extension. company_email/support_email are
+    # contact-info display fields (shown to the org's own end users, e.g.
+    # in a footer); email_sender_name/email_sender_email are a DIFFERENT,
+    # narrower thing -- the reply-to identity shown on outbound emails,
+    # independent of Partie 1.4.5's custom-domain sending (which sends
+    # FROM the verified domain itself; this is just the display name/
+    # reply-to address, real regardless of whether a custom domain is
+    # even configured).
+    company_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    support_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    email_sender_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    email_sender_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    custom_js: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A real kill switch, distinct from hide_platform_branding (which
+    # only hides THIS platform's own identity): is_active=False means
+    # "ignore every custom field on this row, render pure platform
+    # defaults" -- e.g. an org that configured white-label then
+    # downgraded off the plan that includes it, without losing its
+    # saved configuration.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

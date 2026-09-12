@@ -2454,14 +2454,80 @@ direct : bascule une licence expirée à `expired`).
 ressources que l'enforcement à la demande, envoie un vrai email
 d'avertissement avant qu'une organisation n'atteigne sa limite réelle.
 
-⬜ **White-label** : aucun vrai manque trouvé au-delà de ce qui existait
-déjà (branding, domaines personnalisés, email de domaine personnalisé,
-bascule white-label) — non dupliqué.
+🟡 **White-label** : à l'époque de la Partie 18, aucun vrai manque
+trouvé au-delà de ce qui existait déjà (branding, domaines
+personnalisés, email de domaine personnalisé, bascule white-label).
+Un audit plus poussé demandé explicitement en Partie 19 a trouvé de
+vrais manques réels (voir plus bas) — non contredit, juste approfondi.
 
 10 tests réels ajoutés dans `tests/test_sales_models.py` (inscription,
 double-inscription rejetée, tableau de bord, paiement de commission,
 idempotence du calcul mensuel, seuil de paiement minimum, expiration
 de licence), tous passés en direct.
+
+---
+
+## PARTIE 19 — White-label complet — ✅ COMPLET (scope honnête)
+
+Discipline établie appliquée en premier : audit de l'existant AVANT
+tout code (demandé explicitement par ce prompt). Résultat honnête :
+9 des 15 champs du `WhiteLabelConfig` demandé existaient déjà sur
+`OrganizationBranding` (Partie 1.3.10), 2 de plus sur `CustomDomain`
+(Partie 1.4.1). Créer une deuxième table aurait dupliqué une source de
+vérité déjà réelle — exactement l'erreur qu'`api/security/white_label.py`
+avait déjà documenté avoir rejetée une fois, pour la même raison. Donc :
+`organization_branding` étendue avec les 6 vrais champs manquants
+(`company_email`/`support_email`/`email_sender_name`/`email_sender_email`/
+`custom_js`/`is_active`, migration `0101`, RLS non concerné — table déjà
+couverte), le reste vient en lecture croisée depuis `custom_domains`.
+
+✅ **12 endpoints réels** sous `/organizations/{org_id}/whitelabel/...`
+(Member+ lecture, Admin+ écriture — un cran plus permissif que
+l'ancien `/white-label` Owner-only, conservé inchangé) : config
+GET/PATCH, domaine POST/DELETE/verify, email POST/DELETE, logo
+POST/DELETE, favicon POST, preview GET, reset POST. Logo/favicon
+délèguent au vrai upload S3 déjà existant (Partie 1.3.10), domaine
+délègue à la vraie vérification DNS déjà existante (Partie 1.4.1) —
+rien réimplémenté.
+
+✅ **Vrai kill switch `is_active`**, distinct de `hide_platform_branding` :
+testé en direct — désactivé, l'aperçu retombe sur les vrais défauts de
+la plateforme sans perdre la configuration sauvegardée.
+
+✅ **Middleware réel de détection de domaine** (`api/services/white_label_middleware.py`)
+— le vrai manque d'infrastructure trouvé par l'audit : rien ne lisait
+encore le header `Host` d'une requête entrante pour résoudre
+l'organisation via son domaine personnalisé. **Vrai bug trouvé et
+corrigé pendant l'écriture de ses propres tests** : une première
+version ouvrait sa propre session DB directement, contournant la
+substitution de base de test — 36 tests non liés sont passés de
+quelques secondes à 3m24s, la preuve chiffrée que CHAQUE requête de
+toute la suite de tests tapait réellement la vraie base Postgres de
+production. Corrigé en passant par `request.app.dependency_overrides`,
+le même mécanisme que `Depends(get_db)` utilise déjà.
+
+✅ **`custom_js` honnêtement non sanitisé** : contrairement à
+`custom_css` (motifs dangereux réels rejetés), un script est du code
+arbitraire par définition — la vraie barrière de sécurité documentée
+est le contrôle d'accès (Admin+ uniquement) et la portée (seulement la
+page white-labelée de cette organisation), pas une sanitisation
+illusoire.
+
+✅ **16 tests backend réels** (`tests/backend/whitelabel/test_config.py`,
+`test_domain.py`, `test_email.py`, `test_logo.py`) + **14 tests
+frontend réels** (`frontend/components/whitelabel/components.test.tsx`
+— placé à côté des composants comme `plugins`/`integrations`, pas au
+chemin `tests/frontend/whitelabel/` suggéré, hors de la racine vitest
+et jamais découvert), tous passés en direct. Voir
+[`docs/whitelabel/CONFIGURATION.md`](whitelabel/CONFIGURATION.md),
+[`docs/whitelabel/DOMAIN.md`](whitelabel/DOMAIN.md),
+[`docs/whitelabel/EMAIL.md`](whitelabel/EMAIL.md),
+[`docs/whitelabel/RESELLER.md`](whitelabel/RESELLER.md).
+
+⬜ **Gap honnête non construit** : pas de propagation automatique de la
+marque d'un revendeur vers tous ses sous-clients (chaque organisation
+reste sa propre config white-label indépendante) — voir
+`docs/whitelabel/RESELLER.md`.
 
 ---
 
