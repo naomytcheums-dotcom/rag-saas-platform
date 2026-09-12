@@ -1056,6 +1056,13 @@ class Settings(BaseSettings):
     QUALITY_DASHBOARD_MAX_RESPONSES: int = 1000
     QUALITY_DASHBOARD_RETENTION_DAYS: int = 90
 
+    # -- Advanced analytics (Partie 20) -----------------------------------------
+    ANALYTICS_ENABLED: bool = True
+    ANALYTICS_RETENTION_DAYS: int = 365
+    ANALYTICS_AGGREGATION_ENABLED: bool = True
+    ANALYTICS_MAX_EXPORT_ROWS: int = 100_000
+    ANALYTICS_DEFAULT_PERIOD: str = "30d"
+
     # -- Ground-truth answers (Partie 7.1.3) -----------------------------------
     GROUND_TRUTH_SEMANTIC_THRESHOLD: float = 0.8
     GROUND_TRUTH_FUZZY_THRESHOLD: float = 0.8

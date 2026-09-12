@@ -2531,6 +2531,67 @@ reste sa propre config white-label indépendante) — voir
 
 ---
 
+## PARTIE 20 — Analytics avancés — ✅ COMPLET (scope honnête)
+
+Audit préalable (agent d'exploration dédié) : Prometheus, la santé
+système, les revenus/MRR/ARR/ARPU/churn (compte brut), le ledger
+d'usage quotidien par organisation, le tableau de bord qualité RAG, et
+le suivi tokens/coût par évaluation étaient TOUS déjà réels — rien
+dupliqué. 3 vrais manques comblés : `AnalyticsEvent` (journal
+d'événements produit en texte libre, délibérément distinct d'`AuditLog`
+dont l'enum d'actions est fermé et à visée sécurité/conformité),
+`AnalyticsAggregate` (agrégats matérialisés par période, pour des
+requêtes de tableau de bord rapides), `AnalyticsDashboard` (mise en
+page de widgets sauvegardée — le seul vrai manque de "dashboard
+personnalisable" dans tout le code).
+
+✅ **Business (superadmin, plateforme entière)** : étend
+`admin_subscriptions.py` avec le **vrai taux de churn** (pas juste le
+compte brut), la **rétention**, le **LTV** (ARPU / taux de churn,
+honnêtement `null` sans signal de churn) et une **tendance de revenu
+quotidienne réelle** (approximation honnêtement documentée : prix du
+plan actuel appliqué rétroactivement, faute d'historique de prix).
+
+✅ **Produit (par organisation)** : usage (réutilise le ledger existant),
+adoption, engagement (utilisateurs actifs quotidiens), funnels — tout
+basé sur `AnalyticsEvent`, honnêtement vide tant qu'aucun événement
+réel n'est tracké.
+
+✅ **Technique (par organisation)** : performance/erreurs sont
+honnêtement documentées comme **plateforme entière, pas par
+organisation** (Prometheus n'a pas de label `org_id`) ; usage API
+réutilise le ledger existant ; usage LLM est un vrai pont vers le
+suivi tokens/coût de l'Evaluation Lab, avec le champ
+`"scope": "evaluation_lab_runs_only"` explicite — n'inclut PAS les
+vraies conversations de production, aucun suivi token/coût n'existe
+pour ce chemin dans ce code, honnêtement signalé plutôt que tu.
+
+✅ **Dashboards personnalisables réels** : CRUD complet, un seul
+dashboard par défaut appliqué automatiquement, widgets en JSON opaque
+côté frontend.
+
+✅ **Export CSV/JSON réel**, borné par `ANALYTICS_MAX_EXPORT_ROWS`.
+
+✅ **Première dépendance de graphiques du frontend** : `recharts`
+ajoutée (`--legacy-peer-deps`, conflit préexistant et non lié entre
+`vitest@5` et `@types/node@^20`) — aucune librairie de graphiques
+n'existait avant.
+
+✅ **29 tests backend + 10 tests frontend réels**, tous passés en
+direct dès la première exécution. Voir
+[`docs/analytics/METRICS.md`](analytics/METRICS.md),
+[`docs/analytics/BUSINESS.md`](analytics/BUSINESS.md),
+[`docs/analytics/PRODUCT.md`](analytics/PRODUCT.md),
+[`docs/analytics/TECHNICAL.md`](analytics/TECHNICAL.md),
+[`docs/analytics/DASHBOARDS.md`](analytics/DASHBOARDS.md).
+
+⬜ **Gap honnête non construit** : segmentation réelle (par plan, par
+rôle, etc.) — `SegmentSelector.tsx` n'offre qu'un seul segment
+fonctionnel ("Tous les utilisateurs") aujourd'hui, aucune dimension de
+segmentation réelle n'est trackée sur `AnalyticsEvent`.
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

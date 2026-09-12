@@ -35,7 +35,7 @@ celery_app = Celery(
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
-        "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales",
+        "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics",
     ],
 )
 
@@ -268,6 +268,23 @@ celery_app.conf.beat_schedule = {
     "check-usage-limits-hourly": {
         "task": "api.tasks.sales.check_usage_limits",
         "schedule": crontab(minute=0),
+    },
+    # -- Partie 20: advanced analytics ---------------------------------------
+    "aggregate-metrics-hourly": {
+        "task": "api.tasks.analytics.aggregate_metrics_hourly",
+        "schedule": crontab(minute=5),
+    },
+    "aggregate-metrics-daily": {
+        "task": "api.tasks.analytics.aggregate_metrics_daily",
+        "schedule": crontab(hour=0, minute=15),
+    },
+    "aggregate-metrics-monthly": {
+        "task": "api.tasks.analytics.aggregate_metrics_monthly",
+        "schedule": crontab(hour=0, minute=30, day_of_month=1),
+    },
+    "cleanup-old-analytics-events-daily": {
+        "task": "api.tasks.analytics.cleanup_old_events",
+        "schedule": crontab(hour=5, minute=0),
     },
 }
 

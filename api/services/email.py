@@ -781,6 +781,17 @@ def send_usage_limit_warning_email(to_email: str, organization_name: str, resour
     )
 
 
+def send_analytics_report_email(to_email: str, total_events_last_30d: int) -> None:
+    """Partie 20 -- the email half of api/tasks/analytics.py's
+    send_analytics_report. A real, current count, not a canned figure."""
+    subject = "Your monthly analytics report"
+    _send(
+        to_email, subject,
+        f"<p>Your organization tracked <strong>{total_events_last_30d}</strong> product events in the last 30 days. "
+        f"Sign in to your analytics dashboard for the full breakdown.</p>",
+    )
+
+
 def send_via_custom_email_domain(domain_row: CustomDomain, from_local_part: str, to_email: str, subject: str, html_body: str) -> None:
     """
     Partie 1.4.5, item 6's literal "l'envoi d'email avec un domaine
