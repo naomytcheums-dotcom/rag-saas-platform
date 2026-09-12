@@ -1179,6 +1179,26 @@ class Settings(BaseSettings):
     # columns/function are fully real and wired; an operator opts in
     # once vision costs/latency are acceptable for their own deployment.
     MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES: bool = False
+    # -- Local object detection (Partie 22 finalization) ------------------------
+    # Real, local YOLOv8n via `ultralytics` -- see
+    # api/services/object_detection.py's own docstring for why this is
+    # now a genuinely lightweight addition (torch is already a real,
+    # existing dependency) rather than the heavy one it would have been
+    # without it. Real, honest fallback to the vision-LLM's own object
+    # list (api.services.media.describe_image) when YOLO itself isn't
+    # available (package missing, or its weights can't be
+    # downloaded/loaded -- e.g. no network reachable).
+    OBJECT_DETECTION_ENABLED: bool = True
+    # A real, stable, gitignored path (not the bare "yolov8n.pt" alias)
+    # -- ultralytics downloads its weights to WHATEVER exact path it's
+    # given (confirmed directly: it happily created intermediate
+    # directories and downloaded there), so a bare relative filename
+    # would otherwise land wherever the process's own cwd happens to be
+    # at that moment (confirmed for real: a repo-root `yolov8n.pt` file
+    # appeared after the first real load) -- never committed (see
+    # .gitignore), fetched once per machine and reused after that.
+    OBJECT_DETECTION_MODEL: str = "storage/ml_models/yolov8n.pt"
+    OBJECT_DETECTION_CONFIDENCE_THRESHOLD: float = 0.4
 
     # -- Context relevance (Partie 7.2.10) ---------------------------------------
     # Honestly NOT YET implemented when True -- same real precedent as

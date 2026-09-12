@@ -15,14 +15,22 @@ never fails the upload itself, same reasoning as document upload's own
    (reused as-is). A missing Tesseract binary degrades gracefully
    (`OCRNotAvailableError` caught, logged, `ocr_text` stays `None`) --
    the asset still completes.
-2. **Vision description + object tagging** -- one real call to
-   `describe_image`, which sends the image to a vision-capable LLM
-   (`VISION_PROVIDER`/`VISION_MODEL`, default `openai`/`gpt-4o`) via
-   the SAME `chat_completion`/litellm this codebase already uses for
-   every other LLM call. The prompt asks for a real, structured JSON
+2. **Vision description** -- one real call to `describe_image`, which
+   sends the image to a vision-capable LLM (`VISION_PROVIDER`/
+   `VISION_MODEL`, default `openai`/`gpt-4o`) via the SAME
+   `chat_completion`/litellm this codebase already uses for every
+   other LLM call. The prompt asks for a real, structured JSON
    response (`description`, `objects`, `tags`); a model that doesn't
    obey the JSON instruction still has its raw text kept as the
    description (an honest degradation, not a discarded result).
+2b. **Object tagging (finalization)** -- real, local YOLOv8n
+   (`api.services.object_detection.detect_objects_yolo`) runs FIRST;
+   its real detected labels are used for `objects_json` when
+   available. Only when YOLO itself can't run (package/weights
+   unavailable) does `objects_json` fall back to `describe_image`'s
+   own object list from the SAME call above (no extra LLM call paid
+   just for the fallback). `description`/`tags` always come from the
+   vision LLM either way -- YOLO has no captioning ability.
 3. **RAG indexing** -- `ocr_text` and `description` are each chunked/
    cleaned/normalized/embedded exactly like document text, and stored
    as real `DocumentChunk` rows (`media_asset_id` set, `document_id`

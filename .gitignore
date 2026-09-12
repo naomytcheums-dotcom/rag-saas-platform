@@ -21,3 +21,9 @@ observability/*/data/
 # real binaries, never source, never committed.
 .tools/
 snyk.exe
+
+# Real, downloaded ML model weights (Partie 22 finalization -- YOLOv8n
+# via ultralytics, api/services/object_detection.py) -- fetched at
+# runtime from ultralytics' own GitHub releases, never committed, same
+# reasoning as .tools/ above.
+storage/ml_models/

@@ -1,16 +1,22 @@
 """Partie 22 finalization -- real diarization (Deepgram-only, best-effort
 parsing), real vision description wired into `process_document`'s own
-embedded-image loop (off by default), and the deliberate, documented
-decision NOT to add a separate object detector or split components
-further (see docs/CAHIER_DES_CHARGES.md's own PARTIE 22 finalization
-note)."""
+embedded-image loop (off by default), real local YOLO object detection
+now wired ahead of the vision-LLM's own objects in the media pipeline
+(see tests/backend/media/test_object_detection.py for the detector
+itself), and the deliberate, documented decision NOT to split frontend
+components further (see docs/CAHIER_DES_CHARGES.md's own PARTIE 22
+finalization note)."""
 
-from unittest.mock import AsyncMock
+import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from litellm.types.utils import Choices, Message, ModelResponse
+from sqlalchemy import select
 
 from api.config import settings
+from api.models.media import MediaAsset, MediaStatus, MediaType
+from api.services import media as media_service
 from api.services.voice import VoiceError, _parse_diarization_segments, transcribe_audio_with_diarization
 
 
@@ -116,3 +122,74 @@ async def test_describe_embedded_image_degrades_gracefully_on_a_real_provider_fa
     # the whole document -- same degradation as OCR's own
     # OCRNotAvailableError handling right above it in the same loop.
     assert (description, objects) == (None, None)
+
+
+# -------------------------------------------------------------- YOLO wired ahead of vision-LLM objects
+
+async def _create_image_asset(db_session, organization_id) -> MediaAsset:
+    asset = MediaAsset(
+        organization_id=organization_id, uploaded_by=None, media_type=MediaType.image, status=MediaStatus.pending,
+        filename="asset.png", file_key=f"media/{organization_id}/fake/asset.png", file_size=100, mime_type="image/png",
+    )
+    db_session.add(asset)
+    await db_session.flush()
+    return asset
+
+
+async def _make_org_id(client, db_session, register_payload) -> uuid.UUID:
+    payload = {"email": register_payload["email"], "password": register_payload["password"], "accept_terms": True}
+    access_token = (await client.post("/auth/register", json=payload)).json()["access_token"]
+    org_id = (await client.post("/organizations", json={"name": "YOLO Org"}, headers={"Authorization": f"Bearer {access_token}"})).json()["id"]
+    return uuid.UUID(org_id)
+
+
+async def test_process_media_asset_prefers_real_yolo_objects_over_vision_llm_objects(client, db_session, register_payload, monkeypatch):
+    org_id = await _make_org_id(client, db_session, register_payload)
+    asset = await _create_image_asset(db_session, org_id)
+    await db_session.commit()
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-oai-test")
+    monkeypatch.setattr("api.services.media.download_document_file", lambda file_key: b"fake-image-bytes")
+    monkeypatch.setattr("api.services.media.ocr_image_bytes", lambda content, language=None: "")
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_completion_response(
+        '{"description": "Une photo.", "objects": ["objet-du-llm"], "tags": []}'
+    )))
+
+    with patch("api.services.object_detection.detect_objects_yolo", return_value=["person", "bus"]):
+        updated = await media_service.process_media_asset(db_session, asset.id)
+        await db_session.commit()
+
+    assert updated.status == MediaStatus.completed
+    # YOLO's own real objects win over the vision-LLM's own list when
+    # YOLO is available -- the whole point of preferring the local,
+    # dedicated detector.
+    assert updated.objects_json == ["person", "bus"]
+    assert updated.description == "Une photo."  # description still always comes from the vision LLM -- YOLO has no captioning ability
+
+
+async def test_process_media_asset_falls_back_to_vision_llm_objects_when_yolo_unavailable(client, db_session, register_payload, monkeypatch):
+    org_id = await _make_org_id(client, db_session, register_payload)
+    asset = await _create_image_asset(db_session, org_id)
+    await db_session.commit()
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-oai-test")
+    monkeypatch.setattr("api.services.media.download_document_file", lambda file_key: b"fake-image-bytes")
+    monkeypatch.setattr("api.services.media.ocr_image_bytes", lambda content, language=None: "")
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_completion_response(
+        '{"description": "Une photo.", "objects": ["objet-du-llm"], "tags": []}'
+    )))
+
+    from api.services.object_detection import YOLONotAvailableError
+
+    with patch("api.services.object_detection.detect_objects_yolo", side_effect=YOLONotAvailableError("simulated: no real weights available")):
+        updated = await media_service.process_media_asset(db_session, asset.id)
+        await db_session.commit()
+
+    assert updated.status == MediaStatus.completed
+    assert updated.objects_json == ["objet-du-llm"]

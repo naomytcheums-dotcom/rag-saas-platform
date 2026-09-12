@@ -14,12 +14,18 @@ storage (`MediaAsset`), video processing entirely
 tagging via a vision-capable LLM (no such call existed anywhere in
 this codebase before this part).
 
-**Object detection, a real, documented simplification**: rather than a
-second, separate CV model/dependency (YOLO, a hosted detection API --
-neither previously present, per the audit), one real vision-LLM call
-(`describe_image` below) asks for a description AND a structured
-objects/tags list in the SAME real request -- one real network call,
-one real dependency (litellm, already core), not two."""
+**Object detection (finalization)**: real, local YOLOv8n via
+`ultralytics` (`api.services.object_detection`) is now the PRIMARY
+detector -- confirmed end-to-end against a real photo (ultralytics'
+own bundled `bus.jpg`: `['bus', 'person']`). Originally declined (no
+confirmed PyTorch install in this environment); the user later
+confirmed a real, working CPU-only `torch` was already installed,
+making YOLOv8n (~6.5MB weights) a genuinely lightweight addition on
+top of an already-real dependency rather than a new heavy one. Falls
+back to the vision-LLM's own object list (`describe_image`'s own
+structured JSON response) when YOLO itself isn't available (package
+missing, or its weights can't be loaded/downloaded) -- never a crash,
+never an empty result mistaken for "nothing detected"."""
 
 import copy
 import json
@@ -175,10 +181,38 @@ async def describe_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> d
 
 
 async def detect_objects(image_bytes: bytes, mime_type: str = "image/jpeg") -> list[str]:
-    """Item 8's own literal function -- see this module's own docstring
-    for why this is the SAME real vision-LLM call as `describe_image`,
-    not a separate detector."""
-    return (await describe_image(image_bytes, mime_type))["objects"]
+    """Item 8's own literal function -- Partie 22 finalization: real,
+    local YOLOv8n detection FIRST (`api.services.object_detection`,
+    confirmed end-to-end against a real photo -- `['bus', 'person']`
+    on ultralytics' own bundled `bus.jpg` sample), falling back to the
+    vision-LLM's own object list (`describe_image`, one extra real
+    network call -- only paid when YOLO itself isn't available) when
+    YOLO can't run (package/weights unavailable). A caller that already
+    has a `describe_image` result on hand (the pipeline below) should
+    reuse ITS `objects` for the fallback instead of calling this
+    function (avoids a second, redundant vision-LLM call)."""
+    try:
+        from api.services.object_detection import detect_objects_yolo
+
+        return detect_objects_yolo(image_bytes)
+    except Exception as exc:  # noqa: BLE001 -- YOLONotAvailableError or any other real local-inference failure
+        logger.warning("detect_objects: local YOLO detection unavailable, falling back to vision-LLM objects: %s", exc)
+        return (await describe_image(image_bytes, mime_type))["objects"]
+
+
+def _detect_objects_yolo_or_none(image_bytes: bytes) -> list[str] | None:
+    """Sync helper for the pipeline below -- real YOLO objects, or
+    `None` (never `[]`, which would be indistinguishable from "YOLO ran
+    and found nothing real") when YOLO itself isn't available, so the
+    caller can fall back to an ALREADY-COMPUTED vision-LLM object list
+    instead of making a second, redundant vision call."""
+    try:
+        from api.services.object_detection import detect_objects_yolo
+
+        return detect_objects_yolo(image_bytes)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("local YOLO detection unavailable, falling back to the vision-LLM's own object list: %s", exc)
+        return None
 
 
 async def describe_video(db: AsyncSession, asset: MediaAsset) -> str | None:
@@ -239,9 +273,10 @@ async def extract_video_frames(db: AsyncSession, asset: MediaAsset, video_path: 
         try:
             file_key = upload_media_file(asset.organization_id, asset.id, f"frame_{index}.jpg", frame_bytes, "image/jpeg")
             result = await describe_image(frame_bytes)
+            objects = _detect_objects_yolo_or_none(frame_bytes)
             frame = MediaFrame(
                 media_asset_id=asset.id, frame_index=index, timestamp_ms=timestamp_ms, file_key=file_key,
-                description=result["description"], objects_json=result["objects"] or None,
+                description=result["description"], objects_json=(objects if objects is not None else result["objects"]) or None,
             )
             db.add(frame)
             frames.append(frame)
@@ -267,7 +302,10 @@ async def process_media_asset(db: AsyncSession, media_asset_id: uuid.UUID) -> Me
             except OCRNotAvailableError as exc:
                 logger.warning("process_media_asset: OCR unavailable for '%s': %s", asset.id, exc)
             result = await describe_image(content, asset.mime_type)
-            asset.description, asset.objects_json, asset.tags_json = result["description"], result["objects"] or None, result["tags"] or None
+            objects = _detect_objects_yolo_or_none(content)
+            asset.description = result["description"]
+            asset.objects_json = (objects if objects is not None else result["objects"]) or None
+            asset.tags_json = result["tags"] or None
 
         elif asset.media_type == MediaType.audio:
             await extract_audio_transcript(db, asset)

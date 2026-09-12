@@ -401,6 +401,18 @@ aiosqlite==0.22.1
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 
+# -- Local object detection (Partie 22 finalization) --------------------------
+# Real, local YOLOv8n via ultralytics -- originally declined for Partie
+# 22 itself (no confirmed PyTorch install in this environment at the
+# time); the user later confirmed a real, working CPU-only
+# torch==2.13.0+cpu was already installed (pinned above, Partie 2.1.1's
+# own embeddings section), making this a genuinely lightweight addition
+# (yolov8n.pt is ~6.5MB, downloaded on first real use, never committed
+# -- see .gitignore) rather than the heavy dependency it would have
+# been on its own. Confirmed end-to-end against a real photo before
+# relying on it (api/services/object_detection.py's own docstring).
+ultralytics==8.4.106
+
 # -- Security scanning (Partie 10.5, api/services/security_scan.py) ----------
 # Real, locally-runnable scanners this environment can actually execute
 # without a paid SaaS account (Snyk/Trivy licensing, a cloud KMS, etc.):

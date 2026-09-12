@@ -53,22 +53,29 @@ See `IMAGES.md`, `AUDIO.md`, `VIDEO.md`, and `SEARCH.md` for the real
 detail on each pipeline, and `api/models/media.py`'s own module
 docstring for the exact real build-vs-reuse split.
 
-## A real, honest simplification: no separate object-detection model
+## Object detection: real, local YOLOv8n (finalization)
 
-The literal spec names object detection (YOLO or similar) as its own
-item. This part's own audit confirmed no CV/object-detection
-dependency existed anywhere in this codebase. Rather than adding a
-second, separate model/dependency, `describe_image` asks the SAME
-vision-LLM call for a structured objects/tags list alongside the
-description -- one real network call, one real dependency (litellm,
-already core), not two. This is a documented trade-off, not a silent
-gap: a dedicated detector would give bounding boxes; this gives real,
-useful object labels without a new, heavier dependency.
+Originally declined: this part's own audit confirmed no CV/object-
+detection dependency existed anywhere in this codebase, and a real
+detector needs either a heavy dependency or a paid hosted API. The
+user later confirmed a real, working CPU-only `torch==2.13.0+cpu` was
+already installed in this environment -- on top of that, `ultralytics`
+(YOLOv8n, ~6.5MB weights) is a genuinely lightweight addition, not a
+new heavy one, so it was added: `api/services/object_detection.py` now
+runs REAL, local YOLOv8n detection first, falling back to the
+vision-LLM's own object list only when YOLO itself isn't available
+(package missing, or its weights can't be loaded/downloaded -- no
+network, say). Confirmed end-to-end against a real photo (ultralytics'
+own bundled `bus.jpg` sample: real output `['bus', 'person']`) before
+relying on it. Weights are fetched once per machine into
+`storage/ml_models/` (gitignored, never committed) and cached in
+memory after the first real load.
 
 ## Config
 
 `MULTIMODAL_ENABLED`, `MULTIMODAL_MAX_IMAGE_SIZE_MB`/`_AUDIO_SIZE_MB`/
 `_VIDEO_SIZE_MB`, `VISION_PROVIDER`/`VISION_MODEL`,
 `MULTIMODAL_FRAME_INTERVAL_SECONDS`, `MULTIMODAL_MAX_FRAMES_PER_VIDEO`,
-`MEDIA_CLEANUP_FAILED_AFTER_DAYS` (`api/config.py`). OCR/STT settings
-are unchanged and reused as-is.
+`MEDIA_CLEANUP_FAILED_AFTER_DAYS`, `MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES`,
+`OBJECT_DETECTION_ENABLED`/`_MODEL`/`_CONFIDENCE_THRESHOLD`
+(`api/config.py`). OCR/STT settings are unchanged and reused as-is.

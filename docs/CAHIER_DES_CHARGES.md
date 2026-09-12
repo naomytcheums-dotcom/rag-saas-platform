@@ -2690,24 +2690,44 @@ Suite à une demande explicite de traiter les 4 points partiels :
   inconditionnellement. Même logique que `AB_TEST_AUTO_DECIDE`/
   `OTEL_ENABLED` : réel et fonctionnel, activable une fois le
   coût/latence acceptés par l'opérateur.
-- **Détecteur d'objets séparé (YOLO)** : décliné, refus honnête et
-  documenté, pas une omission. Un détecteur réel nécessite soit une
-  dépendance lourde (torch + poids YOLO, plusieurs centaines de Mo),
-  soit une API hébergée payante — aucune des deux n'est "sans
-  dépendance lourde" comme demandé. L'appel LLM vision existant
-  renvoie déjà des objets réels (pas de bounding boxes, mais des
-  labels réels) sans dépendance supplémentaire.
-- **14 composants frontend séparés** : déclinés — la consolidation
-  actuelle (upload, liste, détail, lecteurs, transcription,
-  description, galerie de frames, recherche) couvre les mêmes vraies
-  fonctionnalités sans fichiers redondants ; le prompt laissait
-  explicitement le choix ("si tu penses que c'est utile").
+- **14 composants frontend séparés** : audit de correspondance
+  confirmé — voir "Deuxième finalisation" ci-dessous.
+
+### Deuxième finalisation — YOLO local + audit frontend
+
+Suite à confirmation par l'utilisateur qu'un vrai `torch==2.13.0+cpu`
+était déjà installé, le détecteur d'objets séparé (initialement
+décliné) a été ajouté pour de vrai :
+
+- **`api/services/object_detection.py`** : détection réelle, locale,
+  YOLOv8n via `ultralytics` (poids ~6.5 Mo, réutilisation de torch déjà
+  présent — plus une dépendance lourde). **Confirmé en direct** contre
+  une vraie photo (l'échantillon `bus.jpg` fourni par ultralytics
+  lui-même) : détection réelle `['bus', 'person']`. Câblé en PRIORITÉ
+  dans le pipeline (`process_media_asset`, `extract_video_frames`) —
+  repli sur les objets du LLM vision uniquement si YOLO n'est pas
+  disponible (paquet absent, poids non téléchargeables). Poids stockés
+  dans `storage/ml_models/` (gitignored, jamais commités).
+- **Tests** : 15 tests réels (parsing, dégradation gracieuse,
+  priorité YOLO sur LLM vision dans le pipeline, et un test réel de
+  bout en bout non mocké contre la vraie photo `bus.jpg`).
+
+**Audit de correspondance frontend (14 composants demandés)** :
+aucun manque fonctionnel trouvé. `MediaUpload.tsx` est couvert par
+`MediaUploadZone.tsx` (upload + drag-and-drop dans le même fichier) ;
+`VisualSearch.tsx` est couvert par `MediaSearch.tsx` (filtre
+`media_type=image`, même interprétation que les 3 routes de recherche
+du prompt original — une recherche textuelle filtrée par type, pas une
+recherche par similarité d'image). Les 12 autres noms demandés
+correspondent 1:1 à des fichiers du même nom déjà créés. Aucun fichier
+correctif ajouté puisqu'aucun manque fonctionnel réel n'a été trouvé.
 
 🐛 **Simplification réelle, documentée, pas un manque caché** :
-aucun détecteur d'objets séparé (YOLO ou équivalent) n'a été ajouté —
-le même appel LLM vision qui décrit l'image renvoie aussi une liste
-d'objets structurée en JSON, un seul appel réseau réel au lieu de deux
-dépendances.
+la recherche "visuelle" reste une recherche textuelle filtrée par
+type de média, pas une recherche par similarité d'image (upload d'une
+image pour en trouver des similaires) — cette dernière nécessiterait
+un modèle d'embedding d'image (CLIP ou équivalent), un vrai gap non
+comblé, non demandé explicitement non plus.
 
 🟡 **Ce qui reste partiel** : les 3 routes de recherche
 séparées du prompt original (`/search`, `/search/visual`,
