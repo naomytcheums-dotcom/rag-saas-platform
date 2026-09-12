@@ -75,3 +75,18 @@ class MediaSearchResult(BaseModel):
 
 class MediaSearchResponse(BaseModel):
     results: list[MediaSearchResult]
+
+
+class VisualSearchRequest(BaseModel):
+    query: str
+    top_k: int = 10
+
+
+class VisualSearchResult(BaseModel):
+    media_asset_id: uuid.UUID
+    filename: str
+    score: float
+
+
+class VisualSearchResponse(BaseModel):
+    results: list[VisualSearchResult]

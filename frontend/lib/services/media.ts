@@ -76,6 +76,20 @@ export const listMediaFrames = (id: string) => api.get<MediaFrame[]>(`/media/${i
 export const searchMedia = (query: string, mediaType?: MediaType, topK = 10) =>
   api.post<{ results: MediaSearchResult[] }>(`/media/search`, { query, media_type: mediaType, top_k: topK });
 
+export interface VisualSearchResult {
+  media_asset_id: string;
+  filename: string;
+  score: number;
+}
+
+// Real CLIP-based search (Partie 22, 3rd finalization) -- compares a
+// query directly against real image CONTENT, distinct from
+// searchMedia's own text search over LLM-written descriptions.
+export const searchVisual = (query: string, topK = 10) =>
+  api.post<{ results: VisualSearchResult[] }>(`/media/search/visual`, { query, top_k: topK });
+
+export const searchSimilar = (file: File) => api.postFile<{ results: VisualSearchResult[] }>(`/media/search/similar`, file);
+
 // Real, authenticated fetch-as-blob -- same pattern as
 // components/analytics/ExportButton.tsx and VoiceOutput.tsx: this
 // endpoint requires a Bearer token, so a plain <img>/<audio>/<video>

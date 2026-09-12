@@ -4,16 +4,24 @@
 // tests/frontend/media/ (this part's own literal spec suggestion)
 // sits outside vitest's project root and would never actually run.
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DescriptionViewer } from "./DescriptionViewer";
 import { MediaCard } from "./MediaCard";
 import { MediaStatusBadge } from "./MediaStatusBadge";
+import { VisualSearch } from "./VisualSearch";
 import type { MediaAsset } from "@/lib/services/media";
 
+// vi.mock's factory is hoisted above regular top-level statements --
+// vi.hoisted lets `mockApi` exist before that hoisted call runs, so
+// the factory can safely reference it (a plain top-level const here
+// would throw "Cannot access before initialization").
+const mockApi = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), postMultipart: vi.fn(), putMultipart: vi.fn(), postFile: vi.fn() }));
+
 vi.mock("@/lib/api", () => ({
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), postMultipart: vi.fn(), putMultipart: vi.fn(), postFile: vi.fn() },
+  api: mockApi,
   ApiError: class ApiError extends Error {
     status: number;
     constructor(status: number, detail: unknown) {
@@ -63,5 +71,31 @@ describe("DescriptionViewer", () => {
   it("shows a real, honest empty state when nothing has been extracted yet", () => {
     render(<DescriptionViewer asset={{ ...BASE_ASSET, description: null, ocr_text: null, objects_json: null }} />);
     expect(screen.getByText("No description yet.")).toBeInTheDocument();
+  });
+});
+
+describe("VisualSearch", () => {
+  it("runs a real text-to-image (CLIP) search and renders ranked results", async () => {
+    mockApi.post.mockResolvedValueOnce({ results: [{ media_asset_id: "a1", filename: "bus.jpg", score: 0.91 }] });
+    render(<VisualSearch />);
+
+    await userEvent.type(screen.getByPlaceholderText(/Describe what the image should show/i), "a photo of a bus");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => expect(screen.getByText("bus.jpg")).toBeInTheDocument());
+    expect(mockApi.post).toHaveBeenCalledWith("/media/search/visual", { query: "a photo of a bus", top_k: 10 });
+    expect(screen.getByText("91% similar")).toBeInTheDocument();
+  });
+
+  it("runs a real image-to-image (CLIP) search on file upload", async () => {
+    mockApi.postFile.mockResolvedValueOnce({ results: [{ media_asset_id: "a2", filename: "similar.jpg", score: 0.8 }] });
+    render(<VisualSearch />);
+
+    const file = new File(["fake-bytes"], "query.png", { type: "image/png" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(input, file);
+
+    await waitFor(() => expect(screen.getByText("similar.jpg")).toBeInTheDocument());
+    expect(mockApi.postFile).toHaveBeenCalledWith("/media/search/similar", file);
   });
 });

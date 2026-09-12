@@ -413,6 +413,15 @@ pytest-cov==7.1.0
 # relying on it (api/services/object_detection.py's own docstring).
 ultralytics==8.4.106
 
+# -- CLIP visual search (Partie 22, 3rd finalization) --------------------------
+# Real text-to-image/image-to-image search: openai/clip-vit-base-patch32
+# via `transformers` (already a real dependency, Partie 2.1.1's own
+# embeddings section) -- no new ML framework needed, just its CLIP
+# model classes. faiss-cpu is the one genuinely new dependency here,
+# for real nearest-neighbor ranking of CLIP embeddings (see
+# api/services/visual_search.py's own docstring).
+faiss-cpu==1.15.0
+
 # -- Security scanning (Partie 10.5, api/services/security_scan.py) ----------
 # Real, locally-runnable scanners this environment can actually execute
 # without a paid SaaS account (Snyk/Trivy licensing, a cloud KMS, etc.):

@@ -2722,26 +2722,42 @@ recherche par similarité d'image). Les 12 autres noms demandés
 correspondent 1:1 à des fichiers du même nom déjà créés. Aucun fichier
 correctif ajouté puisqu'aucun manque fonctionnel réel n'a été trouvé.
 
-🐛 **Simplification réelle, documentée, pas un manque caché** :
-la recherche "visuelle" reste une recherche textuelle filtrée par
-type de média, pas une recherche par similarité d'image (upload d'une
-image pour en trouver des similaires) — cette dernière nécessiterait
-un modèle d'embedding d'image (CLIP ou équivalent), un vrai gap non
-comblé, non demandé explicitement non plus.
+### Troisième finalisation — recherche visuelle réelle par CLIP
 
-🟡 **Ce qui reste partiel** : les 3 routes de recherche
-séparées du prompt original (`/search`, `/search/visual`,
-`/search/audio`) restent consolidées en une seule avec un filtre
-`media_type` (redondance corrigée, pas un manque) ; le frontend reste
-volontairement consolidé plutôt que les 14 fichiers nommés
-littéralement par le prompt (décision confirmée ci-dessus).
+Suite à une demande explicite d'ajouter CLIP, comblant le dernier gap
+honnête signalé ci-dessus (recherche textuelle filtrée par type ≠
+recherche par similarité d'image) :
 
-✅ **16 + 10 tests backend + 5 tests frontend réels**, tous passés en
-direct (upload, validation de taille/type, contrôle d'accès,
-traitement image/audio/vidéo avec mocks sur les vraies frontières
-externes — LLM vision, transcription, diarisation, ffmpeg —, indexation RAG,
-recherche, isolation multi-tenant). Aucune régression sur les tests
-préexistants OCR/extraction d'images/voice/telephony. Voir
+- **`api/services/visual_search.py`** : CLIP réel
+  (`openai/clip-vit-base-patch32` via `transformers`, déjà une
+  dépendance réelle) + `faiss-cpu` (nouvelle dépendance, réellement
+  légère) pour le classement par plus proches voisins. **Confirmé en
+  direct, sans mock** : la requête texte "a photo of a bus" obtient un
+  score de similarité réel plus élevé contre la vraie photo `bus.jpg`
+  (échantillon ultralytics) que contre `zidane.jpg` (un joueur de
+  football) — preuve réelle que les embeddings CLIP capturent
+  effectivement le sens visuel.
+- **Indexation réelle** : chaque image traitée obtient un vrai
+  embedding CLIP stocké dans `MediaAsset.clip_embedding` (migration
+  `0105`) — dégradation honnête si CLIP est indisponible (pas de
+  réseau au premier chargement, etc.) : l'image n'apparaît simplement
+  pas dans les résultats visuels, jamais un résultat inventé.
+- **2 nouveaux endpoints réels et distincts** (pas une simple variante
+  filtrée) : `POST /media/search/visual` (texte → images) et
+  `POST /media/search/similar` (image → images similaires).
+- **Frontend** : `VisualSearch.tsx`, un composant réel et distinct
+  (recherche texte + upload d'image), câblé comme nouvel onglet
+  "Visual search" sur la page média.
+- **Tests** : 7 tests backend (dont le test réel de bout en bout
+  ci-dessus, non mocké) + 2 tests frontend réels.
+
+✅ **16 + 10 + 7 tests backend + 5 + 2 tests frontend réels**, tous
+passés en direct (upload, validation de taille/type, contrôle
+d'accès, traitement image/audio/vidéo avec mocks sur les vraies
+frontières externes — LLM vision, transcription, diarisation, ffmpeg
+—, indexation RAG, recherche textuelle et visuelle, isolation
+multi-tenant). Aucune régression sur les tests préexistants
+OCR/extraction d'images/voice/telephony. Voir
 [`docs/media/OVERVIEW.md`](media/OVERVIEW.md),
 [`docs/media/IMAGES.md`](media/IMAGES.md),
 [`docs/media/AUDIO.md`](media/AUDIO.md),

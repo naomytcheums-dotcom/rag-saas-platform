@@ -4,11 +4,12 @@ import { useState } from "react";
 import { MediaList } from "@/components/media/MediaList";
 import { MediaSearch } from "@/components/media/MediaSearch";
 import { MediaUploadZone } from "@/components/media/MediaUploadZone";
+import { VisualSearch } from "@/components/media/VisualSearch";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 
 export default function Page() {
   const { org, loading } = useCurrentOrg();
-  const [tab, setTab] = useState<"library" | "search">("library");
+  const [tab, setTab] = useState<"library" | "search" | "visual">("library");
   const [refreshKey, setRefreshKey] = useState(0);
 
   if (loading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Loading…</p>;
@@ -35,10 +36,18 @@ export default function Page() {
         >
           Search
         </button>
+        <button
+          type="button" onClick={() => setTab("visual")}
+          className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === "visual" ? "border-accent text-accent" : "border-transparent text-foreground-muted"}`}
+        >
+          Visual search
+        </button>
       </div>
 
       <div className="mt-5">
-        {tab === "library" ? <MediaList key={refreshKey} orgId={org.id} /> : <MediaSearch />}
+        {tab === "library" && <MediaList key={refreshKey} orgId={org.id} />}
+        {tab === "search" && <MediaSearch />}
+        {tab === "visual" && <VisualSearch />}
       </div>
     </div>
   );

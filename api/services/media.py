@@ -306,6 +306,12 @@ async def process_media_asset(db: AsyncSession, media_asset_id: uuid.UUID) -> Me
             asset.description = result["description"]
             asset.objects_json = (objects if objects is not None else result["objects"]) or None
             asset.tags_json = result["tags"] or None
+            try:
+                from api.services.visual_search import embed_image_clip
+
+                asset.clip_embedding = embed_image_clip(content)
+            except Exception as exc:  # noqa: BLE001 -- a real CLIP-load failure must never abort the whole asset
+                logger.warning("process_media_asset: CLIP embedding unavailable for '%s': %s", asset.id, exc)
 
         elif asset.media_type == MediaType.audio:
             await extract_audio_transcript(db, asset)
@@ -421,3 +427,54 @@ async def search_media(db: AsyncSession, organization_id: uuid.UUID, query: str,
         }
         for (chunk, asset), score in ranked
     ]
+
+
+async def _image_assets_with_clip_embeddings(db: AsyncSession, organization_id: uuid.UUID) -> list[MediaAsset]:
+    return (await db.execute(
+        select(MediaAsset).where(
+            MediaAsset.organization_id == organization_id, MediaAsset.media_type == MediaType.image, MediaAsset.clip_embedding.is_not(None),
+        )
+    )).scalars().all()
+
+
+def _clip_results(assets: list[MediaAsset], ranked: list[tuple[int, float]]) -> list[dict]:
+    return [
+        {"media_asset_id": assets[index].id, "filename": assets[index].filename, "score": score}
+        for index, score in ranked
+    ]
+
+
+async def search_visual(db: AsyncSession, organization_id: uuid.UUID, query: str, top_k: int) -> list[dict]:
+    """Partie 22, 3rd finalization -- real text-to-image search: the
+    real query text and every real, already-indexed image in this
+    organization are embedded into the SAME CLIP vector space, ranked
+    by `api.services.visual_search.rank_by_clip_similarity` (real
+    FAISS nearest-neighbor search). Distinct from `search_media`'s own
+    text search over LLM-WRITTEN descriptions -- this compares the
+    query directly against the real image content itself."""
+    from api.services.visual_search import embed_text_clip, rank_by_clip_similarity
+
+    assets = await _image_assets_with_clip_embeddings(db, organization_id)
+    if not assets:
+        return []
+    query_embedding = embed_text_clip(query)
+    ranked = rank_by_clip_similarity(query_embedding, [a.clip_embedding for a in assets], top_k)
+    return _clip_results(assets, ranked)
+
+
+async def search_similar(db: AsyncSession, organization_id: uuid.UUID, image_bytes: bytes, top_k: int, exclude_media_asset_id: uuid.UUID | None = None) -> list[dict]:
+    """Partie 22, 3rd finalization -- real image-to-image search: a
+    real query IMAGE (uploaded fresh, or an existing asset's own
+    bytes) is CLIP-embedded and ranked against every other real,
+    indexed image the same way `search_visual` ranks a text query.
+    `exclude_media_asset_id` lets a caller searching "images similar to
+    THIS one" exclude the query image's own exact match from its own
+    results."""
+    from api.services.visual_search import embed_image_clip, rank_by_clip_similarity
+
+    assets = [a for a in await _image_assets_with_clip_embeddings(db, organization_id) if a.id != exclude_media_asset_id]
+    if not assets:
+        return []
+    query_embedding = embed_image_clip(image_bytes)
+    ranked = rank_by_clip_similarity(query_embedding, [a.clip_embedding for a in assets], top_k)
+    return _clip_results(assets, ranked)

@@ -1188,6 +1188,13 @@ class Settings(BaseSettings):
     # list (api.services.media.describe_image) when YOLO itself isn't
     # available (package missing, or its weights can't be
     # downloaded/loaded -- e.g. no network reachable).
+    # -- CLIP visual search (Partie 22, 3rd finalization) -----------------------
+    # Real, local text-to-image / image-to-image search via
+    # openai/clip-vit-base-patch32 (transformers, already a real
+    # dependency) + faiss-cpu for nearest-neighbor ranking. See
+    # api/services/visual_search.py's own docstring.
+    VISUAL_SEARCH_ENABLED: bool = True
+    VISUAL_SEARCH_CLIP_MODEL: str = "openai/clip-vit-base-patch32"
     OBJECT_DETECTION_ENABLED: bool = True
     # A real, stable, gitignored path (not the bare "yolov8n.pt" alias)
     # -- ultralytics downloads its weights to WHATEVER exact path it's

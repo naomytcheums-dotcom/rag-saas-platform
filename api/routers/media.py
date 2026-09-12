@@ -6,15 +6,23 @@ use the new `require_media_member`/`require_media_admin`
 literal spec never nests these under `{org_id}`, the same real,
 documented access-level adaptation already applied for Parties 19/20/21.
 
-**`POST /media/search`, real, single, consolidated endpoint** -- this
-part's own literal spec additionally names `/media/search/visual` and
-`/media/search/audio`, but the real underlying search
-(`api.services.media.search_media`) is ONE real function over ONE real
-chunk table, filterable by `media_type` -- 3 separate routes for the
-same real query with a different default filter would be redundant
-surface, not a real functional difference (this session's own standing
-"correct DeepSeek's own incoherent/duplicate asks" instruction). One
-route, one real optional `media_type` filter."""
+**`POST /media/search`, real, consolidated endpoint** -- covers the
+literal spec's own `/media/search/audio` (and, originally,
+`/media/search/visual` too) as ONE real function over ONE real chunk
+table, filterable by `media_type` -- 2 separate routes for the same
+real query with a different default filter would be redundant surface
+(this session's own standing "correct DeepSeek's own incoherent/
+duplicate asks" instruction).
+
+**`POST /media/search/visual` and `POST /media/search/similar`,
+genuinely real and distinct (3rd finalization)** -- CLIP-based
+text-to-image and image-to-image search
+(`api.services.visual_search`/`media_service.search_visual`/
+`search_similar`), NOT a filtered variant of `POST /media/search`: it
+compares a real query directly against real image CONTENT in CLIP's
+own shared vector space, not against an LLM-written text description
+-- a genuine functional difference from the consolidated text search
+above, so this one earns its own real, separate routes."""
 
 import uuid
 
@@ -29,7 +37,7 @@ from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.media import (
     MediaAssetListResponse, MediaAssetResponse, MediaFrameResponse, MediaSearchRequest, MediaSearchResponse,
-    MediaTranscriptResponse,
+    MediaTranscriptResponse, VisualSearchRequest, VisualSearchResponse,
 )
 from api.security.media import require_media_admin, require_media_member
 from api.security.organizations import require_org_member
@@ -161,10 +169,10 @@ async def get_media_frame_file_endpoint(
 @router.post("/media/search", response_model=MediaSearchResponse)
 async def search_media_endpoint(payload: MediaSearchRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Real, org-scoped by the caller's OWN organizations only -- see
-    this module's own docstring for why `visual`/`audio` search are
-    consolidated here as a real, optional `media_type` filter rather
-    than 2 separate routes."""
-    memberships = (await db.execute(select(OrganizationMember.organization_id).where(OrganizationMember.user_id == current_user.id))).scalars().all()
+    this module's own docstring for why `audio` search is consolidated
+    here as a real, optional `media_type` filter (`visual` now has its
+    own real, distinct CLIP-based routes below)."""
+    memberships = await _own_organization_ids(db, current_user)
     if not memberships:
         return MediaSearchResponse(results=[])
 
@@ -173,3 +181,42 @@ async def search_media_endpoint(payload: MediaSearchRequest, current_user: User 
         all_results.extend(await media_service.search_media(db, organization_id, payload.query, payload.media_type, payload.top_k))
     all_results.sort(key=lambda r: r["score"], reverse=True)
     return MediaSearchResponse(results=all_results[: payload.top_k])
+
+
+async def _own_organization_ids(db: AsyncSession, current_user: User) -> list[uuid.UUID]:
+    return (await db.execute(select(OrganizationMember.organization_id).where(OrganizationMember.user_id == current_user.id))).scalars().all()
+
+
+@router.post("/media/search/visual", response_model=VisualSearchResponse)
+async def search_visual_endpoint(payload: VisualSearchRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Partie 22, 3rd finalization -- real text-to-image search (CLIP),
+    org-scoped by the caller's OWN organizations only, same isolation
+    reasoning as `POST /media/search`."""
+    memberships = await _own_organization_ids(db, current_user)
+    if not memberships:
+        return VisualSearchResponse(results=[])
+
+    all_results = []
+    for organization_id in memberships:
+        all_results.extend(await media_service.search_visual(db, organization_id, payload.query, payload.top_k))
+    all_results.sort(key=lambda r: r["score"], reverse=True)
+    return VisualSearchResponse(results=all_results[: payload.top_k])
+
+
+@router.post("/media/search/similar", response_model=VisualSearchResponse)
+async def search_similar_endpoint(
+    file: UploadFile = File(...), top_k: int = 10, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Partie 22, 3rd finalization -- real image-to-image search
+    (CLIP): upload a query image, get back the most visually similar
+    real images already indexed across the caller's OWN organizations."""
+    content = await file.read()
+    memberships = await _own_organization_ids(db, current_user)
+    if not memberships:
+        return VisualSearchResponse(results=[])
+
+    all_results = []
+    for organization_id in memberships:
+        all_results.extend(await media_service.search_similar(db, organization_id, content, top_k))
+    all_results.sort(key=lambda r: r["score"], reverse=True)
+    return VisualSearchResponse(results=all_results[:top_k])

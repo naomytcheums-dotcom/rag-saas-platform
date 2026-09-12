@@ -59,6 +59,13 @@ class MediaAsset(Base):
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     objects_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     tags_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Partie 22, 3rd finalization -- real CLIP image embedding (a plain
+    # JSON list of floats, same "no pgvector, cross-dialect JSON"
+    # convention as DocumentChunk.embedding -- see that column's own
+    # docstring), populated at processing time for real image assets,
+    # used by api.services.visual_search's real text-to-image/
+    # image-to-image ranking.
+    clip_embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
