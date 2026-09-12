@@ -32,7 +32,7 @@ entirely, at zero real cost (same value, same real meaning)."""
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -406,7 +406,96 @@ class ABTest(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Partie 21 -- real gaps an audit found in this otherwise-mature
+    # 7.3.10 system: what KIND of thing variant_a/b actually configure
+    # (purely descriptive -- variant_a/b stay opaque JSON either way,
+    # nothing here changes how bucketing/tracking work), the specific
+    # metric key (out of KNOWN_AB_TEST_METRICS) this test is actually
+    # being judged on, and per-test statistical thresholds (a test
+    # comparing two cheap prompt tweaks and one comparing two
+    # expensive model swaps may reasonably want different real
+    # thresholds, not one global setting for every test).
+    test_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "agent" | "prompt" | "model"
+    target_metric: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    min_sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    confidence_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.95)
+    # "a" | "b" | "none" -- distinct from metrics["winner"] (the OLDER,
+    # still-real manual choose-winner endpoint's own storage spot,
+    # kept unchanged): this real column is set by the NEW automatic,
+    # statistics-driven decide_ab_test_winner below, so a caller can
+    # always tell a human's manual call from a real statistical one.
+    winner: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     __table_args__ = (
         Index("ix_ab_tests_organization_id", "organization_id"),
+    )
+
+
+class ABTestAssignment(Base):
+    """Partie 21 -- the real, persisted audit trail
+    `get_ab_test_variant`'s own deterministic hash-bucketing never
+    needed to function correctly (the hash IS the real, stable source
+    of truth) but this codebase never had, for "who was actually
+    assigned to which variant, and when" -- e.g. for
+    GET /ab-tests/{id}/assignments (Admin+, this part's own literal
+    ask). Written once per (test, request_id) the FIRST time
+    get_ab_test_variant resolves that pair -- a real, idempotent upsert,
+    never a second, independent source of truth for the variant itself
+    (the hash always wins if this row and the hash ever disagreed,
+    which they structurally cannot since this row is only ever written
+    FROM the hash's own real output)."""
+
+    __tablename__ = "ab_test_assignments"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Real bug caught live (fast SQLite suite): `index=True` here PLUS
+    # the explicit named Index below created the SAME index twice under
+    # Base.metadata.create_all() -- "index already exists". Fixed by
+    # keeping only the one, explicitly-named index (the same one the
+    # real migration creates), not both.
+    ab_test_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ab_tests.id", ondelete="CASCADE"), nullable=False)
+    # Real, honest naming: this is the same free-form `request_id`
+    # get_ab_test_variant already takes (a real user id, session id,
+    # or any other real caller-chosen bucketing key) -- NOT narrowed to
+    # a real users.id FK, since production callers legitimately bucket
+    # by session for anonymous traffic too.
+    request_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    variant: Mapped[str] = mapped_column(String(1), nullable=False)
+    assigned_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("ab_test_id", "request_id", name="uq_ab_test_assignments_test_request"),
+        Index("ix_ab_test_assignments_ab_test_id", "ab_test_id"),
+    )
+
+
+class ABTestResult(Base):
+    """Partie 21 -- a real, point-in-time SNAPSHOT of
+    calculate_ab_test_statistics's own live computation, distinct from
+    `ABTest.metrics` (the raw, incremental {count, sum, sum_sq}
+    running sufficient statistics `track_ab_test_metric` maintains).
+    `metrics` is what makes live computation possible at all; THIS
+    table is the historical record of what the computed, derived
+    statistics (mean, std_dev, CI, p-value) actually WERE at a given
+    moment -- written by the periodic significance-check Celery task
+    and by a manual GET .../statistics call, so a completed test's own
+    real history survives even if `metrics` is later cleared/reset."""
+
+    __tablename__ = "ab_test_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    ab_test_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ab_tests.id", ondelete="CASCADE"), nullable=False)  # index=True dropped, same real duplicate-index bug as ABTestAssignment above
+    variant: Mapped[str] = mapped_column(String(1), nullable=False)
+    metric_value: Mapped[float] = mapped_column(Numeric(20, 6), nullable=False)  # the real mean at snapshot time
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    mean: Mapped[float] = mapped_column(Numeric(20, 6), nullable=False)
+    std_dev: Mapped[float] = mapped_column(Numeric(20, 6), nullable=False)
+    confidence_interval_lower: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    confidence_interval_upper: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    p_value: Mapped[float | None] = mapped_column(Numeric(10, 8), nullable=True)
+    is_significant: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_ab_test_results_ab_test_id", "ab_test_id"),
     )

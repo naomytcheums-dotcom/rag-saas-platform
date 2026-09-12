@@ -792,6 +792,18 @@ def send_analytics_report_email(to_email: str, total_events_last_30d: int) -> No
     )
 
 
+def send_ab_test_report_email(to_email: str, test_name: str, status: str, metrics: dict) -> None:
+    """Partie 21 -- the email half of api/tasks/ab_tests.py's
+    send_ab_test_report. Real, current status -- not a canned string."""
+    subject = f"A/B test report: {test_name}"
+    tracked_metrics = ", ".join(sorted(set(metrics.get("a", {})) | set(metrics.get("b", {})))) or "none tracked yet"
+    _send(
+        to_email, subject,
+        f"<p>Your A/B test <strong>{html.escape(test_name)}</strong> is currently <strong>{html.escape(status)}</strong>. "
+        f"Tracked metrics: {html.escape(tracked_metrics)}. Sign in to your dashboard for the full statistics.</p>",
+    )
+
+
 def send_via_custom_email_domain(domain_row: CustomDomain, from_local_part: str, to_email: str, subject: str, html_body: str) -> None:
     """
     Partie 1.4.5, item 6's literal "l'envoi d'email avec un domaine

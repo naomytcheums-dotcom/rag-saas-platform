@@ -485,6 +485,25 @@ class ABTestCreateRequest(BaseModel):
     variant_a: dict
     variant_b: dict
     traffic_split: int = Field(default=50, ge=0, le=100)
+    test_type: str | None = Field(default=None, pattern="^(agent|prompt|model)$")
+    target_metric: str | None = None
+    min_sample_size: int | None = Field(default=None, ge=1)
+    confidence_level: float | None = Field(default=None, gt=0, lt=1)
+
+
+class ABTestUpdateRequest(BaseModel):
+    """PATCH /ab-tests/{id} -- partial update, same exclude_unset
+    convention as every other PATCH in this codebase. Deliberately
+    excludes variant_a/b/status/organization_id -- see
+    api/services/ab_tests.py's own update_ab_test docstring."""
+
+    name: str | None = None
+    description: str | None = None
+    traffic_split: int | None = Field(default=None, ge=0, le=100)
+    test_type: str | None = Field(default=None, pattern="^(agent|prompt|model)$")
+    target_metric: str | None = None
+    min_sample_size: int | None = Field(default=None, ge=1)
+    confidence_level: float | None = Field(default=None, gt=0, lt=1)
 
 
 class ABTestResponse(BaseModel):
@@ -504,10 +523,32 @@ class ABTestResponse(BaseModel):
     created_by: uuid.UUID | None
     created_at: dt.datetime
     updated_at: dt.datetime
+    test_type: str | None
+    target_metric: str | None
+    min_sample_size: int
+    confidence_level: float
+    winner: str | None
 
 
 class ABTestListResponse(BaseModel):
     items: list[ABTestResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ABTestAssignmentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ab_test_id: uuid.UUID
+    request_id: str
+    variant: str
+    assigned_at: dt.datetime
+
+
+class ABTestAssignmentListResponse(BaseModel):
+    items: list[ABTestAssignmentResponse]
     total: int
     limit: int
     offset: int
@@ -537,6 +578,11 @@ class ABTestMetricResult(BaseModel):
     lift: float | None
     p_value: float | None
     significant: bool | None
+    confidence_interval_lower: float | None = None
+    confidence_interval_upper: float | None = None
+    effect_size_cohens_d: float | None = None
+    statistical_power: float | None = None
+    min_sample_size_reached: bool | None = None
 
 
 class ABTestResultsResponse(BaseModel):

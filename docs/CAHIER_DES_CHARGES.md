@@ -2592,6 +2592,51 @@ segmentation réelle n'est trackée sur `AnalyticsEvent`.
 
 ---
 
+## PARTIE 21 — A/B testing avancé — ✅ COMPLET (scope honnête)
+
+Audit préalable : la Partie 7.3.10 avait déjà construit un vrai système
+d'A/B testing EN PRODUCTION, mature — bucketing déterministe réel (hash
+MD5 mod 100), statistiques incrémentales réelles
+(`{count, sum, sum_sq}` par variante/métrique), et une vraie p-value
+(approximation normale du test t de Welch). Rien reconstruit. Seuls les
+vrais manques ont été comblés : champs de config par test
+(`test_type`, `target_metric`, `min_sample_size`, `confidence_level`),
+`ABTestAssignment` (audit réel des assignations — le hash n'en avait
+jamais eu besoin pour fonctionner, mais rien ne répondait à "qui a été
+assigné à quoi"), `ABTestResult` (snapshot historique réel, distinct du
+`metrics` JSON qui reste les statistiques courantes), intervalle de
+confiance/Cohen's d/puissance statistique réels, décision automatique
+statistique (`POST /decide`, distincte du choix humain manuel
+préexistant `.../variants/choose`), CRUD complet (PATCH/DELETE/resume),
+export CSV/JSON, 4 tâches Celery réelles, et le partage Member+/Admin+
+explicitement demandé par ce prompt.
+
+🐛 **Vrai bug trouvé et corrigé en testant en direct — répond
+directement à la vision critique "les statistiques sont-elles
+correctes"** : `track_ab_test_metric` faisait une copie SUPERFICIELLE
+(`dict(test.metrics)`) avant de muter la statistique d'une variante.
+Les dictionnaires imbriqués par variante restaient les MÊMES objets
+que ceux déjà attachés à `test.metrics` — muter la variante B mutait
+donc `test.metrics["b"]` en place, AVANT même la réaffectation
+`test.metrics = metrics`. SQLAlchemy ne détectait alors aucune vraie
+différence entre l'ancienne et la nouvelle valeur et sautait
+silencieusement la mise à jour SQL. Confirmé en direct avec des prints
+réels : l'échantillon tracké pour la variante B apparaissait dans la
+réponse de CETTE requête, puis disparaissait — jamais réellement
+persisté. Corrigé avec `copy.deepcopy` au lieu d'une copie superficielle.
+
+✅ **25 tests backend + 7 tests frontend réels**, tous passés en
+direct (le seul échec initial était une erreur dans mon PROPRE test,
+pas dans le code — une intervalle de confiance à largeur nulle est
+mathématiquement correcte quand la variance des deux groupes est nulle,
+pas un bug). Aucune régression sur les tests préexistants
+(`tests/test_ab_tests.py`, `tests/test_ab_tests_endpoints.py`). Voir
+[`docs/ab-testing/OVERVIEW.md`](ab-testing/OVERVIEW.md),
+[`docs/ab-testing/STATISTICS.md`](ab-testing/STATISTICS.md),
+[`docs/ab-testing/BEST_PRACTICES.md`](ab-testing/BEST_PRACTICES.md).
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

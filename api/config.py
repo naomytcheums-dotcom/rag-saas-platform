@@ -1128,6 +1128,20 @@ class Settings(BaseSettings):
     # "A/B testing" ask) -- the conventional real 0.05.
     AB_TEST_SIGNIFICANCE_THRESHOLD: float = 0.05
 
+    # -- Advanced A/B testing (Partie 21) ----------------------------------------
+    AB_TESTING_ENABLED: bool = True
+    AB_TEST_DEFAULT_TRAFFIC_SPLIT: int = 50
+    AB_TEST_MIN_SAMPLE_SIZE: int = 100
+    AB_TEST_CONFIDENCE_LEVEL: float = 0.95
+    AB_TEST_MAX_DURATION_DAYS: int = 30
+    # When True, the scheduled auto_decide_ab_tests Celery task marks a
+    # real winner (real metric, real min_sample_size reached, real
+    # significance) without a human clicking anything. Defaults False:
+    # an automatic decision on live, real production traffic is a real
+    # business decision this codebase should never make silently by
+    # default.
+    AB_TEST_AUTO_DECIDE: bool = False
+
     # -- Context relevance (Partie 7.2.10) ---------------------------------------
     # Honestly NOT YET implemented when True -- same real precedent as
     # ANSWER_RELEVANCE_USE_LLM (7.2.9).

@@ -253,3 +253,19 @@ async def require_ab_test_admin(
         raise _NOT_FOUND
     membership = await _membership_for(test.organization_id, current_user, db)
     return test, _require_admin(membership)
+
+
+async def require_ab_test_member(
+    test_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[ABTest, OrganizationMember]:
+    """Partie 21 -- the real Member+ counterpart to require_ab_test_admin,
+    for the read-only endpoints this part's own spec explicitly wants
+    laxer than write/lifecycle actions (viewing a test's own real
+    results/statistics is not the same real risk as starting/pausing/
+    deciding one) -- same real pattern as Partie 19/20's own documented
+    Member+/Admin+ split."""
+    test = await db.get(ABTest, test_id)
+    if test is None:
+        raise _NOT_FOUND
+    membership = await _membership_for(test.organization_id, current_user, db)
+    return test, _require_member_excluding_viewer(membership)

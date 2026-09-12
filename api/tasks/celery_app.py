@@ -35,7 +35,7 @@ celery_app = Celery(
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
-        "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics",
+        "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
     ],
 )
 
@@ -285,6 +285,19 @@ celery_app.conf.beat_schedule = {
     "cleanup-old-analytics-events-daily": {
         "task": "api.tasks.analytics.cleanup_old_events",
         "schedule": crontab(hour=5, minute=0),
+    },
+    # -- Partie 21: advanced A/B testing --------------------------------------
+    "check-ab-test-significance-hourly": {
+        "task": "api.tasks.ab_tests.check_ab_test_significance",
+        "schedule": crontab(minute=20),
+    },
+    "auto-decide-ab-tests-hourly": {
+        "task": "api.tasks.ab_tests.auto_decide_ab_tests",
+        "schedule": crontab(minute=25),
+    },
+    "complete-expired-ab-tests-daily": {
+        "task": "api.tasks.ab_tests.complete_expired_ab_tests",
+        "schedule": crontab(hour=5, minute=30),
     },
 }
 
