@@ -312,3 +312,70 @@ async def test_expire_overdue_licenses_flips_status_for_real(db_session):
     await db_session.refresh(still_valid)
     assert overdue.status == LicenseStatus.expired
     assert still_valid.status == LicenseStatus.active
+
+
+# -- Partner referral link (Partie 18) ---------------------------------------
+
+async def test_register_partner_gets_a_real_unique_referral_code(client):
+    first = await client.post("/partners/register", json={
+        "organization_name": "Referral Reseller A", "email": "refpartnerA@example.com", "password": "correct horse battery staple 42",
+    })
+    second = await client.post("/partners/register", json={
+        "organization_name": "Referral Reseller B", "email": "refpartnerB@example.com", "password": "correct horse battery staple 42",
+    })
+    code_a = first.json()["reseller"]["referral_code"]
+    code_b = second.json()["reseller"]["referral_code"]
+    assert code_a and code_b and code_a != code_b
+
+
+async def test_referral_redirect_sets_cookie_and_redirects(client):
+    registered = await client.post("/partners/register", json={
+        "organization_name": "Redirect Reseller", "email": "redirectpartner@example.com", "password": "correct horse battery staple 42",
+    })
+    code = registered.json()["reseller"]["referral_code"]
+
+    response = await client.get(f"/r/{code}", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"].endswith(f"/register?ref={code}")
+    assert response.cookies.get("partner_ref") == code
+
+
+async def test_referral_redirect_unknown_code_is_a_real_404(client):
+    response = await client.get("/r/not-a-real-code")
+    assert response.status_code == 404
+
+
+async def test_registering_with_a_referral_cookie_attributes_the_new_org(client, db_session):
+    from sqlalchemy import select
+
+    from api.models.sales import Reseller, SubClient
+
+    registered = await client.post("/partners/register", json={
+        "organization_name": "Attribution Reseller", "email": "attributionpartner@example.com", "password": "correct horse battery staple 42",
+    })
+    code = registered.json()["reseller"]["referral_code"]
+    reseller_id = uuid.UUID(registered.json()["reseller"]["id"])
+
+    client.cookies.set("partner_ref", code)
+    new_account = await client.post("/auth/register", json={
+        "email": "referred_client@example.com", "password": "correct horse battery staple 42",
+        "full_name": "Referred Client", "accept_terms": True,
+    })
+    assert new_account.status_code == 201
+    client.cookies.delete("partner_ref")  # the endpoint clears it server-side too -- this just keeps the shared test client tidy for later tests
+
+    sub_clients = await db_session.scalars(select(SubClient).where(SubClient.reseller_id == reseller_id))
+    assert len(sub_clients.all()) == 1
+
+    reseller = await db_session.get(Reseller, reseller_id)
+    assert reseller is not None  # sanity: the reseller itself is untouched by the attribution
+
+
+async def test_registering_with_an_unknown_referral_cookie_does_not_break_registration(client):
+    client.cookies.set("partner_ref", "totally-made-up-code")
+    response = await client.post("/auth/register", json={
+        "email": "unaffected_by_bad_referral@example.com", "password": "correct horse battery staple 42",
+        "full_name": "Unaffected", "accept_terms": True,
+    })
+    client.cookies.delete("partner_ref")
+    assert response.status_code == 201

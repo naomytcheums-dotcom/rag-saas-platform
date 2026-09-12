@@ -109,6 +109,15 @@ class TicketResponse(Base):
 
 # -- White-label: reseller / sub-clients -------------------------------------
 
+def generate_referral_code() -> str:
+    """Partie 18 (referral link) -- short, URL-safe, real random code
+    (`secrets.token_hex`, same entropy-generation family as
+    generate_license_key above), not a sequential/guessable id -- a
+    partner's referral link must not let anyone enumerate other
+    partners' codes by incrementing a number."""
+    return secrets.token_hex(4)
+
+
 class Reseller(Base):
     """A platform-level partner who resells this app under their own
     brand to their own sub-clients. Reuses OrganizationBranding
@@ -122,6 +131,7 @@ class Reseller(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
     commission_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    referral_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, default=generate_referral_code)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -46,6 +46,7 @@ from api.security.password_similarity import is_password_too_similar
 from api.security.password_strength import is_password_known_breached
 from api.security.adaptive_rate_limit import enforce_adaptive_rate_limit
 from api.security.rate_limit import enforce_rate_limit
+from api.services import sales
 from api.services.email import send_rate_limit_alert_email
 from api.services.security_alerts import check_and_alert_on_failed_login_spike
 from api.services.verification import create_and_send_email_otp
@@ -85,7 +86,10 @@ _DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY = hash_password("timing-safety-dummy-valu
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+async def register(
+    payload: RegisterRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db),
+    partner_ref: str | None = Cookie(default=None, alias=sales.PARTNER_REFERRAL_COOKIE_NAME),
+):
     """
     Create a new account and log the user in immediately (the response
     already contains a working access token + refresh cookie -- there is
@@ -145,10 +149,23 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     # organization at all. OAuth/SSO sign-up (api/routers/oauth.py,
     # api/routers/enterprise_sso.py) do not yet get this -- out of scope
     # for this step, a disclosed gap, not an oversight.
-    await create_organization_with_owner(
+    organization = await create_organization_with_owner(
         db, name=f"Organisation de {user.email}", owner_user_id=user.id,
         ip=client_ip(request), user_agent=request.headers.get("user-agent"),
     )
+
+    # Partie 18 (referral link) -- best-effort: a stale/invalid cookie
+    # (an old link, a code that's since been deactivated) must never
+    # break registration itself. Cookie is cleared either way -- a
+    # returning user's LATER organization (if they ever create a
+    # second one) isn't attributed to a link they clicked once, long
+    # before this account existed.
+    if partner_ref:
+        try:
+            await sales.attribute_referral(db, referral_code=partner_ref, new_organization_id=organization.id)
+        except Exception:
+            logger.warning("register: referral attribution failed for code '%s'", partner_ref, exc_info=True)
+        response.delete_cookie(sales.PARTNER_REFERRAL_COOKIE_NAME)
 
     await create_and_send_email_otp(db, user)  # 1.1.4 -- fire-and-forget-ish: logs a warning and continues on email failure, never blocks registration
     # No notify_new_device_email here: this is the account's first-ever

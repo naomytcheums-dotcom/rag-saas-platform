@@ -53,6 +53,15 @@ class EmailAlreadyRegisteredError(SalesError):
     pass
 
 
+# Real, shared cookie name -- set by GET /r/{code} (api/routers/sales.py),
+# read by /auth/register (api/routers/auth.py) to attribute a new
+# organization to the referring partner. 30 days: long enough for a
+# real "clicked the link today, signs up next week" gap, same order of
+# magnitude as this app's own REFRESH_TOKEN_EXPIRE_DAYS.
+PARTNER_REFERRAL_COOKIE_NAME = "partner_ref"
+PARTNER_REFERRAL_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 3600
+
+
 def _as_utc(value: dt.datetime) -> dt.datetime:
     """SQLite (this project's fast test suite) returns naive datetimes
     from a DateTime(timezone=True) column, real Postgres returns aware
@@ -241,6 +250,24 @@ async def get_reseller_by_organization(db: AsyncSession, organization_id: uuid.U
     at -- looked up the same direction `get_license_status` already
     looks up a License by organization_id."""
     return await db.scalar(select(Reseller).where(Reseller.organization_id == organization_id))
+
+
+async def get_reseller_by_referral_code(db: AsyncSession, code: str) -> Reseller | None:
+    return await db.scalar(select(Reseller).where(Reseller.referral_code == code))
+
+
+async def attribute_referral(db: AsyncSession, *, referral_code: str, new_organization_id: uuid.UUID) -> bool:
+    """Real, best-effort attribution: a stale/invalid/expired referral
+    cookie must never break the registration it's attached to -- this
+    returns False (not an exception) for "no real attribution
+    happened", the caller decides what that means. `add_sub_client`'s
+    own `organization_id` uniqueness already guarantees a newly created
+    org can't accidentally get double-attributed."""
+    reseller = await get_reseller_by_referral_code(db, referral_code)
+    if reseller is None or not reseller.is_active:
+        return False
+    await add_sub_client(db, reseller.id, new_organization_id)
+    return True
 
 
 async def get_reseller_for_user(db: AsyncSession, user_id: uuid.UUID) -> Reseller | None:

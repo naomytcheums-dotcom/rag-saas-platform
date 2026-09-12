@@ -8,8 +8,10 @@ spans two organizations -- not one org's own data).
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db, require_superadmin
 from api.models.organization import OrganizationMember
 from api.models.user import User
@@ -173,6 +175,28 @@ async def list_partner_commissions_endpoint(reseller_id: uuid.UUID, _admin: User
     except sales.ResellerNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseller not found")
     return await sales.list_partner_commissions(db, reseller_id)
+
+
+@router.get("/r/{code}")
+async def referral_redirect_endpoint(code: str, db: AsyncSession = Depends(get_db)):
+    """Public -- a partner's shareable referral link. Real, honest
+    behavior on an unknown/stale code: a plain 404, not a silent
+    redirect to the generic registration page (which would let a
+    partner "test" random codes and learn which ones are real).
+    Setting the cookie here (rather than trusting a query param at
+    registration time) means the referral survives the click ->
+    "look around the marketing site first" -> registration gap without
+    the frontend having to thread `?ref=` through every intermediate
+    page itself."""
+    reseller = await sales.get_reseller_by_referral_code(db, code)
+    if reseller is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown referral code")
+    response = RedirectResponse(url=f"{settings.FRONTEND_URL}/register?ref={code}", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    response.set_cookie(
+        key=sales.PARTNER_REFERRAL_COOKIE_NAME, value=code, max_age=sales.PARTNER_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+        httponly=True, secure=settings.COOKIE_SECURE, samesite="lax",
+    )
+    return response
 
 
 @router.post("/partners/commissions/{commission_id}/pay", response_model=PartnerCommissionResponse)

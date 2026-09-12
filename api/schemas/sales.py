@@ -79,6 +79,7 @@ class ResellerResponse(BaseModel):
     organization_id: uuid.UUID
     commission_percent: int
     is_active: bool
+    referral_code: str
 
     model_config = {"from_attributes": True}
 
