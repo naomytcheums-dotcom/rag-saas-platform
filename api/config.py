@@ -1860,6 +1860,28 @@ class Settings(BaseSettings):
     AIRBYTE_CLIENT_ID: str | None = None
     AIRBYTE_CLIENT_SECRET: str | None = None
 
+    # -- Partie 18: sales models (SaaS / self-hosted / partner / white-label) --
+    # These are honest deployment-mode DECLARATIONS, not feature gates that
+    # hide code -- every endpoint above already works regardless of these
+    # flags. SAAS_MODE/SELF_HOSTED_MODE let a deployment (this app's own
+    # hosted service vs. someone's self-hosted docker-compose install)
+    # state which mode it's actually running as, e.g. for a frontend banner
+    # or ops tooling -- not read by any billing/license logic itself, which
+    # stays real and available either way.
+    SAAS_MODE: bool = True
+    SELF_HOSTED_MODE: bool = False
+    PARTNER_PROGRAM_ENABLED: bool = True
+    WHITE_LABEL_ENABLED: bool = True
+    PARTNER_DEFAULT_COMMISSION: int = 20
+    # In cents, same unit as every other money column in this app
+    # (Plan.monthly_price_cents, Invoice totals, ...) -- 100 EUR.
+    PARTNER_MIN_PAYOUT_CENTS: int = 10000
+    # Self-hosted only: this deployment's OWN license key, checked against
+    # a real License row by api/tasks/sales.py's validate_licenses sweep.
+    # None (the honest default for this hosted dev environment) means no
+    # periodic self-check runs.
+    LICENSE_KEY: str | None = None
+
     # -- n8n -- e.g. http://localhost:5678 once docker-compose.observability.yml's
     # own n8n service is running.
     N8N_URL: str | None = None

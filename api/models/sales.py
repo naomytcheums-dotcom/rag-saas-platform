@@ -11,7 +11,7 @@ import enum
 import secrets
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -138,4 +138,32 @@ class SubClient(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     reseller_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("resellers.id", ondelete="CASCADE"), nullable=False, index=True)
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# -- Partner program: a real, persisted commission ledger --------------------
+
+class PartnerCommissionStatus(str, enum.Enum):
+    pending = "pending"
+    paid = "paid"
+
+
+class PartnerCommission(Base):
+    """Partie 18 -- the one real gap `calculate_reseller_commission`
+    (above) deliberately left open: that function is a live,
+    on-the-fly calculation, not a record. This is the real, persisted
+    ledger row a payout run creates and later marks paid -- one row
+    per reseller per billing period, so a partner (and this platform)
+    has an actual, auditable history of what was owed and when it was
+    paid, not just "whatever the math says right now"."""
+
+    __tablename__ = "partner_commissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    reseller_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("resellers.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_start: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[PartnerCommissionStatus] = mapped_column(nullable=False, default=PartnerCommissionStatus.pending)
+    paid_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

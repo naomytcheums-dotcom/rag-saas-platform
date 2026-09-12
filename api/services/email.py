@@ -765,6 +765,22 @@ def send_invoice_reminder_email(to_email: str, invoice_number: str, total_displa
     _send(to_email, subject, f"<p>Invoice <strong>{html.escape(invoice_number)}</strong> ({html.escape(total_display)}) is now {days_overdue} day(s) overdue. Please arrange payment.</p>")
 
 
+def send_usage_limit_warning_email(to_email: str, organization_name: str, resource_type: str, current_percent: int, limit: int) -> None:
+    """Partie 18 -- the email half of api/tasks/sales.py's
+    check_usage_limits sweep. Same "notify, don't fabricate an
+    enforcement action" pattern as send_invoice_reminder_email:
+    the actual hard block already happens at request time
+    (api/services/billing_usage.py's check_limits), this is a
+    heads-up before that point is reached."""
+    subject = f"{organization_name} is at {current_percent}% of its {resource_type} limit"
+    _send(
+        to_email, subject,
+        f"<p>Your organization <strong>{html.escape(organization_name)}</strong> is using "
+        f"{current_percent}% of its plan's {html.escape(resource_type)} limit ({html.escape(str(limit))} total). "
+        f"Consider upgrading your plan before you hit it.</p>",
+    )
+
+
 def send_via_custom_email_domain(domain_row: CustomDomain, from_local_part: str, to_email: str, subject: str, html_body: str) -> None:
     """
     Partie 1.4.5, item 6's literal "l'envoi d'email avec un domaine

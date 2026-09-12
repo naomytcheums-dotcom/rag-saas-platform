@@ -2415,6 +2415,56 @@ côté agent (voir 5.2.9). **À compléter si tu retrouves la suite.**
 
 ---
 
+## PARTIE 18 — Modèles de vente (SaaS / Self-hosted / Partenaire / White-label) — ✅ COMPLET (scope honnête)
+
+Discipline établie appliquée dès le départ : les 4 modèles de vente
+demandés existaient déjà en grande partie (SaaS complet depuis la
+Partie 11.4/12 ; self-hosted, hybrid support/SLA, et reseller/sub-client
+depuis la Partie 16 (bis) ; white-label depuis les Parties 1.3.10/1.4.1/
+1.4.5). Un agent d'exploration dédié a d'abord audité l'existant avant
+tout code, pour ne construire QUE les vrais manques réels — voir le
+détail complet dans [`docs/sales/PARTNER_PROGRAM.md`](sales/PARTNER_PROGRAM.md).
+
+✅ **Programme partenaire — le vrai manque comblé** : `PartnerCommission`
+(migration `0099_partner_commissions.py`, RLS activé dès la création —
+leçon retenue de `0098`), le ledger persisté (payé/en attente) que
+`calculate_reseller_commission` (Partie 16 bis) laissait volontairement
+en calcul à la volée uniquement. Inscription self-service réelle
+(`POST /partners/register`, jusque-là superadmin uniquement),
+tableau de bord partenaire (`GET /partners/me`, `/me/clients`,
+`/me/commissions`), paiement manuel (`POST /partners/commissions/{id}/pay`)
+et 2 tâches Celery réelles (`calculate_partner_commissions` mensuel,
+idempotent par période — testé en direct ; `pay_partner_commissions`
+quotidien, respecte un vrai seuil minimum de paiement,
+`PARTNER_MIN_PAYOUT_CENTS`). Aucun vrai virement bancaire (pas de
+Stripe Connect) — honnêtement documenté comme un changement d'état de
+ledger, pas un paiement réel automatisé. Frontend :
+`PartnerDashboard.tsx`/`CommissionList.tsx`, composés dans
+`/dashboard/partners`.
+
+✅ **Self-hosted — les 2 scripts manquants ajoutés** : `update.sh`
+(sauvegarde réelle avant toute mise à jour, chemin de restauration
+explicite en cas d'échec) et `uninstall.sh` (ne supprime jamais les
+données par défaut, `--purge-data` explicite requis). Nouvelle tâche
+Celery `validate_licenses` (revalidation périodique réelle, teste en
+direct : bascule une licence expirée à `expired`).
+
+✅ **SaaS — alerte d'usage réelle ajoutée** : tâche Celery
+`check_usage_limits` (horaire), réutilise le même comptage réel de
+ressources que l'enforcement à la demande, envoie un vrai email
+d'avertissement avant qu'une organisation n'atteigne sa limite réelle.
+
+⬜ **White-label** : aucun vrai manque trouvé au-delà de ce qui existait
+déjà (branding, domaines personnalisés, email de domaine personnalisé,
+bascule white-label) — non dupliqué.
+
+10 tests réels ajoutés dans `tests/test_sales_models.py` (inscription,
+double-inscription rejetée, tableau de bord, paiement de commission,
+idempotence du calcul mensuel, seuil de paiement minimum, expiration
+de licence), tous passés en direct.
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

@@ -10,13 +10,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, require_superadmin
+from api.dependencies import get_current_user, get_db, require_superadmin
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.sales import (
     ActivateLicenseRequest, AddSubClientRequest, CreateResellerRequest, CreateTicketRequest, GenerateLicenseRequest,
-    LicenseResponse, ResellerResponse, RespondTicketRequest, SubClientResponse, TicketMessageResponse,
-    TicketResponseModel, ValidateLicenseRequest,
+    LicenseResponse, PartnerCommissionResponse, RegisterPartnerRequest, RegisterPartnerResponse, ResellerResponse,
+    RespondTicketRequest, SubClientResponse, TicketMessageResponse, TicketResponseModel, ValidateLicenseRequest,
 )
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import sales
@@ -123,3 +123,65 @@ async def reseller_commission_endpoint(reseller_id: uuid.UUID, _admin: User = De
         return await sales.calculate_reseller_commission(db, reseller_id)
     except sales.ResellerNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseller not found")
+
+
+# -- Partner program (Partie 18): self-service signup + real commission ledger
+
+@router.post("/partners/register", response_model=RegisterPartnerResponse, status_code=status.HTTP_201_CREATED)
+async def register_partner_endpoint(body: RegisterPartnerRequest, db: AsyncSession = Depends(get_db)):
+    """Public -- the real front door create_reseller (superadmin-only)
+    never had: a prospective partner creates their own account, own
+    organization, and their own Reseller row, all in this one call."""
+    try:
+        _user, reseller = await sales.register_partner(
+            db, organization_name=body.organization_name, email=body.email, password=body.password, full_name=body.full_name,
+        )
+    except sales.EmailAlreadyRegisteredError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not register with these details")
+    await db.commit()
+    return RegisterPartnerResponse(reseller=reseller)
+
+
+@router.get("/partners/me", response_model=ResellerResponse)
+async def get_my_partner_profile_endpoint(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    reseller = await sales.get_reseller_for_user(db, user.id)
+    if reseller is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not a registered partner")
+    return reseller
+
+
+@router.get("/partners/me/clients", response_model=list[SubClientResponse])
+async def list_my_partner_clients_endpoint(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    reseller = await sales.get_reseller_for_user(db, user.id)
+    if reseller is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not a registered partner")
+    return await sales.list_sub_clients(db, reseller.id)
+
+
+@router.get("/partners/me/commissions", response_model=list[PartnerCommissionResponse])
+async def list_my_partner_commissions_endpoint(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    reseller = await sales.get_reseller_for_user(db, user.id)
+    if reseller is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not a registered partner")
+    return await sales.list_partner_commissions(db, reseller.id)
+
+
+@router.get("/partners/{reseller_id}/commissions", response_model=list[PartnerCommissionResponse])
+async def list_partner_commissions_endpoint(reseller_id: uuid.UUID, _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    try:
+        await sales.get_reseller(db, reseller_id)
+    except sales.ResellerNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseller not found")
+    return await sales.list_partner_commissions(db, reseller_id)
+
+
+@router.post("/partners/commissions/{commission_id}/pay", response_model=PartnerCommissionResponse)
+async def pay_partner_commission_endpoint(commission_id: uuid.UUID, _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    try:
+        commission = await sales.pay_partner_commission(db, commission_id)
+    except sales.PartnerCommissionNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commission not found")
+    except sales.SalesError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    await db.commit()
+    return commission

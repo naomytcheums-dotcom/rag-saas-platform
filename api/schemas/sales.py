@@ -1,11 +1,13 @@
-"""Request/response bodies for Partie 16 (bis): self-hosted license, hybrid support/SLA, white-label reseller."""
+"""Request/response bodies for Partie 16 (bis): self-hosted license,
+hybrid support/SLA, white-label reseller. Partie 18 adds partner
+self-registration and the persisted commission ledger."""
 
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
-from api.models.sales import LicenseStatus, TicketPriority, TicketStatus
+from api.models.sales import LicenseStatus, PartnerCommissionStatus, TicketPriority, TicketStatus
 
 
 class GenerateLicenseRequest(BaseModel):
@@ -89,6 +91,31 @@ class SubClientResponse(BaseModel):
     id: uuid.UUID
     reseller_id: uuid.UUID
     organization_id: uuid.UUID
+    created_at: dt.datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RegisterPartnerRequest(BaseModel):
+    organization_name: str
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+
+
+class RegisterPartnerResponse(BaseModel):
+    reseller: ResellerResponse
+    message: str = "Partner account created. Sign in at /auth/login to access your dashboard."
+
+
+class PartnerCommissionResponse(BaseModel):
+    id: uuid.UUID
+    reseller_id: uuid.UUID
+    period_start: dt.date
+    period_end: dt.date
+    amount_cents: int
+    status: PartnerCommissionStatus
+    paid_at: dt.datetime | None
     created_at: dt.datetime
 
     model_config = {"from_attributes": True}

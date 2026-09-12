@@ -35,7 +35,7 @@ celery_app = Celery(
         "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
-        "api.tasks.integrations", "api.tasks.plugins",
+        "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales",
     ],
 )
 
@@ -251,6 +251,23 @@ celery_app.conf.beat_schedule = {
     "fire-scheduled-plugin-hook-hourly": {
         "task": "api.tasks.plugins.fire_scheduled_hook",
         "schedule": crontab(minute=30),
+    },
+    # -- Partie 18: sales models --------------------------------------------
+    "calculate-partner-commissions-monthly": {
+        "task": "api.tasks.sales.calculate_partner_commissions",
+        "schedule": crontab(hour=4, minute=0, day_of_month=1),  # just after the month rolls over, low-traffic hour
+    },
+    "pay-partner-commissions-daily": {
+        "task": "api.tasks.sales.pay_partner_commissions",
+        "schedule": crontab(hour=4, minute=15),
+    },
+    "validate-licenses-daily": {
+        "task": "api.tasks.sales.validate_licenses",
+        "schedule": crontab(hour=4, minute=30),
+    },
+    "check-usage-limits-hourly": {
+        "task": "api.tasks.sales.check_usage_limits",
+        "schedule": crontab(minute=0),
     },
 }
 
