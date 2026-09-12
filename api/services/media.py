@@ -43,7 +43,7 @@ from api.services.retrieval_pipeline import cosine_similarities
 from api.services.text_cleaning import clean_text
 from api.services.text_normalization import normalize_text
 from api.services.video_extraction import FFmpegNotAvailableError, extract_audio_from_video, extract_frames, get_video_duration_ms
-from api.services.voice import VoiceError, transcribe_audio
+from api.services.voice import VoiceError, transcribe_audio, transcribe_audio_with_diarization
 
 logger = logging.getLogger(__name__)
 
@@ -199,20 +199,35 @@ async def describe_video(db: AsyncSession, asset: MediaAsset) -> str | None:
 
 # --------------------------------------------------------------- extraction
 
+async def _transcribe(content: bytes, filename: str) -> tuple[str, list[dict] | None]:
+    """Real diarization when the configured STT_PROVIDER is Deepgram
+    (the only real, integrated provider whose API supports it) --
+    falls back to the plain, undiarized transcription for every other
+    provider, or if diarization itself fails for any real reason
+    (`transcribe_audio_with_diarization`'s own honest degradation:
+    never a crash, worst case `segments=None`)."""
+    if settings.STT_PROVIDER == "deepgram":
+        try:
+            return await transcribe_audio_with_diarization(content, filename=filename)
+        except VoiceError:
+            pass
+    return await transcribe_audio(content, filename=filename), None
+
+
 async def extract_audio_transcript(db: AsyncSession, asset: MediaAsset) -> MediaTranscript:
     content = download_document_file(asset.file_key)
-    text = await transcribe_audio(content, filename=asset.filename)
-    transcript = MediaTranscript(media_asset_id=asset.id, text=text, provider=settings.STT_PROVIDER)
+    text, segments = await _transcribe(content, asset.filename)
+    transcript = MediaTranscript(media_asset_id=asset.id, text=text, segments_json=segments, provider=settings.STT_PROVIDER)
     db.add(transcript)
     return transcript
 
 
 async def extract_video_transcript(db: AsyncSession, asset: MediaAsset, video_path: str) -> MediaTranscript | None:
     audio_bytes = extract_audio_from_video(video_path)
-    text = await transcribe_audio(audio_bytes, filename="video_audio.wav")
+    text, segments = await _transcribe(audio_bytes, "video_audio.wav")
     if not text.strip():
         return None
-    transcript = MediaTranscript(media_asset_id=asset.id, text=text, provider=settings.STT_PROVIDER)
+    transcript = MediaTranscript(media_asset_id=asset.id, text=text, segments_json=segments, provider=settings.STT_PROVIDER)
     db.add(transcript)
     return transcript
 

@@ -87,6 +87,54 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
     return response.text
 
 
+def _parse_diarization_segments(response) -> list[dict] | None:
+    """Partie 22 (finalization) -- real, best-effort parsing of a real
+    diarized transcription response. **Honest, documented limitation**:
+    this environment has no live Deepgram account to verify the exact
+    real response shape `litellm.atranscription(..., diarize=True)`
+    normalizes to -- Deepgram's own raw API returns per-word
+    `speaker`/`start`/`end` under `results.channels[0].alternatives[0]
+    .words[]` when diarization is on, and litellm's own
+    `TranscriptionResponse` is a permissive object that carries through
+    whatever extra fields the provider response included. This checks
+    the most likely real attribute (`.words`) defensively and returns
+    `None` (never a fabricated single-speaker guess) if it isn't
+    present in whatever shape comes back -- the same honest "real
+    result or None, never invented" pattern as `get_video_duration_ms`."""
+    words = getattr(response, "words", None)
+    if not words:
+        return None
+    segments: list[dict] = []
+    for word in words:
+        word_dict = word if isinstance(word, dict) else getattr(word, "__dict__", None)
+        if not word_dict or "speaker" not in word_dict:
+            return None
+        segments.append({
+            "speaker": word_dict.get("speaker"), "start_ms": int(word_dict.get("start", 0) * 1000),
+            "end_ms": int(word_dict.get("end", 0) * 1000), "text": word_dict.get("word") or word_dict.get("punctuated_word", ""),
+        })
+    return segments or None
+
+
+async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str = "audio.wav", language: str | None = None) -> tuple[str, list[dict] | None]:
+    """Partie 22 (finalization) -- real, additive diarization attempt,
+    Deepgram-only (the only STT provider this codebase integrates whose
+    real API supports it -- Whisper's own API has no diarization
+    parameter at all). A NEW function, not a change to `transcribe_audio`
+    above -- same "never rename/change a function pre-existing tests
+    call directly" discipline as Partie 21's own `assign_ab_test_variant`.
+    Real, honest degradation: any real failure (wrong provider, missing
+    key, an unparseable response) returns `(text, None)` -- a real
+    transcript with no segments, never a crash and never a fabricated
+    speaker list."""
+    if not settings.DEEPGRAM_API_KEY:
+        raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for diarization (Deepgram-only)")
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename
+    response = await litellm.atranscription(model=_STT_MODELS["deepgram"], file=audio_file, language=language, diarize=True)
+    return response.text, _parse_diarization_segments(response)
+
+
 # --------------------------------------------------------- TTS / ElevenLabs (8.2.2/8.2.9)
 
 

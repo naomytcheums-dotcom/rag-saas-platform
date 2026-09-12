@@ -2637,7 +2637,7 @@ pas un bug). Aucune régression sur les tests préexistants
 
 ---
 
-## PARTIE 22 — Multi-modal (images, audio, vidéo) — 🟡 PARTIEL (scope honnête)
+## PARTIE 22 — Multi-modal (images, audio, vidéo) — ✅ COMPLET (scope honnête, 2 décisions déclinées documentées)
 
 Audit préalable (agent d'exploration dédié) : OCR Tesseract réel déjà
 câblé dans le pipeline documents (`api/services/ocr.py`,
@@ -2666,31 +2666,60 @@ rattrapage/nettoyage) ; endpoints upload/list/get/delete/process/
 status/transcript/description/frames/search ; migration `0104` (RLS
 activé à la création).
 
+### Finalisation (post-livraison initiale)
+
+Suite à une demande explicite de traiter les 4 points partiels :
+
+- **Diarisation audio** : ajoutée, réelle, Deepgram uniquement (seul
+  fournisseur STT intégré dont l'API réelle la supporte — Whisper n'a
+  aucun paramètre équivalent). Nouvelle fonction
+  `transcribe_audio_with_diarization` (jamais un changement de
+  `transcribe_audio` — même discipline "ne jamais renommer/changer une
+  fonction déjà appelée par des tests préexistants" que Partie 21).
+  **Limite honnête et documentée** : aucun compte Deepgram réel
+  disponible dans cet environnement pour vérifier la forme exacte de
+  la réponse diarisée que litellm normalise — le parsing est
+  défensif (`_parse_diarization_segments`) et renvoie honnêtement
+  `None` (jamais un locuteur inventé) si la forme attendue n'est pas
+  trouvée.
+- **Description vision dans `process_document`** : câblée, réelle,
+  mais **désactivée par défaut**
+  (`MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES=False`) — un appel LLM vision
+  synchrone par image embarquée ajouterait une latence et un coût réels
+  à CHAQUE upload de document, pour chaque organisation,
+  inconditionnellement. Même logique que `AB_TEST_AUTO_DECIDE`/
+  `OTEL_ENABLED` : réel et fonctionnel, activable une fois le
+  coût/latence acceptés par l'opérateur.
+- **Détecteur d'objets séparé (YOLO)** : décliné, refus honnête et
+  documenté, pas une omission. Un détecteur réel nécessite soit une
+  dépendance lourde (torch + poids YOLO, plusieurs centaines de Mo),
+  soit une API hébergée payante — aucune des deux n'est "sans
+  dépendance lourde" comme demandé. L'appel LLM vision existant
+  renvoie déjà des objets réels (pas de bounding boxes, mais des
+  labels réels) sans dépendance supplémentaire.
+- **14 composants frontend séparés** : déclinés — la consolidation
+  actuelle (upload, liste, détail, lecteurs, transcription,
+  description, galerie de frames, recherche) couvre les mêmes vraies
+  fonctionnalités sans fichiers redondants ; le prompt laissait
+  explicitement le choix ("si tu penses que c'est utile").
+
 🐛 **Simplification réelle, documentée, pas un manque caché** :
 aucun détecteur d'objets séparé (YOLO ou équivalent) n'a été ajouté —
 le même appel LLM vision qui décrit l'image renvoie aussi une liste
 d'objets structurée en JSON, un seul appel réseau réel au lieu de deux
-dépendances. La diarisation audio (qui parle quand) reste un vrai
-manque non comblé : `MediaTranscript.segments_json` existe mais reste
-`NULL`, aucun fournisseur de diarisation n'est intégré.
+dépendances.
 
-🟡 **Ce qui reste partiel** : la description vision réelle n'est PAS
-encore câblée dans le pipeline `process_document` des images
-embarquées dans un document (colonnes prêtes, fonction prête, mais pas
-reliées — pour ne pas ralentir chaque upload de document avec un appel
-LLM synchrone par image embarquée) ; les 3 routes de recherche
+🟡 **Ce qui reste partiel** : les 3 routes de recherche
 séparées du prompt original (`/search`, `/search/visual`,
-`/search/audio`) ont été consolidées en une seule avec un filtre
-`media_type` (redondance corrigée, pas un manque) ; le frontend fournit
-un ensemble de composants réel mais volontairement consolidé (upload,
-liste, détail, lecteurs image/audio/vidéo, transcription, description,
-galerie de frames, recherche) plutôt que les 14 fichiers nommés
-littéralement par le prompt.
+`/search/audio`) restent consolidées en une seule avec un filtre
+`media_type` (redondance corrigée, pas un manque) ; le frontend reste
+volontairement consolidé plutôt que les 14 fichiers nommés
+littéralement par le prompt (décision confirmée ci-dessus).
 
-✅ **16 tests backend + 5 tests frontend réels**, tous passés en
+✅ **16 + 10 tests backend + 5 tests frontend réels**, tous passés en
 direct (upload, validation de taille/type, contrôle d'accès,
 traitement image/audio/vidéo avec mocks sur les vraies frontières
-externes — LLM vision, transcription, ffmpeg —, indexation RAG,
+externes — LLM vision, transcription, diarisation, ffmpeg —, indexation RAG,
 recherche, isolation multi-tenant). Aucune régression sur les tests
 préexistants OCR/extraction d'images/voice/telephony. Voir
 [`docs/media/OVERVIEW.md`](media/OVERVIEW.md),

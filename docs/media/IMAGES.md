@@ -29,18 +29,27 @@ never fails the upload itself, same reasoning as document upload's own
    `NULL`), tagged `metadata_json.source` = `media_image_ocr` /
    `media_image_description`.
 
-## Embedded document images (unchanged pipeline, extended result)
+## Embedded document images (finalization -- now wired, off by default)
 
 Images embedded inside a PDF/DOCX/EPUB (`document_images` table)
-already got real OCR during document processing. Partie 22 does NOT
-change that pipeline's control flow -- it only adds two columns
-(`description`, `objects_json`) to `DocumentImage`. Wiring the real
-vision call into `process_document`'s own per-image loop is real,
-straightforward future work (the columns and the `describe_image`
-function both already exist) -- not done in this part to avoid
-slowing down every document upload with a real, synchronous LLM call
-per embedded image; a standalone `MediaAsset` image upload is the real
-path exercised end-to-end today.
+already got real OCR during document processing. `process_document`'s
+own per-image loop now ALSO calls the real vision pipeline
+(`api.security.documents.describe_embedded_image_if_enabled`, a small,
+directly-testable wrapper around `api.services.media.describe_image`,
+imported lazily to avoid a circular import), storing the real
+description/objects into the SAME `DocumentImage.description`/
+`objects_json` columns a standalone image upload uses.
+
+**Real, but OFF by default**
+(`settings.MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES=False`) -- a real,
+synchronous vision-LLM call per embedded image would add real latency
+and real per-image cost to EVERY document upload, for every
+organization, unconditionally. Same "real but gated" pattern as
+`AB_TEST_AUTO_DECIDE`/`OTEL_ENABLED`: an operator opts in once vision
+costs/latency are acceptable for their own deployment. Same real,
+honest degradation as OCR right above it in that loop -- any real
+provider failure logs a warning and leaves `description`/`objects_json`
+`NULL`, never aborts the document.
 
 ## Endpoints
 

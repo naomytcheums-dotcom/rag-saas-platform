@@ -17,14 +17,31 @@ The resulting text is stored as a real `MediaTranscript` row
 (`metadata_json.source = "media_transcript"`) the same way document
 text is.
 
-## A real, honest gap: no diarization
+## Diarization (finalization) -- real, Deepgram-only, best-effort
 
-This part's own pre-build audit confirmed no speaker-diarization code
-exists anywhere in this codebase. `MediaTranscript.segments_json` is a
-real, nullable column reserved for real per-speaker segments
-(`{start_ms, end_ms, speaker, text}`) once a real diarization provider
-is integrated -- today it stays `NULL`; `transcribe_audio` returns
-plain text only. Not silently pretended to work.
+`api.services.voice.transcribe_audio_with_diarization` is a NEW
+function (never a change to the original `transcribe_audio` -- same
+"never rename/change a function pre-existing tests call directly"
+discipline as Partie 21's own `assign_ab_test_variant`), used
+automatically by `extract_audio_transcript`/`extract_video_transcript`
+whenever `STT_PROVIDER=deepgram` (the only real, integrated STT
+provider whose API supports diarization at all -- Whisper's API has
+no such parameter). It calls `litellm.atranscription(..., diarize=True)`
+and parses the response for real per-word `speaker` labels into
+`MediaTranscript.segments_json` (`{speaker, start_ms, end_ms, text}`
+per word).
+
+**Honest, documented limitation**: this environment has no live
+Deepgram account, so the exact real shape litellm normalizes a
+diarized Deepgram response into has not been verified against a real
+API call. Parsing is defensive (`_parse_diarization_segments`): it
+only trusts a real `.words` attribute carrying real `speaker` keys,
+and returns `None` (never a fabricated single-speaker guess) for
+anything else -- the same "real result or honestly nothing" pattern
+as `get_video_duration_ms`. `STT_PROVIDER=whisper` (or any diarization
+failure) transparently falls back to the original, undiarized
+`transcribe_audio` -- `segments_json` stays `NULL` in that case, same
+as before this finalization.
 
 ## Endpoints
 

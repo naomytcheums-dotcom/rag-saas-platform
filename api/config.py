@@ -1170,6 +1170,15 @@ class Settings(BaseSettings):
     MULTIMODAL_FRAME_INTERVAL_SECONDS: int = 5
     MULTIMODAL_MAX_FRAMES_PER_VIDEO: int = 20
     MEDIA_CLEANUP_FAILED_AFTER_DAYS: int = 7
+    # Partie 22 (finalization) -- real, but OFF by default, same
+    # reasoning as AB_TEST_AUTO_DECIDE/OTEL_ENABLED: a real, synchronous
+    # vision-LLM call per embedded document image would add real,
+    # potentially significant latency (and real per-image cost) to
+    # EVERY document upload, for every organization, unconditionally --
+    # too large a default behavior change to force on silently. The
+    # columns/function are fully real and wired; an operator opts in
+    # once vision costs/latency are acceptable for their own deployment.
+    MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES: bool = False
 
     # -- Context relevance (Partie 7.2.10) ---------------------------------------
     # Honestly NOT YET implemented when True -- same real precedent as

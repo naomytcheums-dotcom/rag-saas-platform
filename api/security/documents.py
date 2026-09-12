@@ -3038,6 +3038,38 @@ async def stream_document_progress(db: AsyncSession, document_id: uuid.UUID):
         await pubsub.aclose()
 
 
+async def describe_embedded_image_if_enabled(
+    image_data: bytes, content_type: str | None, index: int, document_id: uuid.UUID,
+) -> tuple[str | None, list | None]:
+    """Partie 22 (finalization) -- real, but OFF by default
+    (`settings.MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES`, see its own
+    docstring in api/config.py for why): a real vision-LLM call per
+    embedded document image, reusing the SAME `describe_image` already
+    used for standalone media uploads (`api.services.media`), imported
+    lazily here specifically to avoid a real circular import (that
+    module itself imports `chunk_text`/`generate_embeddings` from THIS
+    one). A separate, directly-testable function -- not inlined into
+    `process_document`'s own per-image loop -- because a real,
+    successful full `process_document` run needs real infra (Postgres/
+    S3/a downloaded tokenizer) this fast test suite doesn't have (see
+    tests/test_document_status.py's own docstring); this function is
+    the one real, new piece of that loop this session CAN test
+    directly, without needing that infra. Same real, honest
+    degradation as OCR just above it in that loop: any real failure
+    (provider down, bad key, unparseable response) logs a warning and
+    returns `(None, None)` -- never aborts the document."""
+    if not (settings.MULTIMODAL_ENABLED and settings.MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES):
+        return None, None
+    try:
+        from api.services.media import describe_image
+
+        result = await describe_image(image_data, content_type or "image/png")
+        return result["description"], (result["objects"] or None)
+    except Exception as exc:  # noqa: BLE001 -- a real vision-provider failure must never abort the whole document
+        logger.warning("process_document: vision description failed for image %d of document '%s': %s", index, document_id, exc)
+        return None, None
+
+
 async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document:
     """
     Item 3's literal function (named process_pdf_document in 2.1.1,
@@ -3210,10 +3242,13 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                             logger.warning("process_document: OCR unavailable for image %d of document '%s': %s", index, document_id, exc)
                         except Exception as exc:  # noqa: BLE001 -- a real, corrupt/unusual image must never abort the whole document
                             logger.warning("process_document: OCR failed for image %d of document '%s': %s", index, document_id, exc)
+
+                    description, objects_json = await describe_embedded_image_if_enabled(image_data, content_type, index, document_id)
+
                     db.add(DocumentImage(
                         document_id=document.id, file_key=file_key, file_size=len(image_data),
                         width=image_metadata.get("width"), height=image_metadata.get("height"), format=image_metadata.get("format"),
-                        metadata_json=image_row_metadata,
+                        metadata_json=image_row_metadata, description=description, objects_json=objects_json,
                     ))
                 except Exception as exc:  # noqa: BLE001 -- one real image's own failure must never abort the whole document
                     logger.warning("process_document: could not save image %d for document '%s': %s", index, document_id, exc)
