@@ -15,7 +15,7 @@ from api.models.autonomous_agent import AutonomousAgent
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.autonomous_agent import (
-    AgentCollaborationRequest, AgentCollaborationResponse, AgentMemoryCreateRequest, AgentMemoryResponse,
+    AgentCollaborationRequest, AgentCollaborationResponse, AgentCostResponse, AgentMemoryCreateRequest, AgentMemoryResponse,
     AgentPlanResponse, AgentStatusResponse, AgentStepResponse, AutonomousAgentCreateRequest, AutonomousAgentListResponse,
     AutonomousAgentResponse, AutonomousAgentUpdateRequest,
 )
@@ -111,6 +111,12 @@ async def stop_autonomous_agent_endpoint(agent_ctx: tuple[AutonomousAgent, Organ
 async def get_autonomous_agent_status_endpoint(agent_ctx: tuple[AutonomousAgent, OrganizationMember] = Depends(require_autonomous_agent_member), db: AsyncSession = Depends(get_db)):
     agent, _caller = agent_ctx
     return await autonomous_agents_service.get_agent_status(db, agent.id)
+
+
+@router.get("/autonomous-agents/{agent_id}/cost", response_model=AgentCostResponse)
+async def get_autonomous_agent_cost_endpoint(agent_ctx: tuple[AutonomousAgent, OrganizationMember] = Depends(require_autonomous_agent_member), db: AsyncSession = Depends(get_db)):
+    agent, _caller = agent_ctx
+    return await autonomous_agents_service.get_agent_cost(db, agent.id)
 
 
 # --------------------------------------------------------------- planning

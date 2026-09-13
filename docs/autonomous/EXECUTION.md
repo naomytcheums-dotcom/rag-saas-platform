@@ -7,8 +7,10 @@ in this codebase explicitly flagged as never having been built. For
 each real, still-`pending` step of the agent's own current (or newly
 created) plan:
 
-1. **Limit check** (`enforce_limits`) -- if `current_step >= max_steps`,
-   the agent is honestly `paused`, not force-completed or crashed.
+1. **Limit check** (`enforce_limits`) -- if `current_step >= max_steps`
+   OR `total_cost >= max_cost` (a real, per-agent `guardrails.max_cost`
+   override, else the global `AUTONOMOUS_MAX_COST` default), the agent
+   is honestly `paused`, not force-completed or crashed.
 2. **Human-approval check** (`human_approval_required`) -- if
    `AUTONOMOUS_HUMAN_APPROVAL` is on and this step's own description
    is in the agent's own `guardrails.require_approval_for` list, the
@@ -37,17 +39,40 @@ actually failed.
    5.1.2's real keyword/LLM ranking) against the real, shared tool
    registry. An honestly empty selection means "no real tool fits."
 3. **Either**:
-   - a real tool matched: a real, small LLM call turns the step's
-     free-text description into structured parameters matching the
-     tool's own JSON schema, then the tool's real `handler` is
-     invoked (`call_tool`).
+   - a real tool matched: a real, small, COSTED LLM call
+     (`_run_costed_completion`) turns the step's free-text description
+     into structured parameters matching the tool's own JSON schema,
+     then the tool's real `handler` is invoked (`call_tool`).
    - no tool matched: the step is a real reasoning step -- the
-     description is sent directly to the LLM (`chat_completion`), and
-     its real response IS the result. `action` is recorded as
-     `"respond"`.
+     description is sent directly to the LLM via the SAME
+     `_run_costed_completion`, and its real response IS the result.
+     `action` is recorded as `"respond"`.
 4. **Errors never crash the run** (`handle_error`) -- a real tool/LLM
    failure marks the step `failed` with the real error message; the
    loop above decides whether to replan or stop.
+
+## Real cost tracking (`_run_costed_completion`)
+
+Every costed call above uses `chat_completion_with_usage` (Partie
+7.2.14) instead of the plain `chat_completion` -- its real,
+provider-reported token usage is run through
+`api.services.cost_tracking.calculate_cost_per_request` (Partie
+7.2.15's own real, static $/M-token pricing table), and the resulting
+real USD cost is added to BOTH `step.total_cost` and
+`agent.total_cost`. An unpriced model or a provider that doesn't
+report usage costs an honest `0` -- never a fabricated estimate, never
+a call blocked from completing over a pricing gap.
+
+`GET /autonomous-agents/{id}/cost` returns the real running total, the
+real effective cap, whether the agent is currently over budget, and a
+real per-step breakdown.
+
+**Honest, documented scope**: `decompose_task` (planning) and
+`execute_collaboration`'s own LLM call are NOT costed -- they still
+call the plain, unmetered `chat_completion`, a shared function many
+OTHER real callers across this codebase depend on; changing its return
+shape for cost-tracking's sake alone was out of scope for this
+finalization.
 
 ## Celery
 

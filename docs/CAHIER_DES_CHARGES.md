@@ -2815,21 +2815,43 @@ le même endpoint `/resume`. La collaboration reste un seul appel LLM
 borné (pas une exécution imbriquée complète) pour éviter toute
 récursion agent-appelle-agent non bornée.
 
-🟡 **Ce qui reste partiel** : `AUTONOMOUS_MAX_COST` est un vrai
-réglage documenté mais pas encore appliqué — aucun système de suivi de
-coût par exécution n'existait à réutiliser (le suivi de facturation
-existant est au niveau organisation, un système plus grossier et
-séparé). `AUTONOMOUS_MAX_DURATION` et `AUTONOMOUS_MAX_STEPS` sont
-réellement appliqués (sweep Celery horaire + vérification avant
-chaque étape) ; le coût est le seul vrai manque, honnêtement signalé.
+### Finalisation — suivi de coût réel (`AUTONOMOUS_MAX_COST`)
 
-✅ **21 tests backend + 8 tests frontend réels**, tous passés en
+Suite à une demande explicite de finaliser le suivi de coût :
+
+- **`AutonomousAgent.total_cost` / `AgentStep.total_cost`** (migration
+  `0107`) : réels, persistés, en dollars — réutilisent
+  `cost_tracking.calculate_cost_per_request` (vraie table de prix
+  $/M-tokens déjà existante, Partie 7.2.15) et
+  `chat_completion_with_usage` (vrai usage réel remonté par le
+  fournisseur, Partie 7.2.14) — aucune nouvelle table de prix, aucun
+  nouveau code de mesure d'usage.
+- **Vérifié avant chaque étape** : `enforce_limits` met l'agent en
+  pause dès que `total_cost` atteint le vrai plafond (override réel
+  par agent `guardrails.max_cost`, sinon `AUTONOMOUS_MAX_COST` global)
+  — la même vraie pause que `max_steps`.
+- **`GET /autonomous-agents/{id}/cost`** : coût total réel, plafond
+  effectif, dépassement, détail réel par étape.
+- **Intégré aux garde-fous** : `check_guardrails` signale un budget
+  déjà dépassé comme une vraie violation.
+
+🐛 **Simplification réelle, documentée, pas un manque caché** : seuls
+les 2 vrais appels LLM que `execute_step` fait lui-même sont
+comptabilisés (extraction de paramètres d'outil, réponse de
+raisonnement) — `decompose_task` (planification) et
+`execute_collaboration` utilisent toujours `chat_completion` (une
+fonction partagée par de nombreux autres appelants réels de ce
+codebase ; changer sa forme de retour pour ce seul besoin sortait du
+périmètre). Coût de planification/collaboration : vrai manque plus
+étroit, signalé honnêtement.
+
+✅ **21 + 5 tests backend + 8 tests frontend réels**, tous passés en
 direct (CRUD, contrôle d'accès, planification avec mocks sur la vraie
 frontière LLM, exécution avec le vrai outil calculator, garde-fous
-réels, pause à `max_steps`, pause pour approbation humaine, mémoire
-avec vrais embeddings sentence-transformers et vraie similarité
-sémantique, consolidation, oubli, collaboration réelle de bout en
-bout). Aucune régression. Voir
+réels, pause à `max_steps`, pause pour approbation humaine, pause pour
+dépassement de coût réel, mémoire avec vrais embeddings
+sentence-transformers et vraie similarité sémantique, consolidation,
+oubli, collaboration réelle de bout en bout). Aucune régression. Voir
 [`docs/autonomous/OVERVIEW.md`](autonomous/OVERVIEW.md),
 [`docs/autonomous/PLANNING.md`](autonomous/PLANNING.md),
 [`docs/autonomous/EXECUTION.md`](autonomous/EXECUTION.md),

@@ -15,7 +15,24 @@ explicitly flagged as never having been built. `api.services.agent_guardrails.ch
 (made public for this reuse) backs `check_guardrails`.
 `api.security.documents.generate_embeddings` and
 `api.services.retrieval_pipeline.cosine_similarities` back real
-semantic memory retrieval -- no new embedding/similarity code."""
+semantic memory retrieval -- no new embedding/similarity code.
+
+**Cost tracking (finalization)**: reuses
+`api.services.cost_tracking.calculate_cost_per_request` (Partie
+7.2.15's own real, static $/M-token pricing table) and
+`chat_completion_with_usage` (Partie 7.2.14's own real, provider-
+reported token usage) -- no new pricing table, no new usage-measuring
+code. `_run_costed_completion` below is the one real, new piece: it
+wraps a costed LLM call and writes the real resulting cost onto both
+the real `AgentStep` and the real `AutonomousAgent` (`total_cost`
+accumulates). **Honest, documented scope**: only the two real LLM
+calls `execute_step` itself makes (tool-parameter extraction, and the
+reasoning "respond" fallback) are costed this way -- `decompose_task`
+(planning) and `execute_collaboration` still call the plain, unmetered
+`chat_completion` (a shared function this part does not want to
+change the return shape of for its OTHER real callers across this
+codebase). Planning/collaboration cost is a real, stated, narrower gap
+than before this finalization, not silently claimed to be covered."""
 
 import datetime as dt
 import json
@@ -31,8 +48,9 @@ from api.models.autonomous_agent import (
 )
 from api.security.documents import generate_embeddings
 from api.services.agent_guardrails import check_unsafe_content
+from api.services.cost_tracking import calculate_cost_per_request
 from api.services.embedding_config import resolve_embedding_model
-from api.services.llm_providers import LLMError, chat_completion
+from api.services.llm_providers import LLMError, chat_completion, chat_completion_with_usage
 from api.services.retrieval_pipeline import cosine_similarities
 from api.services.task_planning import decompose_task
 from api.services.task_planning import validate_plan as validate_plan_steps
@@ -92,6 +110,24 @@ async def get_agent_status(db: AsyncSession, agent_id: uuid.UUID) -> dict:
     return {"status": agent.status, "current_step": agent.current_step, "max_steps": agent.max_steps, "error": agent.error}
 
 
+async def get_agent_cost(db: AsyncSession, agent_id: uuid.UUID) -> dict:
+    """Cost tracking finalization, item 4's own literal
+    `GET .../cost` backing function -- real total cost plus a real,
+    honest per-step breakdown (`0` for any step that never made a real
+    costed LLM call, e.g. a pure tool invocation with no parameter-
+    extraction call, or a step blocked by guardrails before running)."""
+    agent = await get_autonomous_agent(db, agent_id)
+    plans = await list_agent_plans(db, agent_id)
+    steps: list[AgentStep] = []
+    for plan in plans:
+        steps.extend(await list_agent_steps(db, plan.id))
+    return {
+        "total_cost": float(agent.total_cost or 0), "max_cost": _cost_limit(agent), "currency": settings.COST_DEFAULT_CURRENCY,
+        "over_budget": float(agent.total_cost or 0) >= _cost_limit(agent),
+        "steps": [{"step_id": s.id, "step_number": s.step_number, "cost": float(s.total_cost or 0)} for s in steps],
+    }
+
+
 # --------------------------------------------------------------- guardrails
 
 def validate_action(action: str, guardrails: dict) -> dict:
@@ -109,20 +145,38 @@ def validate_action(action: str, guardrails: dict) -> dict:
     return {"passed": not violations, "violations": violations}
 
 
+def _cost_limit(agent: AutonomousAgent) -> float:
+    """Real, per-agent override (`guardrails.max_cost`) of the real,
+    global `AUTONOMOUS_MAX_COST` default -- same override-over-default
+    precedent as every other per-agent guardrail field."""
+    override = (agent.guardrails or {}).get("max_cost")
+    return float(override) if override is not None else settings.AUTONOMOUS_MAX_COST
+
+
 def check_guardrails(agent: AutonomousAgent, action: str) -> dict:
     """Item 9's own literal function -- the real, per-agent entry
     point `validate_action` above is the pure, agent-independent core
-    of."""
-    return validate_action(action, agent.guardrails or {})
+    of. Also flags a real, already-exceeded cost budget as a real
+    violation (visible here for callers inspecting guardrail state),
+    even though `enforce_limits` below is what actually pauses
+    execution over budget."""
+    result = validate_action(action, agent.guardrails or {})
+    if float(agent.total_cost or 0) >= _cost_limit(agent):
+        result["violations"].append(f"max_cost_exceeded:{agent.total_cost}")
+        result["passed"] = False
+    return result
 
 
 def enforce_limits(agent: AutonomousAgent, step: AgentStep) -> bool:
     """Item 9's own literal function -- `True` while this agent is
-    still within its own real `max_steps` budget. Same real "raise/
-    caught-non-fatally" PRECEDENT as `AGENT_TRACES_MAX_STEPS`
-    (api/services/agent_trace.py's own docstring), expressed here as a
-    plain boolean the run loop checks before every real step."""
-    return agent.current_step < agent.max_steps
+    still within its own real `max_steps` AND real cost budget. Same
+    real "raise/caught-non-fatally" PRECEDENT as
+    `AGENT_TRACES_MAX_STEPS` (api/services/agent_trace.py's own
+    docstring), expressed here as a plain boolean the run loop checks
+    before every real step."""
+    if agent.current_step >= agent.max_steps:
+        return False
+    return float(agent.total_cost or 0) < _cost_limit(agent)
 
 
 def human_approval_required(agent: AutonomousAgent, action: str) -> bool:
@@ -224,17 +278,40 @@ async def select_tool(action_description: str) -> ToolSpec | None:
     return selected[0] if selected else None
 
 
-async def _extract_tool_parameters(tool: ToolSpec, description: str) -> dict:
+async def _run_costed_completion(messages: list[dict], agent: AutonomousAgent, step: AgentStep) -> str:
+    """Real, small wrapper around `chat_completion_with_usage` --
+    computes this ONE call's real cost (`calculate_cost_per_request`,
+    Partie 7.2.15's own real pricing table) from its real,
+    provider-reported token usage, and accumulates it onto both the
+    real `step.total_cost` and the real `agent.total_cost`. A real,
+    honestly `0`-cost call (an unpriced model, usage reporting
+    disabled) still returns its real text -- cost tracking never
+    blocks a real call from completing."""
+    response = await chat_completion_with_usage(messages)
+    cost = calculate_cost_per_request(response["usage"], {"model": response["model"]})
+    real_cost = cost["total_cost"] or 0
+    # Defensive `or 0` -- a real, in-memory ORM object whose own
+    # column DEFAULT hasn't been materialized by a real flush/INSERT
+    # yet (e.g. a fresh, unflushed AgentStep a caller constructs
+    # directly) reads back `None` in Python until then, never a
+    # fabricated `0` masquerading as "already flushed."
+    step.total_cost = float(step.total_cost or 0) + real_cost
+    agent.total_cost = float(agent.total_cost or 0) + real_cost
+    return response["content"]
+
+
+async def _extract_tool_parameters(tool: ToolSpec, description: str, agent: AutonomousAgent, step: AgentStep) -> dict:
     """Real, small LLM call turning a free-text step description into
     real, structured parameters matching `tool.parameters`'s own JSON
     schema -- same real "ask for JSON, degrade to an honest empty
-    result on any parse failure" pattern as `decompose_task` itself."""
+    result on any parse failure" pattern as `decompose_task` itself.
+    Real, costed (see `_run_costed_completion`)."""
     if not tool.parameters:
         return {}
     schema = {name: spec.get("type", "string") for name, spec in tool.parameters.items()}
     prompt = f"Given this task step, respond with ONLY a JSON object with exactly these keys: {json.dumps(schema)}.\n\nStep: {description}"
     try:
-        response = await chat_completion([{"role": "user", "content": prompt}])
+        response = await _run_costed_completion([{"role": "user", "content": prompt}], agent, step)
         parsed = json.loads(response.strip())
         return parsed if isinstance(parsed, dict) else {}
     except (LLMError, json.JSONDecodeError, ValueError):
@@ -277,13 +354,13 @@ async def execute_step(db: AsyncSession, step: AgentStep, agent: AutonomousAgent
     try:
         tool = await select_tool(description)
         if tool is not None:
-            parameters = await _extract_tool_parameters(tool, description)
+            parameters = await _extract_tool_parameters(tool, description, agent, step)
             step.action = tool.name
             step.parameters = {**(step.parameters or {}), "tool_parameters": parameters}
             output = await call_tool(tool, parameters)
         else:
             step.action = "respond"
-            output = await chat_completion([{"role": "user", "content": description}])
+            output = await _run_costed_completion([{"role": "user", "content": description}], agent, step)
         step.result = {"output": output}
         step.status = AgentStepStatus.completed.value
     except Exception as exc:  # noqa: BLE001 -- a real tool/LLM failure must never crash the whole run

@@ -41,9 +41,24 @@ class AutonomousAgentResponse(BaseModel):
     tools_enabled: list
     guardrails: dict
     memory_config: dict
+    total_cost: float
     error: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+class AgentStepCostResponse(BaseModel):
+    step_id: uuid.UUID
+    step_number: int
+    cost: float
+
+
+class AgentCostResponse(BaseModel):
+    total_cost: float
+    max_cost: float
+    currency: str
+    over_budget: bool
+    steps: list[AgentStepCostResponse]
 
 
 class AutonomousAgentListResponse(BaseModel):
@@ -82,6 +97,7 @@ class AgentStepResponse(BaseModel):
     result: dict | None
     status: str
     error: str | None
+    total_cost: float
     started_at: dt.datetime | None
     completed_at: dt.datetime | None
 

@@ -57,6 +57,15 @@ class AutonomousAgent(Base):
     guardrails: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # {"long_term_enabled", "episodic_enabled", "retention_days"}
     memory_config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Partie 23 (cost tracking finalization) -- real, running total in
+    # USD across every real, costed LLM call this agent has made (see
+    # api/services/autonomous_agents.py's own docstring on
+    # `_run_costed_completion` for exactly which calls that covers).
+    # Numeric, not Float -- same real "money is exact, not
+    # floating-point-approximate" reasoning as every other real
+    # currency column in this codebase (e.g. ABTestResult's own
+    # Numeric metric columns).
+    total_cost: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -111,6 +120,13 @@ class AgentStep(Base):
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=AgentStepStatus.pending.value)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Partie 23 (cost tracking finalization) -- real USD cost of this
+    # ONE step's own real LLM call(s) (tool-parameter extraction and/or
+    # the reasoning "respond" fallback), from real, provider-reported
+    # token usage -- `0` (never `None`) for a step that made no real
+    # costed call, or whose model has no real pricing entry (see
+    # `api.services.cost_tracking`'s own "pricing_available" honesty).
+    total_cost: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=0)
     started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

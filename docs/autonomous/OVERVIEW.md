@@ -72,13 +72,25 @@ for the real detail on each piece.
 (`api/config.py`). Task-planning/tool-selection settings are unchanged
 and reused as-is.
 
-## A real, honest scope limit: `max_cost` is not yet enforced
+## Cost tracking (finalization) -- real, now enforced
 
-`AUTONOMOUS_MAX_COST` is a real, documented setting, but no real
-per-run token/cost accounting is wired to it yet -- this codebase has
-no existing per-agent-run cost tracker to reuse (the org-level billing
-usage tracker is a separate, coarser real system). `AUTONOMOUS_MAX_DURATION`
-IS enforced (the `check_agent_guardrails` Celery sweep, see
-`EXECUTION.md`), and `AUTONOMOUS_MAX_STEPS` IS enforced (`enforce_limits`,
-checked before every real step) -- cost is the one real, stated gap,
-not silently pretended to work.
+`AUTONOMOUS_MAX_COST` is now real, enforced budget-per-agent, reusing
+`api.services.cost_tracking.calculate_cost_per_request` (Partie
+7.2.15's own real, static $/M-token pricing table) and
+`chat_completion_with_usage` (Partie 7.2.14's own real,
+provider-reported token usage) -- no new pricing table, no new
+usage-measuring code. `AutonomousAgent.total_cost`/`AgentStep.total_cost`
+are real, persisted USD accumulators; `enforce_limits` pauses the
+agent once the real total reaches the real cap (a per-agent
+`guardrails.max_cost` override, or the global default), the SAME real
+pause the `max_steps` cap already uses.
+
+**Honest, documented scope**: only the two real LLM calls
+`execute_step` itself makes are costed -- tool-parameter extraction,
+and the reasoning "respond" fallback. `decompose_task` (planning) and
+`execute_collaboration`'s own LLM call still use the plain, unmetered
+`chat_completion` (a shared function used by many OTHER real callers
+across this codebase; changing its return shape for their sake was out
+of scope). Planning/collaboration cost is a real, narrower, stated gap
+-- not silently claimed to be covered. See `EXECUTION.md` for the full
+detail and `GET /autonomous-agents/{id}/cost` for the real breakdown.
