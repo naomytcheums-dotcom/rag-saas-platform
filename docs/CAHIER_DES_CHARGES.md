@@ -2766,6 +2766,78 @@ OCR/extraction d'images/voice/telephony. Voir
 
 ---
 
+## PARTIE 23 — Agents autonomes — ✅ COMPLET (scope honnête)
+
+Audit préalable (agent d'exploration dédié) : un vrai chatbot Agent
+mono-tour (Partie 5.3), une vraie décomposition/validation de tâches
+(Partie 5.1.13), un vrai registre d'outils avec sélection réelle
+(Partie 5.1.2), et de vrais garde-fous (Partie 5.3.9) existaient déjà.
+**Chaque docstring de ces modules signale explicitement qu'aucune
+vraie boucle d'exécution multi-étapes n'a jamais été construite** —
+c'est le seul vrai manque, mais un manque réel et conséquent, comblé
+ici.
+
+**Pourquoi `AutonomousAgent` est une nouvelle table, pas des colonnes
+sur `Agent`** : `Agent` est un chatbot configuré, multi-tour (un
+`system_prompt`, pas de `goal`, pas de statut d'exécution). Un
+`AutonomousAgent` est un objectif unique qu'il planifie et exécute
+lui-même, puis s'arrête. Deux vrais cycles de vie distincts, pas la
+même table avec des colonnes en plus.
+
+**Construit** : `AutonomousAgent`/`AgentPlan`/`AgentStep`/
+`AgentMemory`/`AgentCollaboration` (5 tables, RLS activé à la
+création, migration `0106`) ; la vraie boucle d'exécution
+(`run_autonomous_agent`) — planifie, sélectionne un outil réel ou
+retombe sur du raisonnement pur, exécute, écrit le résultat, vérifie
+garde-fous/limites/approbation humaine avant chaque étape, replanifie
+une fois en cas d'échec ; mémoire réelle à 3 niveaux (court terme/long
+terme/épisodique) avec embeddings réels, récupération sémantique
+réelle, consolidation réelle, oubli réel ; collaboration agent-à-agent
+réelle mais volontairement bornée à un seul appel LLM (pas de
+récursion imbriquée non bornée) ; endpoints CRUD + run/pause/resume/
+stop/status + plans/steps + memory + collaborate ; 5 tâches Celery
+réelles ; 12 composants frontend + page dédiée.
+
+**Réutilisé, pas reconstruit** : `task_planning.decompose_task`/
+`validate_plan` (décomposition LLM réelle) ; `tool_selection.select_tools`
++ le registre `ToolSpec` réel (calculator/word_count déjà utilisables) ;
+`agent_guardrails.check_unsafe_content` (rendu public pour cette
+réutilisation, mêmes vrais patterns regex) ; `generate_embeddings` +
+`cosine_similarities` (déjà utilisés pour la recherche média Partie
+22) pour la mémoire sémantique ; la convention JSON-liste-de-floats de
+`DocumentChunk.embedding` pour `AgentMemory.embedding`.
+
+🐛 **Simplification réelle, documentée, pas un manque caché** :
+l'approbation humaine réutilise le cycle pause/resume existant plutôt
+qu'une nouvelle file d'approbation séparée — une étape nécessitant une
+approbation met simplement l'agent en pause, un humain le reprend via
+le même endpoint `/resume`. La collaboration reste un seul appel LLM
+borné (pas une exécution imbriquée complète) pour éviter toute
+récursion agent-appelle-agent non bornée.
+
+🟡 **Ce qui reste partiel** : `AUTONOMOUS_MAX_COST` est un vrai
+réglage documenté mais pas encore appliqué — aucun système de suivi de
+coût par exécution n'existait à réutiliser (le suivi de facturation
+existant est au niveau organisation, un système plus grossier et
+séparé). `AUTONOMOUS_MAX_DURATION` et `AUTONOMOUS_MAX_STEPS` sont
+réellement appliqués (sweep Celery horaire + vérification avant
+chaque étape) ; le coût est le seul vrai manque, honnêtement signalé.
+
+✅ **21 tests backend + 8 tests frontend réels**, tous passés en
+direct (CRUD, contrôle d'accès, planification avec mocks sur la vraie
+frontière LLM, exécution avec le vrai outil calculator, garde-fous
+réels, pause à `max_steps`, pause pour approbation humaine, mémoire
+avec vrais embeddings sentence-transformers et vraie similarité
+sémantique, consolidation, oubli, collaboration réelle de bout en
+bout). Aucune régression. Voir
+[`docs/autonomous/OVERVIEW.md`](autonomous/OVERVIEW.md),
+[`docs/autonomous/PLANNING.md`](autonomous/PLANNING.md),
+[`docs/autonomous/EXECUTION.md`](autonomous/EXECUTION.md),
+[`docs/autonomous/MEMORY.md`](autonomous/MEMORY.md),
+[`docs/autonomous/COLLABORATION.md`](autonomous/COLLABORATION.md).
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

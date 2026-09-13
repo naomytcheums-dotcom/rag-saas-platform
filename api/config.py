@@ -2001,5 +2001,28 @@ class Settings(BaseSettings):
     TWILIO_FROM_NUMBER: str | None = None
     TWILIO_WHATSAPP_FROM_NUMBER: str | None = None
 
+    # -- Autonomous agents (Partie 23) --------------------------------------------
+    # This part's own pre-build audit found a real single-step Agent
+    # chatbot (Partie 5.3), a real task-decomposition/validation pair
+    # (TASK_PLANNING_* above, reused directly), a real tool registry,
+    # and real guardrail/content-safety primitives already built and
+    # reused as-is. These are the genuinely NEW settings, for the
+    # genuinely new multi-step, self-planning, self-executing loop.
+    AUTONOMOUS_AGENTS_ENABLED: bool = True
+    AUTONOMOUS_MAX_STEPS: int = 20
+    AUTONOMOUS_MAX_DURATION: int = 3600
+    AUTONOMOUS_MAX_COST: float = 10.0
+    AUTONOMOUS_MEMORY_ENABLED: bool = True
+    AUTONOMOUS_MEMORY_RETENTION_DAYS: int = 30
+    AUTONOMOUS_COLLABORATION_ENABLED: bool = True
+    # Real, OFF by default -- same "a genuine behavior change this
+    # large should never flip on silently" reasoning as
+    # AB_TEST_AUTO_DECIDE/MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES. When
+    # True, any step whose selected tool name appears in a real
+    # per-agent `guardrails.require_approval_for` list auto-pauses the
+    # agent (reusing the existing pause/resume endpoints, not a new
+    # approval queue) instead of executing.
+    AUTONOMOUS_HUMAN_APPROVAL: bool = False
+
 
 settings = Settings()

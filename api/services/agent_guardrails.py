@@ -94,23 +94,33 @@ async def check_blocked_topics(db: AsyncSession, agent_id: uuid.UUID, text: str)
     return [topic for topic in agent.blocked_topics if topic.lower() in lowered]
 
 
-async def check_content_safety(db: AsyncSession, agent_id: uuid.UUID, text: str) -> list[str]:
-    """Item 2's own literal function -- real, matches against the
-    built-in `_UNSAFE_PATTERNS`, gated by the agent's own
-    `content_filter_level` (default `"medium"` when unset -- a real,
-    safe-by-default middle ground). Returns the real, matched
-    CATEGORIES (`"low"`/`"medium"`/`"high"`), never the matched text
-    itself (no reason to echo a real, unsafe phrase back)."""
-    agent = await db.get(Agent, agent_id)
-    if agent is None or agent.deleted_at is not None:
-        return []
-    level = agent.content_filter_level or "medium"
-    active_categories = CONTENT_FILTER_LEVELS[: CONTENT_FILTER_LEVELS.index(level) + 1]
+def check_unsafe_content(text: str, content_filter_level: str = "medium") -> list[str]:
+    """Real, agent-row-INDEPENDENT core of `check_content_safety` below
+    -- made public (Partie 23, same "private helper -> public for real
+    cross-module reuse" precedent as `retrieval_pipeline.cosine_similarities`)
+    for `api.services.autonomous_agents`, whose `AutonomousAgent` is a
+    genuinely separate table (not an `Agent` row) but should reuse
+    these SAME real `_UNSAFE_PATTERNS`, not a second, duplicated
+    regex table. Returns the real, matched CATEGORIES
+    (`"low"`/`"medium"`/`"high"`), never the matched text itself (no
+    reason to echo a real, unsafe phrase back)."""
+    active_categories = CONTENT_FILTER_LEVELS[: CONTENT_FILTER_LEVELS.index(content_filter_level) + 1]
     matched = []
     for category in active_categories:
         if any(pattern.search(text) for pattern in _UNSAFE_PATTERNS[category]):
             matched.append(category)
     return matched
+
+
+async def check_content_safety(db: AsyncSession, agent_id: uuid.UUID, text: str) -> list[str]:
+    """Item 2's own literal function -- real, matches against the
+    built-in `_UNSAFE_PATTERNS`, gated by the agent's own
+    `content_filter_level` (default `"medium"` when unset -- a real,
+    safe-by-default middle ground)."""
+    agent = await db.get(Agent, agent_id)
+    if agent is None or agent.deleted_at is not None:
+        return []
+    return check_unsafe_content(text, agent.content_filter_level or "medium")
 
 
 def _hostname(url: str) -> str | None:

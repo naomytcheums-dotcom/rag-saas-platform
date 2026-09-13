@@ -36,7 +36,7 @@ celery_app = Celery(
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
-        "api.tasks.media",
+        "api.tasks.media", "api.tasks.autonomous_agents",
     ],
 )
 
@@ -320,6 +320,19 @@ celery_app.conf.beat_schedule = {
     "cleanup-old-media-daily": {
         "task": "api.tasks.media.cleanup_old_media",
         "schedule": crontab(hour=4, minute=0),
+    },
+    # -- Partie 23: autonomous agents -------------------------------------------
+    "consolidate-agent-memory-daily": {
+        "task": "api.tasks.autonomous_agents.consolidate_agent_memory",
+        "schedule": crontab(hour=3, minute=15),
+    },
+    "cleanup-old-agent-memory-daily": {
+        "task": "api.tasks.autonomous_agents.cleanup_old_memory",
+        "schedule": crontab(hour=3, minute=30),
+    },
+    "check-agent-guardrails-hourly": {
+        "task": "api.tasks.autonomous_agents.check_agent_guardrails",
+        "schedule": crontab(minute=45),
     },
 }
 
