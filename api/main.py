@@ -37,7 +37,7 @@ from api.routers import (
     sales,
     analytics,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
-    evaluation_jobs, evaluation_results, external_sources, human_approval, invitations, manual_evaluations, oauth,
+    evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, rbac, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
@@ -373,6 +373,7 @@ app.include_router(plugins.admin_router)
 app.include_router(ab_tests.router)
 app.include_router(media.router)
 app.include_router(autonomous_agents.router)
+app.include_router(fine_tuning.router)
 
 
 @app.get("/metrics", tags=["monitoring"])

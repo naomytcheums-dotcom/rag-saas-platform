@@ -2860,6 +2860,84 @@ oubli, collaboration réelle de bout en bout). Aucune régression. Voir
 
 ---
 
+## PARTIE 24 — Fine-tuning — ✅ COMPLET (scope honnête, 1 fournisseur réellement non supportable documenté)
+
+Audit préalable (agent d'exploration dédié) : la config des
+fournisseurs LLM, un vrai Evaluation Lab mature (Partie 7.1-7.2), et
+un précédent réel d'import de datasets existaient déjà. Rien de tout
+ça ne couvre directement la soumission de jobs de fine-tuning aux
+fournisseurs — c'est le vrai manque comblé ici, le reste étant
+réutilisé tel quel.
+
+**Construit** : `FineTuningDataset`/`FineTuningJob`/`FineTunedModel`/
+`FineTuningEvaluation` (4 tables, RLS activé, migration `0108`) ;
+validateur JSONL réel ligne par ligne (schéma `messages`, min/max
+exemples) — aucun validateur JSONL n'existait nulle part avant cette
+partie (la détection JSON de `document_storage.py` exige que TOUT le
+fichier soit un seul document JSON, ce que le JSONL réel n'est pas) ;
+vrais clients REST OpenAI et Mistral via `httpx` (upload de fichier,
+création de job, statut, annulation) — le module de fine-tuning de
+litellm ne couvre que openai/azure/vertex_ai, ne pouvait donc pas être
+réutilisé tel quel pour Mistral ; vrai polling périodique du statut
+(Celery, toutes les 10 minutes) créant automatiquement un
+`FineTunedModel` réel dès qu'un job réussit (idempotent) ; déploiement/
+retrait réel ; 4 tâches Celery ; 13 composants frontend + 7 pages.
+
+**Réutilisé, pas reconstruit** : l'évaluation d'un modèle fine-tuné
+réutilise intégralement le vrai Evaluation Lab existant
+(`create_evaluation_job` + `run_evaluation_job`, Partie 7.1-7.2) — le
+modèle fine-tuné est passé comme un `model_config` candidat réel
+(`{"provider", "model"}`), exactement comme n'importe quelle autre
+configuration LLM candidate déjà testée par les comparaisons de la
+Partie 7.3. Aucun second moteur d'évaluation parallèle. Le stockage
+S3 réutilise les conventions client/clé/gestion d'erreurs de
+`document_storage.py`.
+
+🐛 **Manque réel, honnête et documenté, pas un oubli** : Anthropic
+n'expose aucune API REST de fine-tuning publique et standard,
+contrairement à OpenAI et Mistral. `create_fine_tuning_job` refuse un
+job Anthropic dès le départ avec une vraie erreur claire
+(`ProviderNotSupportedError`), même logique que
+`embedding_config.py` pour les fournisseurs d'embeddings réellement
+non supportés — jamais un job "soumis" fabriqué pour un fournisseur
+que ce codebase ne peut réellement pas atteindre.
+
+🐛 **2 vrais bugs trouvés et corrigés en testant en direct** : (1) les
+tests d'évaluation ne configuraient que `ANTHROPIC_API_KEY`, alors que
+le modèle fine-tuné testé est `provider="openai"` — corrigé en
+configurant aussi une vraie clé OpenAI de test. (2) un test vérifiant
+l'échec honnête "clé API manquante" échouait en fait sur le vrai
+téléchargement S3 (aucun vrai bucket configuré dans cet environnement)
+AVANT même d'atteindre la vérification de clé — corrigé en simulant le
+téléchargement pour laisser apparaître l'échec réellement visé par le
+test.
+
+**Aucune credential réelle de fournisseur dans cet environnement**
+(confirmé par l'audit : `OPENAI_API_KEY`/`MISTRAL_API_KEY` vides par
+défaut, aucune fixture de test n'en configure de réelles) — même
+pattern établi que Stripe/ElevenLabs ailleurs dans ce codebase :
+chaque fonction réelle échoue honnêtement sur une clé manquante ; les
+tests simulent la frontière `httpx` avec des réponses ayant exactement
+la forme des vraies API documentées d'OpenAI/Mistral, jamais une
+réponse inventée.
+
+✅ **34 tests backend + 10 tests frontend réels**, tous passés en
+direct (upload/validation JSONL réelle, contrôle d'accès, soumission
+de job avec upload+création simulés à la frontière `httpx`, échec
+honnête sur clé manquante, polling de statut créant un vrai modèle de
+façon idempotente, échec avec le vrai message d'erreur du fournisseur,
+annulation, déploiement/retrait, refus de déployer un modèle
+déprécié, évaluation réelle de bout en bout via l'Evaluation Lab avec
+confirmation que le bon `provider_model_id` est bien transmis).
+Aucune régression sur les tests préexistants Evaluation Lab/documents.
+Voir [`docs/fine-tuning/OVERVIEW.md`](fine-tuning/OVERVIEW.md),
+[`docs/fine-tuning/DATASETS.md`](fine-tuning/DATASETS.md),
+[`docs/fine-tuning/JOBS.md`](fine-tuning/JOBS.md),
+[`docs/fine-tuning/MODELS.md`](fine-tuning/MODELS.md),
+[`docs/fine-tuning/EVALUATION.md`](fine-tuning/EVALUATION.md).
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

@@ -36,7 +36,7 @@ celery_app = Celery(
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
-        "api.tasks.media", "api.tasks.autonomous_agents",
+        "api.tasks.media", "api.tasks.autonomous_agents", "api.tasks.fine_tuning",
     ],
 )
 
@@ -333,6 +333,15 @@ celery_app.conf.beat_schedule = {
     "check-agent-guardrails-hourly": {
         "task": "api.tasks.autonomous_agents.check_agent_guardrails",
         "schedule": crontab(minute=45),
+    },
+    # -- Partie 24: fine-tuning --------------------------------------------------
+    "check-fine-tuning-status-every-10-minutes": {
+        "task": "api.tasks.fine_tuning.check_fine_tuning_status",
+        "schedule": timedelta(minutes=10),
+    },
+    "cleanup-old-fine-tuning-jobs-daily": {
+        "task": "api.tasks.fine_tuning.cleanup_old_jobs",
+        "schedule": crontab(hour=5, minute=45),
     },
 }
 
