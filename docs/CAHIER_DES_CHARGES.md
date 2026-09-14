@@ -2938,6 +2938,98 @@ Voir [`docs/fine-tuning/OVERVIEW.md`](fine-tuning/OVERVIEW.md),
 
 ---
 
+## PARTIE 25 — Documentation finale — ✅ COMPLET (scope honnête)
+
+Audit préalable (recherche directe, pas d'agent dédié cette fois vu le
+volume déjà connu) : ~20 sous-dossiers `docs/` réels et déjà écrits par
+les Parties précédentes existaient déjà (`autonomous/`, `fine-tuning/`,
+`media/`, `ab-testing/`, `analytics/`, `whitelabel/`, `sales/`,
+`integrations/`, `plugins/`, `monitoring/`, `security/`, `admin/`,
+`billing/`, `ci/`, `marketplace/`, `partners/`, `widget/`), ainsi que
+`docs/DEPLOYMENT_GUIDE.md`, `docs/AUTH_BACKEND_SETUP.md`, les 4 SDK
+(`sdks/{python,js,react,vue}/README.md`), `.env.example` (482 lignes),
+les 3 `docker-compose*.yml`, `install.sh`/`update.sh`/`uninstall.sh`,
+`scripts/backup.sh`/`restore.sh`, et `LICENSE` (texte MIT réel, sans
+extension `.md`). Rien de tout ça n'a été dupliqué : chaque nouveau
+fichier de catégorie (`docs/user/`, `docs/admin/`, `docs/developer/`,
+`docs/install/`, `docs/api/`, `docs/advanced/`) pointe vers le doc
+existant plutôt que de répéter son contenu.
+
+🐛 **Incohérence réelle et la plus significative trouvée par l'audit** :
+le `README.md` racine (342 lignes) ne décrivait QUE la démo RAG
+single-tenant d'origine (`src/`, ChromaDB, Streamlit, jeu d'évaluation
+de 50 questions) -- rien sur la plateforme SaaS multi-tenant réelle et
+massive (`api/`+`frontend/`) construite depuis. Corrigé en préservant ce
+contenu intact dans un nouveau `src/README.md` (même contenu, liens
+relatifs adaptés, un bandeau ajouté en tête pointant vers la
+plateforme) et en écrivant un nouveau `README.md` racine décrivant la
+plateforme réelle, construite sur les 24 Parties précédentes.
+
+**Construit** : `README.md` (racine, réécrit) + `src/README.md`
+(nouveau, contenu original préservé) ; `ARCHITECTURE.md`, `ROADMAP.md`,
+`GLOSSARY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
+`CHANGELOG.md` (racine) -- `LICENSE.md` délibérément NON créé, `LICENSE`
+existant déjà avec un vrai texte MIT ; scaffolding du site de doc
+(`docs/index.md`, `docs/_sidebar.md`, `docs/_coverpage.md`,
+`docs/.nojekyll`) ; 15 fichiers `docs/user/*.md` ; 15 fichiers
+`docs/admin/*.md` (croisés avec les docs `PARTIE_N` existants plutôt
+que dupliqués) ; 18 fichiers `docs/developer/*.md` (dont 4 pages SDK
+fidèles au contenu réel des README des 4 SDK) ; 15 fichiers
+`docs/install/*.md` (fidèles au contenu réel de `.env.example`,
+`install.sh`/`update.sh`/`uninstall.sh`, `scripts/backup.sh`/`restore.sh`) ;
+9 fichiers `docs/api/*.md` + `swagger.md` + `redoc.md` ; 10 fichiers
+`docs/advanced/*.md` ; 8 fichiers `docs/tutorials/*.md` ; 5 fichiers
+`docs/faq/*.md` ; 6 fichiers `docs/diagrams/*.md` (diagrammes Mermaid
+réels et rendus, pas des images statiques) ; 3 tests de documentation
+réels (`tests/docs/test_links.py`, `test_examples.py`,
+`test_api_reference.py`).
+
+🐛 **Détails techniques réels, pas de placeholders** : `docs/api/openapi.json`
+est un export RÉEL et LIVE, généré directement via
+`app.openapi()` depuis `api/main.py` (675 endpoints réels), pas un
+JSON écrit à la main -- `test_committed_openapi_export_matches_live_app`
+compare l'export commité à l'app réelle et échoue si un futur
+changement de routeur rend la doc obsolète. En documentant les endpoints
+réels des conversations, documents et agents autonomes, l'audit a
+révélé que ces trois ressources utilisent des chemins PLATS
+(`/conversations/{id}`, `/documents/{id}`, `/autonomous-agents/{id}`),
+pas imbriqués sous `/organizations/{org_id}/...` comme la majorité des
+autres routeurs -- corrigé dans `docs/api/CHAT.md`, `DOCUMENTS.md`,
+`AGENTS.md` et les tutoriels correspondants après vérification directe
+contre le schéma OpenAPI réel, pas supposé par analogie avec les autres
+routeurs.
+
+**Réutilisé, pas dupliqué** : chaque section admin/developer/install
+pointe vers son doc `PARTIE_N` ou son fichier existant (ex.
+`docs/admin/WHITE_LABEL.md` renvoie vers `docs/whitelabel/*`,
+`docs/developer/SDK_PYTHON.md` renvoie vers `sdks/python/README.md`)
+plutôt que de recopier leur contenu -- le risque de redondance identifié
+dans la vision critique de cette partie a été traité par du lien
+croisé, pas par la duplication.
+
+✅ **Gaps honnêtes documentés, pas cachés** : absence de manifests
+Kubernetes (`docs/install/KUBERNETES.md`), absence d'API de
+fine-tuning Anthropic (`docs/advanced/FINE_TUNING.md`), automatisation
+SSL DNS-01 non totalement automatique sans intégration API DNS
+(`docs/install/SSL_AND_DOMAINS.md`), absence de connecteurs
+Zapier/Make/CRM/ERP dédiés (`docs/developer/INTEGRATIONS.md`).
+
+✅ **Tests de documentation réels, exécutés en direct** :
+`test_links.py` vérifie que chaque lien relatif dans `docs/` et les
+`*.md` racine résout vers un vrai fichier ; `test_examples.py` valide
+la syntaxe des exemples Python/JSON et confirme que les symboles SDK
+documentés (`RagSaasClient`) existent réellement dans `sdks/python/`
+et `sdks/js/` ; `test_api_reference.py` compare chaque endpoint
+documenté au schéma OpenAPI réel généré depuis l'app FastAPI vivante.
+Aucune collision de nom de fichier avec `tests/test_*.py` existants
+(`tests/docs/` est un nouveau répertoire).
+
+**Aucune portée restante identifiée** pour cette partie. Voir
+[`README.md`](../README.md), [`src/README.md`](../src/README.md),
+[`ARCHITECTURE.md`](../ARCHITECTURE.md), [`docs/index.md`](index.md).
+
+---
+
 ## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
 
 Compté précisément item par item sur les Parties 1.1 à 14 (500 items

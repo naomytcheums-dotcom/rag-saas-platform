@@ -44,7 +44,7 @@ window.RAGWidget.destroy();
 
 Events: `open`, `close`, `ready`, `message:sent`, `message:received`, `error`, `theme:changed`.
 
-For a React or Vue application, use `@rag-saas/widget-react` or `@rag-saas/widget-vue` instead of the raw script tag -- see [REACT.md](./REACT.md) and [VUE.md](./VUE.md).
+For a React or Vue application, use `@rag-saas/widget-react` or `@rag-saas/widget-vue` instead of the raw script tag -- see [the React SDK](../developer/SDK_REACT.md) and [the Vue SDK](../developer/SDK_VUE.md).
 
 ## Caching
 
