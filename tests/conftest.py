@@ -101,6 +101,32 @@ def _blank_twilio_credentials_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _blank_airbyte_credentials_by_default(monkeypatch):
+    """
+    Same real incident class as _blank_twilio_credentials_by_default
+    above, found during a full-project test-suite run (2026-09-15):
+    this deployment's real .env carries a real AIRBYTE_API_URL (added
+    earlier in this project to manually exercise the Partie 15.3
+    integration against a real Airbyte instance) -- with no test-time
+    override, tests/test_inbound_webhooks.py's own
+    test_airbyte_honestly_501s_without_configured_instance and
+    test_airbyte_status_honestly_unconfigured_by_default (which both
+    assume Airbyte is unconfigured) instead saw a real, deployment-
+    specific "configured" state and failed. No real Airbyte call was
+    made this time -- both failing tests only reach a local
+    settings/status check, not the Airbyte client -- but the pattern is
+    identical and the fix is the same: blank by default so the whole
+    test suite can never observe or use these deployment-specific
+    values without an explicit, deliberate opt-in.
+    """
+    monkeypatch.setattr(settings, "AIRBYTE_API_URL", None)
+    monkeypatch.setattr(settings, "AIRBYTE_API_KEY", None)
+    monkeypatch.setattr(settings, "AIRBYTE_WORKSPACE_ID", None)
+    monkeypatch.setattr(settings, "AIRBYTE_CLIENT_ID", None)
+    monkeypatch.setattr(settings, "AIRBYTE_CLIENT_SECRET", None)
+
+
+@pytest.fixture(autouse=True)
 def _stub_out_domain_verification_scheduling_by_default(monkeypatch):
     """
     Partie 1.4.4's api/security/custom_domains.py's add_custom_domain
