@@ -148,9 +148,13 @@ jobs:
           # (`server /data`) to actually start the server instead of
           # printing usage and exiting, and GitHub Actions' services:
           # schema has no field to override a container's command.
+          # quay.io/minio/minio, not minio/minio: Docker Hub's minio/minio
+          # tags now return "access denied" for anonymous pulls (MinIO
+          # gated most of its Docker Hub tags in 2024) -- quay.io is
+          # MinIO's own mirror and stays publicly pullable.
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data
+            quay.io/minio/minio server /data
           for i in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 1

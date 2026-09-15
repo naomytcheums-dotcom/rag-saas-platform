@@ -41,7 +41,11 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rag_saas_test
       - image: cimg/redis:7.4
-      - image: minio/minio:latest
+      # Docker Hub's minio/minio:latest now returns "access denied" for
+      # anonymous pulls (MinIO gated most of its Docker Hub tags in 2024).
+      # quay.io/minio/minio is MinIO's own mirror and stays publicly
+      # pullable -- same image, same server binary and CLI.
+      - image: quay.io/minio/minio:latest
         command: ["server", "/data"]
     environment:
       # CI-only values -- never real secrets, this is a throwaway
