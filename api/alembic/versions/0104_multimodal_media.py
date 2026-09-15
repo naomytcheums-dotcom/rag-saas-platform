@@ -30,10 +30,15 @@ media_status_enum = sa.Enum("pending", "processing", "completed", "failed", name
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    media_type_enum.create(bind, checkfirst=True)
-    media_status_enum.create(bind, checkfirst=True)
-
+    # No manual .create(checkfirst=True) here, unlike migration 0096's
+    # add_column-based enums -- op.create_table, unlike op.add_column,
+    # auto-creates any enum type referenced inline by its columns (see
+    # 0096's own comment on this exact distinction). Both media_type_enum
+    # and media_status_enum are only ever used inline below, in
+    # op.create_table -- a redundant manual .create() here raced against
+    # that auto-creation and failed with a real
+    # "type media_type already exists" DuplicateObjectError the first
+    # time this migration actually ran end-to-end in CI.
     op.create_table(
         "media_assets",
         sa.Column("id", sa.Uuid(), nullable=False),
