@@ -144,6 +144,17 @@ pandas==3.0.5
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0+cpu
 sentence-transformers==5.7.0
+# transformers itself was left unpinned as a transitive dep of
+# sentence-transformers above -- a real, confirmed incident (2026-09-15):
+# a fresh CI install resolved transformers==5.17.0 (a new major version)
+# while local dev had 4.57.6, and CLIPModel.get_image_features/
+# get_text_features's return shape changed between them, breaking
+# tests/backend/media/test_visual_search.py's real end-to-end CLIP test
+# with "shapes (1,7,512) and (1,50,768) not aligned" -- not a code bug,
+# confirmed by rerunning that exact test locally against 4.57.6, which
+# passed cleanly. Pinned to the version verified working, same "pin what
+# you actually import" convention as every other entry in this file.
+transformers==4.57.6
 
 # -- Documents / DOCX import (Partie 2.1.2) -----------------------------------
 # The exact library the master cahier des charges names for this item
