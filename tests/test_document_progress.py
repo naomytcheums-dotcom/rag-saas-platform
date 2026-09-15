@@ -77,7 +77,9 @@ async def test_send_progress_update_publishes_the_real_expected_payload(monkeypa
     """Validation criterion: une mise à jour de progression est
     envoyée."""
     publish = AsyncMock()
-    monkeypatch.setattr("api.security.documents._progress_redis.publish", publish)
+    fake_redis = MagicMock()
+    fake_redis.publish = publish
+    monkeypatch.setattr("api.security.documents._get_progress_redis", lambda: fake_redis)
 
     document_id = uuid.uuid4()
     await send_progress_update(document_id, 50, DocumentStatus.processing.value)
@@ -94,7 +96,9 @@ async def test_send_progress_update_tolerates_a_real_broker_failure(monkeypatch)
     async def _boom(*args, **kwargs):
         raise ConnectionError("redis is down")
 
-    monkeypatch.setattr("api.security.documents._progress_redis.publish", _boom)
+    fake_redis = MagicMock()
+    fake_redis.publish = _boom
+    monkeypatch.setattr("api.security.documents._get_progress_redis", lambda: fake_redis)
     await send_progress_update(uuid.uuid4(), 50, DocumentStatus.processing.value)  # must not raise
 
 
@@ -109,7 +113,9 @@ async def test_stream_document_progress_stops_immediately_for_a_real_terminal_st
     def _must_not_be_called():
         raise AssertionError("must not open a real pubsub channel for an already-terminal document")
 
-    monkeypatch.setattr("api.security.documents._progress_redis.pubsub", _must_not_be_called)
+    fake_redis = MagicMock()
+    fake_redis.pubsub = _must_not_be_called
+    monkeypatch.setattr("api.security.documents._get_progress_redis", lambda: fake_redis)
 
     frames = [frame async for frame in stream_document_progress(db_session, document.id)]
     assert len(frames) == 1
@@ -138,7 +144,9 @@ async def test_stream_document_progress_forwards_real_messages_until_a_terminal_
     fake_pubsub.unsubscribe = AsyncMock()
     fake_pubsub.aclose = AsyncMock()
     fake_pubsub.listen = _listen
-    monkeypatch.setattr("api.security.documents._progress_redis.pubsub", lambda: fake_pubsub)
+    fake_redis = MagicMock()
+    fake_redis.pubsub = lambda: fake_pubsub
+    monkeypatch.setattr("api.security.documents._get_progress_redis", lambda: fake_redis)
 
     frames = [frame async for frame in stream_document_progress(db_session, document.id)]
 

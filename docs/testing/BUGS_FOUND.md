@@ -169,3 +169,9 @@ ignorés, 0 échec**, y compris le test précédemment intermittent. Voir
 
 **Statut** : corrigé et vérifié dans le contexte exact qui le faisait échouer, pas
 seulement en isolation.
+
+**Effet de bord découvert et corrigé** : ce changement a cassé 4 tests existants de
+[tests/test_document_progress.py](../../tests/test_document_progress.py) qui patchaient
+directement l'ancien attribut statique `_progress_redis` — corrigé en les adaptant pour
+patcher la nouvelle fonction d'accès `_get_progress_redis`. Vérifié isolément (9/9) puis
+dans la suite complète (0 échec, voir [RESULTS.md](RESULTS.md)).

@@ -43,10 +43,29 @@ Contient notamment :
 
 ### Lots 1/4, 2/4, 3/4
 
-_Exécution lancée après le lot 4 pour confirmer qu'aucune régression n'a été introduite
-ailleurs par les corrections (client Redis, migrations DB). Résultat à compléter dès que
-l'exécution se termine — voir la note en fin de document si cette section n'a pas encore
-été mise à jour._
+Exécutés après le lot 4 pour confirmer qu'aucune régression n'a été introduite ailleurs par
+les corrections (client Redis, migrations DB) :
+
+```
+Lot 1/4 : 1211 passed, 2 skipped, 0 failed in 1222.31s (0:20:22)
+Lot 2/4 : 1077 passed, 0 failed in 337.07s (0:05:37)
+Lot 3/4 : 703 passed, 0 failed in 309.51s (0:05:09)
+```
+
+Un premier passage du lot 1/4 avait révélé 4 échecs réels dans `tests/test_document_progress.py` :
+ces tests patchaient directement l'ancien attribut module-level `_progress_redis`
+(`api.security.documents._progress_redis.publish`), qui n'existe plus sous cette forme
+après la correction #6 ci-dessous (le client est désormais créé à la demande via
+`_get_progress_redis()`). Corrigé en adaptant les 4 tests pour patcher `_get_progress_redis`
+elle-même plutôt que l'objet qu'elle retournait auparavant de façon statique — un vrai test
+cassé par un vrai changement de code, pas une régression applicative. Vérifié isolément
+(9/9 passés) puis dans le lot complet ci-dessus (0 échec).
+
+### Bilan cumulé des 4 lots
+
+```
+3849 passed, 11 skipped, 0 failed
+```
 
 ## 3. Campagne Crawlix (tests par personas IA)
 
@@ -96,7 +115,3 @@ Voir [BUGS_FOUND.md](BUGS_FOUND.md) pour le détail complet. Résumé :
 | 5 | Base Postgres réelle en retard de 5 migrations | Technique, critique | Corrigé, vérifié |
 | 6 | "Event loop is closed" intermittent en suite combinée | Technique, critique, intermittent | Corrigé, vérifié dans le contexte exact qui le déclenchait |
 
----
-
-_Note : ce document sera mis à jour avec le résultat final des lots 1-3 de la suite de
-régression dès leur exécution terminée._
