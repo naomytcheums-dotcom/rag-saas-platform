@@ -33,6 +33,14 @@ jobs:
           command: python tests/test_regression.py
 
   api-tests:
+    # Default "medium" (2 vCPU / 4GB RAM) is shared across the primary
+    # container AND the postgres/redis/minio service containers below --
+    # confirmed too small via a real run (2026-09-15): the job was
+    # killed (OOM) at 94% while loading a real YOLO model, after
+    # thousands of prior tests (many loading sentence-transformers,
+    # CLIP, cross-encoder models) had already accumulated memory in the
+    # same long-lived process. "large" doubles both CPU and RAM.
+    resource_class: large
     docker:
       - image: cimg/python:3.13
       - image: cimg/postgres:16.4
