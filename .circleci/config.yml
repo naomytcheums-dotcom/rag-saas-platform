@@ -66,6 +66,14 @@ jobs:
       JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
       SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
       AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+      # Partie 10.3's real AES-256-GCM field encryption (webhook secrets,
+      # among others) raises EncryptionNotConfiguredError without this --
+      # confirmed as the real cause of all 9 tests/test_webhooks.py
+      # failures in a 2026-09-15 run, a config gap from before this key
+      # existed, not a code or test bug. Generated with the project's own
+      # api.security.encryption.generate_encryption_key() -- a throwaway
+      # CI-only key, never used outside this job.
+      ENCRYPTION_MASTER_KEY: gBZ-pfccwD20XSBiesnRCAo9e7_y7E0LOAAvsXGJXyg=
       SUPPORT_EMAIL: support@ci-test.invalid
       RESEND_API_KEY: re_ci_placeholder_never_a_real_key
       EMAIL_FROM_ADDRESS: onboarding@resend.dev
