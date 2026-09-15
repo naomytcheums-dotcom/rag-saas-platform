@@ -6,6 +6,7 @@ verify-login to authenticate -- see api/security/webauthn.py's module
 docstring for the underlying ceremony/challenge-storage details.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -113,7 +114,7 @@ async def webauthn_registration_verify(
     await db.commit()
 
     try:
-        send_webauthn_credential_added_email(current_user.email, payload.nickname)
+        await asyncio.to_thread(send_webauthn_credential_added_email, current_user.email, payload.nickname)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send webauthn-credential-added notification to %s: %s", current_user.email, exc)
 
@@ -154,7 +155,7 @@ async def delete_webauthn_credential(
     await db.commit()
 
     try:
-        send_webauthn_credential_removed_email(current_user.email, target.nickname)
+        await asyncio.to_thread(send_webauthn_credential_removed_email, current_user.email, target.nickname)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send webauthn-credential-removed notification to %s: %s", current_user.email, exc)
 

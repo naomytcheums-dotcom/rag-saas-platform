@@ -6,6 +6,7 @@ api/routers/organization_members.py's invite_organization_member
 still available side by side with this).
 """
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -93,7 +94,7 @@ async def create_invitation(
 
     invite_link = f"{settings.FRONTEND_URL.rstrip('/')}/invitations/accept?token={raw_token}"
     try:
-        send_organization_invitation_email(payload.email, organization.name, payload.role.value, invite_link)
+        await asyncio.to_thread(send_organization_invitation_email, payload.email, organization.name, payload.role.value, invite_link)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send invitation email to %s: %s", payload.email, exc)
 
@@ -182,7 +183,7 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
         await db.commit()
 
         try:
-            send_organization_member_added_email(existing_user.email, organization.name, invitation.role.value)
+            await asyncio.to_thread(send_organization_member_added_email, existing_user.email, organization.name, invitation.role.value)
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send invitation-accepted notification to %s: %s", existing_user.email, exc)
 

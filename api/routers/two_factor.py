@@ -22,6 +22,7 @@ their recovery codes, the same way they must still be able to see or
 revoke their own sessions.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -184,7 +185,7 @@ async def enable_two_factor(payload: TwoFactorCodeRequest, request: Request, cur
     await db.commit()
 
     try:
-        send_two_factor_enabled_email(current_user.email)
+        await asyncio.to_thread(send_two_factor_enabled_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send 2FA-enabled notification to %s: %s", current_user.email, exc)
 
@@ -236,7 +237,7 @@ async def disable_two_factor(payload: TwoFactorCodeRequest, request: Request, cu
     await db.commit()
 
     try:
-        send_two_factor_disabled_email(current_user.email)
+        await asyncio.to_thread(send_two_factor_disabled_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send 2FA-disabled notification to %s: %s", current_user.email, exc)
 
@@ -273,7 +274,7 @@ async def regenerate_recovery_codes(payload: TwoFactorCodeRequest, current_user:
     await db.commit()
 
     try:
-        send_recovery_codes_regenerated_email(current_user.email)
+        await asyncio.to_thread(send_recovery_codes_regenerated_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send recovery-codes-regenerated notification to %s: %s", current_user.email, exc)
 
@@ -404,7 +405,7 @@ async def verify_two_factor_recovery_code(payload: TwoFactorRecoveryCodeLoginReq
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or already-used recovery code")
 
     try:
-        send_recovery_code_used_email(user.email)
+        await asyncio.to_thread(send_recovery_code_used_email, user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send recovery-code-used alert to %s: %s", user.email, exc)
 
@@ -493,7 +494,7 @@ async def confirm_two_factor_lockout_recovery(payload: TwoFactorLockoutRecoveryC
     await db.commit()
 
     try:
-        send_two_factor_lockout_recovery_completed_email(user.email)
+        await asyncio.to_thread(send_two_factor_lockout_recovery_completed_email, user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send lockout-recovery completion email to %s: %s", user.email, exc)
 

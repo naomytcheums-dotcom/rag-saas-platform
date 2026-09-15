@@ -9,6 +9,7 @@ import "auth" to get it -- this is genuinely shared infrastructure, not
 auth.py's private implementation detail.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -111,7 +112,7 @@ async def enforce_concurrent_session_limit(db: AsyncSession, user_id: uuid.UUID)
         )
         if user is not None:
             try:
-                send_concurrent_session_limit_reached_email(user.email, session.device_info)
+                await asyncio.to_thread(send_concurrent_session_limit_reached_email, user.email, session.device_info)
             except (EnvironmentError, RuntimeError) as exc:
                 logger.warning("failed to send session-limit notification to %s: %s", user.email, exc)
 
@@ -182,7 +183,7 @@ async def issue_session(
 
     if notify_new_device_email and is_new_device:
         try:
-            send_new_login_notification_email(notify_new_device_email, device_info, ip, now.isoformat())
+            await asyncio.to_thread(send_new_login_notification_email, notify_new_device_email, device_info, ip, now.isoformat())
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send new-login notification to %s: %s", notify_new_device_email, exc)
 

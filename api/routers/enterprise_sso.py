@@ -13,6 +13,7 @@ Two audiences, two sets of endpoints:
   GET /auth/sso/{connection_id}/callback.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -131,7 +132,7 @@ async def create_sso_connection(
     await db.commit()
 
     try:
-        send_enterprise_sso_connection_created_email(admin.email, connection.email_domain, connection.display_name)
+        await asyncio.to_thread(send_enterprise_sso_connection_created_email, admin.email, connection.email_domain, connection.display_name)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send SSO-connection-created notification to %s: %s", admin.email, exc)
 

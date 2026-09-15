@@ -2,6 +2,7 @@
 data sources (Partie 11.5's admin_monitoring + Partie 13.1's HTTP
 counter), real notification via email/webhook."""
 
+import asyncio
 import logging
 import uuid
 
@@ -65,7 +66,7 @@ async def send_alert_notification(channel: AlertChannel, message: str) -> bool:
         if channel.type == AlertChannelType.email:
             from api.services.email import send_security_alert_email
 
-            send_security_alert_email(channel.config["email"], message)
+            await asyncio.to_thread(send_security_alert_email, channel.config["email"], message)
         elif channel.type == AlertChannelType.webhook:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(channel.config["webhook_url"], json={"text": message})

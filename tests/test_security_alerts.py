@@ -14,8 +14,14 @@ async def test_alert_fires_exactly_at_the_threshold_not_before(client, register_
     monkeypatch.setattr(settings, "SECURITY_ALERT_FAILED_LOGIN_THRESHOLD", 3)
     captured_webhook = []
     captured_email = []
-    monkeypatch.setattr(security_alerts, "_send_webhook_alert", lambda message: captured_webhook.append(message))
-    monkeypatch.setattr(security_alerts, "_send_email_alert", lambda message: captured_email.append(message))
+    async def _capture_webhook(message):
+        captured_webhook.append(message)
+
+    async def _capture_email(message):
+        captured_email.append(message)
+
+    monkeypatch.setattr(security_alerts, "_send_webhook_alert", _capture_webhook)
+    monkeypatch.setattr(security_alerts, "_send_email_alert", _capture_email)
 
     for _ in range(2):
         await client.post("/auth/login", json={"email": "target@example.com", "password": "wrong"})
@@ -31,8 +37,15 @@ async def test_alert_fires_exactly_at_the_threshold_not_before(client, register_
 async def test_alert_does_not_refire_on_every_subsequent_failure_past_the_threshold(client, monkeypatch):
     monkeypatch.setattr(settings, "SECURITY_ALERT_FAILED_LOGIN_THRESHOLD", 2)
     captured = []
-    monkeypatch.setattr(security_alerts, "_send_webhook_alert", lambda message: captured.append(message))
-    monkeypatch.setattr(security_alerts, "_send_email_alert", lambda message: None)
+
+    async def _capture(message):
+        captured.append(message)
+
+    async def _noop(message):
+        return None
+
+    monkeypatch.setattr(security_alerts, "_send_webhook_alert", _capture)
+    monkeypatch.setattr(security_alerts, "_send_email_alert", _noop)
 
     for _ in range(5):
         await client.post("/auth/login", json={"email": "target@example.com", "password": "wrong"})
@@ -46,8 +59,15 @@ async def test_alert_fires_by_ip_independent_of_email(client, monkeypatch):
     the threshold on its own."""
     monkeypatch.setattr(settings, "SECURITY_ALERT_FAILED_LOGIN_THRESHOLD", 3)
     captured = []
-    monkeypatch.setattr(security_alerts, "_send_webhook_alert", lambda message: captured.append(message))
-    monkeypatch.setattr(security_alerts, "_send_email_alert", lambda message: None)
+
+    async def _capture(message):
+        captured.append(message)
+
+    async def _noop(message):
+        return None
+
+    monkeypatch.setattr(security_alerts, "_send_webhook_alert", _capture)
+    monkeypatch.setattr(security_alerts, "_send_email_alert", _noop)
 
     for i in range(3):
         await client.post("/auth/login", json={"email": f"victim-{i}@example.com", "password": "wrong"})
@@ -60,10 +80,10 @@ async def test_no_alert_channels_configured_is_a_silent_no_op(monkeypatch):
     monkeypatch.setattr(settings, "SECURITY_ALERT_WEBHOOK_URL", None)
     monkeypatch.setattr(settings, "SECURITY_ALERT_EMAIL", None)
     # Must not raise, and must not attempt any network/email call.
-    security_alerts._send_webhook_alert("test message")
-    security_alerts._send_email_alert("test message")
+    await security_alerts._send_webhook_alert("test message")
+    await security_alerts._send_email_alert("test message")
 
 
 async def test_webhook_failure_does_not_raise(monkeypatch):
     monkeypatch.setattr(settings, "SECURITY_ALERT_WEBHOOK_URL", "http://127.0.0.1:1/nonexistent")
-    security_alerts._send_webhook_alert("test message")  # must not raise -- fails open, logs a warning
+    await security_alerts._send_webhook_alert("test message")  # must not raise -- fails open, logs a warning

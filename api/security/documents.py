@@ -139,6 +139,7 @@ should never force-load a multi-hundred-MB ML stack that a given call
 path doesn't need.
 """
 
+import asyncio
 import base64
 import datetime as dt
 import hashlib
@@ -298,7 +299,29 @@ _MAX_ENRICHMENT_INPUT_CHARS = 50_000
 # identical `redis.asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, ...)`
 # pattern), for real-time document processing progress pub/sub -- no
 # new infrastructure, just a new real channel namespace on it.
-_progress_redis = redis_asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, decode_responses=True)
+# Same real timeout fix as api/security/rate_limit.py's own _redis --
+# see that module's comment for the full incident.
+#
+# Same loop-rebinding fix as api/security/rate_limit.py's _get_redis()
+# too -- see that module's comment for the full "Event loop is closed"
+# incident, and it matters MORE here than anywhere else: this module is
+# the one actually reached from api/tasks/document_processing.py's
+# asyncio.run() bridge, i.e. it's a real module-level client that gets
+# used from a genuinely different, throwaway event loop on every task
+# run, not just a theoretical risk surfacing only under pytest.
+_progress_redis: redis_asyncio.Redis | None = None
+_progress_redis_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_progress_redis() -> redis_asyncio.Redis:
+    global _progress_redis, _progress_redis_loop
+    loop = asyncio.get_running_loop()
+    if _progress_redis is None or _progress_redis_loop is not loop:
+        _progress_redis = redis_asyncio.from_url(
+            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+        )
+        _progress_redis_loop = loop
+    return _progress_redis
 
 # A model is loaded once per worker process and reused -- loading one
 # is a real, multi-second disk/network operation (the first call for a
@@ -2964,7 +2987,7 @@ async def send_progress_update(document_id: uuid.UUID, progress: int, status: st
     tolerance elsewhere in this module.
     """
     try:
-        await _progress_redis.publish(
+        await _get_progress_redis().publish(
             f"document_progress:{document_id}",
             json.dumps({"document_id": str(document_id), "status": status, "progress": progress}),
         )
@@ -3022,7 +3045,7 @@ async def stream_document_progress(db: AsyncSession, document_id: uuid.UUID):
     if initial["status"] in _TERMINAL_STATUSES:
         return
 
-    pubsub = _progress_redis.pubsub()
+    pubsub = _get_progress_redis().pubsub()
     channel = f"document_progress:{document_id}"
     await pubsub.subscribe(channel)
     try:

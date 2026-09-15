@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies: DB session (re-exported for convenience) and
 the current-user resolvers every protected route depends on."""
 
+import asyncio
 import logging
 
 from fastapi import Depends, HTTPException, status
@@ -103,7 +104,7 @@ async def get_current_user_any_consent_status(
         await db.commit()
         if notify_email:
             try:
-                send_idle_session_revoked_email(notify_email)
+                await asyncio.to_thread(send_idle_session_revoked_email, notify_email)
             except (EnvironmentError, RuntimeError) as exc:
                 logger.warning("failed to send idle-timeout notification to %s: %s", notify_email, exc)
         raise unauthorized

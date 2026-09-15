@@ -24,6 +24,7 @@ third-party geolocation API being flaky must degrade to "flat limit for
 everyone," never to "nobody can log in."
 """
 
+import asyncio
 import logging
 
 import httpx
@@ -33,8 +34,29 @@ from api.config import settings
 
 logger = logging.getLogger(__name__)
 
-_redis = redis_asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, decode_responses=True)
+# Same real timeout fix as api/security/rate_limit.py's own _redis --
+# see that module's comment for the full incident. This module's two
+# separate Redis round trips (cache read + cache write) each paid the
+# same unbounded connect-timeout cost independently.
+#
+# Same loop-rebinding fix as api/security/rate_limit.py's _get_redis()
+# too -- see that module's comment for the full "Event loop is closed"
+# incident. This module has its own separate client, so it needs its own
+# separate fix rather than reusing rate_limit.py's.
+_redis: redis_asyncio.Redis | None = None
+_redis_loop: asyncio.AbstractEventLoop | None = None
 _CACHE_KEY_PREFIX = "geoip:country:"
+
+
+def _get_redis() -> redis_asyncio.Redis:
+    global _redis, _redis_loop
+    loop = asyncio.get_running_loop()
+    if _redis is None or _redis_loop is not loop:
+        _redis = redis_asyncio.from_url(
+            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+        )
+        _redis_loop = loop
+    return _redis
 
 
 async def lookup_country(ip: str | None) -> str | None:
@@ -47,7 +69,7 @@ async def lookup_country(ip: str | None) -> str | None:
 
     cache_key = f"{_CACHE_KEY_PREFIX}{ip}"
     try:
-        cached = await _redis.get(cache_key)
+        cached = await _get_redis().get(cache_key)
         if cached is not None:
             return cached or None  # "" cached = "looked up before, unknown" -- still a cache hit, no re-fetch
     except Exception as exc:  # noqa: BLE001 -- Redis being down must not block the lookup, just skip the cache
@@ -56,7 +78,7 @@ async def lookup_country(ip: str | None) -> str | None:
     country = await _fetch_country_from_api(ip)
 
     try:
-        await _redis.set(cache_key, country or "", ex=settings.GEO_IP_CACHE_TTL_SECONDS)
+        await _get_redis().set(cache_key, country or "", ex=settings.GEO_IP_CACHE_TTL_SECONDS)
     except Exception as exc:  # noqa: BLE001
         logger.warning("geoip cache write failed for ip=%s: %s", ip, exc)
 

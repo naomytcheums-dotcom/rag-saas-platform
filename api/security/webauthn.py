@@ -20,6 +20,7 @@ client (avoids an import cycle; the two modules have no other reason to
 know about each other).
 """
 
+import asyncio
 import logging
 
 import redis.asyncio as redis_asyncio
@@ -39,8 +40,27 @@ from api.models.webauthn_credential import WebAuthnCredential
 
 logger = logging.getLogger(__name__)
 
-_redis = redis_asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, decode_responses=True)
+# Same real timeout fix as api/security/rate_limit.py's own _redis --
+# see that module's comment for the full incident.
+#
+# Same loop-rebinding fix as api/security/rate_limit.py's _get_redis()
+# too -- see that module's comment for the full "Event loop is closed"
+# incident. This module has its own separate client, so it needs its own
+# separate fix rather than reusing rate_limit.py's.
+_redis: redis_asyncio.Redis | None = None
+_redis_loop: asyncio.AbstractEventLoop | None = None
 _CHALLENGE_TTL_SECONDS = 300  # matches MFA_TOKEN_EXPIRE_MINUTES's ballpark (settings.py) -- long enough for a real ceremony, short enough to bound a replay window
+
+
+def _get_redis() -> redis_asyncio.Redis:
+    global _redis, _redis_loop
+    loop = asyncio.get_running_loop()
+    if _redis is None or _redis_loop is not loop:
+        _redis = redis_asyncio.from_url(
+            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+        )
+        _redis_loop = loop
+    return _redis
 
 
 def _registration_challenge_key(user_id) -> str:
@@ -52,14 +72,14 @@ def _authentication_challenge_key(mfa_token_hash: str) -> str:
 
 
 async def _store_challenge(key: str, challenge: bytes) -> None:
-    await _redis.set(key, webauthn.helpers.bytes_to_base64url(challenge), ex=_CHALLENGE_TTL_SECONDS)
+    await _get_redis().set(key, webauthn.helpers.bytes_to_base64url(challenge), ex=_CHALLENGE_TTL_SECONDS)
 
 
 async def _pop_challenge(key: str) -> bytes | None:
     """Reads AND deletes in one step (Redis GETDEL) -- a challenge is
     single-use by construction, never valid for a second verify attempt
     even if the first one failed."""
-    encoded = await _redis.getdel(key)
+    encoded = await _get_redis().getdel(key)
     return webauthn.helpers.base64url_to_bytes(encoded) if encoded else None
 
 

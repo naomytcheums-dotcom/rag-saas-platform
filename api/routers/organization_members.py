@@ -40,6 +40,7 @@ not to see who's already a member would be invite-blind, unable to
 check for an existing member before inviting a duplicate.
 """
 
+import asyncio
 import logging
 import uuid
 
@@ -163,7 +164,7 @@ async def invite_organization_member(
     await db.commit()
 
     try:
-        send_organization_member_added_email(target_user.email, organization.name, payload.role.value)
+        await asyncio.to_thread(send_organization_member_added_email, target_user.email, organization.name, payload.role.value)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send member-added notification to %s: %s", target_user.email, exc)
 
@@ -197,7 +198,7 @@ async def update_organization_member_role(
 
     organization = await db.get(Organization, org_id)
     try:
-        send_organization_member_role_changed_email(target_email, organization.name, payload.role.value)
+        await asyncio.to_thread(send_organization_member_role_changed_email, target_email, organization.name, payload.role.value)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send role-changed notification to %s: %s", target_email, exc)
 
@@ -238,7 +239,7 @@ async def remove_organization_member(
     await db.commit()
 
     try:
-        send_organization_member_removed_email(target_email, organization.name)
+        await asyncio.to_thread(send_organization_member_removed_email, target_email, organization.name)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send member-removed notification to %s: %s", target_email, exc)
 

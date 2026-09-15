@@ -1,5 +1,6 @@
 """1.1.7 -- mirrors password_reset.py's shape for the 2FA lockout-recovery token."""
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -32,6 +33,6 @@ async def create_and_send_two_factor_lockout_recovery(db: AsyncSession, user: Us
 
     confirm_link = f"{settings.FRONTEND_URL.rstrip('/')}/2fa-lockout-recovery?token={raw_token}"
     try:
-        send_two_factor_lockout_recovery_requested_email(user.email, confirm_link, settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS)
+        await asyncio.to_thread(send_two_factor_lockout_recovery_requested_email, user.email, confirm_link, settings.TWO_FA_LOCKOUT_RECOVERY_DELAY_HOURS)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send 2FA lockout recovery email to %s: %s", user.email, exc)

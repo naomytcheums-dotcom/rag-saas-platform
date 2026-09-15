@@ -13,6 +13,7 @@ security (list/revoke sessions), reading your own profile, and the
 accept-updated-terms endpoint that fixes the gate in the first place.
 """
 
+import asyncio
 import datetime as dt
 import json
 import logging
@@ -124,7 +125,7 @@ async def update_profile(payload: ProfileUpdateRequest, current_user: User = Dep
 
     if changed_fields:
         try:
-            send_profile_changed_email(current_user.email, changed_fields)
+            await asyncio.to_thread(send_profile_changed_email, current_user.email, changed_fields)
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send profile-changed notification to %s: %s", current_user.email, exc)
 
@@ -153,7 +154,7 @@ async def update_preferences(payload: PreferencesUpdateRequest, current_user: Us
 
     if changed_fields:
         try:
-            send_preferences_changed_email(current_user.email, changed_fields)
+            await asyncio.to_thread(send_preferences_changed_email, current_user.email, changed_fields)
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send preferences-changed notification to %s: %s", current_user.email, exc)
 
@@ -239,7 +240,7 @@ async def set_password(payload: SetPasswordRequest, request: Request, current_us
     await db.commit()
 
     try:
-        send_password_set_email(current_user.email)
+        await asyncio.to_thread(send_password_set_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send password-set confirmation to %s: %s", current_user.email, exc)
 
@@ -305,7 +306,7 @@ async def change_password(payload: ChangePasswordRequest, request: Request, curr
     await db.commit()
 
     try:
-        send_password_changed_email(current_user.email)
+        await asyncio.to_thread(send_password_changed_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send password-changed confirmation to %s: %s", current_user.email, exc)
 
@@ -348,7 +349,7 @@ async def delete_account(request: Request, current_user: User = Depends(get_curr
     await db.commit()
 
     try:
-        send_account_deletion_scheduled_email(current_user.email, current_user.deletion_scheduled_at.isoformat())
+        await asyncio.to_thread(send_account_deletion_scheduled_email, current_user.email, current_user.deletion_scheduled_at.isoformat())
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send deletion-scheduled confirmation to %s: %s", current_user.email, exc)
 
@@ -457,7 +458,7 @@ async def withdraw_consent(request: Request, current_user: User = Depends(get_cu
     await db.commit()
 
     try:
-        send_consent_withdrawn_email(current_user.email)
+        await asyncio.to_thread(send_consent_withdrawn_email, current_user.email)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send consent-withdrawal confirmation to %s: %s", current_user.email, exc)
 

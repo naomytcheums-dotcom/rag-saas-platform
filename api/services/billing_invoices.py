@@ -3,6 +3,7 @@ weasyprint pattern already established by
 api/services/conversation_export.py's export_to_pdf (same honest
 "unavailable without native Pango/cairo/GObject libs" handling)."""
 
+import asyncio
 import datetime as dt
 import logging
 import uuid
@@ -106,7 +107,7 @@ async def send_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id:
     org = await db.get(Organization, organization_id)
     if owner_email:
         try:
-            send_invoice_email(owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", org.name if org else "")
+            await asyncio.to_thread(send_invoice_email, owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", org.name if org else "")
         except Exception:
             logger.warning("send_invoice: email delivery failed for invoice %s", invoice.number, exc_info=True)
     invoice.status = InvoiceStatus.sent
@@ -122,7 +123,7 @@ async def remind_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_i
     days_overdue = (dt.date.today() - invoice.due_date).days if invoice.due_date else 0
     if owner_email:
         try:
-            send_invoice_reminder_email(owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", max(days_overdue, 0))
+            await asyncio.to_thread(send_invoice_reminder_email, owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", max(days_overdue, 0))
         except Exception:
             logger.warning("remind_invoice: email delivery failed for invoice %s", invoice.number, exc_info=True)
     return invoice

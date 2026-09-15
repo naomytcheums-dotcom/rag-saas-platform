@@ -29,7 +29,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Login failed");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec de la connexion");
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function LoginPage() {
       window.localStorage.setItem("access_token", result.access_token);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Invalid code");
+      setError(err instanceof ApiError ? String(err.detail) : "Code invalide");
     } finally {
       setLoading(false);
     }
@@ -53,15 +53,15 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-50 to-white px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-foreground">Welcome back</h1>
-        <p className="mb-6 text-sm text-foreground-muted">Sign in to your RAG SaaS Platform account.</p>
+        <h1 className="mb-1 text-xl font-semibold text-foreground">Content de vous revoir</h1>
+        <p className="mb-6 text-sm text-foreground-muted">Connectez-vous à votre compte RAG SaaS Platform.</p>
 
         {error && <p className="mb-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
         {mfaToken ? (
           <form onSubmit={handleMfaSubmit} className="flex flex-col gap-3">
             <label className="text-sm text-foreground-muted">
-              Two-factor code
+              Code à deux facteurs
               <input
                 type="text"
                 inputMode="numeric"
@@ -73,7 +73,7 @@ export default function LoginPage() {
               />
             </label>
             <button type="submit" disabled={loading} className="mt-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-              {loading ? "Verifying…" : "Verify"}
+              {loading ? "Vérification…" : "Vérifier"}
             </button>
           </form>
         ) : (
@@ -86,11 +86,11 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-                placeholder="you@example.com"
+                placeholder="vous@exemple.com"
               />
             </label>
             <label className="text-sm text-foreground-muted">
-              Password
+              Mot de passe
               <input
                 type="password"
                 required
@@ -101,20 +101,20 @@ export default function LoginPage() {
               />
             </label>
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-foreground-muted">
-                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-border-strong" />
-                Remember me
+              <label htmlFor="remember-me" className="flex items-center gap-2 text-foreground-muted">
+                <input id="remember-me" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-border-strong" />
+                Se souvenir de moi
               </label>
-              <Link href="/forgot-password" className="text-accent hover:underline">Forgot password?</Link>
+              <Link href="/forgot-password" className="text-accent hover:underline">Mot de passe oublié ?</Link>
             </div>
             <button type="submit" disabled={loading} className="mt-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Connexion…" : "Se connecter"}
             </button>
           </form>
         )}
 
         <p className="mt-6 text-center text-sm text-foreground-muted">
-          No account? <Link href="/register" className="font-medium text-accent hover:underline">Sign up</Link>
+          Pas encore de compte ? <Link href="/register" className="font-medium text-accent hover:underline">Inscription</Link>
         </p>
       </div>
     </div>

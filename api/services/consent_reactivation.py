@@ -1,5 +1,6 @@
 """1.1.12 -- mirrors account_restore.py's shape for the consent-reactivation token."""
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -34,6 +35,6 @@ async def create_and_send_consent_reactivation(db: AsyncSession, user: User) -> 
 
     reactivation_link = f"{settings.FRONTEND_URL.rstrip('/')}/reactivate-consent?token={raw_token}"
     try:
-        send_consent_reactivation_email(user.email, reactivation_link)
+        await asyncio.to_thread(send_consent_reactivation_email, user.email, reactivation_link)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send consent reactivation email to %s: %s", user.email, exc)

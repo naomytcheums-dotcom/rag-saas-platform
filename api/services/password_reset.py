@@ -1,5 +1,6 @@
 """1.1.3 -- mirrors verification.py's shape for the password-reset token."""
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -29,6 +30,6 @@ async def create_and_send_password_reset(db: AsyncSession, user: User) -> None:
 
     reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={raw_token}"
     try:
-        send_password_reset_email(user.email, reset_link)
+        await asyncio.to_thread(send_password_reset_email, user.email, reset_link)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send password reset email to %s: %s", user.email, exc)

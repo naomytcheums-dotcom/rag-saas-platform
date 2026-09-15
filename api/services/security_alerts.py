@@ -21,6 +21,7 @@ rate_limit.py's Redis handling) -- a webhook or SMTP outage must never
 be what breaks login itself.
 """
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 _WEBHOOK_TIMEOUT_SECONDS = 5.0
 
 
-def _send_webhook_alert(message: str) -> None:
+def _send_webhook_alert_sync(message: str) -> None:
     if not settings.SECURITY_ALERT_WEBHOOK_URL:
         return
     try:
@@ -47,11 +48,20 @@ def _send_webhook_alert(message: str) -> None:
         logger.warning("failed to deliver security alert webhook: %s", exc)
 
 
-def _send_email_alert(message: str) -> None:
+async def _send_webhook_alert(message: str) -> None:
+    # Real bug fixed here (2026-09-15): httpx.post is the sync, blocking
+    # client -- calling it directly from this async call chain blocked
+    # the event loop for up to _WEBHOOK_TIMEOUT_SECONDS. Same class of
+    # bug as api/services/email.py's send_*_email functions (see
+    # api/services/verification.py's docstring for the full incident).
+    await asyncio.to_thread(_send_webhook_alert_sync, message)
+
+
+async def _send_email_alert(message: str) -> None:
     if not settings.SECURITY_ALERT_EMAIL:
         return
     try:
-        send_security_alert_email(settings.SECURITY_ALERT_EMAIL, message)
+        await asyncio.to_thread(send_security_alert_email, settings.SECURITY_ALERT_EMAIL, message)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to deliver security alert email: %s", exc)
 
@@ -98,9 +108,9 @@ async def check_and_alert_on_failed_login_spike(db: AsyncSession, ip: str | None
         # for the email channel. Pre-escaping here would double-escape
         # it for email while breaking the plain-text webhook rendering.
         message = f"{threshold} failed login attempts from IP {ip} in the last {settings.SECURITY_ALERT_WINDOW_MINUTES} minutes."
-        _send_webhook_alert(message)
-        _send_email_alert(message)
+        await _send_webhook_alert(message)
+        await _send_email_alert(message)
     if email_count == threshold:
         message = f"{threshold} failed login attempts targeting {email} in the last {settings.SECURITY_ALERT_WINDOW_MINUTES} minutes."
-        _send_webhook_alert(message)
-        _send_email_alert(message)
+        await _send_webhook_alert(message)
+        await _send_email_alert(message)

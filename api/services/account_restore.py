@@ -1,5 +1,6 @@
 """1.1.10 -- mirrors password_reset.py's shape for the account-restore token."""
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -31,6 +32,6 @@ async def create_and_send_account_restore(db: AsyncSession, user: User) -> None:
 
     restore_link = f"{settings.FRONTEND_URL.rstrip('/')}/restore-account?token={raw_token}"
     try:
-        send_account_restore_email(user.email, restore_link)
+        await asyncio.to_thread(send_account_restore_email, user.email, restore_link)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send account restore email to %s: %s", user.email, exc)

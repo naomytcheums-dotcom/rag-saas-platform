@@ -17,6 +17,7 @@ How the token model works, in plain terms:
   comment on /refresh below for why).
 """
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -110,13 +111,25 @@ async def register(
         settings.REGISTER_RATE_LIMIT_MAX_ATTEMPTS, settings.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
     )
 
-    existing = await db.scalar(select(User).where(User.email == payload.email))
+    # Real perf fix (2026-09-15, found via live persona-based testing):
+    # the existing-user DB lookup and the HIBP breach-check HTTP call are
+    # fully independent (neither result affects the other's inputs) but
+    # were previously awaited one after another -- profiling a live
+    # POST /auth/register (rate_limit 5.8s, existing_user_query 2.2s,
+    # breach_check 0.9s, ... 19.2s total) showed each individual step
+    # was reasonable on its own but purely sequential await chaining
+    # summed real, separate network round trips (remote cross-region
+    # Postgres + HIBP) into one another for no reason. Running them
+    # concurrently costs only the slower of the two, not both.
+    existing, is_breached = await asyncio.gather(
+        db.scalar(select(User).where(User.email == payload.email)),
+        is_password_known_breached(payload.password),
+    )
     if existing is not None:
         # Deliberately vague: confirming "this email is already registered"
         # to an anonymous caller is a user-enumeration leak.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not register with these details")
-
-    if await is_password_known_breached(payload.password):
+    if is_breached:
         raise _BREACHED_PASSWORD_ERROR
 
     if is_password_too_similar(payload.password, payload.email, payload.full_name):
@@ -219,7 +232,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     except HTTPException:
         if user is not None:
             try:
-                send_rate_limit_alert_email(user.email, "sign-in")
+                await asyncio.to_thread(send_rate_limit_alert_email, user.email, "sign-in")
             except (EnvironmentError, RuntimeError) as exc:
                 logger.warning("failed to send rate-limit alert to %s: %s", user.email, exc)
         raise

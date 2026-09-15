@@ -32,6 +32,7 @@ below backs GET /health/ready (api/main.py), so a degraded rate limiter
 shows up as a readiness signal, not just a line in a log file.
 """
 
+import asyncio
 import logging
 import time
 import uuid
@@ -43,7 +44,53 @@ from api.config import settings
 
 logger = logging.getLogger(__name__)
 
-_redis = redis_asyncio.from_url(settings.RATE_LIMIT_REDIS_URL, decode_responses=True)
+# Real bug fixed here (2026-09-15, found via live persona-based testing):
+# from_url with no socket_connect_timeout/socket_timeout falls back to
+# the OS's own TCP connect timeout (tens of seconds) when Redis is
+# unreachable -- the exact "fail open" path this module's docstring
+# describes as a deliberate trade-off was still real, just far too slow
+# to actually be "open" in any practical sense. Confirmed directly: a
+# single connection attempt to an unreachable Redis took ~4s in
+# isolation, and /auth/register (which also touches geoip.py's own
+# separate Redis client below) took 22-59s wall time with Redis down --
+# each of the several Redis touches in one request paying that cost
+# independently, since the client has no cached "known down" state
+# between calls. A short, explicit timeout makes the fail-open path
+# fail open fast, matching the intent already documented above.
+
+# Second real bug fixed here (2026-09-15, found via the regression suite
+# intermittently failing with "Event loop is closed" in long combined
+# runs, never in isolation): a redis.asyncio client's connection pool
+# binds its actual socket to whichever event loop is RUNNING the first
+# time it's used, not to the loop that was running when from_url() was
+# called. A single client built once at import time is safe only as long
+# as exactly one event loop ever exists for the life of the process. That
+# assumption held for the deployed app (one Uvicorn worker, one loop) but
+# not for the test suite: pytest-asyncio's session-scoped loop is one
+# loop, but several other test modules bridge into async code via
+# asyncio.run() (see api/tasks/*.py's Celery task wrappers), which spins
+# up and tears down its OWN separate loop. If this client's underlying
+# connection ever got established while one of those throwaway loops was
+# current, the connection pool bound itself to that loop -- and the
+# moment asyncio.run() closed it, every later call from the real session
+# loop raised exactly "Event loop is closed", in whatever unrelated test
+# happened to touch this client next. Rebuilding the client whenever the
+# running loop has changed since it was last built removes the shared
+# state that made one loop's teardown able to break a different loop's
+# test.
+_redis: redis_asyncio.Redis | None = None
+_redis_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_redis() -> redis_asyncio.Redis:
+    global _redis, _redis_loop
+    loop = asyncio.get_running_loop()
+    if _redis is None or _redis_loop is not loop:
+        _redis = redis_asyncio.from_url(
+            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+        )
+        _redis_loop = loop
+    return _redis
 
 
 async def enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -> None:
@@ -69,7 +116,7 @@ async def enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -
     window_start = now - window_seconds
 
     try:
-        pipe = _redis.pipeline()
+        pipe = _get_redis().pipeline()
         pipe.zremrangebyscore(key, 0, window_start)  # drop attempts that have aged out of the window
         pipe.zadd(key, {str(uuid.uuid4()): now})  # record this attempt (a random member -- the score is what matters)
         pipe.zcard(key)  # how many attempts remain within the window, including this one
@@ -97,7 +144,7 @@ async def is_redis_reachable() -> bool:
     own try/except and must not pay for an extra round-trip just to
     decide whether to log."""
     try:
-        await _redis.ping()
+        await _get_redis().ping()
         return True
     except Exception:  # noqa: BLE001 -- any failure means "not reachable," full stop
         return False
@@ -110,7 +157,7 @@ async def _seconds_until_oldest_entry_expires(key: str, window_seconds: int, now
     header promises. Falls back to the full window length if this lookup
     itself fails; a slightly-too-generous Retry-After is harmless."""
     try:
-        oldest = await _redis.zrange(key, 0, 0, withscores=True)
+        oldest = await _get_redis().zrange(key, 0, 0, withscores=True)
         if oldest:
             oldest_timestamp = oldest[0][1]
             return max(int(window_seconds - (now - oldest_timestamp)), 1)

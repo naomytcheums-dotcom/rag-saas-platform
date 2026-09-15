@@ -6,8 +6,23 @@ endpoint, so both paths create tokens the exact same way.
 A failed email send is logged, not raised further up -- see
 api/services/email.py's docstring: delivery failure must never block
 account creation or block a user from re-requesting a code.
-"""
 
+Real bug fixed here (2026-09-15, found via live persona-based testing):
+api/services/email.py's send_*_email functions call `httpx.post` (the
+sync, blocking client), not `httpx.AsyncClient`. Calling
+send_verification_code_email directly from this async function blocked
+the whole FastAPI event loop for as long as the real Resend HTTP call
+took -- confirmed directly: POST /auth/register took 22-59s wall time
+against this real Resend account, while the same Resend call made in
+isolation took ~2-3s and bcrypt hashing (also in this request) took
+~0.3s. Concurrent requests on the same worker were serialized behind
+that one blocked call, compounding the delay. Wrapping the call in
+asyncio.to_thread moves the blocking I/O off the event loop without
+touching email.py's sync API or its other ~30 call sites -- see that
+module's own docstring for why the rest of them share the same
+blocking-call issue, out of scope for this specific fix."""
+
+import asyncio
 import datetime as dt
 import logging
 
@@ -40,6 +55,6 @@ async def create_and_send_email_otp(db: AsyncSession, user: User) -> None:
     await db.flush()
 
     try:
-        send_verification_code_email(user.email, code)
+        await asyncio.to_thread(send_verification_code_email, user.email, code)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send verification email to %s: %s", user.email, exc)
