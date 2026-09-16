@@ -126,7 +126,42 @@ intentionnellement, 0 échec).
 
 ---
 
-## 6. [Technique — critique, intermittent] "Event loop is closed" dans la suite de tests combinée
+## 6. [UX — critique] Tout le tableau de bord (hors 4 pages d'authentification) était resté en anglais
+
+**Trouvé par** : en reprenant les tests Crawlix pour couvrir les 12 parcours utilisateurs
+demandés, un test manuel de connexion a montré que la coquille du tableau de bord (barre
+latérale, page d'accueil) et pratiquement toutes les pages métier restaient entièrement en
+anglais — seules les 4 pages d'authentification (`/login`, `/register`,
+`/forgot-password`, `/dashboard/documents`) avaient été traduites lors de la première
+campagne. Un grep ciblé sur des motifs anglais courants a trouvé **24 fichiers** concernés
+dans `frontend/app/dashboard/` seul, avant même de compter les sous-composants
+(plugins du marketplace, widgets d'analytics, etc.).
+
+**Pourquoi ça n'avait pas été vu avant** : la première campagne de tests par personas
+n'avait couvert que l'écran d'inscription/connexion (voir RESULTS.md) — jamais le tableau
+de bord lui-même.
+
+**Correction** : traduction complète en français de la coquille du tableau de bord et de
+la page d'accueil, plus les pages principales des parcours suivants : Agents, Widget,
+Clés API, Facturation, Administration, Marketplace, Analytics, Fine-tuning, Agents
+autonomes, Médiathèque, Sécurité, Profil, Paramètres d'organisation, Webhooks —
+[frontend/app/dashboard/layout.tsx](../../frontend/app/dashboard/layout.tsx),
+[frontend/app/dashboard/page.tsx](../../frontend/app/dashboard/page.tsx),
+et 13 autres fichiers. Vérifié par `tsc --noEmit` (0 erreur) et vérification visuelle
+directe dans le navigateur sur plusieurs pages (Facturation, Administration).
+
+**Portée restante, honnêtement non couverte** : certains sous-composants profonds (les
+formulaires du marketplace de plugins dans `frontend/components/plugins/`, par exemple)
+n'ont pas été audités un par un faute de temps dans cette session — seules les pages
+principales listées ci-dessus, celles qu'un utilisateur voit en premier sur chaque
+parcours, ont été garanties en français.
+
+**Statut** : corrigé pour les pages principales, vérifié ; sous-composants profonds à
+auditer dans une prochaine session.
+
+---
+
+## 7. [Technique — critique, intermittent] "Event loop is closed" dans la suite de tests combinée
 
 **Trouvé par** : suite de régression complète (CircleCI, lot 4/4) — le test
 `test_geo_adaptive_rate_limit_integration.py::test_spoofing_x_forwarded_for_does_not_grant_the_trusted_ip_bypass`

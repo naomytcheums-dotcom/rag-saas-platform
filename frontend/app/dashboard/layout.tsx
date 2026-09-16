@@ -8,43 +8,43 @@ import { useAuth, useRequireAuth } from "@/lib/auth";
 
 const NAV_SECTIONS = [
   {
-    label: "Workspace",
+    label: "Espace de travail",
     items: [
-      { href: "/dashboard", label: "Overview" },
-      { href: "/chat", label: "Chat" },
+      { href: "/dashboard", label: "Vue d'ensemble" },
+      { href: "/chat", label: "Conversation" },
       { href: "/dashboard/documents", label: "Documents" },
       { href: "/dashboard/agents", label: "Agents" },
     ],
   },
   {
-    label: "Developer",
+    label: "Développeur",
     items: [
-      { href: "/dashboard/settings/api-keys", label: "API keys" },
+      { href: "/dashboard/settings/api-keys", label: "Clés API" },
       { href: "/dashboard/settings/webhooks", label: "Webhooks" },
-      { href: "/dashboard/api-docs", label: "API docs" },
+      { href: "/dashboard/api-docs", label: "Documentation API" },
     ],
   },
   {
-    label: "Widget & integrations",
+    label: "Widget et intégrations",
     items: [
       { href: "/dashboard/settings/widget", label: "Widget" },
-      { href: "/dashboard/settings/integrations", label: "Integrations" },
+      { href: "/dashboard/settings/integrations", label: "Intégrations" },
       { href: "/dashboard/marketplace", label: "Marketplace" },
     ],
   },
   {
-    label: "Account",
+    label: "Compte",
     items: [
-      { href: "/dashboard/profile", label: "Profile" },
-      { href: "/dashboard/settings/organization", label: "Organization" },
+      { href: "/dashboard/profile", label: "Profil" },
+      { href: "/dashboard/settings/organization", label: "Organisation" },
     ],
   },
   {
-    label: "Platform",
+    label: "Plateforme",
     items: [
-      { href: "/dashboard/billing", label: "Billing" },
-      { href: "/dashboard/security", label: "Security" },
-      { href: "/admin", label: "Admin" },
+      { href: "/dashboard/billing", label: "Facturation" },
+      { href: "/dashboard/security", label: "Sécurité" },
+      { href: "/admin", label: "Administration" },
     ],
   },
 ];
@@ -55,7 +55,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   if (loading || !user) {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Loading…</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
   }
 
   return (
@@ -92,7 +92,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="border-t border-border px-4 py-3">
           <p className="truncate text-xs text-foreground-muted">{user.email}</p>
           <button type="button" onClick={() => void logout()} className="mt-1 text-xs font-medium text-accent hover:underline">
-            Log out
+            Se déconnecter
           </button>
         </div>
       </aside>

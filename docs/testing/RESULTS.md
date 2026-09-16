@@ -31,7 +31,7 @@ La suite complète est découpée en 4 lots séquentiels (voir `.circleci/config
 Contient notamment :
 - `test_geo_adaptive_rate_limit_integration.py::test_spoofing_x_forwarded_for_does_not_grant_the_trusted_ip_bypass`
   — anciennement intermittent ("Event loop is closed"), **passe désormais de façon fiable**
-  dans ce contexte combiné (voir [BUGS_FOUND.md](BUGS_FOUND.md) #6).
+  dans ce contexte combiné (voir [BUGS_FOUND.md](BUGS_FOUND.md) #7).
 - `test_documents_integration.py` (29 tests, 26 réussis + 3 ignorés intentionnellement,
   0 échec) — anciennement en échec à cause du désalignement de schéma DB
   (voir [BUGS_FOUND.md](BUGS_FOUND.md) #5), corrigé.
@@ -55,7 +55,7 @@ Lot 3/4 : 703 passed, 0 failed in 309.51s (0:05:09)
 Un premier passage du lot 1/4 avait révélé 4 échecs réels dans `tests/test_document_progress.py` :
 ces tests patchaient directement l'ancien attribut module-level `_progress_redis`
 (`api.security.documents._progress_redis.publish`), qui n'existe plus sous cette forme
-après la correction #6 ci-dessous (le client est désormais créé à la demande via
+après la correction #7 ci-dessous (le client est désormais créé à la demande via
 `_get_progress_redis()`). Corrigé en adaptant les 4 tests pour patcher `_get_progress_redis`
 elle-même plutôt que l'objet qu'elle retournait auparavant de façon statique — un vrai test
 cassé par un vrai changement de code, pas une régression applicative. Vérifié isolément
@@ -113,5 +113,41 @@ Voir [BUGS_FOUND.md](BUGS_FOUND.md) pour le détail complet. Résumé :
 | 3 | Inscription lente (22-59s) — appels email bloquants + timeouts Redis absents | Technique, critique | Corrigé, vérifié |
 | 4 | Redis indisponible en local (Docker/WSL2 cassés sur cette machine) | Infrastructure | Contourné (dev uniquement) |
 | 5 | Base Postgres réelle en retard de 5 migrations | Technique, critique | Corrigé, vérifié |
-| 6 | "Event loop is closed" intermittent en suite combinée | Technique, critique, intermittent | Corrigé, vérifié dans le contexte exact qui le déclenchait |
+| 6 | Tout le tableau de bord (hors auth) resté en anglais | UX, critique | Corrigé pour les pages principales, vérifié |
+| 7 | "Event loop is closed" intermittent en suite combinée | Technique, critique, intermittent | Corrigé, vérifié dans le contexte exact qui le déclenchait |
+
+## 5. Campagne du 2026-09-16 — extension aux 12 parcours utilisateurs
+
+**Objectif demandé** : tester chacun des 12 parcours (upload de document, création d'agent,
+conversation, widget, clés API, facturation, admin, marketplace, analytics, fine-tuning,
+agents autonomes, médiathèque) un par un avec Crawlix, en utilisant un provider avec plus
+de quota si besoin.
+
+**Ce qui a été fait** :
+- Compte de test persistant créé (`crawlix.persona@example.com`) pour éviter de payer le
+  coût d'inscription à chaque test.
+- Premier essai sur le parcours "Upload de document" : Crawlix ne trouvait aucun élément
+  correspondant aux libellés attendus. Investigation manuelle (navigateur) a révélé la
+  vraie cause : **le tableau de bord entier était resté en anglais** (bug #6 ci-dessus),
+  jamais détecté car la campagne précédente n'avait couvert que l'écran de connexion.
+- Traduction complète de la coquille du tableau de bord et de 13 pages principales
+  (correspondant aux 12 parcours demandés, plus Sécurité/Profil/Organisation/Webhooks).
+  Vérifiée par `tsc --noEmit` (0 erreur) et par navigation manuelle réelle (captures
+  d'écran : Facturation et Administration confirmées entièrement en français).
+- Relance du test Crawlix "Upload de document" après correction : **quota Groq journalier
+  épuisé** (199 992 / 200 000 tokens utilisés, fenêtre glissante — pas un simple reset
+  minute par minute comme initialement espéré). Aucune clé payante n'a été fournie pour
+  prendre le relais.
+
+**Ce qui n'a pas pu être fait aujourd'hui, honnêtement** : aucun des 12 parcours n'a pu
+être testé par un agent Crawlix réel après la correction du bug d'interface, faute de
+quota. Le bug UX majeur qui aurait bloqué chacun de ces 12 tests (tableau de bord en
+anglais) a néanmoins été trouvé et corrigé — la prochaine campagne, avec du quota
+disponible, devrait donc se dérouler sans cet obstacle.
+
+**Pour reprendre** : soit attendre la réinitialisation complète du quota Groq gratuit
+(fenêtre glissante sur 24h, le compteur affiché était de 199 992/200 000 avant l'arrêt),
+soit fournir une clé payante (Groq Dev Tier, OpenAI, ou Anthropic), puis relancer un test
+Crawlix par parcours, un par un, comme demandé — voir
+[PERSONAS_TESTING.md](PERSONAS_TESTING.md) pour la commande exacte.
 

@@ -28,7 +28,7 @@ export default function OrganizationSettingsPage() {
       const data = await api.get<{ items: Member[] }>(`/organizations/${org.id}/members`);
       setMembers(data.items);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to load members");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des membres");
     }
   }, [org]);
 
@@ -45,7 +45,7 @@ export default function OrganizationSettingsPage() {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to save");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -59,7 +59,7 @@ export default function OrganizationSettingsPage() {
       setInviteEmail("");
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to invite member");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'invitation du membre");
     }
   }
 
@@ -71,36 +71,36 @@ export default function OrganizationSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold text-foreground">Organization settings</h1>
+      <h1 className="text-xl font-semibold text-foreground">Paramètres de l'organisation</h1>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Saved!</p>}
+      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Enregistré !</p>}
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Name</h2>
+        <h2 className="text-sm font-semibold text-foreground">Nom</h2>
         <div className="mt-2 flex gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
           <button type="button" onClick={() => void saveName()} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Invite a member</h2>
+        <h2 className="text-sm font-semibold text-foreground">Inviter un membre</h2>
         <div className="mt-2 flex gap-2">
-          <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@example.com" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+          <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="collegue@exemple.com" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
           <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="rounded-lg border border-border bg-background px-2 text-sm">
-            <option value="member">Member</option>
+            <option value="member">Membre</option>
             <option value="admin">Admin</option>
-            <option value="viewer">Viewer</option>
+            <option value="viewer">Lecteur</option>
           </select>
-          <button type="button" onClick={() => void invite()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Invite</button>
+          <button type="button" onClick={() => void invite()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Inviter</button>
         </div>
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Members</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Membres</h2>
         <div className="flex flex-col gap-2">
           {members.map((member) => (
             <div key={member.user_id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
@@ -109,7 +109,7 @@ export default function OrganizationSettingsPage() {
                 <p className="text-xs text-foreground-muted">{member.role}</p>
               </div>
               {member.role !== "owner" && (
-                <button type="button" onClick={() => void removeMember(member.user_id)} className="text-xs font-medium text-danger hover:underline">Remove</button>
+                <button type="button" onClick={() => void removeMember(member.user_id)} className="text-xs font-medium text-danger hover:underline">Retirer</button>
               )}
             </div>
           ))}

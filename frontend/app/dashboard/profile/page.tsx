@@ -28,6 +28,9 @@ interface SessionEntry {
 
 const TABS = ["Information", "Security", "Preferences", "Danger zone"] as const;
 type Tab = (typeof TABS)[number];
+const TAB_LABELS: Record<Tab, string> = {
+  Information: "Informations", Security: "Sécurité", Preferences: "Préférences", "Danger zone": "Zone de danger",
+};
 
 export default function ProfilePage() {
   const { logout } = useAuth();
@@ -40,7 +43,7 @@ export default function ProfilePage() {
     try {
       setProfile(await api.get<Profile>("/account/me"));
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to load profile");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement du profil");
     }
   }, []);
 
@@ -54,15 +57,15 @@ export default function ProfilePage() {
   }
 
   if (!profile) {
-    return <div className="mx-auto max-w-2xl text-sm text-foreground-muted">{error ?? "Loading…"}</div>;
+    return <div className="mx-auto max-w-2xl text-sm text-foreground-muted">{error ?? "Chargement…"}</div>;
   }
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold text-foreground">Profile</h1>
+      <h1 className="text-xl font-semibold text-foreground">Profil</h1>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Saved!</p>}
+      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Enregistré !</p>}
 
       <div className="mt-4 flex gap-1 border-b border-border">
         {TABS.map((t) => (
@@ -74,7 +77,7 @@ export default function ProfilePage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {t}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
@@ -100,7 +103,7 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
     try {
       onSaved(await api.patch<Profile>("/account/profile", { full_name: fullName, company }));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to save");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -111,7 +114,7 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
     try {
       onSaved(await api.postFile<Profile>("/account/avatar", file));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to upload avatar");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec de l'envoi de l'avatar");
     } finally {
       setUploading(false);
     }
@@ -131,24 +134,24 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
       </div>
 
       <div>
-        <label className="text-sm font-medium text-foreground">Full name</label>
+        <label className="text-sm font-medium text-foreground">Nom complet</label>
         <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
       </div>
       <div>
-        <label className="text-sm font-medium text-foreground">Company</label>
+        <label className="text-sm font-medium text-foreground">Entreprise</label>
         <input value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
       </div>
       <div>
         <label className="text-sm font-medium text-foreground">Email</label>
-        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ verified" : "(unverified)"}</p>
+        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ vérifié" : "(non vérifié)"}</p>
       </div>
       <div>
-        <label className="text-sm font-medium text-foreground">Member since</label>
+        <label className="text-sm font-medium text-foreground">Membre depuis</label>
         <p className="mt-1 text-sm text-foreground-muted">{new Date(profile.created_at).toLocaleDateString()}</p>
       </div>
 
       <button type="button" onClick={() => void save()} disabled={saving} className="self-start rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-        {saving ? "Saving…" : "Save changes"}
+        {saving ? "Enregistrement…" : "Enregistrer les modifications"}
       </button>
     </div>
   );
@@ -180,7 +183,7 @@ function SecurityTab({ onError, onSaved }: { onError: (e: string) => void; onSav
       setNewPassword("");
       onSaved();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to change password");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec du changement de mot de passe");
     } finally {
       setChanging(false);
     }
@@ -194,25 +197,25 @@ function SecurityTab({ onError, onSaved }: { onError: (e: string) => void; onSav
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-semibold text-foreground">Change password</h2>
-        <input type="password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
-        <input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <h2 className="text-sm font-semibold text-foreground">Changer le mot de passe</h2>
+        <input type="password" placeholder="Mot de passe actuel" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <input type="password" placeholder="Nouveau mot de passe" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         <button type="button" onClick={() => void changePassword()} disabled={changing || !currentPassword || newPassword.length < 8} className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-          {changing ? "Changing…" : "Change password"}
+          {changing ? "Changement…" : "Changer le mot de passe"}
         </button>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Active sessions</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Sessions actives</h2>
         <div className="flex flex-col gap-2">
           {sessions.map((s) => (
             <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-xs">
               <div>
-                <p className="font-medium text-foreground">{s.device_info ?? "Unknown device"} {s.is_current && <span className="text-accent">(this device)</span>}</p>
-                <p className="text-foreground-muted">{s.ip_address ?? "—"} · last seen {new Date(s.last_seen_at).toLocaleString()}</p>
+                <p className="font-medium text-foreground">{s.device_info ?? "Appareil inconnu"} {s.is_current && <span className="text-accent">(cet appareil)</span>}</p>
+                <p className="text-foreground-muted">{s.ip_address ?? "—"} · vu pour la dernière fois {new Date(s.last_seen_at).toLocaleString()}</p>
               </div>
               {!s.is_current && (
-                <button type="button" onClick={() => void terminate(s.id)} className="font-medium text-danger hover:underline">Terminate</button>
+                <button type="button" onClick={() => void terminate(s.id)} className="font-medium text-danger hover:underline">Déconnecter</button>
               )}
             </div>
           ))}
@@ -231,7 +234,7 @@ function PreferencesTab({ profile, onSaved, onError }: { profile: Profile; onSav
     try {
       onSaved(await api.patch<Profile>("/account/preferences", { locale }));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to save");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -239,14 +242,14 @@ function PreferencesTab({ profile, onSaved, onError }: { profile: Profile; onSav
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
-      <label className="text-sm font-medium text-foreground">Language</label>
+      <label className="text-sm font-medium text-foreground">Langue</label>
       <select value={locale} onChange={(e) => setLocale(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
         {["en", "fr", "es", "de", "pt", "ar"].map((l) => (
           <option key={l} value={l}>{l}</option>
         ))}
       </select>
       <button type="button" onClick={() => void save()} disabled={saving} className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-        {saving ? "Saving…" : "Save preferences"}
+        {saving ? "Enregistrement…" : "Enregistrer les préférences"}
       </button>
     </div>
   );
@@ -262,7 +265,7 @@ function DangerZoneTab({ email, onLoggedOut, onError }: { email: string; onLogge
       await api.delete("/account/me");
       await onLoggedOut();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to delete account");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec de la suppression du compte");
     } finally {
       setDeleting(false);
     }
@@ -270,8 +273,8 @@ function DangerZoneTab({ email, onLoggedOut, onError }: { email: string; onLogge
 
   return (
     <div className="rounded-xl border border-danger bg-danger-soft p-5">
-      <h2 className="text-sm font-semibold text-danger">Delete your account</h2>
-      <p className="mt-1 text-xs text-foreground-muted">This is permanent. Type your email ({email}) to confirm.</p>
+      <h2 className="text-sm font-semibold text-danger">Supprimer votre compte</h2>
+      <p className="mt-1 text-xs text-foreground-muted">Cette action est définitive. Saisissez votre email ({email}) pour confirmer.</p>
       <input value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-danger" />
       <button
         type="button"
@@ -279,7 +282,7 @@ function DangerZoneTab({ email, onLoggedOut, onError }: { email: string; onLogge
         disabled={deleting || confirmEmail !== email}
         className="mt-3 rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
-        {deleting ? "Deleting…" : "Delete my account"}
+        {deleting ? "Suppression…" : "Supprimer mon compte"}
       </button>
     </div>
   );

@@ -15,6 +15,10 @@ type AccessState = "checking" | "granted" | "denied";
 
 const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
 type Tab = (typeof TABS)[number];
+const TAB_LABELS: Record<Tab, string> = {
+  Overview: "Vue d'ensemble", Organizations: "Organisations", Users: "Utilisateurs", Subscriptions: "Abonnements",
+  Monitoring: "Supervision", Logs: "Journaux", Alerting: "Alertes",
+};
 
 export default function AdminPage() {
   const { user, loading } = useRequireAuth();
@@ -37,15 +41,15 @@ export default function AdminPage() {
   }, [loading, user]);
 
   if (loading || !user || access === "checking") {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Loading…</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
   }
 
   if (access === "denied") {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
-        <h1 className="text-lg font-semibold text-foreground">Access restricted</h1>
+        <h1 className="text-lg font-semibold text-foreground">Accès restreint</h1>
         <p className="max-w-sm text-sm text-foreground-muted">
-          This area is reserved for platform administrators. Your account does not have that role.
+          Cette section est réservée aux administrateurs de la plateforme. Votre compte n'a pas ce rôle.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
@@ -54,8 +58,8 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <h1 className="text-xl font-semibold text-foreground">Platform admin</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Global stats, organizations, users, subscriptions, monitoring, and system logs.</p>
+      <h1 className="text-xl font-semibold text-foreground">Administration de la plateforme</h1>
+      <p className="mt-1 text-sm text-foreground-muted">Statistiques globales, organisations, utilisateurs, abonnements, supervision et journaux système.</p>
 
       <div className="mt-5 flex flex-wrap gap-1 border-b border-border">
         {TABS.map((t) => (
@@ -67,7 +71,7 @@ export default function AdminPage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {t}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
@@ -99,26 +103,26 @@ function OverviewTab() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.get("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Failed to load"));
+    void api.get("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, []);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
-  if (!stats) return <p className="text-sm text-foreground-muted">Loading…</p>;
+  if (!stats) return <p className="text-sm text-foreground-muted">Chargement…</p>;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <StatCard label="Users" value={stats.users.total} />
-      <StatCard label="Active users" value={stats.users.active} />
-      <StatCard label="Organizations" value={stats.organizations.total} />
-      <StatCard label="Active orgs" value={stats.organizations.active} />
+      <StatCard label="Utilisateurs" value={stats.users.total} />
+      <StatCard label="Utilisateurs actifs" value={stats.users.active} />
+      <StatCard label="Organisations" value={stats.organizations.total} />
+      <StatCard label="Orgs actives" value={stats.organizations.active} />
       <StatCard label="Documents" value={stats.documents.total} />
       <StatCard label="Agents" value={stats.agents.total} />
       <StatCard label="Conversations" value={stats.conversations.total} />
-      <StatCard label="API requests" value={stats.api_usage.total_requests} />
+      <StatCard label="Requêtes API" value={stats.api_usage.total_requests} />
       <StatCard label="MRR" value={`$${(stats.revenue.mrr_cents / 100).toFixed(2)}`} />
       <StatCard label="ARR" value={`$${(stats.revenue.arr_cents / 100).toFixed(2)}`} />
-      <StatCard label="Active subs" value={stats.revenue.active_subscriptions} />
-      <StatCard label="Churn (30d)" value={stats.revenue.churn_last_30d} />
+      <StatCard label="Abonnements actifs" value={stats.revenue.active_subscriptions} />
+      <StatCard label="Attrition (30j)" value={stats.revenue.churn_last_30d} />
     </div>
   );
 }
@@ -128,7 +132,7 @@ function OrganizationsTab() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<{ items: any[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Failed to load"));
+    void api.get<{ items: any[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -137,7 +141,7 @@ function OrganizationsTab() {
     if (org.is_suspended) {
       await api.post(`/admin/organizations/${org.id}/activate`);
     } else {
-      const reason = window.prompt("Suspension reason (optional)") ?? undefined;
+      const reason = window.prompt("Motif de suspension (facultatif)") ?? undefined;
       await api.post(`/admin/organizations/${org.id}/suspend`, { reason });
     }
     load();
@@ -151,14 +155,14 @@ function OrganizationsTab() {
         <div key={org.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
           <div>
             <p className="font-medium text-foreground">{org.name}</p>
-            <p className="text-xs text-foreground-muted">{org.slug} · {org.is_suspended ? <span className="text-danger">suspended</span> : <span className="text-success">active</span>}</p>
+            <p className="text-xs text-foreground-muted">{org.slug} · {org.is_suspended ? <span className="text-danger">suspendue</span> : <span className="text-success">active</span>}</p>
           </div>
           <button type="button" onClick={() => void toggleSuspend(org)} className="text-xs font-medium text-accent hover:underline">
-            {org.is_suspended ? "Reactivate" : "Suspend"}
+            {org.is_suspended ? "Réactiver" : "Suspendre"}
           </button>
         </div>
       ))}
-      {orgs.length === 0 && <p className="text-sm text-foreground-muted">No organizations yet.</p>}
+      {orgs.length === 0 && <p className="text-sm text-foreground-muted">Aucune organisation pour l'instant.</p>}
     </div>
   );
 }
@@ -170,14 +174,14 @@ function UsersTab() {
 
   const load = useCallback(() => {
     const query = search ? `?search=${encodeURIComponent(search)}&limit=50` : "?limit=50";
-    void api.get<{ items: any[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Failed to load"));
+    void api.get<{ items: any[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
 
   async function toggleSuspend(u: any) {
     if (u.is_active) {
-      const reason = window.prompt("Suspension reason (optional)") ?? undefined;
+      const reason = window.prompt("Motif de suspension (facultatif)") ?? undefined;
       await api.post(`/admin/users/${u.id}/suspend`, { reason });
     } else {
       await api.post(`/admin/users/${u.id}/activate`);
@@ -187,32 +191,32 @@ function UsersTab() {
 
   async function resetPassword(u: any) {
     await api.post(`/admin/users/${u.id}/reset-password`);
-    window.alert(`Password reset email sent to ${u.email}`);
+    window.alert(`Email de réinitialisation du mot de passe envoyé à ${u.email}`);
   }
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
 
   return (
     <div>
-      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by email…" className="mb-3 w-full max-w-sm rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher par email…" className="mb-3 w-full max-w-sm rounded-lg border border-border bg-background px-3 py-2 text-sm" />
       <div className="flex flex-col gap-2">
         {users.map((u) => (
           <div key={u.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
             <div>
               <p className="font-medium text-foreground">{u.email}</p>
               <p className="text-xs text-foreground-muted">
-                {u.role} · {u.is_active ? <span className="text-success">active</span> : <span className="text-danger">suspended</span>} · {u.is_email_verified ? "verified" : "unverified"}
+                {u.role} · {u.is_active ? <span className="text-success">actif</span> : <span className="text-danger">suspendu</span>} · {u.is_email_verified ? "vérifié" : "non vérifié"}
               </p>
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={() => void resetPassword(u)} className="text-xs font-medium text-foreground-muted hover:text-foreground">Reset password</button>
+              <button type="button" onClick={() => void resetPassword(u)} className="text-xs font-medium text-foreground-muted hover:text-foreground">Réinitialiser le mot de passe</button>
               <button type="button" onClick={() => void toggleSuspend(u)} className="text-xs font-medium text-accent hover:underline">
-                {u.is_active ? "Suspend" : "Reactivate"}
+                {u.is_active ? "Suspendre" : "Réactiver"}
               </button>
             </div>
           </div>
         ))}
-        {users.length === 0 && <p className="text-sm text-foreground-muted">No users found.</p>}
+        {users.length === 0 && <p className="text-sm text-foreground-muted">Aucun utilisateur trouvé.</p>}
       </div>
     </div>
   );
@@ -226,7 +230,7 @@ function SubscriptionsTab() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<any[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Failed to load"));
+    void api.get<any[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
     void api.get<any[]>("/admin/subscriptions?limit=50").then(setSubs).catch(() => {});
   }, []);
 
@@ -245,24 +249,24 @@ function SubscriptionsTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Plans</h2>
+        <h2 className="text-sm font-semibold text-foreground">Forfaits</h2>
         <div className="mt-2 flex flex-col gap-1">
           {plans.map((p) => (
             <div key={p.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
               <span className="font-medium text-foreground">{p.name}</span>
-              <span className="text-foreground-muted">${(p.monthly_price_cents / 100).toFixed(2)}/mo</span>
+              <span className="text-foreground-muted">${(p.monthly_price_cents / 100).toFixed(2)}/mois</span>
             </div>
           ))}
         </div>
         <div className="mt-3 flex gap-2">
-          <input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Plan name" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-          <input value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="Price/mo ($)" type="number" className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-          <button type="button" onClick={() => void createPlan()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Create plan</button>
+          <input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Nom du forfait" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          <input value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="Prix/mois ($)" type="number" className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          <button type="button" onClick={() => void createPlan()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Créer le forfait</button>
         </div>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Subscriptions</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Abonnements</h2>
         <div className="flex flex-col gap-1">
           {subs.map((s) => (
             <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs">
@@ -270,7 +274,7 @@ function SubscriptionsTab() {
               <span className="font-medium text-foreground">{s.status}</span>
             </div>
           ))}
-          {subs.length === 0 && <p className="text-sm text-foreground-muted">No subscriptions yet.</p>}
+          {subs.length === 0 && <p className="text-sm text-foreground-muted">Aucun abonnement pour l'instant.</p>}
         </div>
       </div>
     </div>
@@ -295,50 +299,50 @@ function MonitoringTab() {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Database" value={health?.database ?? "…"} />
+        <StatCard label="Base de données" value={health?.database ?? "…"} />
         <StatCard label="Redis" value={health?.redis ?? "…"} />
         <StatCard label="Celery" value={health?.celery ?? "…"} />
       </div>
       {resources && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="CPU" value={`${resources.cpu_percent}%`} />
-          <StatCard label="Memory" value={`${resources.memory_percent}%`} />
-          <StatCard label="Disk" value={`${resources.disk_percent}%`} />
-          <StatCard label="CPU cores" value={resources.cpu_count} />
+          <StatCard label="Mémoire" value={`${resources.memory_percent}%`} />
+          <StatCard label="Disque" value={`${resources.disk_percent}%`} />
+          <StatCard label="Cœurs CPU" value={resources.cpu_count} />
         </div>
       )}
       {queues && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Workers online" value={queues.workers_online} />
-          <StatCard label="Active tasks" value={queues.active_tasks} />
-          <StatCard label="Scheduled tasks" value={queues.scheduled_tasks} />
-          <StatCard label="Reserved tasks" value={queues.reserved_tasks} />
+          <StatCard label="Workers en ligne" value={queues.workers_online} />
+          <StatCard label="Tâches actives" value={queues.active_tasks} />
+          <StatCard label="Tâches planifiées" value={queues.scheduled_tasks} />
+          <StatCard label="Tâches réservées" value={queues.reserved_tasks} />
         </div>
       )}
       {metrics && (
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Business metrics</p>
+          <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Métriques métier</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Organizations" value={metrics.business.organizations} />
-            <StatCard label="Users" value={metrics.business.users} />
+            <StatCard label="Organisations" value={metrics.business.organizations} />
+            <StatCard label="Utilisateurs" value={metrics.business.users} />
             <StatCard label="Conversations" value={metrics.business.conversations} />
-            <StatCard label="Active subscriptions" value={metrics.business.active_subscriptions} />
+            <StatCard label="Abonnements actifs" value={metrics.business.active_subscriptions} />
           </div>
         </div>
       )}
       <div className="rounded-xl border border-border bg-surface p-4">
-        <p className="text-xs font-semibold uppercase text-foreground-muted">Distributed tracing (OpenTelemetry)</p>
+        <p className="text-xs font-semibold uppercase text-foreground-muted">Traçage distribué (OpenTelemetry)</p>
         <p className="mt-1 text-sm text-foreground">
-          {tracing ? (tracing.active ? `Active — exporting to ${tracing.exporter}` : "Disabled (no OTEL_EXPORTER_OTLP_ENDPOINT configured)") : "…"}
+          {tracing ? (tracing.active ? `Actif — export vers ${tracing.exporter}` : "Désactivé (OTEL_EXPORTER_OTLP_ENDPOINT non configuré)") : "…"}
         </p>
       </div>
       <div className="rounded-xl border border-border bg-surface p-4">
-        <p className="text-xs font-semibold uppercase text-foreground-muted">API documentation</p>
+        <p className="text-xs font-semibold uppercase text-foreground-muted">Documentation API</p>
         <a href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/docs`} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-accent hover:underline">
-          Open Swagger UI →
+          Ouvrir Swagger UI →
         </a>
         <a href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/metrics`} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-accent hover:underline">
-          Open Prometheus /metrics →
+          Ouvrir Prometheus /metrics →
         </a>
       </div>
     </div>
@@ -392,44 +396,44 @@ function AlertingTab() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Notification channels</p>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Canaux de notification</p>
         <div className="flex flex-col gap-2">
           {channels.map((c) => (
             <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
               <span>{c.name} ({c.type})</span>
-              <span className="text-xs text-foreground-muted">{c.enabled ? "enabled" : "disabled"}</span>
+              <span className="text-xs text-foreground-muted">{c.enabled ? "activé" : "désactivé"}</span>
             </div>
           ))}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <input value={newChannel.name} onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })} placeholder="Channel name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <input value={newChannel.name} onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })} placeholder="Nom du canal" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
           <select value={newChannel.type} onChange={(e) => setNewChannel({ ...newChannel, type: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
             <option value="email">Email</option>
             <option value="webhook">Webhook (Slack/Teams/Discord/PagerDuty)</option>
           </select>
           <input value={newChannel.value} onChange={(e) => setNewChannel({ ...newChannel, value: e.target.value })} placeholder={newChannel.type === "email" ? "ops@example.com" : "https://hooks..."} className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
-          <button type="button" onClick={() => void createChannel()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Add</button>
+          <button type="button" onClick={() => void createChannel()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Ajouter</button>
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Alert rules</p>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Règles d'alerte</p>
         <div className="flex flex-col gap-2">
           {rules.map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
               <span>{r.name}: {r.metric} {r.operator} {r.threshold}</span>
-              <button type="button" onClick={() => void deleteRule(r.id)} className="text-xs font-medium text-danger hover:underline">Delete</button>
+              <button type="button" onClick={() => void deleteRule(r.id)} className="text-xs font-medium text-danger hover:underline">Supprimer</button>
             </div>
           ))}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <input value={newRule.name} onChange={(e) => setNewRule({ ...newRule, name: e.target.value })} placeholder="Rule name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <input value={newRule.name} onChange={(e) => setNewRule({ ...newRule, name: e.target.value })} placeholder="Nom de la règle" className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
           <select value={newRule.metric} onChange={(e) => setNewRule({ ...newRule, metric: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
             <option value="cpu_percent">CPU %</option>
-            <option value="memory_percent">Memory %</option>
-            <option value="disk_percent">Disk %</option>
-            <option value="celery_queue_backlog">Celery queue backlog</option>
-            <option value="http_5xx_total">HTTP 5xx total</option>
+            <option value="memory_percent">Mémoire %</option>
+            <option value="disk_percent">Disque %</option>
+            <option value="celery_queue_backlog">File d'attente Celery</option>
+            <option value="http_5xx_total">Total HTTP 5xx</option>
           </select>
           <select value={newRule.operator} onChange={(e) => setNewRule({ ...newRule, operator: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
             <option value="gt">&gt;</option>
@@ -437,14 +441,14 @@ function AlertingTab() {
             <option value="lt">&lt;</option>
             <option value="lte">&le;</option>
           </select>
-          <input value={newRule.threshold} onChange={(e) => setNewRule({ ...newRule, threshold: e.target.value })} placeholder="Threshold" className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
-          <button type="button" onClick={() => void createRule()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Add</button>
+          <input value={newRule.threshold} onChange={(e) => setNewRule({ ...newRule, threshold: e.target.value })} placeholder="Seuil" className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
+          <button type="button" onClick={() => void createRule()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Ajouter</button>
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Recent alert history</p>
-        {history.length === 0 ? <p className="text-sm text-foreground-muted">No alerts triggered yet.</p> : (
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Historique récent des alertes</p>
+        {history.length === 0 ? <p className="text-sm text-foreground-muted">Aucune alerte déclenchée pour l'instant.</p> : (
           <div className="flex flex-col gap-2">
             {history.map((h) => (
               <div key={h.id} className="rounded-lg border border-border bg-surface p-3 text-sm">{h.message}</div>
@@ -455,12 +459,12 @@ function AlertingTab() {
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Incidents</p>
-        {incidents.length === 0 ? <p className="text-sm text-foreground-muted">No incidents.</p> : (
+        {incidents.length === 0 ? <p className="text-sm text-foreground-muted">Aucun incident.</p> : (
           <div className="flex flex-col gap-2">
             {incidents.map((i) => (
               <div key={i.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
                 <span>{i.title} — {i.severity} — {i.status}</span>
-                {i.status !== "resolved" && <button type="button" onClick={() => void resolveIncident(i.id)} className="text-xs font-medium text-accent hover:underline">Resolve</button>}
+                {i.status !== "resolved" && <button type="button" onClick={() => void resolveIncident(i.id)} className="text-xs font-medium text-accent hover:underline">Résoudre</button>}
               </div>
             ))}
           </div>
@@ -477,7 +481,7 @@ function LogsTab() {
 
   const load = useCallback(() => {
     const query = level ? `?level=${level}&limit=50` : "?limit=50";
-    void api.get<{ items: any[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Failed to load"));
+    void api.get<{ items: any[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, [level]);
 
   useEffect(() => { load(); }, [load]);
@@ -488,12 +492,12 @@ function LogsTab() {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <select value={level} onChange={(e) => setLevel(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm">
-          <option value="">All levels</option>
-          <option value="WARNING">Warning</option>
-          <option value="ERROR">Error</option>
-          <option value="CRITICAL">Critical</option>
+          <option value="">Tous les niveaux</option>
+          <option value="WARNING">Avertissement</option>
+          <option value="ERROR">Erreur</option>
+          <option value="CRITICAL">Critique</option>
         </select>
-        <a href={fileUrl("/admin/logs/export?fmt=csv")} target="_blank" rel="noreferrer" className="text-xs font-medium text-accent hover:underline">Export CSV →</a>
+        <a href={fileUrl("/admin/logs/export?fmt=csv")} target="_blank" rel="noreferrer" className="text-xs font-medium text-accent hover:underline">Exporter en CSV →</a>
       </div>
       <div className="flex flex-col gap-1">
         {logs.map((log) => (
@@ -505,7 +509,7 @@ function LogsTab() {
             <p className="mt-1 text-foreground">{log.message}</p>
           </div>
         ))}
-        {logs.length === 0 && <p className="text-sm text-foreground-muted">No system logs recorded (real WARNING+ logs are captured live -- this dev process may simply not have logged one yet).</p>}
+        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun journal système enregistré (les vrais journaux de niveau WARNING et plus sont capturés en direct — ce processus de développement n'en a peut-être simplement pas encore généré).</p>}
       </div>
     </div>
   );

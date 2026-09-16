@@ -13,6 +13,7 @@ import PluginVersionForm from "@/components/plugins/PluginVersionForm";
 
 const TABS = ["Browse", "My plugins", "Installed"] as const;
 type Tab = (typeof TABS)[number];
+const TAB_LABELS: Record<Tab, string> = { Browse: "Parcourir", "My plugins": "Mes plugins", Installed: "Installés" };
 
 // Partie 16 (ter) -- one consolidated page composing the real,
 // separate plugin components (PluginMarketplace/InstalledPlugins/
@@ -26,13 +27,13 @@ export default function MarketplacePage() {
   const [error, setError] = useState<string | null>(null);
 
   if (orgLoading || !org) {
-    return <div className="mx-auto max-w-4xl text-sm text-foreground-muted">Loading…</div>;
+    return <div className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="text-xl font-semibold text-foreground">Marketplace</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Browse, publish, and manage plugins for {org.name}.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Parcourez, publiez et gérez les plugins pour {org.name}.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -46,7 +47,7 @@ export default function MarketplacePage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {t}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
@@ -78,7 +79,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
     try {
       setPublished(await listPublishedPlugins(orgId));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to load your plugins");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de vos plugins");
     }
   }, [orgId, onError]);
 
@@ -92,7 +93,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
       await deletePlugin(orgId, pluginId);
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Failed to delete this plugin");
+      onError(err instanceof ApiError ? String(err.detail) : "Échec de la suppression de ce plugin");
     }
   }
 
@@ -108,14 +109,14 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
                 <h3 className="text-sm font-semibold text-foreground">{plugin.name} <span className="ml-1">{statusBadge(plugin.status)}</span></h3>
                 <p className="mt-0.5 text-xs text-foreground-muted">v{plugin.version} — {plugin.description}</p>
                 {plugin.status === "rejected" && plugin.rejection_reason && (
-                  <p className="mt-1 text-xs text-danger">Rejected: {plugin.rejection_reason}</p>
+                  <p className="mt-1 text-xs text-danger">Rejeté : {plugin.rejection_reason}</p>
                 )}
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setManagingId(managingId === plugin.id ? null : plugin.id)} className="text-xs font-medium text-accent-hover hover:underline">
-                  New version
+                  Nouvelle version
                 </button>
-                <button type="button" onClick={() => void remove(plugin.id)} className="text-xs font-medium text-danger hover:underline">Delete</button>
+                <button type="button" onClick={() => void remove(plugin.id)} className="text-xs font-medium text-danger hover:underline">Supprimer</button>
               </div>
             </div>
             {managingId === plugin.id && managedPlugin && (
@@ -133,7 +134,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
             )}
           </div>
         ))}
-        {published.length === 0 && <p className="text-sm text-foreground-muted">You haven&apos;t published any plugins yet.</p>}
+        {published.length === 0 && <p className="text-sm text-foreground-muted">Vous n'avez pas encore publié de plugin.</p>}
       </div>
 
       <PluginCreateForm orgId={orgId} onPublished={() => void load()} onError={onError} />

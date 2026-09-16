@@ -12,12 +12,12 @@ export default function Page() {
   const [tab, setTab] = useState<"library" | "search" | "visual">("library");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  if (loading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Loading…</p>;
+  if (loading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</p>;
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-xl font-semibold text-foreground">Media</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Upload images, audio, and video — each is automatically processed and made searchable.</p>
+      <h1 className="text-xl font-semibold text-foreground">Médiathèque</h1>
+      <p className="mt-1 text-sm text-foreground-muted">Envoyez des images, de l'audio et de la vidéo — chaque fichier est automatiquement traité et rendu consultable.</p>
 
       <div className="mt-4">
         <MediaUploadZone orgId={org.id} onUploaded={() => setRefreshKey((k) => k + 1)} />
@@ -28,19 +28,19 @@ export default function Page() {
           type="button" onClick={() => setTab("library")}
           className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === "library" ? "border-accent text-accent" : "border-transparent text-foreground-muted"}`}
         >
-          Library
+          Médiathèque
         </button>
         <button
           type="button" onClick={() => setTab("search")}
           className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === "search" ? "border-accent text-accent" : "border-transparent text-foreground-muted"}`}
         >
-          Search
+          Recherche
         </button>
         <button
           type="button" onClick={() => setTab("visual")}
           className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === "visual" ? "border-accent text-accent" : "border-transparent text-foreground-muted"}`}
         >
-          Visual search
+          Recherche visuelle
         </button>
       </div>
 

@@ -35,7 +35,7 @@ export default function WidgetSettingsPage() {
       setColors({ primary_color: config.colors.primary, header_background: config.colors.header_background });
       setLogoUrl(config.logo_url);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to load widget config");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de la configuration du widget");
     }
   }, [org]);
 
@@ -59,7 +59,7 @@ export default function WidgetSettingsPage() {
       setTimeout(() => setSavedFlash(false), 2000);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to save");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -71,7 +71,7 @@ export default function WidgetSettingsPage() {
       const result = await api.postFile<{ logo_url: string }>(`/organizations/${org.id}/widget/logo`, file);
       setLogoUrl(result.logo_url);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Failed to upload logo");
+      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'envoi du logo");
     }
   }
 
@@ -82,37 +82,37 @@ export default function WidgetSettingsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-xl font-semibold text-foreground">Widget</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Customize the embeddable chat widget for your website.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Personnalisez le widget de conversation embarquable pour votre site web.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Saved!</p>}
+      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Enregistré !</p>}
 
       <div className="mt-6 flex flex-col gap-5 rounded-xl border border-border bg-surface p-5">
         <div>
-          <label className="text-sm font-medium text-foreground">Widget name</label>
+          <label className="text-sm font-medium text-foreground">Nom du widget</label>
           <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Welcome message</label>
+          <label className="text-sm font-medium text-foreground">Message de bienvenue</label>
           <textarea value={welcome} onChange={(e) => setWelcome(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         </div>
 
         <div>
           <label className="text-sm font-medium text-foreground">Logo</label>
           <div className="mt-1 flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="Widget logo" className="h-10 w-10 rounded-full object-cover" />}
+            {logoUrl && <img src={logoUrl} alt="Logo du widget" className="h-10 w-10 rounded-full object-cover" />}
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} className="text-xs" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-foreground">Primary color</label>
+            <label className="text-sm font-medium text-foreground">Couleur principale</label>
             <input type="color" value={colors.primary_color} onChange={(e) => setColors((c) => ({ ...c, primary_color: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground">Header color</label>
+            <label className="text-sm font-medium text-foreground">Couleur de l'en-tête</label>
             <input type="color" value={colors.header_background} onChange={(e) => setColors((c) => ({ ...c, header_background: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function WidgetSettingsPage() {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Theme</label>
+          <label className="text-sm font-medium text-foreground">Thème</label>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {THEMES.map((t) => (
               <button key={t} type="button" onClick={() => setTheme(t)} className={`rounded-full border px-2.5 py-1 text-xs ${theme === t ? "border-accent bg-accent text-white" : "border-border-strong text-foreground-muted"}`}>
@@ -140,27 +140,27 @@ export default function WidgetSettingsPage() {
         </div>
 
         <button type="button" onClick={() => void save()} disabled={saving} className="self-start rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-          {saving ? "Saving…" : "Save changes"}
+          {saving ? "Enregistrement…" : "Enregistrer les modifications"}
         </button>
       </div>
 
       {scriptSnippet && (
         <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold text-foreground">Embed on your site</h2>
+          <h2 className="text-sm font-semibold text-foreground">Intégrer sur votre site</h2>
           <code className="mt-2 block overflow-x-auto rounded-lg bg-background p-3 text-xs">{scriptSnippet}</code>
         </div>
       )}
 
       {publicKey && (
         <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold text-foreground">Live preview</h2>
-          <p className="mt-1 text-xs text-foreground-muted">This is the real, live widget iframe — save your changes above to see them reflected here.</p>
+          <h2 className="text-sm font-semibold text-foreground">Aperçu en direct</h2>
+          <p className="mt-1 text-xs text-foreground-muted">Ceci est le vrai iframe du widget en direct — enregistrez vos modifications ci-dessus pour les voir reflétées ici.</p>
           <div className="mt-3 overflow-hidden rounded-xl border border-border" style={{ height: 480 }}>
             <iframe
               key={`${theme}-${colors.primary_color}-${colors.header_background}-${position}`}
               src={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/widget/iframe?key=${publicKey}`}
               className="h-full w-full"
-              title="Widget preview"
+              title="Aperçu du widget"
             />
           </div>
         </div>

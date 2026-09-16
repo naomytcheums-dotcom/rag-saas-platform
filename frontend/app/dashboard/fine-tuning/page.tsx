@@ -21,17 +21,17 @@ export default function Page() {
   const { total: jobTotal, loading: jobsLoading } = useFineTuningJobs(org?.id ?? "");
   const { total: modelTotal, loading: modelsLoading } = useFineTunedModels(org?.id ?? "");
 
-  if (orgLoading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Loading…</p>;
+  if (orgLoading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</p>;
 
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="text-xl font-semibold text-foreground">Fine-tuning</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Train custom models on your own data, evaluate them, and deploy the ones that work.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Entraînez des modèles personnalisés sur vos propres données, évaluez-les et déployez ceux qui fonctionnent.</p>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SummaryCard href="/dashboard/fine-tuning/datasets" title="Datasets" total={datasetTotal} loading={datasetsLoading} />
-        <SummaryCard href="/dashboard/fine-tuning/jobs" title="Jobs" total={jobTotal} loading={jobsLoading} />
-        <SummaryCard href="/dashboard/fine-tuning/models" title="Models" total={modelTotal} loading={modelsLoading} />
+        <SummaryCard href="/dashboard/fine-tuning/datasets" title="Jeux de données" total={datasetTotal} loading={datasetsLoading} />
+        <SummaryCard href="/dashboard/fine-tuning/jobs" title="Tâches" total={jobTotal} loading={jobsLoading} />
+        <SummaryCard href="/dashboard/fine-tuning/models" title="Modèles" total={modelTotal} loading={modelsLoading} />
       </div>
     </div>
   );
