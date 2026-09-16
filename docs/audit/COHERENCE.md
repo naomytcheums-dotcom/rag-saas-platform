@@ -84,10 +84,30 @@ que la coquille et la quasi-totalité des pages restaient en anglais. Aucune nou
 incohérence de langue trouvée lors de cet audit sur les pages vérifiées visuellement
 depuis (facturation, administration).
 
+## 5. Bug de propagation de logger révélé par l'ajout du fichier orphelin
+
+**Faille réelle, trouvée en deux temps, par l'exécution réelle de la suite combinée** (pas
+en isolation — voir `docs/audit/TESTS.md` pour le détail complet) :
+`tests/test_admin_dashboard.py::test_system_log_handler_writes_real_rows` échouait de
+façon intermittente **uniquement** quand un autre test, plus tôt dans le même processus
+pytest, avait déjà déclenché le vrai cycle de vie (`lifespan`) de l'application FastAPI —
+ce qui installe un `SystemLogHandler` global sur le logger racine
+(`install_system_log_handler`, `api/security/system_log_handler.py`). Le logger utilisé
+par le test (`test.system_log_handler`) propage par défaut vers ce logger racine — donc
+`logger.warning(message)` écrivait la ligne **deux fois** : une fois via le handler que le
+test attache explicitement, une fois via celui installé globalement. **Corrigé** :
+`logger.propagate = False` sur ce logger de test, dédié et jamais réutilisé ailleurs — il
+n'atteint plus que le handler que le test attache lui-même, quel que soit l'état du reste
+du processus. Reproduit et vérifié directement (handler racine installé manuellement dans
+le même processus avant d'exécuter la logique du test) avant et après correction.
+
 ## Bilan
 
-2 incohérences réelles trouvées et corrigées (numérotation illisible sans note de
-navigation ; 12 fichiers de test orphelins). 1 anomalie mineure documentée sans correction
-(titre contradictoire dans `PARTNER_PROGRAM.md`). Le reste du périmètre (endpoints/modèles
-hors le sous-ensemble audité pour la sécurité, cohérence frontend↔backend complète) n'a
-pas pu être vérifié exhaustivement dans le temps disponible — voir "Non vérifié" ci-dessus.
+3 incohérences réelles trouvées et corrigées (numérotation illisible sans note de
+navigation ; 12 fichiers de test orphelins ; bug de propagation de logger révélé par
+l'exécution réelle de la suite combinée après ajout du fichier orphelin — la preuve la
+plus directe que ce fichier valait la peine d'être câblé en CI). 1 anomalie mineure
+documentée sans correction (titre contradictoire dans `PARTNER_PROGRAM.md`). Le reste du
+périmètre (endpoints/modèles hors le sous-ensemble audité pour la sécurité, cohérence
+frontend↔backend complète) n'a pas pu être vérifié exhaustivement dans le temps disponible
+— voir "Non vérifié" ci-dessus.

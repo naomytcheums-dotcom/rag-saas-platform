@@ -76,21 +76,38 @@ async def test_system_log_handler_writes_real_rows(db_session):
     """Real, direct test of the logging.Handler itself (not via the
     HTTP layer) -- confirms a real log record becomes a real SystemLog row.
 
-    Real bug fixed here (CI-orphan audit, 2026-09-16): this test writes
-    to the REAL, SHARED DATABASE_URL (the handler's own sync engine, not
-    the test's isolated SQLite session -- see below), using the exact
-    same fixed message every run. This test had never run in CI before
-    (see docs/audit/COHERENCE.md), so a first real, failed run somewhere
-    left a duplicate row behind uncleaned -- `scalar_one_or_none()`
-    threw `MultipleResultsFound` before ever reaching the cleanup at the
-    bottom, so every subsequent run failed the SAME way without ever
-    being able to self-heal (the failure itself blocked the only cleanup
-    path). Fixed two ways: a UUID-suffixed message so concurrent/repeat
-    runs can never collide with each other going forward, and cleaning
-    up ALL matching rows (not `scalar_one_or_none`'s single-row
-    assumption) so today's pre-existing duplicate mess in the shared DB
-    is wiped by whichever run finds it first, rather than requiring a
-    manual fix."""
+    Real bug fixed here (CI-orphan audit, 2026-09-16), in two layers:
+
+    1. This test writes to the REAL, SHARED DATABASE_URL (the handler's
+       own sync engine, not the test's isolated SQLite session -- see
+       below), using the exact same fixed message every run. This test
+       had never run in CI before (see docs/audit/COHERENCE.md), so a
+       first real, failed run somewhere left a duplicate row behind
+       uncleaned -- `scalar_one_or_none()` threw `MultipleResultsFound`
+       before ever reaching the cleanup at the bottom, so every
+       subsequent run failed the SAME way without being able to
+       self-heal (the failure itself blocked the only cleanup path).
+       Fixed with a UUID-suffixed message plus cleaning up ALL matching
+       rows on teardown, not `scalar_one_or_none`'s single-row
+       assumption.
+
+    2. Even with a unique message per run, this test STILL failed
+       intermittently when run as part of the full combined suite (never
+       standalone): `install_system_log_handler()`
+       (api/security/system_log_handler.py) attaches its OWN
+       `SystemLogHandler` to the ROOT logger the first time any test's
+       FastAPI app fixture actually runs a real lifespan startup --
+       idempotent, so once any earlier test in the same pytest process
+       triggers it, it stays installed for every test after. This
+       test's own logger ("test.system_log_handler") propagates to that
+       ancestor handler by default, so `logger.warning(message)` was
+       silently writing the row TWICE -- once via this test's own
+       explicit handler, once via the globally-installed one -- whenever
+       that root handler happened to already be installed by test
+       order. Fixed by disabling propagation on this specific,
+       test-only logger, so it only ever reaches the one handler this
+       test explicitly attached, regardless of what else has run
+       before it in the same process."""
     import logging
     import uuid
 
@@ -102,6 +119,7 @@ async def test_system_log_handler_writes_real_rows(db_session):
     message = f"a real warning captured by the real handler ({uuid.uuid4()})"
     handler = SystemLogHandler()
     logger = logging.getLogger("test.system_log_handler")
+    logger.propagate = False
     logger.addHandler(handler)
     logger.warning(message)
     logger.removeHandler(handler)
