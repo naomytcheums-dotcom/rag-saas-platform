@@ -102,3 +102,19 @@ manquée de feedback utilisateur immédiat.
 duplication corrigée (constante `MAX_PAGE_SIZE`). 8 catégories de limites documentées
 mais volontairement non modifiées (constantes raisonnables sans preuve de problème réel).
 Aucun TODO oublié, aucun stub non documenté.
+
+## Re-vérification (2026-09-16, après correction)
+
+- Schéma OpenAPI de l'API réellement en cours d'exécution interrogé en direct : les 4
+  endpoints publics (`/v1/documents`, `/v1/agents`, `/v1/knowledge-bases`,
+  `/v1/conversations`) confirment bien `{"maximum": 100, "minimum": 1}` sur `limit`.
+- **Un 13e endpoint non plafonné trouvé** pendant cette re-vérification, manqué par
+  l'audit initial : `GET /organizations/{org_id}/suggested-questions`
+  ([`api/routers/questions.py`](../../api/routers/questions.py)) acceptait un `limit`
+  entier optionnel sans aucune borne, transmis tel quel jusqu'à un appel de génération
+  LLM (`count=resolved_limit`) — un appelant aurait pu forcer un nombre de questions
+  généré arbitrairement élevé. **Corrigé** : `Query(default=None, ge=1, le=200)`, même
+  discipline que les 12 autres. Vérifié : `py_compile` propre, 11/11 tests
+  (`tests/test_suggested_questions.py`) verts en direct après correction.
+- `api/utils.py` confirmé : la constante `MAX_PAGE_SIZE = 200` existe bien et est
+  importée par `audit.py`/`quality_dashboard.py`/`usage.py`.

@@ -70,5 +70,10 @@ de chaque exemple dans le temps disponible). Spot-check sur `docs/developer/I18N
 ## Bilan
 
 Documentation structurellement saine : zéro lien cassé, couverture large et cohérente par
-sujet, contenu récent daté honnêtement là où vérifié. Le seul vrai problème trouvé (lisibilité
-de la numérotation des Parties) est corrigé — voir `docs/audit/COHERENCE.md`.
+sujet, contenu récent daté honnêtement là où vérifié. Deux vrais problèmes trouvés,
+corrigés — voir `docs/audit/COHERENCE.md` pour le détail complet de chacun :
+- lisibilité de la numérotation des Parties (note de navigation ajoutée) ;
+- titre contradictoire dans [`docs/sales/PARTNER_PROGRAM.md`](../sales/PARTNER_PROGRAM.md)
+  (2026-09-16) — le titre n'annonçait que "Partie 18" alors que le corps du texte couvre
+  aussi "Partie 16 (bis)". Corrigé : titre renommé
+  "Partner program (Partie 16 bis + Partie 18)".

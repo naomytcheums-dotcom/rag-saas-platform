@@ -71,6 +71,19 @@ Exécution ciblée des fichiers directement affectés par les corrections de pag
 chaque fois**. Aucune suite de tests automatisés frontend (Vitest/RTL) n'a été relancée
 dans le cadre spécifique de cet audit.
 
+## Re-vérification (2026-09-16, après correction)
+
+- Les 12 fichiers de test confirmés présents dans `.circleci/config.yml` (grep direct sur
+  les 12 noms de fichiers, tous trouvés).
+- Les 5 exclusions légitimes confirmées documentées en commentaire dans le même fichier.
+- `tests/test_admin_dashboard.py` relancé en direct après le correctif de propagation de
+  logger : **7/7 tests verts**, y compris `test_system_log_handler_writes_real_rows`.
+- Vérifié en direct contre la vraie base partagée : **0 ligne fantôme restante** portant
+  l'ancien message fixe (`"a real warning captured by the real handler..."`).
+- Un nouveau correctif de pagination (`api/routers/questions.py`, voir
+  `docs/audit/LIMITS.md`) revérifié : 11/11 tests (`tests/test_suggested_questions.py`)
+  verts.
+
 ## Portée non couverte
 
 - Couverture de code (`--cov-fail-under=75`) : le seuil est appliqué automatiquement par

@@ -62,6 +62,8 @@ plutôt que silencieusement omis.
 | 4 | Numérotation Partie 15→18 illisible | `docs/CAHIER_DES_CHARGES.md` | Note de navigation ajoutée |
 | 5 | 12 fichiers de test (264 tests) jamais exécutés en CI | `.circleci/config.yml`, `scripts/run_full_test_suite.sh` | Ajoutés au lot 4, exécutés en local avant ajout |
 | 6 | Ligne dupliquée en base réelle + bug de propagation de logger (trouvé PAR l'ajout du point 5) | `tests/test_admin_dashboard.py` | Reproduit directement, lot 4 complet vert (1349 passed, 0 failed) |
+| 7 | Titre contradictoire (Partie 18 en titre, Partie 16 bis dans le corps) | `docs/sales/PARTNER_PROGRAM.md` | Titre renommé, revérifié en lecture directe |
+| 8 | 13e endpoint de pagination non plafonné, trouvé pendant la re-vérification du 2026-09-16 | `api/routers/questions.py` | 11 tests verts (`test_suggested_questions.py`) |
 
 ## Résultat final de la suite de tests
 
@@ -78,9 +80,6 @@ libre, tous deux résolus sans impact sur le résultat final).
 - Timeouts HTTP/subprocess codés en dur (airbyte_client.py, fine_tuning_providers.py,
   security_scan.py, etc.) — constantes raisonnables, aucune preuve de problème réel,
   documentées dans `LIMITS.md` plutôt que modifiées sans besoin démontré.
-- Titre contradictoire dans `docs/sales/PARTNER_PROGRAM.md` ("Partie 18" en titre, "Partie
-  16 bis" dans le corps) — signalé, non corrigé pour éviter de trancher sans le contexte
-  complet de la session d'origine.
 - Portée de sécurité non couverte (sandbox plugins, JWT, CSRF, dépendances) — nécessiterait
   un audit dédié, listé explicitement dans `SECURITY.md`.
 
@@ -88,11 +87,13 @@ libre, tous deux résolus sans impact sur le résultat final).
 
 ✅ **Terminé** — **9/10**
 
-Toutes les failles et incohérences réellement identifiées ont été corrigées et vérifiées
-par des tests réels, y compris un vrai bug (duplication de ligne par propagation de
-logger) découvert seulement PARCE QUE cet audit a forcé l'exécution de code jamais
-exercé en CI — la preuve la plus concrète que ce travail avait une valeur réelle, pas
-cosmétique. Suite de tests finale : 4340 tests réussis, 0 échec. Le point retiré à la
+Les 6 problèmes de l'audit initial ont été re-vérifiés un par un contre le code réel, en
+direct (pas seulement relus), le 2026-09-16 : les 6 sont bien corrigés. Le 6e point
+("titre contradictoire", laissé documenté sans correction dans l'audit initial) a été
+corrigé sur demande explicite. Cette re-vérification a aussi trouvé et corrigé un 7e
+problème que l'audit initial avait manqué (un 13e endpoint de pagination non plafonné,
+`api/routers/questions.py`) — la preuve qu'une vérification en direct vaut mieux qu'une
+simple relecture. Suite de tests finale : 4340 tests réussis, 0 échec. Le point retiré à la
 note : l'exhaustivité totale demandée ("auditer toutes les parties 1 à 25", "chaque
 endpoint", "chaque composant frontend") n'était pas matériellement réalisable dans une
 seule session pour un projet de cette taille (313 fichiers de test, 165 fichiers de

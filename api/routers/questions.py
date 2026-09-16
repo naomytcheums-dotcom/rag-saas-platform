@@ -14,7 +14,7 @@ under-specified duplicate this session has corrected elsewhere (e.g.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -38,7 +38,7 @@ _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not fo
 
 @router.get("/organizations/{org_id}/suggested-questions", response_model=SuggestedQuestionsResponse)
 async def get_suggested_questions_endpoint(
-    org_id: uuid.UUID, context: str | None = None, limit: int | None = None,
+    org_id: uuid.UUID, context: str | None = None, limit: int | None = Query(default=None, ge=1, le=200),
     _caller: OrganizationMember = Depends(require_org_member), current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

@@ -1,11 +1,20 @@
-# Partner program (Partie 18)
+# Partner program (Partie 16 bis + Partie 18)
 
-Real, honest scope: this extends Partie 16 (bis)'s reseller/sub-client
-infrastructure (`api/models/sales.py`) rather than duplicating it under
-new names -- a `Partner` in the spec IS a `Reseller` row here, and a
-`PartnerClient` IS a `SubClient` row. The one genuine gap Partie 16
-(bis) left open -- a persisted, payable commission ledger -- is what
-Partie 18 actually adds.
+Real, honest scope, and real, honest title fix (documentation audit,
+2026-09-16): the original title here named only "Partie 18," which
+read as a contradiction against this file's own opening paragraph
+(which says the underlying reseller/sub-client infrastructure is
+Partie 16 (bis), not 18). Not actually a contradiction once read fully
+-- this file covers BOTH the foundation (16 bis) and what's newly
+added on top of it (18) -- but the title alone didn't say so. Fixed by
+naming both.
+
+This file extends Partie 16 (bis)'s reseller/sub-client infrastructure
+(`api/models/sales.py`) rather than duplicating it under new names -- a
+`Partner` in the spec IS a `Reseller` row here, and a `PartnerClient`
+IS a `SubClient` row. The one genuine gap Partie 16 (bis) left open --
+a persisted, payable commission ledger -- is what Partie 18 actually
+adds.
 
 ## What already existed (Partie 16 bis, not duplicated)
 

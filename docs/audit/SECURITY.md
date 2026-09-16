@@ -147,3 +147,13 @@ généré à l'exécution (`secrets.token_urlsafe`).
 
 1 faille réelle trouvée (sévérité faible, défense en profondeur), corrigée et vérifiée.
 Aucune faille critique, haute ou moyenne trouvée dans le périmètre couvert.
+
+## Re-vérification (2026-09-16, après correction)
+
+- Lecture directe de [`api/routers/human_approval.py`](../../api/routers/human_approval.py) :
+  confirmé que `_get_approval_scoped_to_org` (chargement + vérification d'appartenance à
+  l'organisation) est bien appelée **avant** `approve_human_request`/`reject_human_request`
+  (les fonctions qui mutent la ligne) dans les deux routes concernées.
+- Suite de tests relancée en direct : **36/36 tests verts**
+  (`tests/test_human_approval.py`, `tests/test_workflow_block_human.py`).
+- Aucune régression trouvée.

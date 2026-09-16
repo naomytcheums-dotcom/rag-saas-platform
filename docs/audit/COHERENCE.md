@@ -31,11 +31,14 @@ de document (`docs/CAHIER_DES_CHARGES.md`, juste après le tableau de confiance)
 expliquant le saut 15→18 et où trouver le contenu réel de 16(bis)/16(ter) avant même que
 le lecteur n'atteigne la section Partie 15.
 
-**Anomalie mineure relevée, non corrigée** : `docs/sales/PARTNER_PROGRAM.md` a pour titre
-H1 "Partner program (Partie 18)" alors que son propre corps de texte dit qu'il étend
-"Partie 16 (bis)". Signalé ici plutôt que corrigé silencieusement — trancher entre "18" et
-"16 (bis)" nécessiterait de relire le contexte complet de la session qui a produit ce
-fichier pour ne pas casser une intention documentée ailleurs.
+**Anomalie mineure relevée, corrigée (2026-09-16)** : `docs/sales/PARTNER_PROGRAM.md`
+avait pour titre H1 "Partner program (Partie 18)" alors que son propre corps de texte
+disait qu'il étend "Partie 16 (bis)". En relisant le fichier en entier : ce n'était pas
+une vraie contradiction de fond — le fichier documente bien les deux (l'infrastructure de
+base héritée de 16 bis, et l'ajout réel de 18, le grand livre des commissions) — mais le
+titre, à lui seul, n'annonçait que 18. **Corrigé** : titre renommé
+"Partner program (Partie 16 bis + Partie 18)", avec une note explicative ajoutée en tête
+du fichier pour que cette clarification reste visible.
 
 ## 2. Suite de tests non référencée en CI (orphelins)
 
@@ -103,11 +106,30 @@ le même processus avant d'exécuter la logique du test) avant et après correct
 
 ## Bilan
 
-3 incohérences réelles trouvées et corrigées (numérotation illisible sans note de
+4 incohérences réelles trouvées et corrigées (numérotation illisible sans note de
 navigation ; 12 fichiers de test orphelins ; bug de propagation de logger révélé par
 l'exécution réelle de la suite combinée après ajout du fichier orphelin — la preuve la
-plus directe que ce fichier valait la peine d'être câblé en CI). 1 anomalie mineure
-documentée sans correction (titre contradictoire dans `PARTNER_PROGRAM.md`). Le reste du
-périmètre (endpoints/modèles hors le sous-ensemble audité pour la sécurité, cohérence
-frontend↔backend complète) n'a pas pu être vérifié exhaustivement dans le temps disponible
-— voir "Non vérifié" ci-dessus.
+plus directe que ce fichier valait la peine d'être câblé en CI ; titre contradictoire
+dans `PARTNER_PROGRAM.md`). Un 5e problème (un 13e endpoint de pagination non plafonné,
+`questions.py`) a été trouvé pendant la re-vérification du 2026-09-16 et corrigé sur le
+champ — voir `docs/audit/LIMITS.md`. Le reste du périmètre (endpoints/modèles hors le
+sous-ensemble audité pour la sécurité, cohérence frontend↔backend complète) n'a pas pu
+être vérifié exhaustivement dans le temps disponible — voir "Non vérifié" ci-dessus.
+
+## Re-vérification (2026-09-16)
+
+Chacun des 6 points de l'audit précédent a été relu dans le code réel et, pour ceux qui
+s'y prêtent, retesté en direct :
+1. `human_approval.py` : ordre check-puis-mutation confirmé, 36/36 tests verts.
+2. Pagination : les 4 endpoints publics confirmés `maximum: 100` via le schéma OpenAPI
+   réel. Un 13e endpoint non plafonné trouvé et corrigé en cours de route (voir LIMITS.md).
+3. 12 fichiers de test : confirmés présents dans `.circleci/config.yml`, 5 exclusions
+   confirmées documentées.
+4. Bug de logger : confirmé corrigé (`logger.propagate = False` sur le logger dédié du
+   test, pas dans `install_system_log_handler()` lui-même comme le libellé de la demande
+   le laissait entendre — la fonction globale reste inchangée à dessein, c'est le logger
+   du TEST qui a été rendu étanche). 0 ligne fantôme restante en base réelle, 7/7 tests
+   verts.
+5. Note de navigation : confirmée présente, mentionne bien les 3 réutilisations de
+   "Partie 16".
+6. Titre contradictoire : corrigé (voir plus haut).
