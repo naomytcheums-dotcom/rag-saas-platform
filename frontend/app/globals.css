@@ -65,37 +65,24 @@ body {
   min-height: 100vh;
 }
 
-/* Google Translate widget (components/GoogleTranslate.tsx) -- hide the
-   full-width banner iframe it injects at the top of <body> and the
-   highlight it puts on translated text, so it blends into this app's
-   own light/orange design instead of looking like a bolted-on tool. */
-body {
-  top: 0 !important;
-}
-/* Google renames this banner iframe's class on every release (seen as
-   .goog-te-banner-frame in older docs, .VIpgJd-ZVi9od-ORHb-OEVmcd in the
-   current one) -- targeting any top-level iframe carrying its one
-   stable class, "skiptranslate", is what actually stays correct across
-   Google's own changes. */
-iframe.skiptranslate,
-#goog-gt-tt,
-.goog-tooltip,
-.goog-tooltip:hover {
-  display: none !important;
-  height: 0 !important;
-}
-.goog-text-highlight {
-  background: none !important;
-  box-shadow: none !important;
-}
-/* The real widget lives only to hold Google's hidden <select> --
-   components/GoogleTranslate.tsx drives it from its own styled flags
-   dropdown, so Google's own UI (banner, "Powered by Google" gadget,
-   the plain select itself) is never shown. */
-.google-translate-widget {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+/* Language switcher: components/LanguageSwitcher.tsx wraps the
+   next-google-translate-widget package, which hides Google's own
+   banner/tooltip UI itself (see its dist/index.js) -- no bespoke CSS
+   needed here for that anymore. Theme override for its dropdown, tuned
+   to this app's own light/orange palette (see its readme's CSS
+   variable list).
+   Important, !important: the package's own stylesheet redefines these
+   same variables under `@media (prefers-color-scheme: dark)` -- this
+   app has a standing, explicit "never dark mode" design rule (see this
+   file's own top-of-file comment), so these overrides must win
+   regardless of the visitor's OS color-scheme preference, not just at
+   equal CSS specificity. */
+.app-translate {
+  --ngt-bg: rgba(255, 255, 255, 0.7) !important;
+  --ngt-bg-hover: rgba(255, 255, 255, 0.9) !important;
+  --ngt-border: var(--border) !important;
+  --ngt-text: var(--foreground) !important;
+  --ngt-menu-bg: rgba(255, 255, 255, 0.9) !important;
+  --ngt-menu-border: var(--border) !important;
+  --ngt-active-bg: var(--accent-soft) !important;
 }

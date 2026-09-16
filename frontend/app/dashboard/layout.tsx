@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import GoogleTranslate from "@/components/GoogleTranslate";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 
 const NAV_SECTIONS = [
@@ -99,7 +99,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-end border-b border-border bg-surface px-6 py-3">
-          <GoogleTranslate />
+          <LanguageSwitcher />
         </header>
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
