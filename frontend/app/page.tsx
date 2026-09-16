@@ -1,4 +1,7 @@
 import Link from "next/link";
+import FAQSection from "@/components/FAQSection";
+import PricingSection from "@/components/PricingSection";
+import SecuritySection from "@/components/SecuritySection";
 
 const FEATURES = [
   { title: "Chat propulsé par le RAG", description: "Des réponses ancrées dans vos propres documents, avec de vraies citations.", href: "/chat" },
@@ -94,8 +97,12 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <SecuritySection />
+        <PricingSection />
+        <FAQSection />
+
         {/* Appel à l'action */}
-        <section id="pricing" className="mt-28 rounded-2xl bg-gradient-to-r from-accent to-orange-400 p-10 text-white">
+        <section className="mt-28 rounded-2xl bg-gradient-to-r from-accent to-orange-400 p-10 text-white">
           <h2 className="text-2xl font-semibold">Prêt à créer votre assistant ?</h2>
           <p className="mt-2 text-sm text-white/90">Créez votre organisation en moins d'une minute — aucune carte bancaire requise.</p>
           <Link href="/register" className="mt-5 inline-block rounded-lg bg-white px-6 py-3 text-sm font-medium text-accent-hover transition-transform hover:-translate-y-0.5">
