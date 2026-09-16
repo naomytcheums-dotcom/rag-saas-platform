@@ -14,7 +14,7 @@ then query params)."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -41,7 +41,7 @@ router = APIRouter(tags=["fine-tuning"])
 # --------------------------------------------------------------- datasets
 
 @router.get("/fine-tuning/datasets", response_model=FineTuningDatasetListResponse)
-async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_datasets(db, org_id, limit, offset)
 
 
@@ -86,7 +86,7 @@ async def validate_dataset_endpoint(dataset_ctx: tuple[FineTuningDataset, Organi
 # --------------------------------------------------------------- jobs
 
 @router.get("/fine-tuning/jobs", response_model=FineTuningJobListResponse)
-async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_jobs(db, org_id, limit, offset)
 
 
@@ -131,7 +131,7 @@ async def get_job_metrics_endpoint(job_ctx: tuple[FineTuningJob, OrganizationMem
 # --------------------------------------------------------------- models
 
 @router.get("/fine-tuning/models", response_model=FineTunedModelListResponse)
-async def list_models_endpoint(org_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_models_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_models(db, org_id, limit, offset)
 
 

@@ -31,6 +31,22 @@ Confiance : **haute** pour tout ce qui est authentification/sécurité
 pour tout ce qui touche au pipeline RAG (`src/`, `dashboard/`, travail
 antérieur non revérifié ligne par ligne dans les sessions récentes).
 
+**Note de navigation (audit de cohérence, 2026-09-16)** : les en-têtes
+`## PARTIE N` de ce document sautent volontairement de 15 à 18 — ce
+n'est PAS du contenu manquant. Le numéro "16" (puis "17") a été
+réutilisé par erreur pour 3 sujets différents dans des sessions
+antérieures (modèles de vente, programme partenaire, marketplace de
+plugins) ; plutôt que de tout renuméroter au risque de casser des
+renvois existants, ce document a conservé la discipline déjà en place
+pour les collisions précédentes (Partie 10/11/12/13) : documenter la
+collision là où elle survient, avec un suffixe `(bis)`/`(ter)`, sans
+créer de nouvel en-tête `## PARTIE 16`/`## PARTIE 17`. Le contenu réel
+existe et est complet — cherche-le **à l'intérieur de la section
+`## PARTIE 15`** (pas dans une section dédiée) : "Partie 16 (bis)"
+(modèles de vente : licences self-hosted, support hybride/SLA,
+revendeurs) et "Partie 16 (ter)" (marketplace de plugins). Aucun numéro
+"17" n'a jamais été assigné à quoi que ce soit dans ce projet.
+
 ---
 
 ## Audit exhaustif des limites connues (2026-09-04)

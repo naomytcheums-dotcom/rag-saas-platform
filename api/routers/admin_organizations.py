@@ -3,7 +3,7 @@ mutating action is audited via the existing real audit log."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_admin, require_superadmin
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/admin/organizations", tags=["Admin Organizations"])
 
 
 @router.get("", response_model=OrganizationAdminListResponse)
-async def list_organizations_endpoint(limit: int = 20, offset: int = 0, suspended: bool | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_organizations_endpoint(limit: int = Query(default=20, ge=1, le=200), offset: int = Query(default=0, ge=0), suspended: bool | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rows, total = await list_organizations_admin(db, limit=limit, offset=offset, suspended=suspended)
     return OrganizationAdminListResponse(items=[OrganizationAdminResponse.model_validate(r) for r in rows], total=total, limit=limit, offset=offset)
 
@@ -120,7 +120,7 @@ async def get_organization_billing_endpoint(org_id: uuid.UUID, _admin: User = De
 
 
 @router.get("/{org_id}/activity")
-async def get_organization_activity_endpoint(org_id: uuid.UUID, limit: int = 50, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def get_organization_activity_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     from api.routers.audit import _list_audit_logs
 
     return await _list_audit_logs(db, user_id=None, action=None, since=None, until=None, limit=limit, offset=0, organization_id=org_id)

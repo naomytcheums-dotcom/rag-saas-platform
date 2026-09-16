@@ -4,6 +4,14 @@ import datetime as dt
 
 from fastapi import Request
 
+# Coherence fix (audit finding, 2026-09-16): the same `200` pagination
+# ceiling used to be redefined independently as a private
+# `_MAX_PAGE_SIZE` module constant in 3 separate routers
+# (audit.py, quality_dashboard.py, usage.py) -- same value everywhere,
+# but nothing actually tied them together, so a future change to one
+# could silently drift from the others. One shared constant instead.
+MAX_PAGE_SIZE = 200
+
 
 def client_ip(request: Request) -> str | None:
     """

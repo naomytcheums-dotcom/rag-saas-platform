@@ -8,7 +8,7 @@ they already exist for real in admin_dashboard.py (Partie 11.5).
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin
@@ -131,7 +131,7 @@ async def test_alert_rule_endpoint(rule_id: uuid.UUID, _admin: User = Depends(re
 
 
 @router.get("/alerting/history", response_model=list[AlertHistoryResponse])
-async def get_alert_history_endpoint(limit: int = 50, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def get_alert_history_endpoint(limit: int = Query(default=50, ge=1, le=200), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return await alerting.get_alert_history(db, organization_id=None, limit=limit)
 
 

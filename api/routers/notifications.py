@@ -3,7 +3,7 @@ established convention -- see billing.py's own module docstring)."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
@@ -36,7 +36,7 @@ async def send_whatsapp_endpoint(org_id: uuid.UUID, body: SendSmsRequest, caller
 
 
 @router.get("/sms", response_model=list[SmsMessageResponse])
-async def list_sms_endpoint(org_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_sms_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await twilio_sms.list_sms_messages(db, org_id, limit, offset)
 
 

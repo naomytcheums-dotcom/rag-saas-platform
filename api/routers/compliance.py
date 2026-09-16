@@ -9,7 +9,7 @@ to be a member of).
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_admin, require_superadmin
@@ -49,7 +49,7 @@ async def create_data_request_endpoint(payload: DataRequestCreate, current_user:
 
 
 @router.get("/data-requests", response_model=list[DataRequestResponse])
-async def list_data_requests_endpoint(limit: int = 50, offset: int = 0, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_data_requests_endpoint(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return [DataRequestResponse.model_validate(r) for r in await list_data_requests(db, limit=limit, offset=offset)]
 
 

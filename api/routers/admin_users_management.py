@@ -5,7 +5,7 @@ Admin+ (not superadmin-only) CRUD/lifecycle actions on other accounts."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 
 
 @router.get("", response_model=UserAdminListResponse)
-async def list_users_endpoint(limit: int = 20, offset: int = 0, search: str | None = None, is_active: bool | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_users_endpoint(limit: int = Query(default=20, ge=1, le=200), offset: int = Query(default=0, ge=0), search: str | None = None, is_active: bool | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rows, total = await list_users_admin(db, limit=limit, offset=offset, search=search, is_active=is_active)
     return UserAdminListResponse(items=[UserAdminResponse.model_validate(r) for r in rows], total=total, limit=limit, offset=offset)
 
@@ -130,7 +130,7 @@ async def terminate_user_session_endpoint(user_id: uuid.UUID, session_id: uuid.U
 
 
 @router.get("/{user_id}/activity")
-async def get_user_activity_endpoint(user_id: uuid.UUID, limit: int = 50, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def get_user_activity_endpoint(user_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Real, deliberate: two DIFFERENT real things could be meant by "a
     user's activity" -- actions that USER performed (AuditLog.user_id),
     or admin actions performed ON them (resource_type="user",

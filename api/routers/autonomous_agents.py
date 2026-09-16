@@ -7,7 +7,7 @@ already applied for Parties 19-22."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -29,7 +29,7 @@ router = APIRouter(tags=["autonomous-agents"])
 
 @router.get("/organizations/{org_id}/autonomous-agents", response_model=AutonomousAgentListResponse)
 async def list_autonomous_agents_endpoint(
-    org_id: uuid.UUID, limit: int = 50, offset: int = 0,
+    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
 ):
     return await autonomous_agents_service.list_autonomous_agents(db, org_id, limit, offset)

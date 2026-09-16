@@ -20,11 +20,11 @@ from api.models.organization import OrganizationMember
 from api.models.organization_usage import OrganizationUsageDetail
 from api.schemas.usage import UsageDayEntry, UsageDetailEntry, UsageDetailListResponse, UsageResponse
 from api.security.organizations import require_org_admin
+from api.utils import MAX_PAGE_SIZE
 from api.security.usage import get_usage, get_usage_summary
 
 router = APIRouter(tags=["usage"])
 
-_MAX_PAGE_SIZE = 200
 
 
 @router.get("/organizations/{org_id}/usage", response_model=UsageResponse)
@@ -57,7 +57,7 @@ async def get_organization_usage(
 async def get_organization_usage_details(
     org_id: uuid.UUID, metric: str | None = None, user_id: uuid.UUID | None = None,
     start_date: dt.date | None = None, end_date: dt.date | None = None,
-    limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     """

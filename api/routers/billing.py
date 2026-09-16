@@ -27,7 +27,7 @@ read-only, for the same reason GET /billing/plans is public.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
@@ -157,7 +157,7 @@ async def get_credits_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = 
 
 
 @org_router.get("/credits/transactions", response_model=list[CreditTransactionResponse])
-async def list_credit_transactions_endpoint(org_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_credit_transactions_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await billing_credits.list_credit_transactions(db, org_id, limit, offset)
 
 
@@ -183,7 +183,7 @@ async def purchase_credits_endpoint(org_id: uuid.UUID, body: PurchaseCreditsRequ
 # -- 12.4 invoices -------------------------------------------------------------
 
 @org_router.get("/invoices", response_model=list[InvoiceResponse])
-async def list_invoices_endpoint(org_id: uuid.UUID, status_filter: InvoiceStatus | None = None, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_invoices_endpoint(org_id: uuid.UUID, status_filter: InvoiceStatus | None = None, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await billing_invoices.list_invoices(db, org_id, status_filter=status_filter, limit=limit, offset=offset)
 
 

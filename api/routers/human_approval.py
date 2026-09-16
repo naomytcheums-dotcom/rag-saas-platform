@@ -38,14 +38,31 @@ async def get_organization_pending_approvals(
     return await list_pending_approvals_for_organization(db, org_id)
 
 
+async def _get_approval_scoped_to_org(db: AsyncSession, org_id: uuid.UUID, approval_id: uuid.UUID) -> HumanApproval:
+    """Real security fix (audit finding, 2026-09-16): approve_approval/
+    reject_approval used to call approve_human_request/reject_human_request
+    -- which MUTATE the row -- before checking it belongs to org_id, only
+    404-ing afterward. Not exploitable today (the mutation lives inside
+    this request's own open transaction, rolled back on the 404 raise
+    before any commit), but a real trap: any admin of ANY organization
+    could pass another org's approval_id and have it silently approved/
+    rejected in-session, with only rollback TIMING -- not an authorization
+    check -- preventing it from persisting or being observed elsewhere.
+    Every other single-resource route in this codebase loads, checks,
+    THEN acts; this restores that order here too."""
+    approval = await db.get(HumanApproval, approval_id)
+    if approval is None or approval.organization_id != org_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return approval
+
+
 @router.post("/organizations/{org_id}/approvals/{approval_id}/approve", response_model=HumanApprovalResponse)
 async def approve_approval(
     org_id: uuid.UUID, approval_id: uuid.UUID, payload: HumanApprovalDecisionRequest,
     caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
+    await _get_approval_scoped_to_org(db, org_id, approval_id)
     approval = await approve_human_request(db, approval_id, caller.user_id, payload.comment)
-    if approval is None or approval.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()
     return approval
 
@@ -55,9 +72,8 @@ async def reject_approval(
     org_id: uuid.UUID, approval_id: uuid.UUID, payload: HumanApprovalDecisionRequest,
     caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
+    await _get_approval_scoped_to_org(db, org_id, approval_id)
     approval = await reject_human_request(db, approval_id, caller.user_id, payload.comment)
-    if approval is None or approval.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()
     return approval
 

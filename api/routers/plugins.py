@@ -15,7 +15,7 @@ api/routers/sales.py's own platform-level `router`.
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_superadmin
@@ -55,7 +55,7 @@ async def list_plugin_permissions_endpoint():
 @marketplace_router.get("/plugins", response_model=list[PluginResponse])
 async def list_marketplace_plugins_endpoint(
     search: str | None = None, category: PluginCategory | None = None, min_rating: float | None = None,
-    pricing: PluginPricing | None = None, sort_by: str = "date", limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db),
+    pricing: PluginPricing | None = None, sort_by: str = "date", limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), db: AsyncSession = Depends(get_db),
 ):
     return await plugins.list_marketplace_plugins(db, search=search, category=category, min_rating=min_rating, pricing=pricing, sort_by=sort_by, limit=limit, offset=offset)
 
@@ -231,7 +231,7 @@ async def execute_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body:
 
 
 @org_router.get("/{plugin_id}/executions", response_model=list[PluginExecutionResponse])
-async def list_plugin_executions_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, limit: int = 50, offset: int = 0, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_plugin_executions_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await plugins.get_plugin_executions(db, org_id, plugin_id, limit=limit, offset=offset)
 
 

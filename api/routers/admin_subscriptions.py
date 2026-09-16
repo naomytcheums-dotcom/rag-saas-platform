@@ -4,7 +4,7 @@ honest scope: real CRUD and real math, zero real payment processor."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
 
 
 @router.get("/subscriptions", response_model=list[SubscriptionResponse])
-async def list_subscriptions_endpoint(limit: int = 20, offset: int = 0, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_subscriptions_endpoint(limit: int = Query(default=20, ge=1, le=200), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return [SubscriptionResponse.model_validate(s) for s in await list_subscriptions(db, limit, offset)]
 
 

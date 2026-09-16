@@ -26,7 +26,7 @@ above, so this one earns its own real, separate routes."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,7 +68,7 @@ async def upload_media_endpoint(
 
 @router.get("/organizations/{org_id}/media", response_model=MediaAssetListResponse)
 async def list_media_endpoint(
-    org_id: uuid.UUID, media_type: str | None = None, limit: int = 50, offset: int = 0,
+    org_id: uuid.UUID, media_type: str | None = None, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
 ):
     return await media_service.list_media(db, org_id, media_type, limit, offset)

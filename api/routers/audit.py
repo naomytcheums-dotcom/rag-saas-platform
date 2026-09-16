@@ -32,11 +32,11 @@ from api.schemas.audit import (
     PurgeResultResponse,
 )
 from api.security.audit_log import verify_audit_log_integrity
+from api.utils import MAX_PAGE_SIZE
 from api.security.organizations import require_org_admin as _require_org_admin_for_audit
 
 router = APIRouter(tags=["audit"])
 
-_MAX_PAGE_SIZE = 200
 
 
 def _to_entry(row: AuditLog) -> AuditLogEntry:
@@ -75,7 +75,7 @@ async def get_my_audit_logs(
     action: str | None = None,
     since: dt.datetime | None = None,
     until: dt.datetime | None = None,
-    limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -96,7 +96,7 @@ async def get_all_audit_logs(
     action: str | None = None,
     since: dt.datetime | None = None,
     until: dt.datetime | None = None,
-    limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -109,7 +109,7 @@ async def get_all_audit_logs(
 @router.get("/organizations/{org_id}/audit-logs", response_model=AuditLogListResponse)
 async def get_organization_audit_logs(
     org_id: uuid.UUID, action: str | None = None, since: dt.datetime | None = None, until: dt.datetime | None = None,
-    limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _caller=Depends(_require_org_admin_for_audit), db: AsyncSession = Depends(get_db),
 ):
     """Partie 10.2/10.6 -- an org-scoped view for the Security screen,
@@ -246,7 +246,7 @@ async def export_audit_logs_endpoint(
 
 @router.get("/audit/user/{user_id}", response_model=AuditLogListResponse)
 async def get_user_audit_logs_endpoint(
-    user_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    user_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
 ):
     return await _list_audit_logs(db, user_id=user_id, action=None, since=None, until=None, limit=limit, offset=offset)
@@ -254,7 +254,7 @@ async def get_user_audit_logs_endpoint(
 
 @router.get("/audit/resource/{resource_type}/{resource_id}", response_model=AuditLogListResponse)
 async def get_resource_audit_logs_endpoint(
-    resource_type: str, resource_id: str, limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    resource_type: str, resource_id: str, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
 ):
     """Partie 10.2 -- only finds rows logged AFTER the resource_type/

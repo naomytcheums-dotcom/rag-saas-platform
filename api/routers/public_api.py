@@ -14,7 +14,7 @@ would be real but permanently unreachable.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
@@ -318,7 +318,7 @@ async def public_kb_creation_endpoint(
 
 @router.get("/v1/conversations", response_model=ConversationListResponse)
 async def public_conversations_list_endpoint(
-    limit: int = 20, offset: int = 0, agent_id: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0), agent_id: str | None = None,
     key_row: OrganizationAPIKey = Depends(require_public_api_scope("chat:read")), db: AsyncSession = Depends(get_db),
 ):
     return await handle_public_conversations_list(db, key_row.organization_id, agent_id, limit, offset)
@@ -391,7 +391,8 @@ async def public_embed_endpoint(payload: EmbedRequest, _key_row: OrganizationAPI
 
 @router.get("/v1/documents")
 async def public_documents_list_endpoint(
-    limit: int = 20, offset: int = 0, key_row: OrganizationAPIKey = Depends(require_public_api_scope("documents:read")),
+    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    key_row: OrganizationAPIKey = Depends(require_public_api_scope("documents:read")),
     db: AsyncSession = Depends(get_db),
 ):
     return await handle_public_documents_list(db, key_row.organization_id, limit, offset)
@@ -399,7 +400,8 @@ async def public_documents_list_endpoint(
 
 @router.get("/v1/agents")
 async def public_agents_list_endpoint(
-    limit: int = 20, offset: int = 0, key_row: OrganizationAPIKey = Depends(require_public_api_scope("agents:read")),
+    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    key_row: OrganizationAPIKey = Depends(require_public_api_scope("agents:read")),
     db: AsyncSession = Depends(get_db),
 ):
     return await handle_public_agents_list(db, key_row.organization_id, limit, offset)
@@ -407,7 +409,8 @@ async def public_agents_list_endpoint(
 
 @router.get("/v1/knowledge-bases")
 async def public_kb_list_endpoint(
-    limit: int = 20, offset: int = 0, key_row: OrganizationAPIKey = Depends(require_public_api_scope("kb:read")),
+    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    key_row: OrganizationAPIKey = Depends(require_public_api_scope("kb:read")),
     db: AsyncSession = Depends(get_db),
 ):
     return await handle_public_kb_list(db, key_row.organization_id, limit, offset)

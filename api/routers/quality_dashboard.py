@@ -19,13 +19,13 @@ from api.schemas.quality_dashboard import (
     QualityDashboardResponse, QualityResponseListResponse, QualityTrendsResponse,
 )
 from api.security.organizations import require_org_admin
+from api.utils import MAX_PAGE_SIZE
 from api.services.quality_dashboard import (
     export_quality_metrics, get_quality_dashboard, get_quality_responses, get_quality_trends,
 )
 
 router = APIRouter(tags=["quality-dashboard"])
 
-_MAX_PAGE_SIZE = 200
 
 
 @router.get("/organizations/{org_id}/quality/dashboard", response_model=QualityDashboardResponse)
@@ -60,7 +60,7 @@ async def get_quality_trends_endpoint(
 
 @router.get("/organizations/{org_id}/quality/responses", response_model=QualityResponseListResponse)
 async def get_quality_responses_endpoint(
-    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     return await get_quality_responses(db, org_id, limit=limit, offset=offset)

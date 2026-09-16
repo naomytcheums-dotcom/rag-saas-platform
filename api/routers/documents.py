@@ -29,7 +29,7 @@ Member can't delete someone ELSE's document.
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1014,7 +1014,7 @@ async def reindex_organization_documents_route(
 
 @router.get("/documents/{document_id}/history", response_model=list[DocumentAuditLogResponse])
 async def get_document_history_route(
-    document_id: uuid.UUID, limit: int = 50, offset: int = 0,
+    document_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Item 3's own literal route -- real read, same deliberate
