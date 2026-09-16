@@ -74,18 +74,36 @@ async def test_purge_logs_requires_superadmin(client, db_session, register_paylo
 
 async def test_system_log_handler_writes_real_rows(db_session):
     """Real, direct test of the logging.Handler itself (not via the
-    HTTP layer) -- confirms a real log record becomes a real SystemLog row."""
+    HTTP layer) -- confirms a real log record becomes a real SystemLog row.
+
+    Real bug fixed here (CI-orphan audit, 2026-09-16): this test writes
+    to the REAL, SHARED DATABASE_URL (the handler's own sync engine, not
+    the test's isolated SQLite session -- see below), using the exact
+    same fixed message every run. This test had never run in CI before
+    (see docs/audit/COHERENCE.md), so a first real, failed run somewhere
+    left a duplicate row behind uncleaned -- `scalar_one_or_none()`
+    threw `MultipleResultsFound` before ever reaching the cleanup at the
+    bottom, so every subsequent run failed the SAME way without ever
+    being able to self-heal (the failure itself blocked the only cleanup
+    path). Fixed two ways: a UUID-suffixed message so concurrent/repeat
+    runs can never collide with each other going forward, and cleaning
+    up ALL matching rows (not `scalar_one_or_none`'s single-row
+    assumption) so today's pre-existing duplicate mess in the shared DB
+    is wiped by whichever run finds it first, rather than requiring a
+    manual fix."""
     import logging
+    import uuid
 
     from sqlalchemy import select
 
     from api.models.admin import SystemLog
     from api.security.system_log_handler import SystemLogHandler
 
+    message = f"a real warning captured by the real handler ({uuid.uuid4()})"
     handler = SystemLogHandler()
     logger = logging.getLogger("test.system_log_handler")
     logger.addHandler(handler)
-    logger.warning("a real warning captured by the real handler")
+    logger.warning(message)
     logger.removeHandler(handler)
 
     # The handler uses its own sync engine against the real DATABASE_URL,
@@ -97,8 +115,9 @@ async def test_system_log_handler_writes_real_rows(db_session):
 
     sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""))
     with SyncSession(sync_engine) as sync_db:
-        row = sync_db.execute(select(SystemLog).where(SystemLog.message == "a real warning captured by the real handler")).scalar_one_or_none()
-        assert row is not None
-        assert row.level == "WARNING"
-        sync_db.delete(row)
+        rows = sync_db.scalars(select(SystemLog).where(SystemLog.message == message)).all()
+        assert len(rows) == 1
+        assert rows[0].level == "WARNING"
+        for row in rows:
+            sync_db.delete(row)
         sync_db.commit()
