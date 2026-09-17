@@ -11,6 +11,7 @@ from api.models.organization import OrganizationMember
 from api.schemas.notifications import SendSmsRequest, SmsMessageResponse
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import twilio_sms
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(prefix="/organizations/{org_id}/notifications", tags=["Notifications"])
 
@@ -36,7 +37,7 @@ async def send_whatsapp_endpoint(org_id: uuid.UUID, body: SendSmsRequest, caller
 
 
 @router.get("/sms", response_model=list[SmsMessageResponse])
-async def list_sms_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_sms_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await twilio_sms.list_sms_messages(db, org_id, limit, offset)
 
 

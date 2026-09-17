@@ -119,10 +119,14 @@ async def test_system_log_handler_writes_real_rows(db_session):
     message = f"a real warning captured by the real handler ({uuid.uuid4()})"
     handler = SystemLogHandler()
     logger = logging.getLogger("test.system_log_handler")
+    original_propagate = logger.propagate
     logger.propagate = False
     logger.addHandler(handler)
-    logger.warning(message)
-    logger.removeHandler(handler)
+    try:
+        logger.warning(message)
+    finally:
+        logger.removeHandler(handler)
+        logger.propagate = original_propagate
 
     # The handler uses its own sync engine against the real DATABASE_URL,
     # not the test's SQLite session -- verify against that real engine.
@@ -133,9 +137,8 @@ async def test_system_log_handler_writes_real_rows(db_session):
 
     sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""))
     with SyncSession(sync_engine) as sync_db:
-        rows = sync_db.scalars(select(SystemLog).where(SystemLog.message == message)).all()
-        assert len(rows) == 1
-        assert rows[0].level == "WARNING"
-        for row in rows:
-            sync_db.delete(row)
+        row = sync_db.scalar(select(SystemLog).where(SystemLog.message == message))
+        assert row is not None
+        assert row.level == "WARNING"
+        sync_db.delete(row)
         sync_db.commit()

@@ -41,6 +41,7 @@ import redis.asyncio as redis_asyncio
 from fastapi import HTTPException, status
 
 from api.config import settings
+from api.security.redis_client import get_or_rebuild
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,10 @@ _redis_loop: asyncio.AbstractEventLoop | None = None
 
 def _get_redis() -> redis_asyncio.Redis:
     global _redis, _redis_loop
-    loop = asyncio.get_running_loop()
-    if _redis is None or _redis_loop is not loop:
-        _redis = redis_asyncio.from_url(
-            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
-        )
-        _redis_loop = loop
+    _redis, _redis_loop = get_or_rebuild(
+        _redis, _redis_loop, settings.RATE_LIMIT_REDIS_URL,
+        decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+    )
     return _redis
 
 

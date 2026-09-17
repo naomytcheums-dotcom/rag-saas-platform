@@ -37,6 +37,7 @@ from webauthn.helpers.structs import (
 
 from api.config import settings
 from api.models.webauthn_credential import WebAuthnCredential
+from api.security.redis_client import get_or_rebuild
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,10 @@ logger = logging.getLogger(__name__)
 #
 # Same loop-rebinding fix as api/security/rate_limit.py's _get_redis()
 # too -- see that module's comment for the full "Event loop is closed"
-# incident. This module has its own separate client, so it needs its own
-# separate fix rather than reusing rate_limit.py's.
+# incident, and api/security/redis_client.py for the shared rebuild
+# logic. This module has its own separate client (a dedicated global,
+# not rate_limit.py's), so it needs its own separate accessor -- but
+# the actual rebuild-on-loop-mismatch logic is shared, not copy-pasted.
 _redis: redis_asyncio.Redis | None = None
 _redis_loop: asyncio.AbstractEventLoop | None = None
 _CHALLENGE_TTL_SECONDS = 300  # matches MFA_TOKEN_EXPIRE_MINUTES's ballpark (settings.py) -- long enough for a real ceremony, short enough to bound a replay window
@@ -54,12 +57,10 @@ _CHALLENGE_TTL_SECONDS = 300  # matches MFA_TOKEN_EXPIRE_MINUTES's ballpark (set
 
 def _get_redis() -> redis_asyncio.Redis:
     global _redis, _redis_loop
-    loop = asyncio.get_running_loop()
-    if _redis is None or _redis_loop is not loop:
-        _redis = redis_asyncio.from_url(
-            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
-        )
-        _redis_loop = loop
+    _redis, _redis_loop = get_or_rebuild(
+        _redis, _redis_loop, settings.RATE_LIMIT_REDIS_URL,
+        decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+    )
     return _redis
 
 

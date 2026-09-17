@@ -44,6 +44,7 @@ from api.security.organizations import require_org_member
 from api.services import media as media_service
 from api.services.document_storage import stream_document_file
 from api.tasks.media import schedule_media_processing
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(tags=["media"])
 
@@ -68,7 +69,7 @@ async def upload_media_endpoint(
 
 @router.get("/organizations/{org_id}/media", response_model=MediaAssetListResponse)
 async def list_media_endpoint(
-    org_id: uuid.UUID, media_type: str | None = None, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
+    org_id: uuid.UUID, media_type: str | None = None, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
 ):
     return await media_service.list_media(db, org_id, media_type, limit, offset)

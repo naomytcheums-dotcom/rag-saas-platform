@@ -34,7 +34,7 @@ from api.models.user import User
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_admin
 from api.security.public_api_auth import require_key_org_admin, require_public_api_scope
-from api.utils import client_ip
+from api.utils import PUBLIC_MAX_PAGE_SIZE, client_ip
 from api.services.organization_api_keys import (
     generate_organization_api_key, get_available_scopes, get_expiring_keys,
     get_key_rotation_history, get_quota_status, get_rate_limit_status, list_api_keys, OrganizationAPIKeyError,
@@ -63,9 +63,13 @@ async def create_organization_api_key_endpoint(
     org_id: uuid.UUID, payload: OrganizationAPIKeyCreateRequest, request: Request,
     caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
-    row, plaintext_key = await generate_organization_api_key(
-        db, org_id, payload.name, payload.scopes, expires_at=payload.expires_at, created_by=caller.user_id,
-    )
+    try:
+        row, plaintext_key = await generate_organization_api_key(
+            db, org_id, payload.name, payload.scopes, expires_at=payload.expires_at, created_by=caller.user_id,
+        )
+    except OrganizationAPIKeyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await log_audit_action(
         db, user_id=caller.user_id, action=AuditAction.API_KEY_CREATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
         success=True, organization_id=org_id, resource_type="api_key", resource_id=str(row.id), metadata={"name": row.name},
@@ -318,7 +322,7 @@ async def public_kb_creation_endpoint(
 
 @router.get("/v1/conversations", response_model=ConversationListResponse)
 async def public_conversations_list_endpoint(
-    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0), agent_id: str | None = None,
+    limit: int = Query(default=20, ge=1, le=PUBLIC_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), agent_id: str | None = None,
     key_row: OrganizationAPIKey = Depends(require_public_api_scope("chat:read")), db: AsyncSession = Depends(get_db),
 ):
     return await handle_public_conversations_list(db, key_row.organization_id, agent_id, limit, offset)
@@ -391,7 +395,7 @@ async def public_embed_endpoint(payload: EmbedRequest, _key_row: OrganizationAPI
 
 @router.get("/v1/documents")
 async def public_documents_list_endpoint(
-    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=PUBLIC_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     key_row: OrganizationAPIKey = Depends(require_public_api_scope("documents:read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -400,7 +404,7 @@ async def public_documents_list_endpoint(
 
 @router.get("/v1/agents")
 async def public_agents_list_endpoint(
-    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=PUBLIC_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     key_row: OrganizationAPIKey = Depends(require_public_api_scope("agents:read")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -409,7 +413,7 @@ async def public_agents_list_endpoint(
 
 @router.get("/v1/knowledge-bases")
 async def public_kb_list_endpoint(
-    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=PUBLIC_MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     key_row: OrganizationAPIKey = Depends(require_public_api_scope("kb:read")),
     db: AsyncSession = Depends(get_db),
 ):

@@ -163,6 +163,7 @@ from api.models.organization import OrganizationMember
 from api.models.workspace import Workspace
 from api.security.document_audit import ACTION_CREATED, ACTION_DELETED, ACTION_REINDEXED, log_document_action
 from api.security.organization_settings import get_org_settings
+from api.security.redis_client import get_or_rebuild
 from api.services.document_extraction import (
     CSV_CONTENT_TYPE,
     DOCX_CONTENT_TYPE,
@@ -304,23 +305,23 @@ _MAX_ENRICHMENT_INPUT_CHARS = 50_000
 #
 # Same loop-rebinding fix as api/security/rate_limit.py's _get_redis()
 # too -- see that module's comment for the full "Event loop is closed"
-# incident, and it matters MORE here than anywhere else: this module is
-# the one actually reached from api/tasks/document_processing.py's
-# asyncio.run() bridge, i.e. it's a real module-level client that gets
-# used from a genuinely different, throwaway event loop on every task
-# run, not just a theoretical risk surfacing only under pytest.
+# incident, and api/security/redis_client.py for the shared rebuild
+# logic (a plain function, not copy-pasted here) -- it matters MORE in
+# this module than anywhere else: this is the one actually reached from
+# api/tasks/document_processing.py's asyncio.run() bridge, i.e. it's a
+# real module-level client that gets used from a genuinely different,
+# throwaway event loop on every task run, not just a theoretical risk
+# surfacing only under pytest.
 _progress_redis: redis_asyncio.Redis | None = None
 _progress_redis_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _get_progress_redis() -> redis_asyncio.Redis:
     global _progress_redis, _progress_redis_loop
-    loop = asyncio.get_running_loop()
-    if _progress_redis is None or _progress_redis_loop is not loop:
-        _progress_redis = redis_asyncio.from_url(
-            settings.RATE_LIMIT_REDIS_URL, decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
-        )
-        _progress_redis_loop = loop
+    _progress_redis, _progress_redis_loop = get_or_rebuild(
+        _progress_redis, _progress_redis_loop, settings.RATE_LIMIT_REDIS_URL,
+        decode_responses=True, socket_connect_timeout=3.0, socket_timeout=1.0,
+    )
     return _progress_redis
 
 # A model is loaded once per worker process and reused -- loading one

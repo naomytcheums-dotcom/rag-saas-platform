@@ -33,12 +33,13 @@ from api.services.admin_subscriptions import (
     update_plan,
     update_subscription,
 )
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
 
 
 @router.get("/subscriptions", response_model=list[SubscriptionResponse])
-async def list_subscriptions_endpoint(limit: int = Query(default=20, ge=1, le=200), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_subscriptions_endpoint(limit: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return [SubscriptionResponse.model_validate(s) for s in await list_subscriptions(db, limit, offset)]
 
 

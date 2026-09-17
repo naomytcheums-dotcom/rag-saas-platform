@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_current_user, get_db, require_admin, require_superadmin
 from api.models.compliance import DataRequest, DataRequestStatus
 from api.models.user import User
+from api.utils import MAX_PAGE_SIZE
 from api.schemas.compliance import (
     ComplianceStatusResponse,
     ConsentRequest,
@@ -49,7 +50,7 @@ async def create_data_request_endpoint(payload: DataRequestCreate, current_user:
 
 
 @router.get("/data-requests", response_model=list[DataRequestResponse])
-async def list_data_requests_endpoint(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_data_requests_endpoint(limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return [DataRequestResponse.model_validate(r) for r in await list_data_requests(db, limit=limit, offset=offset)]
 
 

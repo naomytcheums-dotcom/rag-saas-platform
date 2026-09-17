@@ -12,6 +12,7 @@ raises a SECOND error).
 """
 
 import logging
+import time
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SyncSession
@@ -22,6 +23,23 @@ from api.security.logging_correlation import get_request_id, mask_sensitive
 
 _sync_engine = None
 
+# Root-cause note (2026-09-16): this handler is attached to the ROOT
+# logger (see install_system_log_handler below), and Python loggers
+# propagate to their ancestors by default. That means ANY child logger
+# that emits WARNING+ without explicitly setting `propagate = False`
+# reaches this handler once, AND may reach it a second time if that
+# same record also propagates through another handler attached higher
+# up that itself forwards here (the concrete case that bit
+# tests/test_admin_dashboard.py: a test attaching its own handler to a
+# named logger, on a process where this root handler was already
+# installed by an earlier test's app lifespan). Rather than requiring
+# every future caller to remember `propagate = False`, this handler
+# dedupes identical records emitted within a short window -- the
+# general fix, at the point that actually writes the row, instead of a
+# special case at every logger that might double-propagate into it.
+_DEDUPE_WINDOW_SECONDS = 2.0
+_recent_records: dict[tuple, float] = {}
+
 
 def _get_sync_engine():
     global _sync_engine
@@ -31,7 +49,27 @@ def _get_sync_engine():
 
 
 class SystemLogHandler(logging.Handler):
+    def _is_duplicate(self, record: logging.LogRecord) -> bool:
+        """True if THIS EXACT record object already reached another
+        SystemLogHandler instance in the same propagation chain --
+        logging delivers one shared LogRecord to every handler a
+        record propagates through, so `id(record)` is a precise (not
+        content-guessed) key for "already written," scoped to a short
+        window so the id-reuse-after-GC edge case can't wrongly
+        dedupe an unrelated, later record."""
+        now = time.monotonic()
+        for seen_id, seen_at in list(_recent_records.items()):
+            if now - seen_at > _DEDUPE_WINDOW_SECONDS:
+                del _recent_records[seen_id]
+        key = id(record)
+        if key in _recent_records:
+            return True
+        _recent_records[key] = now
+        return False
+
     def emit(self, record: logging.LogRecord) -> None:
+        if self._is_duplicate(record):
+            return
         try:
             with SyncSession(_get_sync_engine()) as db:
                 db.add(SystemLog(

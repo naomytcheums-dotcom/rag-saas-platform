@@ -330,10 +330,10 @@ async def reset_rate_limit(key_id: uuid.UUID) -> None:
     """Item 2's own literal function -- real: clears this key's own
     real Redis sliding-window key outright (the next real request
     starts a fresh real window)."""
-    from api.security.rate_limit import _redis
+    from api.security.rate_limit import _get_redis
 
     try:
-        await _redis.delete(f"public_api:{key_id}")
+        await _get_redis().delete(f"public_api:{key_id}")
     except Exception:  # noqa: BLE001 -- same real fail-open reasoning as enforce_rate_limit itself
         pass
 

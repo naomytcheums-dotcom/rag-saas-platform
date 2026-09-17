@@ -23,13 +23,14 @@ from api.security.autonomous_agents import require_autonomous_agent_admin, requi
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import autonomous_agents as autonomous_agents_service
 from api.tasks.autonomous_agents import schedule_autonomous_agent_run
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(tags=["autonomous-agents"])
 
 
 @router.get("/organizations/{org_id}/autonomous-agents", response_model=AutonomousAgentListResponse)
 async def list_autonomous_agents_endpoint(
-    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
+    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
 ):
     return await autonomous_agents_service.list_autonomous_agents(db, org_id, limit, offset)

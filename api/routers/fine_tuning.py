@@ -34,6 +34,7 @@ from api.security.organizations import require_org_admin, require_org_member
 from api.services import fine_tuning as fine_tuning_service
 from api.services.fine_tuning_storage import DatasetValidationError
 from api.tasks.fine_tuning import schedule_fine_tuning_job_submission
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(tags=["fine-tuning"])
 
@@ -41,7 +42,7 @@ router = APIRouter(tags=["fine-tuning"])
 # --------------------------------------------------------------- datasets
 
 @router.get("/fine-tuning/datasets", response_model=FineTuningDatasetListResponse)
-async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_datasets(db, org_id, limit, offset)
 
 
@@ -86,7 +87,7 @@ async def validate_dataset_endpoint(dataset_ctx: tuple[FineTuningDataset, Organi
 # --------------------------------------------------------------- jobs
 
 @router.get("/fine-tuning/jobs", response_model=FineTuningJobListResponse)
-async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_jobs(db, org_id, limit, offset)
 
 
@@ -131,7 +132,7 @@ async def get_job_metrics_endpoint(job_ctx: tuple[FineTuningJob, OrganizationMem
 # --------------------------------------------------------------- models
 
 @router.get("/fine-tuning/models", response_model=FineTunedModelListResponse)
-async def list_models_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_models_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_models(db, org_id, limit, offset)
 
 

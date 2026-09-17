@@ -108,9 +108,7 @@ async def check_and_alert_on_failed_login_spike(db: AsyncSession, ip: str | None
         # for the email channel. Pre-escaping here would double-escape
         # it for email while breaking the plain-text webhook rendering.
         message = f"{threshold} failed login attempts from IP {ip} in the last {settings.SECURITY_ALERT_WINDOW_MINUTES} minutes."
-        await _send_webhook_alert(message)
-        await _send_email_alert(message)
+        await asyncio.gather(_send_webhook_alert(message), _send_email_alert(message))
     if email_count == threshold:
         message = f"{threshold} failed login attempts targeting {email} in the last {settings.SECURITY_ALERT_WINDOW_MINUTES} minutes."
-        await _send_webhook_alert(message)
-        await _send_email_alert(message)
+        await asyncio.gather(_send_webhook_alert(message), _send_email_alert(message))

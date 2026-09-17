@@ -22,6 +22,7 @@ from api.security.datadog_llmobs import llm_observability_status
 from api.security.loki_handler import loki_status
 from api.security.tracing import tracing_status
 from api.services import alerting, app_metrics
+from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(tags=["Observability"])
 
@@ -131,7 +132,7 @@ async def test_alert_rule_endpoint(rule_id: uuid.UUID, _admin: User = Depends(re
 
 
 @router.get("/alerting/history", response_model=list[AlertHistoryResponse])
-async def get_alert_history_endpoint(limit: int = Query(default=50, ge=1, le=200), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def get_alert_history_endpoint(limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     return await alerting.get_alert_history(db, organization_id=None, limit=limit)
 
 

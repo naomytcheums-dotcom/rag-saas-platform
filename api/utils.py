@@ -12,6 +12,11 @@ from fastapi import Request
 # could silently drift from the others. One shared constant instead.
 MAX_PAGE_SIZE = 200
 
+# The public partner-facing API (api/routers/public_api.py) uses a
+# stricter ceiling than internal/admin endpoints, since it's exposed to
+# third parties rather than just this app's own frontend.
+PUBLIC_MAX_PAGE_SIZE = 100
+
 
 def client_ip(request: Request) -> str | None:
     """
