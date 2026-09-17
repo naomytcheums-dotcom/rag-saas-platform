@@ -21,6 +21,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/dashboard/settings/api-keys", label: "Clés API" },
       { href: "/dashboard/settings/webhooks", label: "Webhooks" },
+      { href: "/dashboard/settings/llm-config", label: "Configuration IA (BYOK)" },
       { href: "/dashboard/api-docs", label: "Documentation API" },
     ],
   },

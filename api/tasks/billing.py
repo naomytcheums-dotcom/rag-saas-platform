@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
-from api.models.billing import Credit, Invoice, InvoiceLine, InvoiceStatus
+from api.models.billing import Credit, CreditTransaction, CreditTransactionType, Invoice, InvoiceLine, InvoiceStatus
 from api.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -110,6 +110,52 @@ def send_invoice_reminders() -> int:
 
     logger.info("send_invoice_reminders: %d reminder(s) sent", sent)
     return sent
+
+
+@celery_app.task(name="api.tasks.billing.grant_monthly_plan_credits")
+def grant_monthly_plan_credits() -> int:
+    """AI Pack -- the recurring counterpart to
+    billing_credits.get_or_create_credit's one-time signup grant: every
+    org with an active subscription on a plan that includes
+    `monthly_credits_included` gets that many credits added, once per
+    real calendar month. Idempotent the same way generate_monthly_invoices
+    above already is -- a `reason` tag naming this exact month lets a
+    re-run (a retried Celery task, an accidental second beat trigger)
+    find its own prior grant and skip it, rather than double-granting."""
+    this_month = dt.date.today().strftime("%Y-%m")
+    reason = f"Monthly plan allotment ({this_month})"
+    granted = 0
+
+    with SyncSession(_sync_engine) as db:
+        subs = db.scalars(select(Subscription).where(Subscription.status == SubscriptionStatus.active)).all()
+        for sub in subs:
+            plan = db.get(Plan, sub.plan_id)
+            if not plan or not plan.monthly_credits_included:
+                continue
+
+            already_granted = db.scalar(
+                select(CreditTransaction.id).where(
+                    CreditTransaction.organization_id == sub.organization_id, CreditTransaction.reason == reason,
+                )
+            )
+            if already_granted is not None:
+                continue
+
+            credit = db.scalar(select(Credit).where(Credit.organization_id == sub.organization_id))
+            if credit is None:
+                credit = Credit(organization_id=sub.organization_id, balance=0)
+                db.add(credit)
+                db.flush()
+            credit.balance += plan.monthly_credits_included
+            db.add(CreditTransaction(
+                organization_id=sub.organization_id, type=CreditTransactionType.grant,
+                amount=plan.monthly_credits_included, balance_after=credit.balance, reason=reason,
+            ))
+            granted += 1
+        db.commit()
+
+    logger.info("grant_monthly_plan_credits: %d organization(s) granted their %s allotment", granted, this_month)
+    return granted
 
 
 @celery_app.task(name="api.tasks.billing.auto_refill_credits")

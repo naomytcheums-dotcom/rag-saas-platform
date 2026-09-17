@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AICreditsSection from "@/components/AICreditsSection";
 import FAQSection from "@/components/FAQSection";
 import PricingSection from "@/components/PricingSection";
 import SecuritySection from "@/components/SecuritySection";
@@ -97,6 +98,7 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <AICreditsSection />
         <SecuritySection />
         <PricingSection />
         <FAQSection />

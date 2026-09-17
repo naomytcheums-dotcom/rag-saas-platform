@@ -84,8 +84,11 @@ from api.services.agent_memory import get_all_memory
 from api.services.agent_permissions import check_agent_permission
 from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
+from api.security.credit_packs import credits_for_usage
+from api.services.billing_credits import InsufficientCreditsError, deduct_credits
+from api.services.llm_byok import resolve_org_api_key
 from api.services.llm_config import resolve_llm_config
-from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream
+from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_with_usage
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
@@ -320,11 +323,43 @@ class AgentOrchestrator:
                     except ValueError:
                         pass
                 await db.commit()
+            byok_key = None
+            if organization_id is not None:
+                async with self._db_lock:
+                    byok_key = await resolve_org_api_key(db, organization_id, llm_cfg["provider"])
+            key_override = {"api_key": byok_key} if byok_key else {}
             try:
-                result = await chat_completion(
+                completion = await chat_completion_with_usage(
                     messages, provider=llm_cfg["provider"], model=llm_cfg["model"], max_retries=max_retries,
                     temperature=llm_cfg["temperature"], top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
+                    **key_override,
                 )
+                result = completion["content"]
+                # AI Pack -- a BYOK key means this call was billed to
+                # the organization's OWN provider account, never this
+                # platform's included credits (byok_key is None the
+                # rest of the time, i.e. every non-BYOK organization,
+                # unchanged behavior). Deducted here, right after a
+                # real, successful call, using the real, provider-
+                # reported token counts (chat_completion_with_usage's
+                # own real `usage` dict) rather than an estimate --
+                # never blocks the response itself on an insufficient
+                # balance (see InsufficientCreditsError below): the
+                # real LLM cost was already incurred with the
+                # provider by this point, so failing the deduction
+                # bookkeeping must never also fail the user's answer.
+                if organization_id is not None and not byok_key and completion.get("usage"):
+                    usage = completion["usage"]
+                    cost = credits_for_usage("tokens_input", usage.get("prompt_tokens") or 0) + credits_for_usage(
+                        "tokens_output", usage.get("completion_tokens") or 0
+                    )
+                    if cost > 0:
+                        try:
+                            async with self._db_lock:
+                                await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']}")
+                                await db.commit()
+                        except InsufficientCreditsError:
+                            logger.warning("agent run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
             except asyncio.CancelledError:
                 # A real, explicit, SAME-WORKER stop_agent() call
                 # cancels this task directly and already persisted
@@ -554,12 +589,18 @@ class AgentOrchestrator:
 
         yield {"type": "thinking", "message": "Generating response"}
 
+        stream_byok_key = None
+        if organization_id is not None:
+            async with self._db_lock:
+                stream_byok_key = await resolve_org_api_key(db, organization_id, llm_cfg["provider"])
+        stream_key_override = {"api_key": stream_byok_key} if stream_byok_key else {}
+
         accumulated: list[str] = []
         deadline = time.monotonic() + timeout
         try:
             async for token in chat_completion_stream(
                 messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
-                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
+                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"], **stream_key_override,
             ):
                 accumulated.append(token)
                 yield {"type": "token", "token": token}

@@ -60,6 +60,16 @@ class Plan(Base):
     max_api_keys: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_webhooks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_requests_per_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # AI Pack -- credits (api/models/billing.py's own Credit/CreditTransaction,
+    # already real, already spent per real LLM call -- see
+    # api/services/billing_credits.py) granted to every subscribed
+    # organization once per billing cycle (api/tasks/billing.py's
+    # grant_monthly_plan_credits), on top of the one-time signup
+    # allotment (settings.CREDITS_DEFAULT_AMOUNT). NULL means "this plan
+    # grants no recurring credits" (distinct from 0, which is a real,
+    # deliberate zero-credit plan) -- Free plan's own real value is a
+    # deliberate business decision, not left to the column's own default.
+    monthly_credits_included: Mapped[int | None] = mapped_column(Integer, nullable=True)
     priority_support: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     advanced_features: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sla: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

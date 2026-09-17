@@ -36,7 +36,7 @@ class SubscriptionNotFoundError(AdminSubscriptionError):
 async def ensure_free_plan_seeded(db: AsyncSession) -> Plan:
     plan = await db.scalar(select(Plan).where(Plan.key == "free"))
     if plan is None:
-        plan = Plan(key="free", name="Free", monthly_price_cents=0, max_documents=50, max_agents=3, max_members=5)
+        plan = Plan(key="free", name="Free", monthly_price_cents=0, max_documents=50, max_agents=3, max_members=5, monthly_credits_included=1000)
         db.add(plan)
         await db.flush()
     return plan
@@ -45,9 +45,9 @@ async def ensure_free_plan_seeded(db: AsyncSession) -> Plan:
 # Partie 16 (bis) -- the real, literal SaaS tier list, seeded once
 # (idempotent, same key-existence check as ensure_free_plan_seeded).
 _DEFAULT_PLANS = [
-    {"key": "starter", "name": "Starter", "monthly_price_cents": 4900, "yearly_price_cents": 49000, "max_documents": 100, "max_agents": 3, "max_members": 5},
-    {"key": "pro", "name": "Pro", "monthly_price_cents": 19900, "yearly_price_cents": 199000, "max_documents": 1000, "max_agents": 10, "max_members": 20, "priority_support": True, "advanced_features": True},
-    {"key": "enterprise", "name": "Enterprise", "monthly_price_cents": 99900, "yearly_price_cents": 999000, "max_documents": None, "max_agents": None, "max_members": None, "priority_support": True, "advanced_features": True, "sla": True},
+    {"key": "starter", "name": "Starter", "monthly_price_cents": 4900, "yearly_price_cents": 49000, "max_documents": 100, "max_agents": 3, "max_members": 5, "monthly_credits_included": 10_000},
+    {"key": "pro", "name": "Pro", "monthly_price_cents": 19900, "yearly_price_cents": 199000, "max_documents": 1000, "max_agents": 10, "max_members": 20, "priority_support": True, "advanced_features": True, "monthly_credits_included": 50_000},
+    {"key": "enterprise", "name": "Enterprise", "monthly_price_cents": 99900, "yearly_price_cents": 999000, "max_documents": None, "max_agents": None, "max_members": None, "priority_support": True, "advanced_features": True, "sla": True, "monthly_credits_included": 200_000},
 ]
 
 

@@ -189,6 +189,12 @@ celery_app.conf.beat_schedule = {
         "task": "api.tasks.billing.generate_monthly_invoices",
         "schedule": crontab(hour=2, minute=0, day_of_month=1),
     },
+    # AI Pack -- the monthly credits_included allotment per plan, same
+    # day-1 window as invoicing above, offset so the two don't contend.
+    "grant-monthly-plan-credits": {
+        "task": "api.tasks.billing.grant_monthly_plan_credits",
+        "schedule": crontab(hour=2, minute=30, day_of_month=1),
+    },
     "mark-overdue-invoices-daily": {
         "task": "api.tasks.billing.mark_overdue_invoices",
         "schedule": crontab(hour=7, minute=45),

@@ -33,10 +33,20 @@ def get_credit_pack(pack_id: str) -> dict | None:
 
 def credits_for_usage(metric: str, amount: int) -> int:
     """How many credits `amount` units of `metric` are worth, rounded up
-    so a partial unit never under-charges."""
+    so a partial unit never under-charges.
+
+    Real bug fixed here (2026-09-17, found via the first live caller
+    this function ever had -- api/services/agent_orchestrator.py's real
+    per-LLM-call credit debit): `CREDIT_CONVERSION`'s rates are units-
+    PER-credit (its own docstring: "1 credit = 100 input tokens" means
+    100 tokens per credit), so converting a real usage amount into
+    credits is `amount / rate`, not `amount * rate` -- the previous
+    formula charged 500 input tokens as 50,000 credits instead of 5,
+    a 10,000x overcharge that nothing had caught yet because nothing
+    had ever called this function until now."""
     rate = CREDIT_CONVERSION.get(metric)
-    if rate is None:
+    if not rate:
         return 0
     import math
 
-    return math.ceil(amount * rate)
+    return math.ceil(amount / rate)

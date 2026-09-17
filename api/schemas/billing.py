@@ -23,6 +23,7 @@ class PlanResponse(BaseModel):
     max_api_keys: int | None
     max_webhooks: int | None
     max_requests_per_month: int | None
+    monthly_credits_included: int | None
     priority_support: bool
     advanced_features: bool
     sla: bool

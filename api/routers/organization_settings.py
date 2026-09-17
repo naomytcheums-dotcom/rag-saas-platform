@@ -14,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
+from api.schemas.llm_byok import LLMConfigResponse, LLMConfigSetRequest
 from api.schemas.organization_settings import OrganizationSettingsResponse, OrganizationSettingsUpdateRequest
 from api.security.organizations import require_org_admin, require_org_owner
 from api.security.organization_settings import get_org_settings, update_org_settings
+from api.services.llm_byok import UnknownLLMProviderError, delete_org_llm_config, list_org_llm_configs, set_org_llm_config
 
 router = APIRouter(tags=["organization-settings"])
 
@@ -50,3 +52,40 @@ async def update_organization_settings(
     updated = await update_org_settings(db, org_id, updates)
     await db.commit()
     return OrganizationSettingsResponse(organization_id=org_id, **updated)
+
+
+# --------------------------------------------------------- BYOK (bring your own key)
+#
+# Owner-only, same tier as PATCH /settings above and stricter than the
+# Admin+ GET -- a real, third-party LLM provider secret is more
+# sensitive than any other organization-level setting on this page.
+
+
+@router.get("/organizations/{org_id}/llm-config", response_model=list[LLMConfigResponse])
+async def list_organization_llm_config(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+):
+    return await list_org_llm_configs(db, org_id)
+
+
+@router.post("/organizations/{org_id}/llm-config", response_model=LLMConfigResponse, status_code=status.HTTP_201_CREATED)
+async def set_organization_llm_config(
+    org_id: uuid.UUID, payload: LLMConfigSetRequest,
+    caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+):
+    try:
+        config = await set_org_llm_config(db, org_id, payload.provider, payload.api_key, created_by=caller.user_id)
+    except UnknownLLMProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    return config
+
+
+@router.delete("/organizations/{org_id}/llm-config/{provider}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_organization_llm_config(
+    org_id: uuid.UUID, provider: str, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+):
+    deleted = await delete_org_llm_config(db, org_id, provider)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No BYOK key configured for this provider")
+    await db.commit()
