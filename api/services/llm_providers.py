@@ -252,7 +252,7 @@ async def chat_completion_with_usage(
     return {"content": response.choices[0].message.content, "usage": usage_dict, "model": resolved_model}
 
 
-async def chat_completion_stream(messages: list[dict], provider: str | None = None, model: str | None = None, **kwargs):
+async def chat_completion_stream(messages: list[dict], provider: str | None = None, model: str | None = None, usage_sink: dict | None = None, **kwargs):
     """Partie 8.1.1's own real function -- a real, additive, STREAMING
     sibling to `chat_completion`: same real provider resolution
     (`_provider_kwargs`), but sets litellm's own real `stream=True` and
@@ -269,14 +269,33 @@ async def chat_completion_stream(messages: list[dict], provider: str | None = No
     surfaced honestly to the real caller (`AgentOrchestrator.stream_response`)
     as a raised real exception, which sends a real `error` SSE event
     (Partie 8.1.1's own literal `send_error`) rather than a silently
-    incomplete real stream."""
+    incomplete real stream.
+
+    `usage_sink`, when given a real dict, is populated in place with
+    the real, provider-reported token usage (`{"prompt_tokens": ...,
+    "completion_tokens": ...}`) once the stream's final chunk arrives --
+    litellm's own `stream_options={"include_usage": True}` normalizes
+    this across providers (OpenAI natively, Anthropic/others via
+    litellm's own adapter), a real usage figure rather than a character-
+    count estimate. Left empty (never a fabricated 0) if the real
+    stream ends without ever carrying a usage-bearing chunk -- the
+    caller (`AgentOrchestrator.stream_response`) treats an empty sink
+    the same as "no usage available," skipping the credit debit rather
+    than guessing at a cost."""
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
     call_kwargs.update(kwargs)
     call_kwargs["stream"] = True
+    if usage_sink is not None:
+        call_kwargs["stream_options"] = {"include_usage": True}
 
     stream = await litellm.acompletion(messages=messages, **call_kwargs)
     async for chunk in stream:
+        if usage_sink is not None and getattr(chunk, "usage", None) is not None:
+            usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
+            usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
+        if not chunk.choices:
+            continue  # the real, final usage-only chunk litellm emits has no real choices to read a delta from
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta

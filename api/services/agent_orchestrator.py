@@ -596,16 +596,37 @@ class AgentOrchestrator:
         stream_key_override = {"api_key": stream_byok_key} if stream_byok_key else {}
 
         accumulated: list[str] = []
+        stream_usage: dict = {}
         deadline = time.monotonic() + timeout
         try:
             async for token in chat_completion_stream(
                 messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
-                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"], **stream_key_override,
+                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"], usage_sink=stream_usage, **stream_key_override,
             ):
                 accumulated.append(token)
                 yield {"type": "token", "token": token}
                 if time.monotonic() > deadline:
                     raise asyncio.TimeoutError("stream_response exceeded SSE_TIMEOUT")
+            # AI Pack -- same real, post-call, usage-based debit as the
+            # non-streaming path (run_agent), using the real token
+            # counts litellm's own stream_options={"include_usage": True}
+            # reports on the stream's final chunk (see
+            # chat_completion_stream's own docstring) -- never an
+            # estimate. Empty stream_usage (a provider that never sends
+            # a usage-bearing chunk) means no debit, same "never
+            # fabricate a cost" reasoning as the non-streaming path's
+            # own `completion.get("usage")` check.
+            if organization_id is not None and not stream_byok_key and stream_usage:
+                cost = credits_for_usage("tokens_input", stream_usage.get("prompt_tokens") or 0) + credits_for_usage(
+                    "tokens_output", stream_usage.get("completion_tokens") or 0
+                )
+                if cost > 0:
+                    try:
+                        async with self._db_lock:
+                            await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']} (stream)")
+                            await db.commit()
+                    except InsufficientCreditsError:
+                        logger.warning("stream_response run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
         except asyncio.TimeoutError:
             async with self._db_lock:
                 await update_run_status(db, run.id, AgentRunStatus.timeout.value, result="".join(accumulated) or None)
