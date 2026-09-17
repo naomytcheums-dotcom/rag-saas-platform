@@ -40,10 +40,14 @@ n'était appelé nulle part avant ce travail.
   réel a déjà été payé au fournisseur à ce stade ; faire échouer la
   comptabilité après coup serait pire que de la laisser en négatif.
 - Le chemin de streaming (`stream_response`) reçoit la même résolution
-  de clé BYOK (voir `docs/features/BYOK.md`) mais **pas** le débit de
-  crédits -- litellm ne renvoie pas l'usage token par token en mode
-  streaming ; l'estimer serait imprécis. Limite honnête, documentée
-  plutôt que masquée.
+  de clé BYOK (voir `docs/features/BYOK.md`) **et** débite maintenant
+  aussi les crédits (ajouté en fin de session) : `chat_completion_stream`
+  accepte un `usage_sink`, rempli avec le vrai usage renvoyé par
+  litellm (`stream_options={"include_usage": True}`, normalisé sur tous
+  les fournisseurs) sur le dernier chunk du flux -- jamais une
+  estimation au nombre de caractères. Si un fournisseur ne renvoie
+  jamais ce chunk d'usage, aucun débit n'est tenté plutôt que d'inventer
+  un coût.
 
 ### 2. Pack de crédits mensuel inclus par forfait
 
