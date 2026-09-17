@@ -43,6 +43,21 @@ COPY locales/ ./locales/
 COPY frontend/widget/ ./frontend/widget/
 
 RUN chown -R appuser:app /app
+
+# Real crash fixed here (2026-09-17, found via a real Render deploy):
+# gunicorn.conf.py's own top docstring always documented this as
+# required ("PROMETHEUS_MULTIPROC_DIR=/tmp/... gunicorn -c
+# gunicorn.conf.py ..."), but this CMD never actually set it -- the
+# multiprocess Prometheus metrics wiring (on_starting/child_exit) ran
+# with it unset from the day this Dockerfile was first written,
+# undetected until a worker actually exited during a real deploy and
+# child_exit's own os.path.join(None, ...) crashed the whole gunicorn
+# arbiter (gunicorn.conf.py's own child_exit now also guards against
+# this missing, but the real fix is to actually set the directory this
+# feature needs to work as designed).
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
+RUN mkdir -p /tmp/prometheus_multiproc && chown appuser:app /tmp/prometheus_multiproc
+
 USER appuser
 
 EXPOSE 8000

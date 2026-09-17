@@ -61,5 +61,19 @@ def child_exit(server, worker):
     app has no Gauge metrics today: it's the correct, recommended
     Gunicorn integration regardless, and costs nothing to have wired up
     before the day a Gauge metric is actually added.
+
+    Real bug fixed here (2026-09-17, found via a real Render deploy
+    crash): unlike on_starting above, this had no guard for
+    PROMETHEUS_MULTIPROC_DIR being unset -- mark_process_dead reads that
+    same env var internally and does `os.path.join(None, ...)` when
+    it's missing, a real TypeError that killed the whole arbiter the
+    moment any worker exited (including this Dockerfile's own graceful
+    restart during a deploy), not just a degraded metrics feature. Same
+    "not configured -> real no-op" guard as on_starting, not assumed
+    fixed by only setting the env var in the Dockerfile -- a future
+    deploy target that reuses this same file without setting it must
+    not crash either.
     """
+    if not os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        return
     multiprocess.mark_process_dead(worker.pid)
