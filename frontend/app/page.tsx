@@ -4,6 +4,8 @@ import FAQSection from "@/components/FAQSection";
 import PricingSection from "@/components/PricingSection";
 import SecuritySection from "@/components/SecuritySection";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 const FEATURES = [
   { title: "Chat propulsé par le RAG", description: "Des réponses ancrées dans vos propres documents, avec de vraies citations.", href: "/chat" },
   { title: "Agents IA personnalisés", description: "Configurez un prompt, des garde-fous et les outils autorisés selon vos besoins.", href: "/dashboard/agents" },
@@ -21,7 +23,7 @@ const STEPS = [
 
 const FOOTER_COLUMNS = [
   { title: "Produit", links: [{ label: "Démo de chat", href: "/chat" }, { label: "Tarifs", href: "/#pricing" }, { label: "Widget", href: "/dashboard/settings/widget" }] },
-  { title: "Développeurs", links: [{ label: "Clés API", href: "/dashboard/settings/api-keys" }, { label: "Webhooks", href: "/dashboard/settings/webhooks" }, { label: "Référence API", href: "http://localhost:8000/docs" }] },
+  { title: "Développeurs", links: [{ label: "Clés API", href: "/dashboard/settings/api-keys" }, { label: "Webhooks", href: "/dashboard/settings/webhooks" }, { label: "Référence API", href: `${API_BASE_URL}/docs` }] },
   { title: "Compte", links: [{ label: "Connexion", href: "/login" }, { label: "Inscription", href: "/register" }] },
 ];
 

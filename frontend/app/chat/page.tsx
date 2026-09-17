@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import ChatComposer from "@/components/ChatComposer";
 import ChatSidebar from "@/components/ChatSidebar";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import MessageBubble from "@/components/MessageBubble";
 import { useTranslation } from "@/lib/i18n";
 import { useMockChat } from "@/lib/mockChat";
@@ -52,7 +51,6 @@ export default function Home() {
             </button>
             <h1 className="text-base font-semibold text-foreground sm:text-lg">RAG SaaS Platform</h1>
           </div>
-          <LanguageSwitcher />
         </header>
 
         <main ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
