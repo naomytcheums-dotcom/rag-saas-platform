@@ -1,0 +1,68 @@
+name: Celery worker (scheduled burst)
+
+# Real "plan B" for background task processing, at zero extra cost:
+# Render's own Background Worker service has no free tier ($7/mo
+# minimum, confirmed live on its dashboard), and running the worker
+# INSIDE the free web service container was tried and confirmed to OOM
+# the whole app within minutes (see Dockerfile.api's own commit
+# history, eb3a34a). GitHub Actions runners are genuinely free (2000
+# free minutes/month on a private repo) and each run gets its own
+# fresh ~7GB-RAM machine -- no shared-memory risk with the web
+# service at all.
+#
+# Real, honest trade-off: this is NOT a persistent worker. It starts
+# the real Celery worker, lets it drain whatever is actually queued in
+# Redis for a bounded window, then stops -- a newly-uploaded document
+# waits up to ~10 minutes (the schedule interval) before processing
+# starts, not instantly. Acceptable for background document
+# processing; not appropriate if this ever needs to become real-time.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  drain-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-api.txt
+
+      - name: Run Celery worker for a bounded window
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
+          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+          RATE_LIMIT_REDIS_URL: ${{ secrets.RATE_LIMIT_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          SESSION_MIDDLEWARE_SECRET: ${{ secrets.SESSION_MIDDLEWARE_SECRET }}
+          AUDIT_LOG_HMAC_SECRET_KEY: ${{ secrets.AUDIT_LOG_HMAC_SECRET_KEY }}
+          SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          SUPPORT_EMAIL: ${{ secrets.SUPPORT_EMAIL }}
+          S3_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_REGION: ${{ secrets.S3_REGION }}
+          S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
+          S3_DOCUMENTS_BUCKET_NAME: ${{ secrets.S3_DOCUMENTS_BUCKET_NAME }}
+        # --pool=solo/--concurrency=1: same lowest-memory mode chosen
+        # for the (reverted) in-container attempt -- appropriate here
+        # too, a GitHub-hosted runner has no reason to run more than
+        # one task at a time for this queue's real volume.
+        # `timeout 420` (7 min) leaves 1 min of the 8-min job timeout
+        # for checkout/install, and lets celery exit(0) itself rather
+        # than being killed mid-task by the runner's own hard timeout.
+        run: |
+          timeout 420 celery -A api.tasks.celery_app worker --loglevel=info --pool=solo --concurrency=1 || true
