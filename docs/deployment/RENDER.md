@@ -55,11 +55,50 @@ dashboard pour le confirmer moi-même) :
   chaque changement de variable, mais possible si le déploiement en
   cours au moment de l'ajout a "gagné la course").
 
-**Conséquence honnête** : le rate limiting est actuellement en mode
-dégradé ("fail open", comportement voulu et documenté — voir
-`api/security/rate_limit.py`) : les endpoints d'authentification ne
-sont PAS protégés contre le brute-force en production tant que ce
-n'est pas résolu. Pas un crash, mais une vraie protection manquante.
+**Mise à jour (résolu)** : après avoir remplacé le contenu des 3
+variables directement dans Render (au lieu de les modifier par-dessus
+l'existant), `GET /health/ready` répond maintenant
+`"rate_limit_redis":"ok"`. Cause réelle probable : la valeur collée la
+première fois contenait un caractère invisible (espace, guillemet)
+introduit lors d'un copier-coller précédent — jamais confirmé avec
+certitude (pas d'accès à l'ancienne valeur, écrasée), mais le
+remplacement complet a résolu le problème de façon reproductible.
+
+### 2 bis. Vrai crash de déploiement trouvé et corrigé
+🔴→✅ **Corrigé.** `gunicorn.conf.py`'s `child_exit()` faisait planter
+tout l'arbitre Gunicorn dès qu'un worker se terminait (donc à chaque
+déploiement, lors du redémarrage) : `PROMETHEUS_MULTIPROC_DIR` n'était
+jamais défini dans `Dockerfile.api`, et `multiprocess.mark_process_dead()`
+plante avec un `TypeError` si cette variable est absente. Corrigé des
+deux côtés (`Dockerfile.api` définit vraiment la variable,
+`child_exit()` a maintenant une protection). Vérifié : déploiement
+`cf94eac` réussi en 2m56s, "Deploy succeeded — Live".
+
+### 2 ter. Vraie erreur de pool de connexions PostgreSQL trouvée et corrigée
+🔴→✅ **Corrigé.** Log réel du déploiement `cf94eac` :
+`asyncpg.exceptions.InternalServerError: (EMAXCONNSESSION) max clients
+reached in session mode - max clients are limited to pool_size: 15`.
+
+**Cause réelle** : `DATABASE_URL` pointe vers le pooler Supabase en
+**mode session** (port 5432), qui plafonne à **15 connexions clientes
+au total, tous processus confondus** — pas par application. Le moteur
+SQLAlchemy async de `api/database.py` n'avait pas de `pool_size`/
+`max_overflow` explicites, donc utilisait les valeurs par défaut de
+SQLAlchemy (5 + 10 = **15 connexions possibles à lui seul**), laissant
+zéro marge pour toute autre connexion simultanée (un serveur de dev
+local, un script d'admin ponctuel, un futur worker Celery séparé).
+
+**Corrigé** : `pool_size=3, max_overflow=2` explicites (5 connexions
+max par processus au lieu de 15), commit `cf94eac`.
+
+**Gap connu, non corrigé (portée limitée dans le temps disponible)** :
+18 autres fichiers `api/tasks/*.py` créent chacun leur propre moteur
+SQLAlchemy synchrone contre la même base, avec les mêmes valeurs par
+défaut non plafonnées. Sans impact aujourd'hui car **aucun worker
+Celery n'est encore déployé** (voir section 3) — mais dès qu'un sera
+créé, ce même risque de saturation du pool Supabase reviendra à moins
+de plafonner ces 18 moteurs aussi. À traiter en même temps que la
+création du service Celery worker.
 
 ### 3. Celery (traitement de documents en arrière-plan)
 🔴 **Non fonctionnel — vérifié en direct, pas une supposition.** Un
