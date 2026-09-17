@@ -66,4 +66,15 @@ EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-CMD ["./docker-entrypoint.sh"]
+# Real result, not a guess: tried running the Celery worker in this
+# same free-tier container (docker-entrypoint.sh, kept in the repo for
+# a future, more RAM-generous host) -- the live service became
+# completely unresponsive within minutes (TCP connects, HTTP request
+# sent, zero bytes back, every retry) -- the free tier's 512MB truly
+# isn't enough for gunicorn (loading torch/sentence-transformers/
+# ultralytics/opencv via api.main) plus a second process importing a
+# large chunk of the same heavy deps again independently. Reverted to
+# plain gunicorn to restore the working API; see docs/deployment/RENDER.md
+# for the real options going forward (a separate, paid worker service,
+# or a self-hosted free VM with real RAM headroom).
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "api.main:app"]
