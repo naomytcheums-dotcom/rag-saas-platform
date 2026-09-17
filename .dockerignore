@@ -12,7 +12,22 @@ __pycache__/
 # own binary Turbopack cache made the build context huge enough to
 # fail outright ("read-only file system" while writing the overlay
 # snapshot -- a real, reproducible failure, not a fluke).
-frontend/
+#
+# Second real bug fixed (2026-09-17): .dockerignore is shared across
+# EVERY Dockerfile that builds from this context, not just the
+# Streamlit one above -- a blanket `frontend/` exclusion here also hid
+# `frontend/widget/` from Dockerfile.api's own COPY (added the same
+# day), breaking the Render build outright ("/frontend/widget": not
+# found) despite the directory being real and committed. A `!frontend/widget/`
+# negation was tried first and rejected: Docker's own documented
+# .dockerignore behavior is that once a parent directory is excluded,
+# files under it can't be re-included by a later negation pattern --
+# so instead of excluding all of frontend/ and trying to carve an
+# exception back out, only the specific large/build-only subdirectories
+# that caused the original bug are excluded below, by name.
+frontend/node_modules/
+frontend/.next/
+frontend/coverage/
 sdks/*/node_modules/
 sdks/*/dist/
 sdks/python/*.egg-info/
