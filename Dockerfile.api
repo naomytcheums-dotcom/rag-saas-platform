@@ -29,7 +29,7 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY api/ ./api/
-COPY alembic.ini ./
+COPY alembic.ini gunicorn.conf.py ./
 
 RUN chown -R appuser:app /app
 USER appuser
