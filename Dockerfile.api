@@ -30,6 +30,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY api/ ./api/
 COPY alembic.ini gunicorn.conf.py ./
+# Real bug found twice already (gunicorn.conf.py missing broke every
+# deploy outright; this pair fails more quietly, 404s/empty responses
+# instead of a crash): both are read at runtime via
+# Path(__file__).resolve().parent.parent.parent from inside api/, i.e.
+# real repo-root siblings of api/, not things pip/the venv provides --
+# locales/ backs every GET /i18n/translations/{lang} call (api/services/i18n.py),
+# frontend/widget/ backs the embeddable widget's own GET /widget/script.js
+# et al (api/routers/widget.py). Neither COPY was ever added when this
+# Dockerfile was first written for api/ alone.
+COPY locales/ ./locales/
+COPY frontend/widget/ ./frontend/widget/
 
 RUN chown -R appuser:app /app
 USER appuser
