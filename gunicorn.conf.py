@@ -26,6 +26,19 @@ from prometheus_client import multiprocess
 bind = "0.0.0.0:8000"
 workers = int(os.environ.get("WEB_CONCURRENCY", 4))
 worker_class = "uvicorn.workers.UvicornWorker"
+# Real bug found (2026-09-18) via a live crash, reproduced on every real
+# chat message: Gunicorn's own default worker timeout is 30s -- it
+# assumes a worker that hasn't finished handling ITS current request
+# within that window is stuck, and sends it CRITICAL WORKER TIMEOUT +
+# SIGKILL. That default is fine for typical request/response endpoints,
+# but genuinely wrong for a real SSE streaming response (POST
+# /chat/stream), which legitimately holds a worker open for as long as
+# the LLM takes to finish generating -- up to api/config.py's own real
+# SSE_TIMEOUT (120s). Without this, every real chat request got killed
+# mid-stream well before that real, intended timeout ever had a chance
+# to fire. Matches SSE_TIMEOUT with a small margin for the rest of the
+# request lifecycle (auth, retrieval, response teardown).
+timeout = 130
 
 
 def on_starting(server):
