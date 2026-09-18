@@ -25,7 +25,14 @@ on:
 jobs:
   drain-queue:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # Real bug found via a live test run (2026-09-18): checkout + Python
+    # setup + `pip install -r requirements-api.txt` (torch/transformers/
+    # ultralytics et al, a genuinely heavy dependency set) takes ~1m45s
+    # on its own, so an 8-minute job timeout left no room for the run
+    # step's own `timeout 420` (7 min) -- the JOB's hard timeout fired
+    # first and force-cancelled the whole run before Celery's own
+    # `timeout` could exit it cleanly. 12 minutes leaves real headroom.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +68,7 @@ jobs:
         # for the (reverted) in-container attempt -- appropriate here
         # too, a GitHub-hosted runner has no reason to run more than
         # one task at a time for this queue's real volume.
-        # `timeout 420` (7 min) leaves 1 min of the 8-min job timeout
+        # `timeout 420` (7 min) leaves ~5 min of the 12-min job timeout
         # for checkout/install, and lets celery exit(0) itself rather
         # than being killed mid-task by the runner's own hard timeout.
         run: |
