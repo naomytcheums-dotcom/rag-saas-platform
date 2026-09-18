@@ -35,11 +35,11 @@ export function useRealChat(orgId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const initialized = useRef(false);
+  const initializedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
+    if (!orgId || initializedFor.current === orgId) return;
+    initializedFor.current = orgId;
     void (async () => {
       try {
         const agents = await api.get<AgentSummary[]>(`/organizations/${orgId}/agents`);
