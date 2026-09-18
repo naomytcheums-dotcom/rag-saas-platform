@@ -13,6 +13,9 @@ const NAV_SECTIONS = [
       { href: "/chat", label: "Conversation" },
       { href: "/dashboard/documents", label: "Documents" },
       { href: "/dashboard/agents", label: "Agents" },
+      { href: "/dashboard/autonomous-agents", label: "Agents autonomes" },
+      { href: "/dashboard/fine-tuning", label: "Fine-tuning" },
+      { href: "/dashboard/analytics", label: "Analytics" },
     ],
   },
   {
