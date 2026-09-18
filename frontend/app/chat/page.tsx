@@ -28,13 +28,13 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  if (orgLoading || !org) {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
-  }
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
+
+  if (orgLoading || !org) {
+    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
+  }
 
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
