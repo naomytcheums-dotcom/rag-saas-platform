@@ -5,7 +5,8 @@ import ChatComposer from "@/components/ChatComposer";
 import ChatSidebar from "@/components/ChatSidebar";
 import MessageBubble from "@/components/MessageBubble";
 import { useTranslation } from "@/lib/i18n";
-import { useMockChat } from "@/lib/mockChat";
+import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useRealChat } from "@/lib/useRealChat";
 
 const STARTER_QUESTIONS = ["What is retrieval-augmented generation?", "How does semantic chunking work?", "Which retriever should I use?"];
 
@@ -13,20 +14,23 @@ const STARTER_QUESTIONS = ["What is retrieval-augmented generation?", "How does 
 // component assembled into one real page: sidebar (conversations,
 // search), message thread (citations, copy, feedback, regenerate,
 // voice playback), and a composer (text + voice input, tap or
-// push-to-talk). Real, honest caveat: the conversation THREAD itself
-// runs on local mock state (lib/mockChat.ts) -- this app has no real
-// login/session flow yet to own a real backend conversation, a real,
-// separate, future piece of work. Every component here is otherwise
-// wired against the real backend built across Partie 8.1/8.2
-// (frontend/lib/api.ts) and degrades gracefully (empty states, never
-// a crash) when that backend isn't reachable, exactly as verified
-// directly in this browser.
+// push-to-talk). Real bug fixed (2026-09-18), found via a live manual
+// test: the conversation thread used to run on local mock state
+// (lib/mockChat.ts) with a comment claiming login wasn't wired up yet
+// -- stale by the time of that test, since login already worked. Now
+// wired to the real backend (lib/useRealChat.ts): POST /chat/stream,
+// a real agent, and a real, persisted conversation.
 export default function Home() {
   const { t } = useTranslation();
-  const { messages, pending, sendMessage, editMessage, regenerate } = useMockChat();
+  const { org, loading: orgLoading } = useCurrentOrg();
+  const { messages, pending, error, sendMessage, editMessage, regenerate } = useRealChat(org?.id ?? "");
   const [draft, setDraft] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  if (orgLoading || !org) {
+    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -55,6 +59,8 @@ export default function Home() {
 
         <main ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+
             {messages.map((message) => (
               <MessageBubble
                 key={message.id}

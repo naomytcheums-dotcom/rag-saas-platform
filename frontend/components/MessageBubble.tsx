@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
-import type { MockMessage } from "@/lib/mockChat";
+import type { ChatMessage } from "@/lib/useRealChat";
 import CitationList from "./CitationList";
 import CopyButton from "./CopyButton";
 import FeedbackButtons from "./FeedbackButtons";
@@ -10,7 +10,7 @@ import MessageContent from "./MessageContent";
 import VoiceOutput from "./VoiceOutput";
 
 interface MessageBubbleProps {
-  message: MockMessage;
+  message: ChatMessage;
   isLast: boolean;
   onEdit: (id: string, content: string) => void;
   onRegenerate: (id: string) => void;
@@ -19,13 +19,7 @@ interface MessageBubbleProps {
 
 // One message row -- user (right-aligned) or assistant (left-aligned,
 // with the real 8.1 components: citations, copy, feedback, voice
-// playback). Regenerate/Edit here are wired to the local mock chat
-// state (lib/mockChat.ts), not the real RegenerateButton/EditQuestion
-// components -- those hard-code real backend endpoints
-// (/conversations/{id}/messages/{id}/regenerate) that need a real,
-// authenticated conversation this demo page doesn't have yet; using
-// them here against a fake id would just fail every time, which is
-// less honest than this real, working, local equivalent.
+// playback), driven by the real backend conversation (lib/useRealChat.ts).
 export default function MessageBubble({ message, isLast, onEdit, onRegenerate, regenerating }: MessageBubbleProps) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);

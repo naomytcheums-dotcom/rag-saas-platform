@@ -65,10 +65,18 @@ async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, creat
 
     org_settings = await get_org_settings(db, organization_id)
     citation_chunks = await search_with_context(db, organization_id, message, top_k=5, org_settings=org_settings)
+    # Real bug found (2026-09-18) via a live, undirected end-to-end test:
+    # citation_chunks was only ever used for citation bookkeeping and
+    # post-hoc quality metrics -- the retrieved chunk text was never
+    # actually given to the LLM, so a "grounded" answer with citations
+    # attached could still be pure model knowledge, unrelated to what
+    # was retrieved. `context` is what run_agent actually injects into
+    # the prompt (see its own docstring).
+    context = "\n\n".join(chunk["content"] for chunk in citation_chunks) if citation_chunks else None
 
     orchestrator = AgentOrchestrator()
     run = await orchestrator.run_agent(
-        agent_id, message, db=db, organization_id=organization_id, created_by=created_by,
+        agent_id, message, db=db, context=context, organization_id=organization_id, created_by=created_by,
         conversation_id=conversation.id, citation_chunks=citation_chunks,
     )
     if run.status != "completed":
