@@ -151,30 +151,47 @@ confirme : `process_document: processing failed for document '...':
 Invalid endpoint: ***` (valeur masquee automatiquement par GitHub car elle
 correspond a un secret).
 
-### Bug reel trouve, non corrige : `S3_ENDPOINT_URL` invalide
+### Bug reel trouve et corrige : `S3_ENDPOINT_URL` invalide
 
 `Invalid endpoint` est l'erreur typique de boto3/aiobotocore quand
 `endpoint_url` n'a pas de schema (`https://`) ou est mal forme. Utilise dans
 `api/services/document_storage.py:400`, `api/services/storage.py:70`, et 3
-autres fichiers. A verifier : la valeur reelle de `S3_ENDPOINT_URL` sur
-Render (Environment -> cliquer les `...` pour reveler) doit commencer par
-`https://` ; si le secret GitHub a ete copie sans ce prefixe, le recreer
-avec le schema inclus. Impossible a diagnostiquer plus precisement depuis
-ce cote : les secrets GitHub ne sont jamais relisibles une fois crees, et
-la valeur est automatiquement masquee (`***`) partout ou elle apparait dans
-les logs, y compris dans les messages d'erreur.
+autres fichiers. La valeur correcte (Supabase Storage, compatible S3) est
+`https://xqlqiclwgywaplbucrsf.storage.supabase.co/storage/v1/s3` -- le
+secret GitHub en contenait probablement une version legerement differente
+(espace ou retour a la ligne colle par erreur lors de la creation). Corrige
+en recreant le secret `S3_ENDPOINT_URL` avec la valeur exacte ci-dessus.
+Confirme par un deuxieme test document reel (voir plus bas) : traitement
+complet reussi.
+
+## Deuxieme test, apres correction du secret (2026-09-18, run `35367590835`)
+
+Nouveau document reel uploade sur le meme compte de test, workflow
+redeclenche manuellement. Resultat via l'API :
+
+```json
+{
+  "status": "completed",
+  "metadata": {
+    "encoding": "ascii", "language": "fr", "chunk_count": 1,
+    "summary": "Deuxieme document de test pour verifier la correction S3_ENDPOINT_URL...",
+    "structure": [...], "reading_time_minutes": 0.1, "complexity_score": 58.2
+  },
+  "processed_at": "2026-09-18T16:19:24.542413Z"
+}
+```
+
+Traitement complet reussi : extraction de structure, resume genere,
+decoupage en chunks, langue detectee. Le pipeline Celery + stockage S3 est
+confirme fonctionnel de bout en bout en conditions de production reelles.
 
 ## Etat au 2026-09-18
 
-- Workflow fonctionnel, verifie trois fois en conditions reelles (connexion
-  Redis TLS, demarrage complet du worker, et prise en charge reelle d'une
-  tache de traitement de document).
-- Pipeline Celery bout en bout confirme operationnel : Redis -> worker ->
-  execution de tache -> mise a jour du document en base.
-- Bug reel, non corrige, bloquant le traitement effectif des documents :
-  `S3_ENDPOINT_URL` mal forme (`Invalid endpoint`) cote stockage S3/R2 --
-  a verifier et corriger cote Render puis recreer le secret GitHub
-  correspondant.
+- Workflow fonctionnel, verifie quatre fois en conditions reelles (connexion
+  Redis TLS, demarrage complet du worker, prise en charge d'une tache, et
+  traitement complet reussi d'un document reel de bout en bout).
+- Les deux bugs trouves (crash TLS, timeout de job, config S3) sont tous
+  corriges et verifies par un test reel a chaque fois.
 - Depot remis en prive apres chaque test.
 - Cron automatique (toutes les 10 min) : bloque tant que le quota Actions
   du compte est epuise et que le depot reste prive (reset le 1er octobre
