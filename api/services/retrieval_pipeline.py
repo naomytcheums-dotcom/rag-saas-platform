@@ -48,6 +48,7 @@ dependency this module deliberately does not need, and its own
 `Retriever.__init__` requires a real, fixed `chunks.json` file this
 codebase has no equivalent of)."""
 
+import asyncio
 import os
 import re
 
@@ -174,7 +175,15 @@ async def vector_search(db: AsyncSession, organization_id, query: str, top_k: in
     module's own top docstring."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
     model_name = resolve_embedding_model(org_settings)
-    query_embedding = generate_embeddings([query], model_name)[0]
+    # Real bug found (2026-09-18), same class as hybrid_reranked_search's
+    # own cross_encoder.predict below: generate_embeddings runs a
+    # synchronous, CPU-bound sentence-transformers .encode() call, which
+    # blocks the whole asyncio event loop for its duration if awaited
+    # directly inside this async function -- and this one runs on EVERY
+    # search (vector_search AND hybrid_search both call it), not just
+    # the reranked strategy.
+    loop = asyncio.get_running_loop()
+    query_embedding = (await loop.run_in_executor(None, generate_embeddings, [query], model_name))[0]
     return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k)
 
 
@@ -269,7 +278,16 @@ async def hybrid_reranked_search(db: AsyncSession, organization_id, query: str, 
     reranker_model = resolve_reranker_model(org_settings, override=reranker)
     cross_encoder = _get_reranker(reranker_model)
     pairs = [[query, c["content"]] for c in candidates]
-    rerank_scores = cross_encoder.predict(pairs)
+    # Real bug found (2026-09-18) via a live crash: CrossEncoder.predict
+    # is a synchronous, CPU-bound call -- run directly inside this async
+    # function, it blocks the whole asyncio event loop for its duration.
+    # On Render's free tier (uvicorn.workers.UvicornWorker, a single
+    # async worker), that starved every other in-flight request on the
+    # same process, including Render's own health check, which timed
+    # out and caused Render to kill and restart the instance mid-chat.
+    # run_in_executor moves the blocking call to a thread instead.
+    loop = asyncio.get_running_loop()
+    rerank_scores = await loop.run_in_executor(None, cross_encoder.predict, pairs)
 
     reranked = sorted(zip(candidates, rerank_scores), key=lambda pair: pair[1], reverse=True)
     return [{**chunk, "score": float(score)} for chunk, score in reranked[:top_k]]
