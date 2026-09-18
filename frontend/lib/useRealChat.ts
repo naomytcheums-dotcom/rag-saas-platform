@@ -62,7 +62,9 @@ export function useRealChat(orgId: string) {
 
         const history = await api.get<ConversationMessage[]>(`/conversations/${convId}/messages`);
         setMessages(history.map((m) => ({ id: m.id, role: m.role, content: m.content, created_at: m.created_at })));
-      } catch {
+      } catch (err) {
+        // eslint-disable-next-line no-console -- temporary, real diagnostic for a live bug that reproduces every real fetch call but not this hook's own calls
+        console.error("useRealChat init failed:", err);
         setError("Impossible de charger la conversation.");
       }
     })();
