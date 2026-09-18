@@ -172,10 +172,21 @@ class Settings(BaseSettings):
     ACCOUNT_DELETION_REMINDER_DAYS_BEFORE: int = 3
 
     # -- Cookies / CORS -----------------------------------------------------
+    # Real bug found (2026-09-18) via a live CORS failure on the actual
+    # production domain: this used to be a single URL, but this app
+    # legitimately has multiple valid frontend origins at once (the
+    # custom production domain, the git-branch preview alias, and
+    # per-deployment Vercel URLs) -- comma-separated, same convention as
+    # GITHUB_INCLUDE_PATTERNS etc. below. Kept as one default entry so
+    # existing single-URL deployments (e.g. local dev) keep working.
     FRONTEND_URL: str = "http://localhost:3000"
     COOKIE_DOMAIN: str | None = None
     COOKIE_SECURE: bool = True
     SESSION_MIDDLEWARE_SECRET: str = Field(min_length=32)
+
+    @property
+    def frontend_urls_list(self) -> list[str]:
+        return [url.strip() for url in self.FRONTEND_URL.split(",") if url.strip()]
 
     # -- OAuth ------------------------------------------------------------
     GOOGLE_OAUTH_CLIENT_ID: str | None = None

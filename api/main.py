@@ -145,7 +145,14 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_MIDDLEWARE_SEC
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=settings.frontend_urls_list,
+    # Real bug found (2026-09-18): Vercel gives every deployment its own
+    # per-build URL (a random hash, e.g. rag-saas-platform-ltn3d727t-...),
+    # on top of the stable production domain and git-branch alias already
+    # covered by FRONTEND_URL above. Without this, CORS would need a
+    # manual config update on every single deploy. Restricted to this
+    # project's own Vercel subdomains, not *.vercel.app generally.
+    allow_origin_regex=r"^https://rag-saas-platform-[a-z0-9-]+-naomytcheums-dotcoms-projects\.vercel\.app$",
     allow_credentials=True,  # the refresh-token cookie requires this
     allow_methods=["*"],
     allow_headers=["*"],
