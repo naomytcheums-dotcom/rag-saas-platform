@@ -9,6 +9,7 @@ default -- see api/config.py); a Postgres-backed broker also works if
 Redis isn't part of the deployment, just change the URL scheme.
 """
 
+import ssl
 from datetime import timedelta
 
 from celery import Celery
@@ -47,6 +48,18 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+# Real crash fixed here (2026-09-18, found via a real GitHub Actions test
+# run): a rediss:// URL (TLS, used by Upstash's free tier) makes Celery's
+# own redis transport refuse to start unless ssl_cert_reqs is explicitly
+# set -- CRITICAL/MainProcess Unrecoverable error: ValueError("A rediss://
+# URL must have parameter ssl_cert_reqs..."). Plain redis:// URLs need
+# neither of these options, hence the scheme check.
+_REDIS_TLS_OPTS = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+if settings.CELERY_BROKER_URL.startswith("rediss://"):
+    celery_app.conf.broker_use_ssl = _REDIS_TLS_OPTS
+if settings.CELERY_RESULT_BACKEND.startswith("rediss://"):
+    celery_app.conf.redis_backend_use_ssl = _REDIS_TLS_OPTS
 
 celery_app.conf.beat_schedule = {
     "purge-deleted-accounts-daily": {
