@@ -38,7 +38,7 @@ explicitement non fait avec la raison exacte.
 | 17 | Tester GDPR en direct | `docs/compliance/GDPR_TEST.md` | Export teste et fonctionnel en direct (vraies donnees recues). Suppression de compte volontairement NON testee (action destructive, hors du perimetre d'une action non explicitement demandee pour elle-meme) |
 | 18 | Verifier les audit logs | `docs/security/AUDIT_LOGS.md` | OK -- 5 evenements reels verifies en direct, correspondant exactement aux actions de cette session |
 | 19 | Banniere cookies | `frontend/components/CookieBanner.tsx`, `frontend/app/layout.tsx`, `docs/compliance/COOKIES.md` | **OK, resolu et verifie en production** -- remonte dans le layout, retest reel sur `https://rag-saas-platform.vercel.app/login` (commit `00d8786`) sur plusieurs rechargements anti-cache et apres interaction : aucune erreur #418, `localStorage` persiste correctement |
-| 20 | Tester 2FA/WebAuthn | `docs/security/2FA.md` | Backend TOTP teste et fonctionnel en direct (`POST /auth/2fa/setup` retourne un vrai secret + QR code). Gap reel trouve : aucune interface frontend n'existe pour activer le 2FA. WebAuthn non testable sans authenticateur materiel |
+| 20 | Tester 2FA/WebAuthn, construire l'interface manquante | `frontend/app/dashboard/profile/page.tsx` (`TwoFactorSection`), `docs/security/2FA.md` | OK -- interface complete (activation avec QR code, codes de recuperation, regeneration, desactivation) construite et testee en direct dans un vrai navigateur contre un backend reellement demarre (cycle complet activation -> desactivation avec de vrais codes TOTP). Bug reel trouve et corrige au passage : `psutil` manquant de `requirements-api.txt` malgre un import direct dans le code. WebAuthn toujours non teste (materiel requis) |
 
 ## Synthese
 

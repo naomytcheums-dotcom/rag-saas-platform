@@ -88,7 +88,7 @@ export default function ProfilePage() {
 
       <div className="mt-5">
         {tab === "Information" && <InformationTab profile={profile} onSaved={(p) => { setProfile(p); flashSaved(); }} onError={setError} />}
-        {tab === "Security" && <SecurityTab onError={setError} onSaved={flashSaved} />}
+        {tab === "Security" && <SecurityTab profile={profile} onProfileChange={setProfile} onError={setError} onSaved={flashSaved} />}
         {tab === "Preferences" && <PreferencesTab profile={profile} onSaved={(p) => { setProfile(p); flashSaved(); }} onError={setError} />}
         {tab === "Danger zone" && <DangerZoneTab email={profile.email} onLoggedOut={logout} onError={setError} />}
       </div>
@@ -161,7 +161,207 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
   );
 }
 
-function SecurityTab({ onError, onSaved }: { onError: (e: string) => void; onSaved: () => void }) {
+interface RecoveryCodesStatus {
+  total: number;
+  remaining: number;
+}
+
+function TwoFactorSection({ enabled, onChanged, onError }: { enabled: boolean; onChanged: (enabled: boolean) => void; onError: (e: string) => void }) {
+  const [step, setStep] = useState<"idle" | "setup" | "recovery-codes" | "regenerate" | "disable">("idle");
+  const [setupData, setSetupData] = useState<{ secret: string; qr_code_data_uri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<{ recovery_codes: string[]; recovery_codes_file: string } | null>(null);
+  const [status, setStatus] = useState<RecoveryCodesStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadStatus = useCallback(async () => {
+    try {
+      setStatus(await api.get<RecoveryCodesStatus>("/auth/2fa/recovery-codes/status"));
+    } catch {
+      // Real, honest no-op: the enable/disable state itself still renders without this count.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
+      void loadStatus();
+    }
+  }, [enabled, loadStatus]);
+
+  async function startSetup() {
+    setBusy(true);
+    try {
+      setSetupData(await api.post<{ secret: string; qr_code_data_uri: string }>("/auth/2fa/setup"));
+      setStep("setup");
+    } catch (err) {
+      onError(err instanceof ApiError ? String(err.detail) : "Échec du démarrage de la configuration 2FA");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmEnable() {
+    setBusy(true);
+    try {
+      setRecoveryCodes(await api.post<{ recovery_codes: string[]; recovery_codes_file: string }>("/auth/2fa/enable", { code }));
+      setStep("recovery-codes");
+      setCode("");
+      onChanged(true);
+    } catch (err) {
+      onError(err instanceof ApiError ? String(err.detail) : "Code invalide");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRegenerate() {
+    setBusy(true);
+    try {
+      setRecoveryCodes(await api.post<{ recovery_codes: string[]; recovery_codes_file: string }>("/auth/2fa/recovery-codes/regenerate", { code }));
+      setStep("recovery-codes");
+      setCode("");
+    } catch (err) {
+      onError(err instanceof ApiError ? String(err.detail) : "Code invalide");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDisable() {
+    setBusy(true);
+    try {
+      await api.post("/auth/2fa/disable", { code });
+      setStep("idle");
+      setCode("");
+      setStatus(null);
+      onChanged(false);
+    } catch (err) {
+      onError(err instanceof ApiError ? String(err.detail) : "Code invalide");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function closeRecoveryCodes() {
+    setRecoveryCodes(null);
+    setStep("idle");
+    void loadStatus();
+  }
+
+  if (step === "setup" && setupData) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-foreground">Configurer l&apos;authentification à deux facteurs</h2>
+        <p className="mt-1 text-xs text-foreground-muted">Scannez ce QR code avec votre application d&apos;authentification (Google Authenticator, 1Password, Authy…), puis saisissez le code à 6 chiffres qu&apos;elle affiche.</p>
+        {/* eslint-disable-next-line @next/next/no-img-element -- a base64 data: URI generated server-side per setup call, not an optimizable remote/static asset */}
+        <img src={setupData.qr_code_data_uri} alt="QR code de configuration 2FA" className="mt-3 h-40 w-40" />
+        <p className="mt-2 text-xs text-foreground-muted">Ou saisissez cette clé manuellement : <code className="rounded bg-surface-muted px-1.5 py-0.5">{setupData.secret}</code></p>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Code à 6 chiffres"
+          maxLength={6}
+          className="mt-3 w-full max-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={() => void confirmEnable()} disabled={busy || code.length !== 6} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
+            {busy ? "Vérification…" : "Confirmer et activer"}
+          </button>
+          <button type="button" onClick={() => { setStep("idle"); setSetupData(null); setCode(""); }} className="rounded-lg border border-border-strong px-4 py-2 text-sm text-foreground hover:bg-surface-muted">
+            Annuler
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "recovery-codes" && recoveryCodes) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-foreground">Codes de récupération</h2>
+        <p className="mt-1 text-xs text-foreground-muted">Notez ces codes et conservez-les en lieu sûr — ils ne seront plus jamais affichés. Chacun ne peut être utilisé qu&apos;une seule fois pour vous connecter si vous perdez l&apos;accès à votre application d&apos;authentification.</p>
+        <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg bg-surface-muted p-3 font-mono text-sm">
+          {recoveryCodes.recovery_codes.map((c) => <span key={c}>{c}</span>)}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <a href={recoveryCodes.recovery_codes_file} download="recovery-codes.txt" className="rounded-lg border border-border-strong px-4 py-2 text-sm text-foreground hover:bg-surface-muted">
+            Télécharger (.txt)
+          </a>
+          <button type="button" onClick={closeRecoveryCodes} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">
+            J&apos;ai enregistré ces codes
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "regenerate" || step === "disable") {
+    const isDisable = step === "disable";
+    return (
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-foreground">{isDisable ? "Désactiver la 2FA" : "Régénérer les codes de récupération"}</h2>
+        <p className="mt-1 text-xs text-foreground-muted">Saisissez le code actuel affiché par votre application d&apos;authentification pour confirmer.</p>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Code à 6 chiffres"
+          maxLength={6}
+          className="mt-3 w-full max-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => void (isDisable ? confirmDisable() : confirmRegenerate())}
+            disabled={busy || code.length !== 6}
+            className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${isDisable ? "bg-danger hover:opacity-90" : "bg-accent hover:bg-accent-hover"}`}
+          >
+            {busy ? "Vérification…" : isDisable ? "Confirmer la désactivation" : "Confirmer la régénération"}
+          </button>
+          <button type="button" onClick={() => { setStep("idle"); setCode(""); }} className="rounded-lg border border-border-strong px-4 py-2 text-sm text-foreground hover:bg-surface-muted">
+            Annuler
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Authentification à deux facteurs</h2>
+          <p className="mt-1 text-xs text-foreground-muted">
+            {enabled
+              ? `Activée — ${status ? `${status.remaining} / ${status.total} codes de récupération restants` : "chargement des codes…"}`
+              : "Désactivée — ajoutez une couche de sécurité supplémentaire avec une application d'authentification."}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${enabled ? "bg-success-soft text-success" : "bg-surface-muted text-foreground-muted"}`}>
+          {enabled ? "Activée" : "Désactivée"}
+        </span>
+      </div>
+      <div className="mt-3 flex gap-2">
+        {enabled ? (
+          <>
+            <button type="button" onClick={() => setStep("regenerate")} className="rounded-lg border border-border-strong px-4 py-2 text-sm text-foreground hover:bg-surface-muted">
+              Régénérer les codes de récupération
+            </button>
+            <button type="button" onClick={() => setStep("disable")} className="rounded-lg border border-danger px-4 py-2 text-sm text-danger hover:bg-danger-soft">
+              Désactiver
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => void startSetup()} disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
+            {busy ? "Démarrage…" : "Activer l'authentification à deux facteurs"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SecurityTab({ profile, onProfileChange, onError, onSaved }: { profile: Profile; onProfileChange: (p: Profile) => void; onError: (e: string) => void; onSaved: () => void }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [changing, setChanging] = useState(false);
@@ -201,6 +401,8 @@ function SecurityTab({ onError, onSaved }: { onError: (e: string) => void; onSav
 
   return (
     <div className="flex flex-col gap-6">
+      <TwoFactorSection enabled={profile.totp_enabled} onChanged={(enabled) => onProfileChange({ ...profile, totp_enabled: enabled })} onError={onError} />
+
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-sm font-semibold text-foreground">Changer le mot de passe</h2>
         <input type="password" placeholder="Mot de passe actuel" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />

@@ -100,6 +100,13 @@ redis==8.1.0
 # `uvicorn api.main:app --reload` either way.
 prometheus-client==0.26.0
 gunicorn==23.0.0
+# api/services/admin_monitoring.py imports this directly (CPU/RAM/disk
+# figures for the admin monitoring dashboard) -- was missing from this
+# file entirely, found while starting the API locally for a live test
+# in this session (ModuleNotFoundError on api.main import, which would
+# fail the SAME WAY on a from-scratch `pip install -r requirements-api.txt`
+# anywhere this package isn't already present transitively).
+psutil==7.2.2
 
 # -- RBAC / policy engine (Etape 1.2.7) ---------------------------------------
 # PyPI publishes this project under TWO distribution names -- "casbin"
