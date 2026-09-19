@@ -121,7 +121,7 @@ steps", "Create agent") alors que tout le reste de l'interface testee est
 en francais -- incoherence i18n reelle, pas juste cosmetique vu que le
 reste du produit est localise.
 
-## Synthese
+## Synthese (etat au premier passage)
 
 - 1 bug critique non corrige : authentification cassee sur le domaine de
   production principal (variable d'environnement Vercel a corriger, acces
@@ -134,3 +134,104 @@ reste du produit est localise.
 - 1 incoherence i18n (formulaire Agents autonomes en anglais).
 - Tous les autres parcours testes (Documents, Agents, Widget, Cles API,
   Facturation, Admin, Marketplace) fonctionnent correctement.
+
+---
+
+## Session de correction du 2026-09-18/19 -- les 4 points demandes
+
+### 1. Chat sans citations -- cause racine trouvee et corrigee (verification live bloquee par une limite d'infra)
+
+Deux bugs reels empiles, tous deux corriges dans le code :
+
+**a) Le chat tournait entierement sur un mock local**
+(`frontend/lib/mockChat.ts`, desormais supprime) -- 3 reponses anglaises
+codees en dur (`CANNED_REPLIES`), jamais connecte au vrai backend, malgre
+un commentaire affirmant a tort que "login n'est pas encore branche".
+Remplace par `frontend/lib/useRealChat.ts`, un vrai hook branche sur
+`POST /chat/stream` (SSE), un vrai agent et une vraie conversation
+persistee.
+
+**b) Meme le vrai backend ne transmettait jamais le contenu recupere au LLM**
+Verifie dans `api/services/agent_orchestrator.py` (`run_agent` et
+`stream_response`) : les deux acceptent bien un parametre `context` qui
+est injecte dans le prompt envoye au LLM (`messages.append({"role": "user",
+"content": f"Context:\n{context}"})`). Mais aucun des deux points d'entree
+reels (`api/services/public_api.py::handle_public_chat`,
+`api/routers/chat_stream.py::_stream_response`) ne construisait ce
+`context` a partir des chunks recuperes par `search_with_context` --
+`citation_chunks` etait passe uniquement pour l'affichage des citations
+et le calcul de metriques de qualite apres coup, jamais pour le prompt
+lui-meme. Un appel pouvait donc afficher des citations pour un contenu
+que le LLM n'avait en realite jamais vu. Corrige aux deux endroits :
+`context = "\n\n".join(chunk["content"] for chunk in citation_chunks)`,
+transmis a `run_agent`/`stream_response`. `chat_stream.py` n'appelait
+meme pas la recherche du tout ; ajoute (meme appel a
+`search_with_context` que `public_api.py`).
+
+**Tests reels effectues, 3 bugs supplementaires trouves et corriges en
+testant en direct** :
+- Crash React #310 (hook appele apres un `return` anticipe dans
+  `frontend/app/chat/page.tsx`) -- corrige.
+- Bug de re-initialisation : le hook ne reessayait jamais une fois
+  `org.id` reellement charge (`useRealChat.ts`) -- corrige.
+- Deux appels CPU bloquants (`generate_embeddings`, `CrossEncoder.predict`
+  dans `api/services/retrieval_pipeline.py`) geles la boucle asyncio
+  entiere, provoquant un echec du health check Render et un redemarrage
+  force de l'instance en plein streaming -- corriges avec
+  `loop.run_in_executor`.
+- Timeout par defaut de gunicorn (30s, trop court pour un stream SSE) --
+  porte a 130s dans `gunicorn.conf.py` (aligne sur `SSE_TIMEOUT`).
+
+**Blocage final, non corrigeable par du code** : apres ces 4 correctifs,
+un nouveau test reel en direct a echoue avec, cette fois, dans les
+evenements Render : *"Ran out of memory (used over 512MB) while running
+your code."* -- l'instance gratuite (512MB RAM) charge des dependances ML
+lourdes (torch, sentence-transformers, et d'apres l'historique du
+Dockerfile egalement ultralytics/opencv) au demarrage ; un appel de chat
+reel (embedding de la requete + appel LLM en streaming en meme temps)
+depasse ce plafond memoire et Render tue l'instance. Ce n'est plus un bug
+de code identifiable -- c'est une limite structurelle du tier gratuit face
+aux dependances reelles de cette application. Pistes reelles, non
+appliquees (hors perimetre de cette session) : charger les modeles ML de
+maniere paresseuse/conditionnelle pour reduire l'empreinte memoire de
+base, retirer les dependances non utilisees par le chemin de chat
+(ultralytics/opencv semblent lies au traitement d'images/documents, pas
+au chat lui-meme), ou passer a un tier Render avec plus de RAM.
+
+### 2. Navigation -- OK, verifie en direct
+
+`Analytics`, `Fine-tuning`, `Agents autonomes` ajoutes a
+`frontend/app/dashboard/layout.tsx` (section "Espace de travail").
+Confirme visible et cliquable en production sur une session authentifiee
+reelle.
+
+### 3. Formulaire "Agents autonomes" -- OK, verifie en direct
+
+`frontend/components/autonomous/AgentCreateForm.tsx` traduit en francais
+("Nom de l'agent", "Description (facultatif)", "Objectif — que doit
+accomplir cet agent ?", "Etapes maximum", "Creer l'agent").
+
+### 4. Limitation i18n a francais + anglais -- OK, verifie en direct
+
+`api/config.py` : `UI_SUPPORTED_LANGUAGES` limite a `["fr", "en"]`,
+`UI_DEFAULT_LANGUAGE` passe a `"fr"`. L'application (backend) refuse deja
+toute autre langue (`api/routers/i18n.py`, 404/400), aucun changement de
+code necessaire la, seule la config a change. `locales/{es,de,pt,ar}`
+laisses sur disque (contenu reel, pas supprime), juste plus proposes.
+
+**Bug reel trouve en verifiant ce point** : `frontend/lib/i18n.tsx`
+exposait deja un `setLanguage()` fonctionnel, mais **aucun composant ne
+l'appelait** -- il n'existait aucun vrai selecteur de langue dans
+l'interface avant ce correctif. Cree `frontend/components/LanguageSelector.tsx`
+(boutons FR/EN), monte dans le layout du dashboard et l'en-tete de la
+page de conversation. Teste en direct : clic sur FR change bien l'etat
+actif, aucun crash, requete API confirmee.
+
+### Synthese de cette session
+
+| Point demande | Statut |
+|---|---|
+| 1. Chat sans citations | Cause racine corrigee (code), verification finale bloquee par une limite memoire du tier gratuit Render |
+| 2. Navigation (3 pages) | Termine, verifie en direct |
+| 3. Formulaire traduit | Termine, verifie en direct |
+| 4. i18n limite a FR/EN | Termine, verifie en direct (selecteur de langue cree au passage, n'existait pas avant) |

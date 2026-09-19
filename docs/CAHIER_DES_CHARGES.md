@@ -3817,3 +3817,41 @@ Partie, pour mémoire :
 - Partie 15 (Human-in-the-loop) -- dès que le contenu complet du cahier des charges original est retrouvé
 
 **On commence par laquelle ?**
+
+---
+
+## ADDENDUM — 2026-09-19 — Session de correction (chat/citations, navigation, i18n)
+
+Note ajoutee sans reprendre les statuts ✅/🟡 du reste de ce document
+(perimetre trop large pour un audit complet dans cette session) --
+details complets et verifies en direct dans
+`docs/testing/MANUAL_RESULTS.md`.
+
+**Partie 6 (Citations)** -- Bug reel trouve et corrige, complementaire a
+ce que 6.1.1-6.1.9 documentent deja : `citation_chunks` (les chunks
+recuperes par `search_with_context`) etait bien persiste pour
+l'affichage des citations et les metriques de qualite, mais **jamais
+transmis au LLM comme contexte de generation** -- ni dans
+`api/services/public_api.py::handle_public_chat`, ni dans
+`api/routers/chat_stream.py::_stream_response` (qui, de surcroit,
+n'appelait meme pas la recherche du tout). Une reponse pouvait donc
+afficher des citations pour un contenu que le LLM n'avait jamais lu.
+Corrige aux deux endroits (`context` construit et transmis a
+`run_agent`/`stream_response`, qui le supportaient deja). Verification
+finale en conditions reelles bloquee par une limite memoire du tier
+gratuit Render (512MB, voir `docs/testing/MANUAL_RESULTS.md` section 1)
+-- pas un defaut de ce correctif.
+
+**Partie 8 (Interface Utilisateur)** -- 3 pages deja construites et
+fonctionnelles (Analytics, Fine-tuning, Agents autonomes) mais absentes
+du menu de navigation, ajoutees a
+`frontend/app/dashboard/layout.tsx`. Formulaire "Agents autonomes"
+(`frontend/components/autonomous/AgentCreateForm.tsx`) traduit en
+francais, incoherent jusque-la avec le reste de l'interface localisee.
+
+**i18n** -- Decision produit : `UI_SUPPORTED_LANGUAGES` limite de 6 a 2
+langues (francais, anglais). Voir `docs/developer/I18N.md` pour le
+detail complet, y compris un vrai selecteur de langue cree au passage
+(`frontend/components/LanguageSelector.tsx`) -- le seul point d'entree
+qui appelait reellement `setLanguage()` avant ce correctif n'existait
+pas.
