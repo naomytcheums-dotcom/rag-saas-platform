@@ -1,13 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
+import LoadingState from "@/components/LoadingState";
 import { BusinessMetrics } from "@/components/analytics/BusinessMetrics";
-import { DashboardBuilder } from "@/components/analytics/DashboardBuilder";
 import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import { ExportButton } from "@/components/analytics/ExportButton";
 import { ProductMetrics } from "@/components/analytics/ProductMetrics";
-import { TechnicalMetrics } from "@/components/analytics/TechnicalMetrics";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+
+// Both pull in recharts (~390KB) -- deferred so visiting the default
+// Overview/Business/Product tabs never downloads it, only actually
+// opening Technical or Dashboards does.
+const TechnicalMetrics = dynamic(() => import("@/components/analytics/TechnicalMetrics").then((m) => m.TechnicalMetrics), {
+  loading: () => <LoadingState fullScreen={false} />,
+});
+const DashboardBuilder = dynamic(() => import("@/components/analytics/DashboardBuilder").then((m) => m.DashboardBuilder), {
+  loading: () => <LoadingState fullScreen={false} />,
+});
 
 const TABS = ["Overview", "Business", "Product", "Technical", "Dashboards"] as const;
 type Tab = (typeof TABS)[number];
