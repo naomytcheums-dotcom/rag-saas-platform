@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+// CookieBanner is DELIBERATELY not mounted -- see docs/compliance/COOKIES.md
+// for why (real hydration crash reproduced twice in production, second
+// fix attempt not re-verified given the time already spent chasing it).
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
