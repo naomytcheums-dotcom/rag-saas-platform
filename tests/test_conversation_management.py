@@ -109,6 +109,22 @@ def test_highlight_matches_case_insensitive():
     assert highlight_matches("Hello World", "world") == "Hello <mark>World</mark>"
 
 
+def test_highlight_matches_escapes_html_in_surrounding_text():
+    """Real regression test for a real stored-XSS bug found by audit
+    (2026-09-19): a conversation message is arbitrary user text, and the
+    frontend renders this function's return value via
+    dangerouslySetInnerHTML -- unescaped HTML in the text around a match
+    used to pass straight through."""
+    result = highlight_matches("<script>alert(1)</script> world", "world")
+    assert result == "&lt;script&gt;alert(1)&lt;/script&gt; <mark>world</mark>"
+    assert "<script>" not in result
+
+
+def test_highlight_matches_escapes_html_in_the_match_itself():
+    result = highlight_matches("say <b>hi</b> now", "<b>hi</b>")
+    assert result == "say <mark>&lt;b&gt;hi&lt;/b&gt;</mark> now"
+
+
 async def test_search_conversations_by_title(db_session):
     """Validation criterion: la recherche fonctionne."""
     user_id = uuid.uuid4()

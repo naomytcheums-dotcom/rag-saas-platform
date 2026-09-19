@@ -12,6 +12,7 @@ asks for.
 """
 
 import datetime as dt
+import html
 import uuid
 
 from sqlalchemy import func, select
@@ -87,18 +88,29 @@ async def rename_conversation(db: AsyncSession, conversation_id: uuid.UUID, titl
 def highlight_matches(text: str, query: str) -> str:
     """Item 2's own literal function -- real, case-insensitive
     `<mark>` wrapping, never a regex-injection risk (the real query is
-    matched literally, not compiled as a real pattern)."""
+    matched literally, not compiled as a real pattern).
+
+    Real, critical bug fixed (2026-09-19, found via audit): `text` is a
+    real conversation message -- arbitrary user-typed content, not
+    trusted markup -- and the frontend renders this function's return
+    value via `dangerouslySetInnerHTML` (ConversationSearch.tsx). This
+    used to return `text` interleaved with `<mark>` tags WITHOUT
+    escaping it first, a real, exploitable stored XSS: a message
+    containing `<script>...</script>` would execute in the browser of
+    anyone who later searched conversations for a term matching inside
+    it. Every real text segment is now HTML-escaped before the (still
+    literal, still trusted) `<mark>` tags are added around it."""
     if not query:
-        return text
+        return html.escape(text)
     lowered_text, lowered_query = text.lower(), query.lower()
     result, cursor = [], 0
     index = lowered_text.find(lowered_query, cursor)
     while index != -1:
-        result.append(text[cursor:index])
-        result.append(f"<mark>{text[index:index + len(query)]}</mark>")
+        result.append(html.escape(text[cursor:index]))
+        result.append(f"<mark>{html.escape(text[index:index + len(query)])}</mark>")
         cursor = index + len(query)
         index = lowered_text.find(lowered_query, cursor)
-    result.append(text[cursor:])
+    result.append(html.escape(text[cursor:]))
     return "".join(result)
 
 
