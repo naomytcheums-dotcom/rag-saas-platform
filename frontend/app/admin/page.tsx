@@ -11,6 +11,107 @@ interface AuditLogEntry {
   timestamp: string;
 }
 
+interface AdminStats {
+  users: { total: number; active: number };
+  organizations: { total: number; active: number };
+  documents: { total: number };
+  agents: { total: number };
+  conversations: { total: number };
+  api_usage: { total_requests: number };
+  revenue: { mrr_cents: number; arr_cents: number; active_subscriptions: number; churn_last_30d: number };
+}
+
+interface AdminOrg {
+  id: string;
+  name: string;
+  slug: string;
+  is_suspended: boolean;
+}
+
+interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  is_email_verified: boolean;
+}
+
+interface AdminPlan {
+  id: string;
+  name: string;
+  monthly_price_cents: number;
+}
+
+interface AdminSubscription {
+  id: string;
+  organization_id: string;
+  status: string;
+}
+
+interface HealthStatus {
+  database?: string;
+  redis?: string;
+  celery?: string;
+}
+
+interface ResourceStats {
+  cpu_percent: number;
+  memory_percent: number;
+  disk_percent: number;
+  cpu_count: number;
+}
+
+interface QueueStats {
+  workers_online: number;
+  active_tasks: number;
+  scheduled_tasks: number;
+  reserved_tasks: number;
+}
+
+interface MetricsSummary {
+  business: { organizations: number; users: number; conversations: number; active_subscriptions: number };
+}
+
+interface TracingStatus {
+  active: boolean;
+  exporter?: string;
+}
+
+interface AlertRule {
+  id: string;
+  name: string;
+  metric: string;
+  operator: string;
+  threshold: number;
+}
+
+interface AlertChannel {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+}
+
+interface AlertHistoryEntry {
+  id: string;
+  message: string;
+}
+
+interface Incident {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+}
+
+interface AdminLogEntry {
+  id: string;
+  level: string;
+  logger_name: string;
+  created_at: string;
+  message: string;
+}
+
 type AccessState = "checking" | "granted" | "denied";
 
 const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
@@ -49,7 +150,7 @@ export default function AdminPage() {
       <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
         <h1 className="text-lg font-semibold text-foreground">Accès restreint</h1>
         <p className="max-w-sm text-sm text-foreground-muted">
-          Cette section est réservée aux administrateurs de la plateforme. Votre compte n'a pas ce rôle.
+          Cette section est réservée aux administrateurs de la plateforme. Votre compte n&apos;a pas ce rôle.
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
@@ -99,11 +200,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function OverviewTab() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.get("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
+    void api.get<AdminStats>("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, []);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
@@ -128,16 +229,16 @@ function OverviewTab() {
 }
 
 function OrganizationsTab() {
-  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgs, setOrgs] = useState<AdminOrg[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<{ items: any[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
+    void api.get<{ items: AdminOrg[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  async function toggleSuspend(org: any) {
+  async function toggleSuspend(org: AdminOrg) {
     if (org.is_suspended) {
       await api.post(`/admin/organizations/${org.id}/activate`);
     } else {
@@ -162,24 +263,24 @@ function OrganizationsTab() {
           </button>
         </div>
       ))}
-      {orgs.length === 0 && <p className="text-sm text-foreground-muted">Aucune organisation pour l'instant.</p>}
+      {orgs.length === 0 && <p className="text-sm text-foreground-muted">Aucune organisation pour l&apos;instant.</p>}
     </div>
   );
 }
 
 function UsersTab() {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     const query = search ? `?search=${encodeURIComponent(search)}&limit=50` : "?limit=50";
-    void api.get<{ items: any[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
+    void api.get<{ items: AdminUser[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function toggleSuspend(u: any) {
+  async function toggleSuspend(u: AdminUser) {
     if (u.is_active) {
       const reason = window.prompt("Motif de suspension (facultatif)") ?? undefined;
       await api.post(`/admin/users/${u.id}/suspend`, { reason });
@@ -189,7 +290,7 @@ function UsersTab() {
     load();
   }
 
-  async function resetPassword(u: any) {
+  async function resetPassword(u: AdminUser) {
     await api.post(`/admin/users/${u.id}/reset-password`);
     window.alert(`Email de réinitialisation du mot de passe envoyé à ${u.email}`);
   }
@@ -223,15 +324,15 @@ function UsersTab() {
 }
 
 function SubscriptionsTab() {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [subs, setSubs] = useState<any[]>([]);
+  const [plans, setPlans] = useState<AdminPlan[]>([]);
+  const [subs, setSubs] = useState<AdminSubscription[]>([]);
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<any[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
-    void api.get<any[]>("/admin/subscriptions?limit=50").then(setSubs).catch(() => {});
+    void api.get<AdminPlan[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
+    void api.get<AdminSubscription[]>("/admin/subscriptions?limit=50").then(setSubs).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -274,7 +375,7 @@ function SubscriptionsTab() {
               <span className="font-medium text-foreground">{s.status}</span>
             </div>
           ))}
-          {subs.length === 0 && <p className="text-sm text-foreground-muted">Aucun abonnement pour l'instant.</p>}
+          {subs.length === 0 && <p className="text-sm text-foreground-muted">Aucun abonnement pour l&apos;instant.</p>}
         </div>
       </div>
     </div>
@@ -282,18 +383,18 @@ function SubscriptionsTab() {
 }
 
 function MonitoringTab() {
-  const [health, setHealth] = useState<any>(null);
-  const [resources, setResources] = useState<any>(null);
-  const [queues, setQueues] = useState<any>(null);
-  const [metrics, setMetrics] = useState<any>(null);
-  const [tracing, setTracing] = useState<any>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [resources, setResources] = useState<ResourceStats | null>(null);
+  const [queues, setQueues] = useState<QueueStats | null>(null);
+  const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
+  const [tracing, setTracing] = useState<TracingStatus | null>(null);
 
   useEffect(() => {
-    void api.get("/admin/monitoring/health").then(setHealth).catch(() => {});
-    void api.get("/admin/monitoring/resources").then(setResources).catch(() => {});
-    void api.get("/admin/monitoring/queues").then(setQueues).catch(() => {});
-    void api.get("/monitoring/metrics").then(setMetrics).catch(() => {});
-    void api.get("/monitoring/tracing/status").then(setTracing).catch(() => {});
+    void api.get<HealthStatus>("/admin/monitoring/health").then(setHealth).catch(() => {});
+    void api.get<ResourceStats>("/admin/monitoring/resources").then(setResources).catch(() => {});
+    void api.get<QueueStats>("/admin/monitoring/queues").then(setQueues).catch(() => {});
+    void api.get<MetricsSummary>("/monitoring/metrics").then(setMetrics).catch(() => {});
+    void api.get<TracingStatus>("/monitoring/tracing/status").then(setTracing).catch(() => {});
   }, []);
 
   return (
@@ -350,18 +451,18 @@ function MonitoringTab() {
 }
 
 function AlertingTab() {
-  const [rules, setRules] = useState<any[]>([]);
-  const [channels, setChannels] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
-  const [incidents, setIncidents] = useState<any[]>([]);
+  const [rules, setRules] = useState<AlertRule[]>([]);
+  const [channels, setChannels] = useState<AlertChannel[]>([]);
+  const [history, setHistory] = useState<AlertHistoryEntry[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [newRule, setNewRule] = useState({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
   const [newChannel, setNewChannel] = useState({ name: "", type: "email", value: "" });
 
   const load = useCallback(() => {
-    void api.get<any[]>("/alerting/rules").then(setRules).catch(() => {});
-    void api.get<any[]>("/alerting/channels").then(setChannels).catch(() => {});
-    void api.get<any[]>("/alerting/history").then(setHistory).catch(() => {});
-    void api.get<any[]>("/alerting/incidents").then(setIncidents).catch(() => {});
+    void api.get<AlertRule[]>("/alerting/rules").then(setRules).catch(() => {});
+    void api.get<AlertChannel[]>("/alerting/channels").then(setChannels).catch(() => {});
+    void api.get<AlertHistoryEntry[]>("/alerting/history").then(setHistory).catch(() => {});
+    void api.get<Incident[]>("/alerting/incidents").then(setIncidents).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -417,7 +518,7 @@ function AlertingTab() {
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Règles d'alerte</p>
+        <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Règles d&apos;alerte</p>
         <div className="flex flex-col gap-2">
           {rules.map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
@@ -432,7 +533,7 @@ function AlertingTab() {
             <option value="cpu_percent">CPU %</option>
             <option value="memory_percent">Mémoire %</option>
             <option value="disk_percent">Disque %</option>
-            <option value="celery_queue_backlog">File d'attente Celery</option>
+            <option value="celery_queue_backlog">File d&apos;attente Celery</option>
             <option value="http_5xx_total">Total HTTP 5xx</option>
           </select>
           <select value={newRule.operator} onChange={(e) => setNewRule({ ...newRule, operator: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
@@ -448,7 +549,7 @@ function AlertingTab() {
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">Historique récent des alertes</p>
-        {history.length === 0 ? <p className="text-sm text-foreground-muted">Aucune alerte déclenchée pour l'instant.</p> : (
+        {history.length === 0 ? <p className="text-sm text-foreground-muted">Aucune alerte déclenchée pour l&apos;instant.</p> : (
           <div className="flex flex-col gap-2">
             {history.map((h) => (
               <div key={h.id} className="rounded-lg border border-border bg-surface p-3 text-sm">{h.message}</div>
@@ -475,13 +576,13 @@ function AlertingTab() {
 }
 
 function LogsTab() {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AdminLogEntry[]>([]);
   const [level, setLevel] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     const query = level ? `?level=${level}&limit=50` : "?limit=50";
-    void api.get<{ items: any[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
+    void api.get<{ items: AdminLogEntry[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement"));
   }, [level]);
 
   useEffect(() => { load(); }, [load]);
@@ -509,7 +610,7 @@ function LogsTab() {
             <p className="mt-1 text-foreground">{log.message}</p>
           </div>
         ))}
-        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun journal système enregistré (les vrais journaux de niveau WARNING et plus sont capturés en direct — ce processus de développement n'en a peut-être simplement pas encore généré).</p>}
+        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun journal système enregistré (les vrais journaux de niveau WARNING et plus sont capturés en direct — ce processus de développement n&apos;en a peut-être simplement pas encore généré).</p>}
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ export function CustomCSSEditor({ value, onChange }: CustomCSSEditorProps) {
         placeholder=".my-brand-header { background: linear-gradient(...); }"
         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-foreground"
       />
-      <p className="mt-1 text-xs text-foreground-muted">Applied on your organization's own branded pages only.</p>
+      <p className="mt-1 text-xs text-foreground-muted">Applied on your organization&apos;s own branded pages only.</p>
     </div>
   );
 }

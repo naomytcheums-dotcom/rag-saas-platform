@@ -108,7 +108,7 @@ export default function LandingPage() {
         {/* Appel à l'action */}
         <section className="mt-28 rounded-2xl bg-gradient-to-r from-accent to-orange-400 p-10 text-white">
           <h2 className="text-2xl font-semibold">Prêt à créer votre assistant ?</h2>
-          <p className="mt-2 text-sm text-white/90">Créez votre organisation en moins d'une minute — aucune carte bancaire requise.</p>
+          <p className="mt-2 text-sm text-white/90">Créez votre organisation en moins d&apos;une minute — aucune carte bancaire requise.</p>
           <Link href="/register" className="mt-5 inline-block rounded-lg bg-white px-6 py-3 text-sm font-medium text-accent-hover transition-transform hover:-translate-y-0.5">
             Commencer gratuitement
           </Link>

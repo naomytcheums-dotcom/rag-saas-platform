@@ -31,7 +31,7 @@
 
   function emit(event, payload) {
     (listeners[event] || []).forEach(function (cb) {
-      try { cb(payload); } catch (e) { /* one bad subscriber must not break the others */ }
+      try { cb(payload); } catch { /* one bad subscriber must not break the others */ }
     });
   }
 

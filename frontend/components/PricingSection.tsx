@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 
 interface Plan {
   id: string;
@@ -42,7 +42,7 @@ export default function PricingSection() {
     <section id="pricing" className="mt-28">
       <h2 className="text-center text-2xl font-semibold text-foreground">Tarifs</h2>
       <p className="mx-auto mt-2 max-w-lg text-center text-sm text-foreground-muted">
-        Commencez gratuitement, passez à l'échelle quand vous en avez besoin. Aucune carte bancaire requise pour démarrer.
+        Commencez gratuitement, passez à l&apos;échelle quand vous en avez besoin. Aucune carte bancaire requise pour démarrer.
       </p>
 
       {!plans ? (

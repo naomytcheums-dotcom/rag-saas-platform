@@ -51,11 +51,12 @@ function WebhookDeliveries({ webhookId }: { webhookId: string }) {
   }, [webhookId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
   if (loading) return <p className="text-xs text-foreground-muted">Chargement des livraisons…</p>;
-  if (deliveries.length === 0) return <p className="text-xs text-foreground-muted">Aucune livraison pour l'instant.</p>;
+  if (deliveries.length === 0) return <p className="text-xs text-foreground-muted">Aucune livraison pour l&apos;instant.</p>;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -96,6 +97,7 @@ export default function WebhooksPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -145,7 +147,7 @@ export default function WebhooksPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="text-xl font-semibold text-foreground">Webhooks</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Recevez un vrai POST HTTP à chaque fois qu'un événement survient dans votre organisation.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Recevez un vrai POST HTTP à chaque fois qu&apos;un événement survient dans votre organisation.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -184,7 +186,7 @@ export default function WebhooksPage() {
         {loading ? (
           <p className="text-sm text-foreground-muted">Chargement…</p>
         ) : webhooks.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun webhook pour l'instant.</p>
+          <p className="text-sm text-foreground-muted">Aucun webhook pour l&apos;instant.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {webhooks.map((webhook) => (

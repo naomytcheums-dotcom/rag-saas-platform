@@ -54,11 +54,17 @@ export function exportMetricsUrl(orgId: string, dateRange: string, format: "csv"
 
 // -- Business (platform-wide) ---------------------------------------------
 
-export const getBusinessRevenue = (dateRange = "30d") => api.get(`/analytics/business/revenue${toQuery({ date_range: dateRange })}`);
-export const getBusinessCustomers = () => api.get(`/analytics/business/customers`);
-export const getBusinessRetention = (dateRange = "30d") => api.get(`/analytics/business/retention${toQuery({ date_range: dateRange })}`);
-export const getBusinessChurn = (dateRange = "30d") => api.get(`/analytics/business/churn${toQuery({ date_range: dateRange })}`);
-export const getBusinessLtv = (dateRange = "30d") => api.get(`/analytics/business/ltv${toQuery({ date_range: dateRange })}`);
+export interface BusinessRevenue { mrr_cents: number; arr_cents: number; arpu_cents: number; }
+export interface BusinessCustomers { active_customers: number; total_customers: number; }
+export interface BusinessRetention { retention_rate: number | null; }
+export interface BusinessChurn { churn_rate: number | null; }
+export interface BusinessLtv { ltv_cents: number | null; }
+
+export const getBusinessRevenue = (dateRange = "30d") => api.get<BusinessRevenue>(`/analytics/business/revenue${toQuery({ date_range: dateRange })}`);
+export const getBusinessCustomers = () => api.get<BusinessCustomers>(`/analytics/business/customers`);
+export const getBusinessRetention = (dateRange = "30d") => api.get<BusinessRetention>(`/analytics/business/retention${toQuery({ date_range: dateRange })}`);
+export const getBusinessChurn = (dateRange = "30d") => api.get<BusinessChurn>(`/analytics/business/churn${toQuery({ date_range: dateRange })}`);
+export const getBusinessLtv = (dateRange = "30d") => api.get<BusinessLtv>(`/analytics/business/ltv${toQuery({ date_range: dateRange })}`);
 export const getBusinessRevenueTrend = (dateRange = "30d") => api.get<{ date: string; mrr_cents: number }[]>(`/analytics/business/revenue/trend${toQuery({ date_range: dateRange })}`);
 
 export async function getBusinessMetrics(dateRange = "30d") {
@@ -70,9 +76,13 @@ export async function getBusinessMetrics(dateRange = "30d") {
 
 // -- Product (per-organization) --------------------------------------------
 
-export const getProductUsage = (orgId: string, dateRange = "30d") => api.get(`/organizations/${orgId}/analytics/product/usage${toQuery({ date_range: dateRange })}`);
-export const getProductAdoption = (orgId: string, dateRange = "30d") => api.get(`/organizations/${orgId}/analytics/product/adoption${toQuery({ date_range: dateRange })}`);
-export const getProductEngagement = (orgId: string, dateRange = "30d") => api.get(`/organizations/${orgId}/analytics/product/engagement${toQuery({ date_range: dateRange })}`);
+export interface ProductUsage { by_metric: Record<string, number>; }
+export interface ProductAdoption { by_event_type: { event_type: string; event_count: number }[]; }
+export interface ProductEngagement { daily_active_users: { date: string; active_users: number }[]; }
+
+export const getProductUsage = (orgId: string, dateRange = "30d") => api.get<ProductUsage>(`/organizations/${orgId}/analytics/product/usage${toQuery({ date_range: dateRange })}`);
+export const getProductAdoption = (orgId: string, dateRange = "30d") => api.get<ProductAdoption>(`/organizations/${orgId}/analytics/product/adoption${toQuery({ date_range: dateRange })}`);
+export const getProductEngagement = (orgId: string, dateRange = "30d") => api.get<ProductEngagement>(`/organizations/${orgId}/analytics/product/engagement${toQuery({ date_range: dateRange })}`);
 export const getProductFunnel = (orgId: string, steps: string[], dateRange = "30d") =>
   api.get(`/organizations/${orgId}/analytics/product/funnels${toQuery({ steps: steps.join(","), date_range: dateRange })}`);
 
@@ -85,10 +95,15 @@ export async function getProductMetrics(orgId: string, dateRange = "30d") {
 
 // -- Technical (per-organization) -------------------------------------------
 
-export const getTechnicalPerformance = (orgId: string) => api.get(`/organizations/${orgId}/analytics/technical/performance`);
-export const getTechnicalErrors = (orgId: string) => api.get(`/organizations/${orgId}/analytics/technical/errors`);
-export const getTechnicalApiUsage = (orgId: string, dateRange = "30d") => api.get(`/organizations/${orgId}/analytics/technical/api-usage${toQuery({ date_range: dateRange })}`);
-export const getTechnicalLlmUsage = (orgId: string, dateRange = "30d") => api.get(`/organizations/${orgId}/analytics/technical/llm-usage${toQuery({ date_range: dateRange })}`);
+export interface TechnicalPerformance { http_requests_total_samples: number; request_duration_observation_count: number; }
+export interface TechnicalErrors { by_type: Record<string, number>; }
+export interface TechnicalApiUsage { by_metric: Record<string, number>; }
+export interface TechnicalLlmUsage { total_tokens: number; total_cost: number; }
+
+export const getTechnicalPerformance = (orgId: string) => api.get<TechnicalPerformance>(`/organizations/${orgId}/analytics/technical/performance`);
+export const getTechnicalErrors = (orgId: string) => api.get<TechnicalErrors>(`/organizations/${orgId}/analytics/technical/errors`);
+export const getTechnicalApiUsage = (orgId: string, dateRange = "30d") => api.get<TechnicalApiUsage>(`/organizations/${orgId}/analytics/technical/api-usage${toQuery({ date_range: dateRange })}`);
+export const getTechnicalLlmUsage = (orgId: string, dateRange = "30d") => api.get<TechnicalLlmUsage>(`/organizations/${orgId}/analytics/technical/llm-usage${toQuery({ date_range: dateRange })}`);
 
 export async function getTechnicalMetrics(orgId: string, dateRange = "30d") {
   const [performance, errors, apiUsage, llmUsage] = await Promise.all([

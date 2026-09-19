@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -48,6 +49,7 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -124,7 +126,7 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
       <div className="flex items-center gap-3">
         {profile.avatar_url ? (
-          <img src={profile.avatar_url} alt="Avatar" className="h-14 w-14 rounded-full object-cover" />
+          <Image src={profile.avatar_url} alt="Avatar" width={56} height={56} unoptimized className="h-14 w-14 rounded-full object-cover" />
         ) : (
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-lg font-semibold text-accent-hover">
             {(profile.full_name ?? profile.email).charAt(0).toUpperCase()}
@@ -172,6 +174,7 @@ function SecurityTab({ onError, onSaved }: { onError: (e: string) => void; onSav
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void loadSessions();
   }, [loadSessions]);
 

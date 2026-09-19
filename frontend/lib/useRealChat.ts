@@ -143,9 +143,12 @@ export function useRealChat(orgId: string) {
   );
 
   const regenerate = useCallback(
-    (_id: string) => {
-      const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      if (lastUser) void sendMessage(lastUser.content);
+    (id: string) => {
+      const index = messages.findIndex((m) => m.id === id);
+      const precedingUser = [...messages.slice(0, index === -1 ? messages.length : index + 1)]
+        .reverse()
+        .find((m) => m.role === "user");
+      if (precedingUser) void sendMessage(precedingUser.content);
     },
     [messages, sendMessage],
   );

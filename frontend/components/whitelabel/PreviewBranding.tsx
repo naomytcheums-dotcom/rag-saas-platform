@@ -30,7 +30,7 @@ export function PreviewBranding({ orgId }: PreviewBrandingProps) {
           <span className="rounded-full px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: preview.accent_color }}>Accent</span>
         </div>
         {!preview.is_active && (
-          <p className="mt-3 text-xs text-foreground-muted">White-label is currently turned off -- this preview shows the platform's own real defaults.</p>
+          <p className="mt-3 text-xs text-foreground-muted">White-label is currently turned off -- this preview shows the platform&apos;s own real defaults.</p>
         )}
       </div>
     </div>

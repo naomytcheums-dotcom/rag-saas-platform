@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { MetricCard } from "@/components/analytics/MetricCard";
 import * as analyticsService from "@/lib/services/analytics";
 
@@ -19,8 +20,8 @@ export function TechnicalMetrics({ orgId, dateRange }: TechnicalMetricsProps) {
       try {
         setData(await analyticsService.getTechnicalMetrics(orgId, dateRange));
         setError(null);
-      } catch (err: any) {
-        if (err?.status === 403) setNotAllowed(true);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 403) setNotAllowed(true);
         else setError(err instanceof Error ? err.message : "Failed to load technical metrics");
       }
     })();
@@ -32,15 +33,13 @@ export function TechnicalMetrics({ orgId, dateRange }: TechnicalMetricsProps) {
   if (error) return <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-foreground-muted">Loading…</p>;
 
-  const performance = data.performance as any;
-  const llmUsage = data.llmUsage as any;
-  const apiUsage = data.apiUsage as any;
+  const { performance, llmUsage, apiUsage } = data;
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-foreground-muted">
-        Performance/error figures are platform-wide (this deployment's Prometheus counters aren't labeled per organization) --
-        LLM usage below is scoped to this organization's own Evaluation Lab runs (see docs/analytics/TECHNICAL.md).
+        Performance/error figures are platform-wide (this deployment&apos;s Prometheus counters aren&apos;t labeled per organization) --
+        LLM usage below is scoped to this organization&apos;s own Evaluation Lab runs (see docs/analytics/TECHNICAL.md).
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="HTTP requests (this process)" value={performance?.http_requests_total_samples ?? "—"} />

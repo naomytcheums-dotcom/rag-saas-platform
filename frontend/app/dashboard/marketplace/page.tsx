@@ -134,7 +134,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
             )}
           </div>
         ))}
-        {published.length === 0 && <p className="text-sm text-foreground-muted">Vous n'avez pas encore publié de plugin.</p>}
+        {published.length === 0 && <p className="text-sm text-foreground-muted">Vous n&apos;avez pas encore publié de plugin.</p>}
       </div>
 
       <PluginCreateForm orgId={orgId} onPublished={() => void load()} onError={onError} />

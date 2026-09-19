@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 
@@ -40,6 +41,7 @@ export default function WidgetSettingsPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -101,7 +103,7 @@ export default function WidgetSettingsPage() {
         <div>
           <label className="text-sm font-medium text-foreground">Logo</label>
           <div className="mt-1 flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="Logo du widget" className="h-10 w-10 rounded-full object-cover" />}
+            {logoUrl && <Image src={logoUrl} alt="Logo du widget" width={40} height={40} unoptimized className="h-10 w-10 rounded-full object-cover" />}
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} className="text-xs" />
           </div>
         </div>
@@ -112,7 +114,7 @@ export default function WidgetSettingsPage() {
             <input type="color" value={colors.primary_color} onChange={(e) => setColors((c) => ({ ...c, primary_color: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground">Couleur de l'en-tête</label>
+            <label className="text-sm font-medium text-foreground">Couleur de l&apos;en-tête</label>
             <input type="color" value={colors.header_background} onChange={(e) => setColors((c) => ({ ...c, header_background: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
         </div>

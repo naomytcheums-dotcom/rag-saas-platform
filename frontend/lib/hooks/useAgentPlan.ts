@@ -13,6 +13,7 @@ export function useAgentPlan(agentId: string, planId: string | null) {
   useEffect(() => {
     if (!planId) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     setLoading(true);
     Promise.all([autonomousAgentsService.getAgentPlan(agentId, planId), autonomousAgentsService.listAgentSteps(agentId, planId)])
       .then(([loadedPlan, loadedSteps]) => {

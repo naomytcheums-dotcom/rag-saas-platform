@@ -33,6 +33,7 @@ export default function OrganizationSettingsPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -71,7 +72,7 @@ export default function OrganizationSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold text-foreground">Paramètres de l'organisation</h1>
+      <h1 className="text-xl font-semibold text-foreground">Paramètres de l&apos;organisation</h1>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
       {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Enregistré !</p>}

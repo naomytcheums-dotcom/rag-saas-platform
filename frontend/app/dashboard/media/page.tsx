@@ -17,7 +17,7 @@ export default function Page() {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="text-xl font-semibold text-foreground">Médiathèque</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Envoyez des images, de l'audio et de la vidéo — chaque fichier est automatiquement traité et rendu consultable.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Envoyez des images, de l&apos;audio et de la vidéo — chaque fichier est automatiquement traité et rendu consultable.</p>
 
       <div className="mt-4">
         <MediaUploadZone orgId={org.id} onUploaded={() => setRefreshKey((k) => k + 1)} />

@@ -144,6 +144,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -173,7 +174,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Factures récentes</h2>
         {invoices.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune facture pour l'instant.</p>
+          <p className="text-sm text-foreground-muted">Aucune facture pour l&apos;instant.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {invoices.map((inv) => (
@@ -209,6 +210,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -270,7 +272,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           }}
           className="self-start text-xs font-medium text-danger hover:underline"
         >
-          Annuler l'abonnement
+          Annuler l&apos;abonnement
         </button>
       )}
       {sub && sub.status === "canceled" && (
@@ -286,7 +288,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           }}
           className="self-start text-xs font-medium text-accent hover:underline"
         >
-          Réactiver l'abonnement
+          Réactiver l&apos;abonnement
         </button>
       )}
     </div>
@@ -311,6 +313,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -321,7 +324,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Usage — 30 derniers jours</h2>
         {metrics.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun usage enregistré pour l'instant pour cette organisation.</p>
+          <p className="text-sm text-foreground-muted">Aucun usage enregistré pour l&apos;instant pour cette organisation.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {metrics.map(([metric, total]) => (
@@ -361,6 +364,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -397,7 +401,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Historique des transactions</h2>
         {transactions.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune transaction pour l'instant.</p>
+          <p className="text-sm text-foreground-muted">Aucune transaction pour l&apos;instant.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {transactions.map((tx) => (
@@ -426,6 +430,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -453,7 +458,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   return (
     <div className="flex flex-col gap-2">
       {invoices.length === 0 ? (
-        <p className="text-sm text-foreground-muted">Aucune facture pour l'instant — les factures sont générées automatiquement une fois un vrai forfait payant actif.</p>
+        <p className="text-sm text-foreground-muted">Aucune facture pour l&apos;instant — les factures sont générées automatiquement une fois un vrai forfait payant actif.</p>
       ) : (
         invoices.map((inv) => (
           <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3 text-sm">

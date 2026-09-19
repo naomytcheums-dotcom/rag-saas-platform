@@ -87,7 +87,7 @@ export default function SecurityPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="text-xl font-semibold text-foreground">Sécurité</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Rôles, journal d'audit, chiffrement, conformité et analyse de vulnérabilités pour {org.name}.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Rôles, journal d&apos;audit, chiffrement, conformité et analyse de vulnérabilités pour {org.name}.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -137,6 +137,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -182,7 +183,6 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [newRoleName, setNewRoleName] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async () => {
     try {
@@ -200,6 +200,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -313,6 +314,7 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -330,7 +332,7 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
             <span className={log.success ? "text-success" : "text-danger"}>{log.success ? "succès" : "échec"}</span>
           </div>
         ))}
-        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun événement enregistré pour cette organisation pour l'instant.</p>}
+        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun événement enregistré pour cette organisation pour l&apos;instant.</p>}
       </div>
     </div>
   );
@@ -351,6 +353,7 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
   }, [onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -395,7 +398,7 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
   );
 }
 
-function ComplianceTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => void }) {
   const [consents, setConsents] = useState<{ consent_type: string; granted: boolean }[]>([]);
   const [status, setStatus] = useState<{ pending_data_requests: number; unnotified_breaches: number; compliant: boolean } | null>(null);
   const [statusRestricted, setStatusRestricted] = useState(false);
@@ -414,6 +417,7 @@ function ComplianceTab({ orgId, onError }: { orgId: string; onError: (e: string)
   }, [onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -452,7 +456,7 @@ function ComplianceTab({ orgId, onError }: { orgId: string; onError: (e: string)
 
       {!statusRestricted && status && (
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-sm font-semibold text-foreground">Statut de conformité de l'organisation</h2>
+          <h2 className="text-sm font-semibold text-foreground">Statut de conformité de l&apos;organisation</h2>
           <p className="mt-2 text-sm"><span className={status.compliant ? "text-success" : "text-warning"}>{status.compliant ? "Conforme" : "Nécessite une attention"}</span></p>
           <p className="mt-1 text-xs text-foreground-muted">{status.pending_data_requests} demande(s) de données en attente · {status.unnotified_breaches} violation(s) non notifiée(s)</p>
         </div>
@@ -480,6 +484,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -559,6 +564,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   }, [orgId, onError]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -599,7 +605,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       </div>
 
       <div className="mt-3">
-        <label className="text-xs font-medium text-foreground-muted">Liste blanche d'IP (une par ligne, vide = illimité)</label>
+        <label className="text-xs font-medium text-foreground-muted">Liste blanche d&apos;IP (une par ligne, vide = illimité)</label>
         <textarea value={policy.ip_allowlist ?? ""} onChange={(e) => setPolicy({ ...policy, ip_allowlist: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
       </div>
 

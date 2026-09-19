@@ -44,6 +44,7 @@ export default function LLMConfigPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -85,7 +86,7 @@ export default function LLMConfigPage() {
       <p className="mt-1 text-sm text-foreground-muted">
         Utilisez votre propre clé API pour un fournisseur IA au lieu des crédits inclus dans votre forfait — les
         appels avec une clé BYOK sont facturés directement par le fournisseur, jamais sur vos crédits IA. Votre
-        clé est chiffrée avant d'être stockée et n'est jamais réaffichée après l'enregistrement.
+        clé est chiffrée avant d&apos;être stockée et n&apos;est jamais réaffichée après l&apos;enregistrement.
       </p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}

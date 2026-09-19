@@ -27,6 +27,7 @@ export function WhiteLabelConfig({ config, onSave }: WhiteLabelConfigProps) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     setBrandName(config.brand_name ?? "");
     setPrimaryColor(config.primary_color);
     setSecondaryColor(config.secondary_color);
@@ -69,7 +70,7 @@ export function WhiteLabelConfig({ config, onSave }: WhiteLabelConfigProps) {
             Active
           </label>
         </div>
-        <p className="mt-1 text-xs text-foreground-muted">When off, every visitor sees this platform's own real defaults, regardless of what's saved below.</p>
+        <p className="mt-1 text-xs text-foreground-muted">When off, every visitor sees this platform&apos;s own real defaults, regardless of what&apos;s saved below.</p>
       </div>
 
       <div className="rounded-xl border border-border bg-surface p-5">
@@ -84,7 +85,7 @@ export function WhiteLabelConfig({ config, onSave }: WhiteLabelConfigProps) {
           </div>
           <label className="mt-6 flex items-center gap-2 text-sm text-foreground">
             <input type="checkbox" checked={hideBranding} onChange={(e) => setHideBranding(e.target.checked)} />
-            Hide "RAG SaaS" branding
+            Hide &quot;RAG SaaS&quot; branding
           </label>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">

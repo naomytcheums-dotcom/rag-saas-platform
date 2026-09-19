@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { MetricCard } from "@/components/analytics/MetricCard";
 import { MetricChart } from "@/components/analytics/MetricChart";
 import * as analyticsService from "@/lib/services/analytics";
@@ -20,9 +21,7 @@ function formatPercent(rate: number | null | undefined): string {
 }
 
 export function BusinessMetrics({ dateRange }: BusinessMetricsProps) {
-  const [data, setData] = useState<{
-    revenue: any; customers: any; retention: any; churn: any; ltv: any;
-  } | null>(null);
+  const [data, setData] = useState<Awaited<ReturnType<typeof analyticsService.getBusinessMetrics>> | null>(null);
   const [trend, setTrend] = useState<{ date: string; mrr_cents: number }[]>([]);
   const [notAllowed, setNotAllowed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +36,8 @@ export function BusinessMetrics({ dateRange }: BusinessMetricsProps) {
         setData(metrics);
         setTrend(revenueTrend);
         setError(null);
-      } catch (err: any) {
-        if (err?.status === 403) {
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 403) {
           setNotAllowed(true);
         } else {
           setError(err instanceof Error ? err.message : "Failed to load business metrics");

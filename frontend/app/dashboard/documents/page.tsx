@@ -39,6 +39,7 @@ export default function DocumentsPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -79,7 +80,7 @@ export default function DocumentsPage() {
         {loading ? (
           <p className="text-sm text-foreground-muted">Chargement…</p>
         ) : documents.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun document pour l'instant.</p>
+          <p className="text-sm text-foreground-muted">Aucun document pour l&apos;instant.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {documents.map((doc) => (

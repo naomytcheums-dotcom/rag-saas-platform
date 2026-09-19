@@ -22,6 +22,7 @@ export function useMetrics(orgId: string, metricName?: string, period = "day", d
   }, [orgId, metricName, period, dateRange]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void reload();
   }, [reload]);
 

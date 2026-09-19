@@ -16,7 +16,7 @@ export default function SecuritySection() {
     <section className="mt-28 rounded-2xl border border-border bg-surface p-8 sm:p-10">
       <h2 className="text-center text-2xl font-semibold text-foreground">Sécurité et conformité</h2>
       <p className="mx-auto mt-2 max-w-lg text-center text-sm text-foreground-muted">
-        Conçu pour des équipes qui manipulent des données sensibles, pas seulement des cas d'usage de démonstration.
+        Conçu pour des équipes qui manipulent des données sensibles, pas seulement des cas d&apos;usage de démonstration.
       </p>
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {SECURITY_ITEMS.map((item) => (

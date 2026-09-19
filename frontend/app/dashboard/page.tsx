@@ -22,7 +22,7 @@ export default function DashboardHome() {
       <h1 className="text-xl font-semibold text-foreground">
         {loading ? "…" : org?.name ?? "Votre espace de travail"}
       </h1>
-      <p className="mt-1 text-sm text-foreground-muted">Tout ce qu'il vous faut pour gérer votre plateforme RAG.</p>
+      <p className="mt-1 text-sm text-foreground-muted">Tout ce qu&apos;il vous faut pour gérer votre plateforme RAG.</p>
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {QUICK_LINKS.map((link) => (

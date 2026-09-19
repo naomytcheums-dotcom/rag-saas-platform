@@ -68,7 +68,7 @@ export function PartnerDashboard() {
         <div className="rounded-xl border border-border bg-surface p-5">
           <h2 className="text-xs font-medium uppercase text-foreground-muted">Commission rate</h2>
           <p className="mt-2 text-2xl font-semibold text-foreground">{reseller.commission_percent}%</p>
-          <p className="mt-1 text-xs text-foreground-muted">Applied to your sub-clients' active monthly subscriptions.</p>
+          <p className="mt-1 text-xs text-foreground-muted">Applied to your sub-clients&apos; active monthly subscriptions.</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-5">
           <h2 className="text-xs font-medium uppercase text-foreground-muted">Status</h2>

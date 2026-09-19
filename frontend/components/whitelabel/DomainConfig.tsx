@@ -59,7 +59,7 @@ export function DomainConfig({ domain, domainVerified, onSet, onRemove, onVerify
           </div>
           {!domainVerified && (
             <p className="text-xs text-foreground-muted">
-              Add a CNAME record pointing this domain at this platform's own domain, then verify. DNS propagation can take up to a few hours.
+              Add a CNAME record pointing this domain at this platform&apos;s own domain, then verify. DNS propagation can take up to a few hours.
             </p>
           )}
           <div className="flex gap-2">

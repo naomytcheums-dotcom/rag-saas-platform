@@ -24,9 +24,16 @@ interface QuotaStatus {
 }
 
 function KeyStatusBadge({ apiKey }: { apiKey: ApiKey }) {
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the wall clock) after mount, not a value derivable from props/state.
+    setNow(Date.now());
+  }, []);
+
   if (!apiKey.is_active) return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted">révoquée</span>;
-  if (apiKey.expires_at) {
-    const daysLeft = (new Date(apiKey.expires_at).getTime() - Date.now()) / 86_400_000;
+  if (apiKey.expires_at && now !== null) {
+    const daysLeft = (new Date(apiKey.expires_at).getTime() - now) / 86_400_000;
     if (daysLeft < 0) return <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">expirée</span>;
     if (daysLeft < 7) return <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">expire bientôt</span>;
   }
@@ -80,6 +87,7 @@ export default function ApiKeysPage() {
   }, [org]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
 
@@ -129,7 +137,7 @@ export default function ApiKeysPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="text-xl font-semibold text-foreground">Clés API</h1>
       <p className="mt-1 text-sm text-foreground-muted">
-        Clés réelles, révocables, propres à l'organisation, pour l'API publique <code>/v1/*</code>.
+        Clés réelles, révocables, propres à l&apos;organisation, pour l&apos;API publique <code>/v1/*</code>.
       </p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
@@ -185,7 +193,7 @@ export default function ApiKeysPage() {
         {loading ? (
           <p className="text-sm text-foreground-muted">Chargement…</p>
         ) : keys.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune clé API pour l'instant.</p>
+          <p className="text-sm text-foreground-muted">Aucune clé API pour l&apos;instant.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {keys.map((key) => (

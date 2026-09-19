@@ -21,6 +21,7 @@ export function MediaDetail({ mediaAssetId }: { mediaAssetId: string }) {
   }, [mediaAssetId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     if (polled) setAsset(polled);
   }, [polled]);
 

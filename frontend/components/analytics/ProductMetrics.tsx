@@ -28,23 +28,23 @@ export function ProductMetrics({ orgId, dateRange }: ProductMetricsProps) {
   if (error) return <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-foreground-muted">Loading…</p>;
 
-  const adoption = (data.adoption as any)?.by_event_type ?? [];
-  const engagement = (data.engagement as any)?.daily_active_users ?? [];
-  const usage = (data.usage as any)?.by_metric ?? {};
+  const adoption = data.adoption.by_event_type;
+  const engagement = data.engagement.daily_active_users;
+  const usage = data.usage.by_metric;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-xs font-medium uppercase text-foreground-muted">Daily active users</h2>
         <div className="mt-3">
-          <MetricChart type="area" data={engagement.map((row: any) => ({ label: row.date.slice(5), value: row.active_users }))} />
+          <MetricChart type="area" data={engagement.map((row) => ({ label: row.date.slice(5), value: row.active_users }))} />
         </div>
       </div>
 
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-xs font-medium uppercase text-foreground-muted">Feature adoption</h2>
         <div className="mt-3">
-          <MetricChart type="bar" data={adoption.map((row: any) => ({ label: row.event_type, value: row.event_count }))} />
+          <MetricChart type="bar" data={adoption.map((row) => ({ label: row.event_type, value: row.event_count }))} />
         </div>
       </div>
 
