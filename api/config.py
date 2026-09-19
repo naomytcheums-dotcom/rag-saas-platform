@@ -1394,8 +1394,14 @@ class Settings(BaseSettings):
     FOLLOW_UP_QUESTIONS_MAX_TOKENS: int = 256
 
     # -- Multi-langue UI / i18n (Partie 8.1.19) -------------------------------------
-    UI_DEFAULT_LANGUAGE: str = "en"
-    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["en", "fr", "es", "de", "pt", "ar"])
+    # Real product decision (2026-09-19): scoped down from 6 languages to
+    # the 2 this product actually targets, French and English -- the
+    # locales/{es,de,pt,ar} directories still exist with real translated
+    # content, kept on disk (not deleted) in case those languages are
+    # reintroduced later, but no longer offered through the UI. See
+    # docs/developer/I18N.md.
+    UI_DEFAULT_LANGUAGE: str = "fr"
+    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
 
     # -- Speech-to-text (Partie 8.2.1) -----------------------------------------------

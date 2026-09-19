@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useAuth, useRequireAuth } from "@/lib/auth";
+import LanguageSelector from "@/components/LanguageSelector";
 
 const NAV_SECTIONS = [
   {
@@ -93,6 +94,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t border-border px-4 py-3">
+          <div className="mb-2">
+            <LanguageSelector />
+          </div>
           <p className="truncate text-xs text-foreground-muted">{user.email}</p>
           <button type="button" onClick={() => void logout()} className="mt-1 text-xs font-medium text-accent hover:underline">
             Se déconnecter
