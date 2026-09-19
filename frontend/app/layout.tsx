@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import CookieBanner from "@/components/CookieBanner";
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
@@ -30,7 +29,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <I18nProvider>
           <AuthProvider>{children}</AuthProvider>
         </I18nProvider>
-        <CookieBanner />
       </body>
     </html>
   );
