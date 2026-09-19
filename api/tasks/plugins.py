@@ -9,7 +9,7 @@ import asyncio
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session as SyncSession
 
@@ -17,10 +17,10 @@ from api.config import settings
 from api.models.plugins import Plugin, PluginExecution, PluginInstallation, PluginStatus
 from api.security.plugin_manifest import PluginCodeSecurityError, scan_plugin_code
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.plugins.validate_pending_plugins")

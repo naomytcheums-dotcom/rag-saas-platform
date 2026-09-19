@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 import LanguageSelector from "@/components/LanguageSelector";
+import LoadingState from "@/components/LoadingState";
 
 const NAV_SECTIONS = [
   {
@@ -57,16 +58,32 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useRequireAuth();
   const { logout } = useAuth();
   const pathname = usePathname();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading || !user) {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
+    return <LoadingState onRetry={() => window.location.reload()} />;
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
-        <div className="border-b border-border px-4 py-4">
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/20 md:hidden" onClick={() => setSidebarOpen(false)} role="presentation" />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-60 shrink-0 flex-col border-r border-border bg-surface transition-transform md:static md:z-auto md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0 shadow-md" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-4">
           <Link href="/" className="text-sm font-semibold text-foreground">RAG SaaS Platform</Link>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Fermer le menu"
+            className="rounded-lg p-1 text-foreground-muted hover:bg-surface-muted md:hidden"
+          >
+            ✕
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -80,6 +97,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={() => setSidebarOpen(false)}
                       className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm ${
                         active ? "bg-accent-soft font-medium text-accent-hover" : "text-foreground hover:bg-surface-muted"
                       }`}
@@ -105,6 +123,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Ouvrir le menu"
+            className="rounded-lg p-1.5 text-foreground-muted hover:bg-surface-muted"
+          >
+            ☰
+          </button>
+          <span className="text-sm font-semibold text-foreground">RAG SaaS Platform</span>
+        </header>
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>

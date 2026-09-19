@@ -24,16 +24,16 @@ import asyncio
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.models.integrations import AirbyteConnection, IntegrationConnection
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.integrations.cleanup_integration_logs")

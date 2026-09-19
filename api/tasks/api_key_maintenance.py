@@ -6,16 +6,16 @@ task pattern as `api/tasks/conversation_cleanup.py`."""
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.organization_api_key import OrganizationAPIKey
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.api_key_maintenance.check_expiring_keys_task")

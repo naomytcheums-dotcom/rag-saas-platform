@@ -14,7 +14,7 @@ plumbing for no real benefit at this scale (a once-a-day batch job).
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
@@ -22,10 +22,10 @@ from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.services.storage import delete_avatar
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.account_purge.purge_deleted_accounts")

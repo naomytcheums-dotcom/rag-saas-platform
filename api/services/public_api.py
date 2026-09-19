@@ -53,7 +53,7 @@ async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, creat
     `api/widget/service.py`'s own docstring) can reuse this same real
     engine instead of each having its own copy."""
     from api.services.agent_orchestrator import AgentOrchestrator
-    from api.services.retrieval_pipeline import search_with_context
+    from api.services.retrieval_pipeline import build_llm_context, search_with_context
 
     if conversation_id is not None:
         conversation = await get_conversation(db, conversation_id)
@@ -71,8 +71,9 @@ async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, creat
     # actually given to the LLM, so a "grounded" answer with citations
     # attached could still be pure model knowledge, unrelated to what
     # was retrieved. `context` is what run_agent actually injects into
-    # the prompt (see its own docstring).
-    context = "\n\n".join(chunk["content"] for chunk in citation_chunks) if citation_chunks else None
+    # the prompt (see its own docstring). build_llm_context also bounds
+    # the real, previously-unbounded context length (audit, 2026-09-19).
+    context = build_llm_context(citation_chunks, org_settings)
 
     orchestrator = AgentOrchestrator()
     run = await orchestrator.run_agent(

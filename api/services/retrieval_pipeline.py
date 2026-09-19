@@ -395,3 +395,36 @@ async def search_with_context(
         }
         for result in results
     ]
+
+
+def build_llm_context(citation_chunks: list[dict] | None, org_settings: dict | None = None) -> str | None:
+    """Real fix found via audit (2026-09-19): the two real callers that
+    build an LLM prompt from retrieved chunks (api/routers/chat_stream.py,
+    api/services/public_api.py) used to do a plain, unbounded
+    `"\\n\\n".join(...)` -- no limit at all on how much text could be
+    handed to the LLM. Both now call this shared helper instead of
+    reimplementing their own truncation. Bounds to
+    `settings.RAG_CONTEXT_MAX_TOKENS`, using the SAME tokenizer already
+    cached for chunking (`get_tokenizer`) -- truncates whole chunks from
+    the end (lowest-ranked first, since `citation_chunks` is already
+    ordered by relevance), never cuts a chunk's own text in half."""
+    if not citation_chunks:
+        return None
+
+    from api.config import settings
+    from api.services.sentence_chunking import get_tokenizer
+
+    model_name = resolve_embedding_model(org_settings)
+    tokenizer = get_tokenizer(model_name)
+    budget = settings.RAG_CONTEXT_MAX_TOKENS
+
+    kept: list[str] = []
+    used = 0
+    for chunk in citation_chunks:
+        content = chunk["content"]
+        length = len(tokenizer.encode(content, add_special_tokens=False))
+        if kept and used + length > budget:
+            break
+        kept.append(content)
+        used += length
+    return "\n\n".join(kept) if kept else None

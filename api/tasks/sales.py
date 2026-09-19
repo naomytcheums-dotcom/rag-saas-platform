@@ -8,7 +8,7 @@ as billing.py's own tasks vs api/services/billing_usage.py."""
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
@@ -18,10 +18,10 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.sales import License, LicenseStatus, PartnerCommission, PartnerCommissionStatus, Reseller, SubClient
 from api.models.user import User
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.sales.calculate_partner_commissions")

@@ -6,16 +6,16 @@ sync-engine-in-a-Celery-task pattern as
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.voice import VoiceMessage
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.voice_message_cleanup.purge_expired_voice_messages_task")

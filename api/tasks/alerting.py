@@ -4,17 +4,16 @@ pattern as every other Celery task module in this project."""
 import asyncio
 import logging
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.services.alerting import breaches, real_metric_value
 from api.models.alerting import AlertChannel, AlertHistory, AlertRule
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.alerting.check_alert_rules")

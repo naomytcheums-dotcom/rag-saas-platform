@@ -480,6 +480,15 @@ class Settings(BaseSettings):
     # consume them.
     TOP_K_MAX: int = 100
     RERANKER_MAX_TOKENS: int = 512
+    # Real bug found via audit (2026-09-19): the retrieved-chunk context
+    # built for the chat LLM prompt (api/routers/chat_stream.py,
+    # api/services/public_api.py) was concatenated with no length bound
+    # at all -- an organization with many long, highly relevant chunks
+    # could silently overflow the LLM's real context window. Bounds the
+    # context to this many tokens (of the resolved embedding model's own
+    # tokenizer, same real tokenizer already used for chunking) before
+    # it's handed to the LLM.
+    RAG_CONTEXT_MAX_TOKENS: int = 3000
 
     # -- Multi-provider LLM abstraction (Partie 4.1.1-4.1.7) -----------------
     # See api/services/llm_providers.py's own top docstring for the real

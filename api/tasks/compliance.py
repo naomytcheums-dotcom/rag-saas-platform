@@ -10,7 +10,7 @@ requests that have sat pending too long.
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
@@ -18,10 +18,10 @@ from api.models.compliance import DataBreach, DataRequest, DataRequestStatus
 from api.models.user import User
 from api.services.email import send_security_alert_email
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.compliance.send_data_breach_notifications")

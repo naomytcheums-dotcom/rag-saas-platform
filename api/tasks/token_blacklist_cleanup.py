@@ -14,16 +14,16 @@ Same sync-engine-in-a-Celery-task reasoning as account_purge.py.
 import datetime as dt
 import logging
 
-from sqlalchemy import create_engine, delete
+from sqlalchemy import delete
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.revoked_token import RevokedAccessToken
 from api.tasks.celery_app import celery_app
+from api.tasks._sync_engine import sync_engine as _sync_engine
 
 logger = logging.getLogger(__name__)
 
-_sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True)
 
 
 @celery_app.task(name="api.tasks.token_blacklist_cleanup.purge_expired_blacklist_entries")

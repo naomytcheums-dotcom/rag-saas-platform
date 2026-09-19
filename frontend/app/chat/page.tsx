@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ChatComposer from "@/components/ChatComposer";
 import ChatSidebar from "@/components/ChatSidebar";
 import LanguageSelector from "@/components/LanguageSelector";
+import LoadingState from "@/components/LoadingState";
 import MessageBubble from "@/components/MessageBubble";
 import { useTranslation } from "@/lib/i18n";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -34,7 +35,7 @@ export default function Home() {
   }, [messages.length]);
 
   if (orgLoading || !org) {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
+    return <LoadingState onRetry={() => window.location.reload()} />;
   }
 
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;

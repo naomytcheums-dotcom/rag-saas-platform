@@ -9,7 +9,9 @@ import uuid
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.organization import Organization
 from api.security.documents import generate_embeddings
-from api.services.retrieval_pipeline import bm25_search, hybrid_reranked_search, hybrid_search, search, search_with_context, vector_search
+from api.services.retrieval_pipeline import (
+    bm25_search, build_llm_context, hybrid_reranked_search, hybrid_search, search, search_with_context, vector_search,
+)
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -310,3 +312,30 @@ async def test_hybrid_reranked_search_does_not_compound_the_real_candidate_pool_
 
     results = await hybrid_reranked_search(db_session, org.id, "filler content", org_settings={"top_k": 20})
     assert len(results) <= 5
+
+
+# ---------------------------------------------------------------- build_llm_context (audit, 2026-09-19)
+
+
+def test_build_llm_context_returns_none_for_no_chunks():
+    assert build_llm_context([]) is None
+    assert build_llm_context(None) is None
+
+
+def test_build_llm_context_joins_real_chunk_content():
+    chunks = [{"content": "First chunk."}, {"content": "Second chunk."}]
+    result = build_llm_context(chunks)
+    assert result == "First chunk.\n\nSecond chunk."
+
+
+def test_build_llm_context_truncates_past_the_real_token_budget(monkeypatch):
+    """Real regression test for a real bug found via audit: context used
+    to be joined with no length bound at all. Sets a tiny budget so a
+    real, short second chunk is genuinely excluded, not just trimmed."""
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "RAG_CONTEXT_MAX_TOKENS", 3)
+    chunks = [{"content": "one two three four five six seven eight"}, {"content": "short"}]
+    result = build_llm_context(chunks)
+    assert result == chunks[0]["content"]
+    assert "short" not in result

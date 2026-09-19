@@ -1,0 +1,118 @@
+name: CI
+
+# Real gap found via audit (2026-09-19): 284 test files existed in
+# tests/ but nothing ever ran them automatically -- a regression could
+# be merged without a single test executing. This workflow is the fix:
+# every push and pull request against main runs the full backend test
+# suite (SQLite in-memory, no real Postgres needed -- see
+# tests/conftest.py's own docstring), a Python dependency vulnerability
+# scan, and the frontend's type check, lint, unit tests, and dependency
+# vulnerability scan.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-api.txt
+
+      - name: Run test suite
+        env:
+          # Same secrets already configured for the Celery worker
+          # workflow (.github/workflows/celery-worker.yml) -- the test
+          # suite itself runs against an in-memory SQLite DB, not
+          # DATABASE_URL, but every required (no-default) setting must
+          # still resolve for api.config.settings to import at all.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
+          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+          RATE_LIMIT_REDIS_URL: ${{ secrets.RATE_LIMIT_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          SESSION_MIDDLEWARE_SECRET: ${{ secrets.SESSION_MIDDLEWARE_SECRET }}
+          AUDIT_LOG_HMAC_SECRET_KEY: ${{ secrets.AUDIT_LOG_HMAC_SECRET_KEY }}
+          SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          SUPPORT_EMAIL: ${{ secrets.SUPPORT_EMAIL }}
+          S3_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_REGION: ${{ secrets.S3_REGION }}
+          S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
+          S3_DOCUMENTS_BUCKET_NAME: ${{ secrets.S3_DOCUMENTS_BUCKET_NAME }}
+        run: pytest -q --maxfail=20
+
+  backend-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-api.txt
+
+      - name: pip-audit
+        run: pip-audit -r requirements-api.txt --desc off
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        # Real, honest state found while wiring this up (2026-09-19):
+        # 132 pre-existing lint errors already exist across the
+        # codebase (47 react/no-unescaped-entities, 42
+        # typescript-eslint/no-explicit-any, 42
+        # react-hooks/set-state-in-effect, plus smaller counts) --
+        # none introduced by this session's own new/changed files,
+        # which lint clean on their own. continue-on-error keeps this
+        # step VISIBLE (so nobody has to guess the debt exists) without
+        # blocking every future merge on a backlog too large to clear
+        # in one pass. Remove continue-on-error once that backlog is
+        # actually paid down -- see docs/devops/CI.md.
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Unit tests
+        run: npm test
+
+      - name: npm audit
+        run: npm audit --production
