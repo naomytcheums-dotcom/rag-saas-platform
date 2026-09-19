@@ -596,18 +596,18 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs font-medium text-foreground-muted">Expiration de session (minutes)</label>
-          <input type="number" value={policy.session_timeout_minutes} onChange={(e) => setPolicy({ ...policy, session_timeout_minutes: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+          <label htmlFor="policy-session-timeout" className="text-xs font-medium text-foreground-muted">Expiration de session (minutes)</label>
+          <input id="policy-session-timeout" type="number" value={policy.session_timeout_minutes} onChange={(e) => setPolicy({ ...policy, session_timeout_minutes: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
         </div>
         <div>
-          <label className="text-xs font-medium text-foreground-muted">Tentatives de connexion max</label>
-          <input type="number" value={policy.max_login_attempts} onChange={(e) => setPolicy({ ...policy, max_login_attempts: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+          <label htmlFor="policy-max-login-attempts" className="text-xs font-medium text-foreground-muted">Tentatives de connexion max</label>
+          <input id="policy-max-login-attempts" type="number" value={policy.max_login_attempts} onChange={(e) => setPolicy({ ...policy, max_login_attempts: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
         </div>
       </div>
 
       <div className="mt-3">
-        <label className="text-xs font-medium text-foreground-muted">Liste blanche d&apos;IP (une par ligne, vide = illimité)</label>
-        <textarea value={policy.ip_allowlist ?? ""} onChange={(e) => setPolicy({ ...policy, ip_allowlist: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+        <label htmlFor="policy-ip-allowlist" className="text-xs font-medium text-foreground-muted">Liste blanche d&apos;IP (une par ligne, vide = illimité)</label>
+        <textarea id="policy-ip-allowlist" value={policy.ip_allowlist ?? ""} onChange={(e) => setPolicy({ ...policy, ip_allowlist: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
       </div>
 
       <button type="button" onClick={() => void save()} disabled={saving} className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">

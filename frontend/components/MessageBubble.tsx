@@ -35,7 +35,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 rows={2}
-                className="w-64 max-w-full resize-none rounded-lg border border-white/30 bg-white/10 p-2 text-sm text-white outline-none placeholder:text-white/60"
+                className="w-64 max-w-full resize-none rounded-lg border border-white/30 bg-white/10 p-2 text-sm text-white outline-none focus:ring-2 focus:ring-white placeholder:text-white/60"
               />
               <div className="flex justify-end gap-2 text-xs">
                 <button type="button" onClick={() => setEditing(false)} className="text-white/80 hover:underline">{t("cancel")}</button>

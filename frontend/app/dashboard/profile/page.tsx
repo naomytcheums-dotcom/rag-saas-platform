@@ -138,19 +138,19 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
       </div>
 
       <div>
-        <label className="text-sm font-medium text-foreground">Nom complet</label>
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <label htmlFor="profile-full-name" className="text-sm font-medium text-foreground">Nom complet</label>
+        <input id="profile-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
       </div>
       <div>
-        <label className="text-sm font-medium text-foreground">Entreprise</label>
-        <input value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <label htmlFor="profile-company" className="text-sm font-medium text-foreground">Entreprise</label>
+        <input id="profile-company" value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
       </div>
       <div>
-        <label className="text-sm font-medium text-foreground">Email</label>
+        <p className="text-sm font-medium text-foreground">Email</p>
         <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ vérifié" : "(non vérifié)"}</p>
       </div>
       <div>
-        <label className="text-sm font-medium text-foreground">Membre depuis</label>
+        <p className="text-sm font-medium text-foreground">Membre depuis</p>
         <p className="mt-1 text-sm text-foreground-muted">{new Date(profile.created_at).toLocaleDateString()}</p>
       </div>
 
@@ -260,6 +260,7 @@ function TwoFactorSection({ enabled, onChanged, onError }: { enabled: boolean; o
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          aria-label="Code à 6 chiffres"
           placeholder="Code à 6 chiffres"
           maxLength={6}
           className="mt-3 w-full max-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
@@ -305,6 +306,7 @@ function TwoFactorSection({ enabled, onChanged, onError }: { enabled: boolean; o
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          aria-label="Code à 6 chiffres"
           placeholder="Code à 6 chiffres"
           maxLength={6}
           className="mt-3 w-full max-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
@@ -405,8 +407,8 @@ function SecurityTab({ profile, onProfileChange, onError, onSaved }: { profile: 
 
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-sm font-semibold text-foreground">Changer le mot de passe</h2>
-        <input type="password" placeholder="Mot de passe actuel" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
-        <input type="password" placeholder="Nouveau mot de passe" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <input type="password" aria-label="Mot de passe actuel" placeholder="Mot de passe actuel" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+        <input type="password" aria-label="Nouveau mot de passe" placeholder="Nouveau mot de passe" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         <button type="button" onClick={() => void changePassword()} disabled={changing || !currentPassword || newPassword.length < 8} className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
           {changing ? "Changement…" : "Changer le mot de passe"}
         </button>
@@ -449,8 +451,8 @@ function PreferencesTab({ profile, onSaved, onError }: { profile: Profile; onSav
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
-      <label className="text-sm font-medium text-foreground">Langue</label>
-      <select value={locale} onChange={(e) => setLocale(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+      <label htmlFor="profile-locale" className="text-sm font-medium text-foreground">Langue</label>
+      <select id="profile-locale" value={locale} onChange={(e) => setLocale(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
         {["en", "fr", "es", "de", "pt", "ar"].map((l) => (
           <option key={l} value={l}>{l}</option>
         ))}

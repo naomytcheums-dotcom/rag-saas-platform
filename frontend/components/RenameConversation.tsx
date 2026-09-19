@@ -60,7 +60,7 @@ export default function RenameConversation({ conversation, onRenamed }: RenameCo
             setEditing(false);
           }
         }}
-        className="w-full rounded-md border border-accent bg-background px-1.5 py-0.5 text-sm text-foreground outline-none"
+        className="w-full rounded-md border border-accent bg-background px-1.5 py-0.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent"
       />
       {error && <p className="mt-0.5 text-xs text-danger">{error}</p>}
     </div>

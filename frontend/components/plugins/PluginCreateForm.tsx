@@ -64,30 +64,30 @@ export default function PluginCreateForm({ orgId, onPublished, onError }: Plugin
       <p className="mt-1 text-xs text-foreground-muted">Reviewed by an admin before it appears in the marketplace.</p>
 
       <div className="mt-3 flex flex-col gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plugin name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
+        <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Plugin name" placeholder="Plugin name" className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} aria-label="Description" placeholder="Description" rows={2} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
         <div className="flex gap-2">
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category" className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Version (e.g. 1.0.0)" className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
-          <select value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
+          <input value={version} onChange={(e) => setVersion(e.target.value)} aria-label="Version" placeholder="Version (e.g. 1.0.0)" className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent" />
+          <select value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} aria-label="Entry point" className="w-1/3 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
             <option value="index.js">index.js</option>
             <option value="index.py">index.py</option>
           </select>
         </div>
 
         <div className="flex gap-2">
-          <select value={pricing} onChange={(e) => setPricing(e.target.value)} className="w-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
+          <select value={pricing} onChange={(e) => setPricing(e.target.value)} aria-label="Pricing model" className="w-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
             <option value="free">Free</option>
             <option value="paid">Paid</option>
             <option value="freemium">Freemium</option>
           </select>
           {pricing !== "free" && (
             <input
-              value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (EUR)" type="number" min="0.01" step="0.01"
+              value={price} onChange={(e) => setPrice(e.target.value)} aria-label="Price (EUR)" placeholder="Price (EUR)" type="number" min="0.01" step="0.01"
               className="w-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent"
             />
           )}

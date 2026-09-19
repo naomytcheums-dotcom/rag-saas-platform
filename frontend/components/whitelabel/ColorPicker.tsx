@@ -10,18 +10,21 @@ const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
   const isValid = HEX_PATTERN.test(value);
+  const id = `color-picker-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
     <div>
-      <label className="block text-xs font-medium uppercase text-foreground-muted">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium uppercase text-foreground-muted">{label}</label>
       <div className="mt-1 flex items-center gap-2">
         <input
+          id={id}
           type="color" value={isValid ? value : "#000000"}
           onChange={(e) => onChange(e.target.value)}
           className="h-9 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5"
         />
         <input
           type="text" value={value} onChange={(e) => onChange(e.target.value)}
+          aria-label={`${label} (hex)`}
           placeholder="#2563eb"
           className={`w-28 rounded-lg border px-2 py-1.5 text-sm text-foreground ${isValid ? "border-border" : "border-danger"}`}
         />

@@ -91,39 +91,39 @@ export default function WidgetSettingsPage() {
 
       <div className="mt-6 flex flex-col gap-5 rounded-xl border border-border bg-surface p-5">
         <div>
-          <label className="text-sm font-medium text-foreground">Nom du widget</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+          <label htmlFor="widget-name" className="text-sm font-medium text-foreground">Nom du widget</label>
+          <input id="widget-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Message de bienvenue</label>
-          <textarea value={welcome} onChange={(e) => setWelcome(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+          <label htmlFor="widget-welcome" className="text-sm font-medium text-foreground">Message de bienvenue</label>
+          <textarea id="widget-welcome" value={welcome} onChange={(e) => setWelcome(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Logo</label>
+          <p className="text-sm font-medium text-foreground">Logo</p>
           <div className="mt-1 flex items-center gap-3">
             {logoUrl && <Image src={logoUrl} alt="Logo du widget" width={40} height={40} unoptimized className="h-10 w-10 rounded-full object-cover" />}
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} className="text-xs" />
+            <input type="file" aria-label="Logo du widget" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} className="text-xs" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-foreground">Couleur principale</label>
-            <input type="color" value={colors.primary_color} onChange={(e) => setColors((c) => ({ ...c, primary_color: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
+            <label htmlFor="widget-primary-color" className="text-sm font-medium text-foreground">Couleur principale</label>
+            <input id="widget-primary-color" type="color" value={colors.primary_color} onChange={(e) => setColors((c) => ({ ...c, primary_color: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground">Couleur de l&apos;en-tête</label>
-            <input type="color" value={colors.header_background} onChange={(e) => setColors((c) => ({ ...c, header_background: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
+            <label htmlFor="widget-header-color" className="text-sm font-medium text-foreground">Couleur de l&apos;en-tête</label>
+            <input id="widget-header-color" type="color" value={colors.header_background} onChange={(e) => setColors((c) => ({ ...c, header_background: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-border" />
           </div>
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Position</label>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <p className="text-sm font-medium text-foreground" id="widget-position-label">Position</p>
+          <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="widget-position-label">
             {POSITIONS.map((p) => (
-              <button key={p} type="button" onClick={() => setPosition(p)} className={`rounded-full border px-2.5 py-1 text-xs ${position === p ? "border-accent bg-accent text-white" : "border-border-strong text-foreground-muted"}`}>
+              <button key={p} type="button" aria-pressed={position === p} onClick={() => setPosition(p)} className={`rounded-full border px-2.5 py-1 text-xs ${position === p ? "border-accent bg-accent text-white" : "border-border-strong text-foreground-muted"}`}>
                 {p}
               </button>
             ))}
@@ -131,10 +131,10 @@ export default function WidgetSettingsPage() {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">Thème</label>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <p className="text-sm font-medium text-foreground" id="widget-theme-label">Thème</p>
+          <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="widget-theme-label">
             {THEMES.map((t) => (
-              <button key={t} type="button" onClick={() => setTheme(t)} className={`rounded-full border px-2.5 py-1 text-xs ${theme === t ? "border-accent bg-accent text-white" : "border-border-strong text-foreground-muted"}`}>
+              <button key={t} type="button" aria-pressed={theme === t} onClick={() => setTheme(t)} className={`rounded-full border px-2.5 py-1 text-xs ${theme === t ? "border-accent bg-accent text-white" : "border-border-strong text-foreground-muted"}`}>
                 {t}
               </button>
             ))}
