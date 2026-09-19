@@ -32,7 +32,6 @@ none at all."""
 import io
 
 import httpx
-import litellm
 
 from api.config import settings
 
@@ -81,6 +80,8 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
     if resolved_provider == "deepgram" and not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for the 'deepgram' STT provider")
 
+    import litellm  # local: see api/services/llm_providers.py's own note on this import's real memory cost
+
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename
     response = await litellm.atranscription(model=model, file=audio_file, language=language)
@@ -127,6 +128,8 @@ async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str
     key, an unparseable response) returns `(text, None)` -- a real
     transcript with no segments, never a crash and never a fabricated
     speaker list."""
+    import litellm  # local: see api/services/llm_providers.py's own note on this import's real memory cost
+
     if not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for diarization (Deepgram-only)")
     audio_file = io.BytesIO(audio_bytes)

@@ -41,7 +41,7 @@ def test_detect_user_language_prefers_cookie():
 
 
 def test_detect_user_language_falls_back_to_accept_language_header():
-    assert detect_user_language("de-DE,de;q=0.9,en;q=0.8") == "de"
+    assert detect_user_language("de-DE,de;q=0.9,en;q=0.8") == "en"
 
 
 def test_detect_user_language_falls_back_to_default():
@@ -61,6 +61,6 @@ async def test_i18n_endpoints(client):
     unsupported = await client.get("/i18n/translations/xx")
     assert unsupported.status_code == 404
 
-    set_lang = await client.post("/i18n/language", json={"language": "es"})
+    set_lang = await client.post("/i18n/language", json={"language": "en"})
     assert set_lang.status_code == 200
-    assert "lang=es" in set_lang.headers.get("set-cookie", "")
+    assert "lang=en" in set_lang.headers.get("set-cookie", "")

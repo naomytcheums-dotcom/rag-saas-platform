@@ -453,7 +453,11 @@ function PreferencesTab({ profile, onSaved, onError }: { profile: Profile; onSav
     <div className="rounded-xl border border-border bg-surface p-5">
       <label htmlFor="profile-locale" className="text-sm font-medium text-foreground">Langue</label>
       <select id="profile-locale" value={locale} onChange={(e) => setLocale(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-        {["en", "fr", "es", "de", "pt", "ar"].map((l) => (
+        {/* Matches the backend's real, deliberate 2-language scope (api/config.py's
+            UI_SUPPORTED_LANGUAGES, docs/developer/I18N.md) -- the other 4 locale
+            directories still exist on disk but /i18n/translations/{lang} 404s for
+            them, so offering them here would silently save a locale nothing serves. */}
+        {["fr", "en"].map((l) => (
           <option key={l} value={l}>{l}</option>
         ))}
       </select>

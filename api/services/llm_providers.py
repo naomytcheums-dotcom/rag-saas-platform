@@ -55,8 +55,6 @@ real secret and a real, billed API call this environment cannot make).
 import asyncio
 import logging
 
-import litellm
-
 from api.config import settings
 
 logger = logging.getLogger(__name__)
@@ -175,6 +173,8 @@ async def _chat_completion_raw(
     failures (`LLMRateLimitError`/`LLMTimeoutError`) -- never for
     `LLMAuthenticationError` (a real bad/missing key that retrying can
     never fix) or a generic `LLMProviderError`."""
+    import litellm  # local: costs ~190MB RSS to import (its own bundled per-model cost map, dozens of provider SDKs) -- every module that imports this one at load time pays that cost at process boot, before a single real LLM call has happened. Deferred to first real use instead.
+
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
     call_kwargs.update(kwargs)  # a real, explicit caller override always wins
@@ -282,6 +282,8 @@ async def chat_completion_stream(messages: list[dict], provider: str | None = No
     caller (`AgentOrchestrator.stream_response`) treats an empty sink
     the same as "no usage available," skipping the credit debit rather
     than guessing at a cost."""
+    import litellm  # local: see _chat_completion_raw's own note on this import
+
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
     call_kwargs.update(kwargs)
