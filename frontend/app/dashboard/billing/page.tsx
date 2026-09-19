@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -83,7 +84,7 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (orgLoading || !org) {
-    return <div className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</div>;
+    return <LoadingState fullScreen={false} />;
   }
 
   return (

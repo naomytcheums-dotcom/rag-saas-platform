@@ -31,25 +31,18 @@ chaque commande individuelle (`pytest`, `tsc --noEmit`, `pip-audit`,
 `npm audit`) a ete executee et verifiee en local dans cette meme session
 avant d'etre assemblee dans le workflow.
 
-## Decouverte reelle en verifiant ce point : 132 erreurs de lint preexistantes
+## Backlog de lint -- resorbe
 
-`npm run lint` a ete execute reellement (pas seulement ajoute au
-workflow sans verification) : **132 erreurs preexistantes**, reparties
-en 47 `react/no-unescaped-entities`, 42 `typescript-eslint/no-explicit-any`,
-42 `react-hooks/set-state-in-effect` (dont un exemplaire corrige dans
-cette meme session, voir `frontend/components/CookieBanner.tsx`), le
-reste divers. **Aucune de ces erreurs ne vient des fichiers crees ou
-modifies dans cette session** (verifie individuellement : `LanguageSelector.tsx`,
-`LoadingState.tsx`, `CookieBanner.tsx`, `useRealChat.ts`, `chat/page.tsx`,
-`dashboard/layout.tsx` passent tous le lint sans erreur).
-
-Corriger les 132 erreurs est un chantier reel de plusieurs heures, hors
-perimetre raisonnable de cette session de correctifs. Plutot que de
-cacher ce constat (retirer le lint de la CI) ou de le laisser bloquer
-tout futur merge, l'etape `Lint` du workflow utilise `continue-on-error:
-true` -- elle reste VISIBLE dans chaque run (le detail des 132 erreurs
-s'affiche), mais ne fait pas echouer la pipeline. A retirer des que ce
-backlog est reellement resorbe.
+`npm run lint` avait initialement releve **132 erreurs preexistantes**
+(47 `react/no-unescaped-entities`, 42 `typescript-eslint/no-explicit-any`,
+42 `react-hooks/set-state-in-effect`, 7 `no-unused-vars`, 2
+`no-img-element`, 1 `react-hooks/purity`), aucune dans les fichiers
+crees pendant la session d'audit initiale. Le backlog complet a ete
+corrige (commit `00d8786`) : `npx eslint .` et `npx tsc --noEmit`
+retournent 0 erreur/0 warning sur tout le projet, `npm run build`
+compile les 38 routes, `npx vitest run` passe 77/77. L'etape `Lint`
+du workflow n'utilise donc plus `continue-on-error` -- un lint cassant
+desormais bien la pipeline.
 
 ## Limite honnete
 

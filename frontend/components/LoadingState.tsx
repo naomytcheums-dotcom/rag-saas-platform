@@ -9,6 +9,12 @@ interface LoadingStateProps {
    * slow cold-started backend (see docs/devops/MEMORY.md). */
   slowAfterMs?: number;
   onRetry?: () => void;
+  /** true (default) centers in the full viewport height -- for a page
+   * with no other chrome rendered yet (root layout gate, route
+   * `loading.tsx`). false renders inline instead, for a loading state
+   * nested inside an already-rendered layout (e.g. a dashboard page
+   * whose sidebar/header are already on screen). */
+  fullScreen?: boolean;
 }
 
 // Real gap found via audit (2026-09-19): every "Chargement…" state in
@@ -17,7 +23,7 @@ interface LoadingStateProps {
 // this session on a cold-started Render instance. This component is a
 // drop-in replacement: same look while loading normally, a reassuring
 // message plus an optional retry button once it's taken too long.
-export default function LoadingState({ slowAfterMs = 6000, onRetry }: LoadingStateProps) {
+export default function LoadingState({ slowAfterMs = 6000, onRetry, fullScreen = true }: LoadingStateProps) {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
@@ -26,7 +32,7 @@ export default function LoadingState({ slowAfterMs = 6000, onRetry }: LoadingSta
   }, [slowAfterMs]);
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-2 text-sm text-foreground-muted">
+    <div className={`flex flex-col items-center justify-center gap-2 text-sm text-foreground-muted ${fullScreen ? "h-screen" : "py-10"}`}>
       <p>Chargement…</p>
       {slow && (
         <div className="flex flex-col items-center gap-2 text-center">

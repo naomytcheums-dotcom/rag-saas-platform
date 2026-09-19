@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -85,7 +86,7 @@ export default function AgentsPage() {
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Vos agents</h2>
         {loading ? (
-          <p className="text-sm text-foreground-muted">Chargement…</p>
+          <LoadingState fullScreen={false} />
         ) : agents.length === 0 ? (
           <p className="text-sm text-foreground-muted">Aucun agent pour l&apos;instant.</p>
         ) : (

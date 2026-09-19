@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -142,7 +143,7 @@ export default function AdminPage() {
   }, [loading, user]);
 
   if (loading || !user || access === "checking") {
-    return <div className="flex h-screen items-center justify-center text-sm text-foreground-muted">Chargement…</div>;
+    return <LoadingState fullScreen={false} />;
   }
 
   if (access === "denied") {
@@ -208,7 +209,7 @@ function OverviewTab() {
   }, []);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
-  if (!stats) return <p className="text-sm text-foreground-muted">Chargement…</p>;
+  if (!stats) return <LoadingState fullScreen={false} />;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useState } from "react";
 import { AgentCreateForm } from "@/components/autonomous/AgentCreateForm";
 import { AgentList } from "@/components/autonomous/AgentList";
@@ -10,7 +11,7 @@ export default function Page() {
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  if (loading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</p>;
+  if (loading || !org) return <LoadingState fullScreen={false} />;
 
   return (
     <div className="mx-auto max-w-4xl">

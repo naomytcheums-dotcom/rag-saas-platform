@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import LoadingState from "@/components/LoadingState";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -59,7 +60,8 @@ export default function ProfilePage() {
   }
 
   if (!profile) {
-    return <div className="mx-auto max-w-2xl text-sm text-foreground-muted">{error ?? "Chargement…"}</div>;
+    if (error) return <div className="mx-auto max-w-2xl text-sm text-danger">{error}</div>;
+    return <LoadingState fullScreen={false} />;
   }
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -81,7 +82,7 @@ export default function SecurityPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (orgLoading || !org) {
-    return <div className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</div>;
+    return <LoadingState fullScreen={false} />;
   }
 
   return (
@@ -373,7 +374,7 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
     return <p className="text-sm text-foreground-muted">Le statut de chiffrement est réservé aux administrateurs de la plateforme.</p>;
   }
   if (!status) {
-    return <p className="text-sm text-foreground-muted">Chargement…</p>;
+    return <LoadingState fullScreen={false} />;
   }
 
   return (
@@ -580,7 +581,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     }
   }
 
-  if (!policy) return <p className="text-sm text-foreground-muted">Chargement…</p>;
+  if (!policy) return <LoadingState fullScreen={false} />;
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5">

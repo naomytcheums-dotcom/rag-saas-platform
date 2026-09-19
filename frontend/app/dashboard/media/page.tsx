@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useState } from "react";
 import { MediaList } from "@/components/media/MediaList";
 import { MediaSearch } from "@/components/media/MediaSearch";
@@ -12,7 +13,7 @@ export default function Page() {
   const [tab, setTab] = useState<"library" | "search" | "visual">("library");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  if (loading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</p>;
+  if (loading || !org) return <LoadingState fullScreen={false} />;
 
   return (
     <div className="mx-auto max-w-4xl">

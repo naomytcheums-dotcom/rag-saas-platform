@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import Link from "next/link";
 import { useFineTuningDatasets } from "@/lib/hooks/useFineTuningDatasets";
 import { useFineTuningJobs } from "@/lib/hooks/useFineTuningJobs";
@@ -21,7 +22,7 @@ export default function Page() {
   const { total: jobTotal, loading: jobsLoading } = useFineTuningJobs(org?.id ?? "");
   const { total: modelTotal, loading: modelsLoading } = useFineTunedModels(org?.id ?? "");
 
-  if (orgLoading || !org) return <p className="mx-auto max-w-4xl text-sm text-foreground-muted">Chargement…</p>;
+  if (orgLoading || !org) return <LoadingState fullScreen={false} />;
 
   return (
     <div className="mx-auto max-w-4xl">

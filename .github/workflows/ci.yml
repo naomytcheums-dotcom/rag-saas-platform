@@ -97,19 +97,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        # Real, honest state found while wiring this up (2026-09-19):
-        # 132 pre-existing lint errors already exist across the
-        # codebase (47 react/no-unescaped-entities, 42
-        # typescript-eslint/no-explicit-any, 42
-        # react-hooks/set-state-in-effect, plus smaller counts) --
-        # none introduced by this session's own new/changed files,
-        # which lint clean on their own. continue-on-error keeps this
-        # step VISIBLE (so nobody has to guess the debt exists) without
-        # blocking every future merge on a backlog too large to clear
-        # in one pass. Remove continue-on-error once that backlog is
-        # actually paid down -- see docs/devops/CI.md.
         run: npm run lint
-        continue-on-error: true
 
       - name: Unit tests
         run: npm test

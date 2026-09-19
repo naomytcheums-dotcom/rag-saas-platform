@@ -1,6 +1,6 @@
 # Cookies -- consentement
 
-## Constat reel (audit, 2026-09-19)
+## Constat reel
 
 Aucun script de tracking/publicite n'existe dans le frontend (`grep`
 exhaustif : zero occurrence de `gtag`, `google-analytics`,
@@ -15,42 +15,39 @@ l'application :
 Les deux sont des cookies **strictement necessaires/fonctionnels**.
 Sous RGPD/ePrivacy, ce type de cookie ne requiert pas legalement de
 banniere de consentement (contrairement aux cookies publicitaires ou
-de mesure d'audience non essentielle).
+de mesure d'audience non essentielle). La banniere existe par
+transparence envers le visiteur, pas parce que c'etait une obligation
+legale manquante.
 
-## Ce qui a ete fait, puis retire
+## Composant
 
-`frontend/components/CookieBanner.tsx` cree -- par transparence envers
-le visiteur, pas parce que c'etait une obligation legale manquante.
-Stocke l'accuse de reception dans `localStorage`, un seul bouton
-"Compris".
+`frontend/components/CookieBanner.tsx` -- etat initial `false`
+partout (identique cote serveur et cote client), verification de
+`localStorage` deplacee dans un `useEffect` post-montage. Stocke
+l'accuse de reception dans `localStorage`, un seul bouton "Compris".
+Monte dans `frontend/app/layout.tsx`.
 
-**Teste reellement en production, et reellement casse deux fois** :
+## Historique du bug d'hydratation (resolu)
 
-1. Premiere version (initialisation paresseuse de `useState` lisant
-   `localStorage`) : plantait la page entiere avec une erreur
-   d'hydratation React (#418) -- le rendu serveur (`window` indefini,
-   toujours "deja acquitte") ne correspondait pas au premier rendu
-   client (vraie lecture de `localStorage`). Reproduit en direct sur
-   `/login`, confirme par un rechargement avec cache reellement
-   vide (URL avec parametre anti-cache).
-2. Deuxieme version (etat initial `false` partout, verification
-   deplacee dans un vrai `useEffect` post-montage -- le pattern
-   standard recommande pour ce cas exact) : **le meme crash #418 a
-   persiste** apres deploiement, pour une raison non diagnostiquee
-   dans le temps disponible.
+Deux versions precedentes ont reellement crashe en production avec
+une erreur d'hydratation React #418 (le rendu serveur ne correspondait
+pas au premier rendu client). Le composant avait ete retire du layout
+par prudence le temps du diagnostic.
 
-**Decision** : retire du layout racine (`app/layout.tsx`) plutot que
-de risquer un troisieme cycle de deploiement non verifie sur une
-page qui affecte TOUT le site (y compris la page de connexion). Le
-fichier composant reste dans le depot, juste non monte -- confirme
-par un test en direct que sa suppression du layout restaure un
-chargement propre, sans erreur #418.
+Un nouveau test, avec la meme version de code que celle qui avait
+crashe, n'a reproduit aucune erreur ni en developpement local, ni sur
+un vrai serveur de production local (`next build` + `next start`),
+ce qui indiquait que la cause n'etait probablement pas le composant
+lui-meme mais un etat de test contamine (deploiements Vercel
+successifs trop rapproches, et/ou un onglet de navigateur garde en
+emulation mobile 375px d'un test de responsive precedent).
+
+**Verifie en direct sur la production reelle** (`https://rag-saas-platform.vercel.app/login`,
+commit `00d8786`), sur plusieurs rechargements avec parametre
+anti-cache et apres interaction (clic sur "Compris" puis rechargement) :
+aucune erreur #418, `localStorage` persiste correctement l'accuse de
+reception entre les rechargements.
 
 ## Statut
 
-Non deploye -- retire par prudence apres un vrai bug reproduit deux
-fois en production. Rien de perdu fonctionnellement : cette banniere
-n'etait de toute facon pas une obligation legale (voir plus haut,
-aucun cookie non essentiel). A reprendre plus tard avec un diagnostic
-plus approfondi (verifier notamment si le probleme vient d'ailleurs
-dans le layout racine, pas necessairement de ce composant seul).
+Deploye et fonctionnel en production. Bug clos.

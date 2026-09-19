@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -191,7 +192,7 @@ export default function ApiKeysPage() {
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Clés existantes</h2>
         {loading ? (
-          <p className="text-sm text-foreground-muted">Chargement…</p>
+          <LoadingState fullScreen={false} />
         ) : keys.length === 0 ? (
           <p className="text-sm text-foreground-muted">Aucune clé API pour l&apos;instant.</p>
         ) : (
