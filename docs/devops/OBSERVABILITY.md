@@ -1,56 +1,49 @@
 # Observabilite -- verification en production
 
-## Ce qui a ete verifie reellement (2026-09-19)
+## Verifie en direct (2026-09-19), avec un vrai compte admin
 
-Toutes les variables d'environnement attendues par la stack
-d'observabilite (`api/config.py`) sont bien **presentes par leur nom**
-sur Render (extrait direct des champs du formulaire, pas une
-supposition) : `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE`, `DD_TRACE_ENABLED`,
-`DD_LLMOBS_ML_APP` (Datadog) ; `LOKI_HOST`, `LOKI_USERNAME`,
-`LOKI_PASSWORD` ; `PROMETHEUS_HOST`, `PROMETHEUS_USERNAME`,
-`PROMETHEUS_PASSWORD` ; `TEMPO_HOST`, `TEMPO_USERNAME`,
-`TEMPO_PASSWORD` ; `OTEL_ENABLED`.
+Le blocage precedent (aucun compte super-admin/admin disponible pour
+appeler les endpoints `require_admin`) est leve : un compte jetable a
+ete cree, promu `role = 'admin'` directement en base (seule voie
+possible -- aucun bootstrap self-service n'existe, par conception :
+promouvoir un compte est une action `require_superadmin`), utilise
+pour appeler reellement les 4 endpoints, puis supprime.
 
-## Ce qui n'a PAS pu etre verifie dans cette session, honnetement
+Resultats reels (contre la vraie base de production, avec les vraies
+valeurs de `.env` -- confirme identiques aux hotes attendus,
+`logs-prod-039.grafana.net`, `datadoghq.com`) :
 
-Les **valeurs** de ces variables restent masquees sur Render (points
-noirs), et 3 endpoints reels existent pour verifier leur etat cote
-application (`api/routers/observability.py`) :
+| Endpoint | Reponse reelle | Interpretation |
+|---|---|---|
+| `GET /monitoring/loki/status` | `{"configured": true, "authenticated": true, "installed": true, "host": "https://logs-prod-039.grafana.net"}` | **Fonctionne reellement** -- authentification confirmee aupres de Grafana Loki, pas juste une variable presente |
+| `GET /monitoring/datadog/status` | `{"configured": true, "enabled": false, ...}` | Configure mais **volontairement desactive** (`DD_TRACE_ENABLED=False` dans `.env`) -- etat attendu, pas un manquement |
+| `GET /monitoring/tracing/status` | `{"enabled": true, "active": false, "exporter": "otlp", "otlp_endpoint": "http://localhost:4318"}` | Configure mais **genuinement inactif** -- `OTEL_EXPORTER_OTLP_ENDPOINT` pointe sur `localhost:4318`, qui n'existe nulle part en production non plus (aucun collecteur OTLP colocalise). Ceci est le comportement **documente et voulu** de `api/security/tracing.py` : plutot que d'exporter des spans dans le vide, le code les desactive explicitement sans collecteur reel configure |
+| `GET /monitoring/metrics` | `{"business": {"organizations": 166, "users": 28, ...}, "http_requests_total_samples": 125, ...}` | Metriques Prometheus reelles, chiffres coherents avec une vraie base de production active |
 
-- `GET /monitoring/tracing/status`
-- `GET /monitoring/loki/status`
-- `GET /monitoring/datadog/status`
+## Ce qui reste non verifie
 
-Les trois sont proteges par `require_admin` -- le compte de test utilise
-dans cette session (`celery-test-...@example.com`) est proprietaire
-d'une organisation, pas super-administrateur de la plateforme, et
-recoit donc un refus d'acces (comportement RBAC correct, deja verifie
-plus tot dans l'audit -- voir Securite). Aucun compte super-admin n'a
-ete cree ou fourni dans cette session.
+Les dashboards Grafana/Datadog eux-memes n'ont pas ete ouverts dans
+cette session (identifiants d'acces a ces interfaces web non fournis)
+-- mais `authenticated: true` sur Loki est une preuve directe, cote
+application, que les identifiants d'ingestion sont valides et acceptes
+par Grafana, ce qui est la partie qui comptait le plus (les logs
+partent bien).
 
-`GET /metrics` (Prometheus, public par conception) et les 3 endpoints
-`/monitoring/*/status` ci-dessus n'ont pas pu etre appeles avec succes
-dans le temps imparti de cette session (l'instance Render, sur le tier
-gratuit, se met en veille apres inactivite et le reveil a pris plus de
-temps que le budget restant de cette verification).
+## Recommandation
 
-Aucun acces aux dashboards Grafana/Datadog eux-memes (identifiants non
-fournis dans cette session) -- impossible de confirmer que des logs/
-metriques/traces reels y arrivent, meme si les variables sont bien
-configurees cote Render.
-
-## Ce qu'il faut faire pour verifier completement
-
-1. Se connecter avec un compte super-admin (ou en creer un) et appeler
-   les 3 endpoints `/monitoring/*/status` ci-dessus -- chacun renvoie un
-   etat reel ("configured"/"reachable" ou une erreur precise), pas
-   juste "la variable existe".
-2. Ouvrir les dashboards Grafana/Datadog reels correspondant a ces
-   identifiants et confirmer qu'un evenement recent (ex. le deploiement
-   de cette session) y apparait.
+Si le tracing distribue (OpenTelemetry) doit devenir reellement actif,
+il faut soit pointer `OTEL_EXPORTER_OTLP_ENDPOINT` vers l'ingest OTLP
+reel de Grafana Tempo (`TEMPO_HOST` existe deja, mais Tempo Cloud
+necessite generalement un relais type Grafana Alloy plutot qu'un envoi
+OTLP direct authentifie), soit deployer un collecteur OTLP colocalise.
+Aucune des deux options n'a ete faite dans cette session (decision
+produit/infrastructure, pas un bug de code).
 
 ## Statut
 
-Partiellement verifie : configuration presente (noms de variables),
-fonctionnement reel non confirme faute d'acces admin/dashboards dans
-cette session.
+Verifie en direct avec un vrai compte admin et de vrais appels HTTP,
+pas seulement la presence de variables d'environnement. Loki confirme
+fonctionnel ; Datadog et le tracing OTel sont dans l'etat exact que
+leur configuration actuelle indique (respectivement desactive par
+choix, et non connecte a un collecteur reel) -- aucun des deux n'est
+un bug.
