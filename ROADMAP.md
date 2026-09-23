@@ -83,15 +83,43 @@ itemized breakdown of each part.
   testé aurait été invasif pour un gain marginal face à la vraie
   question "cette organisation a-t-elle un problème de retrieval" que
   ce scope répond déjà).
-- **[CORRIGÉE, Phase 5 Étape 11] `backend-tests` CI : vrai service
-  Redis ajouté** (`services: redis: image: redis:7-alpine` dans
-  `ci.yml`, `RATE_LIMIT_REDIS_URL` pointé vers
-  `redis://localhost:6379/0` pour ce job spécifiquement) -- exécute le
-  plan concret déjà tracé à l'Étape 10. **Non re-vérifié par un run CI
-  réel dans cette passe** (voir Limites restantes) -- le changement
-  suit exactement le plan déjà validé, mais per la règle de zéro
-  dissimulation, ceci reste TRACÉ comme "appliqué, vérification du
-  résultat réel en attente" tant qu'un run CI ne l'a pas confirmé.
+- **[TRACÉE, P0 -- hypothèse infirmée, cause réelle toujours inconnue]
+  Le service Redis ajouté à `backend-tests` (`ci.yml`) N'A PAS résolu
+  les ~15 échecs auth/SSO CI-only tracés à l'Étape 10.** Vérifié
+  rigoureusement, pas supposé : un vrai run CI complet a été déclenché
+  après l'ajout du service `redis:7-alpine` + `RATE_LIMIT_REDIS_URL=
+  redis://localhost:6379/0` -- le run est allé jusqu'au bout cette fois
+  (22m37s, plus de timeout), mais **exactement les mêmes tests
+  échouent, avec exactement les mêmes assertions** (`assert 403 == 200`,
+  `assert 200 == 401`, etc.) -- l'hypothèse "Redis injoignable/pollué"
+  de l'Étape 10 est donc réellement fausse, pas juste non confirmée.
+  **Nouvelle piste, non testée** : ces ~2200+ tests tournent tous dans
+  UN SEUL process pytest sur ce runner (contrainte CPU réelle, 2 cœurs
+  sur un runner GitHub Actions standard), alors qu'en local ils ont
+  toujours été exécutés isolément (`pytest tests/test_auth_api.py`
+  seul) -- un vrai state partagé entre tests (event loop asyncio,
+  cache JWT en mémoire de `api/security/jwt.py`, un mock de temps non
+  réinitialisé) pourrait ne se manifester que sous cette combinaison
+  précise de volume + concurrence + ordre d'exécution. **Priorité :
+  P0** (inchangée -- bloque toujours `backend-tests` de passer au
+  vert). **Plan concret révisé** : lancer `pytest tests/test_auth_api.py
+  tests/test_enterprise_sso_integration.py tests/test_oauth_logic_integration.py`
+  seuls (pas la suite complète) sur le MÊME runner CI, pour confirmer
+  si c'est un problème d'isolation entre fichiers de test (plausible,
+  rapide à vérifier) avant d'creuser plus loin dans une vraie
+  différence d'environnement. **Complexité : faible pour le prochain
+  test de diagnostic, potentiellement substantielle si un vrai bug de
+  state partagé est confirmé.**
+- **[CORRIGÉE, Phase 5 Étape 11] `docs/api/openapi.json` était de
+  nouveau obsolète** -- les 2 nouveaux endpoints de cette étape
+  (`GET /workflows/runs/{run_id}/trace`,
+  `GET /organizations/{org_id}/retrieval-diagnostics`) n'avaient pas
+  été suivis d'une régénération. Confirmé par le même run CI ci-dessus
+  (`test_committed_openapi_export_matches_live_app` a re-échoué).
+  Régénéré (712 chemins réels, +2 vs l'Étape 10). **Leçon retenue** :
+  ce test existe précisément pour attraper ça -- chaque étape qui
+  ajoute un routeur doit régénérer avant de pousser, pas seulement au
+  moment où le test le signale.
 - **[CORRIGÉE, Phase 5 Étape 10] `docs/api/openapi.json` était
   réellement obsolète** (confirmé par le test dédié
   `tests/docs/test_api_reference.py::test_committed_openapi_export_matches_live_app`,

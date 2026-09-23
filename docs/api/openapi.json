@@ -4575,6 +4575,58 @@
         }
       }
     },
+    "/workflows/runs/{run_id}/trace": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Get Workflow Run Trace Endpoint",
+        "operationId": "get_workflow_run_trace_endpoint_workflows_runs__run_id__trace_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowNodeExecutionResponse"
+                  },
+                  "title": "Response Get Workflow Run Trace Endpoint Workflows Runs  Run Id  Trace Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflows/runs/{run_id}/human-blocks": {
       "get": {
         "tags": [
@@ -5256,6 +5308,81 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/organizations/{org_id}/retrieval-diagnostics": {
+      "get": {
+        "tags": [
+          "retrieval-diagnostics"
+        ],
+        "summary": "List Retrieval Diagnostics Endpoint",
+        "operationId": "list_retrieval_diagnostics_endpoint_organizations__org_id__retrieval_diagnostics_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RetrievalDiagnosticResponse"
+                  },
+                  "title": "Response List Retrieval Diagnostics Endpoint Organizations  Org Id  Retrieval Diagnostics Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/organizations/{org_id}/teams": {
@@ -63392,6 +63519,58 @@
         "title": "ResponseDetailResponse",
         "description": "Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 -- the real, whole\n`Response` entity, including the 6 real anti-hallucination metrics\nthis batch adds. Real, STORED creation-time snapshots (unlike the\ncitation-level enrichments, these are NOT recomputed live here --\nrecomputing all 6 real checks on every read would repeat real,\nnon-trivial work `enrich_response_with_quality_metrics` already\ndid once at generation time; a real, deliberate difference from\n`GET /responses/{response_id}/confidence`'s own live recompute,\nwhich only ever re-derives 5 cheap, citation-only factors)."
       },
+      "RetrievalDiagnosticResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Organization Id"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "final_chunks": {
+            "items": {},
+            "type": "array",
+            "title": "Final Chunks"
+          },
+          "result_count": {
+            "type": "integer",
+            "title": "Result Count"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "query",
+          "strategy",
+          "final_chunks",
+          "result_count",
+          "latency_ms",
+          "created_at"
+        ],
+        "title": "RetrievalDiagnosticResponse"
+      },
       "RetryResponse": {
         "properties": {
           "message": {
@@ -69205,6 +69384,102 @@
           "value"
         ],
         "title": "WorkflowHumanInputSubmitRequest"
+      },
+      "WorkflowNodeExecutionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workflow_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Run Id"
+          },
+          "step_number": {
+            "type": "integer",
+            "title": "Step Number"
+          },
+          "node_id": {
+            "type": "string",
+            "title": "Node Id"
+          },
+          "node_type": {
+            "type": "string",
+            "title": "Node Type"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workflow_run_id",
+          "step_number",
+          "node_id",
+          "node_type",
+          "input",
+          "output",
+          "duration_ms",
+          "status",
+          "error",
+          "created_at"
+        ],
+        "title": "WorkflowNodeExecutionResponse"
       },
       "WorkflowResponse": {
         "properties": {
