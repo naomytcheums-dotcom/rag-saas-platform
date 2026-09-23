@@ -18,6 +18,7 @@ from api.models.organization import OrganizationMember
 from api.models.workflow import Workflow
 from api.models.workflow_run import WorkflowRun
 from api.schemas.workflow_human_input import WorkflowHumanInputResponse, WorkflowHumanInputSubmitRequest
+from api.schemas.workflow_node_execution import WorkflowNodeExecutionResponse
 from api.schemas.workflow_triggers import (
     WorkflowRunRequest, WorkflowRunResponse, WorkflowTriggerCreateRequest, WorkflowTriggerResponse,
 )
@@ -35,7 +36,7 @@ from api.security.workflows import (
 )
 from api.services.workflow_block_human import get_human_approval, list_human_blocks, submit_human_input
 from api.services.workflow_blocks import WorkflowBlockError
-from api.services.workflow_engine import stream_workflow_run
+from api.services.workflow_engine import list_node_executions, stream_workflow_run
 from api.tasks.workflows import schedule_workflow_resume, schedule_workflow_run
 from api.utils import MAX_PAGE_SIZE
 from api.services.workflow_triggers import (
@@ -239,6 +240,14 @@ async def get_workflow_run_endpoint(run_ctx: tuple[WorkflowRun, OrganizationMemb
 async def stream_workflow_run_endpoint(run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member)) -> StreamingResponse:
     run, _caller = run_ctx
     return StreamingResponse(stream_workflow_run(run), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+@router.get("/workflows/runs/{run_id}/trace", response_model=list[WorkflowNodeExecutionResponse])
+async def get_workflow_run_trace_endpoint(
+    run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member), db: AsyncSession = Depends(get_db),
+):
+    run, _caller = run_ctx
+    return await list_node_executions(db, run.id)
 
 
 # ------------------------------------- Partie 5.4.9 -- human block -------------------------------------

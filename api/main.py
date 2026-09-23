@@ -40,7 +40,7 @@ from api.routers import (
     evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, rbac, reindex_schedules, regression_detection, regression_thresholds,
-    resource_permissions, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
+    resource_permissions, retrieval_diagnostics, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
 )
@@ -317,6 +317,7 @@ app.include_router(organization_members.router)
 app.include_router(workspaces.router)
 app.include_router(workflows.router)
 app.include_router(resource_permissions.router)
+app.include_router(retrieval_diagnostics.router)
 app.include_router(teams.router)
 app.include_router(invitations.router)
 app.include_router(quotas.router)

@@ -17,6 +17,7 @@ call sites share the SAME real building blocks
 (`resolve_llm_config`/`chat_completion`) rather than one reimplementing
 the other."""
 
+import time
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +30,8 @@ from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import chat_completion
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
-from api.services.retrieval_config import resolve_context_compression_enabled
-from api.services.retrieval_pipeline import search_with_context
+from api.services.retrieval_config import resolve_context_compression_enabled, resolve_retrieval_strategy
+from api.services.retrieval_pipeline import record_retrieval_diagnostic, search_with_context
 
 CITATION_INSTRUCTIONS = (
     "Answer the question using only the context below. Cite your sources "
@@ -55,7 +56,12 @@ async def generate_response(
     never end up in `chunks` below, and therefore can never become a
     real citation either -- no separate citation-layer filtering needed."""
     org_settings = await get_org_settings(db, organization_id)
+    retrieval_started = time.monotonic()
     chunks = await search_with_context(db, organization_id, query, org_settings=org_settings, metadata_filters=metadata_filters)
+    retrieval_latency_ms = int((time.monotonic() - retrieval_started) * 1000)
+    await record_retrieval_diagnostic(
+        db, organization_id, query, resolve_retrieval_strategy(org_settings), chunks, retrieval_latency_ms,
+    )
     llm_cfg = resolve_llm_config(org_settings)
 
     system_prompt = llm_cfg["system_prompt"]

@@ -27,6 +27,24 @@ jobs:
     # shared CPU). 30 minutes leaves real headroom without masking an
     # actual hang if one ever occurs.
     timeout-minutes: 30
+    # Phase 5, Étape 11 -- real fix for the ~15 auth/SSO test failures
+    # traced in ROADMAP.md (Étape 10): a real Redis service for THIS
+    # job specifically, so RATE_LIMIT_REDIS_URL points at something
+    # actually reachable from this runner instead of the shared
+    # secret's own real remote instance (unreachable from a GitHub-
+    # hosted runner, or reachable but carrying real state from a
+    # previous run -- either way, not what a fast, isolated test run
+    # needs).
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -48,7 +66,10 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
           CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
-          RATE_LIMIT_REDIS_URL: ${{ secrets.RATE_LIMIT_REDIS_URL }}
+          # Real, deliberate override of the shared secret above: THIS
+          # job's own real, isolated Redis service, not whatever
+          # RATE_LIMIT_REDIS_URL's own secret value points to.
+          RATE_LIMIT_REDIS_URL: redis://localhost:6379/0
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           SESSION_MIDDLEWARE_SECRET: ${{ secrets.SESSION_MIDDLEWARE_SECRET }}
           AUDIT_LOG_HMAC_SECRET_KEY: ${{ secrets.AUDIT_LOG_HMAC_SECRET_KEY }}

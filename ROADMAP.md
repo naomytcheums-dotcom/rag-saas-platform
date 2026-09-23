@@ -18,6 +18,80 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+- **[VÉRIFIÉ, Phase 5 Étape 11] API/Developer Platform existait déjà,
+  bien au-delà du périmètre demandé.** Audit complet avant tout code :
+  API keys réelles (`OrganizationAPIKey`, hash, scopes, rotation,
+  quotas, rate-limit -- Partie 9.1/9.2), auth `X-API-Key` réelle,
+  rate limiting réel (fenêtre glissante Redis), **webhooks CRUD
+  complets** (`Webhook`/`WebhookDelivery`, signature HMAC, retry, test,
+  logs de livraison -- Partie 9.2.7), documentation API réelle
+  (OpenAPI + Redoc, régénérée et vérifiée à l'Étape 10). **Au-delà du
+  spec demandé : 3 vrais SDK déjà présents et testés** (`sdks/python/`,
+  `sdks/js/`, `sdks/react/`, chacun avec ses propres tests réels). Seul
+  vrai gap trouvé : pas de Sandbox Environment isolé -- tracé ci-dessous.
+- **[TRACÉE, P2] Pas de Sandbox Environment isolé (données de test
+  séparées de la prod, TTL automatique).** Investigation menée avant
+  de coder (question posée à l'utilisateur) : un vrai sandbox isolé
+  demanderait de taguer `is_sandbox` sur quasiment CHAQUE modèle
+  existant qui accepte des données créées via API (documents,
+  conversations, agents, workflows...) et de filtrer ce flag à CHAQUE
+  point de lecture -- une chirurgie transversale, pas un ajout additif
+  comme les deux autres gaps de cette étape. **Pourquoi pas construit**
+  : une version partielle (juste un modèle `SandboxEnvironment` sans
+  vraie isolation des autres ressources) donnerait une fausse
+  impression de sécurité/isolation aux développeurs externes qui s'y
+  fieraient -- pire que ne rien avoir. **Priorité : P2** (les
+  développeurs externes peuvent déjà tester contre une organisation
+  réelle dédiée aux tests, juste sans isolation ni purge automatique).
+  **Complexité estimée : substantielle** -- un vrai plan concret :
+  (1) ajouter `is_sandbox: bool` à `OrganizationAPIKey` (une clé
+  `pk_test_...` vs `pk_live_...`, comme Stripe) ; (2) propager ce flag
+  dans le contexte de chaque requête authentifiée par API key ; (3)
+  ajouter une colonne `is_sandbox` aux tables réellement créables via
+  l'API publique (documents, conversations, messages -- pas toutes les
+  ~200 tables du schéma, seulement celles réellement exposées par
+  `api/routers/public_api.py`) ; (4) filtrer par défaut dans chaque
+  requête de lecture publique ; (5) une tâche Celery planifiée de purge
+  après le TTL. Un vrai projet de plusieurs jours, pas une passe.
+- **[CORRIGÉE, Phase 5 Étape 11] Observability : 2 vrais gaps trouvés
+  et fermés.** Audit complet d'abord : traces agent (`AgentTrace`),
+  tokens/coût par organisation (`OrganizationUsage`), latence
+  (`latency_metrics.py`), dashboards Grafana, alerting (channels/rules/
+  incidents) existaient déjà, tous vérifiés réels. **(1) Traces
+  workflow par nœud** -- `WorkflowRun` n'avait que `context`/
+  `current_node_id` (l'état courant), jamais un historique réel,
+  queryable, par nœud (contrairement à `AgentTrace` pour les agents).
+  Fermé : `WorkflowNodeExecution` (migration `0120`, appliquée et
+  vérifiée en aller-retour réel contre Postgres), câblé dans la vraie
+  boucle d'exécution (`api/services/workflow_engine.py`'s own
+  `_advance`), couvrant les 3 chemins réels (succès, échec, pause sur
+  bloc `human`). `GET /workflows/runs/{run_id}/trace` réel. Testé
+  (4 tests réels, y compris l'isolation entre deux runs distincts).
+  **(2) Diagnostics retrieval pour les requêtes live** -- seul Eval Lab
+  avait une vraie visibilité par question (`EvaluationResult`), aucune
+  pour une conversation de chat réelle. Fermé : `RetrievalDiagnostic`
+  (migration `0121`, appliquée et vérifiée), câblé dans le vrai point
+  d'entrée de génération (`api/services/generation.generate_response`),
+  `GET /organizations/{org_id}/retrieval-diagnostics` réel, org-scopé
+  et vérifié isolé (5 tests réels, y compris un test explicite prouvant
+  qu'aucun contenu de chunk n'est dupliqué dans la table diagnostic).
+  **Scope honnête, documenté dans le code** : capture la requête, la
+  stratégie résolue, les chunks finaux avec scores, et la latence --
+  PAS une décomposition avant/après-reranking détaillée (instrumenter
+  individuellement les 5 fonctions de stratégie + 3 couches
+  d'amélioration optionnelles de `retrieval_pipeline.py`'s own déjà
+  testé aurait été invasif pour un gain marginal face à la vraie
+  question "cette organisation a-t-elle un problème de retrieval" que
+  ce scope répond déjà).
+- **[CORRIGÉE, Phase 5 Étape 11] `backend-tests` CI : vrai service
+  Redis ajouté** (`services: redis: image: redis:7-alpine` dans
+  `ci.yml`, `RATE_LIMIT_REDIS_URL` pointé vers
+  `redis://localhost:6379/0` pour ce job spécifiquement) -- exécute le
+  plan concret déjà tracé à l'Étape 10. **Non re-vérifié par un run CI
+  réel dans cette passe** (voir Limites restantes) -- le changement
+  suit exactement le plan déjà validé, mais per la règle de zéro
+  dissimulation, ceci reste TRACÉ comme "appliqué, vérification du
+  résultat réel en attente" tant qu'un run CI ne l'a pas confirmé.
 - **[CORRIGÉE, Phase 5 Étape 10] `docs/api/openapi.json` était
   réellement obsolète** (confirmé par le test dédié
   `tests/docs/test_api_reference.py::test_committed_openapi_export_matches_live_app`,

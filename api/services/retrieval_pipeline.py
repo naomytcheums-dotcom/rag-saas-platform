@@ -59,6 +59,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.document import Document, DocumentChunk
+from api.models.retrieval_diagnostic import RetrievalDiagnostic
 from api.security.documents import generate_embeddings
 from api.services.embedding_config import resolve_embedding_model
 from api.services.retrieval_config import (
@@ -676,6 +677,26 @@ async def search_with_context(
         }
         for result in results
     ]
+
+
+async def record_retrieval_diagnostic(
+    db: AsyncSession, organization_id, query: str, strategy: str, results: list[dict], latency_ms: int,
+) -> RetrievalDiagnostic:
+    """Phase 5, Étape 11 -- real, per-query diagnostic for a LIVE query
+    (see api/models/retrieval_diagnostic.py's own docstring for the
+    honest scope: final chunks + latency, not a full before/after-rerank
+    breakdown). `final_chunks` stores only `chunk_id`/`document_id`/
+    `score` per result -- never the full chunk text, which would
+    needlessly duplicate real document content already stored once in
+    `document_chunks` and bloat this table for no diagnostic value."""
+    diagnostic = RetrievalDiagnostic(
+        organization_id=organization_id, query=query, strategy=strategy,
+        final_chunks=[{"chunk_id": r.get("chunk_id"), "document_id": r.get("document_id"), "score": r.get("score")} for r in results],
+        result_count=len(results), latency_ms=latency_ms,
+    )
+    db.add(diagnostic)
+    await db.flush()
+    return diagnostic
 
 
 def build_llm_context(citation_chunks: list[dict] | None, org_settings: dict | None = None) -> str | None:

@@ -31,6 +31,7 @@ from api.models.password_history import PasswordHistory
 from api.models.recovery_code import TwoFactorRecoveryCode
 from api.models.resource_permission import ResourcePermission
 from api.models.response import Response
+from api.models.retrieval_diagnostic import RetrievalDiagnostic
 from api.models.restore_token import AccountRestoreToken
 from api.models.revoked_token import RevokedAccessToken
 from api.models.session import Session
@@ -44,6 +45,7 @@ from api.models.user import User
 from api.models.webauthn_credential import WebAuthnCredential
 from api.models.workflow import Workflow
 from api.models.workflow_human_input import WorkflowHumanInput
+from api.models.workflow_node_execution import WorkflowNodeExecution
 from api.models.workflow_run import WorkflowRun, WorkflowTrigger
 from api.models.workflow_version import WorkflowVersion
 from api.models.workspace import Workspace

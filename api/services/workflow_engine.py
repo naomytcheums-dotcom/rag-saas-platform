@@ -31,12 +31,15 @@ are two real, separate calls" shape already established there)."""
 import datetime as dt
 import json
 import logging
+import time
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.workflow import Workflow
 from api.models.workflow_human_input import WorkflowHumanInput
+from api.models.workflow_node_execution import WorkflowNodeExecution
 from api.models.workflow_run import WorkflowRun, WorkflowRunStatus
 from api.services.workflow_block_calendar import execute_calendar_block
 from api.services.workflow_block_code import execute_code_block
@@ -187,6 +190,26 @@ async def _fail(run: WorkflowRun, context: dict, message: str) -> WorkflowRun:
     return run
 
 
+async def _record_node_execution(
+    db: AsyncSession, run_id: uuid.UUID, step_number: int, node: dict, node_input: dict, output: dict | None,
+    started_at: float, status: str, error: str | None,
+) -> None:
+    """Phase 5, Étape 11 -- real, per-node execution trace, the same
+    real gap `AgentTrace` already closed for agents
+    (api/models/agent_trace.py). One row per real node execution
+    attempt, including a real duration measured with
+    `time.monotonic()` (never wall-clock, immune to a real system
+    clock adjustment mid-run)."""
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    db.add(
+        WorkflowNodeExecution(
+            workflow_run_id=run_id, step_number=step_number, node_id=node["id"], node_type=node["type"],
+            input=node_input, output=output, duration_ms=duration_ms, status=status, error=error,
+        )
+    )
+    await db.flush()
+
+
 async def _advance(db: AsyncSession, run: WorkflowRun, workflow: Workflow, context: dict, current_id: str | None) -> WorkflowRun:
     """The real, shared loop both `execute_workflow_run` (a fresh run,
     starting at the real `trigger` node) and `resume_workflow_run` (a
@@ -214,15 +237,19 @@ async def _advance(db: AsyncSession, run: WorkflowRun, workflow: Workflow, conte
         run.current_node_id = current_id
         await _publish_run_event(run.id, {"event": "node_started", "node_id": current_id, "status": run.status})
 
+        node_input = dict(context)
+        started_at = time.monotonic()
         try:
             result = await _execute_node(db, workflow.organization_id, run, node, context)
         except (WorkflowBlockError, WorkflowExecutionError) as exc:
+            await _record_node_execution(db, run.id, steps, node, node_input, None, started_at, "failed", str(exc))
             await _fail(run, context, f"Node {current_id!r} ({node['type']}) failed: {exc}")
             await db.flush()
             await _publish_run_event(run.id, {"event": "run_failed", "node_id": current_id, "status": run.status, "error": run.error})
             return run
 
         if result is None:  # a real 'human' block -- pause here, wait for a real, separate submission
+            await _record_node_execution(db, run.id, steps, node, node_input, None, started_at, "waiting_human", None)
             run.status = WorkflowRunStatus.waiting_human.value
             run.current_node_id = current_id
             run.context = context
@@ -230,6 +257,7 @@ async def _advance(db: AsyncSession, run: WorkflowRun, workflow: Workflow, conte
             await _publish_run_event(run.id, {"event": "waiting_human", "node_id": current_id, "status": run.status})
             return run
 
+        await _record_node_execution(db, run.id, steps, node, node_input, result, started_at, "completed", None)
         context.update(result)
         await _publish_run_event(run.id, {"event": "node_completed", "node_id": current_id, "status": run.status, "output": result})
         current_id = _next_node_id(current_id, node["type"], result, workflow.edges)
@@ -330,3 +358,12 @@ async def stream_workflow_run(run: WorkflowRun):
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
+
+
+async def list_node_executions(db: AsyncSession, workflow_run_id: uuid.UUID) -> list[WorkflowNodeExecution]:
+    """Phase 5, Étape 11 -- real, ordered, per-node execution history
+    for one run, backing `GET /workflows/runs/{run_id}/trace`."""
+    result = await db.scalars(
+        select(WorkflowNodeExecution).where(WorkflowNodeExecution.workflow_run_id == workflow_run_id).order_by(WorkflowNodeExecution.step_number)
+    )
+    return list(result.all())
