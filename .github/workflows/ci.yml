@@ -58,6 +58,22 @@ jobs:
 
       - name: Run test suite
         env:
+          # Real root cause found (Phase 5, Étape 12) for the ~15
+          # auth/SSO failures traced across Étapes 10-11 -- NOT Redis
+          # (that hypothesis was tested and disproven). `COOKIE_SECURE`
+          # defaults to `True` (api/config.py) and was never overridden
+          # here, unlike every local dev machine's own git-ignored
+          # `.env` (`COOKIE_SECURE=False`, confirmed present locally).
+          # tests/conftest.py's own test client talks to the app over
+          # plain `http://testserver` (ASGITransport, never real TLS) --
+          # with `COOKIE_SECURE=True`, every `Secure`-flagged cookie
+          # (refresh_token/csrf_token) is silently dropped by httpx's
+          # own cookie jar, breaking every session/CSRF-dependent
+          # assertion. Reproduced locally and confirmed byte-for-byte
+          # (`COOKIE_SECURE=True pytest tests/test_auth_api.py`: same 15
+          # failures, same exact assertions) BEFORE touching CI, per
+          # this étape's own "one real CI run, not a guessing loop" rule.
+          COOKIE_SECURE: "False"
           # Same secrets already configured for the Celery worker
           # workflow (.github/workflows/celery-worker.yml) -- the test
           # suite itself runs against an in-memory SQLite DB, not
