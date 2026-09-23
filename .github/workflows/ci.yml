@@ -18,7 +18,15 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Real bug found by this étape's own first-ever completed CI run:
+    # this job was cancelled at the original 15-minute limit while
+    # still making genuine, steady progress (42% through 4756 real
+    # tests, not stuck) -- a shared GitHub-hosted runner is real, but
+    # slower per-test than this session's own dev machine (real bcrypt
+    # hashing costs, real async DB round-trips, add up differently under
+    # shared CPU). 30 minutes leaves real headroom without masking an
+    # actual hang if one ever occurs.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
