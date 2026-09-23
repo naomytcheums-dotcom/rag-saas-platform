@@ -92,7 +92,12 @@ itemized breakdown of each part.
   (22m37s, plus de timeout), mais **exactement les mêmes tests
   échouent, avec exactement les mêmes assertions** (`assert 403 == 200`,
   `assert 200 == 401`, etc.) -- l'hypothèse "Redis injoignable/pollué"
-  de l'Étape 10 est donc réellement fausse, pas juste non confirmée.
+  de l'Étape 10 est donc réellement fausse, pas juste non confirmée --
+  ce n'est PAS un problème de Redis. **Impact réel** : `backend-tests`
+  reste rouge sur chaque push/PR vers `main`, ce qui masque le vrai
+  signal de tout AUTRE test qui casserait réellement (un vrai
+  régression future se noierait dans ces ~15 échecs déjà connus) --
+  un vrai risque opérationnel pour la fiabilité du CI, pas cosmétique.
   **Nouvelle piste, non testée** : ces ~2200+ tests tournent tous dans
   UN SEUL process pytest sur ce runner (contrainte CPU réelle, 2 cœurs
   sur un runner GitHub Actions standard), alors qu'en local ils ont
@@ -102,14 +107,22 @@ itemized breakdown of each part.
   réinitialisé) pourrait ne se manifester que sous cette combinaison
   précise de volume + concurrence + ordre d'exécution. **Priorité :
   P0** (inchangée -- bloque toujours `backend-tests` de passer au
-  vert). **Plan concret révisé** : lancer `pytest tests/test_auth_api.py
-  tests/test_enterprise_sso_integration.py tests/test_oauth_logic_integration.py`
-  seuls (pas la suite complète) sur le MÊME runner CI, pour confirmer
-  si c'est un problème d'isolation entre fichiers de test (plausible,
-  rapide à vérifier) avant d'creuser plus loin dans une vraie
-  différence d'environnement. **Complexité : faible pour le prochain
-  test de diagnostic, potentiellement substantielle si un vrai bug de
-  state partagé est confirmé.**
+  vert). **Plan concret révisé, en 2 temps** : (1) diagnostic --
+  ajouter un vrai logging détaillé (état de `jwt_signing_keys`, contenu
+  réel du cache JWT, timestamp serveur) juste avant chaque assertion
+  qui échoue en CI, lancer `pytest tests/test_auth_api.py
+  tests/test_enterprise_sso_integration.py
+  tests/test_oauth_logic_integration.py` SEULS (pas la suite complète)
+  sur le MÊME runner GitHub Actions pour comparer directement contre le
+  comportement local déjà confirmé correct (171/171) ; (2) une fois la
+  vraie cause confirmée par ce diagnostic, corriger le code réel (pas
+  le test) si c'est un vrai bug de state partagé, ou isoler
+  proprement le state entre tests si c'est un problème de fixture.
+  **Complexité : moyenne** -- le diagnostic lui-même est rapide (un
+  run CI ciblé, quelques lignes de logging temporaire), mais la
+  correction finale dépend de ce que ce diagnostic révèle réellement,
+  d'où le classement "moyenne" plutôt que "faible" tant que la cause
+  exacte n'est pas confirmée.
 - **[CORRIGÉE, Phase 5 Étape 11] `docs/api/openapi.json` était de
   nouveau obsolète** -- les 2 nouveaux endpoints de cette étape
   (`GET /workflows/runs/{run_id}/trace`,
