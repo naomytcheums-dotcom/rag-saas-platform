@@ -207,8 +207,22 @@ itemized breakdown of each part.
   tools custom d'une organisation que lorsque la clé API appelante
   appartient à CETTE organisation -- déjà vrai pour l'auth, il manque
   le filtrage par org dans `list_tools_endpoint`/`call_tool_endpoint`).
-- **[TRACÉE, P0] Build Docker backend ET frontend toujours non
-  vérifiés de bout en bout après un 3e cycle de tentatives (Étape 7 :
+- **[CORRIGÉE, Phase 5 Étape 10] Build Docker backend ET frontend
+  enfin vérifiés pour de vrai, sur un vrai runner GitHub Actions.**
+  `build-backend` ✓ en 8m44s (job 107291194496, run 35893399884),
+  `build-frontend` ✓ en 22s (grâce au cache GHA, 2e confirmation
+  consécutive après un premier ✓ à 3m26s). Fermeture définitive du P0
+  ouvert depuis l'Étape 7 : après 4 tentatives locales infructueuses
+  (bcrypt/torch/ddtrace/ReadTimeoutError, toutes confirmées comme de
+  l'instabilité réseau locale, jamais un vrai défaut de code), le
+  déplacement de la vérification vers un runner CI stable -- exactement
+  la recommandation de cette étape -- a réellement tranché la question.
+  Aucun changement de code Dockerfile n'a été nécessaire : les deux
+  images se construisent avec le code existant, une fois sur un réseau
+  fiable.
+- **[HISTORIQUE, résolu ci-dessus] Build Docker backend ET frontend
+  toujours non vérifiés de bout en bout après un 3e cycle de tentatives
+  (Étape 7 :
   2 essais : bcrypt puis torch, réseau ; Étape 9 : 2 essais
   supplémentaires chacun).**
   **Backend, essai 1 (Étape 9)** : réseau nettement plus stable
