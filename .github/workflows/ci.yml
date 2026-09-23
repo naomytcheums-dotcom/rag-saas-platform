@@ -105,7 +105,14 @@ jobs:
     # GitHub-hosted runner is a genuinely different, stable network path
     # this session's own environment can't rule out or confirm from the
     # inside.
-    needs: backend-tests
+    #
+    # Deliberately NOT `needs: backend-tests` -- a real, environment-
+    # specific test-suite issue (auth/session tests failing only on this
+    # runner, not locally, likely a missing real Redis reachable at
+    # RATE_LIMIT_REDIS_URL for this job -- see ROADMAP.md) is a genuinely
+    # separate concern from "does this Dockerfile actually build,"
+    # which this job exists specifically to verify without being
+    # blocked by an unrelated, already-traced issue.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

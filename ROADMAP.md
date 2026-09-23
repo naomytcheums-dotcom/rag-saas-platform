@@ -18,6 +18,114 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+- **[CORRIGÉE, Phase 5 Étape 10] `docs/api/openapi.json` était
+  réellement obsolète** (confirmé par le test dédié
+  `tests/docs/test_api_reference.py::test_committed_openapi_export_matches_live_app`,
+  jamais exécuté avec succès en CI avant cette étape -- ferme
+  exactement le gap "openapi.json drift" tracé P3 à l'Étape 8, ET
+  répond à sa propre recommandation ("un test CI qui échoue si le
+  fichier commité diffère du schéma généré en live" existait déjà,
+  il suffisait qu'un vrai run CI l'exécute). Régénéré réellement
+  depuis `api.main.app.openapi()` (710 chemins réels), test repassé
+  en vert (38/38 dans `tests/docs/` + `tests/test_api_key_management.py`).
+- **[CORRIGÉE, Phase 5 Étape 10] Vrai bug d'oubli de l'Étape 9 :
+  `PUBLIC_API_SCOPES` compte 13 scopes réels depuis l'ajout de
+  `"mcp:tools"`, mais 2 tests avaient toujours `== 12` en dur.**
+  Trouvé par ce même premier vrai run CI. Corrigé
+  (`tests/test_api_key_management.py`, les deux assertions + une
+  nouvelle assertion explicite `"mcp:tools" in scopes`).
+- **[TRACÉE, P0] ~15 tests réels de `tests/test_auth_api.py` +
+  `tests/test_enterprise_sso_integration.py` échouent SEULEMENT sur le
+  runner CI, jamais en local.** Vérifié rigoureusement, pas supposé :
+  `python -m pytest tests/test_auth_api.py` en local → **171/171
+  passent** ; le même fichier sur le runner GitHub Actions → ~15
+  échecs réels, tous de la même famille (`assert 403 == 401`,
+  `assert 200 == 401`, `assert 403 == 200`, un `RuntimeError: coroutine
+  raised StopIteration`) -- des flux de session/refresh/blacklist/CSRF
+  qui se comportent différemment selon l'environnement. **Cause
+  probable, non confirmée** : `backend-tests` ne démarre aucun service
+  Redis réel, alors que `RATE_LIMIT_REDIS_URL` (un vrai secret GitHub,
+  configuré) doit pointer vers quelque chose -- soit une instance
+  injoignable depuis ce runner (comportement de repli différent d'un
+  environnement local où Redis tourne réellement), soit une instance
+  RÉELLE et PARTAGÉE dont l'état (sessions/blacklist déjà présents
+  d'un run précédent) pollue ce run. **Pourquoi pas diagnostiqué plus
+  loin dans cette passe** : confirmer laquelle des deux hypothèses est
+  réelle demanderait d'inspecter la valeur réelle du secret
+  `RATE_LIMIT_REDIS_URL` (jamais fait par principe -- les secrets ne
+  doivent jamais être exposés/manipulés directement) et/ou de modifier
+  l'infrastructure CI (ajouter un vrai service `redis:` au job,
+  générer une URL de test dédiée) -- un vrai changement d'infra, pas
+  un correctif de code. **Priorité : P0** (bloque `backend-tests` de
+  passer au vert sur CI, même si ça ne bloque PAS `build-backend`,
+  découplé exprès -- voir plus bas). **Plan concret** : ajouter un
+  vrai service `redis:7-alpine` au job `backend-tests` de `ci.yml`
+  (`services: redis: image: redis:7-alpine`) et pointer
+  `RATE_LIMIT_REDIS_URL` vers `redis://localhost:6379/0` pour CE job
+  spécifiquement (pas le secret partagé), puis relancer et confirmer.
+- **[ACCEPTÉE] `build-backend` ne dépend plus de `backend-tests`
+  (`needs:` retiré volontairement).** Le job `build-backend` existe
+  spécifiquement pour vérifier qu'une image Docker se construit,
+  vérification indépendante de la santé de la suite de tests --
+  bloquer la vérification du build P0 sur un problème réel mais
+  distinct (l'investigation Redis ci-dessus) mélangerait deux
+  préoccupations différentes. `build-frontend`, lui, dépend de
+  `frontend-checks` (déjà vert, aucune raison de découpler).
+- **[VÉRIFIÉ, Phase 5 Étape 10] Eval Lab existait déjà, bien au-delà du
+  périmètre demandé par cette étape.** Audit complet mené avant tout
+  code (règle PROMPT CATCH) : `EvaluationDataset`/`EvaluationQuestion`
+  (ground truth réel : `expected_documents`, `expected_answer`,
+  difficulté/catégorie)/`QuestionSet`+`QuestionSetItem`/
+  `BenchmarkVersion` (snapshots versionnés) `api/models/evaluation.py`.
+  Métriques réelles et calculées (pas de placeholder) : Recall@1/3/5/10,
+  MRR, NDCG, Precision, Hit Rate (`api/services/retrieval_metrics.py` +
+  `api/services/ground_truth_documents.py`). Batch evaluation réel via
+  Celery (`api/services/evaluation_jobs.py`), avec annulation réelle
+  (`POST /jobs/{id}/cancel`). Comparaison réelle
+  (`ComparisonJob`, 4 types : model/retriever/reranker/prompt).
+  **Au-delà du spec demandé** : détection de régression automatique
+  entre deux jobs (`RegressionDetection`/`RegressionThreshold`, par
+  organisation), gate d'évaluation avant déploiement d'un agent
+  (`DeploymentEvaluation`), évaluation manuelle humaine
+  (`ManualEvaluation`), A/B testing EN PRODUCTION avec statistiques
+  réelles (p-value, intervalle de confiance -- `ABTest`/
+  `ABTestAssignment`/`ABTestResult`). 65 endpoints réels au total sur
+  10 routeurs. Multi-tenant réel et vérifié
+  (`require_org_admin`+`require_dataset_admin`/`require_question_admin`,
+  même convention "ressource puis rôle" que le reste du codebase).
+  Import/export de questions déjà réels. Coût par résultat déjà tracé
+  (réutilise `api/services/cost_tracking.py`). 24 fichiers de tests
+  réels. **Aucune construction nécessaire cette étape** -- le travail
+  a consisté à auditer, vérifier, et tracer les 3 gaps réels restants
+  ci-dessous plutôt qu'à reconstruire quelque chose de déjà mature.
+- **[TRACÉE, P2] Eval Lab n'a pas d'UI frontend dédiée.** Seul
+  `frontend/components/fine-tuning/ModelEvaluation.tsx` existe, sans
+  rapport avec ce module. Aucune page dataset/run/comparaison/graphique
+  n'existe pour ce module pourtant très complet côté backend.
+  **Pourquoi pas construit dans cette passe** : une UI complète
+  (listes, détail de run, comparaison avec deltas, graphiques Recall@K/
+  MRR, export) est un vrai travail frontend substantiel, hors du
+  périmètre "corrections + vérifications" de cette étape combinée
+  Docker CI + Eval Lab, et cette session a déjà consommé un temps très
+  important sur les étapes précédentes. **Priorité : P2** (le module
+  est pleinement utilisable via l'API dès aujourd'hui -- Postman/script
+  -- juste pas via une UI dédiée). **Complexité estimée : substantielle**
+  (plusieurs pages + composants + graphiques, à l'image de
+  `frontend/components/ab-tests/` qui existe déjà comme précédent réel
+  à suivre pour le style).
+- **[TRACÉE, P3] Pas de progression en temps réel (SSE) pour un
+  `EvaluationJob` en cours -- seul le polling via `progress`/
+  `completed_questions`/`total_questions` existe.** **Priorité : P3**
+  (fonctionnel, juste moins réactif qu'un push). **Complexité estimée :
+  faible** (réutiliser le pattern SSE déjà établi par
+  `api/services/streaming.py`/le stream d'exécution de workflow).
+- **[TRACÉE, P3] Pas de budget/coût plafonné par `EvaluationJob`** --
+  le coût est réellement calculé et rapporté après coup
+  (`calculate_cost_per_request`), mais rien n'arrête un run en cours
+  de route si un budget est dépassé. **Priorité : P3** (visibilité
+  déjà réelle, juste pas de coupe-circuit). **Complexité estimée :
+  faible** (un champ `max_cost` sur `EvaluationJob` + une vérification
+  dans la boucle Celery existante).
 - **[CORRIGÉE, Phase 5 Étape 10] Le premier vrai run CI (déclenché par
   cette étape elle-même) a trouvé 3 vrais bugs, invisibles en local,
   que la promesse "runner CI stable" de cette étape a justement
