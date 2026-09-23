@@ -30,16 +30,17 @@ from api.models.widget import WidgetConfig
 from api.schemas.public_api import ChatResponse
 from api.schemas.widget import (
     ReorderQuestionsRequest, SuggestedQuestionCreateRequest, SuggestedQuestionResponse, SuggestedQuestionUpdateRequest,
-    WidgetChatRequest, WidgetConfigUpdateRequest, WidgetLanguageUpdateRequest, WidgetNameUpdateRequest,
-    WidgetPositionResponse, WidgetPositionUpdateRequest, WidgetPublicConfigResponse, WidgetSessionRequest,
-    WidgetSessionResponse, WidgetThemeResponse, WidgetThemeUpdateRequest, WidgetWelcomeUpdateRequest,
+    WidgetChatRequest, WidgetConfigUpdateRequest, WidgetDomainsResponse, WidgetDomainsUpdateRequest,
+    WidgetLanguageUpdateRequest, WidgetNameUpdateRequest, WidgetPositionResponse, WidgetPositionUpdateRequest,
+    WidgetPublicConfigResponse, WidgetSessionRequest, WidgetSessionResponse, WidgetThemeResponse,
+    WidgetThemeUpdateRequest, WidgetWelcomeUpdateRequest,
 )
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_member
 from api.utils import client_ip
 from api.security.widget_auth import (
     WidgetAuthError, WidgetSession, create_widget_session_token, get_widget_config_by_public_key,
-    require_widget_public_key, require_widget_session,
+    is_origin_allowed, require_widget_public_key, require_widget_session, resolve_request_origin,
 )
 from api.services.public_api import PublicAPIError, handle_public_chat
 from api.services.widget import (
@@ -47,9 +48,10 @@ from api.services.widget import (
     generate_css_variables, get_default_theme, get_or_create_widget_config, get_supported_widget_languages,
     get_widget_avatar, get_widget_config_public, get_widget_language, get_widget_logo, get_widget_position,
     list_suggested_questions, reorder_suggested_questions, reset_to_default_avatar, reset_welcome_message,
-    reset_widget_theme, update_suggested_question, update_widget_config, update_widget_position, upload_widget_avatar,
-    upload_widget_logo, validate_theme, validate_widget_name, validate_widget_params, validate_language,
-    get_welcome_message, update_welcome_message, validate_theme_colors, sanitize_custom_css, generate_widget_short_name,
+    reset_widget_theme, set_widget_allowed_domains, update_suggested_question, update_widget_config,
+    update_widget_position, upload_widget_avatar, upload_widget_logo, validate_theme, validate_widget_name,
+    validate_widget_params, validate_language, get_welcome_message, update_welcome_message, validate_theme_colors,
+    sanitize_custom_css, generate_widget_short_name,
 )
 
 router = APIRouter(tags=["Widget"])
@@ -102,11 +104,26 @@ async def get_widget_iframe(config: WidgetConfig = Depends(require_widget_public
     real HTML shell itself needs no config baked in server-side
     (chat.js fetches /widget/config client-side once loaded), so this
     just serves the real static template with the widget's own real
-    security headers layered on top."""
+    security headers layered on top.
+
+    Phase 4, Étape 5 (Domain Allowlist Widget) -- `frame-ancestors` is
+    now real, per-organization: `config.allowed_domains` empty/`None`
+    (every real, pre-existing organization's own real default) keeps
+    the real, EXACT, unchanged `*` this codebase already, deliberately
+    used (api/main.py's own `_WIDGET_FRAMEABLE_PATH` docstring: "the
+    ONE real, deliberate exception... that's the whole point of an
+    iframe-embed integration"); a real, non-empty allowlist restricts
+    embedding to those real, configured origins instead -- `'self'` is
+    NOT added (an organization's own real frontend dashboard has no
+    real reason to iframe its own widget)."""
     path = _ASSETS_DIR / "iframe.html"
     if not path.exists():
         raise _NOT_FOUND
-    headers = {**_cache_headers(), "X-Frame-Options": "ALLOWALL", "Content-Security-Policy": "frame-ancestors *"}
+    if config.allowed_domains:
+        frame_ancestors = "frame-ancestors " + " ".join(config.allowed_domains)
+    else:
+        frame_ancestors = "frame-ancestors *"
+    headers = {**_cache_headers(), "X-Frame-Options": "ALLOWALL", "Content-Security-Policy": frame_ancestors}
     return Response(content=path.read_text(encoding="utf-8"), media_type="text/html", headers=headers)
 
 
@@ -142,12 +159,34 @@ async def get_widget_config_admin_endpoint(org_id: uuid.UUID, caller: Organizati
 
 
 @router.post("/widget/session", response_model=WidgetSessionResponse)
-async def create_widget_session_endpoint(payload: WidgetSessionRequest, db: AsyncSession = Depends(get_db)):
+async def create_widget_session_endpoint(payload: WidgetSessionRequest, request: Request, db: AsyncSession = Depends(get_db)):
     try:
         config = await get_widget_config_by_public_key(db, payload.public_key)
     except WidgetAuthError as exc:
         raise _NOT_FOUND from exc
-    token = create_widget_session_token(config.id, config.organization_id, config.agent_id)
+    # Phase 4, Étape 5 (Domain Allowlist Widget) -- real, genuine
+    # vulnerability found by audit: minting a session token (the REAL
+    # authorization boundary `POST /widget/chat` actually trusts) had
+    # NO origin check at all -- any site, given only the real,
+    # non-secret `public_key`, could mint one. `resolve_request_origin`
+    # (Étape 5bis, factored out for real reuse by `require_widget_session`
+    # below) resolves `Origin` first, falling back to `Referer` -- both
+    # `None` correctly means "reject" once `is_origin_allowed` sees a
+    # real, non-empty `allowed_domains` (confirmed by this étape's own
+    # re-audit of "Limite 1": already correct before this étape, see
+    # this étape's own final report). `is_origin_allowed` itself is a
+    # real, deliberate no-op (always `True`) when this organization
+    # never configured `allowed_domains`, so a fresh/unconfigured
+    # organization's own widget keeps working exactly as before,
+    # unrestricted.
+    origin = resolve_request_origin(request)
+    if not is_origin_allowed(origin, config.allowed_domains):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This origin is not authorized to embed this widget")
+    # Phase 4, Étape 5bis -- real, genuine hardening ("Limite 2"): the
+    # SAME real, resolved origin is embedded in the real token itself,
+    # so `require_widget_session` can reject a real, stolen/replayed
+    # token used from a real, different origin later.
+    token = create_widget_session_token(config.id, config.organization_id, config.agent_id, origin=origin)
     return {"session_token": token, "expires_in": settings.WIDGET_SESSION_TOKEN_EXPIRE_MINUTES * 60}
 
 
@@ -165,6 +204,30 @@ async def widget_chat_endpoint(payload: WidgetChatRequest, session: WidgetSessio
         raise _to_http_error(exc) from exc
     await db.commit()
     return result
+
+
+# ------------------------------------------------------------------------- Phase 4, Étape 5 -- Domain allowlist (Member+)
+
+
+@router.get("/organizations/{org_id}/widget/domains", response_model=WidgetDomainsResponse)
+async def get_widget_domains_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    config = await get_or_create_widget_config(db, org_id)
+    await db.commit()
+    return {"allowed_domains": config.allowed_domains or []}
+
+
+@router.patch("/organizations/{org_id}/widget/domains", response_model=WidgetDomainsResponse)
+async def update_widget_domains_endpoint(org_id: uuid.UUID, payload: WidgetDomainsUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    try:
+        config = await set_widget_allowed_domains(db, org_id, payload.allowed_domains, caller.user_id)
+    except WidgetError as exc:
+        raise _to_http_error(exc) from exc
+    await log_audit_action(
+        db, user_id=caller.user_id, action=AuditAction.WIDGET_UPDATED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=org_id, resource_type="widget", resource_id=str(org_id),
+    )
+    await db.commit()
+    return {"allowed_domains": config.allowed_domains or []}
 
 
 # ------------------------------------------------------------------------- 9.3.3/9.3.10 Theme (Member+)

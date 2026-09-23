@@ -93,11 +93,36 @@ from zoneinfo import available_timezones
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings as app_settings
 from api.models.organization_settings import OrganizationSettings
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "chunk_size": 512,
     "chunk_overlap": 50,
+    # Phase 4, Étape 1 (correctif config parent_child) -- dedicated,
+    # per-organization sizes for the "parent_child" strategy alone,
+    # never read by the other 7 strategies (which keep using the pair
+    # above, completely unchanged). Real, deliberate defaults: the SAME
+    # real values `api.config.settings.PARENT_CHILD_PARENT_SIZE`/
+    # `_CHILD_SIZE`/`_PARENT_OVERLAP`/`_CHILD_OVERLAP` already were (and
+    # still are, for any organization that never touches these) --
+    # `chunk_parent_child` itself falls back to those exact same
+    # constants when a caller passes `None`, so a pre-existing
+    # organization that adopts `chunking_strategy="parent_child"`
+    # without ever setting these 4 new keys gets BYTE-IDENTICAL
+    # behavior to before this étape, not a silent behavior change.
+    "parent_chunk_size": app_settings.PARENT_CHILD_PARENT_SIZE,
+    "parent_chunk_overlap": app_settings.PARENT_CHILD_PARENT_OVERLAP,
+    "child_chunk_size": app_settings.PARENT_CHILD_CHILD_SIZE,
+    "child_chunk_overlap": app_settings.PARENT_CHILD_CHILD_OVERLAP,
+    # Phase 4, Étape 1 -- real, per-organization selection among the 7
+    # real chunking strategies (`api/services/chunk_config.py`'s own
+    # `CHUNKING_STRATEGIES`). "fixed" is the pre-existing, real
+    # token-sliding-window strategy `process_document` has always used
+    # -- the real, deliberate default here, so an organization that
+    # never touches this new setting keeps the exact same real chunking
+    # behavior it already had before this étape.
+    "chunking_strategy": "fixed",
     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "llm_provider": "anthropic",
     # Real, deliberate `None` -- Partie 7.2.15's own cost-tracking work
@@ -146,6 +171,35 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # precedence, capped by CITATION_MAX_COUNT), the same real resolver
     # convention as every other setting above.
     "citation_count": 5,
+    # Phase 4, Étape 2 (Advanced Retrieval) -- Query Rewriting, Multi-
+    # Query, HyDE, MMR, Context Compression already existed as complete,
+    # individually-tested, standalone modules (api/services/
+    # query_rewriting.py, multi_query.py, hyde.py, mmr.py,
+    # context_compression.py), each with its own GLOBAL kill switch
+    # (api.config.settings.*_ENABLED) that already defaults to True --
+    # but none were ever organization-configurable, and none were ever
+    # called by the real search()/search_with_context()/
+    # generate_response() path. Every one of the 5 new *_enabled keys
+    # below defaults to `False`, regardless of the pre-existing global
+    # default, so an organization that never touches these keeps the
+    # EXACT SAME retrieval/generation behavior it already had (this
+    # étape's own explicit rétrocompatibilité requirement) -- see
+    # api/services/retrieval_config.py's own "Phase 4, Étape 2" section
+    # for the resolvers that read these.
+    "query_rewriting_enabled": False,
+    "multi_query_enabled": False,
+    # Real, deliberate default: the SAME real value
+    # api.config.settings.MULTI_QUERY_NUM_VARIANTS already is, so an
+    # organization that enables multi_query_enabled without ever
+    # touching this key gets that module's own pre-existing, already-
+    # tested default variant count.
+    "multi_query_count": app_settings.MULTI_QUERY_NUM_VARIANTS,
+    "hyde_enabled": False,
+    "mmr_enabled": False,
+    # Real, deliberate default: the SAME real value
+    # api.config.settings.MMR_LAMBDA already is.
+    "mmr_lambda": app_settings.MMR_LAMBDA,
+    "context_compression_enabled": False,
 }
 
 # Computed once at import time, not per-call -- available_timezones()

@@ -24,11 +24,23 @@ GitHub sections.
 import uuid
 from unittest.mock import patch
 
+import pytest
+
 from api.security.documents import process_github_issues, process_github_repo
 from api.services.github_extraction import fetch_github_repo, fetch_github_repo_tree
 
 _REAL_OWNER, _REAL_REPO = "octocat", "Spoon-Knife"
 _REAL_ISSUES_OWNER, _REAL_ISSUES_REPO = "github", "docs"
+
+# Phase 5, Étape 3 correctif: every test in this file hits the real,
+# unauthenticated GitHub REST API (60 requests/hour per real IP) --
+# found flaky (httpx.ReadTimeout, then a real rate-limit-exceeded on a
+# single retry) during this étape's own full-suite regression run,
+# unrelated to any of this étape's actual code changes. Same real,
+# genuine "sometimes fails for reasons unrelated to this codebase"
+# category Phase 4, Étape 5ter already established the `network_flaky`
+# marker for -- this file just never got it applied.
+pytestmark = pytest.mark.network_flaky
 
 
 def _patch_process_github_files(captured):

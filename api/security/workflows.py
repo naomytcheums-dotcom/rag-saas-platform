@@ -65,6 +65,7 @@ async def create_workflow(db: AsyncSession, organization_id: uuid.UUID, data: di
     workflow = Workflow(
         organization_id=organization_id, created_by=created_by, workspace_id=data.get("workspace_id"),
         name=data["name"], description=data.get("description"), nodes=data.get("nodes") or [], edges=data.get("edges") or [],
+        variables=data.get("variables") or [],
     )
     db.add(workflow)
     await db.flush()
@@ -77,7 +78,7 @@ async def update_workflow(db: AsyncSession, workflow_id: uuid.UUID, data: dict) 
         return None
     if "nodes" in data or "edges" in data:
         validate_workflow_data({"nodes": data.get("nodes", workflow.nodes), "edges": data.get("edges", workflow.edges)})
-    for field in ("name", "description", "workspace_id", "nodes", "edges", "status"):
+    for field in ("name", "description", "workspace_id", "nodes", "edges", "variables", "status"):
         if field in data:
             setattr(workflow, field, data[field])
     await db.flush()
@@ -104,6 +105,18 @@ async def list_workflows(db: AsyncSession, organization_id: uuid.UUID, limit: in
     query = (
         select(Workflow).where(Workflow.organization_id == organization_id, Workflow.deleted_at.is_(None))
         .order_by(Workflow.created_at.desc()).limit(limit).offset(offset)
+    )
+    return list((await db.scalars(query)).all())
+
+
+async def list_workflow_runs(db: AsyncSession, workflow_id: uuid.UUID, limit: int = 50, offset: int = 0) -> list[WorkflowRun]:
+    """Phase 5, Étape 5 -- backs the Workflow Builder UI's own
+    execution-history list. Real gap found during this étape's own
+    audit: the run/human-block endpoints already existed, but nothing
+    ever listed a workflow's own past runs."""
+    query = (
+        select(WorkflowRun).where(WorkflowRun.workflow_id == workflow_id)
+        .order_by(WorkflowRun.started_at.desc()).limit(limit).offset(offset)
     )
     return list((await db.scalars(query)).all())
 

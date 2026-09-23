@@ -108,6 +108,16 @@ class PlanResponse(BaseModel):
     max_agents: int | None
     max_members: int | None
     is_active: bool
+    # Phase 5, Étape 2 correctif (Étape 3 audit) -- these two fields were
+    # added to Plan/api.schemas.billing.PlanResponse in Étape 2, but this
+    # is the schema the REAL admin CRUD endpoint (POST/PATCH /admin/plans,
+    # api/routers/admin_subscriptions.py) actually uses -- without them
+    # here, an admin had no real way to set a Plan's Paystack plan code
+    # through the API at all. api.schemas.billing.PlanCreateRequest/
+    # PlanUpdateRequest are never imported by any router (confirmed by
+    # audit) -- this is the one that matters.
+    paystack_plan_code_monthly: str | None = None
+    paystack_plan_code_yearly: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -119,6 +129,8 @@ class PlanCreateRequest(BaseModel):
     max_documents: int | None = None
     max_agents: int | None = None
     max_members: int | None = None
+    paystack_plan_code_monthly: str | None = None
+    paystack_plan_code_yearly: str | None = None
 
 
 class PlanUpdateRequest(BaseModel):
@@ -128,6 +140,8 @@ class PlanUpdateRequest(BaseModel):
     max_agents: int | None = None
     max_members: int | None = None
     is_active: bool | None = None
+    paystack_plan_code_monthly: str | None = None
+    paystack_plan_code_yearly: str | None = None
 
 
 class SubscriptionResponse(BaseModel):

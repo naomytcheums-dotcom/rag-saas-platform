@@ -36,6 +36,8 @@ automated CI run can responsibly provision -- same restraint as Partie
 2.1.1's own S3_DOCUMENTS_BUCKET_NAME (never auto-provisioned).
 """
 
+import pytest
+
 from api.services.github_extraction import (
     extract_github_metadata,
     extract_issue_metadata,
@@ -48,6 +50,14 @@ from api.services.github_extraction import (
     fetch_github_repo_tree,
     format_issue_for_import,
 )
+
+# Phase 5, Étape 3 correctif: every test in this file hits the real,
+# unauthenticated GitHub REST API -- found flaky (httpx.ReadTimeout)
+# during this étape's own full-suite regression run, unrelated to any
+# of this étape's actual code changes. Same real, genuine "sometimes
+# fails for reasons unrelated to this codebase" category Phase 4,
+# Étape 5ter already established the `network_flaky` marker for.
+pytestmark = pytest.mark.network_flaky
 
 
 async def test_fetch_github_repo_returns_real_metadata_for_a_real_public_repo():

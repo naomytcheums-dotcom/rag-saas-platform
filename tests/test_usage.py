@@ -5,6 +5,7 @@ tier as tests/test_quotas.py.
 
 import datetime as dt
 import uuid
+from unittest.mock import AsyncMock
 
 from sqlalchemy import select
 
@@ -84,7 +85,7 @@ async def test_inviting_an_existing_member_records_usage(client, db_session, reg
 
 async def test_accepting_an_email_invitation_records_usage(client, db_session, register_payload, monkeypatch):
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
     monkeypatch.setattr("api.routers.invitations.send_organization_member_added_email", lambda *a: None)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])

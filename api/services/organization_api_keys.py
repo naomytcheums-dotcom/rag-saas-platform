@@ -34,6 +34,11 @@ _KEY_PREFIX = "pk_"
 PUBLIC_API_SCOPES = (
     "chat:read", "chat:write", "documents:read", "documents:write", "search:read", "agents:read", "agents:run",
     "kb:read", "kb:write", "usage:read", "analytics:read", "embed:write",
+    # Phase 5, Étape 9 -- gates the real MCP server endpoints
+    # (api/routers/mcp_server.py): an external MCP client authenticates
+    # with the exact same org-scoped `X-API-Key` mechanism as every
+    # other public API route, scoped to just this one capability.
+    "mcp:tools",
 )
 
 _RATE_LIMIT_PERIODS = ("minute", "hour", "day", "month")

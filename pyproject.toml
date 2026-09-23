@@ -17,6 +17,28 @@ asyncio_mode = "auto"
 # the integration fixtures were already implicitly assuming.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+# Phase 4, Étape 5ter -- real, minimal marker registry (avoids pytest's
+# own "unknown marker" warning), one real entry: `network_flaky` tags a
+# real test that hits a real, external, rate-limited third-party API
+# (GitHub's own real, unauthenticated REST API -- 60 requests/hour per
+# real IP) rather than a real, controlled local server -- a real,
+# genuine "sometimes fails for reasons unrelated to this codebase" test,
+# excluded from the default run (see `addopts` below) to keep CI/the
+# standard suite deterministic. Run it explicitly with
+# `pytest -m network_flaky ...` (or `pytest -m "" ...` to run
+# everything, ignoring this default exclusion).
+markers = [
+    "network_flaky: hits a real, external, rate-limited third-party API -- excluded from the default run, run explicitly with -m network_flaky",
+    # Phase 5, Étape 3 -- Paystack has never been exercised against its
+    # real API in this session (no PAYSTACK_SECRET_KEY in any available
+    # environment, see ROADMAP.md). Tests marked here are real, written,
+    # and ready, but need a real Paystack sandbox key to actually run --
+    # skipped by their own `pytest.mark.skipif` (not just excluded by
+    # addopts, unlike network_flaky) so `pytest -m paystack_live` without
+    # a key still reports them as skipped, not silently deselected.
+    "paystack_live: needs a real PAYSTACK_SECRET_KEY (sandbox) to run -- see tests/test_billing_paystack_live.py",
+]
+addopts = "-m \"not network_flaky\""
 
 [tool.coverage.run]
 # Coverage measurement audit finding: SQLAlchemy's async extension uses

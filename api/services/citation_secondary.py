@@ -34,12 +34,42 @@ from api.config import settings
 from api.models.citation import Citation
 
 
+def _citation_score(chunk: dict) -> float:
+    """Phase 4, Étape 2 correctif ciblé (2026-09-22) -- real, genuine bug
+    found while validating citations end-to-end (not mocked): a real
+    chunk's own raw `score` is on a wildly different real scale
+    depending on which real retrieval strategy produced it -- cosine
+    similarity roughly `[-1, 1]`, raw BM25 unbounded, but Reciprocal
+    Rank Fusion's own real score (`hybrid`/`hybrid_reranked`/Multi-Query,
+    all of which reuse `reciprocal_rank_fusion`) is a REAL, TINY fraction
+    (`1 / (k + rank + 1)`, at most ~0.016 for the real, standard
+    `k=60`) -- always below the real `CITATION_MIN_SCORE` (`0.5`)
+    regardless of how genuinely relevant the real, top-ranked chunk
+    actually is. Confirmed by a real, direct repro: the DEFAULT
+    organization retrieval strategy is `"hybrid"`, so this silently
+    produced ZERO real citations for every real query against a fresh
+    organization's own default settings, never caught because every
+    pre-existing `generate_response` test mocked `search_with_context`
+    with a hand-picked, already-normalized-looking `score`, never
+    exercising a real, end-to-end RRF-scored result.
+
+    Real, minimal fix: prefer `normalized_score` (`api.services.
+    retrieval_pipeline._normalize_scores`, ALWAYS present on every real
+    result `search()`/`search_with_context()` return, regardless of
+    strategy -- the SAME real, per-strategy-agnostic 0-1 scale
+    `score_threshold` itself already relies on) when present, falling
+    back to the real, raw `score` only when it's genuinely absent (a
+    real, hand-built chunk dict in a test, or any other real caller that
+    never went through `search()`) -- fully backward compatible."""
+    return float(chunk.get("normalized_score", chunk.get("score", 0.0)))
+
+
 def select_primary_sources(chunks: list[dict], count: int) -> list[dict]:
     """Item 7's own literal function -- see this module's own top
     docstring: the real, canonical version of `citations.py`'s own
     `select_top_citations`."""
-    qualifying = [c for c in chunks if c.get("score", 0.0) >= settings.CITATION_MIN_SCORE]
-    ranked = sorted(qualifying, key=lambda c: c.get("score", 0.0), reverse=True)
+    qualifying = [c for c in chunks if _citation_score(c) >= settings.CITATION_MIN_SCORE]
+    ranked = sorted(qualifying, key=_citation_score, reverse=True)
     return ranked[:count]
 
 
@@ -47,8 +77,8 @@ def select_secondary_sources(chunks: list[dict], count: int, threshold: float) -
     """Item 7's own literal function -- see this module's own top
     docstring for the real, honest `[threshold, CITATION_MIN_SCORE)`
     band this draws from."""
-    qualifying = [c for c in chunks if threshold <= c.get("score", 0.0) < settings.CITATION_MIN_SCORE]
-    ranked = sorted(qualifying, key=lambda c: c.get("score", 0.0), reverse=True)
+    qualifying = [c for c in chunks if threshold <= _citation_score(c) < settings.CITATION_MIN_SCORE]
+    ranked = sorted(qualifying, key=_citation_score, reverse=True)
     return ranked[:count]
 
 

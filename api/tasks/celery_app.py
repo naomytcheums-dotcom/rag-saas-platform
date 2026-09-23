@@ -37,7 +37,8 @@ celery_app = Celery(
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
-        "api.tasks.media", "api.tasks.autonomous_agents", "api.tasks.fine_tuning",
+        "api.tasks.media", "api.tasks.autonomous_agents", "api.tasks.fine_tuning", "api.tasks.workflows",
+        "api.tasks.notifications",
     ],
 )
 
@@ -132,6 +133,13 @@ celery_app.conf.beat_schedule = {
     # own check-pending-domain-verifications entry.
     "check-scheduled-reindexes": {
         "task": "api.tasks.reindex_schedule.check_scheduled_reindexes_task",
+        "schedule": timedelta(minutes=1),
+    },
+    # Partie 5.4.2 -- same "timedelta, not crontab" reasoning as
+    # check-scheduled-reindexes just above: a workflow's own `schedule`
+    # trigger can legitimately be "every minute" too.
+    "check-scheduled-workflow-triggers": {
+        "task": "api.tasks.workflows.check_scheduled_workflow_triggers",
         "schedule": timedelta(minutes=1),
     },
     # Partie 8.1.13 -- same low-traffic window, offset again. Idempotent
@@ -361,6 +369,15 @@ celery_app.conf.beat_schedule = {
     "cleanup-old-fine-tuning-jobs-daily": {
         "task": "api.tasks.fine_tuning.cleanup_old_jobs",
         "schedule": crontab(hour=5, minute=45),
+    },
+    # -- Phase 5, Étape 4: notifications ------------------------------------
+    "purge-old-notifications-daily": {
+        "task": "api.tasks.notifications.purge_old_notifications_task",
+        "schedule": crontab(hour=7, minute=30),
+    },
+    "retry-failed-notification-emails-hourly": {
+        "task": "api.tasks.notifications.retry_failed_notifications_task",
+        "schedule": timedelta(hours=1),
     },
 }
 

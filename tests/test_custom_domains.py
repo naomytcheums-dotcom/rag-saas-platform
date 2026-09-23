@@ -215,6 +215,21 @@ async def test_cannot_register_the_platforms_own_domain(client, db_session, regi
     assert "platform's own domain" in response.json()["detail"]
 
 
+async def test_cannot_register_a_subdomain_of_the_platforms_own_root_domain(client, db_session, register_payload):
+    """Phase 5, Étape 3 correctif: the pre-existing check only rejected
+    an exact match against CUSTOM_DOMAIN_CNAME_TARGET -- a real
+    subdomain of the platform's own root domain passed unrejected."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    for evil_domain in ("evil.rag-saas-platform.com", "rag-saas-platform.com", "sub.app.rag-saas-platform.com"):
+        response = await client.post(
+            f"/organizations/{org['id']}/domains", json={"domain": evil_domain}, headers=_auth_header(owner_token),
+        )
+        assert response.status_code == 400, evil_domain
+        assert "platform's own domain" in response.json()["detail"]
+
+
 async def test_cannot_register_an_already_registered_domain(client, db_session, register_payload):
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

@@ -79,6 +79,12 @@ class Plan(Base):
     stripe_product_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stripe_price_id_monthly: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stripe_price_id_yearly: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Phase 5, Étape 2 -- Paystack's own equivalent of a Stripe Price:
+    # a "plan code" (e.g. "PLN_xxxx") created via Paystack's Plans API,
+    # one per billing period, same "NULL until actually synced" honesty
+    # as the Stripe columns above (see api/services/billing_paystack.py).
+    paystack_plan_code_monthly: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    paystack_plan_code_yearly: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -97,6 +103,15 @@ class Subscription(Base):
     # api/services/billing_stripe.py) -- NULL for every subscription in
     # an environment with no Stripe account configured, honestly.
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Phase 5, Étape 2 -- Paystack's own equivalent of
+    # stripe_subscription_id, set once a real Paystack subscription
+    # exists for this org (api/services/billing_paystack.py). The two
+    # columns are mutually exclusive in practice (an org uses exactly
+    # one resolved provider, api/services/billing_providers/registry.py)
+    # but both stay nullable rather than merged into one generic column,
+    # so a provider migration for one org never has to touch the other
+    # provider's own real, unrelated identifier format.
+    paystack_subscription_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Partie 16 (bis) -- real 14-day free trial: set once, at
     # subscription creation, to now()+14d. NULL for a subscription that
     # was never on a trial (e.g. one created before this column

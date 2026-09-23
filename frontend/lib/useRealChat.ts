@@ -36,6 +36,7 @@ export function useRealChat(orgId: string) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initializedFor = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!orgId || initializedFor.current === orgId) return;
@@ -80,6 +81,9 @@ export function useRealChat(orgId: string) {
       setMessages((prev) => [...prev, userMessage, { id: assistantId, role: "assistant", content: "", created_at: nowIso() }]);
       setPending(true);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       try {
         const token = getAccessToken();
         const response = await fetch(`${API_BASE_URL}/chat/stream`, {
@@ -87,6 +91,7 @@ export function useRealChat(orgId: string) {
           headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           credentials: "include",
           body: JSON.stringify({ agent_id: agentId, message: text, conversation_id: conversationId }),
+          signal: controller.signal,
         });
         if (!response.ok || !response.body) throw new Error(`Chat stream failed (${response.status})`);
 
@@ -125,14 +130,21 @@ export function useRealChat(orgId: string) {
             }
           }
         }
-      } catch {
-        setError("La connexion au serveur de chat a échoué.");
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          setError("La connexion au serveur de chat a échoué.");
+        }
       } finally {
         setPending(false);
+        abortControllerRef.current = null;
       }
     },
     [agentId, conversationId, pending],
   );
+
+  const stopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   const editMessage = useCallback(
     (id: string, newContent: string) => {
@@ -153,5 +165,5 @@ export function useRealChat(orgId: string) {
     [messages, sendMessage],
   );
 
-  return { messages, pending, error, sendMessage, editMessage, regenerate };
+  return { messages, pending, error, sendMessage, editMessage, regenerate, stopGeneration };
 }

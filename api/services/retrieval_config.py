@@ -185,3 +185,168 @@ def resolve_rrf_k(org_settings: dict | None = None, override: int | None = None)
     if value > 1000:
         raise ValueError(f"rrf_k {value} exceeds the real maximum of 1000")
     return value
+
+
+# --------------------------------------------------------------------
+# Phase 4, Étape 2 -- Advanced Retrieval.
+#
+# The 5 requested features (Query Rewriting, Multi-Query, HyDE, MMR,
+# Context Compression) already existed as complete, standalone,
+# individually-tested modules (api/services/query_rewriting.py,
+# multi_query.py, hyde.py, mmr.py, context_compression.py) with their
+# own GLOBAL kill switches (api/config.py's settings.QUERY_REWRITING_ENABLED,
+# etc, every one of which already DEFAULTS TO True at the global level).
+# None of those globals were ever organization-configurable, and none of
+# these modules' orchestrators were ever called by the production
+# `search()`/`search_with_context()` path -- this section is that
+# wiring's own resolver layer, following the exact same
+# override > org_settings > default precedence as every resolver above.
+#
+# Retrocompatibility (this étape's own explicit requirement 4): every one
+# of the 5 new *_enabled resolvers below defaults to False regardless of
+# the pre-existing global default being True -- an organization that
+# never touches these new settings gets EXACTLY the pre-existing
+# retrieval behavior, byte-for-byte, not a silent behavior change just
+# because a module it never asked for happens to default to "on" at the
+# global config layer. The global flags remain a real, second, inner
+# kill switch inside each module's own orchestrator (unchanged, still
+# checked there) -- these new resolvers are an outer gate `search()`
+# checks BEFORE ever calling into one of these modules at all.
+
+
+def resolve_query_rewriting_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New Étape 2 resolver -- per-organization gate for
+    `api.services.query_rewriting.rewrite_query`. Real
+    override > org_settings > default precedence; default `False`
+    (see this section's own top docstring for why)."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("query_rewriting_enabled") is not None:
+        value = org_settings["query_rewriting_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["query_rewriting_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid query_rewriting_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_multi_query_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New Étape 2 resolver -- per-organization gate for
+    `api.services.multi_query`'s real multi-query retrieval."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("multi_query_enabled") is not None:
+        value = org_settings["multi_query_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["multi_query_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid multi_query_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_multi_query_count(org_settings: dict | None = None, override: int | None = None) -> int:
+    """New Étape 2 resolver -- how many query variants (including the
+    real original query) `generate_query_variants` produces. Real bounds
+    (1-10): a cost guardrail (this étape's own explicit requirement 13,
+    "limiter... le nombre de requêtes générées") -- a single user
+    question must never be able to trigger an unbounded number of LLM
+    calls."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("multi_query_count") is not None:
+        value = org_settings["multi_query_count"]
+    else:
+        value = DEFAULT_SETTINGS["multi_query_count"]
+
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"Invalid multi_query_count: {value!r} (must be a positive integer)")
+    if value > 10:
+        raise ValueError(f"multi_query_count {value} exceeds the real maximum of 10")
+    return value
+
+
+def resolve_hyde_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New Étape 2 resolver -- per-organization gate for
+    `api.services.hyde`'s real Hypothetical Document Embeddings."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("hyde_enabled") is not None:
+        value = org_settings["hyde_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["hyde_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid hyde_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_mmr_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New Étape 2 resolver -- per-organization gate for
+    `api.services.mmr`'s real Maximal Marginal Relevance diversification."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("mmr_enabled") is not None:
+        value = org_settings["mmr_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["mmr_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid mmr_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_mmr_lambda(org_settings: dict | None = None, override: float | None = None) -> float:
+    """New Étape 2 resolver -- MMR's own real relevance/diversity
+    trade-off (`0` = maximum diversity, `1` = maximum relevance, same
+    real semantics as `api.services.mmr.compute_mmr`'s own literal
+    bounds)."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("mmr_lambda") is not None:
+        value = org_settings["mmr_lambda"]
+    else:
+        value = DEFAULT_SETTINGS["mmr_lambda"]
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError(f"Invalid mmr_lambda: {value!r} (must be a real number)")
+    value = float(value)
+    if not (0.0 <= value <= 1.0):
+        raise ValueError(f"Invalid mmr_lambda: {value!r} (must be between 0.0 and 1.0)")
+    return value
+
+
+def resolve_mmr_candidate_k(org_settings: dict | None = None, override: int | None = None, top_k: int | None = None) -> int:
+    """New Étape 2 resolver -- how wide a real candidate pool MMR gets
+    to diversify over before it cuts down to the final real `top_k`
+    (this étape's own explicit requirement 8: "pool de candidats >
+    k final"). Same real DYNAMIC-multiplier pattern as
+    `resolve_reranker_top_k` above, deliberately NOT a stand-alone
+    organization setting: it is a derived, internal sizing knob (MMR
+    reuses the already-produced candidate list, it never triggers a new
+    vector search of its own -- this only controls how many of the
+    existing strategy's own candidates it gets to see), not one this
+    étape's own "n'ajoute que les paramètres réellement nécessaires"
+    instruction calls for exposing directly."""
+    if override is not None:
+        return override
+    effective_top_k = top_k if top_k is not None else resolve_top_k(org_settings)
+    return effective_top_k * 3
+
+
+def resolve_context_compression_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New Étape 2 resolver -- per-organization gate for
+    `api.services.context_compression`'s real pre-generation compression
+    (wired in `api.services.generation.generate_response`, not here --
+    this module has no generation step of its own)."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("context_compression_enabled") is not None:
+        value = org_settings["context_compression_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["context_compression_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid context_compression_enabled: {value!r} (must be a boolean)")
+    return value

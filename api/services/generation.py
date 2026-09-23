@@ -29,6 +29,7 @@ from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import chat_completion
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
+from api.services.retrieval_config import resolve_context_compression_enabled
 from api.services.retrieval_pipeline import search_with_context
 
 CITATION_INSTRUCTIONS = (
@@ -40,19 +41,71 @@ CITATION_INSTRUCTIONS = (
 async def generate_response(
     db: AsyncSession, organization_id: uuid.UUID, query: str,
     workspace_id: uuid.UUID | None = None, created_by: uuid.UUID | None = None, citation_count: int | None = None,
+    metadata_filters: dict | None = None,
 ) -> Response:
     """Item 5's own literal `generate_response` -- real retrieval, a
     real LLM call, then a real, persisted `Response` with its own real
     citations attached (5 by default, this étape's own literal ask,
-    via `add_citations_to_response`)."""
+    via `add_citations_to_response`).
+
+    Phase 4, Étape 3 (Metadata Filtering) -- `metadata_filters` passes
+    straight through to `search_with_context`, which already applies it
+    at the one, real, shared `fetch_organization_chunks` choke point:
+    an excluded real chunk never becomes a real candidate, so it can
+    never end up in `chunks` below, and therefore can never become a
+    real citation either -- no separate citation-layer filtering needed."""
     org_settings = await get_org_settings(db, organization_id)
-    chunks = await search_with_context(db, organization_id, query, org_settings=org_settings)
+    chunks = await search_with_context(db, organization_id, query, org_settings=org_settings, metadata_filters=metadata_filters)
     llm_cfg = resolve_llm_config(org_settings)
 
     system_prompt = llm_cfg["system_prompt"]
     context_text = None
     if chunks:
-        context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(chunks, start=1))
+        # Phase 4, Étape 1 (correctif parent_child) -- a real `child`
+        # chunk carries its own real, wider parent's text already
+        # denormalized onto its own `metadata_json["parent_context"]`
+        # at ingestion time (`api/security/documents.py`'s own
+        # `process_document`) -- read here with ZERO extra real query,
+        # exactly the way `document_name`/`file_type`/`source_url`
+        # already ride along on every real search result. The LLM gets
+        # the real, wider parent context when one exists; a real
+        # citation (`add_citations_to_response` below) still points at
+        # the child's own real, precise `content`, untouched.
+        prompt_chunks = [
+            {**c, "content": (c.get("metadata_json") or {}).get("parent_context") or c["content"]}
+            for c in chunks
+        ]
+        # Phase 4, Étape 2 (Advanced Retrieval) -- Context Compression,
+        # gated by the new per-organization `context_compression_enabled`
+        # (default `False`, this étape's own explicit rétrocompatibilité
+        # requirement). Real, deliberate isolation from citations
+        # (requirement 9, "les citations doivent continuer à
+        # fonctionner"): `compress_context` transforms `prompt_chunks` --
+        # the text actually assembled into the real LLM prompt below --
+        # `add_citations_to_response` further down is called with the
+        # ORIGINAL, UNCOMPRESSED `chunks` either way, so a real citation
+        # always quotes a real chunk's own real, untouched `content`,
+        # never a compressed/summarized paraphrase. `method="extract"`/
+        # `"summarize"` (the real, existing global default) each keep one
+        # real dict per input chunk (only `content` changes), so
+        # `enumerate` below still lines up one real `[N]` marker per real
+        # source chunk; `method="llm"` is that module's own real,
+        # pre-existing, documented exception (collapses every chunk into
+        # ONE combined block) -- an existing limitation of
+        # `compress_context` itself, not something this wiring changes.
+        # Real, explicit `try/except`: a real compression failure falls
+        # back to the real, uncompressed prompt_chunks (requirement 9's
+        # own explicit ask), a real search/generation must never fail
+        # solely because compression failed.
+        if resolve_context_compression_enabled(org_settings):
+            from api.services.context_compression import compress_context
+
+            try:
+                prompt_chunks = await compress_context(prompt_chunks, query=query) or prompt_chunks
+            except Exception:
+                pass
+
+        context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(prompt_chunks, start=1))
         system_prompt = f"{system_prompt}\n\n{CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
 
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": query}]

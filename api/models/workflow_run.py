@@ -21,6 +21,7 @@ TRIGGER_TYPES = ("webhook", "schedule", "manual")
 class WorkflowRunStatus(StrEnum):
     pending = "pending"
     running = "running"
+    waiting_human = "waiting_human"
     completed = "completed"
     failed = "failed"
 
@@ -39,6 +40,10 @@ class WorkflowTrigger(Base):
     # sécurisés" rather than a bare, sequential id alone.
     webhook_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Real due-ness reference for a `schedule`-type trigger -- see
+    # migration 0111's own docstring; NULL for webhook/manual triggers
+    # (they have no real cron pattern to be "due" against).
+    last_run_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("ix_workflow_triggers_workflow_id", "workflow_id"),)
 
@@ -53,6 +58,11 @@ class WorkflowRun(Base):
     input: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     output: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Real execution state -- see migration 0111's own docstring: the
+    # accumulated context threaded between blocks, and the node id a
+    # `waiting_human` run is paused at (NULL otherwise).
+    context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    current_node_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

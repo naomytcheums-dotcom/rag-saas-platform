@@ -11,6 +11,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
@@ -29,11 +30,14 @@ from api.schemas.workflows import (
 )
 from api.security.organizations import require_org_manager
 from api.security.workflows import (
-    create_workflow, delete_workflow, list_workflows, require_workflow_manager, require_workflow_member,
-    require_workflow_run_member, update_workflow,
+    create_workflow, delete_workflow, import_workflow, list_workflow_runs, list_workflows, require_workflow_manager,
+    require_workflow_member, require_workflow_run_member, update_workflow,
 )
 from api.services.workflow_block_human import get_human_approval, list_human_blocks, submit_human_input
 from api.services.workflow_blocks import WorkflowBlockError
+from api.services.workflow_engine import stream_workflow_run
+from api.tasks.workflows import schedule_workflow_resume, schedule_workflow_run
+from api.utils import MAX_PAGE_SIZE
 from api.services.workflow_triggers import (
     TRIGGER_TYPES, WorkflowTriggerError, create_manual_trigger, create_schedule_trigger, create_webhook_trigger,
     delete_trigger, get_trigger, list_triggers, trigger_workflow, verify_webhook_token,
@@ -42,9 +46,10 @@ from api.services.workflow_versions import (
     WorkflowVersionError, create_workflow_version, diff_workflow_versions, get_workflow_version,
     list_workflow_versions, restore_workflow_version,
 )
-from api.services.workflows import WorkflowValidationError, validate_workflow
+from api.services.workflows import WorkflowValidationError, export_workflow, validate_workflow
 
 router = APIRouter(tags=["workflows"])
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 @router.post("/organizations/{org_id}/workflows", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
@@ -67,6 +72,37 @@ async def list_workflows_endpoint(
     _caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     return await list_workflows(db, org_id, limit=limit, offset=offset)
+
+
+# Phase 5, Étape 5 -- real gap found during this étape's own audit:
+# api/security/workflows.import_workflow and
+# api/services/workflows.export_workflow were real, complete,
+# tested-in-isolation functions with ZERO router endpoint anywhere --
+# the same "built, never wired" pattern this session has found and
+# closed before (billing_stripe_sync.py, Phase 5 Étape 3). Org-scoped,
+# not the literal spec's flat `/workflows/import`/`GET /workflows/{id}/export`
+# paths -- this codebase's own real, established convention for
+# anything that creates a NEW org-owned resource
+# (`/organizations/{org_id}/workflows`, same router, right above).
+
+@router.post("/organizations/{org_id}/workflows/import", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
+async def import_workflow_endpoint(
+    org_id: uuid.UUID, payload: WorkflowCreateRequest,
+    caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
+):
+    try:
+        workflow = await import_workflow(db, org_id, payload.model_dump(), caller.user_id)
+    except WorkflowValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(workflow)
+    return workflow
+
+
+@router.get("/workflows/{workflow_id}/export")
+async def export_workflow_endpoint(workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member)):
+    workflow, _caller = workflow_ctx
+    return export_workflow(workflow)
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowResponse)
@@ -160,6 +196,7 @@ async def run_workflow_via_webhook_endpoint(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook token")
     run = await trigger_workflow(db, trigger.workflow_id, payload.input, trigger_id=trigger.id)
     await db.commit()
+    schedule_workflow_run(run.id)
     return run
 
 
@@ -171,7 +208,37 @@ async def run_workflow_manually_endpoint(
     workflow, _caller = workflow_ctx
     run = await trigger_workflow(db, workflow.id, payload.input)
     await db.commit()
+    schedule_workflow_run(run.id)
     return run
+
+
+# ------------------------------------- Phase 5, Étape 5 -- execution history + live debug -------------------------------------
+# Real gap found during this étape's own audit: POST .../run existed,
+# but nothing ever listed a workflow's own past runs, fetched one run's
+# own detail, or streamed a running one live -- all three genuinely
+# required by the Workflow Builder UI's own execution-history and
+# debug/run panels (this étape's own spec, sections 3.4/3.5), not
+# optional.
+
+@router.get("/workflows/{workflow_id}/runs", response_model=list[WorkflowRunResponse])
+async def list_workflow_runs_endpoint(
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+):
+    workflow, _caller = workflow_ctx
+    return await list_workflow_runs(db, workflow.id, limit, offset)
+
+
+@router.get("/workflows/runs/{run_id}", response_model=WorkflowRunResponse)
+async def get_workflow_run_endpoint(run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member)):
+    run, _caller = run_ctx
+    return run
+
+
+@router.get("/workflows/runs/{run_id}/stream")
+async def stream_workflow_run_endpoint(run_ctx: tuple[WorkflowRun, OrganizationMember] = Depends(require_workflow_run_member)) -> StreamingResponse:
+    run, _caller = run_ctx
+    return StreamingResponse(stream_workflow_run(run), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 # ------------------------------------- Partie 5.4.9 -- human block -------------------------------------
@@ -216,6 +283,7 @@ async def submit_human_block_endpoint(
     if updated is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This human input is no longer pending")
     await db.commit()
+    schedule_workflow_resume(run.id, updated.id)
     return updated
 
 

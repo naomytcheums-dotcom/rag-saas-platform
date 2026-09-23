@@ -244,3 +244,39 @@ async def test_multi_query_search_respects_the_real_kill_switch(db_session, monk
 
     assert len(results) == 1
     mock_acompletion.assert_not_called()
+
+
+# ------------------------- Phase 4, Étape 2: run_queries_parallel's own new search_fn -------------------------
+
+
+async def test_run_queries_parallel_defaults_to_vector_search_when_no_search_fn_given():
+    """Validation criterion: rétrocompatibilité -- every pre-existing
+    real caller/test of this function (above) keeps working unchanged,
+    since `search_fn=None` still means plain `vector_search`."""
+    import inspect
+
+    signature = inspect.signature(run_queries_parallel)
+    assert signature.parameters["search_fn"].default is None
+
+
+async def test_run_queries_parallel_uses_a_real_custom_search_fn_when_given(db_session):
+    """Validation criterion: Multi-Query doit alimenter le retrieval
+    existant (requirement 11) -- api.services.retrieval_pipeline.search's
+    own real wiring passes the ACTUAL resolved strategy (e.g.
+    hybrid_search, BM25 included), not always plain vector_search."""
+    from api.services.retrieval_pipeline import hybrid_search
+
+    org = await _make_org(db_session, "Org Multi Query Custom Search Fn")
+    document = await _make_document(db_session, org.id)
+    await _add_chunks(db_session, org.id, document.id, [
+        "The invoice number INV-445566 is attached to this order.",
+        "Our office relocated to a new building downtown.",
+    ])
+
+    results = await run_queries_parallel(
+        db_session, org.id, ["INV-445566", "invoice number"], top_k=1, search_fn=hybrid_search,
+    )
+
+    assert len(results) == 2
+    assert all(len(r) == 1 for r in results)
+    assert all("INV-445566" in r[0]["content"] for r in results)

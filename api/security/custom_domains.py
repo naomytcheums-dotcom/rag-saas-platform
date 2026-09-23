@@ -65,6 +65,22 @@ def is_valid_hostname(domain: str) -> bool:
     return len(domain) <= _MAX_DOMAIN_LENGTH and bool(_HOSTNAME_PATTERN.match(domain))
 
 
+def _is_reserved_platform_domain(normalized_domain: str) -> bool:
+    """Phase 5, Étape 3 correctif -- the pre-existing check only
+    rejected an exact match against `settings.CUSTOM_DOMAIN_CNAME_TARGET`
+    (e.g. "app.rag-saas-platform.com"), so a real subdomain of the
+    platform's own root domain (e.g. "evil.rag-saas-platform.com", or
+    even "sub.app.rag-saas-platform.com") would pass unrejected -- found
+    during Phase 5, Étape 3's White Label audit. Derives the platform's
+    registrable root domain as the CNAME target's last two labels (a
+    simple, real heuristic that's correct for this platform's own
+    actual domain; it would be wrong for a root domain under a public
+    suffix like "co.uk", which doesn't apply here)."""
+    cname_target = normalize_domain(settings.CUSTOM_DOMAIN_CNAME_TARGET)
+    root_domain = ".".join(cname_target.split(".")[-2:])
+    return normalized_domain == cname_target or normalized_domain == root_domain or normalized_domain.endswith(f".{root_domain}")
+
+
 def dns_records_for(domain: str, verification_token: str) -> list[dict[str, object]]:
     """
     Partie 1.4.1's original literal requirement (CNAME + TXT), extended
@@ -184,8 +200,8 @@ async def add_custom_domain(db: AsyncSession, organization_id: uuid.UUID, domain
     normalized = normalize_domain(domain)
     if not is_valid_hostname(normalized):
         raise ValueError(f"'{domain}' is not a valid domain name")
-    if normalized == normalize_domain(settings.CUSTOM_DOMAIN_CNAME_TARGET):
-        raise ValueError(f"'{domain}' is this platform's own domain and cannot be registered as a custom domain")
+    if _is_reserved_platform_domain(normalized):
+        raise ValueError(f"'{domain}' is this platform's own domain (or a subdomain of it) and cannot be registered as a custom domain")
 
     existing = await db.scalar(select(CustomDomain.id).where(CustomDomain.domain == normalized))
     if existing is not None:

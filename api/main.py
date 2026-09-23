@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, media, notifications, observability,
+    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notifications, observability,
     plugins,
     sales,
     analytics,
@@ -51,6 +51,7 @@ from api.security.logging_correlation import configure_structured_logging, reque
 from api.services.plugin_hooks import plugin_error_hook_middleware
 from api.services.white_label_middleware import white_label_domain_middleware
 from api.security.datadog_llmobs import setup_llm_observability
+from api.security.error_tracking import setup_error_tracking
 from api.security.loki_handler import install_loki_handler
 from api.security.system_log_handler import install_system_log_handler
 from api.security.tracing import setup_tracing, tracing_status
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
     configure_structured_logging(settings.LOG_FORMAT)
     install_loki_handler()
     setup_llm_observability()
+    setup_error_tracking()
 
     # Partie 13.4 -- real OpenTelemetry instrumentation, a real no-op
     # unless OTEL_ENABLED is set (see api/security/tracing.py's own
@@ -188,7 +190,19 @@ async def _security_headers(request: Request, call_next):
             "font-src cdn.jsdelivr.net"
         )
     elif request.url.path == _WIDGET_FRAMEABLE_PATH:
-        response.headers["Content-Security-Policy"] = "frame-ancestors *"
+        # Phase 4, Étape 5 (Domain Allowlist Widget) -- real, minimal
+        # fix: `get_widget_iframe` (api/routers/widget.py) now sets its
+        # own real, per-organization `frame-ancestors` value (an
+        # organization's own configured `allowed_domains`, or the real,
+        # unchanged `*` default) -- this middleware runs AFTER the real
+        # route handler and used to unconditionally OVERWRITE it back to
+        # a real, hardcoded `*` for every organization regardless, a
+        # real bug that would have silently defeated this étape's own
+        # fix. Only sets the real, global default when the route itself
+        # didn't already set one (a real caller other than
+        # `get_widget_iframe` reaching this same real path, in
+        # principle -- none exists today, but real, honest robustness).
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors *")
     else:
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -312,6 +326,8 @@ app.include_router(organization_settings.router)
 app.include_router(organization_branding.router)
 app.include_router(custom_domains.router)
 app.include_router(custom_tools.router)
+app.include_router(mcp_servers.router)
+app.include_router(mcp_server.router)
 app.include_router(ssl_certificates.router)
 app.include_router(email_domains.router)
 app.include_router(white_label.router)
@@ -370,6 +386,7 @@ app.include_router(observability.router)
 app.include_router(integrations_universal.router)
 app.include_router(integrations_universal.org_router)
 app.include_router(notifications.router)
+app.include_router(notification_center.router)
 app.include_router(sales.router)
 app.include_router(sales.org_router)
 app.include_router(analytics.router)

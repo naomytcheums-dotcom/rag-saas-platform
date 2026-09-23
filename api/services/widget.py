@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.widget import WidgetConfig, WidgetSuggestedQuestion
+from api.security.widget_auth import WidgetDomainError, validate_widget_domain
 
 
 class WidgetError(ValueError):
@@ -113,6 +114,35 @@ async def update_widget_config(db: AsyncSession, organization_id: uuid.UUID, dat
     await db.flush()
     await db.refresh(config)
     return config
+
+
+# Phase 4, Étape 5 (Domain Allowlist Widget) -- item 14's own literal
+# ask: real, CONFIGURATION-time validation, not just runtime matching
+# (`api.security.widget_auth.is_origin_allowed`). A separate, dedicated
+# function rather than routing this through the generic
+# `update_widget_config` above: every OTHER real field there is a
+# trusted, single scalar value a caller already validated (theme/
+# position/language each have their own real `validate_*` call in the
+# router BEFORE reaching `update_widget_config`) -- this one is a real
+# LIST needing real, per-item validation plus a real, whole-list
+# dedup/cap this module's own top-level cap (`WidgetDomainError`,
+# reused from `widget_auth.py`, never a second, duplicate error type).
+async def set_widget_allowed_domains(db: AsyncSession, organization_id: uuid.UUID, domains: list[str], user_id: uuid.UUID) -> WidgetConfig:
+    from api.security.widget_auth import MAX_WIDGET_ALLOWED_DOMAINS
+
+    if len(domains) > MAX_WIDGET_ALLOWED_DOMAINS:
+        raise WidgetError(f"Too many widget allowed domains: {len(domains)} (max {MAX_WIDGET_ALLOWED_DOMAINS})")
+    try:
+        normalized = [validate_widget_domain(d) for d in domains]
+    except WidgetDomainError as exc:
+        raise WidgetError(str(exc)) from exc
+    # Real, order-preserving dedup -- two real, distinct raw entries
+    # (`https://example.com` and `example.com`) can normalize to the
+    # SAME real canonical origin; a real admin's own intent ("allow
+    # this one real origin") should never silently become two real,
+    # redundant, identical allowlist rows.
+    deduped = list(dict.fromkeys(normalized))
+    return await update_widget_config(db, organization_id, {"allowed_domains": deduped or None}, user_id)
 
 
 def get_default_theme() -> dict:

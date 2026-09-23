@@ -122,14 +122,49 @@ async def test_summarize_chunk_falls_back_to_the_real_original_on_a_real_llm_err
     assert result == _LONG_TEXT
 
 
-async def test_compress_with_llm_combines_real_chunks_into_one_real_result(monkeypatch):
-    mock_acompletion = AsyncMock(return_value=_real_response("Condensed, relevant answer."))
+async def test_compress_with_llm_keeps_one_real_result_per_real_input_chunk(monkeypatch):
+    """Phase 4, Étape 2 correctif ciblé -- real regression test for the
+    real traceability bug: `compress_with_llm` used to combine every
+    real chunk into ONE combined result, losing the real 1:1 mapping a
+    real caller's own `[N]` numbering depends on. Now real, one real
+    (possibly distinct) compressed result per real input chunk."""
+    mock_acompletion = AsyncMock(side_effect=[
+        _real_response("Condensed part one."), _real_response("Condensed part two."),
+    ])
     monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
 
-    chunks = [{"content": "Part one."}, {"content": "Part two."}]
+    chunks = [
+        {"chunk_id": "1", "document_id": "doc-a", "content": "Part one."},
+        {"chunk_id": "2", "document_id": "doc-b", "content": "Part two."},
+    ]
     result = await compress_with_llm(chunks, "a real question")
 
-    assert result == "Condensed, relevant answer."
+    assert len(result) == 2
+    assert result[0]["content"] == "Condensed part one."
+    assert result[1]["content"] == "Condensed part two."
+    # Real, deliberate check: every other real key (chunk identity) rides
+    # through completely untouched -- only `content` was ever compressed.
+    assert result[0]["chunk_id"] == "1" and result[0]["document_id"] == "doc-a"
+    assert result[1]["chunk_id"] == "2" and result[1]["document_id"] == "doc-b"
+    assert mock_acompletion.call_count == 2
+
+
+async def test_compress_with_llm_falls_back_per_chunk_on_a_real_llm_failure(monkeypatch):
+    """Real, honest per-chunk robustness: one real chunk's own LLM
+    failure returns THAT chunk's own real, uncompressed content, and
+    never blocks another, independently-succeeding real chunk."""
+    mock_acompletion = AsyncMock(side_effect=[
+        litellm.exceptions.RateLimitError(message="rate limited", llm_provider="anthropic", model="claude"),
+        _real_response("Condensed part two."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    monkeypatch.setattr(settings, "LLM_MAX_RETRIES", 0)
+
+    chunks = [{"chunk_id": "1", "content": "Part one."}, {"chunk_id": "2", "content": "Part two."}]
+    result = await compress_with_llm(chunks, "a real question")
+
+    assert result[0]["content"] == "Part one."  # the real, failed chunk kept its own real, uncompressed content
+    assert result[1]["content"] == "Condensed part two."
 
 
 # --------------------------------- compress_context orchestrator ---------------------------------
@@ -171,15 +206,28 @@ async def test_compress_context_summarize_method_calls_the_real_llm_per_chunk(mo
     assert all(c["content"] == "summarized" for c in result)
 
 
-async def test_compress_context_llm_method_returns_a_real_single_combined_result(monkeypatch):
-    mock_acompletion = AsyncMock(return_value=_real_response("one combined real answer"))
+async def test_compress_context_llm_method_keeps_one_real_result_per_real_chunk(monkeypatch):
+    """Phase 4, Étape 2 correctif ciblé -- real regression test:
+    `method="llm"` used to collapse every real chunk into ONE combined
+    result (a real traceability bug, see `compress_with_llm`'s own
+    docstring). Now real, one real result per real input chunk, same
+    real 1:1 shape as "extract"/"summarize"."""
+    mock_acompletion = AsyncMock(side_effect=[_real_response(f"condensed {i}") for i in range(3)])
     monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
 
-    chunks = [{"content": _LONG_TEXT} for _ in range(3)]
-    result = await compress_context(chunks, max_tokens=10, method="llm", query="refund policy")
+    # max_tokens=30 sits below the real, combined token count of 3 real
+    # `_LONG_TEXT` copies (so compression genuinely triggers) but well
+    # above the real, tiny compressed outputs below (so the real,
+    # post-compression `truncate_to_limit` doesn't drop any of them --
+    # isolating the real 1:1 mapping this test checks from truncation).
+    chunks = [{"chunk_id": str(i), "content": _LONG_TEXT} for i in range(3)]
+    result = await compress_context(chunks, max_tokens=30, method="llm", query="refund policy")
 
-    assert len(result) == 1
-    assert result[0]["content"] == "one combined real answer"
+    assert len(result) == 3
+    assert [c["chunk_id"] for c in result] == ["0", "1", "2"]
+    assert result[0]["content"] == "condensed 0"
+    assert result[1]["content"] == "condensed 1"
+    assert result[2]["content"] == "condensed 2"
 
 
 async def test_compress_context_llm_method_without_a_real_query_raises():

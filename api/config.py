@@ -622,6 +622,17 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT: int = 60
     AGENT_MAX_RETRIES: int = 3
     AGENT_MAX_TOKENS: int = 4096
+    # Phase 5, Étape 6 -- the real function-calling loop's own step cap,
+    # same "must never spin forever" reasoning as
+    # api/services/workflow_engine.py's own MAX_STEPS: one real
+    # iteration is one real LLM call, which may trigger one more round
+    # of tool calls before the next iteration's LLM call.
+    AGENT_MAX_TOOL_ITERATIONS: int = 8
+    # Per-tool-call timeout used by the function-calling loop when no
+    # real per-tool DB override exists (api/services/tool_timeout.py's
+    # own get_tool_timeout) -- distinct from AGENT_TIMEOUT, which bounds
+    # the WHOLE run (every iteration + every tool call combined).
+    AGENT_TOOL_CALL_TIMEOUT: float = 30.0
 
     # -- Tool selection (Partie 5.1.2) ---------------------------------------
     TOOL_SELECTION_TOP_K: int = 5
@@ -1901,6 +1912,23 @@ class Settings(BaseSettings):
     STRIPE_CANCEL_URL: str = "http://localhost:3000/dashboard/billing?checkout=canceled"
     STRIPE_PORTAL_RETURN_URL: str = "http://localhost:3000/dashboard/billing"
 
+    # -- Phase 5, Étape 2: Paystack (Africa: NG, GH, ZA, KE) -- same
+    # "None/empty so we can detect not configured and honestly 501"
+    # discipline as Stripe above. See api/services/billing_paystack.py
+    # and api/services/billing_providers/registry.py.
+    PAYSTACK_SECRET_KEY: str | None = None
+    PAYSTACK_PUBLIC_KEY: str | None = None
+    PAYSTACK_CALLBACK_URL: str = "http://localhost:3000/dashboard/billing?checkout=success"
+    # Comma-separated ISO 3166-1 alpha-2 country codes that resolve to
+    # Paystack instead of Stripe (api/services/billing_providers/registry.py).
+    # Configurable, not hardcoded, so a deployment can extend Paystack's
+    # own real country coverage without a code change.
+    PAYSTACK_COUNTRIES: str = "NG,GH,ZA,KE"
+    # Which provider an organization with no resolvable country (and no
+    # country match) falls back to. "stripe" by default -- the exact
+    # provider every organization already used before this étape.
+    DEFAULT_BILLING_PROVIDER: str = "stripe"
+
     # -- Partie 12.3: Credits / usage ----------------------------------------
     CREDITS_ENABLED: bool = True
     CREDITS_DEFAULT_AMOUNT: int = 1000
@@ -1936,6 +1964,11 @@ class Settings(BaseSettings):
     OTEL_SERVICE_NAME: str = "rag-saas-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_TRACES_SAMPLER_ARG: float = 0.1
+
+    # -- Phase 5, Étape 7: Sentry error tracking ---------------------------------
+    SENTRY_DSN: str | None = None
+    SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
     # -- Partie 15.1/15.2: universal inbound integrations -----------------------
     INTEGRATIONS_ENABLED: bool = True

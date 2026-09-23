@@ -4,6 +4,8 @@ usage limits, invoices (incl. real PDF generation), and Stripe's honest
 
 import uuid
 
+import pytest
+
 
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
@@ -165,3 +167,186 @@ async def test_stripe_checkout_honestly_501s_without_configured_keys(client, reg
 async def test_stripe_webhook_501s_without_configured_secret(client):
     response = await client.post("/billing/stripe/webhook", content=b"{}", headers={"stripe-signature": "t=1,v1=fake"})
     assert response.status_code == 501
+
+
+# -- Phase 5, Étape 2: Paystack + provider-generic billing --------------------
+
+async def test_paystack_webhook_501s_without_configured_secret(client):
+    response = await client.post("/billing/paystack/webhook", content=b"{}", headers={"x-paystack-signature": "fake"})
+    assert response.status_code == 501
+
+
+async def test_unified_checkout_501s_without_any_configured_provider(client, db_session, register_payload):
+    from api.models.admin import Plan
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    plan = Plan(key="pro-unified-test", name="Pro Unified", monthly_price_cents=2900, yearly_price_cents=29000)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    response = await client.post(f"/organizations/{org_id}/billing/checkout", json={"plan_id": str(plan.id)}, headers=_auth_header(token))
+    assert response.status_code == 501
+
+
+async def test_unified_checkout_requires_owner(client, db_session, register_payload):
+    from sqlalchemy import select
+
+    from api.models.organization import OrganizationMember, OrganizationRole
+    from api.models.user import User
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    membership = await db_session.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == uuid.UUID(org_id), OrganizationMember.user_id == user.id))
+    membership.role = OrganizationRole.member
+    await db_session.commit()
+
+    response = await client.post(f"/organizations/{org_id}/billing/checkout", json={"plan_id": str(uuid.uuid4())}, headers=_auth_header(token))
+    assert response.status_code == 403
+
+
+async def test_billing_provider_endpoint_reports_none_when_unconfigured(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+    response = await client.get(f"/organizations/{org_id}/billing/provider", headers=_auth_header(token))
+    assert response.status_code == 200
+    assert response.json() == {"provider": "none", "configured": False}
+
+
+async def test_billing_country_roundtrip_and_validation(client, register_payload):
+    token, org_id = await _register_and_create_org(client, register_payload)
+
+    get_response = await client.get(f"/organizations/{org_id}/billing/country", headers=_auth_header(token))
+    assert get_response.status_code == 200
+    assert get_response.json() == {"billing_country": None}
+
+    set_response = await client.patch(f"/organizations/{org_id}/billing/country", json={"billing_country": "ng"}, headers=_auth_header(token))
+    assert set_response.status_code == 200
+    assert set_response.json() == {"billing_country": "NG"}
+
+    invalid = await client.patch(f"/organizations/{org_id}/billing/country", json={"billing_country": "NGA"}, headers=_auth_header(token))
+    assert invalid.status_code == 422
+
+
+async def test_billing_country_update_requires_owner(client, db_session, register_payload):
+    from sqlalchemy import select
+
+    from api.models.organization import OrganizationMember, OrganizationRole
+    from api.models.user import User
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    membership = await db_session.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == uuid.UUID(org_id), OrganizationMember.user_id == user.id))
+    membership.role = OrganizationRole.member
+    await db_session.commit()
+
+    response = await client.patch(f"/organizations/{org_id}/billing/country", json={"billing_country": "NG"}, headers=_auth_header(token))
+    assert response.status_code == 403
+
+
+async def test_registry_resolves_paystack_for_paystack_country_when_configured(db_session, monkeypatch):
+    from api.config import settings
+    from api.models.organization import Organization
+    from api.services.billing_providers.registry import resolve_provider_for_organization
+
+    monkeypatch.setattr(settings, "PAYSTACK_SECRET_KEY", "sk_test_fake")
+
+    org = Organization(name="Lagos Org", slug="lagos-org-registry-test", billing_country="NG")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+
+    provider = await resolve_provider_for_organization(db_session, org.id)
+    assert provider.name == "paystack"
+
+
+async def test_registry_falls_back_to_stripe_for_non_paystack_country(db_session, monkeypatch):
+    from api.config import settings
+    from api.models.organization import Organization
+    from api.services.billing_providers.registry import resolve_provider_for_organization
+
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_fake")
+
+    org = Organization(name="Paris Org", slug="paris-org-registry-test", billing_country="FR")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+
+    provider = await resolve_provider_for_organization(db_session, org.id)
+    assert provider.name == "stripe"
+
+
+async def test_registry_raises_not_configured_when_resolved_provider_has_no_key(db_session):
+    from api.models.organization import Organization
+    from api.services.billing_providers.base import ProviderNotConfiguredError
+    from api.services.billing_providers.registry import resolve_provider_for_organization
+
+    org = Organization(name="Accra Org", slug="accra-org-registry-test", billing_country="GH")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+
+    with pytest.raises(ProviderNotConfiguredError):
+        await resolve_provider_for_organization(db_session, org.id)
+
+
+def test_get_provider_rejects_unknown_provider_name():
+    from api.services.billing_providers.registry import get_provider
+
+    with pytest.raises(ValueError):
+        get_provider("unknown-provider")
+
+
+def test_paystack_webhook_signature_rejects_tampered_payload(monkeypatch):
+    import hashlib
+    import hmac
+
+    from api.config import settings
+    from api.services.billing_paystack import verify_webhook_signature
+
+    monkeypatch.setattr(settings, "PAYSTACK_SECRET_KEY", "sk_test_fake")
+    payload = b'{"event": "charge.success", "data": {"id": 1}}'
+    real_signature = hmac.new(b"sk_test_fake", payload, hashlib.sha512).hexdigest()
+
+    event = verify_webhook_signature(payload, real_signature)
+    assert event["event"] == "charge.success"
+
+    with pytest.raises(ValueError):
+        verify_webhook_signature(payload, "0" * 128)
+
+
+async def test_paystack_webhook_is_idempotent_on_repeated_event(db_session):
+    from api.services.billing_paystack import handle_paystack_webhook
+
+    event = {"event": "charge.success", "data": {"id": 999999, "metadata": {}}}
+    first = await handle_paystack_webhook(db_session, event)
+    await db_session.commit()
+    second = await handle_paystack_webhook(db_session, event)
+    assert first is True
+    assert second is False
+
+
+async def test_paystack_webhook_reconciles_subscription_status_via_customer_code(db_session, register_payload, client):
+    from api.models.admin import Plan, Subscription, SubscriptionStatus
+    from api.models.billing import PaymentCustomer, PaymentProvider
+    from api.services.billing_paystack import handle_paystack_webhook
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    org_uuid = uuid.UUID(org_id)
+
+    plan = Plan(key="pro-paystack-webhook-test", name="Pro Paystack", monthly_price_cents=2900, yearly_price_cents=29000)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    sub = Subscription(organization_id=org_uuid, plan_id=plan.id, status=SubscriptionStatus.active)
+    customer = PaymentCustomer(organization_id=org_uuid, provider=PaymentProvider.paystack, external_customer_id="CUS_test123")
+    db_session.add_all([sub, customer])
+    await db_session.commit()
+
+    event = {"event": "subscription.disable", "data": {"subscription_code": "SUB_test123", "customer": {"customer_code": "CUS_test123"}}}
+    applied = await handle_paystack_webhook(db_session, event)
+    await db_session.commit()
+    assert applied is True
+
+    await db_session.refresh(sub)
+    assert sub.status == SubscriptionStatus.canceled

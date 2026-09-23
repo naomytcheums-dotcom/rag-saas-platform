@@ -231,3 +231,12 @@ class AgentGuardrailsUpdateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+
+
+class AgentLongTermMemoryResponse(BaseModel):
+    memory: dict
+
+
+class AgentLongTermMemorySetRequest(BaseModel):
+    value: dict | list | str | int | float | bool | None
+    expires_at: dt.datetime | None = None

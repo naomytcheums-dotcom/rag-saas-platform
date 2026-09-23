@@ -11,9 +11,25 @@ exists for real elsewhere in this codebase:
 
 What's genuinely new: Credit (a spendable balance, distinct from raw
 usage counting), CreditTransaction (its audit trail), Invoice/
-InvoiceLine (real billing documents), and the minimal Stripe-side
-bookkeeping (StripeCustomer, StripeEvent for webhook idempotency) --
+InvoiceLine (real billing documents), and the minimal payment-provider
+bookkeeping (PaymentCustomer, PaymentEvent for webhook idempotency) --
 none of which existed anywhere in this codebase before this part.
+
+**Phase 5, Étape 2 (2026-09-22) -- generalized for multi-provider
+billing (Stripe + Paystack)**: `StripeCustomer`/`StripeEvent` were
+Stripe-only tables, each keyed uniquely on `organization_id` alone --
+that made it structurally impossible for an organization to ever have
+a real customer record with a second provider. Renamed to
+`PaymentCustomer`/`PaymentEvent` with an explicit `provider` column
+("stripe" | "paystack") and `organization_id` uniqueness now scoped
+per-provider, not global. `PaymentEvent` unique key is a real
+`payment_provider_event_uq` covering `(provider, id)` -- Stripe's and
+Paystack's own event-id formats already differ in shape (`evt_...` vs
+a bare integer), but this makes the impossibility explicit rather than
+relying on that never colliding. Migration
+0115_generalize_payment_provider_tables.py renames both tables in
+place and backfills `provider='stripe'` on every pre-existing row --
+reversible, no data loss (see that migration's own docstring).
 """
 
 import datetime as dt
@@ -99,29 +115,45 @@ class InvoiceLine(Base):
     total_cents: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
-class StripeCustomer(Base):
-    """One row per organization that has ever started a real Stripe
-    checkout/portal flow -- absent entirely for an organization that
-    never has, which is every organization in this environment today
-    (no STRIPE_SECRET_KEY configured, see api/services/billing_stripe.py)."""
+class PaymentProvider(str, enum.Enum):
+    stripe = "stripe"
+    paystack = "paystack"
 
-    __tablename__ = "stripe_customers"
+
+class PaymentCustomer(Base):
+    """One row per (organization, provider) that has ever started a
+    real checkout/portal flow with that specific provider -- absent
+    entirely for a provider an organization never used, which is every
+    provider in this environment today unless a real secret key is
+    configured (see api/services/billing_providers/)."""
+
+    __tablename__ = "payment_customers"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
-    stripe_customer_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[PaymentProvider] = mapped_column(nullable=False)
+    external_customer_id: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        UniqueConstraint("organization_id", "provider", name="uq_payment_customer_org_provider"),
+        UniqueConstraint("provider", "external_customer_id", name="uq_payment_customer_provider_external_id"),
+    )
 
-class StripeEvent(Base):
-    """Idempotency ledger for POST /billing/stripe/webhook -- Stripe's
-    own docs guarantee at-least-once delivery, so a webhook handler that
-    doesn't record which event ids it already applied WILL double-apply
-    one eventually. `id` is the real Stripe event id itself (e.g.
-    "evt_..."), not a generated uuid."""
 
-    __tablename__ = "stripe_events"
+class PaymentEvent(Base):
+    """Idempotency ledger for both POST /billing/stripe/webhook and
+    POST /billing/paystack/webhook -- both providers' own docs guarantee
+    at-least-once delivery, so a webhook handler that doesn't record
+    which event ids it already applied WILL double-apply one
+    eventually. `id` is the real external event id (Stripe's "evt_...",
+    Paystack's own bare integer id as a string), scoped per-provider --
+    see this module's own docstring for why a global unique id can't be
+    assumed across two independent providers."""
 
+    __tablename__ = "payment_events"
+
+    provider: Mapped[PaymentProvider] = mapped_column(nullable=False, primary_key=True)
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     type: Mapped[str] = mapped_column(String(100), nullable=False)
     processed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

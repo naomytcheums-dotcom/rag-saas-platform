@@ -1,0 +1,72 @@
+# Phase 5, Étape 7 -- real nginx reverse proxy for the self-hosted stack
+# (docker-compose.selfhosted.yml's own "proxy" profile), templated with
+# the official nginx:alpine image's own built-in envsubst-at-startup
+# feature (any file under /etc/nginx/templates/*.template is rendered
+# to /etc/nginx/conf.d/ with $-prefixed vars substituted, no custom
+# entrypoint needed -- see nginx:alpine's own docker-entrypoint.d
+# scripts). Real variables come from .env via docker-compose.selfhosted.yml's
+# own "nginx" service `environment:` block: DOMAIN_NAME, plus the fixed,
+# in-network service names `api`/`frontend` (never localhost -- this
+# runs in the same compose network as those two services).
+
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+
+    # Certbot's own webroot HTTP-01 challenge -- must stay reachable over
+    # plain HTTP even after HTTPS is otherwise enforced below.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN_NAME};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Real security headers (spec section 3.2) -- HSTS opt-in only once a
+    # real cert is actually live (an operator following this template
+    # before running certbot's own initial issuance would otherwise 502
+    # on ssl_certificate above; see nginx/README.md's own setup order).
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # Real rate limiting (spec section 3.2) -- defined once in nginx.conf's
+    # own http{} block (10 req/s per client IP, burst 20), applied here.
+    limit_req zone=api_limit burst=20 nodelay;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location /api/ {
+        proxy_pass http://api:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://frontend:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

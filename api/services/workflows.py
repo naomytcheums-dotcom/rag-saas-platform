@@ -94,7 +94,7 @@ def export_workflow(workflow: Workflow) -> dict:
     (no real database ids beyond the node/edge ids the graph itself
     needs -- no `organization_id`/`created_by`, so this is safe to
     import into a DIFFERENT real organization)."""
-    return {"name": workflow.name, "description": workflow.description, "nodes": workflow.nodes, "edges": workflow.edges}
+    return {"name": workflow.name, "description": workflow.description, "nodes": workflow.nodes, "edges": workflow.edges, "variables": workflow.variables}
 
 
 def validate_workflow_data(workflow_data: dict) -> None:

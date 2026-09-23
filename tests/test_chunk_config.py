@@ -6,7 +6,10 @@ genuinely honors an organization-resolved size."""
 import pytest
 
 from api.security.organization_settings import DEFAULT_SETTINGS
-from api.services.chunk_config import resolve_chunk_overlap, resolve_chunk_size
+from api.services.chunk_config import (
+    CHUNKING_STRATEGIES, chunk_content, resolve_child_chunk_overlap, resolve_child_chunk_size, resolve_chunk_overlap,
+    resolve_chunk_size, resolve_chunking_strategy, resolve_parent_chunk_overlap, resolve_parent_chunk_size,
+)
 
 
 def test_resolve_chunk_size_falls_back_to_the_real_default():
@@ -72,6 +75,135 @@ def test_resolve_chunk_overlap_rejects_overlap_greater_than_or_equal_to_chunk_si
         resolve_chunk_overlap(override=512, chunk_size=512)
     with pytest.raises(ValueError):
         resolve_chunk_overlap(override=600, chunk_size=512)
+
+
+# ------------------------ Phase 4, Étape 1 -- resolve_chunking_strategy / chunk_content ------------------------
+
+
+def test_resolve_chunking_strategy_falls_back_to_the_real_default():
+    """Validation criterion: le fallback sur 'fixed' (comportement
+    préexistant) fonctionne."""
+    assert resolve_chunking_strategy() == DEFAULT_SETTINGS["chunking_strategy"] == "fixed"
+
+
+def test_resolve_chunking_strategy_reads_from_real_organization_settings():
+    assert resolve_chunking_strategy({"chunking_strategy": "markdown"}) == "markdown"
+
+
+def test_resolve_chunking_strategy_override_wins_over_organization_settings():
+    assert resolve_chunking_strategy({"chunking_strategy": "markdown"}, override="code") == "code"
+
+
+def test_resolve_chunking_strategy_rejects_an_unknown_value():
+    """Validation criterion: robustesse -- une valeur inconnue est
+    rejetée explicitement, jamais silencieusement acceptée."""
+    with pytest.raises(ValueError, match="Unknown chunking_strategy"):
+        resolve_chunking_strategy(override="not-a-real-strategy")
+    with pytest.raises(ValueError, match="Unknown chunking_strategy"):
+        resolve_chunking_strategy({"chunking_strategy": "also-not-real"})
+
+
+# ------------------------ Phase 4, Étape 1 (correctif config parent_child) -- dedicated resolvers ------------------------
+
+
+def test_resolve_parent_and_child_sizes_fall_back_to_the_real_pre_existing_global_defaults():
+    """Validation criterion: rétrocompatibilité -- une organisation qui
+    ne configure rien obtient exactement les mêmes valeurs que les
+    constantes globales préexistantes (comportement inchangé)."""
+    from api.config import settings as app_settings
+
+    assert resolve_parent_chunk_size() == DEFAULT_SETTINGS["parent_chunk_size"] == app_settings.PARENT_CHILD_PARENT_SIZE
+    assert resolve_parent_chunk_overlap() == DEFAULT_SETTINGS["parent_chunk_overlap"] == app_settings.PARENT_CHILD_PARENT_OVERLAP
+    assert resolve_child_chunk_size() == DEFAULT_SETTINGS["child_chunk_size"] == app_settings.PARENT_CHILD_CHILD_SIZE
+    assert resolve_child_chunk_overlap() == DEFAULT_SETTINGS["child_chunk_overlap"] == app_settings.PARENT_CHILD_CHILD_OVERLAP
+
+
+def test_resolve_parent_and_child_sizes_read_from_real_organization_settings():
+    """Validation criterion: une organisation peut définir ses propres
+    valeurs, réellement lues, indépendamment de chunk_size/chunk_overlap."""
+    org_settings = {"parent_chunk_size": 1024, "parent_chunk_overlap": 100, "child_chunk_size": 256, "child_chunk_overlap": 30}
+    assert resolve_parent_chunk_size(org_settings) == 1024
+    assert resolve_parent_chunk_overlap(org_settings) == 100
+    assert resolve_child_chunk_size(org_settings) == 256
+    assert resolve_child_chunk_overlap(org_settings) == 30
+
+
+def test_resolve_parent_and_child_sizes_are_independent_of_chunk_size_and_overlap():
+    """Validation criterion: les 4 nouveaux réglages sont bien un
+    système DÉDIÉ, jamais mélangé avec chunk_size/chunk_overlap des 7
+    autres stratégies."""
+    org_settings = {"chunk_size": 4096, "chunk_overlap": 500, "parent_chunk_size": 1024, "child_chunk_size": 256}
+    assert resolve_parent_chunk_size(org_settings) == 1024
+    assert resolve_child_chunk_size(org_settings) == 256
+    # chunk_size/chunk_overlap remain what api/services/chunk_config.py's own resolve_chunk_size/resolve_chunk_overlap already returned before this étape:
+    assert resolve_chunk_size(org_settings) == 4096
+
+
+def test_resolve_parent_and_child_overlaps_reject_invalid_values():
+    """Validation criterion: validations -- valeurs positives, overlap
+    non négatif, overlap strictement inférieur à la taille correspondante."""
+    with pytest.raises(ValueError):
+        resolve_parent_chunk_size(override=0)
+    with pytest.raises(ValueError):
+        resolve_parent_chunk_size(override=-10)
+    with pytest.raises(ValueError):
+        resolve_child_chunk_size(override=0)
+    with pytest.raises(ValueError):
+        resolve_parent_chunk_overlap(override=-1, parent_chunk_size=512)
+    with pytest.raises(ValueError):
+        resolve_child_chunk_overlap(override=-1, child_chunk_size=128)
+    with pytest.raises(ValueError, match="parent_chunk_overlap"):
+        resolve_parent_chunk_overlap(override=512, parent_chunk_size=512)
+    with pytest.raises(ValueError, match="child_chunk_overlap"):
+        resolve_child_chunk_overlap(override=200, child_chunk_size=128)
+
+
+def test_resolve_parent_and_child_sizes_reject_a_too_large_value():
+    from api.config import settings as app_settings
+
+    with pytest.raises(ValueError):
+        resolve_parent_chunk_size(override=app_settings.CHUNK_SIZE_MAX_TOKENS + 1)
+    with pytest.raises(ValueError):
+        resolve_child_chunk_size(override=app_settings.CHUNK_SIZE_MAX_TOKENS + 1)
+
+
+def test_chunk_content_dispatches_every_real_non_fixed_strategy():
+    """Validation criterion: le point d'entrée unique route réellement
+    vers chacune des 6 stratégies (hors 'fixed' et 'parent_child',
+    toutes deux gérées directement par l'appelant, `process_document` --
+    voir le docstring de CHUNKING_STRATEGIES)."""
+    text = "First real sentence here. Second real sentence follows. Third one concludes this real paragraph."
+    for strategy in CHUNKING_STRATEGIES:
+        if strategy in ("fixed", "parent_child"):
+            continue
+        chunks = chunk_content(text, strategy, 30, 0)
+        assert isinstance(chunks, list)
+        assert all(isinstance(c, str) for c in chunks)
+
+
+def test_chunk_content_rejects_fixed_and_parent_child():
+    """Validation criterion: robustesse -- le dispatcher ne prétend
+    jamais gérer 'fixed' (a besoin d'un vrai tokenizer, propriété de
+    l'appelant) ni 'parent_child' (forme de sortie différente, pas
+    encore branchée)."""
+    with pytest.raises(ValueError):
+        chunk_content("some text", "fixed", 30, 0)
+    with pytest.raises(ValueError):
+        chunk_content("some text", "parent_child", 30, 0)
+
+
+def test_chunk_content_markdown_respects_real_headings():
+    text = "# Title\n\nIntro.\n\n## A\n\nContent A.\n\n## B\n\nContent B."
+    chunks = chunk_content(text, "markdown", 200, 0)
+    assert len(chunks) == 3
+    assert chunks[0].startswith("# Title")
+
+
+def test_chunk_content_code_respects_real_function_boundaries():
+    text = "def foo():\n    return 1\n\ndef bar():\n    return 2\n"
+    chunks = chunk_content(text, "code", 100, 0)
+    assert any("foo" in c for c in chunks)
+    assert any("bar" in c for c in chunks)
 
 
 # ------------------------ real integration: every strategy honors it ------------------------

@@ -93,3 +93,16 @@ async def test_select_tools_via_llm_falls_back_to_heuristic_on_malformed_respons
 
     result = await select_tools("2 + 2", [CALCULATOR_TOOL, WORD_COUNT_TOOL], use_llm=True, threshold=0.0)
     assert CALCULATOR_TOOL in result
+
+
+async def test_select_tools_via_llm_falls_back_to_heuristic_on_none_content(monkeypatch):
+    """Phase 5, Étape 6 correctif -- a real, previously-latent bug: a
+    provider message with no real text content (`content=None`, only
+    possible in this codebase now that real function-calling responses
+    exist) used to crash with an uncaught `AttributeError`
+    (`None.strip()`) instead of falling back to the real heuristic
+    ranker, same as any other malformed LLM reply."""
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_response(None)))
+
+    result = await select_tools("2 + 2", [CALCULATOR_TOOL, WORD_COUNT_TOOL], use_llm=True, threshold=0.0)
+    assert CALCULATOR_TOOL in result

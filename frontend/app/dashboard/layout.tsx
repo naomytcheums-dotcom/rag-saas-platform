@@ -16,6 +16,7 @@ const NAV_SECTIONS = [
       { href: "/dashboard/documents", label: "Documents" },
       { href: "/dashboard/agents", label: "Agents" },
       { href: "/dashboard/autonomous-agents", label: "Agents autonomes" },
+      { href: "/dashboard/workflows", label: "Workflows" },
       { href: "/dashboard/fine-tuning", label: "Fine-tuning" },
       { href: "/dashboard/analytics", label: "Analytics" },
     ],

@@ -412,7 +412,7 @@ async def test_process_document_runs_the_real_pdf_pipeline_end_to_end(pg_engine,
                 # Partie 3.1.7 -- real, detected language merged into
                 # every chunk's own metadata alongside its real,
                 # existing per-format fields.
-                assert chunk["metadata_json"] == {"page": 1, "language": "en"}
+                assert chunk["metadata_json"] == {"page": 1, "chunking_strategy": "fixed", "language": "en"}
             # Partie 6.1.5 -- real, 1-based, real content-order ordinal
             # (not derived from created_at -- see
             # api/models/document.py's own DocumentChunk docstring for
@@ -552,7 +552,7 @@ async def test_process_document_runs_the_real_docx_pipeline_end_to_end(pg_engine
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
                 # Partie 3.1.7 -- real, detected language.
-                assert chunk["metadata_json"] == {"language": "en"}
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "en"}
 
             # Partie 3.1.5 -- real, embedded image extracted and
             # stored in S3, with a real DocumentImage row.
@@ -615,7 +615,7 @@ async def test_process_document_runs_the_real_txt_pipeline_end_to_end(pg_engine,
                 assert len(chunk["embedding"]) == 384
                 # Partie 3.1.7 -- real, detected language, the only key
                 # for a format with no other per-chunk metadata of its own.
-                assert chunk["metadata_json"] == {"language": "fr"}
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "fr"}
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -766,7 +766,7 @@ async def test_process_document_runs_the_real_csv_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] == {"language": "en"}  # CSV has a single whole-document section, same as DOCX/TXT/HTML; a real, deterministic detection on sparse name/number data
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "en"}  # CSV has a single whole-document section, same as DOCX/TXT/HTML; a real, deterministic detection on sparse name/number data
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -873,7 +873,7 @@ async def test_process_document_runs_the_real_html_pipeline_end_to_end(pg_engine
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] == {"language": "fr"}  # HTML has a single whole-document section, same as DOCX/TXT
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "fr"}  # HTML has a single whole-document section, same as DOCX/TXT
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -948,7 +948,7 @@ async def test_process_document_runs_the_real_json_pipeline_end_to_end(pg_engine
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] == {"language": "fr"}  # JSON has a single whole-document section, same as DOCX/TXT/HTML/CSV
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "fr"}  # JSON has a single whole-document section, same as DOCX/TXT/HTML/CSV
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -997,7 +997,7 @@ async def test_process_document_runs_the_real_xml_pipeline_end_to_end(pg_engine,
                 assert chunk["content"].strip()
                 assert chunk["embedding"] is not None
                 assert len(chunk["embedding"]) == 384
-                assert chunk["metadata_json"] == {"language": "fr"}  # XML has a single whole-document section, same as DOCX/TXT/HTML/CSV/JSON
+                assert chunk["metadata_json"] == {"chunking_strategy": "fixed", "language": "fr"}  # XML has a single whole-document section, same as DOCX/TXT/HTML/CSV/JSON
         finally:
             await _cleanup(session, organization.id, owner.id)
 
@@ -1085,6 +1085,7 @@ async def test_process_document_marks_failed_for_an_epub_missing_its_container_f
             await _cleanup(session, organization.id, owner.id)
 
 
+@pytest.mark.network_flaky  # Phase 5, Étape 1 -- real, genuine flakiness found (same class as the GitHub test above): a real fetch of a real external page (example.com) intermittently failed for reasons unrelated to this codebase (confirmed by re-running this exact test alone immediately after -- passed). Excluded from the default run (see pyproject.toml's own `addopts`); run explicitly with `pytest -m network_flaky tests/test_documents_integration.py::test_process_url_document_runs_the_real_end_to_end_url_import_pipeline`.
 async def test_process_url_document_runs_the_real_end_to_end_url_import_pipeline(pg_engine, _require_documents_bucket):
     """
     Partie 2.1.10's own validation criterion -- the real, full chain:
@@ -1171,6 +1172,7 @@ async def _make_org_and_owner(session):
     return owner, organization
 
 
+@pytest.mark.network_flaky  # Phase 4, Étape 5ter -- real, genuine flakiness found: GitHub's own real, unauthenticated REST API (60 req/hour per real IP) intermittently returned a real failure unrelated to this codebase (confirmed by re-running this exact test alone immediately after -- passed). Excluded from the default run (see pyproject.toml's own `addopts`); run explicitly with `pytest -m network_flaky tests/test_documents_integration.py::test_import_and_process_github_file_runs_the_real_end_to_end_github_import_pipeline`.
 async def test_import_and_process_github_file_runs_the_real_end_to_end_github_import_pipeline(pg_engine, _require_documents_bucket):
     """
     Partie 2.1.12's own validation criterion -- the real, full chain:
@@ -1344,5 +1346,53 @@ async def test_import_and_process_google_drive_file_marks_failed_for_a_real_none
 
             assert updated.status == DocumentStatus.failed.value
             assert "error" in updated.metadata_json
+        finally:
+            await _cleanup(session, organization.id, owner.id)
+
+
+# ------------------------------- Phase 4, Étape 3 (Metadata Filtering) -------------------------------
+
+
+async def test_metadata_filtering_works_against_real_postgres_json_columns(pg_engine):
+    """Real, dedicated cross-database check: a real, direct empirical
+    audit against this codebase's own fast SQLite test backend found
+    SQLAlchemy's JSON comparator's own `.as_string()` does NOT correctly
+    match a real JSON NUMBER value (only a real JSON STRING) -- fixed in
+    `api.services.metadata_filtering.build_metadata_filter_clauses` via
+    a real, value-type-aware cast (`.as_float()` for a real numeric
+    filter value, `.as_string()` for a real text one). This test proves
+    that real fix also holds against real Postgres (this codebase's own
+    real, plain `JSON` column type, not `JSONB`), not just SQLite --
+    both a real text equals (`department`) AND a real numeric equals
+    (`year`) filter, combined."""
+    from api.services.retrieval_pipeline import search
+
+    session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
+    async with session_factory() as session:
+        owner, organization = await _make_org_and_owner(session)
+        try:
+            document = Document(
+                organization_id=organization.id, name="finance.pdf", file_key=f"documents/{uuid.uuid4()}/finance.pdf",
+                file_size=1, file_type="application/pdf", status=DocumentStatus.completed.value,
+            )
+            session.add(document)
+            await session.flush()
+
+            texts = ["Finance revenue forecast for 2026.", "Legal revenue forecast for 2026.", "Finance revenue forecast for 2018."]
+            metadatas = [{"department": "finance", "year": 2026}, {"department": "legal", "year": 2026}, {"department": "finance", "year": 2018}]
+            embeddings = generate_embeddings(texts, EMBEDDING_MODEL)
+            for text_content, metadata, embedding in zip(texts, metadatas, embeddings):
+                session.add(DocumentChunk(
+                    document_id=document.id, organization_id=organization.id, content=text_content,
+                    embedding=embedding, metadata_json=metadata,
+                ))
+            await session.commit()
+
+            results = await search(
+                session, organization.id, "revenue forecast", strategy="vector_only", top_k=10, score_threshold=0.0,
+                metadata_filters={"department": "finance", "year": 2026},
+            )
+            assert len(results) == 1
+            assert results[0]["metadata_json"] == {"department": "finance", "year": 2026}
         finally:
             await _cleanup(session, organization.id, owner.id)

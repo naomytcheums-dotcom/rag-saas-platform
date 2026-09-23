@@ -12,6 +12,7 @@ class WorkflowCreateRequest(BaseModel):
     workspace_id: uuid.UUID | None = None
     nodes: list[dict] = Field(default_factory=list)
     edges: list[dict] = Field(default_factory=list)
+    variables: list[dict] = Field(default_factory=list)
 
 
 class WorkflowUpdateRequest(BaseModel):
@@ -20,6 +21,7 @@ class WorkflowUpdateRequest(BaseModel):
     workspace_id: uuid.UUID | None = None
     nodes: list[dict] | None = None
     edges: list[dict] | None = None
+    variables: list[dict] | None = None
     status: str | None = None
 
 
@@ -33,6 +35,7 @@ class WorkflowResponse(BaseModel):
     description: str | None
     nodes: list
     edges: list
+    variables: list
     status: str
     created_by: uuid.UUID | None
     created_at: dt.datetime

@@ -4,6 +4,7 @@ same tier as tests/test_organization_members.py.
 """
 
 import uuid
+from unittest.mock import AsyncMock
 
 from sqlalchemy import select
 
@@ -40,7 +41,7 @@ def _extract_token(link: str) -> str:
 
 async def test_manager_can_invite_an_existing_user(monkeypatch, client, db_session, register_payload):
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -60,7 +61,7 @@ async def test_manager_can_invite_an_existing_user(monkeypatch, client, db_sessi
 
 
 async def test_manager_can_invite_a_new_user(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -78,7 +79,7 @@ async def test_manager_can_invite_a_new_user(monkeypatch, client, db_session, re
 
 async def test_manager_cannot_invite_an_existing_member(monkeypatch, client, db_session, register_payload):
     """Validation criterion: a Manager cannot invite someone already a member."""
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -110,7 +111,7 @@ async def test_non_manager_cannot_create_an_invitation(client, db_session, regis
 async def test_manager_cannot_invite_as_admin(monkeypatch, client, db_session, register_payload):
     """Carries over Etape 1.2.4's privilege-escalation guard: a Manager
     can't invite someone in as admin/manager."""
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -137,7 +138,7 @@ async def test_cannot_invite_someone_as_owner(client, db_session, register_paylo
 
 
 async def test_reinviting_the_same_email_reissues_the_same_row(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -162,7 +163,7 @@ async def test_reinviting_the_same_email_reissues_the_same_row(monkeypatch, clie
 # --------------------------------------------------------------- list --
 
 async def test_manager_can_list_invitations(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -179,7 +180,7 @@ async def test_manager_can_list_invitations(monkeypatch, client, db_session, reg
 # ------------------------------------------------------------- cancel --
 
 async def test_manager_can_cancel_an_invitation(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock())
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -207,7 +208,7 @@ async def test_accepting_with_a_valid_token_adds_an_existing_user(monkeypatch, c
     """Validation criterion: acceptance with a valid token works, for an
     existing user."""
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
     monkeypatch.setattr("api.routers.invitations.send_organization_member_added_email", lambda *a: None)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
@@ -235,7 +236,7 @@ async def test_accepting_with_a_valid_token_adds_an_existing_user(monkeypatch, c
 async def test_accepting_with_a_valid_token_creates_a_new_account(monkeypatch, client, db_session, register_payload):
     """Validation criterion: a new user can be created via acceptance."""
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
     monkeypatch.setattr("api.services.verification.send_verification_code_email", lambda *a: None)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
@@ -275,7 +276,7 @@ async def test_accepting_with_a_valid_token_creates_a_new_account(monkeypatch, c
 
 async def test_accepting_a_new_account_without_password_fails(monkeypatch, client, db_session, register_payload):
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -297,7 +298,7 @@ async def test_accepting_with_an_invalid_token_fails(client, db_session, registe
 async def test_accepting_an_already_accepted_invitation_fails(monkeypatch, client, db_session, register_payload):
     """'Acceptée par une autre personne' -- a used token must not work twice."""
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
     monkeypatch.setattr("api.routers.invitations.send_organization_member_added_email", lambda *a: None)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])

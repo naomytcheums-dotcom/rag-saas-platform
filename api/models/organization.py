@@ -55,6 +55,13 @@ class Organization(Base):
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     suspended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     suspended_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Phase 5, Étape 2 -- ISO 3166-1 alpha-2 country code (e.g. "NG",
+    # "FR"), used only to auto-select a billing provider (Paystack for
+    # NG/GH/ZA/KE, Stripe otherwise -- api/services/billing_providers/registry.py).
+    # NULL means "unknown", which resolves to Stripe (the global default),
+    # never to an error -- an org that never sets this keeps working
+    # exactly as billing did before this étape.
+    billing_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
 
     members: Mapped[list["OrganizationMember"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"

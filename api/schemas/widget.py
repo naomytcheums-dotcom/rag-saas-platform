@@ -37,6 +37,27 @@ class WidgetConfigUpdateRequest(BaseModel):
     font_family: str | None = None
 
 
+# Phase 4, Étape 5 (Domain Allowlist Widget) -- admin-only (this field
+# deliberately never rides along on `WidgetPublicConfigResponse`, this
+# étape's own explicit "ne fuite pas la config d'autres tenants" ask --
+# though the real concern here is simpler: an organization's OWN
+# allowlist is not secret to that org's own admins, but it has no real
+# reason to be broadcast to every real, anonymous widget visitor
+# either).
+class WidgetDomainsUpdateRequest(BaseModel):
+    # Real, deliberate `list[str]`, not `list[str] | None` -- an admin
+    # always sends the real, COMPLETE, intended list (empty list =
+    # real, explicit "remove all restrictions", matching
+    # `update_widget_config`'s own established "None reaching here is
+    # always a real, deliberate reset" convention elsewhere in this
+    # module).
+    allowed_domains: list[str] = Field(max_length=20)
+
+
+class WidgetDomainsResponse(BaseModel):
+    allowed_domains: list[str]
+
+
 class WidgetThemeUpdateRequest(BaseModel):
     theme: str | None = None
     theme_custom_css: str | None = Field(default=None, max_length=10_000)

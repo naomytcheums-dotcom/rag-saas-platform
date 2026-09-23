@@ -4,6 +4,7 @@ same tier as tests/test_teams.py.
 """
 
 import uuid
+from unittest.mock import AsyncMock
 
 from sqlalchemy import select
 
@@ -92,7 +93,7 @@ async def test_accepting_an_invitation_also_respects_max_users(monkeypatch, clie
     """The email-invitation acceptance path (Partie 1.3.4) must not be a
     loophole around the same max_users limit."""
     captured = {}
-    monkeypatch.setattr("api.routers.invitations.send_organization_invitation_email", lambda *a: captured.update(link=a[3]))
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

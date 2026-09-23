@@ -25,7 +25,7 @@ const STARTER_QUESTIONS = ["What is retrieval-augmented generation?", "How does 
 export default function Home() {
   const { t } = useTranslation();
   const { org, loading: orgLoading } = useCurrentOrg();
-  const { messages, pending, error, sendMessage, editMessage, regenerate } = useRealChat(org?.id ?? "");
+  const { messages, pending, error, sendMessage, editMessage, regenerate, stopGeneration } = useRealChat(org?.id ?? "");
   const [draft, setDraft] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,12 +77,19 @@ export default function Home() {
 
             {pending && (
               <div className="flex justify-start">
-                <div className="rounded-2xl rounded-tl-sm border border-border bg-surface px-4 py-3 text-sm text-foreground-muted">
+                <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-border bg-surface px-4 py-3 text-sm text-foreground-muted">
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong [animation-delay:-0.3s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong [animation-delay:-0.15s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-border-strong" />
                   </span>
+                  <button
+                    type="button"
+                    onClick={stopGeneration}
+                    className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-foreground hover:bg-accent-soft"
+                  >
+                    {t("stop")}
+                  </button>
                 </div>
               </div>
             )}

@@ -240,7 +240,18 @@ async def chat_completion_with_usage(
     Honestly `usage=None` when a real provider genuinely doesn't report
     it -- `token_usage.py`'s own real caller (Partie 7.2.14) falls back
     to an honest, documented character-count ESTIMATE in that real
-    case, or whenever `TOKEN_USAGE_ESTIMATE_ONLY` is set."""
+    case, or whenever `TOKEN_USAGE_ESTIMATE_ONLY` is set.
+
+    Phase 5, Étape 6 -- also surfaces `tool_calls`: a real, additive
+    key (every existing caller ignores unknown dict keys, so this is
+    backward-compatible), populated whenever the LLM's own response
+    requests one or more real function calls (only present when this
+    call was itself made with a real `tools=` kwarg -- LiteLLM passes
+    that straight through to the underlying provider, same as any other
+    `**kwargs`). Each entry is `{"id", "name", "arguments"}` -- a real,
+    parsed dict, not the raw JSON string providers actually return
+    (a malformed/truncated arguments string becomes `{}`, not a crash
+    the caller has to guard against separately)."""
     response, resolved_model = await _chat_completion_raw(messages, provider=provider, model=model, max_retries=max_retries, **kwargs)
     usage = getattr(response, "usage", None)
     usage_dict = None
@@ -249,7 +260,20 @@ async def chat_completion_with_usage(
             "prompt_tokens": getattr(usage, "prompt_tokens", None), "completion_tokens": getattr(usage, "completion_tokens", None),
             "total_tokens": getattr(usage, "total_tokens", None),
         }
-    return {"content": response.choices[0].message.content, "usage": usage_dict, "model": resolved_model}
+    message = response.choices[0].message
+    tool_calls = None
+    raw_tool_calls = getattr(message, "tool_calls", None)
+    if raw_tool_calls:
+        import json as _json
+
+        tool_calls = []
+        for call in raw_tool_calls:
+            try:
+                arguments = _json.loads(call.function.arguments) if call.function.arguments else {}
+            except (ValueError, TypeError):
+                arguments = {}
+            tool_calls.append({"id": call.id, "name": call.function.name, "arguments": arguments})
+    return {"content": message.content, "usage": usage_dict, "model": resolved_model, "tool_calls": tool_calls}
 
 
 async def chat_completion_stream(messages: list[dict], provider: str | None = None, model: str | None = None, usage_sink: dict | None = None, **kwargs):

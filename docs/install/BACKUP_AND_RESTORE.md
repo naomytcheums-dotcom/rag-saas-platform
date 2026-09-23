@@ -28,10 +28,25 @@ gunzip -c "$FILE" | docker compose -f docker-compose.selfhosted.yml \
 
 ## Backup retention
 
-Backups accumulate under wherever `scripts/backup.sh` writes them (check
-the script's output for the exact path) — this repository doesn't
-automatically prune old backups, so set up your own retention/rotation
-if disk space is a concern.
+`scripts/backup.sh` prunes its own local backups older than
+`BACKUP_RETENTION_DAYS` (default 30, set to `0` to disable). This only
+covers files under `$BACKUP_DIR` on this host — if you copy backups
+elsewhere (object storage, another host), that copy's own retention is
+still yours to manage.
+
+## Scheduling
+
+This repository doesn't run `backup.sh` on a schedule itself (a
+self-hosted deployment's own host is where a cron job belongs, not
+something this platform can centrally trigger for you). A real,
+minimal daily cron entry:
+
+```cron
+0 3 * * * cd /path/to/rag-saas-platform && ./scripts/backup.sh >> /var/log/rag-saas-backup.log 2>&1
+```
+
+`./update.sh` also runs a backup once automatically before every
+upgrade regardless of this schedule — see [Upgrading](UPGRADING.md).
 
 ## Object storage
 

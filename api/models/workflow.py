@@ -49,6 +49,18 @@ class Workflow(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     nodes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     edges: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Phase 5, Étape 5 -- real gap found during this étape's own audit:
+    # nothing backend-side ever persisted a workflow's own named
+    # variable DEFINITIONS (name/type/default/description/scope) --
+    # only the runtime `context` dict (seeded from `run.input`,
+    # api/services/workflow_engine.py) existed. A list of
+    # {name, type, default_value, description, scope} dicts, seeded
+    # into `context` before execution starts (see
+    # execute_workflow_run's own updated docstring) so a node's
+    # `{{ variable_name }}` template reference actually resolves to a
+    # real default even when the caller's own `run.input` doesn't
+    # override it.
+    variables: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=WorkflowStatus.draft.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

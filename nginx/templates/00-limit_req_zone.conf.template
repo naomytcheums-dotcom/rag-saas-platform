@@ -1,0 +1,7 @@
+# Real rate-limit zone (spec section 3.2), applied by default.conf.template's
+# own `limit_req zone=api_limit ...`. Split into its own file because
+# `limit_req_zone` is only valid in nginx's `http{}` context, which is
+# exactly where nginx:alpine's default nginx.conf already `include`s
+# every /etc/nginx/conf.d/*.conf file this template renders into -- no
+# custom nginx.conf needed, just this one extra template.
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;

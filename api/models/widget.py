@@ -29,7 +29,7 @@ import datetime as dt
 import secrets
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -63,6 +63,19 @@ class WidgetConfig(Base):
     # A real, non-secret, publicly embeddable identifier -- safe to sit
     # in a <script> tag's markup, unlike a real OrganizationAPIKey.
     public_key: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=_generate_public_key)
+
+    # Phase 4, Étape 5 (Domain Allowlist Widget) -- real, OPTIONAL,
+    # per-organization origin allowlist. `None`/empty (the real default
+    # every pre-existing organization already has) means real, UNCHANGED
+    # behavior: this organization's own widget stays embeddable from any
+    # origin, exactly as it already was before this étape (this
+    # codebase's own real, existing, DELIBERATE default -- see
+    # api/security/widget_auth.py's own module docstring: the public_key
+    # is explicitly designed to be non-secret, safe to embed anywhere).
+    # A non-empty list is a real, explicit, admin opt-in restriction --
+    # see api/security/widget_auth.py's own `is_origin_allowed`/
+    # `validate_widget_domain` for the real matching/validation rules.
+    allowed_domains: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # 9.3.2 -- logo
     logo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)

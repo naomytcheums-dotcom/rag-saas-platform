@@ -8,6 +8,14 @@ import pytest
 from api.security.organization_settings import DEFAULT_SETTINGS
 from api.services.retrieval_config import (
     RETRIEVAL_STRATEGIES,
+    resolve_context_compression_enabled,
+    resolve_hyde_enabled,
+    resolve_mmr_candidate_k,
+    resolve_mmr_enabled,
+    resolve_mmr_lambda,
+    resolve_multi_query_count,
+    resolve_multi_query_enabled,
+    resolve_query_rewriting_enabled,
     resolve_reranker_model,
     resolve_reranker_top_k,
     resolve_retrieval_strategy,
@@ -196,3 +204,131 @@ def test_resolve_rrf_k_rejects_a_real_too_large_value():
 def test_resolve_rrf_k_accepts_the_real_boundary_values():
     assert resolve_rrf_k(override=1) == 1
     assert resolve_rrf_k(override=1000) == 1000
+
+
+# ------------------------------- Phase 4, Étape 2 (Advanced Retrieval) -------------------------------
+# Real retrocompatibilité requirement (this étape's own explicit ask 4):
+# every one of these 5 *_enabled resolvers defaults to False, even though
+# the pre-existing GLOBAL settings.*_ENABLED flags each default to True
+# (api/config.py) -- a fresh organization must get the exact same
+# retrieval/generation behavior it already had.
+
+
+@pytest.mark.parametrize("resolver, key", [
+    (resolve_query_rewriting_enabled, "query_rewriting_enabled"),
+    (resolve_multi_query_enabled, "multi_query_enabled"),
+    (resolve_hyde_enabled, "hyde_enabled"),
+    (resolve_mmr_enabled, "mmr_enabled"),
+    (resolve_context_compression_enabled, "context_compression_enabled"),
+])
+def test_advanced_retrieval_enabled_flags_default_to_false(resolver, key):
+    assert DEFAULT_SETTINGS[key] is False
+    assert resolver() is False
+    assert resolver({}) is False
+
+
+@pytest.mark.parametrize("resolver", [
+    resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled,
+])
+def test_advanced_retrieval_enabled_flags_read_from_real_organization_settings(resolver):
+    key = {
+        resolve_query_rewriting_enabled: "query_rewriting_enabled",
+        resolve_multi_query_enabled: "multi_query_enabled",
+        resolve_hyde_enabled: "hyde_enabled",
+        resolve_mmr_enabled: "mmr_enabled",
+        resolve_context_compression_enabled: "context_compression_enabled",
+    }[resolver]
+    assert resolver({key: True}) is True
+
+
+@pytest.mark.parametrize("resolver", [
+    resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled,
+])
+def test_advanced_retrieval_enabled_flags_override_wins(resolver):
+    assert resolver({}, override=True) is True
+    assert resolver({}, override=False) is False
+
+
+@pytest.mark.parametrize("resolver", [
+    resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled,
+])
+def test_advanced_retrieval_enabled_flags_reject_non_boolean(resolver):
+    with pytest.raises(ValueError):
+        resolver({}, override="yes")
+
+
+def test_resolve_multi_query_count_falls_back_to_the_real_global_default():
+    """Real, deliberate default: the same real value
+    settings.MULTI_QUERY_NUM_VARIANTS already is."""
+    from api.config import settings
+
+    assert resolve_multi_query_count() == settings.MULTI_QUERY_NUM_VARIANTS
+    assert DEFAULT_SETTINGS["multi_query_count"] == settings.MULTI_QUERY_NUM_VARIANTS
+
+
+def test_resolve_multi_query_count_reads_from_real_organization_settings():
+    assert resolve_multi_query_count({"multi_query_count": 5}) == 5
+
+
+def test_resolve_multi_query_count_override_wins():
+    assert resolve_multi_query_count({"multi_query_count": 5}, override=2) == 2
+
+
+def test_resolve_multi_query_count_rejects_a_real_cost_guardrail_violation():
+    """Validation criterion: real, explicit cost guardrail (requirement
+    13) -- a single user question must never trigger unbounded LLM
+    calls."""
+    with pytest.raises(ValueError):
+        resolve_multi_query_count({"multi_query_count": 11})
+
+
+def test_resolve_multi_query_count_rejects_non_positive_values():
+    with pytest.raises(ValueError):
+        resolve_multi_query_count({"multi_query_count": 0})
+
+
+def test_resolve_mmr_lambda_falls_back_to_the_real_global_default():
+    from api.config import settings
+
+    assert resolve_mmr_lambda() == settings.MMR_LAMBDA
+    assert DEFAULT_SETTINGS["mmr_lambda"] == settings.MMR_LAMBDA
+
+
+def test_resolve_mmr_lambda_reads_from_real_organization_settings():
+    assert resolve_mmr_lambda({"mmr_lambda": 0.3}) == 0.3
+
+
+def test_resolve_mmr_lambda_override_wins():
+    assert resolve_mmr_lambda({"mmr_lambda": 0.3}, override=0.9) == 0.9
+
+
+def test_resolve_mmr_lambda_accepts_the_real_boundary_values():
+    assert resolve_mmr_lambda(override=0.0) == 0.0
+    assert resolve_mmr_lambda(override=1.0) == 1.0
+
+
+def test_resolve_mmr_lambda_rejects_out_of_bounds_values():
+    with pytest.raises(ValueError):
+        resolve_mmr_lambda(override=1.5)
+    with pytest.raises(ValueError):
+        resolve_mmr_lambda(override=-0.1)
+
+
+def test_resolve_mmr_candidate_k_is_a_real_dynamic_multiplier_of_top_k():
+    """Validation criterion: real candidate pool > final k (requirement
+    8) -- not an organization setting of its own (deliberately, see this
+    resolver's own docstring), a derived multiplier of the real,
+    resolved top_k."""
+    assert resolve_mmr_candidate_k(top_k=5) == 15
+    assert resolve_mmr_candidate_k(top_k=5) > 5
+
+
+def test_resolve_mmr_candidate_k_override_wins():
+    assert resolve_mmr_candidate_k(override=42, top_k=5) == 42
+
+
+def test_resolve_mmr_candidate_k_falls_back_to_the_real_resolved_top_k():
+    assert resolve_mmr_candidate_k({"top_k": 2}) == 6

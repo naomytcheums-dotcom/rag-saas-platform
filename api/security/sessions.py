@@ -187,6 +187,25 @@ async def issue_session(
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send new-login notification to %s: %s", notify_new_device_email, exc)
 
+        # Phase 5, Étape 4 -- security_login_new_device, the one real
+        # trigger for the "security" domain. Account-level, no single
+        # owning organization (organization_id=None, see
+        # api/models/notification.py's own docstring) -- this
+        # notification's own email above is unconditional regardless of
+        # in-app preference (create_notification's email_enabled check
+        # governs only the SEPARATE email this function ALSO sends via
+        # create_notification itself; both fire independently here,
+        # same as every other trigger).
+        from api.services.notifications import create_notification
+
+        try:
+            await create_notification(
+                db, organization_id=None, user_id=user_id, notification_type="security_login_new_device",
+                priority="high", context={"device_info": device_info},
+            )
+        except Exception as exc:  # noqa: BLE001 -- a notification failure must never fail the real login it only reports on
+            logger.warning("failed to create in-app new-login notification for user '%s': %s", user_id, exc)
+
     set_refresh_cookie(response, raw_refresh_token, remember_me=remember_me)
     set_csrf_cookie(response, generate_csrf_token())
     return TokenResponse(

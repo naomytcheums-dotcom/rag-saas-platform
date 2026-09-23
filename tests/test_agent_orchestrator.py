@@ -9,12 +9,13 @@ boundary -- the real SQLite `db_session` fixture backs every DB
 operation for real, no DB mocking."""
 
 import asyncio
+import json
 import uuid
 from unittest.mock import AsyncMock
 
 import litellm
 import pytest
-from litellm.types.utils import Choices, Message, ModelResponse
+from litellm.types.utils import ChatCompletionMessageToolCall, Choices, Function, Message, ModelResponse
 
 from api.config import settings
 from api.models.agent_run import AgentRunRecord
@@ -29,6 +30,20 @@ from api.services.tools import CALCULATOR_TOOL, WORD_COUNT_TOOL
 def _real_response(text: str) -> ModelResponse:
     message = Message(content=text, role="assistant")
     choice = Choices(message=message, index=0, finish_reason="stop")
+    return ModelResponse(choices=[choice])
+
+
+def _tool_call_response(calls: list[tuple[str, str, dict]], content: str | None = None) -> ModelResponse:
+    """Phase 5, Étape 6 -- a real litellm `ModelResponse` requesting one
+    or more real tool calls, the same real types (`Message`,
+    `ChatCompletionMessageToolCall`, `Function`) litellm itself builds
+    from a real provider response -- `calls` is `[(id, name, arguments_dict), ...]`."""
+    tool_calls = [
+        ChatCompletionMessageToolCall(id=call_id, type="function", function=Function(name=name, arguments=json.dumps(arguments)))
+        for call_id, name, arguments in calls
+    ]
+    message = Message(content=content, role="assistant", tool_calls=tool_calls)
+    choice = Choices(message=message, index=0, finish_reason="tool_calls")
     return ModelResponse(choices=[choice])
 
 
@@ -766,3 +781,188 @@ async def test_run_agent_never_gates_the_response_when_no_real_gate_is_configure
     run = await orchestrator.run_agent(str(agent.id), "why is the sky blue?", db=db_session, organization_id=org_id, citation_chunks=chunks)
 
     assert run.result == "The sky is blue [1]."
+
+
+# ------------------------------------- Phase 5, Étape 6: real function-calling loop -------------------------------------
+
+
+async def test_run_agent_executes_a_real_tool_call_and_returns_the_final_answer(monkeypatch, db_session):
+    """Validation criterion: le function calling fonctionne (LLM -> tool -> LLM -> réponse finale)."""
+    # Tool SELECTION (api.services.tool_selection, its own dedicated
+    # test file) is a separate concern from the function-calling LOOP
+    # these new tests actually verify -- bypassed the same way this
+    # file's own header docstring already bypasses litellm at one
+    # narrow, real boundary, not two unrelated ones at once.
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "calculator", {"expression": "6 * 7"})]),
+        _real_response("The answer is 42."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "What is 6 * 7?", db=db_session, tools=[CALCULATOR_TOOL])
+
+    assert run.status == "completed"
+    assert run.result == "The answer is 42."
+    assert mock_acompletion.await_count == 2
+    second_call_messages = mock_acompletion.await_args_list[1].kwargs["messages"]
+    tool_messages = [m for m in second_call_messages if m["role"] == "tool"]
+    assert tool_messages[-1]["content"] == "42"
+    assert tool_messages[-1]["tool_call_id"] == "call_1"
+    first_call_kwargs = mock_acompletion.await_args_list[0].kwargs
+    assert first_call_kwargs["tools"][0]["function"]["name"] == "calculator"
+
+
+async def test_run_agent_executes_multiple_tool_calls_in_parallel(monkeypatch, db_session):
+    """Validation criterion: le parallel tool execution fonctionne."""
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([
+            ("call_1", "calculator", {"expression": "2 + 2"}),
+            ("call_2", "word_count", {"text": "hello world"}),
+        ]),
+        _real_response("4 and 2 words."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "compute things", db=db_session, tools=[CALCULATOR_TOOL, WORD_COUNT_TOOL])
+
+    assert run.status == "completed"
+    assert run.result == "4 and 2 words."
+    second_call_messages = mock_acompletion.await_args_list[1].kwargs["messages"]
+    tool_messages = {m["tool_call_id"]: m["content"] for m in second_call_messages if m["role"] == "tool"}
+    assert tool_messages == {"call_1": "4", "call_2": "2"}
+
+
+async def test_run_agent_feeds_a_real_invalid_tool_call_back_as_an_error_not_a_crash(monkeypatch, db_session):
+    """Validation criterion: la validation des tool calls fonctionne (params invalides ne fait pas planter le run)."""
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "calculator", {})]),  # missing required "expression"
+        _real_response("I could not compute that."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "compute nothing", db=db_session, tools=[CALCULATOR_TOOL])
+
+    assert run.status == "completed"
+    assert run.result == "I could not compute that."
+    second_call_messages = mock_acompletion.await_args_list[1].kwargs["messages"]
+    tool_message = next(m for m in second_call_messages if m["role"] == "tool")
+    assert "Invalid arguments" in tool_message["content"]
+
+
+async def test_run_agent_reports_an_unknown_tool_call_as_a_real_error(monkeypatch, db_session):
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "delete_everything", {})]),
+        _real_response("I can't do that."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "do something unsupported", db=db_session, tools=[CALCULATOR_TOOL])
+
+    assert run.status == "completed"
+    second_call_messages = mock_acompletion.await_args_list[1].kwargs["messages"]
+    tool_message = next(m for m in second_call_messages if m["role"] == "tool")
+    assert "Unknown tool" in tool_message["content"]
+
+
+async def test_run_agent_gives_up_after_max_tool_iterations_instead_of_looping_forever(monkeypatch, db_session):
+    """Validation criterion: la boucle est bornée (max_iterations)."""
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    never_final = [_tool_call_response([(f"call_{i}", "calculator", {"expression": "1+1"})]) for i in range(settings.AGENT_MAX_TOOL_ITERATIONS)]
+    monkeypatch.setattr(litellm, "acompletion", AsyncMock(side_effect=never_final))
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "loop forever", db=db_session, tools=[CALCULATOR_TOOL])
+
+    assert run.status == "failed"
+    assert "tool-calling iterations" in run.error
+
+
+async def test_run_agent_records_a_real_tool_call_trace(monkeypatch, db_session):
+    """Validation criterion: les execution traces incluent les tool calls."""
+    from api.services.agent_traces import get_agent_traces
+
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "calculator", {"expression": "3 * 3"})]),
+        _real_response("9."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "what is 3*3?", db=db_session, tools=[CALCULATOR_TOOL])
+
+    traces = await get_agent_traces(db_session, run.id)
+    tool_traces = [t for t in traces if t.step_type == "tool_call"]
+    assert len(tool_traces) == 1
+    assert tool_traces[0].description == "calculator"
+    assert tool_traces[0].status == "completed"
+    assert tool_traces[0].output == {"result": "9"}
+
+
+async def test_run_agent_redacts_secrets_in_tool_call_traces(monkeypatch, db_session):
+    """Validation criterion: la redaction des secrets est respectée."""
+    from api.services.agent_traces import get_agent_traces
+    from api.services.tools import ToolSpec
+
+    async def _leaky_handler(api_key: str) -> str:
+        return "ok"
+
+    leaky_tool = ToolSpec(
+        name="leaky_tool", description="A tool whose params happen to include a secret-shaped key.",
+        parameters={"api_key": {"type": "string", "description": "a secret"}},
+        capability_tags=("test",), handler=_leaky_handler,
+    )
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "leaky_tool", {"api_key": "sk-super-secret-value"})]),
+        _real_response("done."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent("agent-1", "use the leaky tool", db=db_session, tools=[leaky_tool])
+
+    traces = await get_agent_traces(db_session, run.id)
+    tool_trace = next(t for t in traces if t.step_type == "tool_call")
+    assert tool_trace.input == {"api_key": "[REDACTED]"}
+
+
+async def test_run_agent_auto_resolves_tools_from_the_agents_own_real_config(monkeypatch, db_session):
+    """Validation criterion: un agent réel exécute désormais réellement
+    ses propres tools configurés, sans que l'appelant ait besoin de les
+    passer explicitement (le vrai gap trouvé par l'audit de cette étape)."""
+    from api.services.tool_wiring import CALENDAR_LIST_EVENTS_TOOL  # noqa: F401 -- proves the module registers real tools on import
+    from api.services.tools import get_tool
+
+    org_id = uuid.uuid4()
+    # Real catalog name is "calculate" (api.services.agent_tools.AGENT_TOOL_CATALOG) --
+    # a real, deliberate alias to the registry's own "calculator"
+    # ToolSpec (resolve_agent_tools's own _CATALOG_TO_REGISTRY_NAME),
+    # a genuine naming mismatch this test itself uncovered and Étape 6
+    # fixed rather than silently working around.
+    agent = await create_agent(db_session, org_id, {"name": "Bot", "tools": [{"name": "calculate", "enabled": True}]}, None)
+    await db_session.commit()
+
+    assert get_tool("calculator") is not None  # sanity: the registry really has it
+    monkeypatch.setattr("api.services.agent_orchestrator.select_tools", AsyncMock(side_effect=lambda query, tools, **kw: tools))
+
+    mock_acompletion = AsyncMock(side_effect=[
+        _tool_call_response([("call_1", "calculator", {"expression": "10 - 1"})]),
+        _real_response("9."),
+    ])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    orchestrator = AgentOrchestrator()
+    run = await orchestrator.run_agent(str(agent.id), "what is 10-1?", db=db_session, organization_id=org_id)
+
+    assert run.status == "completed"
+    assert run.result == "9."
+    assert mock_acompletion.await_count == 2

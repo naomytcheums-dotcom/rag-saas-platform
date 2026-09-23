@@ -3648,7 +3648,17 @@ Partie pour 3 à 15.
 
 ---
 
-## Feuille de route — Étapes de travail (mise à jour 2026-09-02)
+## [ARCHIVE -- PERIME] Feuille de route — Étapes de travail (mise à jour 2026-09-02)
+
+**Note ajoutee le 2026-09-19 (audit) : cette section entiere, jusqu'a la
+fin du document, est un artefact de planification date du 2026-09-02 --
+une photo de l'etat du projet a ce moment-la, pas l'etat actuel. Le
+corps du document ci-dessus (Parties 1 a 25) montre depuis de nombreuses
+parties passees a ✅ COMPLET qui etaient encore ouvertes quand cette
+feuille de route a ete ecrite. Conservee ici pour son interet
+historique (elle documente le raisonnement et l'ordre des choix faits a
+l'epoque), mais NE PAS s'y fier pour l'etat reel du projet -- se referer
+aux statuts ✅/🟡/⬜ de chaque Partie ci-dessus, plus recents.**
 
 Principe inchangé : **finir ce qui est partiel avant d'ouvrir un nouveau
 chantier**, une Étape = une Partie (ou un regroupement cohérent), jamais

@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Kept as a real, literal duplicate of
 # `api.services.retrieval_config.RETRIEVAL_STRATEGIES` -- a Pydantic
@@ -19,6 +19,28 @@ class SearchRequest(BaseModel):
     strategy: _STRATEGY_LITERAL | None = None
     reranker: str | None = Field(default=None, min_length=1, max_length=200)
     score_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Phase 4, Étape 3 (Metadata Filtering) -- real, optional, additive
+    # request-time filter (this étape's own literal API shape:
+    # `{"department": "finance", "year": 2026}`, or
+    # `{"year": {"gt": 2020}}`). Real, deliberate `None` default --
+    # rétrocompatibilité's own explicit ask (requirement 20): an
+    # existing `{"query": "..."}` request keeps working byte-identically.
+    # Validated here (real, early rejection -- a malformed filter never
+    # even reaches `api.services.retrieval_pipeline.search`) by the SAME
+    # real function that function's own runtime, fail-fast check also
+    # calls (`api.services.metadata_filtering.normalize_metadata_filters`)
+    # -- never a second, independently-drifting validation rule.
+    filters: dict | None = None
+
+    @field_validator("filters")
+    @classmethod
+    def _validate_filters(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        from api.services.metadata_filtering import normalize_metadata_filters
+
+        normalize_metadata_filters(value)
+        return value
 
 
 class SearchResultContext(BaseModel):

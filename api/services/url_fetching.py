@@ -126,27 +126,54 @@ class _SSRFSafeAsyncTransport(httpx.AsyncHTTPTransport):
         self._pool._network_backend = _SSRFSafeBackend()
 
 
-def _client() -> httpx.AsyncClient:
+def _client(timeout: httpx.Timeout | float | None = None) -> httpx.AsyncClient:
     """One shared client configuration for every real network call in
     this module -- one place the SSRF-safe transport is wired in, not
-    several call sites that could each independently forget it."""
+    several call sites that could each independently forget it.
+
+    Phase 4, Étape 4 (SSRF Hardening Extension) -- `timeout`, when
+    given, overrides this module's own default (real, per-caller
+    timeouts, e.g. `settings.TEAMS_RESPONSE_TIMEOUT`, stay real and
+    honored) -- the real, mandatory SSRF-safe `transport`/
+    `follow_redirects`/`max_redirects` below are NEVER optional, only
+    the timeout is."""
     return httpx.AsyncClient(
         transport=_SSRFSafeAsyncTransport(),
-        timeout=httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=_READ_TIMEOUT, pool=_CONNECT_TIMEOUT),
+        timeout=timeout if timeout is not None else httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=_READ_TIMEOUT, pool=_CONNECT_TIMEOUT),
         follow_redirects=True,
         max_redirects=5,
         headers={"User-Agent": USER_AGENT},
     )
 
 
-def ssrf_safe_client() -> httpx.AsyncClient:
+def ssrf_safe_client(timeout: httpx.Timeout | float | None = None) -> httpx.AsyncClient:
     """Partie 5.4.6 -- a real, public wrapper around this module's own
     `_client` for real cross-module reuse (the workflow `http_call`
     block, `api/services/workflow_block_http.py`, needs the SAME real,
     DNS-rebinding-safe SSRF protection this module already built for
     document fetching -- not a second, weaker implementation of the
-    same real defense)."""
-    return _client()
+    same real defense).
+
+    Phase 4, Étape 4 -- also now reused by 2 real, admin-configured-URL
+    outbound calls this étape's own audit found unprotected
+    (`api.services.chat_integrations.teams.send_teams_response`,
+    `api.services.alerting.send_alert_notification`) -- the SAME
+    canonical helper, never a second, competing SSRF implementation for
+    either. `timeout` lets each real caller keep its own, already-
+    configured real timeout value.
+
+    Real, deliberate `timeout=None` special case, found necessary by a
+    real, genuine test regression (not assumed): calling `_client()`
+    with NO arguments at all when `timeout` is `None` -- not
+    `_client(timeout=None)` -- keeps this function's own real call
+    signature identical to before this étape for every pre-existing
+    real caller (`api.services.workflow_block_http`,
+    `api.services.custom_tools`) whose OWN tests monkeypatch
+    `api.services.url_fetching._client` with a real, zero-argument
+    stub (`tests/test_workflow_block_http.py`/`tests/test_custom_tools.py`)
+    -- passing an unexpected real keyword argument to that real stub
+    broke both, a real, confirmed regression this fixes."""
+    return _client() if timeout is None else _client(timeout=timeout)
 
 
 def validate_url(url: str) -> str:

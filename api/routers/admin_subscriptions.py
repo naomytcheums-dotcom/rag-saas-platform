@@ -148,3 +148,35 @@ async def delete_plan_endpoint(plan_id: uuid.UUID, _admin: User = Depends(requir
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()
+
+
+# -- Phase 5, Étape 3 correctif: billing_stripe_sync.py was real,
+# complete code with ZERO callers anywhere in this codebase (confirmed
+# by audit, Phase 5 Étape 2's own ROADMAP entry) -- the right fix is to
+# wire it, not delete working code nor leave it silently unreachable.
+# These two endpoints are the only way to actually invoke it.
+
+@router.post("/plans/sync/stripe-products", status_code=status.HTTP_200_OK)
+async def sync_stripe_products_endpoint(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    from api.services.billing_stripe import StripeNotConfiguredError
+    from api.services.billing_stripe_sync import sync_stripe_products
+
+    try:
+        synced = await sync_stripe_products(db)
+    except StripeNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await db.commit()
+    return {"synced": synced}
+
+
+@router.post("/plans/sync/stripe-prices", status_code=status.HTTP_200_OK)
+async def sync_stripe_prices_endpoint(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    from api.services.billing_stripe import StripeNotConfiguredError
+    from api.services.billing_stripe_sync import sync_stripe_prices
+
+    try:
+        synced = await sync_stripe_prices(db)
+    except StripeNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await db.commit()
+    return {"synced": synced}

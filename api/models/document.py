@@ -233,7 +233,27 @@ class DocumentChunk(Base):
     # chunking -- embedding generation is a separate step of
     # process_pdf_document that can legitimately fail (or simply not
     # have run yet) without the chunk itself being invalid.
-    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    #
+    # Phase 4, Étape 1 (correctif parent_child) -- REAL BUG FOUND AND
+    # FIXED while wiring a real `parent_child` parent chunk (which must
+    # never receive an embedding, by design): plain `JSON` (its default
+    # `none_as_null=False`) binds a Python `None` as the JSON literal
+    # `null`, NOT a real SQL `NULL` -- so `DocumentChunk.embedding.is_not(None)`
+    # (the SAME real filter `api/services/retrieval_pipeline.py`'s own
+    # `fetch_organization_chunks` already relies on to keep an
+    # unembedded row out of every real search strategy) silently
+    # INCLUDED it instead, verified directly against a real SQLite
+    # engine before this fix. This was already a real, latent
+    # correctness bug for the pre-existing "embedding generation
+    # genuinely failed" case this column's own docstring already
+    # documents -- `none_as_null=True` makes a Python `None` bind as a
+    # real SQL `NULL` again, the one, real, correct fix (no DDL change:
+    # Postgres's own `JSON` column type is unaffected, only how
+    # SQLAlchemy binds a Python `None` into it) -- see migration `0113`
+    # for the matching, one-time backfill of any real, existing row a
+    # prior, real embedding failure already left storing a literal
+    # JSON `null`.
+    embedding: Mapped[list[float] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Partie 6.1.5 (migration 0068) -- real, 1-based, per-document
     # content-order ordinal (same 1-based convention as
@@ -251,11 +271,20 @@ class DocumentChunk(Base):
     # change embeddings/IDs too, a real, deliberate scope limit, not an
     # oversight).
     chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Phase 4, Étape 1 (correctif parent_child) -- migration 0112. Real,
+    # self-referential parent/child relationship (see that migration's
+    # own docstring for why `chunk_role` is a real, explicit tag rather
+    # than inferred from `embedding IS NULL`, and why `ondelete="CASCADE"`
+    # is correct here). Both `NULL` (unchanged) for every chunk produced
+    # by any of the other 7 chunking strategies.
+    parent_chunk_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=True)
+    chunk_role: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     __table_args__ = (
         Index("ix_document_chunks_document_id", "document_id"),
         Index("ix_document_chunks_organization_id", "organization_id"),
         Index("ix_document_chunks_media_asset_id", "media_asset_id"),
+        Index("ix_document_chunks_parent_chunk_id", "parent_chunk_id"),
         CheckConstraint("document_id IS NOT NULL OR media_asset_id IS NOT NULL", name="ck_document_chunks_has_a_parent"),
     )
 

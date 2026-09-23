@@ -76,7 +76,15 @@ async def _select_tools_via_llm(query: str, available_tools: list[ToolSpec], top
     )
     try:
         response = await chat_completion([{"role": "user", "content": prompt}])
-        names = json.loads(response.strip())
+        # Phase 5, Étape 6 correctif -- a real, previously-latent bug:
+        # `response` is `None` whenever the underlying provider message
+        # has no real text content (e.g. a tool-calls-only turn, only
+        # possible now that real function-calling responses exist
+        # anywhere in this codebase) -- `None.strip()` raised an
+        # uncaught `AttributeError` instead of the real, honest
+        # "LLM path failed, fall back to heuristic" this function's own
+        # docstring already promises for every OTHER real failure mode.
+        names = json.loads((response or "").strip())
         if not isinstance(names, list):
             return None
     except (LLMError, json.JSONDecodeError, ValueError):

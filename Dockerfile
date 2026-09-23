@@ -1,3 +1,12 @@
+# NOTE (Phase 5, Étape 7 audit): this builds the EARLIER STREAMLIT
+# PROTOTYPE (dashboard/app.py, "nova"), NOT the RAG SaaS API/frontend
+# product this platform actually is today. If you're looking for the
+# real product's own Docker build, you want `Dockerfile.api` (backend)
+# and `frontend/Dockerfile`, orchestrated together by
+# `docker-compose.selfhosted.yml` -- see docs/install/DOCKER.md. Kept
+# under this exact filename only because `render.yaml`'s own Blueprint
+# already points at it; renaming would break that existing deploy.
+#
 # Containerized deploy target for platforms that need a Docker image
 # (Render, Fly.io) -- separate from the Streamlit Community Cloud path in
 # the README, which deploys straight from GitHub with no Dockerfile at

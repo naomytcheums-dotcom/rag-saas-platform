@@ -109,12 +109,14 @@ async def create_plan(
     max_documents: int | None = None, max_agents: int | None = None, max_members: int | None = None,
     max_api_keys: int | None = None, max_webhooks: int | None = None, max_requests_per_month: int | None = None,
     priority_support: bool = False, advanced_features: bool = False, sla: bool = False,
+    paystack_plan_code_monthly: str | None = None, paystack_plan_code_yearly: str | None = None,
 ) -> Plan:
     plan = Plan(
         key=key, name=name, monthly_price_cents=monthly_price_cents, yearly_price_cents=yearly_price_cents,
         max_documents=max_documents, max_agents=max_agents, max_members=max_members,
         max_api_keys=max_api_keys, max_webhooks=max_webhooks, max_requests_per_month=max_requests_per_month,
         priority_support=priority_support, advanced_features=advanced_features, sla=sla,
+        paystack_plan_code_monthly=paystack_plan_code_monthly, paystack_plan_code_yearly=paystack_plan_code_yearly,
     )
     db.add(plan)
     await db.flush()

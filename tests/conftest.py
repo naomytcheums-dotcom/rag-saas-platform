@@ -326,6 +326,19 @@ def _stub_out_reindex_scheduling_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _stub_out_workflow_run_scheduling_by_default(monkeypatch):
+    """Partie 5.4's own equivalent of the fixtures above --
+    run_workflow_via_webhook_endpoint/run_workflow_manually_endpoint/
+    submit_human_block_endpoint call schedule_workflow_run/
+    schedule_workflow_resume, the SAME real Celery-dispatch problem for
+    the SAME reason. Verified directly in tests/test_workflow_engine.py,
+    which monkeypatches these back for itself where it actually matters
+    to the test."""
+    monkeypatch.setattr("api.routers.workflows.schedule_workflow_run", lambda run_id: None)
+    monkeypatch.setattr("api.routers.workflows.schedule_workflow_resume", lambda run_id, human_input_id: None)
+
+
+@pytest.fixture(autouse=True)
 def _stub_out_progress_updates_by_default(monkeypatch):
     """Partie 2.2.3's own equivalent of the fixtures above --
     process_document calls send_progress_update (a real Redis PUBLISH)

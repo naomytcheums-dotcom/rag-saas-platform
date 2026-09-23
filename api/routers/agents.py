@@ -20,7 +20,8 @@ from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.agents import (
     AgentAllowedUserRequest, AgentCreateRequest, AgentGuardrailsResponse, AgentGuardrailsUpdateRequest,
-    AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentMemoryClearResponse, AgentMemoryConfigResponse,
+    AgentKnowledgeBaseResponse, AgentKnowledgeBaseUpdateRequest, AgentLongTermMemoryResponse,
+    AgentLongTermMemorySetRequest, AgentMemoryClearResponse, AgentMemoryConfigResponse,
     AgentMemoryConfigUpdateRequest, AgentMemoryUsageResponse, AgentModelResponse, AgentModelUpdateRequest,
     AgentPermissionsResponse, AgentPermissionsUpdateRequest, AgentResponse, AgentToolsResponse,
     AgentToolsUpdateRequest, AgentUpdateRequest, KnowledgeBaseOption, SystemPromptPreviewResponse,
@@ -38,6 +39,7 @@ from api.services.agent_guardrails import AgentGuardrailError, get_agent_guardra
 from api.services.agent_knowledge_base import (
     AgentKnowledgeBaseError, get_agent_kb_config, get_available_knowledge_bases, set_agent_knowledge_base,
 )
+from api.services.agent_long_term_memory import delete_long_term_memory, get_long_term_memory, set_long_term_memory
 from api.services.agent_memory_config import (
     AgentMemoryConfigError, clear_agent_memory, get_agent_memory_config, get_memory_usage, set_agent_memory_config,
 )
@@ -458,6 +460,43 @@ async def update_agent_guardrails_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     return await get_agent_guardrails(db, agent.id)
+
+
+# ------------------------------------- Phase 5, Étape 6 -- long-term memory -------------------------------------
+# Distinct from api/services/agent_memory_config.py's own existing
+# endpoints (which manage the SHORT-term, per-session store,
+# api/models/agent_memory.py) -- this étape's own real gap: no cross-
+# run memory existed at all before it (see
+# api/services/agent_long_term_memory.py's own module docstring).
+
+@router.get("/agents/{agent_id}/memory", response_model=AgentLongTermMemoryResponse)
+async def get_agent_long_term_memory_endpoint(
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_member), db: AsyncSession = Depends(get_db),
+):
+    agent, caller = agent_ctx
+    memory = await get_long_term_memory(db, agent.id, user_id=caller.user_id)
+    return AgentLongTermMemoryResponse(memory=memory)
+
+
+@router.put("/agents/{agent_id}/memory/{key}", response_model=AgentLongTermMemoryResponse)
+async def set_agent_long_term_memory_endpoint(
+    key: str, payload: AgentLongTermMemorySetRequest,
+    agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, caller = agent_ctx
+    await set_long_term_memory(db, agent.id, key, payload.value, user_id=caller.user_id, expires_at=payload.expires_at)
+    await db.commit()
+    memory = await get_long_term_memory(db, agent.id, user_id=caller.user_id)
+    return AgentLongTermMemoryResponse(memory=memory)
+
+
+@router.delete("/agents/{agent_id}/memory/{key}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent_long_term_memory_endpoint(
+    key: str, agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
+):
+    agent, caller = agent_ctx
+    await delete_long_term_memory(db, agent.id, key, user_id=caller.user_id)
+    await db.commit()
 
 
 @router.delete("/agents/{agent_id}/permissions/users/{user_id}", response_model=AgentPermissionsResponse)

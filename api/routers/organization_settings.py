@@ -48,6 +48,16 @@ async def update_organization_settings(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="chunk_overlap must be smaller than chunk_size",
         )
+    # Phase 4, Étape 1 (correctif config parent_child) -- same real
+    # cross-field discipline, for the two new parent_child-only pairs.
+    if merged_preview["parent_chunk_overlap"] >= merged_preview["parent_chunk_size"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="parent_chunk_overlap must be smaller than parent_chunk_size",
+        )
+    if merged_preview["child_chunk_overlap"] >= merged_preview["child_chunk_size"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="child_chunk_overlap must be smaller than child_chunk_size",
+        )
 
     updated = await update_org_settings(db, org_id, updates)
     await db.commit()

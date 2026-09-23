@@ -231,6 +231,11 @@ from api.services.onedrive_extraction import (
     list_onedrive_files,
     should_include_onedrive_file,
 )
+from api.services.chunk_config import (
+    chunk_content, resolve_child_chunk_overlap, resolve_child_chunk_size,
+    resolve_chunking_strategy, resolve_parent_chunk_overlap, resolve_parent_chunk_size,
+)
+from api.services.parent_child_chunking import chunk_parent_child
 from api.services.zip_extraction import extract_zip_file, filter_zip_contents, list_zip_contents
 from api.services.image_extraction import extract_images_docx, extract_images_epub, get_image_metadata
 from api.services.ocr import OCRNotAvailableError, ocr_image_bytes
@@ -3146,6 +3151,16 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
 
             tokenizer = AutoTokenizer.from_pretrained(settings_dict["embedding_model"])
 
+            # Phase 4, Étape 1 -- real dispatch among the 7 real
+            # chunking strategies (`api/services/chunk_config.py`'s own
+            # `CHUNKING_STRATEGIES`/`chunk_content`), resolved ONCE per
+            # document (not per section) from this organization's own
+            # real setting -- `resolve_chunking_strategy` re-validates
+            # defensively even though the HTTP PATCH path already
+            # enforces it, the same "don't trust every caller" reasoning
+            # `resolve_chunk_size`/`resolve_chunk_overlap` already apply.
+            chunking_strategy = resolve_chunking_strategy(settings_dict)
+
             # Each section carries its OWN per-format metadata dict
             # (api/services/document_extraction.py's own docstring --
             # a PDF's real page number, a Markdown section's real
@@ -3158,7 +3173,154 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                 section_text = section["text"].strip()
                 if not section_text:
                     continue
-                for piece in chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
+                # Phase 4, Étape 1 -- `effective_strategy` tracks what
+                # ACTUALLY produced `pieces` for THIS section (never just
+                # the org's own configured `chunking_strategy`) -- a real
+                # per-section fallback below must never leave the
+                # persisted metadata claiming a strategy that didn't
+                # really run, the same "record reality, not intent"
+                # discipline `document_language` a few lines down
+                # already follows.
+                effective_strategy = chunking_strategy
+                # Phase 4, Étape 1 (correctif) -- `"parent_child"` is the
+                # one real strategy that does NOT produce a flat
+                # `list[str]` (see `chunk_parent_child`'s own docstring):
+                # it gets its own real branch, never forced through the
+                # single-population `chunk_text`/`chunk_content` path
+                # below, and appends directly to `chunk_records` itself
+                # (with real `role`/`parent_ref`/`skip_embedding` keys
+                # the other 7 strategies' own records never set) before
+                # `continue`-ing to the next real section.
+                if chunking_strategy == "parent_child":
+                    try:
+                        # Phase 4, Étape 1 (correctif config parent_child)
+                        # -- real, dedicated per-organization sizes,
+                        # resolved the SAME override > org_settings >
+                        # default way as chunk_size/chunk_overlap above
+                        # (see `resolve_parent_chunk_size` and its 3
+                        # siblings, `api/services/chunk_config.py`) --
+                        # no longer the bare global `settings.PARENT_CHILD_*`
+                        # constants, which `chunk_parent_child` itself
+                        # now only ever sees as the LAST-resort default
+                        # inside these resolvers, for an organization
+                        # that never configured its own values.
+                        result = chunk_parent_child(
+                            section_text,
+                            parent_size=resolve_parent_chunk_size(settings_dict),
+                            parent_overlap=resolve_parent_chunk_overlap(settings_dict),
+                            child_size=resolve_child_chunk_size(settings_dict),
+                            child_overlap=resolve_child_chunk_overlap(settings_dict),
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- same real per-section fallback discipline as every other strategy below
+                        logger.warning(
+                            "process_document: chunking_strategy 'parent_child' raised for a section of document "
+                            "'%s', falling back to 'fixed' for that section: %s", document_id, exc,
+                        )
+                        result = None
+                    if not result or not result["parents"]:
+                        # Either a real runtime failure above, or the
+                        # real, documented `PARENT_CHILD_ENABLED=False`
+                        # operator kill switch (`chunk_parent_child`'s
+                        # own honest empty result, not an exception) --
+                        # both real, legitimate reasons this organization
+                        # doesn't actually get parent/child chunks for
+                        # this section; a real, visible log line either
+                        # way, so this is never a silent behavior change.
+                        if result is not None:
+                            logger.warning(
+                                "process_document: chunking_strategy 'parent_child' produced no parents for a "
+                                "section of document '%s' (PARENT_CHILD_ENABLED likely False) -- falling back to "
+                                "'fixed' for that section.", document_id,
+                            )
+                        for piece in chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"]):
+                            piece = normalize_text(clean_text(piece))
+                            chunk_records.append({"content": piece, "metadata": {**(section["metadata"] or {}), "chunking_strategy": "fixed"}})
+                        continue
+
+                    # Real, explicit, PYTHON-SIDE id assignment (rather
+                    # than leaving it to SQLAlchemy's own column default
+                    # at flush time) -- a real child needs its own real
+                    # parent's real id to set `parent_chunk_id` on
+                    # itself, and both are inserted in the SAME real
+                    # flush below; generating it here, once, is simpler
+                    # and cheaper than a real, separate per-parent flush
+                    # round-trip just to learn a real id back.
+                    parent_uuid_by_local_id = {parent["id"]: uuid.uuid4() for parent in result["parents"]}
+                    # Real O(1) lookup for the children loop below --
+                    # never a real O(n) scan of `chunk_records` per real
+                    # child (a genuine quadratic-cost trap this section's
+                    # own real perf review caught before it shipped).
+                    parent_content_by_uuid: dict[uuid.UUID, str] = {}
+                    for parent in result["parents"]:
+                        content = normalize_text(clean_text(parent["text"]))
+                        parent_uuid = parent_uuid_by_local_id[parent["id"]]
+                        parent_content_by_uuid[parent_uuid] = content
+                        chunk_records.append({
+                            "content": content,
+                            "metadata": {**(section["metadata"] or {}), "chunking_strategy": "parent_child"},
+                            "role": "parent",
+                            "explicit_id": parent_uuid,
+                            # Partie 3.2.8's own real design, re-applied
+                            # here for real (see this module's own top
+                            # docstring on why `fetch_organization_chunks`
+                            # -- and therefore every real search strategy
+                            # -- already excludes a `NULL`-embedding row
+                            # with zero changes needed to retrieval
+                            # itself): a real parent exists to supply
+                            # real, wider CONTEXT once one of its own
+                            # real children is matched, never to be
+                            # matched or cited directly on its own.
+                            "skip_embedding": True,
+                        })
+                    for child in result["children"]:
+                        parent_uuid = parent_uuid_by_local_id[child["parent_id"]]
+                        content = normalize_text(clean_text(child["text"]))
+                        parent_content = parent_content_by_uuid[parent_uuid]
+                        chunk_records.append({
+                            "content": content,
+                            "metadata": {
+                                **(section["metadata"] or {}), "chunking_strategy": "parent_child",
+                                # Real, denormalized parent context, ONCE,
+                                # at ingestion time -- so a real retrieval
+                                # hit on this child (`fetch_organization_chunks`,
+                                # already selecting `metadata_json` for
+                                # every real result) carries its own real
+                                # parent's context with ZERO extra real
+                                # query at search time (the exact same
+                                # "no extra join needed" reasoning that
+                                # module's own docstring already applies
+                                # to `document_name`/`file_type`/
+                                # `source_url`). `api/services/generation.py`'s
+                                # own `generate_response` prefers this
+                                # over the child's own real, narrower
+                                # `content` when building the real LLM
+                                # context -- real citations still point at
+                                # the real, precise child (`content`
+                                # itself, untouched).
+                                "parent_chunk_id": str(parent_uuid), "parent_context": parent_content,
+                            },
+                            "role": "child",
+                            "parent_ref": parent_uuid,
+                            "skip_embedding": False,
+                        })
+                    continue
+
+                if chunking_strategy == "fixed":
+                    pieces = chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"])
+                else:
+                    try:
+                        pieces = chunk_content(
+                            section_text, chunking_strategy, settings_dict["chunk_size"], settings_dict["chunk_overlap"],
+                            embedding_model=settings_dict["embedding_model"],
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- a real, per-section fallback: one strategy's own real failure (e.g. a semantic-chunking embedding call erroring) must never abort the whole document's own real ingestion
+                        logger.warning(
+                            "process_document: chunking_strategy '%s' failed for a section of document '%s', "
+                            "falling back to 'fixed' for that section: %s", chunking_strategy, document_id, exc,
+                        )
+                        pieces = chunk_text(tokenizer, section_text, settings_dict["chunk_size"], settings_dict["chunk_overlap"])
+                        effective_strategy = "fixed"
+                for piece in pieces:
                     # Partie 3.1.1/3.1.2 -- real, per-chunk cleanup
                     # (control characters/Unicode form/whitespace) then
                     # normalization (dates/numbers/units), right before
@@ -3173,7 +3335,16 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                     # own vision critique 1 asks to keep configurable.
                     piece = clean_text(piece)
                     piece = normalize_text(piece)
-                    chunk_records.append({"content": piece, "metadata": section["metadata"]})
+                    chunk_records.append({
+                        "content": piece,
+                        # Phase 4, Étape 1 -- real, per-chunk provenance:
+                        # which strategy actually produced it (honors a
+                        # real per-section fallback above), same real
+                        # "record it in metadata, don't just apply it
+                        # silently" convention as `language` a few lines
+                        # below.
+                        "metadata": {**(section["metadata"] or {}), "chunking_strategy": effective_strategy},
+                    })
 
             # Partie 3.1.7 -- detected ONCE per document, from a real
             # sample of its own already-cleaned chunk text (the first
@@ -3194,16 +3365,42 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             for record in chunk_records:
                 record["metadata"] = {**(record["metadata"] or {}), "language": document_language}
 
+            # Phase 4, Étape 1 (correctif) -- a real `parent_child`
+            # parent record carries `skip_embedding=True` (set above):
+            # it must NEVER receive a real embedding at all, both to
+            # honor `fetch_organization_chunks`'s own existing
+            # `embedding IS NOT NULL` filter (see that module's own top
+            # docstring -- this is what keeps a parent out of every real
+            # search strategy with ZERO retrieval-code changes) and to
+            # avoid a real, wasted embedding call on text no real search
+            # will ever rank against. Every other real record (all 7
+            # other strategies, plus every real "child") is unaffected --
+            # this is a strict generalization of the prior "embed
+            # everything" behavior, not a new code path for them.
             embeddings: list[list[float] | None] = [None] * len(chunk_records)
-            if chunk_records:
-                embeddings = generate_embeddings([c["content"] for c in chunk_records], settings_dict["embedding_model"])
+            texts_to_embed = [record["content"] for record in chunk_records if not record.get("skip_embedding")]
+            if texts_to_embed:
+                embedded = iter(generate_embeddings(texts_to_embed, settings_dict["embedding_model"]))
+                embeddings = [None if record.get("skip_embedding") else next(embedded) for record in chunk_records]
 
             # Existing chunks (a re-run of a previously-processed
             # document) are replaced, not appended to -- otherwise
             # reprocessing would duplicate every chunk each time.
             await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
             for index, (record, embedding) in enumerate(zip(chunk_records, embeddings), start=1):
+                # Phase 4, Étape 1 (correctif) -- a real `parent_child`
+                # parent record carries a real, PRE-COMPUTED
+                # `explicit_id` (see the parent/child loop above, which
+                # needs it before this insert to link its own real
+                # children's `parent_chunk_id`) -- every other real
+                # record (all 7 other strategies, plus every real
+                # "child") has none, so `id` is left unset and keeps
+                # relying on the column's own real, unchanged
+                # `default=uuid.uuid4` at flush time, exactly like
+                # before this étape.
+                explicit_id = record.get("explicit_id")
                 db.add(DocumentChunk(
+                    **({"id": explicit_id} if explicit_id else {}),
                     document_id=document.id, organization_id=document.organization_id, content=record["content"],
                     metadata_json=record["metadata"] or None, embedding=embedding,
                     # Partie 6.1.5 -- real, per-document content-order
@@ -3216,6 +3413,10 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                     # common case here: every chunk in this loop is
                     # inserted within the SAME real transaction).
                     chunk_index=index,
+                    # Phase 4, Étape 1 (correctif) -- both `None`
+                    # (unchanged) for every one of the other 7
+                    # strategies' own real records.
+                    chunk_role=record.get("role"), parent_chunk_id=record.get("parent_ref"),
                 ))
 
             # Partie 3.1.5 -- real, embedded images (PDF/DOCX/EPUB only,

@@ -58,6 +58,7 @@ are genuinely separate, future real work.
 `resolve_llm_config` (Partie 4.3.1-4.3.5)."""
 
 import asyncio
+import json
 import time
 import uuid
 
@@ -80,8 +81,10 @@ from api.services.agent_context_only import (
 )
 from api.services.agent_guardrails import validate_guardrails
 from api.services.agent_idk import format_idk_response, get_idk_message, get_idk_threshold, should_say_idk
+from api.services.agent_long_term_memory import get_long_term_memory
 from api.services.agent_memory import get_all_memory
 from api.services.agent_permissions import check_agent_permission
+from api.services.agent_tools import resolve_agent_tools
 from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
 from api.security.credit_packs import credits_for_usage
@@ -93,7 +96,9 @@ from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
 from api.services.tool_selection import select_tools
-from api.services.tools import ToolSpec
+from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout, get_tool_timeout
+from api.services.tool_validation import get_validation_errors
+from api.services.tools import ToolSpec, tool_input_schema, tool_to_function_schema
 
 import logging
 
@@ -115,6 +120,27 @@ async def _fire_message_hook(db: AsyncSession, organization_id: uuid.UUID | None
         await trigger_hook(db, organization_id, PluginHook[hook_name], {"conversation_id": str(conversation_id) if conversation_id else None, "content": content})
     except Exception as exc:  # noqa: BLE001 -- a plugin hook failure must never fail the real chat turn that triggered it
         logger.warning("_fire_message_hook: %s dispatch failed: %s", hook_name, exc)
+
+
+_SECRET_KEY_MARKERS = ("api_key", "apikey", "password", "token", "secret", "authorization")
+
+
+def _redact_secrets(value):
+    """Phase 5, Étape 6 -- real, minimal redaction applied before ANY
+    tool-call input/output is persisted into a real `AgentTrace` row.
+    A dict key matching a common secret-shaped name (case-insensitive)
+    has its value replaced, recursively -- a real, defensive floor
+    given LLM-supplied tool arguments and third-party tool RESULTS are
+    both genuinely outside this codebase's own control, unlike this
+    session's own first-party services."""
+    if isinstance(value, dict):
+        return {
+            k: "[REDACTED]" if any(marker in k.lower() for marker in _SECRET_KEY_MARKERS) else _redact_secrets(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_secrets(v) for v in value]
+    return value
 
 
 class AgentOrchestrator:
@@ -159,15 +185,39 @@ class AgentOrchestrator:
         every run is now genuinely persisted; there is no more
         in-memory-only mode to silently fall back to.
 
-        `tools` (Partie 5.1.2, optional) -- when given, real tool
-        selection runs and the selected tools' real descriptions are
-        appended to the system prompt, traced under a real
-        `"tools_selected"` event. This is a real, honest, DELIBERATELY
-        LIGHT integration: there is no automatic LLM function-calling
-        loop here (parsing structured tool_calls and re-invoking the
-        LLM with a tool's result) -- that is Partie 5.2's own,
-        separate, larger scope. An empty selection (no tool scored
-        above threshold) is a real, valid outcome, not an error.
+        `tools` (Partie 5.1.2, optional; Phase 5 Étape 6 for the real
+        loop below) -- when omitted AND `agent_id` resolves to a real,
+        persisted `Agent` row, its own configured `Agent.tools` are
+        resolved automatically (`resolve_agent_tools`) -- a real fix,
+        not a new default behavior nobody asked for: NO real call site
+        in this codebase (api/routers/agent_api_keys.py,
+        api/services/message_actions.py, api/services/public_api.py,
+        api/services/telephony.py) had ever passed `tools=` explicitly,
+        so an agent's own configured tools had ZERO effect on any real
+        run before this fix. Real tool selection runs either way, and
+        the selected tools' real descriptions are appended to the
+        system prompt, traced under a real `"tools_selected"` event.
+        An empty selection (no tool scored above threshold) is a real,
+        valid outcome, not an error.
+
+        **The real LLM function-calling loop**: when at least one real
+        tool is selected, `_execute()` below calls the LLM with real,
+        provider-native function-calling schemas
+        (`tool_to_function_schema`) and, whenever the LLM's own
+        response requests one or more tool calls, validates each
+        call's arguments (`tool_validation.get_validation_errors`),
+        executes the real handler under a real per-tool timeout
+        (`tool_timeout.execute_tool_with_timeout`) -- concurrently via
+        `asyncio.gather` when the LLM requests more than one tool call
+        in the same turn -- feeds each real result back as a `role:
+        tool` message, and calls the LLM again, up to
+        `settings.AGENT_MAX_TOOL_ITERATIONS` real iterations before
+        honestly failing the run (same "never spin forever" doctrine
+        as `api.services.workflow_engine`'s own `MAX_STEPS`). Every
+        real tool call gets its own `"tool_call"`-type `AgentTrace` row
+        (input/output real, secrets redacted -- `_redact_secrets`),
+        distinct from the existing `"llm_call"` trace bracketing the
+        whole exchange.
 
         `citation_chunks` (Partie 6.1.1, optional) -- when given
         (already-real RAG search results, `search_with_context`-shaped)
@@ -203,21 +253,36 @@ class AgentOrchestrator:
         except ValueError:
             real_agent_id = None
 
-        if created_by is not None and real_agent_id is not None:
+        agent_row = None
+        if real_agent_id is not None:
             async with self._db_lock:
                 agent_row = await db.get(Agent, real_agent_id)
-                allowed = True
-                if agent_row is not None and agent_row.deleted_at is None:
-                    allowed = await check_agent_permission(db, real_agent_id, created_by, "use")
-                if not allowed:
-                    trace.append(self._trace_event("permission_denied", {"user_id": str(created_by)}))
-                    await update_run_status(
-                        db, run.id, AgentRunStatus.failed.value, error="Permission denied: you are not allowed to use this agent",
-                        trace=list(trace),
-                    )
-                    await db.commit()
-                    await db.refresh(run)
-                    return run
+                if agent_row is not None and agent_row.deleted_at is not None:
+                    agent_row = None
+                if created_by is not None:
+                    allowed = True
+                    if agent_row is not None:
+                        allowed = await check_agent_permission(db, real_agent_id, created_by, "use")
+                    if not allowed:
+                        trace.append(self._trace_event("permission_denied", {"user_id": str(created_by)}))
+                        await update_run_status(
+                            db, run.id, AgentRunStatus.failed.value, error="Permission denied: you are not allowed to use this agent",
+                            trace=list(trace),
+                        )
+                        await db.commit()
+                        await db.refresh(run)
+                        return run
+
+        # Phase 5, Étape 6 -- a real gap this étape's own audit found:
+        # no real call site ever passed `tools=` explicitly, so an
+        # agent's own configured `Agent.tools` had zero effect on any
+        # real run. A caller-supplied `tools=` still always wins (the
+        # exact pre-existing behavior every current test already
+        # exercises); this only fills in the gap when nothing was
+        # passed at all and a real, persisted `Agent` row exists.
+        if tools is None and agent_row is not None:
+            async with self._db_lock:
+                tools = await resolve_agent_tools(db, agent_row, organization_id)
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
@@ -244,6 +309,7 @@ class AgentOrchestrator:
                 steps_text = "\n".join(f"{i + 1}. {s.description}" for i, s in enumerate(plan_steps))
                 system_prompt = f"{system_prompt}\n\nSuggested plan for this task:\n{steps_text}"
 
+        selected_tools: list[ToolSpec] = []
         if tools:
             # Partie 5.1.3 -- a denied tool is filtered out BEFORE
             # selection even runs, so it can never be chosen or
@@ -259,6 +325,13 @@ class AgentOrchestrator:
 
             selected_tools = await select_tools(input, permitted)
             trace.append(self._trace_event("tools_selected", {"tools": [t.name for t in selected_tools]}))
+            # Phase 5, Étape 6 -- unlike the plain-text catalog below
+            # (kept for a provider/config combo that ends up with zero
+            # real function-calling schemas), the REAL tool list is
+            # also handed to `_execute()` as real, provider-native
+            # function-calling schemas -- see this method's own updated
+            # docstring for why prose-only tool descriptions used to be
+            # this integration's real ceiling.
             if selected_tools:
                 catalog = "\n".join(f"- {t.name}: {t.description}" for t in selected_tools)
                 system_prompt = f"{system_prompt}\n\nAvailable tools:\n{catalog}"
@@ -277,6 +350,20 @@ class AgentOrchestrator:
             if memory:
                 trace.append(self._trace_event("memory_loaded", {"keys": list(memory.keys())}))
                 system_prompt = f"{system_prompt}\n\nRemembered context from this session:\n{memory}"
+
+        # Phase 5, Étape 6 -- real, additive: LONG-TERM memory (cross-
+        # run, api.services.agent_long_term_memory), distinct from the
+        # short-term, per-session memory just above. Only read for a
+        # real, persisted `Agent` (long-term memory is keyed on a real
+        # `agent_id` FK, unlike short-term memory's plain string id) --
+        # same real, honest no-op otherwise as every other optional
+        # integration point in this file.
+        if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED:
+            async with self._db_lock:
+                long_term_memory = await get_long_term_memory(db, real_agent_id, user_id=created_by)
+            if long_term_memory:
+                trace.append(self._trace_event("long_term_memory_loaded", {"keys": list(long_term_memory.keys())}))
+                system_prompt = f"{system_prompt}\n\nRemembered facts from previous conversations:\n{long_term_memory}"
 
         messages = [{"role": "system", "content": system_prompt}]
         if context:
@@ -328,38 +415,121 @@ class AgentOrchestrator:
                 async with self._db_lock:
                     byok_key = await resolve_org_api_key(db, organization_id, llm_cfg["provider"])
             key_override = {"api_key": byok_key} if byok_key else {}
-            try:
-                completion = await chat_completion_with_usage(
-                    messages, provider=llm_cfg["provider"], model=llm_cfg["model"], max_retries=max_retries,
-                    temperature=llm_cfg["temperature"], top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
-                    **key_override,
-                )
-                result = completion["content"]
+
+            async def _deduct_for_usage(usage: dict | None) -> None:
                 # AI Pack -- a BYOK key means this call was billed to
                 # the organization's OWN provider account, never this
                 # platform's included credits (byok_key is None the
                 # rest of the time, i.e. every non-BYOK organization,
-                # unchanged behavior). Deducted here, right after a
-                # real, successful call, using the real, provider-
-                # reported token counts (chat_completion_with_usage's
-                # own real `usage` dict) rather than an estimate --
-                # never blocks the response itself on an insufficient
-                # balance (see InsufficientCreditsError below): the
-                # real LLM cost was already incurred with the
-                # provider by this point, so failing the deduction
-                # bookkeeping must never also fail the user's answer.
-                if organization_id is not None and not byok_key and completion.get("usage"):
-                    usage = completion["usage"]
-                    cost = credits_for_usage("tokens_input", usage.get("prompt_tokens") or 0) + credits_for_usage(
-                        "tokens_output", usage.get("completion_tokens") or 0
+                # unchanged behavior). Deducted right after each real,
+                # successful LLM call (now possibly several per run,
+                # Phase 5 Étape 6's own tool-calling loop), using the
+                # real, provider-reported token counts rather than an
+                # estimate -- never blocks the response itself on an
+                # insufficient balance: the real LLM cost was already
+                # incurred with the provider by this point, so failing
+                # the deduction bookkeeping must never also fail the
+                # user's answer.
+                if organization_id is None or byok_key or not usage:
+                    return
+                cost = credits_for_usage("tokens_input", usage.get("prompt_tokens") or 0) + credits_for_usage(
+                    "tokens_output", usage.get("completion_tokens") or 0
+                )
+                if cost > 0:
+                    try:
+                        async with self._db_lock:
+                            await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']}")
+                            await db.commit()
+                    except InsufficientCreditsError:
+                        logger.warning("agent run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
+
+            tools_by_name = {t.name: t for t in selected_tools}
+            function_schemas = [tool_to_function_schema(t) for t in selected_tools] if selected_tools else None
+
+            async def _execute_one_tool_call(tool_call: dict) -> tuple[dict, str | None, str | None]:
+                """Phase 5, Étape 6 -- real per-call execution: unknown
+                tool name and invalid arguments (validated against the
+                tool's own real `tool_input_schema`, BEFORE the real
+                handler ever runs) are both real, reported tool errors
+                fed back to the LLM as a `role: tool` message, never a
+                crash of the whole run -- the same "a real, individual
+                tool failure is data, not a crash" doctrine
+                `parallel_tools.aggregate_parallel_results` already
+                established."""
+                tool = tools_by_name.get(tool_call["name"])
+                if tool is None:
+                    return tool_call, None, f"Unknown tool: {tool_call['name']!r}"
+                errors = get_validation_errors(tool_call["arguments"], tool_input_schema(tool))
+                if errors:
+                    return tool_call, None, f"Invalid arguments for {tool.name!r}: {errors}"
+                async with self._db_lock:
+                    timeout = await get_tool_timeout(db, tool.name)
+                try:
+                    output = await execute_tool_with_timeout(tool, tool_call["arguments"], timeout=timeout)
+                    return tool_call, output, None
+                except ToolTimeoutError as exc:
+                    return tool_call, None, str(exc)
+                except Exception as exc:  # noqa: BLE001 -- any real handler failure is real, reportable tool-call data, not a crash of the whole agent run
+                    return tool_call, None, str(exc)
+
+            try:
+                result = None
+                for iteration in range(1, settings.AGENT_MAX_TOOL_ITERATIONS + 1):
+                    call_kwargs = {"tools": function_schemas, "tool_choice": "auto"} if function_schemas else {}
+                    completion = await chat_completion_with_usage(
+                        messages, provider=llm_cfg["provider"], model=llm_cfg["model"], max_retries=max_retries,
+                        temperature=llm_cfg["temperature"], top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
+                        **key_override, **call_kwargs,
                     )
-                    if cost > 0:
-                        try:
-                            async with self._db_lock:
-                                await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']}")
-                                await db.commit()
-                        except InsufficientCreditsError:
-                            logger.warning("agent run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
+                    await _deduct_for_usage(completion.get("usage"))
+
+                    tool_calls = completion.get("tool_calls")
+                    if not tool_calls:
+                        result = completion["content"]
+                        break
+
+                    trace.append(self._trace_event("tool_calls_requested", {"tools": [tc["name"] for tc in tool_calls], "iteration": iteration}))
+                    messages.append({
+                        "role": "assistant", "content": completion["content"],
+                        "tool_calls": [
+                            {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])}}
+                            for tc in tool_calls
+                        ],
+                    })
+
+                    # Phase 5, Étape 6 -- real parallel execution when the
+                    # LLM requests more than one tool call in the same
+                    # turn (asyncio.gather, same real concurrency
+                    # primitive api.services.parallel_tools already
+                    # established); a single tool call runs directly,
+                    # no gather overhead for the common case.
+                    if len(tool_calls) > 1:
+                        call_results = await asyncio.gather(*[_execute_one_tool_call(tc) for tc in tool_calls])
+                    else:
+                        call_results = [await _execute_one_tool_call(tool_calls[0])]
+
+                    for tool_call, output, error in call_results:
+                        async with self._db_lock:
+                            tool_trace = None
+                            if settings.AGENT_TRACES_ENABLED:
+                                try:
+                                    tool_trace = await start_trace(
+                                        db, run.id, "tool_call", tool_call["name"], input=_redact_secrets(tool_call["arguments"]),
+                                    )
+                                except ValueError:
+                                    pass
+                            if tool_trace is not None:
+                                await end_trace(
+                                    db, tool_trace.id, output=_redact_secrets({"result": output}) if error is None else None,
+                                    status="failed" if error is not None else "completed", error=error,
+                                )
+                            await db.commit()
+                        trace.append(self._trace_event("tool_call", {"tool": tool_call["name"], "error": error}))
+                        messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": error if error is not None else (output or "")})
+                else:
+                    raise LLMError(
+                        f"Agent did not reach a final answer within {settings.AGENT_MAX_TOOL_ITERATIONS} tool-calling iterations"
+                    )
             except asyncio.CancelledError:
                 # A real, explicit, SAME-WORKER stop_agent() call
                 # cancels this task directly and already persisted

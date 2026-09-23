@@ -310,6 +310,18 @@ async def change_password(payload: ChangePasswordRequest, request: Request, curr
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send password-changed confirmation to %s: %s", current_user.email, exc)
 
+    # Phase 5, Étape 4 correctif -- security_password_changed, one of
+    # the two security triggers reclassified to P1 and wired here.
+    # Account-level, no owning org (organization_id=None, same
+    # reasoning as security_login_new_device).
+    from api.services.notifications import create_notification
+
+    try:
+        await create_notification(db, organization_id=None, user_id=current_user.id, notification_type="security_password_changed", priority="high", context={})
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 -- a notification failure must never fail the real password change that already succeeded
+        logger.warning("failed to create in-app password-changed notification for user '%s': %s", current_user.id, exc)
+
     return MessageResponse(message="Password changed. Please log in again.")
 
 

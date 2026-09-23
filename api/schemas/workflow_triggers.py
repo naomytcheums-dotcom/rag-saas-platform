@@ -36,5 +36,7 @@ class WorkflowRunResponse(BaseModel):
     input: dict | None
     output: dict | None
     error: str | None
+    context: dict | None
+    current_node_id: str | None
     started_at: dt.datetime
     completed_at: dt.datetime | None

@@ -45,6 +45,7 @@ async def search_organization_documents(
     results = await search_with_context(
         db, org_id, payload.query, top_k=payload.top_k, strategy=payload.strategy,
         reranker=payload.reranker, score_threshold=payload.score_threshold, org_settings=org_settings,
+        metadata_filters=payload.filters,
     )
     resolved_strategy = resolve_retrieval_strategy(org_settings, override=payload.strategy)
     return SearchResponse(query=payload.query, strategy=resolved_strategy, results=results)

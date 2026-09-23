@@ -52,6 +52,19 @@ AGENT_TOOL_CATALOG: dict[str, dict] = {
     "escalate_to_human": {"description": "Escalate a problem to a human when the agent cannot resolve it alone.", "category": "escalation"},
 }
 
+# Phase 5, Étape 6 correctif -- a real, latent naming mismatch this
+# étape's own new `resolve_agent_tools` (below) exposed: this catalog's
+# own literal item-3 name for the arithmetic tool is "calculate", but
+# the actual, real `ToolSpec` registered in `api.services.tools` (and
+# every one of its own real tests) has always been named "calculator"
+# (`CALCULATOR_TOOL.name`). Renaming either one outright would break
+# real, existing, passing tests that assert on the OTHER literal string
+# (`tests/test_agent_tools.py`'s own `"calculate"` assertions vs.
+# `tests/test_agent_orchestrator.py`'s own `CALCULATOR_TOOL.name`) --
+# this small, explicit alias is the real fix that keeps both real,
+# without changing either.
+_CATALOG_TO_REGISTRY_NAME = {"calculate": "calculator"}
+
 
 class AgentToolError(ValueError):
     """Real, dedicated exception."""
@@ -139,6 +152,97 @@ async def enable_tool(db: AsyncSession, agent_id: uuid.UUID, tool_name: str, con
     agent.tools = tools
     await db.flush()
     return agent
+
+
+async def resolve_agent_tools(db: AsyncSession, agent: Agent, organization_id: uuid.UUID | None) -> list:
+    """Phase 5, Étape 6 -- closes a real gap this étape's own audit
+    found: NOT ONE of this codebase's real `AgentOrchestrator.run_agent`
+    call sites (`api/routers/agent_api_keys.py`, `api/services/
+    message_actions.py`, `api/services/public_api.py`,
+    `api/services/telephony.py`) ever passed a real `tools=` argument
+    -- meaning an agent's own configured `Agent.tools`
+    (name/enabled/config entries, this module's own real
+    enable_tool/disable_tool) had ZERO effect on any real run, no
+    matter what was enabled. `AgentOrchestrator.run_agent` now calls
+    this itself (see its own updated docstring) whenever a caller
+    doesn't already pass an explicit `tools=` override, so every real
+    call site benefits without each one needing its own fix.
+
+    Returns real `api.services.tools.ToolSpec` objects for every
+    ENABLED entry in `agent.tools` that resolves to something real --
+    an entry naming a tool that was never actually wired into the
+    shared registry (`api.services.tools.get_tool`) is silently
+    skipped, not an error (the same honest, pre-existing distinction
+    `api.services.agent_tools`'s own module docstring already draws
+    between "selected" and "actually executable"). `execute_sql_query`
+    is special-cased: its real handler needs `db`/`organization_id`
+    bound by closure (`api.services.tool_wiring.build_sql_query_tool`),
+    never LLM-supplied arguments -- skipped entirely when
+    `organization_id` is `None` (no real tenant to scope the query to)."""
+    from api.services.tool_wiring import build_sql_query_tool
+    from api.services.tools import get_tool
+
+    resolved = []
+    for entry in agent.tools or []:
+        if not entry.get("enabled", True):
+            continue
+        name = entry.get("name")
+        if name == "execute_sql_query":
+            if organization_id is not None:
+                resolved.append(build_sql_query_tool(db, organization_id))
+            continue
+        if isinstance(name, str) and name.startswith("mcp:"):
+            mcp_tool = await _build_mcp_tool(db, name, organization_id)
+            if mcp_tool is not None:
+                resolved.append(mcp_tool)
+            continue
+        tool = get_tool(_CATALOG_TO_REGISTRY_NAME.get(name, name))
+        if tool is not None:
+            resolved.append(tool)
+    return resolved
+
+
+async def _build_mcp_tool(db: AsyncSession, name: str, organization_id: uuid.UUID | None):
+    """Phase 5, Étape 9 -- real, per-run `ToolSpec` for an
+    `Agent.tools` entry naming an external MCP tool
+    (`mcp:{server_id}:{tool_name}`), same per-run-closure pattern as
+    `execute_sql_query` above: the server row and its own tool schema
+    are looked up fresh for this run, never cached across agents/orgs.
+    Silently skipped (returns `None`) for a malformed name, a server
+    that no longer exists, one that belongs to a DIFFERENT organization
+    (never trust the entry's own id blindly), or a tool the server's
+    own cached `tools/list` snapshot no longer has -- the same honest
+    "selected but not actually executable" distinction as the rest of
+    this function, never a crash for one stale agent config entry."""
+    from api.models.mcp_server import MCPServerConfig
+    from api.services.mcp.discovery import call_cached_tool, list_cached_tools
+    from api.services.tools import ToolSpec
+
+    parts = name.split(":", 2)
+    if len(parts) != 3:
+        return None
+    _, server_id_str, tool_name = parts
+    try:
+        server_id = uuid.UUID(server_id_str)
+    except ValueError:
+        return None
+
+    server = await db.get(MCPServerConfig, server_id)
+    if server is None or server.organization_id != organization_id:
+        return None
+
+    cached = await list_cached_tools(db, server.id)
+    cached_tool = next((t for t in cached if t.name == tool_name), None)
+    if cached_tool is None:
+        return None
+
+    async def _handler(**kwargs) -> str:
+        return await call_cached_tool(db, server, tool_name, kwargs)
+
+    return ToolSpec(
+        name=name, description=cached_tool.description or f"MCP tool {tool_name!r} from server {server.name!r}",
+        parameters=(cached_tool.input_schema or {}).get("properties", {}), capability_tags=("mcp",), handler=_handler,
+    )
 
 
 async def disable_tool(db: AsyncSession, agent_id: uuid.UUID, tool_name: str) -> Agent | None:

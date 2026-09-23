@@ -15,16 +15,13 @@ permission-checks/timeouts/budgets/retries/fallbacks/parallel
 execution/validation all have something real to exercise in tests
 instead of a mock standing in for a tool that doesn't exist.
 
-**Honest, deliberate limit on orchestrator integration**: `ToolSpec`
-is wired into `AgentOrchestrator.run_agent` as an OPTIONAL, additive
-parameter (selection is computed and traced, tool descriptions are
-appended to the system prompt) -- but there is no automatic
-LLM-function-calling loop here (parsing structured `tool_calls` out of
-a completion and re-invoking the LLM with results). That is real,
-substantial, separate work belonging to Partie 5.2's own scope; adding
-it silently under a 5.1.x tool-infrastructure request would be
-unrequested scope growth, not a fix.
-"""
+**Phase 5, Étape 6 update**: the real LLM-function-calling loop this
+docstring used to describe as out of scope now exists --
+`api.services.agent_orchestrator.AgentOrchestrator._execute`'s own
+tool-calling loop, using `tool_to_function_schema`/`tool_input_schema`
+below to build real, provider-native function-calling schemas and
+`tool_validation.get_validation_errors` to validate the LLM's own
+tool-call arguments before ever invoking `tool.handler`."""
 
 import ast
 import dataclasses
@@ -116,3 +113,24 @@ def get_tool_description(tool: ToolSpec) -> str:
 def get_tool_parameters(tool: ToolSpec) -> dict[str, dict]:
     """Partie 5.1.2's own literal function."""
     return dict(tool.parameters)
+
+
+def tool_input_schema(tool: ToolSpec) -> dict:
+    """Phase 5, Étape 6 -- a real JSON Schema object for `tool`'s own
+    `parameters`, in the exact shape
+    `api.services.tool_validation.get_validation_errors` already
+    expects (`{"type": "object", "properties": ..., "required": ...}`)
+    -- every declared parameter is required (`ToolSpec.parameters` has
+    no per-parameter "optional" flag to say otherwise), reused both to
+    build the real function-calling schema below AND to validate an
+    LLM-supplied tool call's arguments before ever invoking the real
+    handler."""
+    return {"type": "object", "properties": dict(tool.parameters), "required": list(tool.parameters.keys())}
+
+
+def tool_to_function_schema(tool: ToolSpec) -> dict:
+    """Phase 5, Étape 6 -- `tool` as a real OpenAI/Anthropic-style
+    function-calling tool definition, the shape `litellm.acompletion`'s
+    own `tools=` parameter expects (LiteLLM normalizes this one real
+    shape across every real provider it supports)."""
+    return {"type": "function", "function": {"name": tool.name, "description": tool.description, "parameters": tool_input_schema(tool)}}

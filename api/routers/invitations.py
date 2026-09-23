@@ -43,7 +43,9 @@ from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import issue_session
 from api.security.usage import record_usage
-from api.services.email import send_organization_invitation_email, send_organization_member_added_email
+from api.services.email import send_organization_member_added_email
+from api.services.email_branding import send_branded_organization_invitation_email
+from api.services.notifications import create_notification
 from api.services.verification import create_and_send_email_otp
 from api.utils import client_ip
 
@@ -94,9 +96,26 @@ async def create_invitation(
 
     invite_link = f"{settings.FRONTEND_URL.rstrip('/')}/invitations/accept?token={raw_token}"
     try:
-        await asyncio.to_thread(send_organization_invitation_email, payload.email, organization.name, payload.role.value, invite_link)
+        await send_branded_organization_invitation_email(db, org_id, payload.email, payload.role.value, invite_link)
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send invitation email to %s: %s", payload.email, exc)
+
+    # Phase 5, Étape 4 -- invitation_received, the one real trigger for
+    # the "invitation" domain. Only fires an IN-APP notification for an
+    # invitee who already has a real account (a brand-new email has
+    # nowhere in-app to show it -- the branded email above, sent
+    # unconditionally either way, is their only real channel until they
+    # register).
+    invitee = await db.scalar(select(User).where(User.email == payload.email))
+    if invitee is not None:
+        try:
+            await create_notification(
+                db, organization_id=org_id, user_id=invitee.id, notification_type="invitation_received",
+                priority="high", context={"organization_name": organization.name, "role": payload.role.value},
+            )
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 -- a notification failure must never fail the real invitation that already sent
+            logger.warning("failed to create in-app invitation notification for %s: %s", payload.email, exc)
 
     return _to_entry(invitation)
 

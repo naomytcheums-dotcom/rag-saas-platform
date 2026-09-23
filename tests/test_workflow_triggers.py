@@ -10,8 +10,9 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.security.workflows import create_workflow
 from api.services.workflow_triggers import (
-    WorkflowTriggerError, create_manual_trigger, create_schedule_trigger, create_webhook_trigger, delete_trigger,
-    get_trigger, get_trigger_url, list_triggers, trigger_workflow, verify_webhook_token,
+    WorkflowTriggerError, check_scheduled_triggers, create_manual_trigger, create_schedule_trigger,
+    create_webhook_trigger, delete_trigger, fire_scheduled_trigger, get_trigger, get_trigger_url, list_triggers,
+    trigger_workflow, verify_webhook_token,
 )
 
 
@@ -149,6 +150,55 @@ async def test_delete_trigger_removes_it(db_session):
 
 async def test_delete_trigger_returns_false_for_an_unknown_id(db_session):
     assert await delete_trigger(db_session, uuid.uuid4()) is False
+
+
+# --------------------------------------- check_scheduled_triggers / fire_scheduled_trigger --
+
+
+async def test_check_scheduled_triggers_finds_a_real_due_trigger(db_session):
+    """Validation criterion: le balayage détecte réellement un trigger cron dû."""
+    workflow = await create_workflow(db_session, uuid.uuid4(), {"name": "Flow"}, None)
+    await db_session.commit()
+    trigger = await create_schedule_trigger(db_session, workflow.id, "* * * * *")
+    trigger.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=5)
+    await db_session.commit()
+
+    due = await check_scheduled_triggers(db_session)
+    assert trigger.id in {t.id for t in due}
+
+
+async def test_check_scheduled_triggers_ignores_a_non_schedule_trigger(db_session):
+    workflow = await create_workflow(db_session, uuid.uuid4(), {"name": "Flow"}, None)
+    await db_session.commit()
+    await create_manual_trigger(db_session, workflow.id)
+    await create_webhook_trigger(db_session, workflow.id, {})
+    await db_session.commit()
+
+    assert await check_scheduled_triggers(db_session) == []
+
+
+async def test_fire_scheduled_trigger_creates_a_run_and_advances_last_run_at(db_session):
+    """Validation criterion: le déclenchement planifié fonctionne et n'est pas rejoué en boucle."""
+    workflow = await create_workflow(db_session, uuid.uuid4(), {"name": "Flow"}, None)
+    await db_session.commit()
+    trigger = await create_schedule_trigger(db_session, workflow.id, "* * * * *")
+    await db_session.commit()
+    assert trigger.last_run_at is None
+
+    run = await fire_scheduled_trigger(db_session, trigger.id)
+    await db_session.commit()
+
+    assert run.trigger_id == trigger.id
+    assert run.status == "pending"
+    await db_session.refresh(trigger)
+    assert trigger.last_run_at is not None
+    # Just-fired, so it is no longer due against its own new last_run_at.
+    assert trigger.id not in {t.id for t in await check_scheduled_triggers(db_session)}
+
+
+async def test_fire_scheduled_trigger_rejects_an_unknown_id(db_session):
+    with pytest.raises(WorkflowTriggerError):
+        await fire_scheduled_trigger(db_session, uuid.uuid4())
 
 
 # --------------------------------------- endpoints --

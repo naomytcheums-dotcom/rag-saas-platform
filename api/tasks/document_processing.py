@@ -24,6 +24,28 @@ from api.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+async def _notify_document_outcome(db, document) -> None:
+    """Phase 5, Étape 4 -- job_completed/job_failed, the one real
+    trigger this étape wires for the "job" domain. `created_by` is
+    nullable (a system-imported document has no real uploader to
+    notify) -- silently skipped, not an error."""
+    if document.created_by is None:
+        return
+    from api.services.notifications import create_notification
+
+    notification_type = "job_completed" if document.status == "completed" else "job_failed" if document.status == "failed" else None
+    if notification_type is None:
+        return
+    try:
+        await create_notification(
+            db, organization_id=document.organization_id, user_id=document.created_by, notification_type=notification_type,
+            context={"document_name": document.name, "error": (document.metadata_json or {}).get("error")},
+        )
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 -- a notification failure must never fail the real document processing it only reports on
+        logger.warning("_notify_document_outcome: could not notify for document '%s': %s", document.id, exc)
+
+
 async def _process_document_async(document_id: str) -> str:
     engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
@@ -32,6 +54,7 @@ async def _process_document_async(document_id: str) -> str:
             try:
                 document = await process_document(db, uuid.UUID(document_id))
                 await db.commit()
+                await _notify_document_outcome(db, document)
                 return document.status
             except ValueError:
                 # The document was deleted between being scheduled and

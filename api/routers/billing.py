@@ -32,18 +32,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.billing import InvoiceStatus
-from api.models.organization import OrganizationMember
+from api.models.organization import Organization, OrganizationMember
 from api.models.user import User
 from api.schemas.billing import (
-    CancelSubscriptionRequest, CheckoutSessionRequest, CheckoutSessionResponse, CreateUsageAlertRequest,
-    CreditResponse, CreditTransactionResponse, InvoiceDetailResponse, InvoiceResponse, InvoiceStatsResponse,
-    PaymentMethodResponse, PlanResponse, PortalSessionResponse, PurchaseCreditsRequest, StripeInvoiceResponse,
-    SubscribeRequest, SubscriptionResponse, UsageAlertResponse, VoidInvoiceRequest,
+    BillingCountryResponse, BillingCountryUpdateRequest, BillingProviderResponse, CancelSubscriptionRequest,
+    CheckoutSessionRequest, CheckoutSessionResponse, CreateUsageAlertRequest, CreditResponse,
+    CreditTransactionResponse, InvoiceDetailResponse, InvoiceResponse, InvoiceStatsResponse, PaymentMethodResponse,
+    PlanResponse, PortalSessionResponse, ProviderInvoiceResponse, PurchaseCreditsRequest, StripeInvoiceResponse,
+    SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest,
 )
 from api.security.credit_packs import CREDIT_PACKS, get_credit_pack
 from api.security.organizations import require_org_admin, require_org_member, require_org_owner
 from api.services import admin_subscriptions, billing_credits, billing_invoices, billing_stripe, billing_usage
 from api.services.admin_subscriptions import PlanNotFoundError, SubscriptionNotFoundError
+from api.services.billing_providers.base import ProviderNotConfiguredError
+from api.services.billing_providers.registry import resolve_provider_for_organization
 from api.utils import MAX_PAGE_SIZE
 
 router = APIRouter(tags=["Billing"])
@@ -262,7 +265,7 @@ async def create_checkout_session_endpoint(org_id: uuid.UUID, body: CheckoutSess
         url = await billing_stripe.create_checkout_session(db, org_id, price_id=body.price_id, email=current_user.email, org_name=str(org_id))
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    await db.commit()  # create_checkout_session may INSERT a real StripeCustomer row
+    await db.commit()  # create_checkout_session may INSERT a real PaymentCustomer row
     return CheckoutSessionResponse(url=url)
 
 
@@ -323,3 +326,112 @@ async def stripe_webhook_endpoint(request: Request, db: AsyncSession = Depends(g
     applied = await billing_stripe.handle_stripe_webhook(db, dict(event))
     await db.commit()
     return {"received": True, "applied": applied}
+
+
+# -- Phase 5, Étape 2: Paystack webhook (flat, public, signature-verified) ----
+# Same shape as the Stripe webhook above; Paystack calls a single fixed
+# URL it can't parameterize with an org_id either, and its own event
+# payload carries the organization via metadata/customer code (see
+# api/services/billing_paystack.handle_paystack_webhook).
+
+@router.post("/billing/paystack/webhook", status_code=status.HTTP_200_OK)
+async def paystack_webhook_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
+    from api.services import billing_paystack
+
+    payload = await request.body()
+    signature = request.headers.get("x-paystack-signature", "")
+    try:
+        event = billing_paystack.verify_webhook_signature(payload, signature)
+    except billing_paystack.PaystackNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Paystack signature")
+
+    applied = await billing_paystack.handle_paystack_webhook(db, event)
+    await db.commit()
+    return {"received": True, "applied": applied}
+
+
+# -- Phase 5, Étape 2: provider-generic checkout/portal/methods/cancel/invoices
+# The pre-existing /stripe/... endpoints above are untouched (still real,
+# still Stripe-only, kept for backward compatibility). These new
+# endpoints are the actual "add PAYSTACK_SECRET_KEY to .env and it just
+# works" surface: they resolve the org's own provider
+# (api/services/billing_providers/registry.py, by organizations.billing_country)
+# and dispatch to whichever one applies -- callers never need to know
+# which provider an organization is on.
+
+@org_router.get("/provider", response_model=BillingProviderResponse)
+async def get_billing_provider_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+    except ProviderNotConfiguredError:
+        return BillingProviderResponse(provider="none", configured=False)
+    return BillingProviderResponse(provider=provider.name, configured=True)
+
+
+@org_router.get("/country", response_model=BillingCountryResponse)
+async def get_billing_country_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, org_id)
+    return BillingCountryResponse(billing_country=org.billing_country if org else None)
+
+
+@org_router.patch("/country", response_model=BillingCountryResponse)
+async def update_billing_country_endpoint(org_id: uuid.UUID, body: BillingCountryUpdateRequest, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, org_id)
+    org.billing_country = body.billing_country
+    await db.commit()
+    return BillingCountryResponse(billing_country=org.billing_country)
+
+
+@org_router.post("/checkout", response_model=CheckoutSessionResponse)
+async def create_unified_checkout_endpoint(org_id: uuid.UUID, body: UnifiedCheckoutRequest, caller: OrganizationMember = Depends(require_org_owner), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        plan = await admin_subscriptions.get_plan(db, body.plan_id)
+        url = await provider.create_checkout_session(db, org_id, plan=plan, billing_period=body.billing_period, email=current_user.email, org_name=str(org_id))
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    await db.commit()
+    return CheckoutSessionResponse(url=url)
+
+
+@org_router.post("/portal", response_model=PortalSessionResponse)
+async def create_unified_portal_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        url = await provider.create_portal_session(db, org_id)
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    return PortalSessionResponse(url=url)
+
+
+@org_router.get("/payment-methods", response_model=list[PaymentMethodResponse])
+async def list_unified_payment_methods_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        return await provider.list_payment_methods(db, org_id)
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+
+
+@org_router.post("/cancel-active-subscription", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_unified_subscription_endpoint(org_id: uuid.UUID, at_period_end: bool = True, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        await provider.cancel_subscription(db, org_id, at_period_end=at_period_end)
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+
+
+@org_router.get("/provider-invoices", response_model=list[ProviderInvoiceResponse])
+async def list_unified_provider_invoices_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db)):
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        return await provider.list_provider_invoices(db, org_id)
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))

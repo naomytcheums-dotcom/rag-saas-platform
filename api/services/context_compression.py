@@ -4,10 +4,20 @@ retrieved chunks to fit within a real token budget before sending them
 to an LLM, via 3 real methods (`CONTEXT_COMPRESSION_METHOD`):
 extractive (`extract_key_sentences`, reusing Partie 3.1.10's own real
 `extract_summary`), a real per-chunk LLM summary (`summarize_chunk`),
-or a real, single LLM call compressing the WHOLE context at once
-(`compress_with_llm`) -- plus `rerank_by_importance` (reusing Partie
-3.4.6's own real semantic similarity) and `truncate_to_limit` (reusing
-Partie 3.2.6's own real token-budget packer).
+or a real, per-chunk, QUERY-FOCUSED LLM extraction (`compress_with_llm`)
+-- plus `rerank_by_importance` (reusing Partie 3.4.6's own real semantic
+similarity) and `truncate_to_limit` (reusing Partie 3.2.6's own real
+token-budget packer).
+
+**Phase 4, Étape 2 correctif ciblé (2026-09-22)** -- `compress_with_llm`
+used to combine every real chunk into ONE combined LLM call, returning
+a single, combined result: a real, genuine traceability bug for a
+citations-based RAG platform (every chunk's own real, distinct source
+collapsed onto one `[1]`). See that function's own docstring for the
+real fix: one real LLM call PER real chunk now, each returning that
+SAME chunk's own real identity (`chunk_id`/`document_id`/`metadata_json`)
+untouched, only `content` compressed -- every one of the 3 real methods
+now shares the exact same real 1:1 input-chunk -> output-chunk shape.
 
 **Reuses this codebase's own real infrastructure throughout** rather
 than duplicating any of it: `extract_summary` (Partie 3.1.10),
@@ -76,28 +86,56 @@ async def summarize_chunk(chunk: str, max_tokens: int | None = None, **kwargs) -
     return summary.strip() or chunk
 
 
-async def compress_with_llm(chunks: list[dict], query: str, max_tokens: int | None = None, **kwargs) -> str:
-    """Item 2's own literal function -- a real, single LLM call
-    compressing the WHOLE real, combined context at once, focused on
-    real relevance to `query` (the real, standard "contextual
-    compression" idea: keep only what's really relevant to answering
-    THIS specific real question, not a generic per-chunk summary).
-    Real, honest fallback: a real LLM failure returns the real,
-    combined, un-compressed context instead of losing it."""
+async def compress_with_llm(chunks: list[dict], query: str, max_tokens: int | None = None, **kwargs) -> list[dict]:
+    """Item 2's own literal function -- real, query-focused "contextual
+    compression" (the same real, standard idea LangChain's own
+    `ContextualCompressionRetriever`/`LLMChainExtractor` use): keep only
+    what's genuinely relevant to `query`, dropping the rest.
+
+    **Real, deliberate FIX (Phase 4, Étape 2 correctif ciblé,
+    2026-09-22)**: this used to make ONE real LLM call combining EVERY
+    real chunk's own content into a single prompt, returning ONE,
+    single, combined real string -- a real, genuine traceability bug on
+    a citations-based RAG platform: `compress_context` then wrapped that
+    one real string in a real, single-item list (`[{"content": ...}]`),
+    so a real caller's own `[1]`/`[2]`/`[3]` numbering downstream (see
+    `api/services/generation.py`) could no longer be mapped back to
+    WHICH real, original chunk supplied which real fact -- everything
+    collapsed onto a single `[1]`. Fixed here to run the real LLM call
+    ONCE PER real chunk instead, each one extracting only what's
+    genuinely relevant to `query` from THAT chunk ALONE -- returns one
+    real dict per real input chunk (only `content` changes; every other
+    real key -- `chunk_id`/`document_id`/`metadata_json`/etc -- rides
+    through completely untouched, via `{**chunk, ...}`), the exact same
+    real 1:1 shape `extract_key_sentences`/`summarize_chunk` above
+    already keep. A real caller building `[N]`-numbered context from
+    this real result (`enumerate(..., start=1)`) still gets one real
+    `[N]` per real, original source chunk -- traceability preserved.
+
+    Real, honest, PER-CHUNK fallback (a real, deliberate improvement
+    over the old, single-call design too): a real LLM failure on ONE
+    real chunk returns THAT chunk's own real, unmodified content --
+    never drops it, and never lets one real chunk's own failure block
+    every other real chunk's own, independently-succeeding
+    compression."""
     max_tokens = max_tokens if max_tokens is not None else settings.CONTEXT_COMPRESSION_MAX_TOKENS
-    combined = "\n\n".join(chunk.get("content", "") for chunk in chunks)
-    prompt = (
-        f"Given the question: {query}\n\n"
-        "Extract and condense only the information from the following passages that is "
-        "genuinely relevant to answering it. Remove irrelevant content. Keep facts "
-        "accurate and specific.\n\n"
-        f"{combined}"
-    )
-    try:
-        compressed = await completion(prompt, max_tokens=max_tokens, **kwargs)
-    except LLMError:
-        return combined
-    return compressed.strip() or combined
+    compressed_chunks = []
+    for chunk in chunks:
+        content = chunk.get("content", "")
+        prompt = (
+            f"Given the question: {query}\n\n"
+            "Extract and condense only the information from the following passage that is "
+            "genuinely relevant to answering it. Remove irrelevant content. Keep facts "
+            "accurate and specific. If nothing in the passage is relevant, return it unchanged.\n\n"
+            f"{content}"
+        )
+        try:
+            result = await completion(prompt, max_tokens=max_tokens, **kwargs)
+            result = result.strip() or content
+        except LLMError:
+            result = content
+        compressed_chunks.append({**chunk, "content": result})
+    return compressed_chunks
 
 
 async def compress_context(
@@ -134,7 +172,15 @@ async def compress_context(
     if method == "llm":
         if query is None:
             raise ValueError("compress_context: method='llm' requires a real query")
-        compressed_text = await compress_with_llm(chunks, query, max_tokens=max_tokens, **kwargs)
-        return [{"content": compressed_text}]
+        # Real, deliberate FIX (Phase 4, Étape 2 correctif ciblé) --
+        # `compress_with_llm` now returns one real dict PER real input
+        # chunk (see its own docstring for the real traceability bug
+        # this fixes), the exact same real shape "extract"/"summarize"
+        # above already return -- `truncate_to_limit` applies here too,
+        # for the same real reason it already does on those 2 branches
+        # (a real per-chunk LLM call is asked to stay under `max_tokens`
+        # but is never GUARANTEED to).
+        compressed = await compress_with_llm(chunks, query, max_tokens=max_tokens, **kwargs)
+        return truncate_to_limit(compressed, max_tokens=max_tokens)
 
     raise ValueError(f"Unknown context compression method: {method!r} (expected 'extract', 'summarize', or 'llm')")

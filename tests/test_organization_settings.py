@@ -244,6 +244,105 @@ async def test_negative_chunk_size_is_rejected(client, db_session, register_payl
     assert response.status_code == 422
 
 
+async def test_invalid_chunking_strategy_is_rejected(client, db_session, register_payload):
+    """Phase 4, Étape 1 -- même discipline de validation que
+    llm_provider/retrieval_strategy : une valeur inconnue est rejetée
+    au niveau du schéma, jamais acceptée silencieusement."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"chunking_strategy": "not-a-real-strategy"}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 422
+
+
+async def test_chunking_strategy_defaults_to_fixed_and_can_be_updated(client, db_session, register_payload):
+    """Phase 4, Étape 1 -- le comportement par défaut (avant cette
+    étape) reste 'fixed' pour une organisation qui ne touche jamais ce
+    réglage, et un Owner peut réellement le changer parmi les
+    stratégies réellement branchées."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    default_response = await client.get(f"/organizations/{org['id']}/settings", headers=_auth_header(owner_token))
+    assert default_response.json()["chunking_strategy"] == "fixed" == DEFAULT_SETTINGS["chunking_strategy"]
+
+    updated = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"chunking_strategy": "markdown"}, headers=_auth_header(owner_token),
+    )
+    assert updated.status_code == 200
+    assert updated.json()["chunking_strategy"] == "markdown"
+
+
+# ------------------------ Phase 4, Étape 1 (correctif config parent_child) ------------------------
+
+
+async def test_parent_child_settings_default_to_the_real_pre_existing_global_values(client, db_session, register_payload):
+    """Validation criterion: les nouveaux paramètres existent et leurs
+    valeurs par défaut sont correctes -- identiques aux constantes
+    globales préexistantes, pour ne rien casser."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.get(f"/organizations/{org['id']}/settings", headers=_auth_header(owner_token))
+    body = response.json()
+    assert body["parent_chunk_size"] == DEFAULT_SETTINGS["parent_chunk_size"]
+    assert body["parent_chunk_overlap"] == DEFAULT_SETTINGS["parent_chunk_overlap"]
+    assert body["child_chunk_size"] == DEFAULT_SETTINGS["child_chunk_size"]
+    assert body["child_chunk_overlap"] == DEFAULT_SETTINGS["child_chunk_overlap"]
+
+
+async def test_an_organization_can_set_its_own_parent_child_sizes(client, db_session, register_payload):
+    """Validation criterion: une organisation peut définir ses propres
+    valeurs, indépendamment de chunk_size/chunk_overlap."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    updated = await client.patch(
+        f"/organizations/{org['id']}/settings",
+        json={
+            "chunking_strategy": "parent_child", "parent_chunk_size": 1024, "parent_chunk_overlap": 100,
+            "child_chunk_size": 256, "child_chunk_overlap": 30,
+        },
+        headers=_auth_header(owner_token),
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["parent_chunk_size"] == 1024
+    assert body["parent_chunk_overlap"] == 100
+    assert body["child_chunk_size"] == 256
+    assert body["child_chunk_overlap"] == 30
+    # chunk_size/chunk_overlap (the other 7 strategies' own settings) are untouched:
+    assert body["chunk_size"] == DEFAULT_SETTINGS["chunk_size"]
+    assert body["chunk_overlap"] == DEFAULT_SETTINGS["chunk_overlap"]
+
+
+async def test_invalid_parent_child_sizes_are_rejected(client, db_session, register_payload):
+    """Validation criterion: les validations rejettent les valeurs
+    invalides (taille négative, overlap >= taille), au niveau schéma et
+    au niveau du endpoint (vérification croisée)."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    negative = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"parent_chunk_size": -1}, headers=_auth_header(owner_token),
+    )
+    assert negative.status_code == 422
+
+    overlap_too_big = await client.patch(
+        f"/organizations/{org['id']}/settings",
+        json={"parent_chunk_size": 100, "parent_chunk_overlap": 100}, headers=_auth_header(owner_token),
+    )
+    assert overlap_too_big.status_code == 400
+
+    child_overlap_too_big = await client.patch(
+        f"/organizations/{org['id']}/settings",
+        json={"child_chunk_size": 50, "child_chunk_overlap": 60}, headers=_auth_header(owner_token),
+    )
+    assert child_overlap_too_big.status_code == 400
+
+
 async def test_score_threshold_defaults_and_can_be_updated(client, db_session, register_payload):
     """Partie 3.3.7."""
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
@@ -371,5 +470,74 @@ async def test_invalid_language_code_is_rejected(client, db_session, register_pa
 
     response = await client.patch(
         f"/organizations/{org['id']}/settings", json={"language": "english"}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 422
+
+
+# ------------------------------ Phase 4, Étape 2 (Advanced Retrieval) ------------------------------
+
+
+async def test_advanced_retrieval_settings_default_to_disabled(client, db_session, register_payload):
+    """Validation criterion: rétrocompatibilité (requirement 4) -- a
+    fresh organization gets every new Advanced Retrieval feature
+    disabled by real default, even though every pre-existing GLOBAL
+    settings.*_ENABLED flag (api/config.py) already defaults to True."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.get(f"/organizations/{org['id']}/settings", headers=_auth_header(owner_token))
+    body = response.json()
+    assert body["query_rewriting_enabled"] is False
+    assert body["multi_query_enabled"] is False
+    assert body["hyde_enabled"] is False
+    assert body["mmr_enabled"] is False
+    assert body["context_compression_enabled"] is False
+    assert body["multi_query_count"] == DEFAULT_SETTINGS["multi_query_count"]
+    assert body["mmr_lambda"] == DEFAULT_SETTINGS["mmr_lambda"]
+
+
+async def test_an_organization_can_enable_and_configure_advanced_retrieval(client, db_session, register_payload):
+    """Validation criterion: une organisation peut activer/configurer
+    chaque fonctionnalité indépendamment."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    updated = await client.patch(
+        f"/organizations/{org['id']}/settings",
+        json={
+            "query_rewriting_enabled": True, "multi_query_enabled": True, "multi_query_count": 5,
+            "hyde_enabled": True, "mmr_enabled": True, "mmr_lambda": 0.4, "context_compression_enabled": True,
+        },
+        headers=_auth_header(owner_token),
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["query_rewriting_enabled"] is True
+    assert body["multi_query_enabled"] is True
+    assert body["multi_query_count"] == 5
+    assert body["hyde_enabled"] is True
+    assert body["mmr_enabled"] is True
+    assert body["mmr_lambda"] == 0.4
+    assert body["context_compression_enabled"] is True
+
+
+async def test_multi_query_count_rejects_the_real_cost_guardrail_violation(client, db_session, register_payload):
+    """Validation criterion: real, explicit cost guardrail (requirement
+    13)."""
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"multi_query_count": 11}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 422
+
+
+async def test_mmr_lambda_rejects_out_of_bounds_values(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.patch(
+        f"/organizations/{org['id']}/settings", json={"mmr_lambda": 1.5}, headers=_auth_header(owner_token),
     )
     assert response.status_code == 422

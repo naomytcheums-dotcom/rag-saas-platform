@@ -65,15 +65,29 @@ async def generate_query_variants(query: str, num_variants: int | None = None, *
 
 async def run_queries_parallel(
     db: AsyncSession, organization_id, queries: list[str], top_k: int | None = None, org_settings: dict | None = None,
+    search_fn=None,
 ) -> list[list[dict]]:
     """Item 2's own literal function -- real, genuinely parallel
-    execution (`asyncio.gather`) of a real `vector_search` per real
-    query variant. Real, honest robustness (vision critique 3, "que se
-    passe-t-il si une requête échoue"): `return_exceptions=True`, a
-    real, individual query failure contributes an empty real result
-    list rather than aborting every other, still-succeeding real query."""
+    execution (`asyncio.gather`) of a real per-variant search. Real,
+    honest robustness (vision critique 3, "que se passe-t-il si une
+    requête échoue"): `return_exceptions=True`, a real, individual query
+    failure contributes an empty real result list rather than aborting
+    every other, still-succeeding real query.
+
+    Phase 4, Étape 2 -- `search_fn`, when given, replaces the real,
+    literal `vector_search` default (kept as the default specifically so
+    every pre-existing real caller/test of this function is unaffected):
+    `api.services.retrieval_pipeline.search`'s own real multi-query
+    wiring passes the ACTUAL resolved retrieval strategy function
+    (`hybrid_search`/`hybrid_reranked_search`/etc, not always plain
+    vector search) here, so a real, organization-configured strategy
+    (BM25 + embeddings + cross-encoder) still runs for EVERY query
+    variant -- this étape's own explicit requirement 11 ("Multi-Query
+    doit alimenter le retrieval existant"), not a second, vector-only
+    retrieval path bolted on beside it."""
+    fn = search_fn if search_fn is not None else vector_search
     raw_results = await asyncio.gather(
-        *(vector_search(db, organization_id, q, top_k=top_k, org_settings=org_settings) for q in queries),
+        *(fn(db, organization_id, q, top_k=top_k, org_settings=org_settings) for q in queries),
         return_exceptions=True,
     )
     return [r if isinstance(r, list) else [] for r in raw_results]

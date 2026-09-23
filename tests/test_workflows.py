@@ -138,7 +138,7 @@ async def test_export_workflow_returns_a_real_portable_representation(db_session
     await db_session.commit()
 
     exported = export_workflow(workflow)
-    assert exported == {"name": "My Flow", "description": None, "nodes": [{"id": "a", "type": "trigger"}], "edges": []}
+    assert exported == {"name": "My Flow", "description": None, "nodes": [{"id": "a", "type": "trigger"}], "edges": [], "variables": []}
 
 
 async def test_import_workflow_creates_a_real_new_workflow(db_session):
@@ -286,3 +286,91 @@ async def test_cannot_access_a_workflow_from_another_organization(client, db_ses
     other_token, other_owner = await _register(client, db_session, "other@example.com")
     response = await client.get(f"/workflows/{workflow_id}", headers=_auth_header(other_token))
     assert response.status_code == 404
+
+
+# --------------------------------------- Phase 5, Étape 5: run history + import/export endpoints --
+# Real gap found during this étape's own audit: POST .../run existed
+# with no way to list past runs or fetch one's own detail, and
+# import_workflow/export_workflow existed with zero HTTP surface at
+# all -- both closed here, for the Workflow Builder UI's own
+# execution-history and import/export panels.
+
+async def test_list_and_get_workflow_runs(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await client.post(
+        f"/organizations/{org['id']}/workflows",
+        json={"name": "Flow", "nodes": [{"id": "a", "type": "trigger"}, {"id": "b", "type": "code", "data": {"code": "'done'"}}], "edges": [{"id": "e1", "source": "a", "target": "b"}]},
+        headers=_auth_header(owner_token),
+    )
+    workflow_id = created.json()["id"]
+
+    run_response = await client.post(f"/workflows/{workflow_id}/run", json={}, headers=_auth_header(owner_token))
+    assert run_response.status_code == 200
+    run_id = run_response.json()["id"]
+
+    list_response = await client.get(f"/workflows/{workflow_id}/runs", headers=_auth_header(owner_token))
+    assert list_response.status_code == 200
+    assert any(r["id"] == run_id for r in list_response.json())
+
+    detail_response = await client.get(f"/workflows/runs/{run_id}", headers=_auth_header(owner_token))
+    assert detail_response.status_code == 200
+    assert detail_response.json()["id"] == run_id
+
+
+async def test_cannot_list_runs_or_get_run_from_another_organization(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    created = await client.post(
+        f"/organizations/{org['id']}/workflows",
+        json={"name": "Flow", "nodes": [{"id": "a", "type": "trigger"}], "edges": []},
+        headers=_auth_header(owner_token),
+    )
+    workflow_id = created.json()["id"]
+    run_response = await client.post(f"/workflows/{workflow_id}/run", json={}, headers=_auth_header(owner_token))
+    run_id = run_response.json()["id"]
+
+    other_token, _ = await _register(client, db_session, "otherrunner@example.com")
+    assert (await client.get(f"/workflows/{workflow_id}/runs", headers=_auth_header(other_token))).status_code == 404
+    assert (await client.get(f"/workflows/runs/{run_id}", headers=_auth_header(other_token))).status_code == 404
+
+
+async def test_import_and_export_workflow_via_http(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    import_response = await client.post(
+        f"/organizations/{org['id']}/workflows/import",
+        json={"name": "Imported Flow", "nodes": [{"id": "a", "type": "trigger"}], "edges": []},
+        headers=_auth_header(owner_token),
+    )
+    assert import_response.status_code == 201
+    workflow_id = import_response.json()["id"]
+
+    export_response = await client.get(f"/workflows/{workflow_id}/export", headers=_auth_header(owner_token))
+    assert export_response.status_code == 200
+    assert export_response.json() == {"name": "Imported Flow", "description": None, "nodes": [{"id": "a", "type": "trigger"}], "edges": [], "variables": []}
+
+
+async def test_import_workflow_endpoint_rejects_an_invalid_graph(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/workflows/import",
+        json={"name": "Bad", "nodes": [{"id": "a", "type": "not-real"}], "edges": []},
+        headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 400
+
+
+async def test_member_cannot_import_a_workflow(client, db_session, register_payload):
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme")
+    member_token, member = await _register(client, db_session, "importmember@example.com")
+    await _add_member(db_session, uuid.UUID(org["id"]), member.id, OrganizationRole.member)
+
+    response = await client.post(
+        f"/organizations/{org['id']}/workflows/import", json={"name": "Flow", "nodes": [], "edges": []}, headers=_auth_header(member_token),
+    )
+    assert response.status_code == 403

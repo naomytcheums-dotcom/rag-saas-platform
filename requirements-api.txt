@@ -448,3 +448,9 @@ faiss-cpu==1.15.0
 # dependency against the real, public OSV/PyPI advisory database.
 bandit==1.9.4
 pip-audit==2.10.1
+
+# -- Error tracking (Phase 5, Étape 7, api/security/error_tracking.py) -------
+# Real no-op unless SENTRY_DSN is set (see that module's own docstring) --
+# ships in every environment so the integration is real and testable, not
+# an optional extra an operator has to remember to add.
+sentry-sdk[fastapi,celery]==2.40.0

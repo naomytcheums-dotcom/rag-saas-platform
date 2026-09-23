@@ -8,6 +8,7 @@ registers its table).
 from api.database import Base
 from api.models.agent import Agent
 from api.models.agent_api_key import AgentAPIKey
+from api.models.agent_long_term_memory import AgentLongTermMemoryItem
 from api.models.agent_memory import AgentMemoryItem, AgentSession
 from api.models.agent_run import AgentRunRecord
 from api.models.agent_trace import AgentTrace
@@ -22,6 +23,7 @@ from api.models.human_approval import HumanApproval
 from api.models.invitation import Invitation
 from api.models.jwt_signing_key import JWTSigningKey
 from api.models.lockout_recovery_token import TwoFactorLockoutRecoveryToken
+from api.models.mcp_server import MCPServerConfig, MCPToolCache
 from api.models.oauth import OAuthAccount
 from api.models.organization import Organization, OrganizationMember
 from api.models.organization_quota import OrganizationQuota

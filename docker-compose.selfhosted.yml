@@ -98,6 +98,49 @@ services:
       - api
     restart: unless-stopped
 
+  # Real, OPT-IN reverse proxy + HTTPS (spec sections 3.2/3.3). Off by
+  # default -- an operator behind their own existing proxy (Caddy, a
+  # managed load balancer, Cloudflare Tunnel, ...) shouldn't have a
+  # second one forced on them. Enable with:
+  #   docker compose -f docker-compose.selfhosted.yml --profile proxy up -d
+  # after setting DOMAIN_NAME in .env and running the one-time cert
+  # issuance documented in nginx/README.md.
+  nginx:
+    image: nginx:1.29-alpine
+    container_name: rag_saas_nginx
+    profiles: ["proxy"]
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:?set DOMAIN_NAME in .env to use the proxy profile}
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: rag_saas_certbot
+    profiles: ["proxy"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # Real renewal loop (spec 3.3's own "renouvellement automatique") --
+    # certbot's own `renew` is already a safe no-op unless a cert is
+    # within its own renewal window; checking twice a day is certbot's
+    # own documented recommendation. First-time issuance is a separate,
+    # one-time manual command (nginx/README.md) since it needs interactive
+    # domain/email input the first time, not something to silently retry
+    # in a loop forever if misconfigured.
+    entrypoint: sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
+
 volumes:
   postgres-data:
   redis-data:
+  certbot-www:
+  certbot-certs:

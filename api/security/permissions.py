@@ -1,10 +1,7 @@
 """
 Partie 10.1 -- FastAPI dependency factories that gate a route on a
-granular `resource:action` permission, real and live-wired (unlike the
-pre-existing, deliberately-unwired Casbin scaffold at
-api/security/rbac.py -- see that module's own docstring for why it was
-left inert). Named to match this étape's own literal spec
-(require_permission/require_role/require_any_permission/
+granular `resource:action` permission. Named to match this étape's own
+literal spec (require_permission/require_role/require_any_permission/
 require_all_permissions) even though they're implemented as FastAPI
 `Depends(...)` factories rather than Python decorators: a real decorator
 wrapping a route handler has no way to receive FastAPI's own dependency
@@ -13,6 +10,27 @@ re-implementing it, which is exactly the wrong direction for a codebase
 that already has a working, tested Depends-based authorization layer
 (api/security/organizations.py's require_org_admin, etc.) this is meant
 to extend, not replace.
+
+**Phase 5, Étape 1 correctif (2026-09-22) -- real, honest correction of
+a real, false claim this docstring used to make**: this module used to
+describe itself as "real and live-wired (unlike the pre-existing,
+deliberately-unwired Casbin scaffold at api/security/rbac.py)". That was
+FALSE, confirmed by a real, direct audit (`grep -rln "from
+api.security.permissions import" api/ --include=*.py`, excluding tests:
+zero results): `require_permission`/`require_role`/
+`require_any_permission`/`require_all_permissions` are built and tested
+in isolation (`tests/test_rbac_custom.py`, `tests/test_roles_and_permissions.py`
+exercise the underlying `api.services.rbac_custom` service layer and the
+admin endpoints that MANAGE `CustomRole`s), but are not actually imported
+or applied by any real business-logic router -- the exact same
+"complete, tested, never wired" status as the Casbin scaffold this
+docstring wrongly contrasted itself against. See
+[ROADMAP.md](../../ROADMAP.md) ("Granular Permission Enforcement") for
+the real, honest, tracked gap this leaves: a `CustomRole` an org admin
+assigns today has zero effect on what that user can actually do through
+the API -- only the fixed `OrganizationRole` hierarchy
+(owner/admin/manager/member/viewer, `api/security/organizations.py`) is
+genuinely enforced on real endpoints today.
 
 Every check here treats Owner/Admin (api/models/organization.py's
 OrganizationRole) as implicitly holding every permission -- the fixed

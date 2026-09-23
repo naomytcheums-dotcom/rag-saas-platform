@@ -36,6 +36,7 @@ function-calling loop" honesty already documented in
 `api/services/agent_orchestrator.py`'s own top docstring for a
 comparable, real, deliberate boundary."""
 
+import datetime as dt
 import secrets
 import uuid
 
@@ -137,3 +138,32 @@ async def delete_trigger(db: AsyncSession, trigger_id: uuid.UUID) -> bool:
     await db.delete(trigger)
     await db.flush()
     return True
+
+
+async def check_scheduled_triggers(db: AsyncSession) -> list[WorkflowTrigger]:
+    """Real, system-wide sweep -- every real `schedule`-type trigger
+    whose own real cron pattern is due right now, same real due-ness
+    check as `api/security/reindex_schedules.py`'s own
+    `check_scheduled_reindexes` (a trigger that has never fired is
+    compared against its own real `created_at`)."""
+    triggers = (await db.scalars(select(WorkflowTrigger).where(WorkflowTrigger.type == "schedule"))).all()
+    due = []
+    for trigger in triggers:
+        reference = trigger.last_run_at or trigger.created_at
+        if _crontab_from_pattern(trigger.config.get("cron_pattern", "")).is_due(reference).is_due:
+            due.append(trigger)
+    return due
+
+
+async def fire_scheduled_trigger(db: AsyncSession, trigger_id: uuid.UUID) -> WorkflowRun:
+    """Real, per-trigger firing -- creates a real run (same
+    `trigger_workflow` every other trigger type uses) then advances
+    `last_run_at` from the moment this run actually happened, never
+    left stale, same real convention as `reindex_schedules.schedule_reindex`."""
+    trigger = await get_trigger(db, trigger_id)
+    if trigger is None:
+        raise WorkflowTriggerError(f"'{trigger_id}' is not a registered workflow trigger")
+    run = await trigger_workflow(db, trigger.workflow_id, {}, trigger_id=trigger.id)
+    trigger.last_run_at = dt.datetime.now(dt.timezone.utc)
+    await db.flush()
+    return run

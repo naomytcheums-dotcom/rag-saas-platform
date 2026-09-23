@@ -8,12 +8,22 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.config import settings
 from api.security.organization_settings import is_valid_timezone
+from api.services.chunk_config import CHUNKING_STRATEGIES
 
 
 class OrganizationSettingsResponse(BaseModel):
     organization_id: uuid.UUID
     chunk_size: int
     chunk_overlap: int
+    chunking_strategy: str
+    # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
+    # when chunking_strategy="parent_child" (api/security/documents.py);
+    # the other 7 strategies keep using chunk_size/chunk_overlap above,
+    # completely unchanged.
+    parent_chunk_size: int
+    parent_chunk_overlap: int
+    child_chunk_size: int
+    child_chunk_overlap: int
     embedding_model: str
     llm_provider: str
     # Real `| None` -- honestly reflects DEFAULT_SETTINGS["llm_model"]'s
@@ -36,6 +46,17 @@ class OrganizationSettingsResponse(BaseModel):
     timezone: str
     score_threshold: float
     rrf_k: int
+    # Phase 4, Étape 2 (Advanced Retrieval) -- see
+    # api/security/organization_settings.py's own DEFAULT_SETTINGS
+    # docstring for why every one of these 7 new fields defaults to
+    # False/the pre-existing global default.
+    query_rewriting_enabled: bool
+    multi_query_enabled: bool
+    multi_query_count: int
+    hyde_enabled: bool
+    mmr_enabled: bool
+    mmr_lambda: float
+    context_compression_enabled: bool
 
 
 class OrganizationSettingsUpdateRequest(BaseModel):
@@ -52,6 +73,18 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # CHUNK_SIZE_MAX_TOKENS docstring for why.
     chunk_size: int | None = Field(default=None, ge=1, le=settings.CHUNK_SIZE_MAX_TOKENS, description="Tokens per chunk")
     chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive chunks")
+    # Phase 4, Étape 1 -- validated against the SAME real
+    # `CHUNKING_STRATEGIES` tuple `chunk_content`'s own dispatch uses,
+    # not a second, independently-typed literal that could drift.
+    chunking_strategy: Literal[*CHUNKING_STRATEGIES] | None = None
+    # Phase 4, Étape 1 (correctif config parent_child) -- same real
+    # upper bound as chunk_size (a "tokens per chunk" ceiling is the
+    # same real concept regardless of which strategy uses it, no second,
+    # parallel ceiling constant).
+    parent_chunk_size: int | None = Field(default=None, ge=1, le=settings.CHUNK_SIZE_MAX_TOKENS, description="Tokens per parent chunk (parent_child strategy only)")
+    parent_chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive parent chunks (parent_child strategy only)")
+    child_chunk_size: int | None = Field(default=None, ge=1, le=settings.CHUNK_SIZE_MAX_TOKENS, description="Tokens per child chunk (parent_child strategy only)")
+    child_chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive child chunks (parent_child strategy only)")
     embedding_model: str | None = Field(default=None, min_length=1, max_length=200)
     # Widened for Partie 4.1.1-4.1.6's own real, now-supported providers
     # (was 3 -- anthropic/openai/gemini only). See
@@ -92,6 +125,17 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # Partie 3.4.7 -- real bounds matching that étape's own literal ask
     # ("Min: 1, Max: 1000").
     rrf_k: int | None = Field(default=None, ge=1, le=1000)
+    # Phase 4, Étape 2 (Advanced Retrieval) -- real bounds matching each
+    # new resolver's own real validation in
+    # api/services/retrieval_config.py (never a second, independently
+    # hardcoded ceiling).
+    query_rewriting_enabled: bool | None = None
+    multi_query_enabled: bool | None = None
+    multi_query_count: int | None = Field(default=None, ge=1, le=10, description="Number of query variants generated, including the original query")
+    hyde_enabled: bool | None = None
+    mmr_enabled: bool | None = None
+    mmr_lambda: float | None = Field(default=None, ge=0.0, le=1.0, description="MMR relevance/diversity trade-off: 0 = max diversity, 1 = max relevance")
+    context_compression_enabled: bool | None = None
 
     @field_validator("timezone")
     @classmethod

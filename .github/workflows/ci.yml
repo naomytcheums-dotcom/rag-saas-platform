@@ -75,6 +75,54 @@ jobs:
       - name: pip-audit
         run: pip-audit -r requirements-api.txt --desc off
 
+  build-backend:
+    # Phase 5, Étape 10 -- real Docker build verification (P0, carried
+    # over from Étapes 7/9: local builds in this session's own dev
+    # environment kept failing on unrelated packages each time --
+    # bcrypt, then torch, then ddtrace, then a bare ReadTimeoutError on
+    # the very first dependency -- with every "missing" package
+    # independently confirmed to exist and install fine locally,
+    # pointing at local network instability, not a real code defect. A
+    # GitHub-hosted runner is a genuinely different, stable network path
+    # this session's own environment can't rule out or confirm from the
+    # inside.
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+          tags: rag-saas-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-frontend:
+    needs: frontend-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: rag-saas-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   frontend-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15

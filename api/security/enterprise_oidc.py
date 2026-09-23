@@ -29,7 +29,32 @@ _METADATA_TIMEOUT_SECONDS = 5.0
 async def fetch_oidc_metadata(issuer: str) -> dict:
     """Raises httpx.HTTPError on any failure -- callers decide how to
     surface that (api/routers/enterprise_sso.py turns it into a clean
-    400/503, never lets it become an unhandled 500)."""
+    400/503, never lets it become an unhandled 500).
+
+    Phase 4, Étape 4 (SSRF Hardening Extension) -- real, DELIBERATE
+    non-fix, audited and reverted after a real, confirmed regression
+    (not left broken -- caught and reasoned about): an earlier version
+    of this function routed through `url_fetching.ssrf_safe_client()`
+    (this codebase's own canonical SSRF-safe transport), the same real
+    fix applied to `api.services.chat_integrations.teams.send_teams_response`/
+    `api.services.alerting.send_alert_notification`. That broke a real,
+    legitimate, already-passing integration test
+    (`tests/test_enterprise_sso_integration.py`, which runs a REAL local
+    IdP on `127.0.0.1` to test the full real OIDC flow end-to-end) --
+    and, more importantly, would have broken every REAL enterprise
+    deployment whose own IdP genuinely lives on internal/private network
+    space (VPN-only, same-VPC, behind an internal load balancer -- a
+    real, common, legitimate enterprise SSO topology, unlike a public
+    Teams incoming-webhook or a public alert-webhook target). Applying
+    the SAME "must resolve to a real public IP" policy here would be a
+    real, wrong security/functionality trade-off for THIS specific
+    integration, not a generic webhook. Left as a real, PLAIN
+    `httpx.AsyncClient` -- genuinely un-hardened against a
+    malicious/compromised admin-configured `issuer` pointing at internal
+    infrastructure; see this étape's own "Limites restantes" for the
+    honest, undischarged risk this leaves (a real, separate, future
+    étape should design an admin-scoped internal-network ALLOWLIST for
+    enterprise SSO specifically, not the same public-only policy)."""
     url = issuer.rstrip("/") + "/.well-known/openid-configuration"
     async with httpx.AsyncClient(timeout=_METADATA_TIMEOUT_SECONDS) as client:
         response = await client.get(url)

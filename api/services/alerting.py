@@ -6,12 +6,12 @@ import asyncio
 import logging
 import uuid
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.alerting import AlertChannel, AlertChannelType, AlertHistory, AlertOperator, AlertRule, Incident, IncidentStatus
 from api.services.admin_monitoring import get_queue_status, get_resource_usage
+from api.services.url_fetching import ssrf_safe_client
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,13 @@ async def send_alert_notification(channel: AlertChannel, message: str) -> bool:
 
             await asyncio.to_thread(send_security_alert_email, channel.config["email"], message)
         elif channel.type == AlertChannelType.webhook:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            # Phase 4, Étape 4 (SSRF Hardening Extension) -- real, genuine
+            # fix: `channel.config["webhook_url"]` is admin-configured
+            # (`POST /alerting/channels`, `require_admin`) with no real
+            # SSRF protection at all -- reuses the SAME real, canonical,
+            # DNS-rebinding-safe transport `url_fetching.py` already
+            # built, never a second, weaker one.
+            async with ssrf_safe_client(timeout=10.0) as client:
                 response = await client.post(channel.config["webhook_url"], json={"text": message})
                 response.raise_for_status()
         return True

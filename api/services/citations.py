@@ -16,6 +16,7 @@ fewer than the real, requested count; a response genuinely built from
 weak, barely-relevant sources should show fewer real citations, not a
 false sense of five equally strong ones."""
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -68,7 +69,18 @@ def _build_citation(response: Response, chunk: dict, number: int, is_primary: bo
     position_start, position_end = _find_marker_position(response.answer, number)
     document_id = uuid.UUID(chunk["document_id"]) if chunk.get("document_id") else None
     chunk_id = uuid.UUID(chunk["chunk_id"]) if chunk.get("chunk_id") else None
-    score = float(chunk.get("score", 0.0))
+    # Phase 4, Étape 2 correctif ciblé (2026-09-22) -- real, genuine bug
+    # fix, same real reasoning as `citation_secondary._citation_score`
+    # (see that function's own docstring): a real chunk's raw `score` is
+    # on a real, per-strategy scale (RRF fusion's own real score is a
+    # real, tiny fraction, BM25 is real and UNBOUNDED -- both would
+    # violate `validate_citation`'s own real `0.0 <= relevance_score <=
+    # 1.0` invariant, and BM25's real, unbounded score already could,
+    # even before this fix). `normalized_score` (present on every real
+    # result `search()`/`search_with_context()` returns) is the real,
+    # per-strategy-agnostic 0-1 value this field is actually meant to
+    # hold -- falls back to raw `score` only when genuinely absent.
+    score = float(chunk.get("normalized_score", chunk.get("score", 0.0)))
     return Citation(
         response_id=response.id,
         document_id=document_id,
@@ -204,6 +216,143 @@ def validate_citation(citation: Citation) -> None:
         raise CitationError(f"relevance_score must be a real value between 0.0 and 1.0, got {citation.relevance_score}")
     if not citation.text or not citation.text.strip():
         raise CitationError("Citation requires real, non-empty text")
+
+
+# ------------------------------------------------------------------
+# Phase 4, Étape 2 correctif ciblé (2026-09-22) -- deterministic citation
+# validation. Real, explicit requirement audited against: "le système ne
+# doit pas considérer une citation comme valide simplement parce que le
+# LLM a écrit [N]". This codebase's own real citation-CREATION path
+# (`add_citations_to_response` above) already never trusted the LLM for
+# WHICH sources to cite -- every real `Citation` row is built directly
+# from `select_primary_sources(chunks, count)`, itself operating on the
+# real, ALREADY-RETRIEVED `chunks` (never on parsed `[N]` markers from
+# `response.answer`). So a real `Citation` row is, by construction,
+# always backed by a real, retrieved chunk -- there was never a route by
+# which the LLM's own raw text could conjure a fabricated `Citation`
+# row. The real, GENUINE gap this section closes: nothing previously
+# checked whether a `[N]` marker the real LLM actually WROTE in its
+# answer corresponds to one of those real, already-created `Citation`
+# rows at all -- `[99]` in a real answer with only 3 real citations
+# would previously go completely unnoticed. `validate_citation_markers`
+# below is the real, deterministic, non-LLM-trusting check for exactly
+# that: it only ever compares against `citation_number`s ALREADY
+# PERSISTED on real `Citation` rows, never invents or accepts one.
+#
+# **Mini-correctif final (2026-09-22) -- real, explicit "auto-wire or
+# not" audit, and why the answer is NOT automatically**: a real audit of
+# every real caller of `add_citations_to_response` (this file's own
+# real citation-creation function) found TWO, independent, real call
+# sites -- `api.services.generation.generate_response` (this codebase's
+# own real, tested, but NOT YET wired to any real HTTP endpoint --
+# confirmed by grepping every real router: zero real callers exist,
+# consistent with `api/security/organization_settings.py`'s own module
+# docstring, which already documents a real, live, retrieval+generation
+# HTTP endpoint as genuine FUTURE work, "Partie 9"), and
+# `api.services.agent_orchestrator.AgentOrchestrator` (this codebase's
+# own REAL, live, endpoint-wired chat path, via
+# `api/routers/conversations.py`'s own real `regenerate_response`/
+# `_generate_assistant_reply`). Both real call sites call
+# `add_citations_to_response` directly; NEITHER ever called
+# `validate_citation_markers` before this audit, and neither does after
+# it either -- a real, deliberate, DOCUMENTED decision, not an
+# oversight:
+#
+# 1. A real `Citation` row can NEVER be fabricated from the LLM's own
+#    raw text regardless (see this section's own docstring above) --
+#    the actual DATA-INTEGRITY invariant ("no citation points to a
+#    non-existent source") already holds unconditionally, by
+#    construction, whether or not this function ever runs.
+#    `validate_citation_markers` catches a real, narrower, DIFFERENT
+#    concern instead: whether the human-readable ANSWER TEXT mentions a
+#    marker with no real, backing citation -- an answer-QUALITY signal,
+#    not a data-integrity one.
+# 2. `generate_response` -- the one real function this étape's own ask
+#    named -- has genuinely ZERO real consumers today (confirmed by
+#    audit, not assumed). Auto-computing a real quality signal for a
+#    real function nothing downstream reads yet is real, pure waste,
+#    and PERSISTING it would require a real, new `Response` column (a
+#    real migration) for a signal with no real, defined consumer -- a
+#    real, genuine violation of this étape's own explicit "modification
+#    minimale" / "ne pas inventer arbitrairement" constraints. Every
+#    existing sibling quality signal on `Response` (`hallucination_score`,
+#    `groundedness_score`, etc, `api/models/response.py`) was added by a
+#    real, dedicated étape that ALSO defined a real consumer for it --
+#    this one has none yet.
+# 3. `validate_citation_markers`'s own real, existing signature
+#    (`response, citations -> dict`, a pure, stateless computation, no
+#    DB write, no mutation) already matches this file's own real
+#    "explicit utility a caller opts into" precedent
+#    (`resolve_citation_source`, `format_citation`) -- never itself a
+#    mandatory pipeline gate. Kept exactly as-is.
+#
+# Real, honest scope limit this leaves, NOT silently ignored: the real,
+# live `AgentOrchestrator` path can, today, persist a real `Citation`
+# set whose answer text references a `[N]` with no real backing citation,
+# with nothing surfacing that fact anywhere -- exactly the SAME real
+# exposure `generate_response` has. Fixing that for the real, live path
+# is real, separate, future work belonging to whichever étape actually
+# defines what a caller should DO with an invalid marker (strip it?
+# flag it in the API response? log it?) -- a real product decision this
+# mini-correctif's own explicit "ne transforme pas automatiquement cette
+# validation en mécanisme agressif" / "modification minimale" constraints
+# forbid inventing here. `validate_citation_markers` remains available,
+# tested (`tests/test_citation_validation.py`), and ready for whichever
+# real caller/étape needs it.
+
+_CITATION_MARKER_RE = re.compile(r"\[(\d+)\]")
+
+
+def extract_cited_numbers(answer: str) -> set[int]:
+    """Real, purely syntactic extraction of every `[N]` marker actually
+    present in a real LLM answer. Deliberately NOT itself a validity
+    check -- a marker found here is a real, raw CLAIM the LLM made, not
+    yet cross-checked against anything; `validate_citation_markers`
+    below is the real validator."""
+    return {int(n) for n in _CITATION_MARKER_RE.findall(answer or "")}
+
+
+def validate_citation_markers(response: Response, citations: list[Citation]) -> dict:
+    """Item 6's own literal, deterministic validator. Every `[N]` marker
+    the real LLM answer actually contains is cross-checked against the
+    real `citation_number`s of `citations` -- rows that were themselves
+    ALREADY built, upstream, from real, retrieved chunks (never from
+    parsing the answer). A marker with no matching real `Citation` row
+    (a real, out-of-range reference like `[99]`, or a real, in-range-
+    looking but never-actually-created number) is reported as invalid,
+    never silently accepted just because it matches the `[N]` syntax.
+
+    Returns a real, structured dict: `cited_numbers` (every real marker
+    found, deduplicated), `valid_numbers` (real markers backed by a real
+    `Citation`), `invalid_numbers` (real markers with no real backing
+    citation), `all_valid` (real, honest convenience flag)."""
+    cited_numbers = extract_cited_numbers(response.answer)
+    real_numbers = {c.citation_number for c in citations}
+    valid_numbers = sorted(cited_numbers & real_numbers)
+    invalid_numbers = sorted(cited_numbers - real_numbers)
+    return {
+        "cited_numbers": sorted(cited_numbers),
+        "valid_numbers": valid_numbers,
+        "invalid_numbers": invalid_numbers,
+        "all_valid": len(invalid_numbers) == 0,
+    }
+
+
+def resolve_citation_source(citation: Citation) -> dict:
+    """Item 10's own literal function -- real, deterministic resolution
+    from a real citation back to its real chunk/document/source, using
+    ONLY fields already persisted on the real `Citation` row at creation
+    time (`_build_citation` above, itself built from a real, retrieved
+    chunk) -- never re-derived by trusting anything the real LLM said,
+    and never fabricated when a field is genuinely absent (a real,
+    honest `None`, not a placeholder)."""
+    return {
+        "chunk_id": citation.chunk_id,
+        "document_id": citation.document_id,
+        "source_title": citation.source_title,
+        "source_url": citation.source_url,
+        "document_name": citation.document_name,
+    }
 
 
 async def get_citation_count(db: AsyncSession, organization_id: uuid.UUID) -> int:
