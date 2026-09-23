@@ -18,6 +18,43 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+- **[CORRIGÉE, Phase 5 Étape 10] Le premier vrai run CI (déclenché par
+  cette étape elle-même) a trouvé 3 vrais bugs, invisibles en local,
+  que la promesse "runner CI stable" de cette étape a justement
+  révélés.** (1) `mcp==2.0.0` avait été `pip install`é dans
+  l'environnement de dev pendant l'Étape 9 mais jamais déclaré dans
+  `requirements-api.txt` -- `ModuleNotFoundError` sur tout checkout
+  propre (CI, Docker, production réelle), corrigé. (2)
+  `app/layout.tsx` utilise le type `LayoutProps<"/">` généré par Next.js
+  (typed routes), présent seulement après un `next dev`/`next build`
+  local -- absent sur un checkout CI propre. Corrigé en ajoutant `npx
+  next typegen` avant `tsc --noEmit` dans `ci.yml` (vérifié réellement :
+  `rm -rf .next && npx next typegen && npx tsc --noEmit` reproduit puis
+  résout l'erreur exacte du CI). (3) `pip-audit` a trouvé 15
+  vulnérabilités réelles dans 3 paquets -- `bleach` corrigé (bump mineur
+  6.2.0→6.4.0, sans risque, régression ciblée passée) ; `transformers`
+  et `weasyprint` tracés ci-dessous (bump majeur, risque réel de
+  rupture).
+- **[TRACÉE, P1] `transformers==4.57.6` a 7 avis de sécurité réels
+  (PYSEC-2025-217, PYSEC-2026-2288/2289/2290/3929), correction
+  seulement à partir de `5.0.0`/`5.3.0`/`5.5.0`/`5.10.0`.** **Pourquoi
+  pas corrigé dans cette passe** : un saut de version majeure (4.x→5.x)
+  sur une dépendance ML aussi profondément intégrée
+  (`sentence-transformers`, embeddings, citations) a un vrai risque de
+  rupture d'API -- le bump à l'aveugle sous contrainte de temps
+  contredirait la discipline "mesurer deux fois" de cette même session.
+  **Priorité : P1** (vulnérabilités de sécurité réelles, pas
+  cosmétiques). **Complexité estimée : substantielle** -- bump vers
+  `5.10.0`, relancer la suite complète de tests retrieval/embeddings/
+  citations, vérifier les breaking changes documentés par HuggingFace
+  entre 4.x et 5.x.
+- **[TRACÉE, P1] `weasyprint==63.1` a 5 avis de sécurité réels
+  (PYSEC-2026-2034/3412/3940), correction seulement à partir de
+  `68.0`/`70.0`.** Même raisonnement que `transformers` ci-dessus : bump
+  majeur (63→70), utilisé pour la génération de PDF (exports), risque
+  de régression non négligeable sous contrainte de temps. **Priorité :
+  P1**. **Complexité estimée : modérée** -- bump + tests des
+  fonctionnalités d'export PDF existantes.
 - **[CORRIGÉE, Phase 5 Étape 9] MCP (Model Context Protocol) n'existait
   pas du tout** (confirmé par audit : zéro fichier, zéro dépendance,
   zéro doc avant cette étape). Ajouté réellement, dans les deux sens :

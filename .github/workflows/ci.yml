@@ -141,6 +141,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate route types
+        # Real bug found on this étape's own first real CI run (Phase 5,
+        # Étape 10): `app/layout.tsx` uses Next.js's own typed-routes
+        # `LayoutProps<"/">` global type, which only exists once Next.js
+        # has actually generated it (normally a side effect of `next
+        # dev`/`next build`, which a real local dev machine has usually
+        # already run at least once -- a fresh CI checkout never has).
+        # `next typegen` generates just that, without a full build.
+        run: npx next typegen
+
       - name: Type check
         run: npx tsc --noEmit
 
