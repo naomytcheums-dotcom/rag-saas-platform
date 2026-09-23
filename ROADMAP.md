@@ -63,6 +63,11 @@ itemized breakdown of each part.
   (`services: redis: image: redis:7-alpine`) et pointer
   `RATE_LIMIT_REDIS_URL` vers `redis://localhost:6379/0` pour CE job
   spécifiquement (pas le secret partagé), puis relancer et confirmer.
+  **Complexité : faible** -- un bloc `services:` YAML de 5 lignes
+  (même syntaxe que les services Postgres/Redis déjà réels dans
+  `.github/workflows.disabled/regression.yml`/`.circleci/config.yml`,
+  rien de nouveau à inventer), suivi d'un simple `git push` de
+  vérification -- aucun changement de code applicatif requis.
 - **[ACCEPTÉE] `build-backend` ne dépend plus de `backend-tests`
   (`needs:` retiré volontairement).** Le job `build-backend` existe
   spécifiquement pour vérifier qu'une image Docker se construit,
@@ -126,6 +131,29 @@ itemized breakdown of each part.
   déjà réelle, juste pas de coupe-circuit). **Complexité estimée :
   faible** (un champ `max_cost` sur `EvaluationJob` + une vérification
   dans la boucle Celery existante).
+- **[TRACÉE, P2] Eval Lab — analyse d'échecs catégorisée
+  (retrieval/génération/hallucination) non implémentée.** Vérifié par
+  audit (Étape 10) : `EvaluationResult.metrics` stocke bien les scores
+  réels par question (recall/mrr/precision/ndcg/faithfulness/etc.),
+  mais rien ne catégorise AUTOMATIQUEMENT un échec donné comme "le
+  retrieval n'a pas trouvé le bon document" vs "le document était là
+  mais la génération l'a mal utilisé" vs "l'agent a halluciné" -- un
+  opérateur doit encore inspecter les métriques brutes lui-même pour
+  comprendre POURQUOI une question a échoué, question par question.
+  **Impact réel** : les métriques d'échec sont déjà visibles et
+  exploitables aujourd'hui (rien de caché), mais le diagnostic reste
+  manuel -- pas de vue "voici vos N échecs, groupés par cause probable"
+  pour prioriser les corrections. **Priorité : P2** (utile pour
+  accélérer l'itération qualité, pas bloquant -- le module Eval Lab
+  reste pleinement fonctionnel sans ça). **Complexité estimée :
+  moyenne** -- une règle de classification réelle existe déjà comme
+  précédent partiel à réutiliser (`recall_at_k` bas + `expected_documents`
+  non vide ⇒ probable échec de retrieval ; `recall_at_k` haut mais
+  `faithfulness`/`groundedness` bas ⇒ probable échec de génération/
+  hallucination), à formaliser en une vraie fonction
+  `categorize_failure(result: EvaluationResult) -> str` + un endpoint
+  d'agrégation (`GET /eval/runs/{id}/failures?category=...`), à traiter
+  dans une passe future dédiée.
 - **[CORRIGÉE, Phase 5 Étape 10] Le premier vrai run CI (déclenché par
   cette étape elle-même) a trouvé 3 vrais bugs, invisibles en local,
   que la promesse "runner CI stable" de cette étape a justement
@@ -145,20 +173,28 @@ itemized breakdown of each part.
   rupture).
 - **[TRACÉE, P1] `transformers==4.57.6` a 7 avis de sécurité réels
   (PYSEC-2025-217, PYSEC-2026-2288/2289/2290/3929), correction
-  seulement à partir de `5.0.0`/`5.3.0`/`5.5.0`/`5.10.0`.** **Pourquoi
-  pas corrigé dans cette passe** : un saut de version majeure (4.x→5.x)
-  sur une dépendance ML aussi profondément intégrée
-  (`sentence-transformers`, embeddings, citations) a un vrai risque de
-  rupture d'API -- le bump à l'aveugle sous contrainte de temps
-  contredirait la discipline "mesurer deux fois" de cette même session.
-  **Priorité : P1** (vulnérabilités de sécurité réelles, pas
+  seulement à partir de `5.0.0`/`5.3.0`/`5.5.0`/`5.10.0`.** **Impact
+  réel** : la version installée en production reste exposée à 7
+  vulnérabilités connues et publiées tant que le bump n'est pas fait --
+  `pip-audit` (CI `backend-security`) continue de le signaler en rouge
+  à chaque run tant que ce n'est pas corrigé, un vrai signal, pas un
+  faux positif. **Pourquoi pas corrigé dans cette passe** : un saut de
+  version majeure (4.x→5.x) sur une dépendance ML aussi profondément
+  intégrée (`sentence-transformers`, embeddings, citations) a un vrai
+  risque de rupture d'API -- le bump à l'aveugle sous contrainte de
+  temps contredirait la discipline "mesurer deux fois" de cette même
+  session. **Priorité : P1** (vulnérabilités de sécurité réelles, pas
   cosmétiques). **Complexité estimée : substantielle** -- bump vers
   `5.10.0`, relancer la suite complète de tests retrieval/embeddings/
   citations, vérifier les breaking changes documentés par HuggingFace
   entre 4.x et 5.x.
 - **[TRACÉE, P1] `weasyprint==63.1` a 5 avis de sécurité réels
   (PYSEC-2026-2034/3412/3940), correction seulement à partir de
-  `68.0`/`70.0`.** Même raisonnement que `transformers` ci-dessus : bump
+  `68.0`/`70.0`.** **Impact réel** : même exposition -- signalé en
+  rouge par `pip-audit`/CI `backend-security` à chaque run tant que non
+  corrigé ; utilisé pour la génération de PDF (exports), une surface
+  réelle bien que plus restreinte que `transformers`. Même raisonnement
+  que `transformers` ci-dessus : bump
   majeur (63→70), utilisé pour la génération de PDF (exports), risque
   de régression non négligeable sous contrainte de temps. **Priorité :
   P1**. **Complexité estimée : modérée** -- bump + tests des
