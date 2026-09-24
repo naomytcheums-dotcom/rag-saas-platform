@@ -11,6 +11,7 @@ from api.models.audit_log import AuditAction
 from api.models.chat_integrations import DiscordIntegration
 from api.models.organization import OrganizationMember
 from api.schemas.chat_integrations import DiscordConfigResponse, DiscordConfigureRequest, DiscordSendMessageRequest
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.chat_integrations_signature import verify_discord_signature
 from api.security.organizations import require_org_admin
@@ -32,7 +33,7 @@ async def _get_integration(db: AsyncSession, org_id: uuid.UUID) -> DiscordIntegr
 
 
 @router.post("/organizations/{org_id}/integrations/discord/configure", response_model=DiscordConfigResponse)
-async def discord_configure_endpoint(org_id: uuid.UUID, payload: DiscordConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_configure_endpoint(org_id: uuid.UUID, payload: DiscordConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         integration = await save_discord_integration(db, org_id, payload.model_dump(exclude_unset=True), caller.user_id)
     except DiscordIntegrationError as exc:
@@ -46,12 +47,12 @@ async def discord_configure_endpoint(org_id: uuid.UUID, payload: DiscordConfigur
 
 
 @router.get("/organizations/{org_id}/integrations/discord/config", response_model=DiscordConfigResponse)
-async def discord_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     return await _get_integration(db, org_id)
 
 
 @router.delete("/organizations/{org_id}/integrations/discord")
-async def discord_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     await db.delete(integration)
     await log_audit_action(
@@ -63,7 +64,7 @@ async def discord_delete_integration_endpoint(org_id: uuid.UUID, request: Reques
 
 
 @router.post("/organizations/{org_id}/integrations/discord/send")
-async def discord_send_endpoint(org_id: uuid.UUID, payload: DiscordSendMessageRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def discord_send_endpoint(org_id: uuid.UUID, payload: DiscordSendMessageRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     return await send_discord_response(integration, payload.channel_id, payload.text, payload.message_id)
 

@@ -23,6 +23,7 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.reindex_schedule import ReindexSchedule
 from api.models.user import User
 from api.schemas.reindex_schedules import ReindexScheduleCreateRequest, ReindexScheduleResponse, ReindexScheduleUpdateRequest
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin
 from api.security.reindex_schedules import create_reindex_schedule, delete_reindex_schedule, list_reindex_schedules, update_reindex_schedule
 
@@ -59,7 +60,7 @@ def _require_admin(membership: OrganizationMember) -> None:
 @router.post("/organizations/{org_id}/reindex-schedules", response_model=ReindexScheduleResponse, status_code=status.HTTP_201_CREATED)
 async def create_reindex_schedule_route(
     org_id: uuid.UUID, payload: ReindexScheduleCreateRequest,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("documents:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         schedule = await create_reindex_schedule(db, org_id, payload.schedule_name, payload.cron_pattern, payload.enabled)
@@ -72,7 +73,7 @@ async def create_reindex_schedule_route(
 
 @router.get("/organizations/{org_id}/reindex-schedules", response_model=list[ReindexScheduleResponse])
 async def list_reindex_schedules_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")), db: AsyncSession = Depends(get_db),
 ):
     rows = await list_reindex_schedules(db, org_id)
     return [_to_response(row) for row in rows]

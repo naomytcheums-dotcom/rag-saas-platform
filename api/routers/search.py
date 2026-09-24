@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.schemas.search import SearchRequest, SearchResponse
+from api.security.permissions import require_permission
 from api.security.organization_settings import get_org_settings
 from api.security.organizations import require_org_member
 from api.services.retrieval_config import resolve_retrieval_strategy
@@ -39,7 +40,7 @@ router = APIRouter(tags=["search"])
 @router.post("/organizations/{org_id}/search", response_model=SearchResponse)
 async def search_organization_documents(
     org_id: uuid.UUID, payload: SearchRequest,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")), db: AsyncSession = Depends(get_db),
 ):
     org_settings = await get_org_settings(db, org_id)
     results = await search_with_context(

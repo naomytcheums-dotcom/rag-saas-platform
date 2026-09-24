@@ -27,6 +27,7 @@ from api.schemas.agents import (
     AgentToolsUpdateRequest, AgentUpdateRequest, KnowledgeBaseOption, SystemPromptPreviewResponse,
     SystemPromptUpdateRequest, SystemPromptVariablesResponse, ToolConfigUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.agents import (
     activate_agent, archive_agent, create_agent, delete_agent, list_agents, pause_agent, require_agent_manager,
     require_agent_member, update_agent,
@@ -80,7 +81,7 @@ async def create_agent_endpoint(
 async def list_agents_endpoint(
     org_id: uuid.UUID, status_filter: str | None = Query(default=None, alias="status"), workspace_id: uuid.UUID | None = None,
     limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     filters = {}
     if status_filter is not None:

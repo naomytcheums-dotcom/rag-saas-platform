@@ -65,6 +65,7 @@ from api.security.organizations import (
     reject_if_target_is_owner,
     require_org_admin,
 )
+from api.security.permissions import require_permission
 from api.security.quotas import require_quota_available
 from api.security.usage import record_usage
 from api.security.user_limits import require_can_invite_members
@@ -177,7 +178,7 @@ async def invite_organization_member(
 @router.patch("/{user_id}/role", response_model=OrganizationMemberEntry)
 async def update_organization_member_role(
     org_id: uuid.UUID, user_id: uuid.UUID, payload: OrganizationMemberRoleUpdateRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("members:write")), db: AsyncSession = Depends(get_db),
 ):
     target_membership = await get_organization_member_or_404(db, org_id, user_id)
     reject_if_target_is_owner(target_membership, action="change the role of")
@@ -211,7 +212,7 @@ async def update_organization_member_role(
 @router.delete("/{user_id}")
 async def remove_organization_member(
     org_id: uuid.UUID, user_id: uuid.UUID, request: Request,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("members:delete")), db: AsyncSession = Depends(get_db),
 ):
     target_membership = await get_organization_member_or_404(db, org_id, user_id)
     reject_if_target_is_owner(target_membership, action="remove")

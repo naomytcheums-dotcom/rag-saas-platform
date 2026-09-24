@@ -27,6 +27,7 @@ from api.schemas.evaluation import (
     ABTestAssignmentListResponse, ABTestChooseWinnerRequest, ABTestCreateRequest, ABTestListResponse, ABTestResponse,
     ABTestResultsResponse, ABTestTrackMetricRequest, ABTestUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.evaluation import require_ab_test_admin, require_ab_test_member
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import ab_tests as ab_tests_service
@@ -36,7 +37,7 @@ router = APIRouter(tags=["ab-tests"])
 
 @router.post("/organizations/{org_id}/ab-tests", response_model=ABTestResponse, status_code=status.HTTP_201_CREATED)
 async def create_ab_test_endpoint(
-    org_id: uuid.UUID, payload: ABTestCreateRequest, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, payload: ABTestCreateRequest, _caller: OrganizationMember = Depends(require_permission("evaluation:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -54,7 +55,7 @@ async def create_ab_test_endpoint(
 @router.get("/organizations/{org_id}/ab-tests", response_model=ABTestListResponse)
 async def list_ab_tests_endpoint(
     org_id: uuid.UUID, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:read")), db: AsyncSession = Depends(get_db),
 ):
     return await ab_tests_service.list_ab_tests(db, org_id, limit, offset)
 

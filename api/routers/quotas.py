@@ -18,6 +18,7 @@ from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.models.organization_quota import OrganizationQuota
 from api.schemas.quotas import OrganizationQuotaResponse, OrganizationQuotaUpdateRequest, QuotaDimensionEntry
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_owner
 from api.security.quotas import create_default_quota, get_quota_limits, get_quota_usage
 
@@ -45,7 +46,7 @@ async def _to_response(org_id: uuid.UUID, db: AsyncSession) -> OrganizationQuota
 
 @router.get("/organizations/{org_id}/quotas", response_model=OrganizationQuotaResponse)
 async def get_organization_quotas(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await _to_response(org_id, db)
 
@@ -53,7 +54,7 @@ async def get_organization_quotas(
 @router.patch("/organizations/{org_id}/quotas", response_model=OrganizationQuotaResponse)
 async def update_organization_quotas(
     org_id: uuid.UUID, payload: OrganizationQuotaUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     quota = await db.scalar(select(OrganizationQuota).where(OrganizationQuota.organization_id == org_id))
     if quota is None:

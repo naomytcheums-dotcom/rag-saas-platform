@@ -29,6 +29,7 @@ from api.schemas.rbac import (
     PermissionCheckResponse,
     PermissionResponse,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import get_organization_member_or_404, require_org_admin, require_org_member
 from api.services.rbac_custom import (
     DuplicateRoleNameError,
@@ -61,7 +62,7 @@ async def _role_to_response(db: AsyncSession, role) -> CustomRoleResponse:
 
 
 @router.get("/organizations/{org_id}/rbac/permissions", response_model=list[PermissionResponse])
-async def list_permissions_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def list_permissions_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db)):
     permissions = await list_permissions(db)
     # Real, necessary commit: list_permissions() may have just seeded the
     # 52-row catalog (ensure_permission_catalog_seeded's own flush-only
@@ -75,14 +76,14 @@ async def list_permissions_endpoint(org_id: uuid.UUID, _caller: OrganizationMemb
 
 
 @router.get("/organizations/{org_id}/rbac/roles", response_model=list[CustomRoleResponse])
-async def list_roles_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def list_roles_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db)):
     return [await _role_to_response(db, r) for r in await list_custom_roles(db, org_id)]
 
 
 @router.post("/organizations/{org_id}/rbac/roles", response_model=CustomRoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role_endpoint(
     org_id: uuid.UUID, payload: CustomRoleCreateRequest,
-    caller: OrganizationMember = Depends(require_org_admin), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("members:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     try:
         role = await create_custom_role(db, organization_id=org_id, name=payload.name, description=payload.description, user_id=current_user.id)
@@ -93,7 +94,7 @@ async def create_role_endpoint(
 
 
 @router.get("/organizations/{org_id}/rbac/roles/{role_id}", response_model=CustomRoleResponse)
-async def get_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def get_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db)):
     try:
         role = await get_custom_role_or_404(db, role_id, org_id)
     except RoleNotFoundError:
@@ -104,7 +105,7 @@ async def get_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: Orga
 @router.patch("/organizations/{org_id}/rbac/roles/{role_id}", response_model=CustomRoleResponse)
 async def update_role_endpoint(
     org_id: uuid.UUID, role_id: uuid.UUID, payload: CustomRoleUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         role = await update_custom_role(db, role_id=role_id, organization_id=org_id, name=payload.name, description=payload.description)
@@ -116,7 +117,7 @@ async def update_role_endpoint(
 
 
 @router.delete("/organizations/{org_id}/rbac/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def delete_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await delete_custom_role(db, role_id=role_id, organization_id=org_id)
     except RoleNotFoundError:
@@ -127,7 +128,7 @@ async def delete_role_endpoint(org_id: uuid.UUID, role_id: uuid.UUID, _caller: O
 @router.post("/organizations/{org_id}/rbac/roles/{role_id}/permissions", response_model=CustomRoleResponse)
 async def assign_permissions_endpoint(
     org_id: uuid.UUID, role_id: uuid.UUID, payload: AssignPermissionsRequest,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         role = await assign_permissions_to_role(db, role_id=role_id, organization_id=org_id, permission_ids=payload.permission_ids)
@@ -142,7 +143,7 @@ async def assign_permissions_endpoint(
 @router.delete("/organizations/{org_id}/rbac/roles/{role_id}/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_permission_endpoint(
     org_id: uuid.UUID, role_id: uuid.UUID, permission_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         await remove_permission_from_role(db, role_id=role_id, organization_id=org_id, permission_id=permission_id)
@@ -154,7 +155,7 @@ async def remove_permission_endpoint(
 @router.post("/organizations/{org_id}/rbac/users/{user_id}/roles", status_code=status.HTTP_201_CREATED)
 async def assign_role_to_user_endpoint(
     org_id: uuid.UUID, user_id: uuid.UUID, payload: AssignRoleToUserRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     await get_organization_member_or_404(db, org_id, user_id)
     try:
@@ -168,7 +169,7 @@ async def assign_role_to_user_endpoint(
 @router.delete("/organizations/{org_id}/rbac/users/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_role_from_user_endpoint(
     org_id: uuid.UUID, user_id: uuid.UUID, role_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     await remove_role_from_user(db, user_id=user_id, role_id=role_id)
     await db.commit()
@@ -176,7 +177,7 @@ async def remove_role_from_user_endpoint(
 
 @router.get("/organizations/{org_id}/rbac/users/{user_id}/permissions", response_model=EffectivePermissionsResponse)
 async def get_user_permissions_endpoint(
-    org_id: uuid.UUID, user_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, user_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
     target_membership = await get_organization_member_or_404(db, org_id, user_id)
     from api.models.organization import OrganizationRole

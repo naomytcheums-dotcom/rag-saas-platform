@@ -27,6 +27,7 @@ from api.schemas.integrations_universal import (
     ConnectionCreateRequest, ConnectionCreateResponse, ConnectionResponse, ConnectionTestResponse, ConnectionUpdateRequest,
     LogResponse, MappingCreateRequest, MappingResponse, MappingUpdateRequest, ProviderResponse,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import airbyte_client, integrations
 
@@ -76,12 +77,12 @@ async def list_providers_endpoint():
 
 
 @org_router.get("/connections", response_model=list[ConnectionResponse])
-async def list_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     return await integrations.list_connections(db, org_id)
 
 
 @org_router.get("/connections/{connection_id}", response_model=ConnectionResponse)
-async def get_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def get_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     try:
         return await integrations.get_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -89,14 +90,14 @@ async def get_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _
 
 
 @org_router.post("/connections", response_model=ConnectionCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_connection_endpoint(org_id: uuid.UUID, body: ConnectionCreateRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def create_connection_endpoint(org_id: uuid.UUID, body: ConnectionCreateRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     connection, token = await integrations.create_connection(db, org_id, name=body.name, provider=body.provider, action=body.action, user_id=caller.user_id)
     await db.commit()
     return ConnectionCreateResponse(**ConnectionResponse.model_validate(connection).model_dump(), token=token)
 
 
 @org_router.patch("/connections/{connection_id}", response_model=ConnectionResponse)
-async def update_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, body: ConnectionUpdateRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def update_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, body: ConnectionUpdateRequest, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         connection = await integrations.update_connection(db, org_id, connection_id, **body.model_dump())
     except integrations.ConnectionNotFoundError:
@@ -106,7 +107,7 @@ async def update_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID
 
 
 @org_router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def delete_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await integrations.delete_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -115,7 +116,7 @@ async def delete_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID
 
 
 @org_router.get("/connections/{connection_id}/logs", response_model=list[LogResponse])
-async def get_connection_logs_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def get_connection_logs_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     try:
         await integrations.get_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -124,7 +125,7 @@ async def get_connection_logs_endpoint(org_id: uuid.UUID, connection_id: uuid.UU
 
 
 @org_router.post("/connections/{connection_id}/test", response_model=ConnectionTestResponse)
-async def test_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def test_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         connection = await integrations.get_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -133,7 +134,7 @@ async def test_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, 
 
 
 @org_router.post("/connections/{connection_id}/sync", response_model=list[LogResponse])
-async def sync_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def sync_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     """Real, honest scope: this connection type is push-only (nothing
     external to pull from) -- 'sync' here means re-running the
     connection's current action against every previously FAILED
@@ -148,7 +149,7 @@ async def sync_connection_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, 
 
 
 @org_router.get("/connections/{connection_id}/syncs", response_model=list[LogResponse])
-async def get_connection_syncs_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def get_connection_syncs_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     """Real alias over this connection's own log ledger -- there is no
     separate 'sync run' concept for a push-only connection, see
     sync_connection_endpoint's own docstring."""
@@ -160,7 +161,7 @@ async def get_connection_syncs_endpoint(org_id: uuid.UUID, connection_id: uuid.U
 
 
 @org_router.get("/connections/{connection_id}/mappings", response_model=list[MappingResponse])
-async def list_mappings_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_mappings_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     try:
         await integrations.get_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -169,7 +170,7 @@ async def list_mappings_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _c
 
 
 @org_router.post("/connections/{connection_id}/mappings", response_model=MappingResponse, status_code=status.HTTP_201_CREATED)
-async def create_mapping_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, body: MappingCreateRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def create_mapping_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, body: MappingCreateRequest, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await integrations.get_connection(db, org_id, connection_id)
     except integrations.ConnectionNotFoundError:
@@ -180,7 +181,7 @@ async def create_mapping_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, b
 
 
 @org_router.patch("/mappings/{mapping_id}", response_model=MappingResponse)
-async def update_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, body: MappingUpdateRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def update_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, body: MappingUpdateRequest, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         mapping = await integrations.update_mapping(db, mapping_id, **body.model_dump())
     except integrations.MappingNotFoundError:
@@ -190,7 +191,7 @@ async def update_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, body
 
 
 @org_router.delete("/mappings/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def delete_mapping_endpoint(org_id: uuid.UUID, mapping_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     await integrations.delete_mapping(db, mapping_id)
     await db.commit()
 
@@ -221,7 +222,7 @@ async def inbound_webhook_endpoint(connection_id: uuid.UUID, request: Request, d
 # -- 15.3 Airbyte (org-scoped) ------------------------------------------------
 
 @org_router.get("/airbyte/source-definitions", response_model=list[AirbyteSourceDefinitionResponse])
-async def list_airbyte_source_definitions_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member)):
+async def list_airbyte_source_definitions_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:write"))):
     try:
         return await airbyte_client.list_source_definitions()
     except airbyte_client.AirbyteNotConfiguredError as exc:
@@ -229,12 +230,12 @@ async def list_airbyte_source_definitions_endpoint(org_id: uuid.UUID, _caller: O
 
 
 @org_router.get("/airbyte/connections", response_model=list[AirbyteConnectionResponse])
-async def list_airbyte_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_airbyte_connections_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:write")), db: AsyncSession = Depends(get_db)):
     return await airbyte_client.list_connections(db, org_id)
 
 
 @org_router.post("/airbyte/sources", status_code=status.HTTP_201_CREATED)
-async def create_airbyte_source_endpoint(org_id: uuid.UUID, body: AirbyteCreateSourceRequest, _caller: OrganizationMember = Depends(require_org_admin)):
+async def create_airbyte_source_endpoint(org_id: uuid.UUID, body: AirbyteCreateSourceRequest, _caller: OrganizationMember = Depends(require_permission("integrations:manage"))):
     try:
         return await airbyte_client.create_source(name=body.name, source_definition_id=body.source_definition_id, connection_configuration=body.connection_configuration)
     except airbyte_client.AirbyteNotConfiguredError as exc:
@@ -242,7 +243,7 @@ async def create_airbyte_source_endpoint(org_id: uuid.UUID, body: AirbyteCreateS
 
 
 @org_router.get("/airbyte/sources/{source_id}/catalog")
-async def get_airbyte_catalog_endpoint(org_id: uuid.UUID, source_id: str, _caller: OrganizationMember = Depends(require_org_member)):
+async def get_airbyte_catalog_endpoint(org_id: uuid.UUID, source_id: str, _caller: OrganizationMember = Depends(require_permission("integrations:write"))):
     try:
         return await airbyte_client.get_source_catalog(source_id)
     except airbyte_client.AirbyteNotConfiguredError as exc:
@@ -250,7 +251,7 @@ async def get_airbyte_catalog_endpoint(org_id: uuid.UUID, source_id: str, _calle
 
 
 @org_router.post("/airbyte/connections", response_model=AirbyteConnectionResponse, status_code=status.HTTP_201_CREATED)
-async def create_airbyte_connection_endpoint(org_id: uuid.UUID, body: AirbyteCreateConnectionRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def create_airbyte_connection_endpoint(org_id: uuid.UUID, body: AirbyteCreateConnectionRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         result = await airbyte_client.create_connection(source_id=body.airbyte_source_id, destination_id=body.airbyte_destination_id, sync_catalog=body.sync_catalog)
     except airbyte_client.AirbyteNotConfiguredError as exc:
@@ -261,7 +262,7 @@ async def create_airbyte_connection_endpoint(org_id: uuid.UUID, body: AirbyteCre
 
 
 @org_router.post("/airbyte/connections/{connection_id}/sync")
-async def trigger_airbyte_sync_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def trigger_airbyte_sync_endpoint(org_id: uuid.UUID, connection_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     row = await db.get(AirbyteConnection, connection_id)
     if row is None or row.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")

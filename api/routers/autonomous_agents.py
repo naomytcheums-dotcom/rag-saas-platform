@@ -19,6 +19,7 @@ from api.schemas.autonomous_agent import (
     AgentPlanResponse, AgentStatusResponse, AgentStepResponse, AutonomousAgentCreateRequest, AutonomousAgentListResponse,
     AutonomousAgentResponse, AutonomousAgentUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.autonomous_agents import require_autonomous_agent_admin, require_autonomous_agent_member
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import autonomous_agents as autonomous_agents_service
@@ -31,14 +32,14 @@ router = APIRouter(tags=["autonomous-agents"])
 @router.get("/organizations/{org_id}/autonomous-agents", response_model=AutonomousAgentListResponse)
 async def list_autonomous_agents_endpoint(
     org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     return await autonomous_agents_service.list_autonomous_agents(db, org_id, limit, offset)
 
 
 @router.post("/organizations/{org_id}/autonomous-agents", response_model=AutonomousAgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_autonomous_agent_endpoint(
-    org_id: uuid.UUID, payload: AutonomousAgentCreateRequest, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, payload: AutonomousAgentCreateRequest, _caller: OrganizationMember = Depends(require_permission("agents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     agent = await autonomous_agents_service.create_autonomous_agent(db, org_id, payload.model_dump(), current_user.id)

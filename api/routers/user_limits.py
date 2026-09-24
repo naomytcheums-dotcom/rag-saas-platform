@@ -23,6 +23,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.user_limits import MemberLimitsResponse, MyLimitsResponse, UserLimitsEntry, UserLimitsUpdateRequest, UserLimitsUsageEntry
+from api.security.permissions import require_permission
 from api.security.organizations import get_organization_member_or_404, reject_if_target_is_owner, require_org_admin
 from api.security.user_limits import get_user_limits, get_user_usage
 
@@ -58,7 +59,7 @@ async def get_my_limits(current_user: User = Depends(get_current_user), db: Asyn
 @router.get("/organizations/{org_id}/members/{user_id}/limits", response_model=MemberLimitsResponse)
 async def get_member_limits(
     org_id: uuid.UUID, user_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     await get_organization_member_or_404(db, org_id, user_id)  # 404 if user_id isn't a member of org_id
     limits = await get_user_limits(db, user_id, org_id)
@@ -69,7 +70,7 @@ async def get_member_limits(
 @router.patch("/organizations/{org_id}/members/{user_id}/limits", response_model=MemberLimitsResponse)
 async def update_member_limits(
     org_id: uuid.UUID, user_id: uuid.UUID, payload: UserLimitsUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     target_membership = await get_organization_member_or_404(db, org_id, user_id)
     reject_if_target_is_owner(target_membership, action="change the limits of")

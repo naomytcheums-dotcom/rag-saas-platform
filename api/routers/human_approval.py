@@ -23,6 +23,7 @@ from api.dependencies import get_db
 from api.models.human_approval import HumanApproval
 from api.models.organization import OrganizationMember
 from api.schemas.human_approval import HumanApprovalDecisionRequest, HumanApprovalResponse
+from api.security.permissions import require_permission
 from api.security.human_approval import (
     approve_human_request, get_approval_status, list_pending_approvals_for_organization, reject_human_request,
 )
@@ -33,7 +34,7 @@ router = APIRouter(tags=["human-approval"])
 
 @router.get("/organizations/{org_id}/approvals/pending", response_model=list[HumanApprovalResponse])
 async def get_organization_pending_approvals(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("agents:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await list_pending_approvals_for_organization(db, org_id)
 
@@ -59,7 +60,7 @@ async def _get_approval_scoped_to_org(db: AsyncSession, org_id: uuid.UUID, appro
 @router.post("/organizations/{org_id}/approvals/{approval_id}/approve", response_model=HumanApprovalResponse)
 async def approve_approval(
     org_id: uuid.UUID, approval_id: uuid.UUID, payload: HumanApprovalDecisionRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("agents:manage")), db: AsyncSession = Depends(get_db),
 ):
     await _get_approval_scoped_to_org(db, org_id, approval_id)
     approval = await approve_human_request(db, approval_id, caller.user_id, payload.comment)
@@ -70,7 +71,7 @@ async def approve_approval(
 @router.post("/organizations/{org_id}/approvals/{approval_id}/reject", response_model=HumanApprovalResponse)
 async def reject_approval(
     org_id: uuid.UUID, approval_id: uuid.UUID, payload: HumanApprovalDecisionRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("agents:manage")), db: AsyncSession = Depends(get_db),
 ):
     await _get_approval_scoped_to_org(db, org_id, approval_id)
     approval = await reject_human_request(db, approval_id, caller.user_id, payload.comment)
@@ -81,7 +82,7 @@ async def reject_approval(
 @router.get("/organizations/{org_id}/approvals/{approval_id}", response_model=HumanApprovalResponse)
 async def get_approval(
     org_id: uuid.UUID, approval_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     status_value = await get_approval_status(db, approval_id)
     if status_value is None:

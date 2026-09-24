@@ -35,6 +35,7 @@ from api.schemas.widget import (
     WidgetPublicConfigResponse, WidgetSessionRequest, WidgetSessionResponse, WidgetThemeResponse,
     WidgetThemeUpdateRequest, WidgetWelcomeUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_member
 from api.utils import client_ip
@@ -148,7 +149,7 @@ async def get_widget_config_endpoint(
 # snippet) without already knowing it. Same honest-gap-fill pattern as
 # 9.1's own `POST /organizations/{org_id}/api-keys`.
 @router.get("/organizations/{org_id}/widget/config")
-async def get_widget_config_admin_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def get_widget_config_admin_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:read")), db: AsyncSession = Depends(get_db)):
     config = await get_or_create_widget_config(db, org_id)
     data = await get_widget_config_public(db, config)
     await db.commit()
@@ -210,14 +211,14 @@ async def widget_chat_endpoint(payload: WidgetChatRequest, session: WidgetSessio
 
 
 @router.get("/organizations/{org_id}/widget/domains", response_model=WidgetDomainsResponse)
-async def get_widget_domains_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def get_widget_domains_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:read")), db: AsyncSession = Depends(get_db)):
     config = await get_or_create_widget_config(db, org_id)
     await db.commit()
     return {"allowed_domains": config.allowed_domains or []}
 
 
 @router.patch("/organizations/{org_id}/widget/domains", response_model=WidgetDomainsResponse)
-async def update_widget_domains_endpoint(org_id: uuid.UUID, payload: WidgetDomainsUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_domains_endpoint(org_id: uuid.UUID, payload: WidgetDomainsUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         config = await set_widget_allowed_domains(db, org_id, payload.allowed_domains, caller.user_id)
     except WidgetError as exc:
@@ -239,7 +240,7 @@ async def get_widget_theme_endpoint(config: WidgetConfig = Depends(require_widge
 
 
 @router.patch("/organizations/{org_id}/widget/theme", response_model=WidgetThemeResponse)
-async def update_widget_theme_endpoint(org_id: uuid.UUID, payload: WidgetThemeUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_theme_endpoint(org_id: uuid.UUID, payload: WidgetThemeUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         data = payload.model_dump(exclude_unset=True)
         if "theme" in data and data["theme"] is not None:
@@ -254,14 +255,14 @@ async def update_widget_theme_endpoint(org_id: uuid.UUID, payload: WidgetThemeUp
 
 
 @router.post("/organizations/{org_id}/widget/theme/reset", response_model=WidgetThemeResponse)
-async def reset_widget_theme_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def reset_widget_theme_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     config = await reset_widget_theme(db, org_id, caller.user_id)
     await db.commit()
     return {"theme": config.theme, "theme_custom_css": config.theme_custom_css}
 
 
 @router.patch("/organizations/{org_id}/widget/config")
-async def update_widget_colors_endpoint(org_id: uuid.UUID, payload: WidgetConfigUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_colors_endpoint(org_id: uuid.UUID, payload: WidgetConfigUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     data = payload.model_dump(exclude_unset=True)
     try:
         validate_theme_colors(data)
@@ -288,7 +289,7 @@ async def update_widget_colors_endpoint(org_id: uuid.UUID, payload: WidgetConfig
 
 
 @router.patch("/organizations/{org_id}/widget/agent")
-async def set_widget_agent_endpoint(org_id: uuid.UUID, payload: dict, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def set_widget_agent_endpoint(org_id: uuid.UUID, payload: dict, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     agent_id = payload.get("agent_id")
     config = await get_or_create_widget_config(db, org_id, created_by=caller.user_id)
     config.agent_id = uuid.UUID(agent_id) if agent_id else None
@@ -302,7 +303,7 @@ async def set_widget_agent_endpoint(org_id: uuid.UUID, payload: dict, caller: Or
 
 
 @router.patch("/organizations/{org_id}/widget/config/name")
-async def update_widget_name_endpoint(org_id: uuid.UUID, payload: WidgetNameUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_name_endpoint(org_id: uuid.UUID, payload: WidgetNameUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         name = validate_widget_name(payload.name)
     except WidgetError as exc:
@@ -322,7 +323,7 @@ async def get_widget_welcome_endpoint(config: WidgetConfig = Depends(require_wid
 
 
 @router.patch("/organizations/{org_id}/widget/welcome")
-async def update_widget_welcome_endpoint(org_id: uuid.UUID, payload: WidgetWelcomeUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_welcome_endpoint(org_id: uuid.UUID, payload: WidgetWelcomeUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         config = await update_welcome_message(db, org_id, payload.message, caller.user_id)
     except WidgetError as exc:
@@ -332,7 +333,7 @@ async def update_widget_welcome_endpoint(org_id: uuid.UUID, payload: WidgetWelco
 
 
 @router.post("/organizations/{org_id}/widget/welcome/reset")
-async def reset_widget_welcome_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def reset_widget_welcome_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     config = await reset_welcome_message(db, org_id, caller.user_id)
     await db.commit()
     return {"message": config.welcome_message}
@@ -347,7 +348,7 @@ async def get_widget_position_public_endpoint(config: WidgetConfig = Depends(req
 
 
 @router.patch("/organizations/{org_id}/widget/position", response_model=WidgetPositionResponse)
-async def update_widget_position_endpoint(org_id: uuid.UUID, payload: WidgetPositionUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_position_endpoint(org_id: uuid.UUID, payload: WidgetPositionUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         await update_widget_position(db, org_id, payload.model_dump(exclude_unset=True), caller.user_id)
     except WidgetError as exc:
@@ -370,7 +371,7 @@ async def get_widget_language_endpoint(config: WidgetConfig = Depends(require_wi
 
 
 @router.patch("/organizations/{org_id}/widget/language")
-async def update_widget_language_endpoint(org_id: uuid.UUID, payload: WidgetLanguageUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_widget_language_endpoint(org_id: uuid.UUID, payload: WidgetLanguageUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         validate_language(payload.language)
         config = await update_widget_config(db, org_id, {"language": payload.language}, caller.user_id)
@@ -389,7 +390,7 @@ async def get_widget_logo_endpoint(config: WidgetConfig = Depends(require_widget
 
 
 @router.post("/organizations/{org_id}/widget/logo")
-async def upload_widget_logo_endpoint(org_id: uuid.UUID, file: UploadFile = File(...), caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def upload_widget_logo_endpoint(org_id: uuid.UUID, file: UploadFile = File(...), caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     content = await file.read()
     try:
         config = await upload_widget_logo(db, org_id, content, caller.user_id)
@@ -401,7 +402,7 @@ async def upload_widget_logo_endpoint(org_id: uuid.UUID, file: UploadFile = File
 
 
 @router.delete("/organizations/{org_id}/widget/logo")
-async def delete_widget_logo_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def delete_widget_logo_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:delete")), db: AsyncSession = Depends(get_db)):
     await delete_widget_logo(db, org_id, caller.user_id)
     await db.commit()
     return {"logo_url": None}
@@ -416,7 +417,7 @@ async def get_widget_avatar_endpoint(config: WidgetConfig = Depends(require_widg
 
 
 @router.post("/organizations/{org_id}/widget/avatar")
-async def upload_widget_avatar_endpoint(org_id: uuid.UUID, file: UploadFile = File(...), caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def upload_widget_avatar_endpoint(org_id: uuid.UUID, file: UploadFile = File(...), caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     content = await file.read()
     try:
         config = await upload_widget_avatar(db, org_id, content, caller.user_id)
@@ -428,14 +429,14 @@ async def upload_widget_avatar_endpoint(org_id: uuid.UUID, file: UploadFile = Fi
 
 
 @router.delete("/organizations/{org_id}/widget/avatar")
-async def delete_widget_avatar_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def delete_widget_avatar_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:delete")), db: AsyncSession = Depends(get_db)):
     await delete_widget_avatar(db, org_id, caller.user_id)
     await db.commit()
     return {"avatar_url": None}
 
 
 @router.patch("/organizations/{org_id}/widget/avatar/default")
-async def reset_widget_avatar_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def reset_widget_avatar_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     await reset_to_default_avatar(db, org_id, caller.user_id)
     await db.commit()
     return {"use_default_avatar": True}
@@ -451,14 +452,14 @@ async def get_suggested_questions_endpoint(config: WidgetConfig = Depends(requir
 
 
 @router.get("/organizations/{org_id}/widget/suggested-questions/admin")
-async def list_suggested_questions_admin_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_suggested_questions_admin_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:read")), db: AsyncSession = Depends(get_db)):
     config = await get_or_create_widget_config(db, org_id)
     questions = await list_suggested_questions(db, config.id, include_inactive=True)
     return [SuggestedQuestionResponse.model_validate(q) for q in questions]
 
 
 @router.post("/organizations/{org_id}/widget/suggested-questions")
-async def add_suggested_question_endpoint(org_id: uuid.UUID, payload: SuggestedQuestionCreateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def add_suggested_question_endpoint(org_id: uuid.UUID, payload: SuggestedQuestionCreateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         row = await add_suggested_question(db, org_id, payload.question, payload.label, caller.user_id)
     except WidgetError as exc:
@@ -473,7 +474,7 @@ async def add_suggested_question_endpoint(org_id: uuid.UUID, payload: SuggestedQ
 # "/{question_id}" routes below at the same depth, or FastAPI parses
 # "reorder" as a `question_id` UUID and 422s instead of matching.
 @router.patch("/organizations/{org_id}/widget/suggested-questions/reorder")
-async def reorder_suggested_questions_endpoint(org_id: uuid.UUID, payload: ReorderQuestionsRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def reorder_suggested_questions_endpoint(org_id: uuid.UUID, payload: ReorderQuestionsRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         rows = await reorder_suggested_questions(db, org_id, payload.question_ids, caller.user_id)
     except WidgetError as exc:
@@ -483,7 +484,7 @@ async def reorder_suggested_questions_endpoint(org_id: uuid.UUID, payload: Reord
 
 
 @router.patch("/organizations/{org_id}/widget/suggested-questions/{question_id}")
-async def update_suggested_question_endpoint(org_id: uuid.UUID, question_id: uuid.UUID, payload: SuggestedQuestionUpdateRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def update_suggested_question_endpoint(org_id: uuid.UUID, question_id: uuid.UUID, payload: SuggestedQuestionUpdateRequest, caller: OrganizationMember = Depends(require_permission("widget:write")), db: AsyncSession = Depends(get_db)):
     try:
         row = await update_suggested_question(db, question_id, org_id, payload.model_dump(exclude_unset=True), caller.user_id)
     except WidgetError as exc:
@@ -493,7 +494,7 @@ async def update_suggested_question_endpoint(org_id: uuid.UUID, question_id: uui
 
 
 @router.delete("/organizations/{org_id}/widget/suggested-questions/{question_id}")
-async def delete_suggested_question_endpoint(org_id: uuid.UUID, question_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def delete_suggested_question_endpoint(org_id: uuid.UUID, question_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("widget:delete")), db: AsyncSession = Depends(get_db)):
     try:
         await delete_suggested_question(db, question_id, org_id, caller.user_id)
     except WidgetError as exc:

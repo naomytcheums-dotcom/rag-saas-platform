@@ -24,6 +24,7 @@ from api.models.user import User
 from api.schemas.suggested_questions import (
     FollowUpQuestionGenerateRequest, FollowUpQuestionResponse, SuggestedQuestionsResponse,
 )
+from api.security.permissions import require_permission
 from api.security.conversations import get_conversation
 from api.security.organizations import require_org_member
 from api.services.suggested_questions import (
@@ -40,7 +41,7 @@ _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not fo
 @router.get("/organizations/{org_id}/suggested-questions", response_model=SuggestedQuestionsResponse)
 async def get_suggested_questions_endpoint(
     org_id: uuid.UUID, context: str | None = None, limit: int | None = Query(default=None, ge=1, le=MAX_PAGE_SIZE),
-    _caller: OrganizationMember = Depends(require_org_member), current_user: User = Depends(get_current_user),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:read")), current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     questions = await get_suggested_questions(db, org_id, current_user.id, context=context, limit=limit)

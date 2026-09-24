@@ -25,6 +25,7 @@ from api.schemas.mcp_servers import (
     MCPServerCreateRequest, MCPServerResponse, MCPServerUpdateRequest, MCPTestConnectionResponse, MCPToolCallRequest,
     MCPToolCallResponse, MCPToolResponse,
 )
+from api.security.permissions import require_permission
 from api.security.encryption import encrypt_field
 from api.security.organizations import require_org_admin, require_org_member
 from api.services.mcp.client import MCPClientError, test_connection
@@ -48,7 +49,7 @@ async def _get_owned_server(db: AsyncSession, org_id: uuid.UUID, server_id: uuid
 @router.post("/organizations/{org_id}/mcp-servers", response_model=MCPServerResponse, status_code=status.HTTP_201_CREATED)
 async def create_mcp_server_endpoint(
     org_id: uuid.UUID, payload: MCPServerCreateRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     if payload.transport not in _VALID_TRANSPORTS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"transport must be one of {_VALID_TRANSPORTS}")
@@ -70,7 +71,7 @@ async def create_mcp_server_endpoint(
 
 @router.get("/organizations/{org_id}/mcp-servers", response_model=list[MCPServerResponse])
 async def list_mcp_servers_endpoint(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db),
 ):
     return await list_mcp_servers(db, org_id)
 
@@ -78,7 +79,7 @@ async def list_mcp_servers_endpoint(
 @router.patch("/organizations/{org_id}/mcp-servers/{server_id}", response_model=MCPServerResponse)
 async def update_mcp_server_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID, payload: MCPServerUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     for field in ("name", "description", "url", "command", "args", "env", "auth_type", "is_active"):
@@ -94,7 +95,7 @@ async def update_mcp_server_endpoint(
 @router.delete("/organizations/{org_id}/mcp-servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mcp_server_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     await delete_mcp_server(db, server)
@@ -104,7 +105,7 @@ async def delete_mcp_server_endpoint(
 @router.post("/organizations/{org_id}/mcp-servers/{server_id}/test", response_model=MCPTestConnectionResponse)
 async def test_mcp_server_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     try:
@@ -116,7 +117,7 @@ async def test_mcp_server_endpoint(
 @router.get("/organizations/{org_id}/mcp-servers/{server_id}/tools", response_model=list[MCPToolResponse])
 async def list_mcp_tools_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     return await list_cached_tools(db, server.id)
@@ -125,7 +126,7 @@ async def list_mcp_tools_endpoint(
 @router.post("/organizations/{org_id}/mcp-servers/{server_id}/sync", response_model=list[MCPToolResponse])
 async def sync_mcp_tools_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     try:
@@ -140,7 +141,7 @@ async def sync_mcp_tools_endpoint(
 @router.post("/organizations/{org_id}/mcp-servers/{server_id}/tools/{tool_name}/call", response_model=MCPToolCallResponse)
 async def call_mcp_tool_endpoint(
     org_id: uuid.UUID, server_id: uuid.UUID, tool_name: str, payload: MCPToolCallRequest,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:write")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
     try:

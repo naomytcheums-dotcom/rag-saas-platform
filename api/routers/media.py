@@ -39,6 +39,7 @@ from api.schemas.media import (
     MediaAssetListResponse, MediaAssetResponse, MediaFrameResponse, MediaSearchRequest, MediaSearchResponse,
     MediaTranscriptResponse, VisualSearchRequest, VisualSearchResponse,
 )
+from api.security.permissions import require_permission
 from api.security.media import require_media_admin, require_media_member
 from api.security.organizations import require_org_member
 from api.services import media as media_service
@@ -51,7 +52,7 @@ router = APIRouter(tags=["media"])
 
 @router.post("/organizations/{org_id}/media", response_model=MediaAssetResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media_endpoint(
-    org_id: uuid.UUID, file: UploadFile = File(...), _caller: OrganizationMember = Depends(require_org_member),
+    org_id: uuid.UUID, file: UploadFile = File(...), _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
@@ -70,7 +71,7 @@ async def upload_media_endpoint(
 @router.get("/organizations/{org_id}/media", response_model=MediaAssetListResponse)
 async def list_media_endpoint(
     org_id: uuid.UUID, media_type: str | None = None, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("documents:read")), db: AsyncSession = Depends(get_db),
 ):
     return await media_service.list_media(db, org_id, media_type, limit, offset)
 

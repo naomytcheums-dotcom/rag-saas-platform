@@ -31,6 +31,7 @@ from api.schemas.public_api import (
 )
 from api.dependencies import get_current_user
 from api.models.user import User
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_admin
 from api.security.public_api_auth import require_key_org_admin, require_public_api_scope
@@ -61,7 +62,7 @@ def _to_http_error(exc: PublicAPIError) -> HTTPException:
 @router.post("/organizations/{org_id}/api-keys", response_model=OrganizationAPIKeyCreateResponse)
 async def create_organization_api_key_endpoint(
     org_id: uuid.UUID, payload: OrganizationAPIKeyCreateRequest, request: Request,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         row, plaintext_key = await generate_organization_api_key(
@@ -83,14 +84,14 @@ async def create_organization_api_key_endpoint(
 
 @router.get("/organizations/{org_id}/api-keys", response_model=list[OrganizationAPIKeyResponse])
 async def list_organization_api_keys_endpoint(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await list_api_keys(db, org_id)
 
 
 @router.delete("/organizations/{org_id}/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_organization_api_key_endpoint(
-    org_id: uuid.UUID, key_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, key_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     revoked = await revoke_api_key(db, key_id)
     if not revoked:
@@ -123,7 +124,7 @@ async def list_available_scopes_endpoint(_current_user: User = Depends(get_curre
 
 @router.get("/organizations/{org_id}/api-keys/expiring", response_model=list[OrganizationAPIKeyResponse])
 async def get_expiring_keys_endpoint(
-    org_id: uuid.UUID, days: int = 30, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, days: int = 30, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     """Real, deliberately org-scoped path (`/organizations/{org_id}/...`,
     not a bare `/api-keys/expiring`) -- see

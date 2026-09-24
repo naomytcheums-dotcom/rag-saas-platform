@@ -20,6 +20,7 @@ from api.models.user import User
 from api.schemas.message_actions import (
     FeedbackCreateRequest, FeedbackResponse, FeedbackStatsResponse, FeedbackUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.conversations import get_conversation
 from api.security.organizations import require_org_admin
 from api.services.message_actions import MessageActionError, add_feedback, delete_feedback, get_feedback, get_feedback_stats, update_feedback
@@ -96,6 +97,6 @@ async def delete_feedback_endpoint(
 
 @router.get("/organizations/{org_id}/feedback/stats", response_model=FeedbackStatsResponse)
 async def get_feedback_stats_endpoint(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("conversations:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await get_feedback_stats(db, org_id)

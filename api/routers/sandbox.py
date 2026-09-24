@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.models.sandbox import SandboxEnvironment
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member
 
 router = APIRouter(tags=["sandbox"])
@@ -18,7 +19,7 @@ router = APIRouter(tags=["sandbox"])
 @router.get("/organizations/{org_id}/sandbox")
 async def list_sandboxes(
     org_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_member),
+    _caller: OrganizationMember = Depends(require_permission("settings:read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(SandboxEnvironment).where(SandboxEnvironment.organization_id == org_id))
@@ -30,7 +31,7 @@ async def create_sandbox(
     org_id: uuid.UUID,
     name: str,
     data_ttl_hours: int = 24,
-    _caller: OrganizationMember = Depends(require_org_admin),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     sandbox = SandboxEnvironment(
@@ -49,7 +50,7 @@ async def create_sandbox(
 async def delete_sandbox(
     org_id: uuid.UUID,
     sandbox_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     sandbox = await db.get(SandboxEnvironment, sandbox_id)
@@ -63,7 +64,7 @@ async def delete_sandbox(
 async def reset_sandbox(
     org_id: uuid.UUID,
     sandbox_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     sandbox = await db.get(SandboxEnvironment, sandbox_id)

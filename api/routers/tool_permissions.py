@@ -26,6 +26,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.tool_permissions import AvailableToolResponse, ToolPermissionGrantRequest, ToolPermissionResponse
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member
 from api.security.tool_permissions import (
     get_available_tools, get_tool_permissions, grant_tool_permission, revoke_tool_permission,
@@ -37,7 +38,7 @@ router = APIRouter(tags=["tool-permissions"])
 @router.post("/organizations/{org_id}/agents/{agent_id}/tools/{tool_name}/permissions", response_model=ToolPermissionResponse)
 async def grant_agent_tool_permission(
     org_id: uuid.UUID, agent_id: str, tool_name: str, payload: ToolPermissionGrantRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     row = await grant_tool_permission(
         db, org_id, agent_id, payload.user_id, tool_name, payload.permission, granted_by=caller.user_id,
@@ -49,7 +50,7 @@ async def grant_agent_tool_permission(
 @router.delete("/organizations/{org_id}/agents/{agent_id}/tools/{tool_name}/permissions/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_agent_tool_permission(
     org_id: uuid.UUID, agent_id: str, tool_name: str, user_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     revoked = await revoke_tool_permission(db, org_id, agent_id, user_id, tool_name)
     if not revoked:
@@ -60,14 +61,14 @@ async def revoke_agent_tool_permission(
 @router.get("/organizations/{org_id}/agents/{agent_id}/tools/permissions", response_model=list[ToolPermissionResponse])
 async def list_agent_tool_permissions(
     org_id: uuid.UUID, agent_id: str,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await get_tool_permissions(db, org_id, agent_id=agent_id)
 
 
 @router.get("/organizations/{org_id}/users/me/tools/permissions", response_model=list[AvailableToolResponse])
 async def get_my_available_tools(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     tools = await get_available_tools(db, org_id, agent_id=None, user_id=current_user.id)

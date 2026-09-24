@@ -41,6 +41,7 @@ from api.models.audit_log import AuditAction
 from api.models.organization import OrganizationMember
 from api.models.workspace import Workspace
 from api.schemas.workspaces import WorkspaceCreateRequest, WorkspaceEntry, WorkspaceListResponse, WorkspaceUpdateRequest
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_member
 from api.security.quotas import require_quota_available
@@ -62,7 +63,7 @@ def _to_entry(workspace: Workspace) -> WorkspaceEntry:
 
 @router.get("/organizations/{org_id}/workspaces", response_model=WorkspaceListResponse)
 async def list_workspaces(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:read")), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.execute(
         select(Workspace).where(Workspace.organization_id == org_id).order_by(Workspace.created_at.asc())

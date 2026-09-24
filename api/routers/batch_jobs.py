@@ -25,6 +25,7 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.schemas.batch_jobs import BatchJobCreateRequest, BatchJobItemResponse, BatchJobResponse
 import api.security.batch_jobs as batch_jobs_security
+from api.security.permissions import require_permission
 from api.security.batch_jobs import cancel_batch_job, create_batch_job, list_batch_job_items
 from api.security.organizations import require_org_admin
 
@@ -69,7 +70,7 @@ def _require_admin(membership: OrganizationMember) -> None:
 @router.post("/organizations/{org_id}/batch/jobs", response_model=BatchJobResponse, status_code=status.HTTP_201_CREATED)
 async def create_batch_job_route(
     org_id: uuid.UUID, payload: BatchJobCreateRequest,
-    _caller: OrganizationMember = Depends(require_org_admin),
+    _caller: OrganizationMember = Depends(require_permission("documents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -84,7 +85,7 @@ async def create_batch_job_route(
 
 @router.get("/organizations/{org_id}/batch/jobs", response_model=list[BatchJobResponse])
 async def list_batch_jobs_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.scalars(
         select(BatchJob).where(BatchJob.organization_id == org_id).order_by(BatchJob.created_at.desc())

@@ -19,6 +19,7 @@ from api.schemas.evaluation import (
     DatasetCreateRequest, DatasetListResponse, DatasetResponse, DatasetUpdateRequest, QuestionCreateRequest,
     QuestionImportResponse, QuestionListResponse, QuestionResponse, QuestionUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.evaluation import require_dataset_admin, require_question_admin
 from api.security.organizations import require_org_admin
 from api.services.evaluation_datasets import (
@@ -32,7 +33,7 @@ router = APIRouter(tags=["evaluation-datasets"])
 @router.post("/organizations/{org_id}/datasets", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
 async def create_dataset_endpoint(
     org_id: uuid.UUID, payload: DatasetCreateRequest, current_user: User = Depends(get_current_user),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     dataset = await create_dataset(db, org_id, payload.name, payload.description, current_user.id)
     await db.commit()
@@ -42,7 +43,7 @@ async def create_dataset_endpoint(
 @router.get("/organizations/{org_id}/datasets", response_model=DatasetListResponse)
 async def list_datasets_endpoint(
     org_id: uuid.UUID, is_active: bool | None = None, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     filters = {"is_active": is_active} if is_active is not None else None
     return await list_datasets(db, org_id, filters, limit, offset)

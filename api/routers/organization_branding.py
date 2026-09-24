@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.organization import Organization, OrganizationMember
 from api.schemas.organization_branding import OrganizationBrandingResponse, OrganizationBrandingUpdateRequest
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_owner
 from api.security.organization_branding import get_org_branding, update_org_branding
 from api.services.storage import delete_branding_asset, upload_organization_favicon, upload_organization_logo
@@ -48,7 +49,7 @@ async def get_organization_branding(org_id: uuid.UUID, db: AsyncSession = Depend
 @router.patch("/organizations/{org_id}/branding", response_model=OrganizationBrandingResponse)
 async def update_organization_branding(
     org_id: uuid.UUID, payload: OrganizationBrandingUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     updates = payload.model_dump(exclude_unset=True)
     updated = await update_org_branding(db, org_id, updates)
@@ -59,7 +60,7 @@ async def update_organization_branding(
 @router.post("/organizations/{org_id}/branding/logo", response_model=OrganizationBrandingResponse)
 async def upload_organization_logo_route(
     org_id: uuid.UUID, file: UploadFile,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     """All actual validation (real image format, size, pixel dimensions)
     and the S3 call itself live in api/services/storage.py -- this route
@@ -87,7 +88,7 @@ async def upload_organization_logo_route(
 @router.post("/organizations/{org_id}/branding/favicon", response_model=OrganizationBrandingResponse)
 async def upload_organization_favicon_route(
     org_id: uuid.UUID, file: UploadFile,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
     try:
@@ -110,7 +111,7 @@ async def upload_organization_favicon_route(
 
 @router.delete("/organizations/{org_id}/branding/logo", response_model=OrganizationBrandingResponse)
 async def delete_organization_logo(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     current = await get_org_branding(db, org_id)
     updated = await update_org_branding(db, org_id, {"logo_url": None})
@@ -124,7 +125,7 @@ async def delete_organization_logo(
 
 @router.delete("/organizations/{org_id}/branding/favicon", response_model=OrganizationBrandingResponse)
 async def delete_organization_favicon(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     current = await get_org_branding(db, org_id)
     updated = await update_org_branding(db, org_id, {"favicon_url": None})

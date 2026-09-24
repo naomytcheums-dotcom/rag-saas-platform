@@ -16,6 +16,7 @@ from api.schemas.evaluation import (
     RegressionThresholdCheckRequest, RegressionThresholdCreateRequest, RegressionThresholdResponse,
     RegressionThresholdUpdateRequest, RegressionThresholdViolation,
 )
+from api.security.permissions import require_permission
 from api.security.evaluation import require_regression_threshold_admin
 from api.security.organizations import require_org_admin
 from api.services.regression_thresholds import (
@@ -28,7 +29,7 @@ router = APIRouter(tags=["regression-thresholds"])
 
 @router.post("/organizations/{org_id}/thresholds", response_model=RegressionThresholdResponse, status_code=status.HTTP_201_CREATED)
 async def set_regression_threshold_endpoint(
-    org_id: uuid.UUID, payload: RegressionThresholdCreateRequest, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, payload: RegressionThresholdCreateRequest, _caller: OrganizationMember = Depends(require_permission("evaluation:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     threshold = await set_regression_threshold(db, org_id, payload.metric, payload.threshold, payload.severity, current_user.id)
@@ -38,7 +39,7 @@ async def set_regression_threshold_endpoint(
 
 
 @router.get("/organizations/{org_id}/thresholds", response_model=list[RegressionThresholdResponse])
-async def list_regression_thresholds_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def list_regression_thresholds_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db)):
     return await get_regression_thresholds(db, org_id)
 
 
@@ -71,6 +72,6 @@ async def delete_regression_threshold_endpoint(
 
 @router.post("/organizations/{org_id}/thresholds/check", response_model=list[RegressionThresholdViolation])
 async def check_regression_thresholds_endpoint(
-    org_id: uuid.UUID, payload: RegressionThresholdCheckRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, payload: RegressionThresholdCheckRequest, _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await check_regression_thresholds(db, org_id, payload.metrics)

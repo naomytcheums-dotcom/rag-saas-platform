@@ -23,6 +23,7 @@ from api.schemas.white_label import (
     ConfigureEmailRequest, SetCustomDomainRequest, WhiteLabelConfigResponse, WhiteLabelFullConfigResponse,
     WhiteLabelFullUpdateRequest, WhiteLabelUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member, require_org_owner
 from api.security.white_label import (
     DomainNotFoundError, configure_email, get_white_label_config, get_whitelabel_config, get_whitelabel_preview,
@@ -35,7 +36,7 @@ router = APIRouter(tags=["white-label"])
 
 @router.get("/organizations/{org_id}/white-label", response_model=WhiteLabelConfigResponse)
 async def get_white_label_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     config = await get_white_label_config(db, org_id)
     return WhiteLabelConfigResponse(organization_id=org_id, **config)
@@ -44,7 +45,7 @@ async def get_white_label_route(
 @router.patch("/organizations/{org_id}/white-label", response_model=WhiteLabelConfigResponse)
 async def update_white_label_route(
     org_id: uuid.UUID, payload: WhiteLabelUpdateRequest,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     updates = payload.model_dump(exclude_unset=True)
     if "hide_platform_branding" in updates:
@@ -63,7 +64,7 @@ async def update_white_label_route(
 
 @router.get("/organizations/{org_id}/whitelabel/config", response_model=WhiteLabelFullConfigResponse)
 async def get_whitelabel_config_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:read")), db: AsyncSession = Depends(get_db),
 ):
     config = await get_whitelabel_config(db, org_id)
     return WhiteLabelFullConfigResponse(organization_id=org_id, **config)
@@ -72,7 +73,7 @@ async def get_whitelabel_config_route(
 @router.patch("/organizations/{org_id}/whitelabel/config", response_model=WhiteLabelFullConfigResponse)
 async def update_whitelabel_config_route(
     org_id: uuid.UUID, payload: WhiteLabelFullUpdateRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     updates = payload.model_dump(exclude_unset=True)
     config = await update_whitelabel_config(db, org_id, updates, caller.user_id)
@@ -83,7 +84,7 @@ async def update_whitelabel_config_route(
 @router.post("/organizations/{org_id}/whitelabel/domain", response_model=WhiteLabelFullConfigResponse, status_code=status.HTTP_201_CREATED)
 async def set_whitelabel_domain_route(
     org_id: uuid.UUID, payload: SetCustomDomainRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         config = await set_custom_domain(db, org_id, payload.domain, caller.user_id)
@@ -95,7 +96,7 @@ async def set_whitelabel_domain_route(
 
 @router.delete("/organizations/{org_id}/whitelabel/domain", response_model=WhiteLabelFullConfigResponse)
 async def remove_whitelabel_domain_route(
-    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         config = await remove_custom_domain(db, org_id, caller.user_id)
@@ -107,7 +108,7 @@ async def remove_whitelabel_domain_route(
 
 @router.post("/organizations/{org_id}/whitelabel/domain/verify", response_model=WhiteLabelFullConfigResponse)
 async def verify_whitelabel_domain_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         config = await verify_domain(db, org_id)
@@ -120,7 +121,7 @@ async def verify_whitelabel_domain_route(
 @router.post("/organizations/{org_id}/whitelabel/email", response_model=WhiteLabelFullConfigResponse)
 async def configure_whitelabel_email_route(
     org_id: uuid.UUID, payload: ConfigureEmailRequest,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     config = await configure_email(db, org_id, sender_name=payload.sender_name, sender_email=payload.sender_email, user_id=caller.user_id)
     await db.commit()
@@ -129,7 +130,7 @@ async def configure_whitelabel_email_route(
 
 @router.delete("/organizations/{org_id}/whitelabel/email", response_model=WhiteLabelFullConfigResponse)
 async def remove_whitelabel_email_route(
-    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     config = await remove_email_config(db, org_id, caller.user_id)
     await db.commit()
@@ -139,7 +140,7 @@ async def remove_whitelabel_email_route(
 @router.post("/organizations/{org_id}/whitelabel/logo", response_model=WhiteLabelFullConfigResponse)
 async def upload_whitelabel_logo_route(
     org_id: uuid.UUID, file: UploadFile,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
     try:
@@ -154,7 +155,7 @@ async def upload_whitelabel_logo_route(
 
 @router.delete("/organizations/{org_id}/whitelabel/logo", response_model=WhiteLabelFullConfigResponse)
 async def remove_whitelabel_logo_route(
-    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     config = await remove_logo(db, org_id, caller.user_id)
     await db.commit()
@@ -164,7 +165,7 @@ async def remove_whitelabel_logo_route(
 @router.post("/organizations/{org_id}/whitelabel/favicon", response_model=WhiteLabelFullConfigResponse)
 async def upload_whitelabel_favicon_route(
     org_id: uuid.UUID, file: UploadFile,
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
     try:
@@ -179,7 +180,7 @@ async def upload_whitelabel_favicon_route(
 
 @router.get("/organizations/{org_id}/whitelabel/preview", response_model=WhiteLabelFullConfigResponse)
 async def get_whitelabel_preview_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:read")), db: AsyncSession = Depends(get_db),
 ):
     config = await get_whitelabel_preview(db, org_id)
     return WhiteLabelFullConfigResponse(organization_id=org_id, **config)
@@ -187,7 +188,7 @@ async def get_whitelabel_preview_route(
 
 @router.post("/organizations/{org_id}/whitelabel/reset", response_model=WhiteLabelFullConfigResponse)
 async def reset_whitelabel_route(
-    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     config = await reset_whitelabel(db, org_id, caller.user_id)
     await db.commit()

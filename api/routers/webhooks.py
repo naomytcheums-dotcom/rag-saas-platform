@@ -14,6 +14,7 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.models.webhook import Webhook
 from api.schemas.webhooks import WebhookCreateRequest, WebhookDeliveryResponse, WebhookResponse, WebhookUpdateRequest
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_admin
 from api.services.webhooks import WebhookError, create_webhook, delete_webhook, list_webhook_deliveries, list_webhooks, send_test_delivery, update_webhook
@@ -40,7 +41,7 @@ async def _require_webhook_org_admin(webhook_id: uuid.UUID, current_user: User =
 
 @router.post("/organizations/{org_id}/webhooks", response_model=WebhookResponse)
 async def create_webhook_endpoint(
-    org_id: uuid.UUID, payload: WebhookCreateRequest, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, payload: WebhookCreateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("webhooks:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         webhook = await create_webhook(db, org_id, payload.name, payload.url, payload.events, headers=payload.headers, secret=payload.secret, created_by=caller.user_id)
@@ -56,7 +57,7 @@ async def create_webhook_endpoint(
 
 
 @router.get("/organizations/{org_id}/webhooks", response_model=list[WebhookResponse])
-async def list_webhooks_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def list_webhooks_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("webhooks:manage")), db: AsyncSession = Depends(get_db)):
     return await list_webhooks(db, org_id)
 
 

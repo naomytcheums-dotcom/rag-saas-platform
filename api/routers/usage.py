@@ -19,6 +19,7 @@ from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.models.organization_usage import OrganizationUsageDetail
 from api.schemas.usage import UsageDayEntry, UsageDetailEntry, UsageDetailListResponse, UsageResponse
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin
 from api.utils import MAX_PAGE_SIZE
 from api.security.usage import get_usage, get_usage_summary
@@ -31,7 +32,7 @@ router = APIRouter(tags=["usage"])
 async def get_organization_usage(
     org_id: uuid.UUID, metric: str | None = None,
     start_date: dt.date | None = None, end_date: dt.date | None = None,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     """
     `metric` omitted: the full résumé across every metric this
@@ -58,7 +59,7 @@ async def get_organization_usage_details(
     org_id: uuid.UUID, metric: str | None = None, user_id: uuid.UUID | None = None,
     start_date: dt.date | None = None, end_date: dt.date | None = None,
     limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     """
     The raw, per-event traceability log (item 2's optional
@@ -99,7 +100,7 @@ async def get_organization_usage_details(
 async def export_organization_usage(
     org_id: uuid.UUID, format: str = Query(default="json", pattern="^(json|csv)$"),
     start_date: dt.date | None = None, end_date: dt.date | None = None,
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     """
     Exports the DAILY AGGREGATE (get_usage_summary), never the raw

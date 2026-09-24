@@ -19,6 +19,7 @@ from api.schemas.custom_tools import (
     CustomToolCreateRequest, CustomToolExecuteRequest, CustomToolExecuteResponse, CustomToolResponse,
     CustomToolUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.custom_tools import (
     CustomToolError, create_custom_tool, delete_custom_tool, get_custom_tools, require_custom_tool_manager,
     require_custom_tool_member, update_custom_tool,
@@ -45,7 +46,7 @@ async def create_custom_tool_endpoint(
 
 @router.get("/organizations/{org_id}/custom-tools", response_model=list[CustomToolResponse])
 async def list_custom_tools_endpoint(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db),
 ):
     return await get_custom_tools(db, org_id)
 

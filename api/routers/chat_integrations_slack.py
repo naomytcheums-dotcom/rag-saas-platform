@@ -11,6 +11,7 @@ from api.models.audit_log import AuditAction
 from api.models.chat_integrations import SlackIntegration
 from api.models.organization import OrganizationMember
 from api.schemas.chat_integrations import SlackConfigResponse, SlackConfigureRequest, SlackSendMessageRequest
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.chat_integrations_signature import verify_slack_signature
 from api.security.organizations import require_org_admin
@@ -32,7 +33,7 @@ async def _get_integration(db: AsyncSession, org_id: uuid.UUID) -> SlackIntegrat
 
 
 @router.get("/organizations/{org_id}/integrations/slack/auth")
-async def slack_auth_url_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin)):
+async def slack_auth_url_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("integrations:manage"))):
     try:
         return {"url": get_oauth_url(org_id)}
     except SlackIntegrationError as exc:
@@ -50,7 +51,7 @@ async def slack_oauth_callback_endpoint(code: str, state: str, db: AsyncSession 
 
 
 @router.post("/organizations/{org_id}/integrations/slack/configure", response_model=SlackConfigResponse)
-async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureRequest, request: Request, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     data = payload.model_dump(exclude_unset=True)
     try:
@@ -68,12 +69,12 @@ async def slack_configure_endpoint(org_id: uuid.UUID, payload: SlackConfigureReq
 
 
 @router.get("/organizations/{org_id}/integrations/slack/config", response_model=SlackConfigResponse)
-async def slack_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_get_config_endpoint(org_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     return await _get_integration(db, org_id)
 
 
 @router.delete("/organizations/{org_id}/integrations/slack")
-async def slack_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_delete_integration_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     await db.delete(integration)
     await log_audit_action(
@@ -85,7 +86,7 @@ async def slack_delete_integration_endpoint(org_id: uuid.UUID, request: Request,
 
 
 @router.post("/organizations/{org_id}/integrations/slack/send")
-async def slack_send_endpoint(org_id: uuid.UUID, payload: SlackSendMessageRequest, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def slack_send_endpoint(org_id: uuid.UUID, payload: SlackSendMessageRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
     return await send_slack_response(integration, payload.channel, payload.text, payload.thread_ts)
 

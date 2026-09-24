@@ -90,6 +90,7 @@ _DEFAULT_ROLE_PERMISSIONS: dict[OrganizationRole, set[str]] = {
         "evaluation:read", "evaluation:write",
         "members:read",
         "settings:read",
+        "audit_logs:read",
     },
     OrganizationRole.viewer: {
         "documents:read",

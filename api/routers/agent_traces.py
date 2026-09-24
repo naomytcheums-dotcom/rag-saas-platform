@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.schemas.agent_traces import AgentTraceResponse
+from api.security.permissions import require_permission
 from api.security.agent_runs import get_run
 from api.security.organizations import require_org_member
 from api.services.agent_traces import export_agent_traces, get_agent_trace_tree, get_agent_traces
@@ -37,7 +38,7 @@ async def _get_owned_run(db: AsyncSession, org_id: uuid.UUID, run_id: uuid.UUID)
 @router.get("/traces", response_model=list[AgentTraceResponse])
 async def list_agent_traces(
     org_id: uuid.UUID, run_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_run(db, org_id, run_id)
     return await get_agent_traces(db, run_id)
@@ -46,7 +47,7 @@ async def list_agent_traces(
 @router.get("/traces/tree")
 async def get_agent_traces_tree(
     org_id: uuid.UUID, run_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_run(db, org_id, run_id)
     return await get_agent_trace_tree(db, run_id)
@@ -55,7 +56,7 @@ async def get_agent_traces_tree(
 @router.get("/traces/export")
 async def export_agent_traces_endpoint(
     org_id: uuid.UUID, run_id: uuid.UUID, format: str = "json",
-    _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_run(db, org_id, run_id)
     try:

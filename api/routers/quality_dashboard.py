@@ -18,6 +18,7 @@ from api.models.organization import OrganizationMember
 from api.schemas.quality_dashboard import (
     QualityDashboardResponse, QualityResponseListResponse, QualityTrendsResponse,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin
 from api.utils import MAX_PAGE_SIZE
 from api.services.quality_dashboard import (
@@ -31,7 +32,7 @@ router = APIRouter(tags=["quality-dashboard"])
 @router.get("/organizations/{org_id}/quality/dashboard", response_model=QualityDashboardResponse)
 async def get_quality_dashboard_endpoint(
     org_id: uuid.UUID, period: int | None = Query(default=None, ge=1),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await get_quality_dashboard(db, org_id, period)
 
@@ -39,7 +40,7 @@ async def get_quality_dashboard_endpoint(
 @router.get("/organizations/{org_id}/quality/metrics", response_model=QualityDashboardResponse)
 async def get_quality_metrics_endpoint(
     org_id: uuid.UUID, period: int | None = Query(default=None, ge=1),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     """A real, narrower view than the dashboard above -- just the
     aggregate metrics, same real `QualityDashboardResponse` shape with
@@ -52,7 +53,7 @@ async def get_quality_metrics_endpoint(
 @router.get("/organizations/{org_id}/quality/trends", response_model=QualityTrendsResponse)
 async def get_quality_trends_endpoint(
     org_id: uuid.UUID, period: int | None = Query(default=None, ge=1), metric: str = "confidence_score",
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     points = await get_quality_trends(db, org_id, period, metric)
     return QualityTrendsResponse(metric=metric, points=points)
@@ -61,7 +62,7 @@ async def get_quality_trends_endpoint(
 @router.get("/organizations/{org_id}/quality/responses", response_model=QualityResponseListResponse)
 async def get_quality_responses_endpoint(
     org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     return await get_quality_responses(db, org_id, limit=limit, offset=offset)
 
@@ -69,7 +70,7 @@ async def get_quality_responses_endpoint(
 @router.get("/organizations/{org_id}/quality/export")
 async def export_quality_metrics_endpoint(
     org_id: uuid.UUID, format: str = Query(default="json", pattern="^(json|csv)$"), period: int | None = Query(default=None, ge=1),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("evaluation:manage")), db: AsyncSession = Depends(get_db),
 ):
     export = await export_quality_metrics(db, org_id, period)
 

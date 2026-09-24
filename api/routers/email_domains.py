@@ -23,6 +23,7 @@ from api.dependencies import get_db
 from api.models.custom_domain import CustomDomain
 from api.models.organization import OrganizationMember
 from api.schemas.email_domains import EmailDnsRecordEntry, EmailDnsResponse, EmailDomainStatusResponse
+from api.security.permissions import require_permission
 from api.security.email_domains import get_email_dns_records, get_email_verification_status, verify_email_domain
 from api.security.organizations import require_org_owner
 
@@ -39,7 +40,7 @@ async def _get_owned_domain(db: AsyncSession, org_id: uuid.UUID, domain_id: uuid
 @router.post("/organizations/{org_id}/domains/{domain_id}/email/verify", response_model=EmailDomainStatusResponse)
 async def verify_email_domain_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     updated = await verify_email_domain(db, domain)
@@ -51,7 +52,7 @@ async def verify_email_domain_route(
 @router.get("/organizations/{org_id}/domains/{domain_id}/email/status", response_model=EmailDomainStatusResponse)
 async def get_email_domain_status_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     return EmailDomainStatusResponse(id=domain.id, domain=domain.domain, **get_email_verification_status(domain))
@@ -60,7 +61,7 @@ async def get_email_domain_status_route(
 @router.get("/organizations/{org_id}/domains/{domain_id}/email/dns", response_model=EmailDnsResponse)
 async def get_email_domain_dns_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     data = await get_email_dns_records(db, domain)

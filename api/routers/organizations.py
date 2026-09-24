@@ -24,6 +24,7 @@ from api.schemas.organizations import (
     OrganizationListResponse,
     OrganizationUpdateRequest,
 )
+from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import create_organization_with_owner, require_org_member, require_org_owner
 from api.utils import client_ip
@@ -67,7 +68,7 @@ async def list_my_organizations(current_user: User = Depends(get_current_user), 
 
 @router.get("/{org_id}", response_model=OrganizationEntry)
 async def get_organization(
-    org_id: uuid.UUID, membership: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, membership: OrganizationMember = Depends(require_permission("settings:read")), db: AsyncSession = Depends(get_db),
 ):
     organization = await db.get(Organization, org_id)
     return _to_entry(organization, membership.role)
@@ -76,7 +77,7 @@ async def get_organization(
 @router.patch("/{org_id}", response_model=OrganizationEntry)
 async def update_organization(
     org_id: uuid.UUID, payload: OrganizationUpdateRequest,
-    membership: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    membership: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     organization = await db.get(Organization, org_id)
     organization.name = payload.name
@@ -95,7 +96,7 @@ async def update_organization(
 @router.delete("/{org_id}")
 async def delete_organization(
     org_id: uuid.UUID, request: Request,
-    membership: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    membership: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     """Owner only. A plain Core DELETE, not session.delete() -- the
     database's own ON DELETE CASCADE (the Alembic migration) removes

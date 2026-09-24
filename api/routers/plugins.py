@@ -26,6 +26,7 @@ from api.schemas.plugins import (
     InstallationResponse, InstallationUpdateRequest, PermissionResponse, PluginExecutionRequest, PluginExecutionResponse,
     PluginRejectRequest, PluginResponse, PluginVersionResponse, RatingSummaryResponse, ReviewRequest, ReviewResponse,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member
 from api.security.plugin_manifest import ALLOWED_PLUGIN_PERMISSIONS, PluginCodeSecurityError, PluginManifestError
 from api.services import plugins
@@ -102,7 +103,7 @@ async def publish_plugin_endpoint(
     org_id: uuid.UUID, name: str = Form(...), description: str = Form(...), category: PluginCategory = Form(PluginCategory.other),
     pricing: PluginPricing = Form(PluginPricing.free), price: float | None = Form(None),
     manifest: UploadFile = File(...), code: UploadFile = File(...),
-    caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     manifest_data = await _read_manifest(manifest)
     code_bytes = await code.read()
@@ -120,7 +121,7 @@ async def publish_plugin_endpoint(
 async def republish_plugin_endpoint(
     org_id: uuid.UUID, plugin_id: uuid.UUID, manifest: UploadFile = File(...), code: UploadFile = File(...),
     description: str | None = Form(None), changelog: str | None = Form(None),
-    _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     manifest_data = await _read_manifest(manifest)
     code_bytes = await code.read()
@@ -138,12 +139,12 @@ async def republish_plugin_endpoint(
 
 
 @org_router.get("/published", response_model=list[PluginResponse])
-async def list_published_plugins_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_published_plugins_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     return await plugins.list_org_plugins(db, org_id)
 
 
 @org_router.delete("/{plugin_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def delete_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await plugins.delete_plugin(db, org_id, plugin_id)
     except plugins.PluginNotFoundError:
@@ -154,7 +155,7 @@ async def delete_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, _calle
 # -- Installation (org-scoped) -------------------------------------------------
 
 @org_router.post("/{plugin_id}/install", response_model=InstallationResponse, status_code=status.HTTP_201_CREATED)
-async def install_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def install_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         installation = await plugins.install_plugin(db, org_id, plugin_id, caller.user_id)
     except plugins.PluginNotFoundError:
@@ -169,12 +170,12 @@ async def install_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, calle
 
 
 @org_router.get("/installed", response_model=list[InstallationResponse])
-async def list_installed_plugins_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_installed_plugins_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     return await plugins.list_installed_plugins(db, org_id)
 
 
 @org_router.patch("/installed/{installation_id}", response_model=InstallationResponse)
-async def update_installation_endpoint(org_id: uuid.UUID, installation_id: uuid.UUID, body: InstallationUpdateRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def update_installation_endpoint(org_id: uuid.UUID, installation_id: uuid.UUID, body: InstallationUpdateRequest, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         installation = await plugins.set_installation_enabled(db, org_id, installation_id, enabled=body.enabled, config=body.config)
     except plugins.InstallationNotFoundError:
@@ -185,7 +186,7 @@ async def update_installation_endpoint(org_id: uuid.UUID, installation_id: uuid.
 
 
 @org_router.delete("/installed/{installation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def uninstall_plugin_endpoint(org_id: uuid.UUID, installation_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def uninstall_plugin_endpoint(org_id: uuid.UUID, installation_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await plugins.uninstall_plugin(db, org_id, installation_id)
     except plugins.InstallationNotFoundError:
@@ -196,7 +197,7 @@ async def uninstall_plugin_endpoint(org_id: uuid.UUID, installation_id: uuid.UUI
 # -- Reviews (org-scoped member) -----------------------------------------------
 
 @org_router.post("/{plugin_id}/reviews", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
-async def submit_review_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: ReviewRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def submit_review_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: ReviewRequest, caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     try:
         review = await plugins.submit_review(db, plugin_id, org_id, caller.user_id, rating=body.rating, comment=body.comment)
     except plugins.PluginNotFoundError:
@@ -211,7 +212,7 @@ async def submit_review_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: 
 # -- Execution (org-scoped member) ---------------------------------------------
 
 @org_router.post("/{plugin_id}/execute", response_model=PluginExecutionResponse, status_code=status.HTTP_201_CREATED)
-async def execute_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: PluginExecutionRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def execute_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body: PluginExecutionRequest, caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     try:
         execution = await plugins.execute_plugin(db, plugin_id, org_id, body.data, user_id=caller.user_id, required_permission=body.required_permission)
     except plugins.PluginNotFoundError:
@@ -232,7 +233,7 @@ async def execute_plugin_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, body:
 
 
 @org_router.get("/{plugin_id}/executions", response_model=list[PluginExecutionResponse])
-async def list_plugin_executions_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_plugin_executions_endpoint(org_id: uuid.UUID, plugin_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db)):
     return await plugins.get_plugin_executions(db, org_id, plugin_id, limit=limit, offset=offset)
 
 

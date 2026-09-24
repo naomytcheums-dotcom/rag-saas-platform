@@ -26,6 +26,7 @@ from api.schemas.fine_tuning import (
     FineTuningEvaluateRequest, FineTuningEvaluationResponse, FineTuningJobCreateRequest, FineTuningJobListResponse,
     FineTuningJobResponse,
 )
+from api.security.permissions import require_permission
 from api.security.fine_tuning import (
     require_dataset_admin, require_dataset_member, require_job_admin, require_job_member, require_model_admin,
     require_model_member,
@@ -42,14 +43,14 @@ router = APIRouter(tags=["fine-tuning"])
 # --------------------------------------------------------------- datasets
 
 @router.get("/fine-tuning/datasets", response_model=FineTuningDatasetListResponse)
-async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_datasets_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_datasets(db, org_id, limit, offset)
 
 
 @router.post("/fine-tuning/datasets", response_model=FineTuningDatasetResponse, status_code=status.HTTP_201_CREATED)
 async def create_dataset_endpoint(
     org_id: uuid.UUID, name: str = Form(...), description: str | None = Form(None), dataset_type: str = Form("llm"),
-    file: UploadFile = File(...), _caller: OrganizationMember = Depends(require_org_admin),
+    file: UploadFile = File(...), _caller: OrganizationMember = Depends(require_permission("agents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
@@ -87,13 +88,13 @@ async def validate_dataset_endpoint(dataset_ctx: tuple[FineTuningDataset, Organi
 # --------------------------------------------------------------- jobs
 
 @router.get("/fine-tuning/jobs", response_model=FineTuningJobListResponse)
-async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_jobs_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_jobs(db, org_id, limit, offset)
 
 
 @router.post("/fine-tuning/jobs", response_model=FineTuningJobResponse, status_code=status.HTTP_201_CREATED)
 async def create_job_endpoint(
-    org_id: uuid.UUID, payload: FineTuningJobCreateRequest, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, payload: FineTuningJobCreateRequest, _caller: OrganizationMember = Depends(require_permission("agents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -132,7 +133,7 @@ async def get_job_metrics_endpoint(job_ctx: tuple[FineTuningJob, OrganizationMem
 # --------------------------------------------------------------- models
 
 @router.get("/fine-tuning/models", response_model=FineTunedModelListResponse)
-async def list_models_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_models_endpoint(org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), _caller: OrganizationMember = Depends(require_permission("agents:read")), db: AsyncSession = Depends(get_db)):
     return await fine_tuning_service.list_models(db, org_id, limit, offset)
 
 

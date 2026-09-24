@@ -26,6 +26,7 @@ from api.models.custom_domain import CustomDomain
 from api.models.organization import OrganizationMember
 from api.models.ssl_certificate import SSLCertificate, SSLCertificateStatus
 from api.schemas.ssl_certificates import SSLCertificateResponse, SSLDns01Challenge
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_owner
 from api.security.ssl_certificates import (
     dns01_challenge_instructions,
@@ -61,7 +62,7 @@ async def _get_owned_domain(db: AsyncSession, org_id: uuid.UUID, domain_id: uuid
 @router.post("/organizations/{org_id}/domains/{domain_id}/ssl/generate", response_model=SSLCertificateResponse)
 async def generate_certificate_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     try:
@@ -79,7 +80,7 @@ async def generate_certificate_route(
 @router.get("/organizations/{org_id}/domains/{domain_id}/ssl", response_model=SSLCertificateResponse)
 async def get_certificate_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     certificate = await get_certificate(db, domain.domain)
@@ -91,7 +92,7 @@ async def get_certificate_route(
 @router.post("/organizations/{org_id}/domains/{domain_id}/ssl/renew", response_model=SSLCertificateResponse)
 async def renew_certificate_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     try:
@@ -109,7 +110,7 @@ async def renew_certificate_route(
 @router.delete("/organizations/{org_id}/domains/{domain_id}/ssl")
 async def delete_certificate_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     try:

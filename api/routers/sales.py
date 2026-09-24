@@ -20,6 +20,7 @@ from api.schemas.sales import (
     LicenseResponse, PartnerCommissionResponse, RegisterPartnerRequest, RegisterPartnerResponse, ResellerResponse,
     RespondTicketRequest, SubClientResponse, TicketMessageResponse, TicketResponseModel, ValidateLicenseRequest,
 )
+from api.security.permissions import require_permission
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import sales
 
@@ -46,7 +47,7 @@ async def validate_license_endpoint(body: ValidateLicenseRequest, db: AsyncSessi
 
 
 @org_router.post("/license/activate", response_model=LicenseResponse)
-async def activate_license_endpoint(org_id: uuid.UUID, body: ActivateLicenseRequest, _caller: OrganizationMember = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def activate_license_endpoint(org_id: uuid.UUID, body: ActivateLicenseRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     try:
         license_row = await sales.activate_license(db, body.key, org_id)
     except sales.LicenseNotFoundError:
@@ -58,26 +59,26 @@ async def activate_license_endpoint(org_id: uuid.UUID, body: ActivateLicenseRequ
 
 
 @org_router.get("/license/status", response_model=LicenseResponse | None)
-async def license_status_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def license_status_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:write")), db: AsyncSession = Depends(get_db)):
     return await sales.get_license_status(db, org_id)
 
 
 # -- Hybrid: support tickets --------------------------------------------------
 
 @org_router.post("/support/tickets", response_model=TicketResponseModel, status_code=status.HTTP_201_CREATED)
-async def create_ticket_endpoint(org_id: uuid.UUID, body: CreateTicketRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def create_ticket_endpoint(org_id: uuid.UUID, body: CreateTicketRequest, caller: OrganizationMember = Depends(require_permission("billing:write")), db: AsyncSession = Depends(get_db)):
     ticket = await sales.create_support_ticket(db, org_id, subject=body.subject, description=body.description, priority=body.priority, user_id=caller.user_id)
     await db.commit()
     return ticket
 
 
 @org_router.get("/support/tickets", response_model=list[TicketResponseModel])
-async def list_tickets_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def list_tickets_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:write")), db: AsyncSession = Depends(get_db)):
     return await sales.list_support_tickets(db, org_id)
 
 
 @org_router.get("/support/tickets/{ticket_id}/sla")
-async def ticket_sla_endpoint(org_id: uuid.UUID, ticket_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def ticket_sla_endpoint(org_id: uuid.UUID, ticket_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:write")), db: AsyncSession = Depends(get_db)):
     try:
         ticket = await sales.get_support_ticket(db, org_id, ticket_id)
     except sales.TicketNotFoundError:
@@ -86,7 +87,7 @@ async def ticket_sla_endpoint(org_id: uuid.UUID, ticket_id: uuid.UUID, _caller: 
 
 
 @org_router.post("/support/tickets/{ticket_id}/respond", response_model=TicketMessageResponse, status_code=status.HTTP_201_CREATED)
-async def respond_ticket_endpoint(org_id: uuid.UUID, ticket_id: uuid.UUID, body: RespondTicketRequest, caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db)):
+async def respond_ticket_endpoint(org_id: uuid.UUID, ticket_id: uuid.UUID, body: RespondTicketRequest, caller: OrganizationMember = Depends(require_permission("billing:write")), db: AsyncSession = Depends(get_db)):
     try:
         response = await sales.respond_to_ticket(db, org_id, ticket_id, body=body.body, is_staff=False, user_id=caller.user_id)
     except sales.TicketNotFoundError:
