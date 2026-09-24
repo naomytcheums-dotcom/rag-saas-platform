@@ -2026,3 +2026,17 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Preuve** : 3 tâches traitées en parallèle avec 16 workers
 - **Conclusion** : Le worker Celery fonctionne parfaitement.
   **Le pipeline complet (upload → Celery → chunking → embeddings → completed) est vérifié de bout en bout.**
+
+### 2026-09-24 — 2 déclencheurs notification : P1 FERMÉ
+
+- **Statut** : ✅ RÉSOLU
+- **Déclencheurs branchés** :
+  1. `billing_quota_warning` → `check_plan_resource_limit` (80% du quota)
+  2. `billing_quota_exceeded` → `check_plan_resource_limit` (100%) + `check_quota_with_notification` (API key quota)
+- **Fichiers modifiés** :
+  - `api/services/billing_usage.py` : ajout des notifications dans `check_plan_resource_limit`
+  - `api/security/public_api_auth.py` : `check_quota` → `check_quota_with_notification`
+  - `api/routers/quotas.py` : revert GET → `require_org_admin`, PATCH → `require_org_owner`
+- **Tests** : `tests/test_quotas.py` → 11 passed
+- **Note** : Les notifications ne bloquent jamais la vérification du quota (try/except).
+- **Conclusion** : Les 2 déclencheurs sont branchés et testés.
