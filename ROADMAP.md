@@ -2284,3 +2284,34 @@ Le travail a été **vraiment fait** (commit `ee73de1`) :
 **Verdict #6** : fermé **proprement**. Les admins peuvent maintenant
 customiser les templates de notification par org, avec preview et test.
 
+
+---
+
+## P2 #9 — Widget branding unifié : FERMÉ (session SSRF épinglé)
+
+**Commit** : `cc9b5c4`
+
+WidgetConfig et OrganizationBranding étaient 2 tables séparées avec
+des colonnes qui se chevauchaient (primary_color, logo_url,
+font_family). Un admin devait re-saisir les mêmes valeurs 2 fois.
+
+**Solution (sans migration)** : `_resolve_effective_branding` dans
+`api/services/widget.py` -- le widget hérite des valeurs de
+OrganizationBranding UNIQUEMENT pour les champs :
+- que l'org a réellement customisés (valeur != default branding)
+- ET que le widget n'a pas explicitement configurés (valeur == default widget)
+
+Règle documentée :
+effective = widget_value if widget_value != widget_default
+branding_value if branding_value != branding_default
+widget_default otherwise
+
+text
+
+`is_active=False` sur OrganizationBranding est respecté (defaults purs).
+
+**Tests** : 8 passed (no branding, branding at defaults, branding
+custom, widget custom wins, logo fallback, logo widget wins, inactive
+ignored, font fallback). **Aucune régression** : 97 tests widget
+existants passent toujours.
+
