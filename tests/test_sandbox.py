@@ -122,3 +122,114 @@ async def test_reset_sandbox(client, db_session, register_payload):
     data = response.json()
     assert data["status"] == "reset"
     assert data["expires_at"] >= original_expires
+
+
+# ------------------------------------------------------- isolation --
+
+
+async def test_sandboxes_are_isolated_by_organization(client, db_session, register_payload):
+    """Org A cannot see Org B's sandboxes."""
+    import uuid as _uuid
+
+    # Org A + sandbox
+    token_a, _ = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org_a = await _create_org(client, token_a, "Isolation Org A")
+
+    await client.post(
+        f"/organizations/{org_a['id']}/sandbox?name=Sandbox+A&data_ttl_hours=24",
+        headers=_auth_header(token_a),
+    )
+
+    # Org B (different email)
+    other_email = f"isolation-b-{_uuid.uuid4().hex[:8]}@example.com"
+    token_b, _ = await _register(client, db_session, other_email, "correct-horse-battery-staple")
+    org_b = await _create_org(client, token_b, "Isolation Org B")
+
+    response = await client.get(
+        f"/organizations/{org_b['id']}/sandbox",
+        headers=_auth_header(token_b),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_cannot_delete_sandbox_from_another_org(client, db_session, register_payload):
+    """Org A cannot delete Org B's sandbox."""
+    import uuid as _uuid
+
+    token_a, _ = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org_a = await _create_org(client, token_a, "Delete Cross Org A")
+
+    create_response = await client.post(
+        f"/organizations/{org_a['id']}/sandbox?name=To+Protect&data_ttl_hours=24",
+        headers=_auth_header(token_a),
+    )
+    sandbox_id = create_response.json()["id"]
+
+    # Org B
+    other_email = f"delete-b-{_uuid.uuid4().hex[:8]}@example.com"
+    token_b, _ = await _register(client, db_session, other_email, "correct-horse-battery-staple")
+    org_b = await _create_org(client, token_b, "Delete Cross Org B")
+
+    response = await client.delete(
+        f"/organizations/{org_b['id']}/sandbox/{sandbox_id}",
+        headers=_auth_header(token_b),
+    )
+
+    # 404 because the sandbox does not belong to org_b
+    assert response.status_code == 404
+
+
+# ------------------------------------------------------- TTL --
+
+
+async def test_sandbox_expires_at_is_set_correctly(client, db_session, register_payload):
+    """The expires_at is set to now + data_ttl_hours."""
+    token, _ = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, token, "TTL Sandbox Org")
+
+    response = await client.post(
+        f"/organizations/{org['id']}/sandbox?name=TTL+Sandbox&data_ttl_hours=48",
+        headers=_auth_header(token),
+    )
+
+    assert response.status_code in (200, 201)
+    data = response.json()
+    assert data["data_ttl_hours"] == 48
+    assert data["expires_at"] is not None
+
+
+# ------------------------------------------------------- errors --
+
+
+async def test_delete_nonexistent_sandbox_returns_404(client, db_session, register_payload):
+    """Deleting a non-existent sandbox returns 404."""
+    import uuid as _uuid
+
+    token, _ = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, token, "Delete Nonexistent Org")
+
+    fake_id = str(_uuid.uuid4())
+    response = await client.delete(
+        f"/organizations/{org['id']}/sandbox/{fake_id}",
+        headers=_auth_header(token),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_reset_nonexistent_sandbox_returns_404(client, db_session, register_payload):
+    """Resetting a non-existent sandbox returns 404."""
+    import uuid as _uuid
+
+    token, _ = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, token, "Reset Nonexistent Org")
+
+    fake_id = str(_uuid.uuid4())
+    response = await client.post(
+        f"/organizations/{org['id']}/sandbox/{fake_id}/reset",
+        headers=_auth_header(token),
+    )
+
+    assert response.status_code == 404
