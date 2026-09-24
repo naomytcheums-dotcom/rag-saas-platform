@@ -36,6 +36,7 @@ from api.security.public_api_auth import require_public_api_scope
 from api.services.custom_tools import execute_custom_tool, get_available_custom_tools
 from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout
 from api.services.tool_validation import get_validation_errors
+from api.services.tool_wiring import build_sql_query_tool
 from api.services.tools import get_tool, list_tools, tool_input_schema
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +62,16 @@ async def list_tools_endpoint(
         {"name": spec.name, "description": spec.description, "input_schema": spec.input_schema}
         for spec in await get_available_custom_tools(db, key.organization_id)
     ]
-    return {"tools": builtin + custom}
+
+    # Per-run SQL tool -- bound to THIS organization, never LLM-controllable
+    sql_tool = build_sql_query_tool(db, key.organization_id)
+    sql_shape = {
+        "name": sql_tool.name,
+        "description": sql_tool.description,
+        "input_schema": {"type": "object", "properties": sql_tool.parameters},
+    }
+
+    return {"tools": builtin + custom + [sql_shape]}
 
 
 @router.post("/tools/{tool_name}/call")
@@ -96,6 +106,16 @@ async def call_tool_endpoint(
             return {"content": [{"type": "text", "text": f"Tool execution failed: {exc}"}], "is_error": True}
 
         return {"content": [{"type": "text", "text": str(result)}], "is_error": False}
+
+    # Special case: execute_sql_query is a per-run tool bound by closure
+    if tool_name == "execute_sql_query":
+        arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
+        sql_tool = build_sql_query_tool(db, _key.organization_id)
+        try:
+            result = await sql_tool.handler(**arguments)
+        except Exception as exc:
+            return {"content": [{"type": "text", "text": f"Tool execution failed: {exc}"}], "is_error": True}
+        return {"content": [{"type": "text", "text": result}], "is_error": False}
 
     arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
     errors = get_validation_errors(arguments, tool_input_schema(tool))
