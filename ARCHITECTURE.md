@@ -15,25 +15,26 @@ per-feature docs linked throughout.
                                    v
 ┌───────────────────────────────────────────────────────────────┐
 │                         api/ (FastAPI)                        │
-│  89 routers — auth, orgs, documents, chat, agents, workflows, │
-│  evaluation, fine-tuning, media, billing, admin, security...  │
-└───────┬───────────────────────┬──────────────────┬────────────┘
-        │                       │                   │
-        v                       v                   v
-┌───────────────┐    ┌────────────────────┐   ┌─────────────┐
-│  PostgreSQL    │    │  Celery + Redis     │   │  S3 storage │
-│  (Supabase)    │    │  background jobs     │   │  documents, │
-│  + pgvector    │    │  (ingestion, evals,  │   │  media,     │
-│                │    │  fine-tuning polling, │   │  datasets   │
-│                │    │  reindexing, ...)     │   │             │
-└───────────────┘    └────────────────────┘   └─────────────┘
-                                   │
-                                   v
-                        ┌────────────────────┐
-                        │  litellm            │
-                        │  → Anthropic/OpenAI/ │
-                        │    Mistral/others    │
-                        └────────────────────┘
+│  92 routers — auth, orgs, documents, chat, agents, workflows, │
+│  evaluation, fine-tuning, media, billing, admin, security,    │
+│  MCP client/server, retrieval diagnostics...                  │
+└───┬───────────────┬──────────────────┬──────────────┬─────────┘
+    │               │                  │              │
+    v               v                  v              v
+┌──────────┐  ┌───────────────┐  ┌───────────┐  ┌─────────────┐
+│PostgreSQL│  │ Celery + Redis│  │S3 storage │  │External MCP │
+│(Supabase)│  │background jobs│  │documents,  │  │servers (via │
+│+pgvector │  │(ingestion,    │  │media,      │  │MCP client)  │
+│          │  │evals, workflow│  │datasets    │  │             │
+│          │  │runs, reindex) │  │            │  │             │
+└──────────┘  └───────────────┘  └───────────┘  └─────────────┘
+                        │
+                        v
+              ┌────────────────────┐
+              │  litellm            │
+              │  → Anthropic/OpenAI/ │
+              │    Mistral/others    │
+              └────────────────────┘
 ```
 
 ## API layer (`api/`)
@@ -96,6 +97,38 @@ then rebuilt for multi-tenant scale in `api/services/`. See
 [`docs/advanced/RERANKING.md`](docs/advanced/RERANKING.md) for the
 current, multi-tenant implementation.
 
+## Workflow engine
+
+`api/services/workflow_engine.py` is a real graph executor over a
+`Workflow`'s own `nodes`/`edges` (LLM call, RAG search, web search, HTTP
+call, condition, code, email, calendar, database, and a `human`
+approval block that pauses the run). Each real node execution is
+recorded in `WorkflowNodeExecution` (input/output/duration/status per
+step, mirroring `AgentTrace`'s own per-step tracing for agents) and
+streamed live over SSE (`GET /workflows/runs/{run_id}/stream`). See
+[`docs/developer/API.md`](docs/developer/API.md) and
+`docs/user/WORKFLOWS.md`.
+
+## Agent function calling and MCP
+
+`AgentOrchestrator.run_agent` runs a real, provider-native
+function-calling loop (`tools=[...]` sent to the LLM, `tool_calls`
+parsed and executed, results fed back as `role:"tool"` messages,
+looped up to a bounded step cap). Tools come from three sources: the
+platform's own built-in registry (`api/services/tools.py`), an
+organization's custom webhook tools (`api/models/custom_tool.py`), and
+**MCP (Model Context Protocol)** — this platform is both an MCP
+*client* (agents call tools on an external MCP server an org
+registers, `api/services/mcp/client.py`, using Anthropic's own `mcp`
+SDK) and an MCP *server* (external MCP clients call this platform's own
+tool registry over `/mcp/v1/*`, reusing the same org-scoped API-key
+auth every other public endpoint uses). See
+[`docs/mcp/README.md`](docs/mcp/README.md).
+
+Cross-run agent memory (`AgentLongTermMemoryItem`, distinct from the
+existing per-session short-term memory) lets a tool persist a fact
+that outlives one conversation, org-wide or per-user.
+
 ## Agents vs. autonomous agents
 
 A real, deliberate architectural split, not two names for the same
@@ -120,6 +153,42 @@ dashboard section per major feature area under `frontend/app/dashboard/`
 client and `frontend/lib/hooks/*.ts` data hooks, matching the API
 router it talks to. Design is intentionally plain: light theme only, no
 dark mode, an orange-and-white gradient, no decorative progress bars.
+
+## Evaluation (Eval Lab)
+
+A real, mature evaluation system, not just the retrieval metrics it
+started from: `EvaluationDataset`/`EvaluationQuestion` (with real
+ground-truth documents/answers), `EvaluationJob` (real, Celery-backed
+batch runs with cancellation), `EvaluationResult` (per-question
+Recall@K/MRR/NDCG/Precision/Hit-Rate, cost, latency), `ComparisonJob`
+(model/retriever/reranker/prompt comparison), `RegressionDetection`
+(automatic, per-organization regression alerts between two jobs), and
+`DeploymentEvaluation` (a real evaluation gate before promoting an
+agent version). See `docs/rag/` and `tests/test_evaluation_*.py`.
+
+## Developer platform (API keys, webhooks, SDKs)
+
+External developers authenticate with an org-scoped API key
+(`OrganizationAPIKey`, hashed at rest, scoped, rate-limited, with
+rotation/expiration), get outbound **webhooks** for real platform
+events (`Webhook`/`WebhookDelivery`, HMAC-SHA256 signed, retried with
+backoff), and can use one of three real, tested SDKs shipped in this
+repo: [`sdks/python/`](sdks/python/), [`sdks/js/`](sdks/js/), and
+[`sdks/react/`](sdks/react/) (a widget-embedding React component). See
+[`docs/developer/API.md`](docs/developer/API.md).
+
+## Observability
+
+Beyond the OpenTelemetry/Loki/Grafana stack (`docker-compose.observability.yml`,
+off unless configured), the platform tracks retrieval quality and
+performance directly: `RetrievalDiagnostic` records the resolved
+strategy, final ranked chunks, and latency for every LIVE chat query
+(not just Eval Lab questions), `AgentTrace`/`WorkflowNodeExecution`
+give per-step execution history for agents and workflows, and
+`OrganizationUsage` tracks tokens/cost per organization. Sentry
+(`api/security/error_tracking.py`) captures backend + Celery errors
+when `SENTRY_DSN` is configured. See
+[`docs/install/OBSERVABILITY_STACK.md`](docs/install/OBSERVABILITY_STACK.md).
 
 ## Diagrams
 

@@ -19,6 +19,6 @@ notifications — see [Notifications](NOTIFICATIONS.md).
 
 ## Building a workflow
 
-Workflow creation is a developer/admin task — see
-[`api/routers/workflows.py`](../../api/routers/workflows.py) and the
-[Developer Guide](../developer/OVERVIEW.md).
+Workflow creation is a developer/admin task — see the real node types,
+variable syntax, and execution-history API in
+[`docs/developer/WORKFLOWS.md`](../developer/WORKFLOWS.md).

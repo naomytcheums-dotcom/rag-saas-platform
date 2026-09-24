@@ -35,6 +35,27 @@ so every function raises `StripeNotConfiguredError`, surfaced as a real
 set, every function makes a real API call -- nothing here is mocked
 internally.
 
+## 12.2bis — Paystack
+
+`api/services/billing_paystack.py` -- a real, second payment provider
+(`api/services/billing_providers/`, a real provider-registry pattern so
+`billing_stripe.py`/`billing_paystack.py` share one interface rather
+than being two independent implementations callers branch on
+manually). Real webhook signature verification via `hmac.new(...,
+hashlib.sha512)` with `hmac.compare_digest` (constant-time, not a naive
+`==`), and real idempotency via the same `PaymentEvent` table Stripe
+uses, keyed by `f"{event_type}:{object_id}"` (Paystack, unlike Stripe,
+has no single top-level event id). Multi-tenant routing has a real
+fallback Stripe's own webhook handler doesn't need: `metadata.organization_id`
+first, then a `PaymentCustomer` lookup by `external_customer_id` if
+Paystack's own event payload omits metadata for that event type. A real,
+opt-in-only live test suite exists
+(`tests/test_billing_paystack_live.py`, skipped by default unless real
+Paystack test keys are present in the environment — see that file's
+own `pytestmark`) — see [`docs/billing/STRIPE_TEST.md`](STRIPE_TEST.md)
+for the equivalent Stripe live-testing procedure (Paystack's own is
+analogous, real test-mode keys required, never run in default CI).
+
 ## 12.3 — Credits / usage
 
 `Credit`/`CreditTransaction` (new, `api/models/billing.py`) track a

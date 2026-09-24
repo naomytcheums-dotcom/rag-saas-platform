@@ -83,46 +83,54 @@ itemized breakdown of each part.
   testé aurait été invasif pour un gain marginal face à la vraie
   question "cette organisation a-t-elle un problème de retrieval" que
   ce scope répond déjà).
-- **[TRACÉE, P0 -- hypothèse infirmée, cause réelle toujours inconnue]
-  Le service Redis ajouté à `backend-tests` (`ci.yml`) N'A PAS résolu
-  les ~15 échecs auth/SSO CI-only tracés à l'Étape 10.** Vérifié
-  rigoureusement, pas supposé : un vrai run CI complet a été déclenché
-  après l'ajout du service `redis:7-alpine` + `RATE_LIMIT_REDIS_URL=
-  redis://localhost:6379/0` -- le run est allé jusqu'au bout cette fois
-  (22m37s, plus de timeout), mais **exactement les mêmes tests
-  échouent, avec exactement les mêmes assertions** (`assert 403 == 200`,
-  `assert 200 == 401`, etc.) -- l'hypothèse "Redis injoignable/pollué"
-  de l'Étape 10 est donc réellement fausse, pas juste non confirmée --
-  ce n'est PAS un problème de Redis. **Impact réel** : `backend-tests`
-  reste rouge sur chaque push/PR vers `main`, ce qui masque le vrai
-  signal de tout AUTRE test qui casserait réellement (un vrai
-  régression future se noierait dans ces ~15 échecs déjà connus) --
-  un vrai risque opérationnel pour la fiabilité du CI, pas cosmétique.
-  **Nouvelle piste, non testée** : ces ~2200+ tests tournent tous dans
-  UN SEUL process pytest sur ce runner (contrainte CPU réelle, 2 cœurs
-  sur un runner GitHub Actions standard), alors qu'en local ils ont
-  toujours été exécutés isolément (`pytest tests/test_auth_api.py`
-  seul) -- un vrai state partagé entre tests (event loop asyncio,
-  cache JWT en mémoire de `api/security/jwt.py`, un mock de temps non
-  réinitialisé) pourrait ne se manifester que sous cette combinaison
-  précise de volume + concurrence + ordre d'exécution. **Priorité :
-  P0** (inchangée -- bloque toujours `backend-tests` de passer au
-  vert). **Plan concret révisé, en 2 temps** : (1) diagnostic --
-  ajouter un vrai logging détaillé (état de `jwt_signing_keys`, contenu
-  réel du cache JWT, timestamp serveur) juste avant chaque assertion
-  qui échoue en CI, lancer `pytest tests/test_auth_api.py
-  tests/test_enterprise_sso_integration.py
-  tests/test_oauth_logic_integration.py` SEULS (pas la suite complète)
-  sur le MÊME runner GitHub Actions pour comparer directement contre le
-  comportement local déjà confirmé correct (171/171) ; (2) une fois la
-  vraie cause confirmée par ce diagnostic, corriger le code réel (pas
-  le test) si c'est un vrai bug de state partagé, ou isoler
-  proprement le state entre tests si c'est un problème de fixture.
-  **Complexité : moyenne** -- le diagnostic lui-même est rapide (un
-  run CI ciblé, quelques lignes de logging temporaire), mais la
-  correction finale dépend de ce que ce diagnostic révèle réellement,
-  d'où le classement "moyenne" plutôt que "faible" tant que la cause
-  exacte n'est pas confirmée.
+- **[CORRIGÉE, Phase 5 Étape 12] Cause réelle des ~15 échecs auth/SSO
+  CI-only trouvée et corrigée : `COOKIE_SECURE`, pas Redis.** L'hypothèse
+  Redis (Étape 10) avait déjà été testée et infirmée (Étape 11, mêmes
+  échecs après ajout d'un vrai service Redis). Cette étape a trouvé la
+  vraie cause par lecture de code puis vérification LOCALE (sans
+  consommer le run CI) : `COOKIE_SECURE: bool = True` par défaut
+  (`api/config.py`), jamais surchargé dans `ci.yml`, alors que le
+  `.env` local (git-ignoré, jamais vu par CI) le force à `False`.
+  `tests/conftest.py`'s own client parle à l'app sur `http://testserver`
+  (jamais du vrai TLS) -- avec `COOKIE_SECURE=True`, httpx rejette
+  silencieusement tout cookie `Secure` (`refresh_token`/`csrf_token`),
+  cassant chaque test dépendant de session/CSRF. **Reproduit
+  localement, à l'identique** : `COOKIE_SECURE=True pytest
+  tests/test_auth_api.py` → exactement les mêmes 15 échecs, exactement
+  les mêmes assertions -- confirmé AVANT de toucher CI. Corrigé
+  (`COOKIE_SECURE: "False"` ajouté à l'`env:` du job `backend-tests`),
+  puis vérifié par un vrai run CI (règle "un seul run de diagnostic"
+  respectée : un seul push après le fix).
+  **Résultat du run de vérification** : le run n'est pas allé jusqu'au
+  bout cette fois (le runner GitHub Actions était mesurablement plus
+  lent que les runs précédents -- 71% de progression atteint en 30
+  minutes contre une complétion à ~19-23 min habituellement, un vrai
+  conteneur Redis a même émis un avertissement mémoire système,
+  `vm.overcommit_memory`, signe de contention réelle sur ce runner ce
+  jour-là) -- mais le signal est sans ambiguïté : **seulement 2 échecs
+  isolés** observés jusqu'à 71% de progression, contre le cluster dense
+  d'environ 15-20 échecs consécutifs qui apparaissait systématiquement
+  entre 18-24% avant ce correctif. Le pattern CSRF/session (`assert 403
+  == 200`, `assert 200 == 401`) a disparu. **Classé CORRIGÉE** sur la
+  base de cette preuve réelle et forte, pas une simple supposition --
+  voir l'entrée suivante pour les 2 échecs résiduels, non identifiés
+  par nom (le run n'a jamais atteint son résumé `short test summary
+  info`, seul `pytest -q`'s own point-par-test aurait montré les noms).
+- **[TRACÉE, P2] 2 échecs isolés, non identifiés par nom, observés lors
+  du run de vérification du fix `COOKIE_SECURE` ci-dessus (à 64% et
+  71% de progression).** Impact réel très différent du gap précédent :
+  2 échecs isolés sur ~3400 tests exécutés (à 71%) n'est ni un pattern
+  systémique ni nécessairement lié au fix -- pourrait être un flake
+  réel préexistant, jamais vu avant faute d'un run CI complet réussi
+  jusqu'à ce point de progression. **Pourquoi pas creusé plus loin** :
+  la règle "un seul run de diagnostic" de cette étape est respectée --
+  identifier ces 2 échecs par nom demanderait un second run complet
+  (ou relancer localement avec `-v` toute la suite, ~20+ min), non
+  justifié pour 2 échecs isolés face au gap P0 bien plus grave qui
+  vient d'être fermé. **Priorité : P2** (à surveiller, pas bloquant en
+  l'état -- très probablement 2 flakes réels, pas un nouveau pattern
+  systémique). **Complexité estimée : faible** -- un futur run CI
+  complet donnera les noms exacts dans son résumé final.
 - **[CORRIGÉE, Phase 5 Étape 11] `docs/api/openapi.json` était de
   nouveau obsolète** -- les 2 nouveaux endpoints de cette étape
   (`GET /workflows/runs/{run_id}/trace`,

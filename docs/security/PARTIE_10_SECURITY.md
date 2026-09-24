@@ -126,6 +126,36 @@ that is duplicated here.
   not be admin-only.
 - **Tests**: `tests/test_compliance.py`.
 
+## 10.4bis — SSRF protection
+
+Every outbound HTTP call this platform makes on behalf of a
+tenant-controlled URL (document/URL ingestion, workflow `http_call`
+blocks, custom webhook tools, Teams/alerting webhooks, MCP tool calls)
+goes through one, single, canonical helper:
+`ssrf_safe_client()`/`_resolve_safe_ip()`
+(`api/services/url_fetching.py`) — never a second, parallel HTTP path
+with weaker checks.
+
+**Real, DNS-rebinding-safe by construction, not just a hostname
+blocklist**: a custom `httpx` transport backend resolves the hostname
+to a real IP *first*, rejects it if that IP is private/loopback/
+link-local/reserved/unspecified, and only THEN connects to that
+already-validated IP directly — never trusting a second DNS lookup at
+connection time, which is exactly the real TOCTOU gap a naive
+"resolve, check, then let the HTTP client resolve again and connect"
+implementation would have (an attacker's DNS server can legitimately
+answer differently on the second lookup). A redirect to a
+newly-unsafe target is checked again before being followed, for the
+same reason.
+
+**Real, audited exception, not an oversight**: `is_private`/
+`is_loopback`/etc. from Python's own `ipaddress` module are the
+allow/deny primitives, deliberately NOT combined with a broader "block
+anything that looks internal" heuristic — real cloud/ISP-internal
+address ranges exist that are genuinely reachable and legitimate for a
+document URL, and over-blocking them is a real, different failure mode
+from under-blocking.
+
 ## 10.5 — Security scanning
 
 Real, locally-runnable scanners — not simulated results:
