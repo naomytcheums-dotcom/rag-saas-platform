@@ -2240,3 +2240,25 @@ Comportement attendu : exécution réelle. Peut révéler des bugs (c'est le but
 
 **Verdict #11** : fermé proprement. `docs/architecture/` n'est plus vide.
 
+
+---
+
+## P2 #8 — Email branding : FERMÉ COMPLET (session SSRF épinglé)
+
+**Correction de la clôture précédente** (qui disait "partiel, dette tracée") :
+
+Le travail a été **vraiment fait** :
+
+| Élément | État |
+|---------|------|
+| Async branded (FastAPI) | 7/7 créés |
+| Sync branded (Celery) | 3/3 créés |
+| Call sites patchés | 11 |
+| Tests | 19 passed (9 + 10 nouveaux) |
+| Emails auth/sécurité (20) | N/A (pas de contexte org) |
+| Emails user-level (8) | N/A (user-scoped) |
+
+**Commit** : `cf42d22` -- "feat(email): brand all 7 org-level emails"
+
+**Verdict #8** : fermé **proprement**. Plus de dette.
+
