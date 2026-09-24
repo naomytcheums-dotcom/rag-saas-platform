@@ -575,6 +575,29 @@ class AgentOrchestrator:
                         return
                     trace.append(self._trace_event("completed", {"result": result}))
                     await update_run_status(db, run.id, AgentRunStatus.completed.value, result=result, trace=list(trace))
+
+                    # Phase 5, Étape 6 (suite) -- real, automatic
+                    # long-term memory write-back. Best-effort: never
+                    # raises, never blocks the run's own result.
+                    if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED:
+                        try:
+                            from api.services.agent_long_term_memory import (
+                                extract_and_store_long_term_memory,
+                            )
+                            stored = await extract_and_store_long_term_memory(
+                                db, real_agent_id,
+                                user_id=created_by,
+                                user_message=input,
+                                assistant_message=result or "",
+                            )
+                            if stored:
+                                trace.append(self._trace_event(
+                                    "long_term_memory_stored",
+                                    {"keys": list(stored.keys())},
+                                ))
+                        except Exception:
+                            pass  # best-effort only
+
                     if llm_trace is not None:
                         await end_trace(db, llm_trace.id, output={"result": result}, status="completed")
                     if conversation_id is not None:
