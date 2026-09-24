@@ -400,3 +400,178 @@ async def import_docusign(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     count = await _ingest_records_as_documents(db, org_id, current_user.id, "docusign", records)
     return CRMImportResponse(imported=count, source="docusign")
+
+
+
+# -- Phase 5, Étape 19 -- 9 more real connectors ------------------------------
+
+
+@router.post("/organizations/{org_id}/crm/monday/import", response_model=CRMImportResponse)
+async def import_monday(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.monday_extraction import MondayError, fetch_monday_records
+    if not settings.MONDAY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Monday integration is disabled")
+    try:
+        records = await fetch_monday_records(limit=payload.limit)
+    except MondayError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "monday", records)
+    return CRMImportResponse(imported=count, source="monday")
+
+
+@router.post("/organizations/{org_id}/crm/gitlab/import", response_model=CRMImportResponse)
+async def import_gitlab(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.gitlab_extraction import GitLabError, fetch_gitlab_records
+    if not settings.GITLAB_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GitLab integration is disabled")
+    try:
+        records = await fetch_gitlab_records(limit=payload.limit)
+    except GitLabError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "gitlab", records)
+    return CRMImportResponse(imported=count, source="gitlab")
+
+
+@router.post("/organizations/{org_id}/crm/bitbucket/import", response_model=CRMImportResponse)
+async def import_bitbucket(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.bitbucket_extraction import BitbucketError, fetch_bitbucket_records
+    if not settings.BITBUCKET_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitbucket integration is disabled")
+    try:
+        records = await fetch_bitbucket_records(limit=payload.limit)
+    except BitbucketError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "bitbucket", records)
+    return CRMImportResponse(imported=count, source="bitbucket")
+
+
+@router.post("/organizations/{org_id}/crm/azure-devops/import", response_model=CRMImportResponse)
+async def import_azure_devops(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.azure_devops_extraction import AzureDevOpsError, fetch_azure_devops_records
+    if not settings.AZURE_DEVOPS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Azure DevOps integration is disabled")
+    try:
+        records = await fetch_azure_devops_records(limit=payload.limit)
+    except AzureDevOpsError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "azure-devops", records)
+    return CRMImportResponse(imported=count, source="azure-devops")
+
+
+@router.post("/organizations/{org_id}/crm/basecamp/import", response_model=CRMImportResponse)
+async def import_basecamp(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.basecamp_extraction import BasecampError, fetch_basecamp_records
+    if not settings.BASECAMP_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Basecamp integration is disabled")
+    try:
+        records = await fetch_basecamp_records(limit=payload.limit)
+    except BasecampError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "basecamp", records)
+    return CRMImportResponse(imported=count, source="basecamp")
+
+
+@router.post("/organizations/{org_id}/crm/wrike/import", response_model=CRMImportResponse)
+async def import_wrike(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.wrike_extraction import WrikeError, fetch_wrike_records
+    if not settings.WRIKE_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wrike integration is disabled")
+    try:
+        records = await fetch_wrike_records(limit=payload.limit)
+    except WrikeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "wrike", records)
+    return CRMImportResponse(imported=count, source="wrike")
+
+
+@router.post("/organizations/{org_id}/crm/smartsheet/import", response_model=CRMImportResponse)
+async def import_smartsheet(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.smartsheet_extraction import SmartsheetError, fetch_smartsheet_records
+    if not settings.SMARTSHEET_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Smartsheet integration is disabled")
+    try:
+        records = await fetch_smartsheet_records(limit=payload.limit)
+    except SmartsheetError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "smartsheet", records)
+    return CRMImportResponse(imported=count, source="smartsheet")
+
+
+@router.post("/organizations/{org_id}/crm/coda/import", response_model=CRMImportResponse)
+async def import_coda(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.coda_extraction import CodaError, fetch_coda_records
+    if not settings.CODA_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Coda integration is disabled")
+    try:
+        records = await fetch_coda_records(limit=payload.limit)
+    except CodaError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "coda", records)
+    return CRMImportResponse(imported=count, source="coda")
+
+
+@router.post("/organizations/{org_id}/crm/miro/import", response_model=CRMImportResponse)
+async def import_miro(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.miro_extraction import MiroError, fetch_miro_records
+    if not settings.MIRO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Miro integration is disabled")
+    try:
+        records = await fetch_miro_records(limit=payload.limit)
+    except MiroError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "miro", records)
+    return CRMImportResponse(imported=count, source="miro")
