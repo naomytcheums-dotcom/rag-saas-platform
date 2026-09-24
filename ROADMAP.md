@@ -1936,3 +1936,12 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Dépôt public/privé** : décision toujours en attente
 - **`backend-security` CI** : bump transformers/weasyprint toujours tracé P1
 - **2 échecs CI résiduels** : toujours tracés P2
+
+### 2026-09-24 — ultralytics non installable (PyPI)
+
+- **Statut** : TRACÉ P2
+- **Problème** : `pip install ultralytics` échoue (PyPI inaccessible depuis l'environnement actuel)
+- **Impact** : 5 tests media échouent (`test_object_detection.py`, `test_visual_search.py`)
+- **Cause** : Problème réseau/PyPI, pas un problème de code
+- **Plan** : Installer `ultralytics` quand PyPI sera accessible, puis relancer les tests media
+- **Complexité** : Faible (une fois PyPI accessible)
