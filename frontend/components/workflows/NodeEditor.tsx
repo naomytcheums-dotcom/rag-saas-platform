@@ -109,13 +109,67 @@ function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (
           <TextField label="Titre" value={str("title")} onChange={(v) => set("title", v)} />
         </>
       );
-    case "human":
+    case "human": {
+      const inputType = str("input_type") || "text";
+      const rawOptions = data.choices;
+      const choices: string[] = Array.isArray(rawOptions) ? rawOptions.map((c) => String(c)) : ["", ""];
+
+      function updateChoice(index: number, value: string) {
+        const next = [...choices];
+        next[index] = value;
+        set("choices", next);
+      }
+
+      function addChoice() {
+        set("choices", [...choices, ""]);
+      }
+
+      function removeChoice(index: number) {
+        set("choices", choices.filter((_, i) => i !== index));
+      }
+
       return (
         <>
           <TextField label="Message ({{ variable }} supporté)" value={str("message")} onChange={(v) => set("message", v)} multiline />
-          <SelectField label="Type de réponse" value={str("input_type") || "text"} options={["text", "confirm", "choice"]} onChange={(v) => set("input_type", v)} />
+          <SelectField label="Type de réponse" value={inputType} options={["text", "confirm", "choice"]} onChange={(v) => set("input_type", v)} />
+          <TextField label="Label du bouton d'approbation" value={str("approve_label") || "Approuver"} onChange={(v) => set("approve_label", v)} />
+          <TextField label="Label du bouton de rejet" value={str("reject_label") || "Rejeter"} onChange={(v) => set("reject_label", v)} />
+          <TextField label="Timeout (secondes, vide = pas de timeout)" value={str("timeout_seconds") || ""} onChange={(v) => set("timeout_seconds", v)} />
+
+          {inputType === "choice" ? (
+            <div className="rounded-md border border-border bg-background p-2">
+              <p className="mb-2 text-xs font-medium text-foreground">Options de choix</p>
+              {choices.map((choice, index) => (
+                <div key={index} className="mb-1 flex gap-1">
+                  <input
+                    type="text"
+                    value={choice}
+                    onChange={(e) => updateChoice(index, e.target.value)}
+                    placeholder={`Option ${index + 1}`}
+                    className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeChoice(index)}
+                    className="rounded-md border border-border px-2 py-1 text-xs text-danger hover:border-danger"
+                    title="Supprimer cette option"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addChoice}
+                className="mt-1 w-full rounded-md border border-border px-2 py-1 text-xs text-foreground-muted hover:border-accent"
+              >
+                + Ajouter une option
+              </button>
+            </div>
+          ) : null}
         </>
       );
+    }
     default:
       return <p className="text-xs text-foreground-muted">Ce type de nœud n&apos;a pas de configuration.</p>;
   }
