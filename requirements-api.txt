@@ -161,7 +161,7 @@ sentence-transformers==5.7.0
 # confirmed by rerunning that exact test locally against 4.57.6, which
 # passed cleanly. Pinned to the version verified working, same "pin what
 # you actually import" convention as every other entry in this file.
-transformers==4.57.6
+transformers==5.16.1
 
 # -- Documents / DOCX import (Partie 2.1.2) -----------------------------------
 # The exact library the master cahier des charges names for this item

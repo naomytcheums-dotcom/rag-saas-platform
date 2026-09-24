@@ -2040,3 +2040,16 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Tests** : `tests/test_quotas.py` → 11 passed
 - **Note** : Les notifications ne bloquent jamais la vérification du quota (try/except).
 - **Conclusion** : Les 2 déclencheurs sont branchés et testés.
+
+### 2026-09-24 — `transformers` + `weasyprint` : P1 FERMÉ
+
+- **Statut** : ✅ RÉSOLU
+- **transformers** : `4.57.6` → `5.16.1` (0 CVE vs 7 CVE)
+- **weasyprint** : `63.1` → `65.0` (0 CVE vs 5 CVE)
+- **Vérifications** :
+  - `transformers==5.16.1` installé ✅
+  - `weasyprint==65.0` installé ✅
+  - `pip-audit` : 0 vulnérabilité sur les 2 ✅
+  - `CLIPModel`, `CLIPProcessor` importent ✅
+- **Note** : Les tests CLIP échouent sur `ultralytics` (module manquant, P2 préexistant). Ce n'est PAS un problème de `transformers`.
+- **Conclusion** : Les 12 CVE sont corrigées. Le P1 est fermé.
