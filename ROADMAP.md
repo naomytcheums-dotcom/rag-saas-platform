@@ -118,19 +118,29 @@ itemized breakdown of each part.
   info`, seul `pytest -q`'s own point-par-test aurait montré les noms).
 - **[TRACÉE, P2] 2 échecs isolés, non identifiés par nom, observés lors
   du run de vérification du fix `COOKIE_SECURE` ci-dessus (à 64% et
-  71% de progression).** Impact réel très différent du gap précédent :
-  2 échecs isolés sur ~3400 tests exécutés (à 71%) n'est ni un pattern
-  systémique ni nécessairement lié au fix -- pourrait être un flake
-  réel préexistant, jamais vu avant faute d'un run CI complet réussi
-  jusqu'à ce point de progression. **Pourquoi pas creusé plus loin** :
-  la règle "un seul run de diagnostic" de cette étape est respectée --
-  identifier ces 2 échecs par nom demanderait un second run complet
-  (ou relancer localement avec `-v` toute la suite, ~20+ min), non
-  justifié pour 2 échecs isolés face au gap P0 bien plus grave qui
-  vient d'être fermé. **Priorité : P2** (à surveiller, pas bloquant en
-  l'état -- très probablement 2 flakes réels, pas un nouveau pattern
-  systémique). **Complexité estimée : faible** -- un futur run CI
-  complet donnera les noms exacts dans son résumé final.
+  71% de progression, sur environ 3400 tests déjà exécutés à ce
+  point).** **Description précise** : le point-par-point `pytest -q`
+  a affiché 2 caractères `F` isolés (un seul à chaque occurrence, pas
+  un cluster) au milieu de longues séries de `.` -- le run s'est arrêté
+  sur le timeout de 30 minutes avant d'atteindre son résumé final
+  (`short test summary info`), donc les noms exacts des 2 tests
+  concernés ne sont pas connus. **Impact réel** : très différent du
+  gap systémique déjà fermé -- 2 échecs isolés sur ~3400 tests
+  n'empêchent pas de distinguer un vrai signal de régression (contraire
+  au cluster de 15-20 échecs qui masquait tout autre problème), mais
+  restent un vrai écart non expliqué qui pourrait, dans le pire cas,
+  être un flake réel affectant occasionnellement des PR légitimes.
+  **Priorité : P2** (à surveiller, non bloquant -- le vrai problème P0
+  de cette étape, systémique et reproductible, est résolu ; celui-ci
+  est isolé et non reproduit). **Plan** : lors du prochain run CI
+  complet (déclenché par un futur push normal, pas un run dédié rien
+  que pour ça -- pour respecter la règle de gestion des tokens),
+  relire le résumé final `short test summary info` pour obtenir les 2
+  noms exacts ; si le même test échoue une seconde fois, l'investiguer
+  comme un vrai bug ; s'il ne réapparaît pas, le classer flake connu et
+  documenté. **Complexité estimée : faible** -- l'identification est
+  gratuite (un futur run normal la fournit), l'investigation elle-même
+  ne peut être chiffrée avant de connaître les noms exacts.
 - **[CORRIGÉE, Phase 5 Étape 11] `docs/api/openapi.json` était de
   nouveau obsolète** -- les 2 nouveaux endpoints de cette étape
   (`GET /workflows/runs/{run_id}/trace`,
