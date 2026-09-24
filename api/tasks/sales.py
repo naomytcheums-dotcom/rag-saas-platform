@@ -133,7 +133,7 @@ def check_usage_limits() -> int:
     point is reached."""
     from api.models.agent import Agent
     from api.models.document import Document
-    from api.services.email import send_usage_limit_warning_email
+    from api.services.email_branding import send_branded_usage_limit_warning_email_sync
 
     _COUNT_QUERY = {
         "documents": lambda org_id: select(func.count()).select_from(Document).where(Document.organization_id == org_id),
@@ -169,7 +169,7 @@ def check_usage_limits() -> int:
                 if percent < alert.threshold_percent:
                     continue
                 try:
-                    send_usage_limit_warning_email(owner_email, str(organization_id), alert.resource_type, percent, limit)
+                    send_branded_usage_limit_warning_email_sync(db, organization_id, owner_email, alert.resource_type, percent, limit)
                     sent += 1
                 except Exception:
                     logger.warning("check_usage_limits: email delivery failed for org %s", organization_id, exc_info=True)

@@ -84,7 +84,7 @@ def mark_overdue_invoices_task() -> int:
 def send_invoice_reminders() -> int:
     from api.models.organization import OrganizationMember, OrganizationRole
     from api.models.user import User
-    from api.services.email import send_invoice_reminder_email
+    from api.services.email_branding import send_branded_invoice_reminder_email_sync
 
     reminder_days = [int(d) for d in settings.INVOICE_REMINDER_DAYS.split(",") if d.strip()]
     today = dt.date.today()
@@ -103,7 +103,7 @@ def send_invoice_reminders() -> int:
             if not owner_email:
                 continue
             try:
-                send_invoice_reminder_email(owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", days_overdue)
+                send_branded_invoice_reminder_email_sync(db, invoice.organization_id, owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", days_overdue)
                 sent += 1
             except Exception:
                 logger.warning("send_invoice_reminders: delivery failed for invoice %s", invoice.number, exc_info=True)

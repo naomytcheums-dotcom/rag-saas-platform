@@ -69,10 +69,10 @@ from api.security.permissions import require_permission
 from api.security.quotas import require_quota_available
 from api.security.usage import record_usage
 from api.security.user_limits import require_can_invite_members
-from api.services.email import (
-    send_organization_member_added_email,
-    send_organization_member_removed_email,
-    send_organization_member_role_changed_email,
+from api.services.email_branding import (
+    send_branded_organization_member_added_email,
+    send_branded_organization_member_removed_email,
+    send_branded_organization_member_role_changed_email,
 )
 from api.utils import client_ip
 
@@ -165,7 +165,9 @@ async def invite_organization_member(
     await db.commit()
 
     try:
-        await asyncio.to_thread(send_organization_member_added_email, target_user.email, organization.name, payload.role.value)
+        await send_branded_organization_member_added_email(
+            db, org_id, target_user.email, payload.role.value,
+        )
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send member-added notification to %s: %s", target_user.email, exc)
 
@@ -199,7 +201,9 @@ async def update_organization_member_role(
 
     organization = await db.get(Organization, org_id)
     try:
-        await asyncio.to_thread(send_organization_member_role_changed_email, target_email, organization.name, payload.role.value)
+        await send_branded_organization_member_role_changed_email(
+            db, org_id, target_email, payload.role.value,
+        )
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send role-changed notification to %s: %s", target_email, exc)
 
@@ -240,7 +244,9 @@ async def remove_organization_member(
     await db.commit()
 
     try:
-        await asyncio.to_thread(send_organization_member_removed_email, target_email, organization.name)
+        await send_branded_organization_member_removed_email(
+            db, org_id, target_email,
+        )
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send member-removed notification to %s: %s", target_email, exc)
 

@@ -100,14 +100,16 @@ async def update_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_i
 
 
 async def send_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
-    from api.services.email import send_invoice_email
+    from api.services.email_branding import send_branded_invoice_email
 
     invoice = await get_invoice(db, organization_id, invoice_id)
     owner_email = await _owner_email(db, organization_id)
-    org = await db.get(Organization, organization_id)
     if owner_email:
         try:
-            await asyncio.to_thread(send_invoice_email, owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", org.name if org else "")
+            await send_branded_invoice_email(
+                db, organization_id, owner_email, invoice.number,
+                f"{invoice.total_cents / 100:.2f} {invoice.currency}",
+            )
         except Exception:
             logger.warning("send_invoice: email delivery failed for invoice %s", invoice.number, exc_info=True)
     invoice.status = InvoiceStatus.sent
@@ -116,14 +118,18 @@ async def send_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id:
 
 
 async def remind_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
-    from api.services.email import send_invoice_reminder_email
+    from api.services.email_branding import send_branded_invoice_reminder_email
 
     invoice = await get_invoice(db, organization_id, invoice_id)
     owner_email = await _owner_email(db, organization_id)
     days_overdue = (dt.date.today() - invoice.due_date).days if invoice.due_date else 0
     if owner_email:
         try:
-            await asyncio.to_thread(send_invoice_reminder_email, owner_email, invoice.number, f"{invoice.total_cents / 100:.2f} {invoice.currency}", max(days_overdue, 0))
+            await send_branded_invoice_reminder_email(
+                db, organization_id, owner_email, invoice.number,
+                f"{invoice.total_cents / 100:.2f} {invoice.currency}",
+                max(days_overdue, 0),
+            )
         except Exception:
             logger.warning("remind_invoice: email delivery failed for invoice %s", invoice.number, exc_info=True)
     return invoice

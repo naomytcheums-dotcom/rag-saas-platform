@@ -43,8 +43,7 @@ from api.security.password_strength import is_password_known_breached
 from api.security.rate_limit import enforce_rate_limit
 from api.security.sessions import issue_session
 from api.security.usage import record_usage
-from api.services.email import send_organization_member_added_email
-from api.services.email_branding import send_branded_organization_invitation_email
+from api.services.email_branding import send_branded_organization_invitation_email, send_branded_organization_member_added_email
 from api.services.notifications import create_notification
 from api.services.verification import create_and_send_email_otp
 from api.utils import client_ip
@@ -202,7 +201,9 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
         await db.commit()
 
         try:
-            await asyncio.to_thread(send_organization_member_added_email, existing_user.email, organization.name, invitation.role.value)
+            await send_branded_organization_member_added_email(
+                db, invitation.organization_id, existing_user.email, invitation.role.value,
+            )
         except (EnvironmentError, RuntimeError) as exc:
             logger.warning("failed to send invitation-accepted notification to %s: %s", existing_user.email, exc)
 

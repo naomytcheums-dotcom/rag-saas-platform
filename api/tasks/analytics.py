@@ -121,7 +121,7 @@ def send_analytics_report(organization_id: str) -> bool:
 
     from api.models.organization import OrganizationMember, OrganizationRole
     from api.models.user import User
-    from api.services.email import send_analytics_report_email
+    from api.services.email_branding import send_branded_analytics_report_email_sync
 
     org_uuid = uuid_module.UUID(organization_id)
     with SyncSession(_sync_engine) as db:
@@ -138,7 +138,8 @@ def send_analytics_report(organization_id: str) -> bool:
         ) or 0
 
     try:
-        send_analytics_report_email(owner_email, total_events)
+        with SyncSession(_sync_engine) as db:
+            send_branded_analytics_report_email_sync(db, org_uuid, owner_email, total_events)
         return True
     except Exception:
         logger.warning("send_analytics_report: delivery failed for org %s", organization_id, exc_info=True)
