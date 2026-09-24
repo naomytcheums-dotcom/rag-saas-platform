@@ -55,13 +55,73 @@ from api.services.rbac_custom import get_user_effective_permissions
 _FORBIDDEN = HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
+# Real, default permissions per fixed role -- so the fixed hierarchy
+# (owner/admin/manager/member/viewer) keeps working after a route
+# starts using require_permission, without requiring every org admin
+# to hand-craft a CustomRole for every member first.
+# Owner/Admin always get "everything" (None sentinel below).
+# Manager: can do everything except fully manage the organization itself.
+# Member:  can read and write most resources, but not delete or manage.
+# Viewer:  read-only everywhere.
+_DEFAULT_ROLE_PERMISSIONS: dict[OrganizationRole, set[str]] = {
+    OrganizationRole.manager: {
+        "documents:read", "documents:write", "documents:delete",
+        "agents:read", "agents:write", "agents:delete",
+        "conversations:read", "conversations:write", "conversations:delete",
+        "api_keys:read", "api_keys:write",
+        "webhooks:read", "webhooks:write",
+        "widget:read", "widget:write",
+        "integrations:read", "integrations:write",
+        "evaluation:read", "evaluation:write",
+        "billing:read",
+        "members:read",
+        "settings:read", "settings:write",
+        "security:read",
+        "audit_logs:read",
+    },
+    OrganizationRole.member: {
+        "documents:read", "documents:write",
+        "agents:read", "agents:write",
+        "conversations:read", "conversations:write",
+        "api_keys:read",
+        "webhooks:read",
+        "widget:read",
+        "integrations:read",
+        "evaluation:read", "evaluation:write",
+        "members:read",
+        "settings:read",
+    },
+    OrganizationRole.viewer: {
+        "documents:read",
+        "agents:read",
+        "conversations:read",
+        "api_keys:read",
+        "webhooks:read",
+        "widget:read",
+        "integrations:read",
+        "evaluation:read",
+        "members:read",
+        "settings:read",
+    },
+}
+
+
 async def _effective_permissions_for(db: AsyncSession, membership: OrganizationMember) -> set[str] | None:
     """None is a sentinel meaning "every permission" (Owner/Admin) rather
     than an actual set, so callers never need to enumerate all 52 keys
-    just to express "this membership already has full access."""
+    just to express "this membership already has full access".
+
+    Real, default permissions per fixed role: manager/member/viewer
+    each get a real, documented default set, so a route switching to
+    require_permission(...) doesn't silently lock out every member
+    who doesn't have a hand-crafted CustomRole. A CustomRole can still
+    ADD permissions on top (it's unioned in below)."""
     if membership.role in (OrganizationRole.owner, OrganizationRole.admin):
         return None
-    return await get_user_effective_permissions(db, user_id=membership.user_id, organization_id=membership.organization_id)
+
+    defaults = _DEFAULT_ROLE_PERMISSIONS.get(membership.role, set())
+    custom = await get_user_effective_permissions(db, user_id=membership.user_id, organization_id=membership.organization_id)
+    return defaults | custom
 
 
 def require_permission(permission_key: str):

@@ -119,6 +119,7 @@ from api.security.document_versions import (
     restore_document_version,
 )
 from api.security.organizations import require_org_admin, require_org_member, require_org_member_excluding_viewer
+from api.security.permissions import require_permission
 from api.services.document_storage import stream_document_file
 from api.services.metadata_normalization import normalize_document_metadata
 
@@ -221,7 +222,7 @@ def _tag_to_response(tag: DocumentTag) -> DocumentTagResponse:
 @router.post("/organizations/{org_id}/documents", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
     org_id: uuid.UUID, response: Response, request: Request, file: UploadFile, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     from api.services.billing_usage import check_plan_resource_limit
@@ -255,7 +256,7 @@ async def create_document(
 @router.post("/organizations/{org_id}/documents/batch", response_model=DocumentBatchUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_batch(
     org_id: uuid.UUID, files: list[UploadFile] = File(...), workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.2.1, item 1's own literal ask -- a SEPARATE, dedicated
@@ -289,7 +290,7 @@ async def create_documents_batch(
 @router.post("/organizations/{org_id}/documents/url", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_document_from_url(
     org_id: uuid.UUID, payload: DocumentUrlImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.10, item 1's own literal route. Only cheap,
@@ -311,7 +312,7 @@ async def create_document_from_url(
 @router.post("/organizations/{org_id}/documents/sitemap", response_model=SitemapImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_sitemap(
     org_id: uuid.UUID, payload: SitemapImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.11, item 1's own literal route. 202 Accepted, not 201
@@ -334,7 +335,7 @@ async def create_documents_from_sitemap(
 @router.post("/organizations/{org_id}/documents/github/repo", response_model=GitHubRepoImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_github_repo(
     org_id: uuid.UUID, payload: GitHubRepoImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.12, item 1's own literal route. 202 Accepted, same
@@ -358,7 +359,7 @@ async def create_documents_from_github_repo(
 @router.post("/organizations/{org_id}/documents/github/issues", response_model=GitHubIssuesImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_github_issues(
     org_id: uuid.UUID, payload: GitHubIssuesImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.13, item 1's own literal route. 202 Accepted, same
@@ -384,7 +385,7 @@ async def create_documents_from_github_issues(
 @router.post("/organizations/{org_id}/documents/google-drive", response_model=GoogleDriveImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_google_drive(
     org_id: uuid.UUID, payload: GoogleDriveImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.14, item 1's own literal route. 202 Accepted, same
@@ -408,7 +409,7 @@ async def create_documents_from_google_drive(
 @router.post("/organizations/{org_id}/documents/google-docs", response_model=GoogleDocImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_google_docs(
     org_id: uuid.UUID, payload: GoogleDocImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.15, item 1's own literal route. 202 Accepted, same
@@ -433,7 +434,7 @@ async def create_documents_from_google_docs(
 @router.post("/organizations/{org_id}/documents/notion", response_model=NotionImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_notion(
     org_id: uuid.UUID, payload: NotionImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.16, item 1's own literal route. 202 Accepted, same
@@ -456,7 +457,7 @@ async def create_documents_from_notion(
 @router.post("/organizations/{org_id}/documents/confluence", response_model=ConfluenceImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_confluence(
     org_id: uuid.UUID, payload: ConfluenceImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.17, item 1's own literal route. 202 Accepted, same
@@ -479,7 +480,7 @@ async def create_documents_from_confluence(
 @router.post("/organizations/{org_id}/documents/onedrive", response_model=OneDriveImportResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_documents_from_onedrive(
     org_id: uuid.UUID, payload: OneDriveImportRequest, workspace_id: uuid.UUID | None = None,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.18, item 1's own literal route. 202 Accepted, same
@@ -502,7 +503,7 @@ async def create_documents_from_onedrive(
 
 @router.get("/organizations/{org_id}/documents", response_model=DocumentListResponse)
 async def list_documents(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:read")), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.scalars(
         select(Document).where(Document.organization_id == org_id, Document.deleted_at.is_(None)).order_by(Document.created_at.desc())
@@ -733,7 +734,7 @@ async def replace_document_route(
 @router.post("/organizations/{org_id}/tags", response_model=DocumentTagResponse, status_code=status.HTTP_201_CREATED)
 async def create_organization_tag(
     org_id: uuid.UUID, payload: DocumentTagCreateRequest,
-    _caller: OrganizationMember = Depends(require_org_member_excluding_viewer),
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Item 3's own literal route -- Member+, same reasoning as every
@@ -750,7 +751,7 @@ async def create_organization_tag(
 
 @router.get("/organizations/{org_id}/tags", response_model=list[DocumentTagResponse])
 async def list_organization_tags(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_member), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:read")), db: AsyncSession = Depends(get_db),
 ):
     """Item 3's own literal route -- a real, deliberate, DOCUMENTED
     deviation from this step's own literal "Member+": uses
@@ -994,7 +995,7 @@ async def reindex_document_route(
 
 @router.post("/organizations/{org_id}/documents/reindex")
 async def reindex_organization_documents_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Item 1's own literal route -- Admin+ (this step's own literal
@@ -1055,7 +1056,7 @@ async def get_document_status_route(
 
 @router.get("/organizations/{org_id}/documents/status", response_model=DocumentStatusSummaryResponse)
 async def get_organization_document_status_summary_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """Item 1's own literal organization-wide route -- Admin+ (the same
@@ -1088,7 +1089,7 @@ async def get_document_duplicates_route(
 
 @router.post("/organizations/{org_id}/documents/deduplicate", response_model=DeduplicationResultResponse)
 async def deduplicate_organization_documents_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_admin),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Item 4's own literal route -- Admin+, the same real permission
