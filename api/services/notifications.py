@@ -390,3 +390,30 @@ async def notify_billing_quota_exceeded(
             "limit": limit,
         },
     )
+
+
+async def notify_billing_payment_succeeded(db: AsyncSession, organization_id: uuid.UUID) -> None:
+    """Real, additive: the "a real payment succeeded" notification --
+    symmetric with notify_billing_payment_failed above. Real, honest
+    no-op if the organization has no real owner to notify."""
+    from api.models.organization import Organization, OrganizationMember
+
+    org = await db.get(Organization, organization_id)
+    if org is None:
+        return
+    owner = await db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == organization_id,
+            OrganizationMember.role == "owner",
+        )
+    )
+    if owner is None:
+        return
+    await create_notification(
+        db,
+        user_id=owner.user_id,
+        organization_id=organization_id,
+        type="billing_payment_succeeded",
+        title="Payment received",
+        body=f"Your payment for {org.name} was received successfully.",
+    )

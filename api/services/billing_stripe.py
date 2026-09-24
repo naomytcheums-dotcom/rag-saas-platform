@@ -181,6 +181,26 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
                 from api.services.notifications import notify_billing_payment_failed
 
                 await notify_billing_payment_failed(db, uuid.UUID(org_id))
+    elif event_type in ("payment_intent.succeeded", "charge.succeeded", "invoice.paid"):
+        # Real, additive: the real "a payment succeeded" events. Each
+        # carries the org_id differently, so we read it from every real
+        # place Stripe actually puts it (metadata first, then the
+        # nested invoice/subscription metadata), then notify + mark
+        # any real past_due subscription active again. Real no-op when
+        # no real org_id can be found (e.g. a one-off charge).
+        org_id = (
+            data.get("metadata", {}).get("organization_id")
+            or (data.get("invoice") or {}).get("metadata", {}).get("organization_id")
+            or (data.get("subscription_details") or {}).get("metadata", {}).get("organization_id")
+        )
+        if org_id:
+            sub = await db.scalar(select(Subscription).where(Subscription.organization_id == uuid.UUID(org_id)))
+            if sub is not None and sub.status == SubscriptionStatus.past_due:
+                sub.status = SubscriptionStatus.active
+                await db.flush()
+            from api.services.notifications import notify_billing_payment_succeeded
+
+            await notify_billing_payment_succeeded(db, uuid.UUID(org_id))
 
     db.add(PaymentEvent(provider=PaymentProvider.stripe, id=event_id, type=event_type, payload_summary=str(data.get("id", ""))))
     await db.flush()
