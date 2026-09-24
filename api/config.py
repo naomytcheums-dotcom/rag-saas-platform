@@ -393,12 +393,16 @@ class Settings(BaseSettings):
 
     SHOPIFY_ENABLED: bool = False
     SHOPIFY_API_TOKEN: str | None = None
+    SHOPIFY_SHOP_DOMAIN: str | None = None
 
     WOOCOMMERCE_ENABLED: bool = False
     WOOCOMMERCE_API_TOKEN: str | None = None
+    WOOCOMMERCE_STORE_URL: str | None = None
 
     DOCUSIGN_ENABLED: bool = False
     DOCUSIGN_API_TOKEN: str | None = None
+    DOCUSIGN_ACCOUNT_ID: str | None = None
+    DOCUSIGN_BASE_URL: str = "https://demo.docusign.net"
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
