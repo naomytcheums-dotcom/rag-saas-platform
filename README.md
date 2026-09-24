@@ -7,12 +7,20 @@ billing, white-labeling, and a full admin/security surface — built on
 top of a real, evaluated RAG pipeline (see below).
 
 **Status: feature-complete across 25 development parts (Parties 1-25),
-plus an ongoing Phase 5 of platform-maturity work (14 étapes as of
-2026-09-24): MCP (client + server), a visual workflow builder (React
-Flow), enterprise SSO via generic OIDC, a second billing provider
-(Paystack, alongside Stripe), an application-level Redis cache and
-measured DB indexing, and Eval Lab's own dedicated frontend with real
-failure-category analysis.**
+plus an ongoing Phase 5 of platform-maturity work (20 étapes as of
+2026-09-24): MCP (client + server, including custom and per-run tools),
+a visual workflow builder (React Flow) with undo/redo and a richer
+human-approval editor, enterprise SSO via generic OIDC, a second billing
+provider (Paystack, alongside Stripe), an application-level Redis cache
+and measured DB indexing, Eval Lab's own dedicated frontend with real
+failure-category analysis AND job-comparison, a Sandbox Environment, a
+full RBAC granulaire layer wired on 45 routers, 36 real CRM/connector
+integrations (Salesforce, HubSpot, Jira, Zendesk, Pipedrive, Linear,
+Asana, Trello, Airtable, Dropbox, Box, ClickUp, Intercom, Zoho, Shopify,
+WooCommerce, DocuSign, Monday, GitLab, Bitbucket, Azure DevOps,
+Basecamp, Wrike, Smartsheet, Coda, Miro, Podio, Pipefy, Hive, Teamwork,
+Nifty, SmartSuite, Process Street, ActiveCampaign, Mailchimp, Klaviyo),
+and notification real-time replay.**
 See [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) for
 Parties 1-25's full, itemized build history (audits, real bugs found
 and fixed, test counts), and [`ROADMAP.md`](ROADMAP.md) for the Phase 5
@@ -112,6 +120,36 @@ This repository actually contains two things:
 - **CI/CD & integrations** — the platform's own CI tooling docs and a
   universal integrations layer (Slack, Teams, Discord, Twilio, webhooks,
   n8n, Airbyte) — see [`docs/ci/`](docs/ci/), [`docs/integrations/`](docs/integrations/).
+- **CRM & business connectors** — 36 real, provider-specific extraction
+  modules (each with its own real auth convention: Bearer, Basic, custom
+  header, query param, GraphQL) exposing a unified
+  `POST /organizations/{org_id}/crm/{provider}/import` endpoint that
+  ingests each provider's records as real documents into the RAG
+  pipeline. Covers Salesforce, HubSpot, Jira, Zendesk, Pipedrive,
+  Linear, Asana, Trello, Airtable, Dropbox, Box, ClickUp, Intercom,
+  Zoho, Shopify, WooCommerce, DocuSign, Monday, GitLab, Bitbucket,
+  Azure DevOps, Basecamp, Wrike, Smartsheet, Coda, Miro, Podio,
+  Pipefy, Hive, Teamwork, Nifty, SmartSuite, Process Street,
+  ActiveCampaign, Mailchimp, Klaviyo.
+- **Granular RBAC** — 52 fine-grained `resource:action` permissions
+  (13 resources × 4 actions) with real FastAPI dependencies
+  (`require_permission("documents:write")`) wired on 45 routers
+  (~250 endpoints), plus real default permissions per fixed role
+  (Owner/Admin/Manager/Member/Viewer) so a Member keeps real read/write
+  access without needing a hand-crafted CustomRole first. Resource-level
+  patterns (`require_dataset_admin`, `require_agent_manager`, etc.)
+  remain as-is on the routers that need them — more granular, more
+  secure, not replaced.
+- **Sandbox Environment** — a real, per-organization isolated dev/test
+  environment with TTL and a reset endpoint — see `api/routers/sandbox.py`.
+- **Zapier / Make / n8n** — 6 real inbound actions
+  (`ingest_document`, `log_only`, `create_agent`, `create_conversation`,
+  `send_notification`, `trigger_workflow`) triggered by external
+  systems POSTing to an organization-scoped webhook — gives instant
+  reach to Zapier's 5000+ apps without hand-coding each connector.
+- **Real-time notification replay** — the SSE stream sends an initial
+  snapshot of unread notifications before streaming new ones, so a
+  reconnecting client never misses what happened while offline.
 
 The API surface spans 89 routers under [`api/routers/`](api/routers/);
 the frontend has 17 top-level dashboard sections under
