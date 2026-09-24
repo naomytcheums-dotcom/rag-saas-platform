@@ -31,7 +31,7 @@ entities.
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -78,8 +78,11 @@ class Notification(Base):
     email_retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
-        # Every real list query filters by (user_id, organization_id),
-        # optionally + read_at IS NULL for the unread-count endpoint.
+        # Étape 13 perf audit: this comment named the exact query
+        # pattern (unread-count: user_id + read_at IS NULL) but no
+        # index backed it until now -- user_id alone still meant a
+        # per-user scan to find the unread ones.
+        Index("ix_notifications_user_id_read_at", "user_id", "read_at"),
     )
 
 

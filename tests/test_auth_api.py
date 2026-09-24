@@ -2468,7 +2468,7 @@ async def test_health_ready_reports_database_and_redis_status(client):
     response = await client.get("/health/ready")
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {"database", "rate_limit_redis"}
+    assert set(body.keys()) == {"database", "rate_limit_redis", "cache_redis"}
     # Both real services are reachable in this dev/test environment --
     # the Redis-down case is exercised at the unit level in
     # tests/test_rate_limiting_integration.py's fail-open test; the

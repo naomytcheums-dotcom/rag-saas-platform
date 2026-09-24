@@ -46,6 +46,7 @@ from api.routers import (
 )
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
+from api.services.cache_service import is_redis_reachable as is_cache_redis_reachable
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
 from api.services.plugin_hooks import plugin_error_hook_middleware
@@ -455,8 +456,16 @@ async def readiness():
         database_ok = False
 
     redis_ok = await is_redis_reachable()
+    # Étape 13 -- api/services/cache_service.py has the exact same
+    # fail-open trade-off as rate_limit.py (see that module's own
+    # docstring): unreachable means every get_or_set becomes a real
+    # passthrough, never wrong, just slower. Same reasoning as
+    # rate_limit_redis above for why that must be visible here, not
+    # just a warning log.
+    cache_redis_ok = await is_cache_redis_reachable()
 
     return {
         "database": "ok" if database_ok else "unreachable",
         "rate_limit_redis": "ok" if redis_ok else "unreachable -- rate limiting is NOT currently enforced",
+        "cache_redis": "ok" if cache_redis_ok else "unreachable -- application cache is NOT currently active (passthrough)",
     }

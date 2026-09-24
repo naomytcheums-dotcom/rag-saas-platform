@@ -66,4 +66,9 @@ class WorkflowRun(Base):
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (Index("ix_workflow_runs_workflow_id", "workflow_id"),)
+    __table_args__ = (
+        Index("ix_workflow_runs_workflow_id", "workflow_id"),
+        # Étape 13 perf audit: a pending/running-runs listing scanned
+        # the whole table without this.
+        Index("ix_workflow_runs_status", "status"),
+    )

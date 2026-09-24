@@ -95,6 +95,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings as app_settings
 from api.models.organization_settings import OrganizationSettings
+from api.services import cache_service
+
+# Étape 13 (Performance) -- get_org_settings is real, hot-path config:
+# read at least once per document processed (chunk_size/embedding_model),
+# per search request (retrieval_strategy/top_k/reranker_model/...), and
+# per agent run (llm_provider/llm_model/temperature/...), for a row that
+# changes only when an Owner explicitly edits settings. 60s is short
+# enough that a change made mid-incident (e.g. lowering max_tokens) takes
+# effect within a minute even on a cache hit, long enough to absorb the
+# real request volume above without a DB round-trip on every one of them.
+_ORG_SETTINGS_CACHE_TTL_SECONDS = 60
+
+
+def _cache_key(organization_id: uuid.UUID) -> str:
+    return f"org_settings:{organization_id}"
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "chunk_size": 512,
@@ -242,9 +257,12 @@ async def get_org_settings(db: AsyncSession, organization_id: uuid.UUID) -> dict
     delivered response for whether a backfill migration is still worth
     doing anyway (Points restants).
     """
-    row = await db.scalar(select(OrganizationSettings).where(OrganizationSettings.organization_id == organization_id))
-    overrides = row.settings if row is not None else {}
-    return {**DEFAULT_SETTINGS, **overrides}
+    async def _load() -> dict[str, Any]:
+        row = await db.scalar(select(OrganizationSettings).where(OrganizationSettings.organization_id == organization_id))
+        overrides = row.settings if row is not None else {}
+        return {**DEFAULT_SETTINGS, **overrides}
+
+    return await cache_service.get_or_set(_cache_key(organization_id), _load, ttl_seconds=_ORG_SETTINGS_CACHE_TTL_SECONDS)
 
 
 async def get_org_setting(db: AsyncSession, organization_id: uuid.UUID, key: str) -> Any:
@@ -294,6 +312,11 @@ async def update_org_settings(db: AsyncSession, organization_id: uuid.UUID, upda
 
     row.settings = {**row.settings, **updates}
     await db.flush()
+    # Invalidate now, not after the caller's eventual commit -- a second
+    # get_org_settings call within the SAME request (or a racing request
+    # against the still-committing row) must not keep serving the
+    # pre-update cached value for up to _ORG_SETTINGS_CACHE_TTL_SECONDS.
+    await cache_service.invalidate(_cache_key(organization_id))
     return {**DEFAULT_SETTINGS, **row.settings}
 
 

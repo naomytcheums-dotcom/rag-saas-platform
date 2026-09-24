@@ -6,10 +6,18 @@ search, chat, autonomous agents, workflows, fine-tuning, analytics,
 billing, white-labeling, and a full admin/security surface — built on
 top of a real, evaluated RAG pipeline (see below).
 
-**Status: feature-complete across 25 development parts (Parties 1-25).**
-See [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) for the
-full, itemized build history of every part, including audits, real bugs
-found and fixed, and test counts.
+**Status: feature-complete across 25 development parts (Parties 1-25),
+plus an ongoing Phase 5 of platform-maturity work (14 étapes as of
+2026-09-24): MCP (client + server), a visual workflow builder (React
+Flow), enterprise SSO via generic OIDC, a second billing provider
+(Paystack, alongside Stripe), an application-level Redis cache and
+measured DB indexing, and Eval Lab's own dedicated frontend with real
+failure-category analysis.**
+See [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) for
+Parties 1-25's full, itemized build history (audits, real bugs found
+and fixed, test counts), and [`ROADMAP.md`](ROADMAP.md) for the Phase 5
+étape-by-étape log (same discipline: every gap traced or fixed, never
+silently dropped).
 
 ## What this is
 
@@ -32,12 +40,14 @@ This repository actually contains two things:
 ## Core capabilities
 
 - **Multi-tenant organizations** — orgs, teams, workspaces, members,
-  role-based access control (RBAC), resource-level permissions, SSO
-  (enterprise SAML/OAuth), two-factor auth, WebAuthn, invitations.
+  role-based access control (RBAC) with 52 granular permissions, SSO
+  (enterprise, generic OIDC — Azure AD, Okta, or any OIDC-conformant
+  IdP), two-factor auth, WebAuthn, invitations.
 - **Document pipeline** — upload, ingestion, chunking, embeddings, hybrid
   search (BM25 + semantic + reranking), citations, external source
   connectors (Slack, Teams, Discord, n8n, Airbyte, and more), batch jobs.
-- **Chat & conversations** — streaming chat, conversation sharing,
+- **Chat & conversations** — streaming chat with rendered Markdown and
+  syntax-highlighted code blocks, inline citations, conversation sharing,
   feedback capture, voice messages and voice settings, a public/embeddable
   widget.
 - **Agents** — configured chatbot-persona agents (`agents.py`,
@@ -47,11 +57,18 @@ This repository actually contains two things:
   bounded agent-to-agent collaboration, guardrails, and per-step/per-agent
   USD cost tracking — see [`docs/autonomous/`](docs/autonomous/).
 - **Workflows** — multi-step orchestration (`workflows.py`) built on
-  Celery for background execution.
-- **Evaluation & quality** — evaluation datasets, jobs, results,
-  comparisons, deployment evaluations, manual evaluations, regression
-  detection with configurable thresholds, a quality dashboard, benchmark
-  versions.
+  Celery for background execution, with a visual, drag-and-drop builder
+  (React Flow) in the frontend.
+- **Agent tools & MCP** — agent function-calling/tool-calling loops, and
+  the Model Context Protocol in both directions: this platform as an MCP
+  *server* (exposing its own tool registry to external MCP clients) and
+  as an MCP *client* (registering and calling external MCP servers).
+- **Eval Lab** — evaluation datasets, jobs, results, comparisons,
+  deployment evaluations, manual evaluations, regression detection with
+  configurable thresholds, a quality dashboard, benchmark versions, and
+  a dedicated frontend (`/dashboard/eval`) with real failure-category
+  analysis (retrieval vs. generation vs. suspected hallucination, from
+  actually-recorded failures and metrics — never a placeholder label).
 - **Fine-tuning** — dataset upload and validation (JSONL), job submission
   to OpenAI and Mistral (Anthropic has no public fine-tuning API — this
   gap is documented, not faked), fine-tuned model deployment, and
@@ -66,9 +83,23 @@ This repository actually contains two things:
 - **Analytics & observability** — usage analytics, audit logs, agent
   traces, observability endpoints, human-approval workflows — see
   [`docs/analytics/`](docs/analytics/), [`docs/monitoring/`](docs/monitoring/).
-- **Billing & sales** — subscriptions, quotas, usage-based billing, a
-  partner/sales program — see [`docs/billing/`](docs/billing/),
-  [`docs/sales/`](docs/sales/).
+- **Billing & sales** — subscriptions, quotas, usage-based billing, two
+  independent payment providers (Stripe and Paystack, behind one shared
+  provider interface), a partner/sales program — see
+  [`docs/billing/`](docs/billing/), [`docs/sales/`](docs/sales/).
+- **Notifications** — in-app + email notifications with per-user
+  preferences, real delivery tracking, and an unread-count endpoint
+  backed by a real composite index (`notifications(user_id, read_at)`).
+- **API Platform & SDKs** — organization-scoped public API keys (hashed,
+  never stored in plaintext), granular scopes, rotation, rate limits and
+  quotas per key, and client SDKs in
+  [Python](sdks/python/README.md), [JavaScript](sdks/js/README.md),
+  [React](sdks/react/README.md) and [Vue](sdks/vue/README.md).
+- **Observability & performance** — agent traces, audit logs, per-request
+  token/cost tracking, live retrieval diagnostics, and an
+  application-level Redis cache (fail-open, same discipline as the
+  rate limiter) on top of measured, audited DB indexing — see
+  [`docs/monitoring/`](docs/monitoring/).
 - **White-labeling & branding** — custom domains, SSL certificates,
   organization branding — see [`docs/whitelabel/`](docs/whitelabel/).
 - **Marketplace & plugins** — a plugin system and marketplace for

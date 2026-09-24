@@ -298,6 +298,29 @@ class EvaluationJobListResponse(BaseModel):
     offset: int
 
 
+class EvaluationFailureResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    evaluation_job_id: uuid.UUID
+    question_id: uuid.UUID
+    category: str
+    error: str
+    created_at: dt.datetime
+
+
+class EvaluationFailureListResponse(BaseModel):
+    items: list[EvaluationFailureResponse]
+    total: int
+
+
+class EvaluationFailureCategoriesResponse(BaseModel):
+    retrieval: int
+    generation: int
+    other: int
+    hallucination: int
+
+
 class ManualEvaluationCreateRequest(BaseModel):
     agent_id: uuid.UUID | None = None
     score: int | None = Field(default=None, ge=1, le=5)

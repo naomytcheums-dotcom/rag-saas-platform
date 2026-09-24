@@ -778,6 +778,16 @@ class Settings(BaseSettings):
     # accidentally rate-limited by their own repeated calls. Never set
     # this False in a real deployment.
     RATE_LIMIT_ENABLED: bool = True
+
+    # -- Application cache (Phase 5, Étape 13 -- Performance) ----------------
+    # Its own Redis DB number (3) -- same "no key collision" reasoning as
+    # RATE_LIMIT_REDIS_URL above (Celery has 0/1, rate limiting has 2).
+    CACHE_REDIS_URL: str = "redis://localhost:6379/3"
+    # False makes every cache_service call a pure passthrough (get_or_set
+    # always calls the loader, nothing touches Redis) -- same purpose as
+    # RATE_LIMIT_ENABLED: the fast SQLite test suite doesn't need Redis
+    # and isn't accidentally coupled to cache state between tests.
+    APP_CACHE_ENABLED: bool = True
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3

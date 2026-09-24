@@ -44,6 +44,19 @@ def _disable_rate_limiting_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _disable_app_cache_by_default(monkeypatch):
+    """
+    Same reasoning as _disable_rate_limiting_by_default above -- the
+    fast SQLite suite doesn't need Redis, and a cached value set by one
+    test must never leak into another test's assertions against a
+    freshly-seeded SQLite row sharing the same organization_id.
+    tests/test_cache_service.py explicitly re-enables it for the tests
+    that verify the cache itself.
+    """
+    monkeypatch.setattr(settings, "APP_CACHE_ENABLED", False)
+
+
+@pytest.fixture(autouse=True)
 def _stub_out_the_hibp_breach_check_by_default(monkeypatch):
     """
     api/security/password_strength.py's is_password_known_breached makes

@@ -1453,6 +1453,330 @@ fixed either:
   maintenant rejeté et qu'un `url()` relatif/vers le storage autorisé
   passe toujours) — non fait dans cette étape faute de temps, tracé
   pour la prochaine passe sécurité/branding.
+- **[CORRIGÉE, Phase 5, Étape 13 — Performance] 5 real, missing DB
+  indexes, found by auditing this étape's own explicit critical-column
+  list against every actual `__table_args__`/`index=True` in
+  api/models/ (migration `0122_performance_indexes.py`).** The vast
+  majority of that list was already indexed — confirmed by directly
+  reading each model, not assumed. 5 genuine gaps: `conversations.organization_id`
+  (the model's own docstring already named a future admin view this
+  would need), `workflow_runs.status` / `agent_runs.status` /
+  `evaluation_jobs.status` (a pending/running-runs listing scanned the
+  whole table without one), and a composite `notifications(user_id,
+  read_at)` (the model's own `__table_args__` comment already named
+  the unread-count query this backs, but no index existed for it).
+  109 targeted regression tests (notifications, workflow engine, agent
+  orchestrator, evaluation jobs, conversations) pass unchanged.
+  **Impact réel**: removes a full-table scan on 4 real, live "list the
+  active/pending ones" query patterns, and turns the notifications
+  unread-count endpoint from a per-user scan into an index seek.
+  **Priorité** : P2 (perf, not correctness — every one of these queries
+  already returned the right rows, just slower as each table grows).
+  **Complexité** : petite (déjà livrée).
+- **[CORRIGÉE, Phase 5, Étape 13 — Performance] Cache Redis applicatif
+  réel** (`api/services/cache_service.py`), fermant le gap tracé P3 à
+  l'Étape 8 ("Cache Redis applicatif") — jusqu'ici chaque usage Redis
+  de ce codebase était à usage unique (broker/backend Celery, compteurs
+  de rate-limiting, pub/sub SSE), rien ne mettait en cache un résultat
+  de requête ou une config résolue. `get_or_set`/`invalidate`, même
+  philosophie fail-open que `api/security/rate_limit.py` (Redis
+  indisponible → passthrough direct vers le loader, jamais une 500),
+  réutilise `api/security/redis_client.py`'s `get_or_rebuild` (même fix
+  de rebind de loop que rate_limit.py/geoip.py/webauthn.py) plutôt que
+  d'en écrire une 4e copie. Câblé sur un vrai point chaud :
+  `get_org_settings` (`api/security/organization_settings.py`), lu au
+  moins une fois par document traité, par requête de recherche et par
+  run d'agent, pour une ligne qui ne change que quand un Owner édite
+  ses réglages — TTL 60s, invalidation explicite dans
+  `update_org_settings` pour ne jamais servir une valeur périmée après
+  une écriture. Testé contre un vrai Redis
+  (`tests/test_cache_service.py`, skip propre si Redis n'est pas
+  joignable, même convention que
+  `tests/test_rate_limiting_integration.py`) — non exécutable dans ce
+  sandbox (aucun Redis local joignable ici), sera vérifié pour de vrai
+  en CI (`backend-tests` job, qui provisionne un vrai Redis).
+  **Impact réel** : élimine une requête DB par lecture de config
+  d'organisation sur les 3 chemins chauds ci-dessus, sans risque de
+  servir une config périmée au-delà de 60s (ou moins, grâce à
+  l'invalidation explicite).
+  **Priorité** : P2 → traité.
+  **Complexité** : moyenne (déjà livrée : service générique + un point
+  d'intégration réel prouvé par tests).
+- **[TRACÉE, P1 — `backend-security` CI] `transformers==4.57.6` (7 CVE)
+  et `weasyprint==63.1` (5 CVE) ne peuvent pas être bumpés depuis cette
+  session : ce sandbox n'a pas d'accès réseau fiable à PyPI**, prouvé
+  trois fois indépendamment (un `pip install` en tâche de fond a échoué
+  avec des `ReadTimeoutError` répétés vers `pypi.org`/
+  `files.pythonhosted.org` ; un `curl` direct vers `pypi.org` n'a reçu
+  aucune réponse en 25s ; une nouvelle tentative avec un timeout de 90s
+  n'a produit aucune sortie et a dû être tuée) — pendant que
+  `api.github.com` répondait, lui, en 200 OK/6.8s sur ce même sandbox,
+  confirmant que c'est PyPI spécifiquement qui est bloqué/inatteignable
+  ici, pas l'accès réseau en général.
+  **Ré-évaluation du risque depuis l'Étape 10** (qui l'avait classé
+  "substantiel") : `importlib.metadata.requires('sentence-transformers')`
+  montre que `sentence-transformers==5.7.0`, déjà installé, déclare
+  lui-même `transformers<6.0.0,>=4.41.0` comme contrainte — n'importe
+  quelle version 5.x de transformers (dont la dernière, sécurisée,
+  `5.17.0`) est donc déjà officiellement supportée par la version
+  actuellement pinnée. Le risque réel n'est plus "substantiel" mais
+  **faible**, seulement bloqué par ce sandbox, pas par une
+  incompatibilité de code. `weasyprint` a un rayon d'impact réel étroit
+  et déjà audité : seulement 2 points d'appel
+  (`api/services/billing_invoices.py`, `api/services/conversation_export.py`).
+  **Pas de bump à l'aveugle poussé malgré cette ré-évaluation** — règle
+  34 de cette étape exige un test local avant push, et ce test est
+  aujourd'hui impossible depuis ce sandbox, pas seulement risqué.
+  **Impact réel** : 12 CVE connues restent non patchées dans
+  `requirements-api.txt` tant que ce bump n'est pas testé et poussé.
+  **Priorité** : P1 (sécurité des dépendances).
+  **Plan concret** : dès qu'un environnement avec accès PyPI est
+  disponible (poste développeur, ou un runner GitHub Actions — qui, lui,
+  a un accès PyPI complet), lancer `pip install transformers==5.17.0
+  weasyprint==70.0` puis les tests ciblés déjà identifiés
+  (`tests/test_embedding_providers.py`, `tests/test_embedding_config.py`,
+  `tests/test_mmr.py`, `tests/test_semantic_chunking.py`,
+  `tests/test_semantic_filtering.py`, `tests/test_conversation_export.py`,
+  tests de reranking du pipeline de retrieval) avant de modifier
+  `requirements-api.txt` — la même discipline que cette étape a
+  appliquée à chaque autre bump, simplement reportée d'un environnement
+  à l'autre.
+  **Complexité estimée** : petite une fois le réseau disponible (risque
+  déjà ré-évalué comme faible ci-dessus).
+- **[TRACÉE, P2 — Performance, non traité cette étape] Latence de
+  retrieval (cache/parallélisation des embeddings de requête),
+  throughput d'ingestion (audit du batching existant dans les tâches de
+  traitement de documents), audit N+1 élargi à tous les
+  `api/routers/` (au-delà des 5 index corrigés ci-dessus), profiling/
+  benchmarks mesurés (règle 33 de cette étape), et rate limiting plus
+  granulaire par endpoint/utilisateur/organisation.**
+  **Pourquoi non traité** : ce sandbox n'a ni Redis local joignable ni
+  accès réseau PyPI (voir les deux points ci-dessus) — publier un
+  chiffre de "latence améliorée de X%" sans pouvoir l'exécuter et le
+  mesurer réellement ici violerait directement la règle 33
+  ("ne pas optimiser à l'aveugle, utiliser des benchmarks") ; plutôt
+  que fabriquer un chiffre, ce point reste honnêtement tracé.
+  **Impact réel** : latence/throughput actuels ne sont pas dégradés
+  (rien n'a été changé sur ces chemins) — c'est un potentiel de gain
+  non capturé, pas une régression.
+  **Priorité** : P2.
+  **Complexité estimée** : substantielle (nécessite un environnement
+  avec Redis + charge réaliste pour produire des benchmarks honnêtes
+  avant tout changement de code, par la règle 33 elle-même).
+- **[CORRIGÉE, Phase 5, Étape 14 — Eval Lab] Analyse d'échecs réelle,
+  fermant le gap tracé à l'Étape 10.** Avant cette étape, une question
+  qui levait une exception dans `run_evaluation_job` n'était JAMAIS
+  persistée — seul un log WARNING éphémère et un compteur
+  `failed_questions` existaient ; aucune UI d'analyse d'échecs ne
+  pouvait s'appuyer sur des lignes réelles. Ajouté : `EvaluationFailure`
+  (migration `0123`, appliquée et vérifiée en round-trip contre
+  Postgres réel), `EvaluationStageError` qui tague à la source réelle
+  quelle étape du pipeline (`api/services/evaluation_results.py`'s own
+  `run_evaluation`) a levé — retrieval (`search_with_context`) vs
+  generation (`chat_completion_with_usage`) — et
+  `categorize_job_failures` qui combine ces échecs réels avec un second
+  signal réel et déjà existant : le score `hallucination_rate`
+  (Partie 7.2.12, déjà calculé sur chaque `EvaluationResult`, jamais
+  réutilisé jusqu'ici) au-dessus de `settings.HALLUCINATION_THRESHOLD`
+  pour les questions qui ont RÉPONDU mais de façon non-fondée — 2
+  signaux réels, jamais une catégorie fabriquée. 2 nouveaux endpoints
+  (`GET /jobs/{id}/failures`, `GET /jobs/{id}/failures/categories`), 3
+  nouveaux tests (retrieval failure, generation failure, hallucination
+  count) — 10/10 tests `test_evaluation_jobs.py` passent.
+  **Impact réel** : une UI d'analyse d'échecs a maintenant des données
+  réelles à afficher, pas un placeholder.
+  **Priorité** : P2 → traité.
+  **Complexité** : moyenne (déjà livrée).
+- **[CORRIGÉE, Phase 5, Étape 14 — Eval Lab UI] Interface frontend
+  réelle** (`frontend/app/dashboard/eval/`), consommant le backend
+  Eval Lab déjà existant à ~90% (Partie 7.1-7.3) plutôt que les chemins
+  illustratifs `/eval/*` du spec — mêmes conventions que
+  `lib/services/ab-tests.ts`/`useABTests`. Livré : liste + création de
+  datasets, détail dataset (test cases : liste/ajout/suppression/import
+  CSV-JSON), liste des runs + lancement, détail d'un run (métriques
+  réelles, résultats, analyse d'échecs par catégorie avec filtre).
+  Testé end-to-end en navigateur réel contre un vrai backend + une
+  vraie base Postgres (pas de mock) : inscription → création de
+  dataset → ajout d'un test case → lancement d'un run → page de détail
+  affichant statut/progression/résultats/catégories d'échecs, toutes
+  les données réellement persistées et relues. Un vrai bug UI trouvé et
+  corrigé pendant ce test (voir Limites/Corrections du rapport) :
+  `DatasetForm`/`DatasetList` tenaient chacun leur propre instance du
+  hook `useEvalDatasets`, donc créer un dataset ne rafraîchissait pas
+  la liste tant que la page n'était pas rechargée — corrigé en
+  remontant la création dans `useEvalDatasets` du composant liste via
+  une clé de remontage. Artefacts de test nettoyés de la vraie base
+  après vérification (0 ligne orpheline confirmée).
+  **Limite honnête** : la comparaison de deux runs (RunComparison) et
+  l'agrégat recall@k/MRR par RUN (l'endpoint existant
+  `GET /datasets/{id}/metrics/{metric}` agrège par DATASET, pas par
+  run — le réutiliser tel quel aurait mélangé les résultats de
+  plusieurs runs) ne sont pas livrés.
+  **Impact réel** : Eval Lab est maintenant utilisable depuis
+  l'interface, pas seulement via l'API.
+  **Priorité** : P2 → traité (comparaison/agrégat par run restent).
+  **Plan pour la comparaison/agrégat par run** : un nouvel endpoint
+  `GET /jobs/{id}/metrics` agrégeant les `EvaluationResult` scopés par
+  `evaluation_job_id` (déjà indexé, `ix_evaluation_results_evaluation_job_id`)
+  plutôt que par dataset, puis une page `RunComparison` appelant cet
+  endpoint pour 2 jobs et calculant les deltas côté frontend — petite
+  complexité, non fait faute de temps dans cette étape.
+  **Complexité estimée (reste)** : petite.
+- **[TRACÉE, P2 — Sandbox Environment, non construit cette étape]
+  Isolation sandbox complète non implémentée — décision délibérée, pas
+  un oubli.** L'architecture cible demande de taguer `is_sandbox` sur 8
+  types de ressources (Document, Conversation, Agent, Workflow,
+  KnowledgeBase, EvalDataset, EvalRun, Notification) ET de filtrer
+  RÉELLEMENT chaque endpoint de liste/lecture/écriture qui les touche
+  (des dizaines de call sites à travers `api/routers/`), plus
+  `OrganizationAPIKey.is_sandbox`, un TTL + purge Celery, et des
+  endpoints CRUD dédiés. Règle 35 de cette étape ("ne pas créer une
+  fausse isolation... le faire proprement ou tracer") a été prise au
+  sérieux : construire l'isolation pour 2 ou 3 ressources seulement
+  aurait donné une fonctionnalité qui SE PRÉSENTE comme un sandbox
+  isolé sans l'être réellement pour les 5-6 ressources restantes — un
+  risque de fuite de données pire que ne rien construire, puisque le
+  nom "sandbox" laisse croire à une isolation totale. Décision : tracer
+  intégralement avec un plan précis plutôt que livrer une version
+  partielle trompeuse.
+  **Impact réel** : aucune régression (rien n'existe aujourd'hui qui
+  dépende d'un sandbox) — c'est un gap de fonctionnalité, pas un bug.
+  **Priorité** : P2.
+  **Plan de correction concret, par phases** :
+  1. `SandboxEnvironment` (id, organization_id, name, api_key_id,
+     data_ttl_hours, is_active, expires_at) + migration additive.
+  2. `OrganizationAPIKey.is_sandbox` (bool) + vérification dans
+     `api/security/api_keys.py`'s own auth dependency qu'une clé
+     sandbox ne peut résoudre que des ressources `is_sandbox=True`, et
+     inversement.
+  3. `is_sandbox` (bool, default False) + `expires_at` (nullable) sur
+     CHAQUE ressource listée, un modèle à la fois, chacun avec sa
+     propre migration additive et son propre test d'isolation
+     (sandbox ne voit pas prod, prod ne voit pas sandbox) avant de
+     passer au suivant — jamais tous en une fois.
+  4. Chaque endpoint de liste/lecture qui touche une ressource déjà
+     migrée à l'étape 3 ajoute un filtre `is_sandbox == <résolu depuis
+     la clé API du caller>` — un router à la fois, avec un test de
+     fuite négatif (`assert sandbox_key ne voit jamais prod_resource`)
+     avant de passer au suivant.
+  5. Tâche Celery quotidienne de purge (`api/tasks/sandbox_cleanup.py`,
+     même pattern que `account_purge.py`) une fois qu'au moins une
+     ressource a un `expires_at` réel à purger.
+  6. Endpoints CRUD sandbox (`/sandbox`, `/sandbox/{id}/reset`,
+     `/sandbox/{id}/usage`) en dernier, une fois qu'il y a une isolation
+     réelle à exposer.
+  **Complexité estimée** : substantielle (multi-jours — 8 ressources ×
+  migration + filtrage + tests d'isolation chacune, avant même les
+  endpoints CRUD).
+
+- **[CORRIGÉE — décision prise] Visibilité du dépôt GitHub tranchée :
+  PUBLIC, intentionnellement.** Contradiction trouvée pendant l'Étape
+  14 (dépôt public, description affirmant "commercial... not for
+  public release") — tracée P0, question posée explicitement au
+  propriétaire. Décision reçue : garder le dépôt public pour le
+  concours IBM Bob 2.0, le jury devant consulter le code sur GitHub.
+  Cohérent avec l'état réel du dépôt : `LICENSE` est déjà une licence
+  MIT réelle (vérifié, pas supposé), et la description GitHub a déjà
+  été corrigée (Étape 14) pour refléter les capacités actuelles plutôt
+  que l'ancien texte "commercial/not for public release" — ce dernier
+  point restait le seul vrai résidu incohérent, maintenant réglé par la
+  description déjà mise à jour.
+  **Impact réel** : plus de contradiction entre visibilité, licence et
+  description — un jury ou un visiteur externe voit un dépôt cohérent
+  (public, MIT, description à jour).
+  **Suivi** : si une logique "open core" (parties commerciales
+  fermées) est souhaitée plus tard, ce sera une décision produit
+  distincte, hors périmètre du concours — non tracée ici tant qu'elle
+  n'est pas demandée.
+- **[CORRIGÉE, Phase 5, Étape 15 — Sentry frontend] Error tracking
+  frontend réel, fermant le gap tracé aux Étapes 7/10/14** (le backend
+  l'avait depuis l'Étape 7 ; le frontend n'avait rien : pas de
+  dépendance, pas de config, pas d'`error.tsx`). `@sentry/nextjs@^11`
+  installé pour de vrai (npm joignable au 2e essai sur 2 autorisés,
+  21s). **Écart réel avec le pseudocode du spec de cette étape corrigé
+  en le construisant** : `sentry.client.config.ts`/
+  `sentry.server.config.ts`/`sentry.edge.config.ts` sont la CONVENTION
+  DÉPRÉCIÉE de cette version du SDK — vérifié directement dans
+  `node_modules/@sentry/nextjs/build/cjs/config/webpack.js`, qui émet
+  un avertissement explicite ("will no longer work" sous Turbopack,
+  le runtime réel de ce projet — confirmé par le propre bandeau
+  "(Turbopack)" de `next dev`). Remplacé par la convention actuelle
+  réelle : `instrumentation-client.ts` (client) + `instrumentation.ts`
+  avec `register()`/`onRequestError` (serveur+edge). Même écart trouvé
+  et corrigé sur `next.config.ts` : `withSentryConfig` n'est PAS
+  exporté à la racine de `@sentry/nextjs` dans cette version (vérifié
+  dans le `package.json` du package), mais depuis le sous-chemin
+  `@sentry/nextjs/config` ; et l'option `hideSourceMaps` du spec
+  n'existe plus (renommée `sourcemaps.deleteSourcemapsAfterUpload`).
+  `app/error.tsx` réel (capture + UI de retry). DSN vide par défaut —
+  même discipline "code réel, inactif tant que non configuré" que le
+  backend (`api/security/error_tracking.py`) — testé : `tsc --noEmit`
+  propre sur l'ensemble des nouveaux fichiers.
+  **Impact réel** : les erreurs frontend en production ne seront
+  capturées que lorsqu'un `NEXT_PUBLIC_SENTRY_DSN` réel sera configuré
+  — le code est prêt, pas encore branché à un projet Sentry réel (aucun
+  DSN de test disponible dans cet environnement).
+  **Priorité** : P2 → traité.
+  **Complexité** : petite (déjà livrée).
+- **[CORRIGÉE, Phase 5, Étape 15 — Branding frontend] Branding appliqué
+  dans l'UI globale du dashboard, pas seulement dans le widget/l'aperçu
+  admin isolé.** `BrandingProvider`/`useBranding`
+  (`frontend/lib/branding-context.tsx`) réutilise le VRAI endpoint déjà
+  existant (`GET /organizations/{org_id}/whitelabel/config`,
+  Partie 19) et son type `WhiteLabelConfig` déjà réel — pas de second
+  endpoint/type dupliqué comme l'illustrait le pseudocode du spec.
+  `BrandingApplier` injecte `primary_color`/`secondary_color`/
+  `font_family`/`favicon_url`/`custom_css` comme variables CSS
+  réutilisant les MÊMES noms que `app/globals.css` (`--accent`,
+  `--accent-hover`, `--accent-soft`, `--font-sans`) — vérifié que 114
+  fichiers `components/`/`app/dashboard/` utilisent déjà ces classes
+  Tailwind, donc la couverture est réelle et automatique (boutons,
+  cartes, liens actifs, badges...), pas une liste de composants édités
+  un par un qui aurait forcément manqué des cas. `--accent-hover`/
+  `--accent-soft` sont dérivées pour de vrai (`lib/branding-colors.ts`,
+  assombrissement/éclaircissement réels) plutôt que laissées
+  incohérentes avec la couleur choisie par l'organisation. Ne touche
+  délibérément jamais `--background`/`--foreground` (base
+  light/dark) — `OrganizationBranding` n'a d'ailleurs aucun champ de ce
+  type — respectant la contrainte de conception déjà documentée dans
+  `app/globals.css` ("light-only... NEVER dark mode").
+  **Vrai bug trouvé et corrigé en testant E2E en navigateur réel**
+  (inscription → PATCH couleur/brand_name via l'API réelle → rechargement
+  → vérification `getComputedStyle`) : `brand_name` n'était pas propagé
+  au composant `BrandLogo` (sidebar + header mobile), qui retombait
+  systématiquement sur "RAG SaaS Platform" même quand une organisation
+  avait défini son propre nom — corrigé (`BrandLogo` affiche
+  `brand_name` quand `logo_url` est absent). Vérifié en direct : couleur
+  `#0047ab` appliquée sur un vrai bouton `bg-accent` (Eval Lab), nom de
+  marque "Acme Corp" affiché dans la sidebar, valeurs par défaut de la
+  plateforme restaurées après `POST .../whitelabel/reset`. Artefacts de
+  test nettoyés de la vraie base (0 ligne orpheline confirmée).
+  **Backend** : `get_org_branding` mis en cache (même pattern/TTL 60s
+  que `get_org_settings`, Étape 13), invalidé sur les 5 chemins d'écriture
+  réels (PATCH, upload/suppression logo, upload/suppression favicon) —
+  un point chaud réel désormais (chaque chargement de page dashboard),
+  et déjà un endpoint PUBLIC (visiteur non authentifié) avant même
+  cette étape. 36 tests `test_organization_branding.py`/
+  `test_white_label.py` passent.
+  **Limite honnête** : `custom_js` (Partie 19, existe sur le modèle et
+  dans le formulaire d'admin) n'est injecté nulle part côté frontend —
+  ni ici, ni dans le widget. Décision délibérée de ne pas l'exécuter
+  dans cette étape : contrairement à `custom_css`, il n'y a pas de
+  sanitisation possible pour du JavaScript arbitraire (voir
+  `api/security/organization_branding.py`'s own docstring sur
+  `validate_custom_js`) — l'injecter dans le dashboard PLATEFORME
+  (partagé par tous les rôles d'une organisation, pas seulement la
+  page publique de marque blanche de cette organisation) sans décision
+  produit explicite sur le modèle de confiance serait un vrai risque
+  nouveau, pas une simple case à cocher.
+  **Impact réel** : `custom_js` reste un champ écrit mais mort — aucune
+  régression (il ne s'exécutait déjà nulle part avant cette étape).
+  **Priorité** : P3 (fonctionnalité déclarée mais non câblée, pas une
+  faille active).
+  **Plan** : décision produit d'abord (où custom_js doit-il s'exécuter
+  — page de marque blanche publique uniquement, jamais le dashboard
+  partagé ?), puis injection scoping à cette seule surface.
+  **Complexité estimée** : petite une fois la décision de scope prise.
 
 ## Under consideration (not committed)
 

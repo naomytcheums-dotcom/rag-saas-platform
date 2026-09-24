@@ -79,4 +79,7 @@ class AgentRunRecord(Base):
     __table_args__ = (
         Index("ix_agent_runs_agent_id", "agent_id"),
         Index("ix_agent_runs_organization_id", "organization_id"),
+        # Étape 13 perf audit: same pending/running-runs gap as
+        # WorkflowRun.status.
+        Index("ix_agent_runs_status", "status"),
     )

@@ -52,6 +52,9 @@ class Conversation(Base):
         Index("ix_conversations_user_id", "user_id"),
         Index("ix_conversations_agent_id", "agent_id"),
         Index("ix_conversations_deleted_at", "deleted_at"),
+        # Étape 13 perf audit: this docstring's own "future admin view"
+        # never got its index -- added for real once the gap was found.
+        Index("ix_conversations_organization_id", "organization_id"),
     )
 
 

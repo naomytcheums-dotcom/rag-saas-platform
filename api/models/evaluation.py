@@ -191,6 +191,52 @@ class EvaluationResult(Base):
     )
 
 
+class EvaluationFailureCategory:
+    retrieval = "retrieval"
+    generation = "generation"
+    other = "other"
+
+
+class EvaluationFailure(Base):
+    """Phase 5, Étape 14 -- real, persisted record of a question that
+    FAILED inside a real EvaluationJob run, closing a real gap: before
+    this, `run_evaluation_job`'s own per-question except block only
+    ever logged a WARNING and incremented `failed_questions` in the
+    job's own summary `results` dict -- the actual error and WHICH
+    question failed were never durable, only visible in ephemeral logs
+    for as long as they weren't rotated away. No real "failure
+    analysis" UI can be built on a count with no underlying rows.
+
+    `category` is which pipeline STAGE
+    (`api/services/evaluation_results.py`'s own real `run_evaluation`)
+    the exception actually came from -- retrieval (`search_with_context`)
+    vs generation (`chat_completion_with_usage`) -- tagged at the THROW
+    site via `EvaluationStageError`, not guessed from the error string
+    after the fact. This table is deliberately only for real EXCEPTIONS
+    (a question that never produced an answer at all) -- "hallucination"
+    is a DIFFERENT real thing (a question that DID produce an answer,
+    just an ungrounded one) and is never stored here: it's computed at
+    read time (`api/services/evaluation_jobs.py`'s own
+    `categorize_job_failures`) from the REAL, already-existing
+    `hallucination_rate` metric (`api/services/hallucination_rate.py`,
+    Partie 7.2.12) every completed `EvaluationResult` already carries --
+    reusing that real, existing score rather than inventing a new,
+    parallel "is this a hallucination" judgment."""
+
+    __tablename__ = "evaluation_failures"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    evaluation_job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_jobs.id", ondelete="CASCADE"), nullable=False)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evaluation_questions.id", ondelete="CASCADE"), nullable=False)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default=EvaluationFailureCategory.other)
+    error: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_evaluation_failures_evaluation_job_id", "evaluation_job_id"),
+    )
+
+
 class EvaluationJobStatus:
     pending = "pending"
     running = "running"
@@ -227,6 +273,9 @@ class EvaluationJob(Base):
 
     __table_args__ = (
         Index("ix_evaluation_jobs_dataset_id", "dataset_id"),
+        # Étape 13 perf audit: Eval Lab's own "running jobs" list has
+        # the same status-scan gap as WorkflowRun/AgentRunRecord.
+        Index("ix_evaluation_jobs_status", "status"),
     )
 
 

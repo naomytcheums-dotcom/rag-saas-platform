@@ -30,8 +30,9 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models.evaluation import EvaluationJob, EvaluationJobStatus, EvaluationQuestion, EvaluationResult
-from api.services.evaluation_results import run_evaluation
+from api.config import settings
+from api.models.evaluation import EvaluationFailure, EvaluationFailureCategory, EvaluationJob, EvaluationJobStatus, EvaluationQuestion, EvaluationResult
+from api.services.evaluation_results import EvaluationStageError, run_evaluation
 from api.services.question_sets import get_questions_in_set
 
 logger = logging.getLogger(__name__)
@@ -114,8 +115,12 @@ async def run_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJ
                     result_ids.append(result.id)
             except Exception as exc:  # noqa: BLE001 -- one real question's own real failure must never abort the whole job
                 logger.warning("run_evaluation_job: question '%s' of job '%s' failed: %s", question_id, job_id, exc)
+                category = exc.stage if isinstance(exc, EvaluationStageError) else EvaluationFailureCategory.other
+                error_message = str(exc.original) if isinstance(exc, EvaluationStageError) else str(exc)
                 await db.rollback()
                 await db.refresh(job)
+                db.add(EvaluationFailure(evaluation_job_id=job.id, question_id=question_id, category=category, error=error_message))
+                await db.flush()
 
             job.completed_questions += 1
             job.progress = int(job.completed_questions / job.total_questions * 100) if job.total_questions else 100
@@ -173,6 +178,46 @@ async def list_evaluation_jobs(db: AsyncSession, dataset_id: uuid.UUID, limit: i
         select(EvaluationJob).where(*conditions).order_by(EvaluationJob.created_at.desc()).limit(limit).offset(offset)
     )).all()
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
+
+
+async def get_job_failures(db: AsyncSession, job_id: uuid.UUID) -> list[EvaluationFailure]:
+    """Phase 5, Étape 14 -- every real, persisted exception this job hit,
+    newest first. See api/models/evaluation.py's EvaluationFailure
+    docstring for why this is exceptions only (hallucinations are
+    separate, see categorize_job_failures below)."""
+    rows = (await db.scalars(
+        select(EvaluationFailure).where(EvaluationFailure.evaluation_job_id == job_id).order_by(EvaluationFailure.created_at.desc())
+    )).all()
+    return list(rows)
+
+
+async def categorize_job_failures(db: AsyncSession, job_id: uuid.UUID) -> dict:
+    """Phase 5, Étape 14 -- real failure-category breakdown for one job,
+    combining TWO real, independently-sourced signals rather than one
+    fabricated label set:
+
+    - retrieval / generation / other: real counts from EvaluationFailure
+      rows (a question that raised and never produced an answer).
+    - hallucination: real count of questions that DID complete (a real
+      EvaluationResult exists, tied to this job) but whose already-computed
+      `metrics.hallucination_rate` (api/services/hallucination_rate.py,
+      Partie 7.2.12 -- reused here, not recomputed) is at or above
+      `settings.HALLUCINATION_THRESHOLD`, restricted to `reliable` scores
+      (see that module's own docstring for why an unreliable score --
+      too few extracted claims -- must not be silently treated as
+      equally trustworthy)."""
+    failures = await get_job_failures(db, job_id)
+    counts = {EvaluationFailureCategory.retrieval: 0, EvaluationFailureCategory.generation: 0, EvaluationFailureCategory.other: 0, "hallucination": 0}
+    for failure in failures:
+        counts[failure.category] = counts.get(failure.category, 0) + 1
+
+    results = (await db.scalars(select(EvaluationResult).where(EvaluationResult.evaluation_job_id == job_id))).all()
+    for result in results:
+        metrics = result.metrics or {}
+        if metrics.get("hallucination_rate_reliable") and (metrics.get("hallucination_rate") or 0) >= settings.HALLUCINATION_THRESHOLD:
+            counts["hallucination"] += 1
+
+    return counts
 
 
 async def cancel_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJob | None:

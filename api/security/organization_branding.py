@@ -18,6 +18,21 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services import cache_service
+
+# Étape 15 (Branding frontend) -- get_org_branding is now a real
+# hot-path: every dashboard page load calls it once (BrandingApplier),
+# on top of its own pre-existing public callers (login screen, widget).
+# Same reasoning/TTL as api/security/organization_settings.py's own
+# _ORG_SETTINGS_CACHE_TTL_SECONDS (Étape 13) -- short enough that an
+# Owner changing a color takes effect within a minute even on a cache
+# hit, long enough to absorb the new per-page-load read volume.
+_ORG_BRANDING_CACHE_TTL_SECONDS = 60
+
+
+def _cache_key(organization_id: uuid.UUID) -> str:
+    return f"org_branding:{organization_id}"
+
 from api.models.organization_branding import OrganizationBranding
 
 DEFAULT_BRANDING: dict[str, Any] = {
@@ -119,10 +134,13 @@ async def get_org_branding(db: AsyncSession, organization_id: uuid.UUID) -> dict
     pre-existing org isn't suddenly broken by a step added after it
     already existed.
     """
-    row = await db.scalar(select(OrganizationBranding).where(OrganizationBranding.organization_id == organization_id))
-    if row is None:
-        return dict(DEFAULT_BRANDING)
-    return _to_dict(row)
+    async def _load() -> dict[str, Any]:
+        row = await db.scalar(select(OrganizationBranding).where(OrganizationBranding.organization_id == organization_id))
+        if row is None:
+            return dict(DEFAULT_BRANDING)
+        return _to_dict(row)
+
+    return await cache_service.get_or_set(_cache_key(organization_id), _load, ttl_seconds=_ORG_BRANDING_CACHE_TTL_SECONDS)
 
 
 async def update_org_branding(db: AsyncSession, organization_id: uuid.UUID, updates: dict[str, Any]) -> dict[str, Any]:
@@ -152,4 +170,9 @@ async def update_org_branding(db: AsyncSession, organization_id: uuid.UUID, upda
     for field, value in updates.items():
         setattr(row, field, value)
     await db.flush()
+    # Same reasoning as organization_settings.py's own update path:
+    # invalidate now, not after the caller's eventual commit, so a
+    # second read within the same request never sees the pre-update
+    # cached value.
+    await cache_service.invalidate(_cache_key(organization_id))
     return _to_dict(row)

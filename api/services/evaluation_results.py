@@ -63,8 +63,26 @@ from api.services.retrieval_pipeline import search_with_context
 from api.services.token_usage import estimate_token_usage
 
 __all__ = [
-    "calculate_recall_at_1", "extend_evaluation_metrics", "get_evaluation_results", "get_metrics_summary", "run_evaluation",
+    "EvaluationStageError", "calculate_recall_at_1", "extend_evaluation_metrics", "get_evaluation_results",
+    "get_metrics_summary", "run_evaluation",
 ]
+
+
+class EvaluationStageError(Exception):
+    """Phase 5, Étape 14 -- wraps a real exception raised inside
+    `run_evaluation` with WHICH real pipeline stage it came from, so
+    `run_evaluation_job`'s own per-question except block (the only
+    place these are ever caught) can persist an honest
+    `EvaluationFailure.category` instead of always falling back to
+    `"other"`. `stage` is one of `api.models.evaluation.EvaluationFailureCategory`
+    (`"retrieval"` or `"generation"`) -- never raised for a timeout
+    (that path already returns a real, honest empty answer instead of
+    raising, see this module's own docstring)."""
+
+    def __init__(self, stage: str, original: Exception):
+        self.stage = stage
+        self.original = original
+        super().__init__(str(original))
 
 
 def _deduplicate_documents(chunks: list[dict]) -> list[dict]:
@@ -112,23 +130,34 @@ async def run_evaluation(
     answer = ""
     initial_metrics: dict = {}
     try:
-        chunks = await asyncio.wait_for(
-            search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings, **(retrieval_overrides or {})),
-            timeout=settings.EVALUATION_TIMEOUT,
-        )
+        try:
+            chunks = await asyncio.wait_for(
+                search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings, **(retrieval_overrides or {})),
+                timeout=settings.EVALUATION_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            raise
+        except Exception as exc:
+            raise EvaluationStageError("retrieval", exc) from exc
+
         llm_cfg = resolve_llm_config(org_settings, overrides=model_config)
         system_prompt = llm_cfg["system_prompt"]
         if chunks:
             context_text = "\n\n".join(f"[{i}] {c['content']}" for i, c in enumerate(chunks, start=1))
             system_prompt = f"{system_prompt}\n\n{CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": question.question}]
-        completion = await asyncio.wait_for(
-            chat_completion_with_usage(
-                messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
-                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
-            ),
-            timeout=settings.EVALUATION_TIMEOUT,
-        )
+        try:
+            completion = await asyncio.wait_for(
+                chat_completion_with_usage(
+                    messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
+                    top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
+                ),
+                timeout=settings.EVALUATION_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            raise
+        except Exception as exc:
+            raise EvaluationStageError("generation", exc) from exc
         answer = completion["content"]
         # Partie 7.2.14 -- real token usage can ONLY ever be captured
         # HERE, at real generation time (never reconstructed later from

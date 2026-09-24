@@ -11,12 +11,13 @@ from api.models.evaluation import EvaluationDataset, EvaluationJob
 from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.evaluation import (
-    EvaluationJobCreateRequest, EvaluationJobListResponse, EvaluationJobResponse, EvaluationResultListResponse,
+    EvaluationFailureCategoriesResponse, EvaluationFailureListResponse, EvaluationJobCreateRequest,
+    EvaluationJobListResponse, EvaluationJobResponse, EvaluationResultListResponse,
 )
 from api.security.evaluation import require_dataset_admin, require_evaluation_job_admin
 from api.services.evaluation_jobs import (
-    cancel_evaluation_job, create_evaluation_job, get_evaluation_job_results, list_evaluation_jobs,
-    schedule_evaluation_job_processing,
+    cancel_evaluation_job, categorize_job_failures, create_evaluation_job, get_evaluation_job_results,
+    get_job_failures, list_evaluation_jobs, schedule_evaluation_job_processing,
 )
 
 router = APIRouter(tags=["evaluation-jobs"])
@@ -74,3 +75,20 @@ async def get_evaluation_job_results_endpoint(
 ):
     job, _caller = job_ctx
     return await get_evaluation_job_results(db, job.id, limit, offset)
+
+
+@router.get("/jobs/{job_id}/failures", response_model=EvaluationFailureListResponse)
+async def get_evaluation_job_failures_endpoint(
+    job_ctx: tuple[EvaluationJob, OrganizationMember] = Depends(require_evaluation_job_admin), db: AsyncSession = Depends(get_db),
+):
+    job, _caller = job_ctx
+    failures = await get_job_failures(db, job.id)
+    return {"items": failures, "total": len(failures)}
+
+
+@router.get("/jobs/{job_id}/failures/categories", response_model=EvaluationFailureCategoriesResponse)
+async def get_evaluation_job_failure_categories_endpoint(
+    job_ctx: tuple[EvaluationJob, OrganizationMember] = Depends(require_evaluation_job_admin), db: AsyncSession = Depends(get_db),
+):
+    job, _caller = job_ctx
+    return await categorize_job_failures(db, job.id)

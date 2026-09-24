@@ -6,6 +6,8 @@ import { useState, type ReactNode } from "react";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 import LanguageSelector from "@/components/LanguageSelector";
 import LoadingState from "@/components/LoadingState";
+import { BrandingApplier } from "@/components/BrandingApplier";
+import { BrandingProvider, useBranding } from "@/lib/branding-context";
 
 const NAV_SECTIONS = [
   {
@@ -19,6 +21,7 @@ const NAV_SECTIONS = [
       { href: "/dashboard/workflows", label: "Workflows" },
       { href: "/dashboard/fine-tuning", label: "Fine-tuning" },
       { href: "/dashboard/analytics", label: "Analytics" },
+      { href: "/dashboard/eval", label: "Eval Lab" },
     ],
   },
   {
@@ -55,7 +58,16 @@ const NAV_SECTIONS = [
   },
 ];
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+function BrandLogo({ className }: { className?: string }) {
+  const { branding } = useBranding();
+  if (branding.logo_url) {
+    // eslint-disable-next-line @next/next/no-img-element -- an organization's own uploaded logo is an arbitrary external/S3 URL, not a static local asset next/image can optimize
+    return <img src={branding.logo_url} alt={branding.brand_name ?? ""} className={`max-h-8 max-w-[140px] object-contain ${className ?? ""}`} />;
+  }
+  return <span className={`text-sm font-semibold text-foreground ${className ?? ""}`}>{branding.brand_name ?? "RAG SaaS Platform"}</span>;
+}
+
+function DashboardLayoutInner({ children }: { children: ReactNode }) {
   const { user, loading } = useRequireAuth();
   const { logout } = useAuth();
   const pathname = usePathname();
@@ -67,6 +79,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <BrandingApplier />
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/20 md:hidden" onClick={() => setSidebarOpen(false)} role="presentation" />
       )}
@@ -76,7 +89,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         }`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-4">
-          <Link href="/" className="text-sm font-semibold text-foreground">RAG SaaS Platform</Link>
+          <Link href="/"><BrandLogo /></Link>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
@@ -133,10 +146,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           >
             ☰
           </button>
-          <span className="text-sm font-semibold text-foreground">RAG SaaS Platform</span>
+          <BrandLogo />
         </header>
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  return (
+    <BrandingProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </BrandingProvider>
   );
 }
