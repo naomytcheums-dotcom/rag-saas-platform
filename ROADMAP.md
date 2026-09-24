@@ -2315,3 +2315,45 @@ custom, widget custom wins, logo fallback, logo widget wins, inactive
 ignored, font fallback). **Aucune régression** : 97 tests widget
 existants passent toujours.
 
+
+---
+
+## P2 #4 — Function-calling loop dans stream_response : FERMÉ (session SSRF épinglé)
+
+**Commit** : `0cfe770`
+
+Le streaming (`stream_response`) ne faisait que la SÉLECTION des tools
+pour injection dans le prompt, sans jamais passer `tools=` à l'appel
+LLM. Résultat : un chat streaming ne pouvait pas exécuter de tools.
+
+**Solution** :
+
+1. **Nouvelle fonction** `chat_completion_stream_with_tools` dans
+   `api/services/llm_providers.py` -- séparée de
+   `chat_completion_stream` (les 5+ callers existants ne sont pas
+   touchés). Elle accumule les tool_call deltas par index (protocole
+   litellm), parse le JSON d'arguments, et émet un event terminal
+   `{"type": "tool_calls", "tool_calls": [...]}`.
+
+2. **Boucle tool-aware** dans `stream_response` :
+   - Appelle `chat_completion_stream_with_tools` avec `tools=`
+   - Yield les tokens au fur et à mesure
+   - Si event `tool_calls` → exécute les tools (`execute_tool_with_timeout`,
+     `get_validation_errors`), ajoute les `role:tool` aux `messages`,
+     yield un event `tool_call` + `tool_result`, puis **re-stream**
+   - Boucle jusqu'à `AGENT_MAX_TOOL_ITERATIONS`
+   - Un échec de tool est reporté comme `tool_result{error}` -- jamais
+     un crash du stream
+
+3. **Fix** : `selected_tools: list[ToolSpec] = []` initialisé avant
+   `if tools:` (évite un `UnboundLocalError` quand pas de tools).
+
+**Tests** : 3 passed (tool exécuté + reprise, sans tools pas de loop,
+échec tool reporté). **Aucune régression** : 52 tests
+`test_agent_orchestrator.py` + 7 tests `test_streaming.py` passent
+toujours.
+
+**Impact** : un chat streaming peut maintenant exécuter des tools,
+avec les mêmes garanties que `run_agent` (timeout, parallélisme,
+validation, reporting).
+
