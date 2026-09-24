@@ -168,3 +168,122 @@ async def test_rbac_roles_endpoint_rejects_plain_member(client, db_session, regi
 
     response = await client.get(f"/organizations/{org_id}/rbac/roles", headers=_auth_header(member_token))
     assert response.status_code == 403
+
+
+# ------------------------------------------------------- require_permission --
+
+
+async def test_require_permission_allows_owner(client, db_session, register_payload):
+    """Owner passes any require_permission check."""
+    from api.security.permissions import _effective_permissions_for
+    from api.models.organization import OrganizationRole
+    from api.models.user import User
+    from api.security.organizations import create_organization_with_owner
+    from sqlalchemy import select
+
+    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    org = await create_organization_with_owner(db_session, name="RBAC Perm Org", owner_user_id=owner.id)
+    await db_session.commit()
+
+    from api.models.organization import OrganizationMember
+    membership = await db_session.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == org.id,
+            OrganizationMember.user_id == owner.id,
+        )
+    )
+    assert membership.role == OrganizationRole.owner
+    effective = await _effective_permissions_for(db_session, membership)
+    # None sentinel means "every permission"
+    assert effective is None
+
+
+async def test_require_permission_allows_admin(client, db_session, register_payload):
+    """Admin passes any require_permission check (None sentinel)."""
+    from api.security.permissions import _effective_permissions_for
+    from api.models.organization import OrganizationMember, OrganizationRole
+    from api.models.user import User
+    from api.security.organizations import create_organization_with_owner
+    from sqlalchemy import select
+
+    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    org = await create_organization_with_owner(db_session, name="RBAC Perm Admin Org", owner_user_id=owner.id)
+
+    admin_payload = {"email": "admin-perm@example.com", "password": "correct-horse-battery-staple", "accept_terms": True}
+    await client.post("/auth/register", json=admin_payload)
+    admin = await db_session.scalar(select(User).where(User.email == admin_payload["email"]))
+    db_session.add(OrganizationMember(organization_id=org.id, user_id=admin.id, role=OrganizationRole.admin))
+    await db_session.commit()
+
+    membership = await db_session.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == org.id,
+            OrganizationMember.user_id == admin.id,
+        )
+    )
+    effective = await _effective_permissions_for(db_session, membership)
+    assert effective is None
+
+
+async def test_require_permission_defaults_for_member(client, db_session, register_payload):
+    """Member gets real, default permissions without a CustomRole."""
+    from api.security.permissions import _effective_permissions_for
+    from api.models.organization import OrganizationMember, OrganizationRole
+    from api.models.user import User
+    from api.security.organizations import create_organization_with_owner
+    from sqlalchemy import select
+
+    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    org = await create_organization_with_owner(db_session, name="RBAC Perm Member Org", owner_user_id=owner.id)
+
+    member_payload = {"email": "member-perm@example.com", "password": "correct-horse-battery-staple", "accept_terms": True}
+    await client.post("/auth/register", json=member_payload)
+    member = await db_session.scalar(select(User).where(User.email == member_payload["email"]))
+    db_session.add(OrganizationMember(organization_id=org.id, user_id=member.id, role=OrganizationRole.member))
+    await db_session.commit()
+
+    membership = await db_session.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == org.id,
+            OrganizationMember.user_id == member.id,
+        )
+    )
+    effective = await _effective_permissions_for(db_session, membership)
+    assert effective is not None
+    assert "documents:read" in effective
+    assert "documents:write" in effective
+    assert "documents:delete" not in effective
+
+
+async def test_require_permission_defaults_for_viewer(client, db_session, register_payload):
+    """Viewer gets read-only default permissions."""
+    from api.security.permissions import _effective_permissions_for
+    from api.models.organization import OrganizationMember, OrganizationRole
+    from api.models.user import User
+    from api.security.organizations import create_organization_with_owner
+    from sqlalchemy import select
+
+    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    org = await create_organization_with_owner(db_session, name="RBAC Perm Viewer Org", owner_user_id=owner.id)
+
+    viewer_payload = {"email": "viewer-perm@example.com", "password": "correct-horse-battery-staple", "accept_terms": True}
+    await client.post("/auth/register", json=viewer_payload)
+    viewer = await db_session.scalar(select(User).where(User.email == viewer_payload["email"]))
+    db_session.add(OrganizationMember(organization_id=org.id, user_id=viewer.id, role=OrganizationRole.viewer))
+    await db_session.commit()
+
+    membership = await db_session.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == org.id,
+            OrganizationMember.user_id == viewer.id,
+        )
+    )
+    effective = await _effective_permissions_for(db_session, membership)
+    assert effective is not None
+    assert "documents:read" in effective
+    assert "documents:write" not in effective
+    assert "documents:delete" not in effective
