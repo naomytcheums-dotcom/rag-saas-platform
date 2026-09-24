@@ -575,3 +575,207 @@ async def import_miro(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     count = await _ingest_records_as_documents(db, org_id, current_user.id, "miro", records)
     return CRMImportResponse(imported=count, source="miro")
+
+
+
+# -- Phase 5, Étape 20 -- 10 more real connectors ------------------------------
+
+
+@router.post("/organizations/{org_id}/crm/podio/import", response_model=CRMImportResponse)
+async def import_podio(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.podio_extraction import PodioError, fetch_podio_items
+    if not settings.PODIO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Podio integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="app_id required (project_key)")
+    try:
+        records = await fetch_podio_items(app_id=payload.project_key, limit=payload.limit)
+    except PodioError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "podio", records)
+    return CRMImportResponse(imported=count, source="podio")
+
+
+@router.post("/organizations/{org_id}/crm/pipefy/import", response_model=CRMImportResponse)
+async def import_pipefy(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.pipefy_extraction import PipefyError, fetch_pipefy_cards
+    if not settings.PIPEFY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pipefy integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pipe_id required (project_key)")
+    try:
+        records = await fetch_pipefy_cards(pipe_id=payload.project_key, limit=payload.limit)
+    except PipefyError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "pipefy", records)
+    return CRMImportResponse(imported=count, source="pipefy")
+
+
+@router.post("/organizations/{org_id}/crm/hive/import", response_model=CRMImportResponse)
+async def import_hive(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.hive_extraction import HiveError, fetch_hive_actions
+    if not settings.HIVE_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Hive integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="workspace_id required (project_key)")
+    try:
+        records = await fetch_hive_actions(workspace_id=payload.project_key, limit=payload.limit)
+    except HiveError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "hive", records)
+    return CRMImportResponse(imported=count, source="hive")
+
+
+@router.post("/organizations/{org_id}/crm/teamwork/import", response_model=CRMImportResponse)
+async def import_teamwork(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.teamwork_extraction import TeamworkError, fetch_teamwork_tasks
+    if not settings.TEAMWORK_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Teamwork integration is disabled")
+    try:
+        records = await fetch_teamwork_tasks(limit=payload.limit)
+    except TeamworkError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "teamwork", records)
+    return CRMImportResponse(imported=count, source="teamwork")
+
+
+@router.post("/organizations/{org_id}/crm/nifty/import", response_model=CRMImportResponse)
+async def import_nifty(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.nifty_extraction import NiftyError, fetch_nifty_tasks
+    if not settings.NIFTY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nifty integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id required (project_key)")
+    try:
+        records = await fetch_nifty_tasks(project_id=payload.project_key, limit=payload.limit)
+    except NiftyError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "nifty", records)
+    return CRMImportResponse(imported=count, source="nifty")
+
+
+@router.post("/organizations/{org_id}/crm/smartsuite/import", response_model=CRMImportResponse)
+async def import_smartsuite(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.smartsuite_extraction import SmartSuiteError, fetch_smartsuite_records
+    if not settings.SMARTSUITE_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="SmartSuite integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="table_id required (project_key)")
+    try:
+        records = await fetch_smartsuite_records(table_id=payload.project_key, limit=payload.limit)
+    except SmartSuiteError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "smartsuite", records)
+    return CRMImportResponse(imported=count, source="smartsuite")
+
+
+@router.post("/organizations/{org_id}/crm/process-street/import", response_model=CRMImportResponse)
+async def import_process_street(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.process_street_extraction import ProcessStreetError, fetch_process_street_workflows
+    if not settings.PROCESS_STREET_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Process Street integration is disabled")
+    try:
+        records = await fetch_process_street_workflows(limit=payload.limit)
+    except ProcessStreetError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "process-street", records)
+    return CRMImportResponse(imported=count, source="process-street")
+
+
+@router.post("/organizations/{org_id}/crm/activecampaign/import", response_model=CRMImportResponse)
+async def import_activecampaign(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.activecampaign_extraction import ActiveCampaignError, fetch_activecampaign_contacts
+    if not settings.ACTIVECAMPAIGN_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ActiveCampaign integration is disabled")
+    try:
+        records = await fetch_activecampaign_contacts(limit=payload.limit)
+    except ActiveCampaignError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "activecampaign", records)
+    return CRMImportResponse(imported=count, source="activecampaign")
+
+
+@router.post("/organizations/{org_id}/crm/mailchimp/import", response_model=CRMImportResponse)
+async def import_mailchimp(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.mailchimp_extraction import MailchimpError, fetch_mailchimp_audiences
+    if not settings.MAILCHIMP_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mailchimp integration is disabled")
+    try:
+        records = await fetch_mailchimp_audiences(limit=payload.limit)
+    except MailchimpError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "mailchimp", records)
+    return CRMImportResponse(imported=count, source="mailchimp")
+
+
+@router.post("/organizations/{org_id}/crm/klaviyo/import", response_model=CRMImportResponse)
+async def import_klaviyo(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.klaviyo_extraction import KlaviyoError, fetch_klaviyo_profiles
+    if not settings.KLAVIYO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Klaviyo integration is disabled")
+    try:
+        records = await fetch_klaviyo_profiles(limit=payload.limit)
+    except KlaviyoError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "klaviyo", records)
+    return CRMImportResponse(imported=count, source="klaviyo")
