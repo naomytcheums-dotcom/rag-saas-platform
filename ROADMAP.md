@@ -2157,3 +2157,24 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 
 **Total session : 9 tâches fermées, 9 commits poussés.**
 
+
+---
+
+## Vérification honnête (session SSRF épinglé, 2026-09-24)
+
+Après vérification réelle du code, voici l'état VRAI :
+
+| # | Tâche | État réel | Dette |
+|---|-------|-----------|-------|
+| #1 | Branding UI | ✅ Fait + testé + branché | Aucune |
+| #4 | Function-calling loop | ❌ `stream_response` (SSE) n'exécute pas les tools | `chat_completion_stream` appelé sans `tools=`, pas de `role:tool` |
+| #5 | billing_payment_succeeded | ⚠️ Paystack OK ; Stripe incomplet | Manque `payment_intent.succeeded`, `charge.succeeded`, `invoice.paid` |
+| #7 | Paystack réel | ⚠️ Code complet, jamais testé live | Pas de `PAYSTACK_SECRET_KEY` en sandbox |
+| #11 | Documentation architecture | ⚠️ Racine OK ; `docs/architecture/` vide | Seul `LEGACY.md` existe |
+
+**Corrections :**
+- #1 : fermée proprement ✅
+- #4 : **rouverte** — `stream_response` ne fait que la sélection, pas l'exécution
+- #5 : **rouverte** — Stripe events incomplets
+- #7 : **rouverte** — tests live jamais exécutés
+- #11 : **rouverte** — `docs/architecture/` à compléter
