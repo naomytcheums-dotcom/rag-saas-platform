@@ -1893,3 +1893,46 @@ rather than left implicit.
 - **Frontend** : `frontend/app/dashboard/eval/runs/[runId]/comparison/page.tsx`
 - **Fonction** : `compare_evaluation_jobs` dans `api/services/evaluation_jobs.py`
 - **TypeScript** : ✅ Compile sans erreur
+
+---
+
+## [Phase 5 — Session du 2026-09-24]
+
+Récapitulatif de tout ce qui a été fait dans cette session :
+
+### ✅ CORRIGÉ / AJOUTÉ
+
+- **Sandbox Environment** : modèle + router + migration 0124 + 4 tests
+- **Eval Lab comparaison** : endpoint `/jobs/{id}/comparison` + UI frontend
+- **Agent Builder UI** : page `/dashboard/agents/new`
+- **White-label UI** : page `/dashboard/settings/white-label`
+- **Notifications** : 2 déclencheurs (`billing_quota_warning`, `billing_quota_exceeded`)
+- **MCP tools custom** : exposés via MCP serveur
+- **MCP tools per-run** : `execute_sql_query` exposé via MCP
+- **Undo/Redo canvas** : hook `useHistory` + raccourcis Ctrl+Z/Ctrl+Y
+- **Éditeur `human`** : choices, approve/reject labels, timeout
+- **SSE replay** : snapshot initial des notifications non-lues
+- **RBAC granulaire** : 45 routers branchés (~250 endpoints)
+- **RBAC permissions par défaut** : manager/member/viewer
+- **Salesforce + HubSpot** : modules d'extraction CRM
+- **Zapier/Make actions** : 4 nouvelles actions (create_agent, create_conversation, send_notification, trigger_workflow)
+- **Warnings `datetime.utcnow()`** : corrigés dans sandbox
+
+### 📝 DOCUMENTÉ
+
+- **`agents.md`** : contrat d'onboarding IBM Bob 2.0
+- **`docs/IBM_BOB_2_SUBMISSION.md`** : 19 sections + Impact/Innovation/Scalabilité/IBM Integration
+- **README** : mis à jour avec les nouvelles fonctionnalités
+
+### ⏳ TRACÉ P2
+
+- **RBAC resource-level** : les 43 patterns `require_dataset_admin`/`require_agent_manager`/etc. restent inchangés (plus granulaires, plus sécurisés)
+- **`ultralytics`** : 5 tests media échouent (PyPI inaccessible)
+- **Tests Sandbox supplémentaires** : à créer
+- **Tests Eval Lab comparaison** : à créer
+
+### 🔴 NOTES IMPORTANTES
+
+- **Dépôt public/privé** : décision toujours en attente
+- **`backend-security` CI** : bump transformers/weasyprint toujours tracé P1
+- **2 échecs CI résiduels** : toujours tracés P2
