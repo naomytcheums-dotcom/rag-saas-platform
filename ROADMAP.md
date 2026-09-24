@@ -2178,3 +2178,42 @@ Après vérification réelle du code, voici l'état VRAI :
 - #5 : **rouverte** — Stripe events incomplets
 - #7 : **rouverte** — tests live jamais exécutés
 - #11 : **rouverte** — `docs/architecture/` à compléter
+
+---
+
+## Tests "live" — conditions EXACTES (vérifié 2026-09-24)
+
+Vérification réelle des skip reasons :
+
+| Fichier | Tests | Condition exacte |
+|---------|-------|------------------|
+| `tests/test_billing_stripe_live.py` | 4 | `STRIPE_SECRET_KEY` **ET** `STRIPE_TEST_PRICE_ID` |
+| `tests/test_billing_paystack_live.py` | 4 | `PAYSTACK_SECRET_KEY` **ET** `PAYSTACK_TEST_PLAN_CODE` |
+
+**Ce qu'on a vérifié :**
+- Markers enregistrés (`pyproject.toml` lignes 39-40)
+- Tests compilent (`python -m py_compile`)
+- Code testé importe
+- Skip reason visible avec `-rs`
+- Avec fausse clé : toujours SKIPPED (car price_id/plan_code manquent aussi)
+
+**Pour les activer :**
+
+1. **Stripe** : https://dashboard.stripe.com/test/apikeys -> `sk_test_...`
+   puis créer un price : https://dashboard.stripe.com/test/products -> noter `price_...`
+2. **Paystack** : https://dashboard.paystack.com/#/settings/developer -> `sk_test_...`
+   puis créer un plan : https://dashboard.paystack.com/#/plans -> noter `PLN_...`
+
+Puis dans `.env` :
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_TEST_PRICE_ID=price_...
+PAYSTACK_SECRET_KEY=sk_test_...
+PAYSTACK_TEST_PLAN_CODE=PLN_...
+
+text
+
+Et relancer :
+```bash
+pytest -m stripe_live -v
+pytest -m paystack_live -v
+Comportement attendu : exécution réelle. Peut révéler des bugs (c'est le but).
