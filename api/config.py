@@ -403,6 +403,43 @@ class Settings(BaseSettings):
     DOCUSIGN_API_TOKEN: str | None = None
     DOCUSIGN_ACCOUNT_ID: str | None = None
     DOCUSIGN_BASE_URL: str = "https://demo.docusign.net"
+
+    # -- Phase 5, Étape 19 -- 10 more connectors --------------------------
+    MONDAY_ENABLED: bool = False
+    MONDAY_API_TOKEN: str | None = None
+
+    GITLAB_ENABLED: bool = False
+    GITLAB_API_TOKEN: str | None = None
+    GITLAB_BASE_URL: str = "https://gitlab.com"
+
+    BITBUCKET_ENABLED: bool = False
+    BITBUCKET_USERNAME: str | None = None
+    BITBUCKET_APP_PASSWORD: str | None = None
+    BITBUCKET_WORKSPACE: str | None = None
+
+    AZURE_DEVOPS_ENABLED: bool = False
+    AZURE_DEVOPS_API_TOKEN: str | None = None
+    AZURE_DEVOPS_ORGANIZATION: str | None = None
+    AZURE_DEVOPS_PROJECT: str | None = None
+
+    BASECAMP_ENABLED: bool = False
+    BASECAMP_API_TOKEN: str | None = None
+    BASECAMP_ACCOUNT_ID: str | None = None
+
+    WRIKE_ENABLED: bool = False
+    WRIKE_API_TOKEN: str | None = None
+
+    SMARTSHEET_ENABLED: bool = False
+    SMARTSHEET_API_TOKEN: str | None = None
+
+    CODA_ENABLED: bool = False
+    CODA_API_TOKEN: str | None = None
+
+    MIRO_ENABLED: bool = False
+    MIRO_API_TOKEN: str | None = None
+
+    NOTION_ENABLED: bool = False
+    NOTION_API_TOKEN: str | None = None
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
