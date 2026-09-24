@@ -87,6 +87,16 @@ async def call_tool_endpoint(
     (same `tool_validation.get_validation_errors` the internal
     function-calling loop already uses, api/services/agent_orchestrator.py)
     before ever invoking the real handler."""
+    # Special case: execute_sql_query is a per-run tool bound by closure
+    if tool_name == "execute_sql_query":
+        arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
+        sql_tool = build_sql_query_tool(db, _key.organization_id)
+        try:
+            result = await sql_tool.handler(**arguments)
+        except Exception as exc:
+            return {"content": [{"type": "text", "text": f"Tool execution failed: {exc}"}], "is_error": True}
+        return {"content": [{"type": "text", "text": result}], "is_error": False}
+
     tool = get_tool(tool_name)
     if tool is None:
         # Try as a custom tool for this organization
@@ -106,16 +116,6 @@ async def call_tool_endpoint(
             return {"content": [{"type": "text", "text": f"Tool execution failed: {exc}"}], "is_error": True}
 
         return {"content": [{"type": "text", "text": str(result)}], "is_error": False}
-
-    # Special case: execute_sql_query is a per-run tool bound by closure
-    if tool_name == "execute_sql_query":
-        arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
-        sql_tool = build_sql_query_tool(db, _key.organization_id)
-        try:
-            result = await sql_tool.handler(**arguments)
-        except Exception as exc:
-            return {"content": [{"type": "text", "text": f"Tool execution failed: {exc}"}], "is_error": True}
-        return {"content": [{"type": "text", "text": result}], "is_error": False}
 
     arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
     errors = get_validation_errors(arguments, tool_input_schema(tool))
