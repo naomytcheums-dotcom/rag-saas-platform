@@ -440,6 +440,40 @@ class Settings(BaseSettings):
 
     NOTION_ENABLED: bool = False
     NOTION_API_TOKEN: str | None = None
+
+    # -- Phase 5, Étape 20 -- 10 more connectors --------------------------
+    PODIO_ENABLED: bool = False
+    PODIO_API_TOKEN: str | None = None
+
+    PIPEFY_ENABLED: bool = False
+    PIPEFY_API_TOKEN: str | None = None
+
+    HIVE_ENABLED: bool = False
+    HIVE_API_TOKEN: str | None = None
+
+    TEAMWORK_ENABLED: bool = False
+    TEAMWORK_API_TOKEN: str | None = None
+    TEAMWORK_DOMAIN: str | None = None
+
+    NIFTY_ENABLED: bool = False
+    NIFTY_API_TOKEN: str | None = None
+
+    SMARTSUITE_ENABLED: bool = False
+    SMARTSUITE_API_TOKEN: str | None = None
+
+    PROCESS_STREET_ENABLED: bool = False
+    PROCESS_STREET_API_TOKEN: str | None = None
+
+    ACTIVECAMPAIGN_ENABLED: bool = False
+    ACTIVECAMPAIGN_API_TOKEN: str | None = None
+    ACTIVECAMPAIGN_ACCOUNT: str | None = None
+
+    MAILCHIMP_ENABLED: bool = False
+    MAILCHIMP_API_TOKEN: str | None = None
+    MAILCHIMP_DC: str | None = None
+
+    KLAVIYO_ENABLED: bool = False
+    KLAVIYO_API_TOKEN: str | None = None
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
