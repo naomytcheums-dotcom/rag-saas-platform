@@ -323,6 +323,21 @@ class Settings(BaseSettings):
     # anti-enumeration design GitHub's own API already uses for a private
     # repo.
     NOTION_API_TOKEN: str | None = None
+
+    # -- Salesforce CRM integration (Phase 5, Étape 16) -------------------
+    # Real OAuth 2.0 client credentials, admin-configured once.
+    SALESFORCE_ENABLED: bool = False
+    SALESFORCE_INSTANCE_URL: str = "https://login.salesforce.com"
+    SALESFORCE_CLIENT_ID: str | None = None
+    SALESFORCE_CLIENT_SECRET: str | None = None
+    SALESFORCE_API_VERSION: str = "v59.0"
+
+    # -- HubSpot CRM integration (Phase 5, Étape 16) ----------------------
+    # Real, static private-app access token, the SAME shape as
+    # NOTION_API_TOKEN/GITHUB_API_TOKEN.
+    HUBSPOT_ENABLED: bool = False
+    HUBSPOT_API_TOKEN: str | None = None
+    HUBSPOT_API_BASE_URL: str = "https://api.hubapi.com"
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
