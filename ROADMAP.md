@@ -2217,3 +2217,26 @@ Et relancer :
 pytest -m stripe_live -v
 pytest -m paystack_live -v
 Comportement attendu : exécution réelle. Peut révéler des bugs (c'est le but).
+
+---
+
+## P3 #11 — Documentation architecture : FERMÉ (session SSRF épinglé)
+
+**Vérifié et poussé** (commit `db84b3f`) :
+
+| Fichier | Lignes | Contenu |
+|---------|--------|---------|
+| `docs/architecture/OVERVIEW.md` | 73 | Composants, stack, flux |
+| `docs/architecture/DATA_FLOW.md` | 107 | Ingestion, chat RAG, agents, workflows |
+| `docs/architecture/SECURITY.md` | 120 | Multi-tenancy, RBAC, tool permissions, audit |
+| `ARCHITECTURE.md` (racine) | +4 | Liens vers les deep-dives |
+| `docs/_sidebar.md` | +6 | Nouvelle section Architecture |
+
+**Vérifications faites :**
+- Zero résidus (`MDEOF`, `PYEOF`, `Bloc`) dans les 3 fichiers
+- Liens internes valides (croisés entre OVERVIEW/DATA_FLOW/SECURITY)
+- Sidebar pointe vers les 4 fichiers
+- ARCHITECTURE.md racine pointe vers les 4 deep-dives
+
+**Verdict #11** : fermé proprement. `docs/architecture/` n'est plus vide.
+
