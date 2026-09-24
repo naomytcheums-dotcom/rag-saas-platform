@@ -4,6 +4,13 @@ System-level overview of the RAG SaaS Platform. For subsystem-level detail
 see [`docs/advanced/`](docs/advanced/) (RAG pipeline internals) and the
 per-feature docs linked throughout.
 
+**Subsystem deep-dives:**
+- [System overview](docs/architecture/OVERVIEW.md) -- components, stack, flows
+- [Data flow](docs/architecture/DATA_FLOW.md) -- RAG, agents, workflows end-to-end
+- [Security model](docs/architecture/SECURITY.md) -- multi-tenancy, RLS, permissions
+- [Legacy status](docs/architecture/LEGACY.md) -- src/ vs api/
+
+
 ## High-level components
 
 ```

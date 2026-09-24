@@ -1,5 +1,12 @@
 - [Home](/)
 
+- Architecture
+  - [System Overview](architecture/OVERVIEW.md)
+  - [Data Flow](architecture/DATA_FLOW.md)
+  - [Security Model](architecture/SECURITY.md)
+  - [Legacy Status](architecture/LEGACY.md)
+
+
 - User Guide
   - [Getting Started](user/GETTING_STARTED.md)
   - [Account Setup](user/ACCOUNT_SETUP.md)
