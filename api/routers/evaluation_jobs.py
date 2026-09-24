@@ -106,7 +106,16 @@ async def compare_evaluation_jobs_endpoint(
     """Compare this job's own real, averaged metrics against another
     real job's own. Both jobs must belong to the same organization."""
     other_job = await db.get(EvaluationJob, with_job_id)
-    if other_job is None or other_job.organization_id != job_ctx[0].organization_id:
+    if other_job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    # The job's organization is reachable via its dataset
+    from api.models.evaluation import EvaluationDataset
+    current_dataset = await db.get(EvaluationDataset, job_ctx[0].dataset_id)
+    other_dataset = await db.get(EvaluationDataset, other_job.dataset_id)
+    if current_dataset is None or other_dataset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if current_dataset.organization_id != other_dataset.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     return await compare_evaluation_jobs(db, job_id, with_job_id)

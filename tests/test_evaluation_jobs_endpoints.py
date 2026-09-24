@@ -78,3 +78,47 @@ async def test_get_evaluation_job_endpoint_respects_permissions(client, db_sessi
 
     response = await client.get(f"/jobs/{job['id']}", headers=_auth_header(other_token))
     assert response.status_code == 404
+
+
+async def test_compare_evaluation_jobs_endpoint_works(client, db_session, register_payload):
+    """Validation criterion: la comparaison de deux jobs fonctionne."""
+    owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Compare Org")
+
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
+        job_a = (await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))).json()
+        job_b = (await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))).json()
+
+    response = await client.get(
+        f"/jobs/{job_a['id']}/comparison?with={job_b['id']}",
+        headers=_auth_header(owner_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "run_a" in data
+    assert "run_b" in data
+    assert "diff" in data
+    assert isinstance(data["diff"], list)
+
+
+async def test_compare_evaluation_jobs_rejects_other_org_job(client, db_session, register_payload):
+    """Validation criterion: on ne peut pas comparer avec un job d'une autre organisation."""
+    owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Compare Org A")
+
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
+        job_a = (await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))).json()
+
+    # Create a second org + dataset + job with a unique email
+    import uuid as _uuid
+    other_payload = {"email": f"other-{_uuid.uuid4().hex[:8]}@example.com", "password": register_payload["password"]}
+    other_token, other_dataset = await _make_org_and_dataset(client, db_session, other_payload, "Eval Job Compare Org B")
+
+    with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):
+        other_job = (await client.post(f"/datasets/{other_dataset['id']}/evaluate", json={}, headers=_auth_header(other_token))).json()
+
+    response = await client.get(
+        f"/jobs/{job_a['id']}/comparison?with={other_job['id']}",
+        headers=_auth_header(owner_token),
+    )
+
+    assert response.status_code == 404
