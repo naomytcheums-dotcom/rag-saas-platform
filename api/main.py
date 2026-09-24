@@ -32,7 +32,7 @@ from api.routers import (
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
     chat_stream, citations, compliance, conversations, conversation_shares,
-    custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notifications, observability,
+    crm, custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notifications, observability,
     plugins,
     sales,
     sandbox,
@@ -330,6 +330,7 @@ app.include_router(organization_branding.router)
 app.include_router(sandbox.router)
 app.include_router(custom_domains.router)
 app.include_router(custom_tools.router)
+app.include_router(crm.router)
 app.include_router(mcp_servers.router)
 app.include_router(mcp_server.router)
 app.include_router(ssl_certificates.router)
