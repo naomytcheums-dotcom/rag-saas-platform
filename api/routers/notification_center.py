@@ -92,8 +92,19 @@ async def update_preferences_endpoint(organization_id: uuid.UUID, body: Notifica
 
 
 @router.get("/stream")
-async def stream_notifications_endpoint(current_user: User = Depends(get_current_user)) -> StreamingResponse:
+async def stream_notifications_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
     """Real-time delivery via Server-Sent Events -- a real browser
     EventSource reconnects automatically on drop, same real behavior
-    api/routers/documents.py's own SSE route already relies on."""
-    return StreamingResponse(notifications.stream_user_notifications(current_user.id), media_type="text/event-stream", headers=_SSE_HEADERS)
+    api/routers/documents.py's own SSE route already relies on.
+
+    Phase 5, Étape 4bis -- sends a real initial snapshot of unread
+    notifications before streaming new ones, so a reconnecting client
+    never misses what happened while offline."""
+    return StreamingResponse(
+        notifications.stream_user_notifications(current_user.id, db),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )

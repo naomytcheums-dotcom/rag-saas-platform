@@ -152,13 +152,37 @@ async def _publish_realtime(notification: Notification) -> None:
         logger.warning("_publish_realtime: could not publish notification '%s' for user '%s': %s", notification.id, notification.user_id, exc)
 
 
-async def stream_user_notifications(user_id: uuid.UUID):
+async def stream_user_notifications(user_id: uuid.UUID, db=None):
     """Real async generator wrapped in a StreamingResponse by
-    api/routers/notification_center.py's own SSE route. Sends nothing
-    as an initial snapshot (unlike document progress, there's no single
-    "current state" to summarize) -- a caller wanting the current
-    unread count calls GET /notifications/unread-count first, then
-    opens this stream for what happens next."""
+    api/routers/notification_center.py's own SSE route.
+
+    Phase 5, Étape 4bis -- sends a real, initial snapshot of the user's
+    own unread notifications (so a reconnecting client never misses
+    what happened while it was offline), then streams real new
+    notifications via Redis pub/sub for what happens next."""
+    # Real, initial replay: unread notifications for this user
+    if db is not None:
+        from api.models.notification import Notification
+        from sqlalchemy import select
+
+        result = await db.execute(
+            select(Notification)
+            .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+            .order_by(Notification.created_at.desc())
+            .limit(50)
+        )
+        for notification in result.scalars().all():
+            payload = {
+                "id": str(notification.id),
+                "type": notification.notification_type,
+                "title": notification.title,
+                "body": notification.body,
+                "priority": notification.priority,
+                "created_at": notification.created_at.isoformat() if notification.created_at else None,
+            }
+            import json as _json
+            yield f"event: snapshot\ndata: {_json.dumps(payload)}\n\n"
+
     pubsub = _get_notification_redis().pubsub()
     channel = _channel_for(user_id)
     await pubsub.subscribe(channel)
@@ -166,7 +190,7 @@ async def stream_user_notifications(user_id: uuid.UUID):
         async for message in pubsub.listen():
             if message["type"] != "message":
                 continue
-            yield f"data: {message['data']}\n\n"
+            yield f"event: notification\ndata: {message['data']}\n\n"
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
