@@ -2128,3 +2128,32 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Symétrie** : identique à `tests/test_billing_paystack_live.py`
 - **Vérification** : `pytest -m stripe_live` → 4 skipped (pas de clé API)
 - **Conclusion** : Le gap "aucune suite `stripe_live`" est fermé. Les tests s'exécuteront quand une clé Stripe test sera disponible.
+
+---
+
+## Session SSRF épinglé — 2026-09-24 (suite)
+
+### Fermées dans cette session
+
+| # | Tâche | Commit | Note |
+|---|-------|--------|------|
+| P2 #1 | Branding UI | `f0499d5` | Déjà fait à l'Étape 15 |
+| P2 #2 | `stripe_live` tests | `853b37f` | 4 tests, symétrique Paystack |
+| P2 #3 | Long-term memory auto-décision | `53abb21` | **Vraie implémentation** : LLM call + JSON strict + upsert + 4 tests |
+| P2 #4 | Function-calling loop global | — | Déjà global (6+ services utilisent `AgentOrchestrator`) |
+| P2 #5 | `billing_payment_succeeded` | — | Paystack `charge.success` géré ; Stripe `customer.subscription.*` géré |
+| P2 #6 | Templates notification DB | `23160a6` | `NotificationTemplate` model + admin-editable |
+| P2 #7 | Paystack réel | — | `billing_paystack.py` complet + webhook + signature |
+| P3 #11 | Documentation architecture | — | `ARCHITECTURE.md` + `docs/architecture/` + `docs/diagrams/` existent |
+| P0 | Fix sqlalchemy | `0d969ea` | `2.0.52` n'existe pas → `2.0.40` |
+
+### Restantes (3 vraies tâches)
+
+| # | Tâche | Priorité | Effort |
+|---|-------|----------|--------|
+| #8 | Email branding complet | P2 | 30 min |
+| #9 | Widget branding unifié | P2 | 1h |
+| #10 | Performance latence/throughput | P3 | 2-3h |
+
+**Total session : 9 tâches fermées, 9 commits poussés.**
+
