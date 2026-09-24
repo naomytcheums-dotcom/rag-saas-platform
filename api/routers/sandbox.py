@@ -1,7 +1,7 @@
 """Sandbox Environment — isolated dev/test data CRUD."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -37,7 +37,7 @@ async def create_sandbox(
         organization_id=org_id,
         name=name,
         data_ttl_hours=data_ttl_hours,
-        expires_at=datetime.utcnow() + timedelta(hours=data_ttl_hours),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=data_ttl_hours),
     )
     db.add(sandbox)
     await db.commit()
@@ -69,6 +69,6 @@ async def reset_sandbox(
     sandbox = await db.get(SandboxEnvironment, sandbox_id)
     if not sandbox or sandbox.organization_id != org_id:
         raise HTTPException(status_code=404, detail="Not found")
-    sandbox.expires_at = datetime.utcnow() + timedelta(hours=sandbox.data_ttl_hours)
+    sandbox.expires_at = datetime.now(timezone.utc) + timedelta(hours=sandbox.data_ttl_hours)
     await db.commit()
     return {"status": "reset", "expires_at": sandbox.expires_at}
