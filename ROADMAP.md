@@ -1826,3 +1826,21 @@ rather than left implicit.
 - **Priorité** : P0 (bloquait les clients)
 - **Complexité** : Faible
 - **Statut** : CORRIGÉ
+
+### 2026-09-24 — MCP serveur vérifié et fonctionnel
+
+- **Statut** : ✅ VÉRIFIÉ
+- **Test réel** : `GET /mcp/v1/tools` + `POST /mcp/v1/tools/calculator/call` exécutés avec succès
+- **Tools exposés** : `calculator`, `word_count`
+- **Auth** : X-API-Key avec scope `mcp:tools` (fonctionne)
+- **Réponse** : `{"content":[{"type":"text","text":"4"}],"is_error":false}` pour `2+2`
+- **Prêt pour IBM Bob** : OUI
+- **API key de test** : créée (ne pas commiter)
+- **Endpoint pour IBM Bob** : `http://localhost:8000/mcp/v1`
+
+### 2026-09-24 — Limites MCP identifiées
+
+- **Tools custom non exposés** : Les tools webhook (`api/models/custom_tool.py`) ne sont pas exposés via MCP.
+- **Tools per-run non exposés** : `execute_sql_query` n'est pas exposé (nécessite `organization_id` et `db`).
+- **Scope délibéré** : Seuls les tools builtin sont exposés.
+- **Statut** : TRACÉ (P2, à élargir si nécessaire)
