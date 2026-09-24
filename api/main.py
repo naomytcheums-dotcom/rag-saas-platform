@@ -35,6 +35,7 @@ from api.routers import (
     custom_domains, custom_tools, documents, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notifications, observability,
     plugins,
     sales,
+    sandbox,
     analytics,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
@@ -326,6 +327,7 @@ app.include_router(user_limits.router)
 app.include_router(usage.router)
 app.include_router(organization_settings.router)
 app.include_router(organization_branding.router)
+app.include_router(sandbox.router)
 app.include_router(custom_domains.router)
 app.include_router(custom_tools.router)
 app.include_router(mcp_servers.router)
