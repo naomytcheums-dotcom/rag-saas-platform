@@ -358,6 +358,47 @@ class Settings(BaseSettings):
     PIPEDRIVE_ENABLED: bool = False
     PIPEDRIVE_API_TOKEN: str | None = None
     PIPEDRIVE_API_BASE_URL: str = "https://api.pipedrive.com/v1"
+
+    # -- Additional integrations (Phase 5, Étape 18) -----------------------
+    ASANA_ENABLED: bool = False
+    ASANA_API_TOKEN: str | None = None
+
+    TRELLO_ENABLED: bool = False
+    TRELLO_API_KEY: str | None = None
+    TRELLO_API_TOKEN: str | None = None
+
+    LINEAR_ENABLED: bool = False
+    LINEAR_API_TOKEN: str | None = None
+
+    MONDAY_ENABLED: bool = False
+    MONDAY_API_TOKEN: str | None = None
+
+    AIRTABLE_ENABLED: bool = False
+    AIRTABLE_API_TOKEN: str | None = None
+
+    DROPBOX_ENABLED: bool = False
+    DROPBOX_API_TOKEN: str | None = None
+
+    BOX_ENABLED: bool = False
+    BOX_API_TOKEN: str | None = None
+
+    CLICKUP_ENABLED: bool = False
+    CLICKUP_API_TOKEN: str | None = None
+
+    INTERCOM_ENABLED: bool = False
+    INTERCOM_API_TOKEN: str | None = None
+
+    ZOHO_ENABLED: bool = False
+    ZOHO_API_TOKEN: str | None = None
+
+    SHOPIFY_ENABLED: bool = False
+    SHOPIFY_API_TOKEN: str | None = None
+
+    WOOCOMMERCE_ENABLED: bool = False
+    WOOCOMMERCE_API_TOKEN: str | None = None
+
+    DOCUSIGN_ENABLED: bool = False
+    DOCUSIGN_API_TOKEN: str | None = None
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
