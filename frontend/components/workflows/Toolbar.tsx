@@ -12,11 +12,15 @@ interface Props {
   onExport: () => void;
   onImport: (file: File) => void;
   onUseTemplate: (templateId: string) => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   validationErrors: string[];
   validationWarnings: string[];
 }
 
-export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTemplate, validationErrors, validationWarnings }: Props) {
+export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTemplate, onUndo, onRedo, canUndo, canRedo, validationErrors, validationWarnings }: Props) {
   const [showTemplates, setShowTemplates] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +41,28 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent disabled:opacity-30"
+          title="Annuler (Ctrl+Z)"
+          data-testid="undo-button"
+        >
+          ↶ Annuler
+        </button>
+
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent disabled:opacity-30"
+          title="Rétablir (Ctrl+Y)"
+          data-testid="redo-button"
+        >
+          ↷ Rétablir
+        </button>
 
         <button type="button" onClick={onSave} disabled={saving} className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50" data-testid="save-button">
           {saving ? "Enregistrement…" : "Enregistrer"}

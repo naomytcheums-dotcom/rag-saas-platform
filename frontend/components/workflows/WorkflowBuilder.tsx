@@ -7,7 +7,7 @@
 // the real backend endpoints this étape's own audit found missing and
 // added.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background, Controls, MiniMap, addEdge, applyEdgeChanges, applyNodeChanges,
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
@@ -21,6 +21,7 @@ import { nodeTypes } from "@/components/workflows/nodeTypes";
 import { Toolbar } from "@/components/workflows/Toolbar";
 import { WORKFLOW_TEMPLATES } from "@/components/workflows/templates";
 import { validateWorkflow } from "@/components/workflows/validator";
+import { useHistory } from "@/lib/hooks/useHistory";
 import { VariablePanel, type WorkflowVariable } from "@/components/workflows/VariablePanel";
 import * as workflowService from "@/lib/services/workflows";
 import type { Workflow, WorkflowEdge, WorkflowNode, WorkflowNodeType } from "@/lib/services/workflows";
@@ -53,8 +54,22 @@ const WORKFLOW_TEMPLATES_MAP = Object.fromEntries(WORKFLOW_TEMPLATES.map((t) => 
 let nodeCounter = 0;
 
 export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onSaved?: (w: Workflow) => void }) {
-  const [nodes, setNodes] = useState<Node[]>(() => workflow.nodes.map(toRFNode));
-  const [edges, setEdges] = useState<Edge[]>(() => workflow.edges.map(toRFEdge));
+  const history = useHistory<{ nodes: Node[]; edges: Edge[] }>({
+    nodes: workflow.nodes.map(toRFNode),
+    edges: workflow.edges.map(toRFEdge),
+  });
+  const nodes = history.state.nodes;
+  const edges = history.state.edges;
+
+  const setNodes = useCallback((updater: Node[] | ((prev: Node[]) => Node[])) => {
+    const next = typeof updater === "function" ? updater(history.state.nodes) : updater;
+    history.set({ nodes: next, edges: history.state.edges });
+  }, [history]);
+
+  const setEdges = useCallback((updater: Edge[] | ((prev: Edge[]) => Edge[])) => {
+    const next = typeof updater === "function" ? updater(history.state.edges) : updater;
+    history.set({ nodes: history.state.nodes, edges: next });
+  }, [history]);
   const [variables, setVariables] = useState<WorkflowVariable[]>(() => (workflow.variables as unknown as WorkflowVariable[]) ?? []);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
@@ -62,8 +77,39 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
   const [saveError, setSaveError] = useState<string | null>(null);
   const [runRefreshSignal, setRunRefreshSignal] = useState(0);
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((nds) => applyNodeChanges(changes, nds));
+  }, [setNodes]);
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((eds) => applyEdgeChanges(changes, eds));
+  }, [setEdges]);
+
+  const undo = useCallback(() => {
+    history.undo();
+  }, [history]);
+
+  const redo = useCallback(() => {
+    history.redo();
+  }, [history]);
+
+  // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y or Ctrl+Shift+Z (redo)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key === "y") ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z")
+      ) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge(connection, eds));
@@ -154,6 +200,10 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
         onExport={() => void exportJson()}
         onImport={(file) => void importJson(file)}
         onUseTemplate={useTemplate}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
         validationErrors={validation.errors}
         validationWarnings={validation.warnings}
       />

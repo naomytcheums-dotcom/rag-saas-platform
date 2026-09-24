@@ -102,6 +102,10 @@ describe("Toolbar", () => {
         onExport={vi.fn()}
         onImport={vi.fn()}
         onUseTemplate={vi.fn()}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        canUndo={false}
+        canRedo={false}
         validationErrors={["Un vrai problème"]}
         validationWarnings={["Un vrai avertissement"]}
       />,
@@ -120,6 +124,10 @@ describe("Toolbar", () => {
         onExport={vi.fn()}
         onImport={vi.fn()}
         onUseTemplate={onUseTemplate}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        canUndo={false}
+        canRedo={false}
         validationErrors={[]}
         validationWarnings={[]}
       />,
