@@ -1857,3 +1857,39 @@ rather than left implicit.
 - **Conclusion** : le MCP client du projet peut se connecter à un serveur MCP externe compatible `streamable_http`.
 - **Prêt pour IBM Bob** : OUI
 - **Endpoint serveur test** : `http://127.0.0.1:8001/mcp`
+
+### 2026-09-24 — Sandbox Environment complété
+
+- **Statut** : ✅ CORRIGÉ
+- **Modèle** : `api/models/sandbox.py` (SandboxEnvironment)
+- **Router** : `api/routers/sandbox.py` (CRUD + reset)
+- **Migration** : `0124_sandbox_environments` (appliquée)
+- **Endpoints** :
+  - `GET /organizations/{org_id}/sandbox` — lister
+  - `POST /organizations/{org_id}/sandbox` — créer
+  - `DELETE /organizations/{org_id}/sandbox/{id}` — supprimer
+  - `POST /organizations/{org_id}/sandbox/{id}/reset` — réinitialiser
+- **Tests** : ⏳ À créer
+- **Frontend** : ⏳ À créer
+
+### 2026-09-24 — Agent Builder UI corrigé
+
+- **Statut** : ✅ CORRIGÉ
+- **Fichier** : `frontend/app/dashboard/agents/new/page.tsx`
+- **Correction** : URL org-scoped (`/organizations/${org.id}/agents`)
+- **TypeScript** : ✅ Compile sans erreur
+
+### 2026-09-24 — White-label UI corrigé
+
+- **Statut** : ✅ CORRIGÉ
+- **Fichier** : `frontend/app/dashboard/settings/white-label/page.tsx`
+- **Correction** : URL org-scoped (`/organizations/${org.id}/branding`)
+- **TypeScript** : ✅ Compile sans erreur
+
+### 2026-09-24 — Eval Lab comparaison complété
+
+- **Statut** : ✅ CORRIGÉ
+- **Endpoint** : `GET /jobs/{job_id}/comparison?with={other_job_id}`
+- **Frontend** : `frontend/app/dashboard/eval/runs/[runId]/comparison/page.tsx`
+- **Fonction** : `compare_evaluation_jobs` dans `api/services/evaluation_jobs.py`
+- **TypeScript** : ✅ Compile sans erreur
