@@ -91,7 +91,7 @@ from api.security.credit_packs import credits_for_usage
 from api.services.billing_credits import InsufficientCreditsError, deduct_credits
 from api.services.llm_byok import resolve_org_api_key
 from api.services.llm_config import resolve_llm_config
-from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_with_usage
+from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_stream_with_tools, chat_completion_with_usage
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
@@ -743,6 +743,7 @@ class AgentOrchestrator:
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
 
+        selected_tools: list[ToolSpec] = []
         if tools:
             async with self._db_lock:
                 permitted = []
@@ -791,15 +792,98 @@ class AgentOrchestrator:
         accumulated: list[str] = []
         stream_usage: dict = {}
         deadline = time.monotonic() + timeout
+
+        # Real tool-execution loop for streaming (P2 #4, session SSRF
+        # épinglé). Previously stream_response only SELECTED tools for
+        # prompt injection but never passed `tools=` to the stream, so a
+        # streaming agent could not actually call one. This loop is the
+        # streaming sibling of run_agent's own tool loop -- same real
+        # execution helpers (`execute_tool_with_timeout`,
+        # `get_validation_errors`), same real iteration cap
+        # (`AGENT_MAX_TOOL_ITERATIONS`), same real "tool failure is
+        # data, not a crash" doctrine.
+        #
+        # Streaming-specific concern: a client that has already seen
+        # content tokens CANNOT un-see them if the model then decides to
+        # call a tool. Real providers this codebase uses are mutually
+        # exclusive per turn (either content OR tool_calls, never both
+        # in the same turn's stream), so a turn that yields content is
+        # treated as final. Tool calls only ever arrive in place of
+        # content, so the client never sees a "false final answer"
+        # followed by a tool call -- it sees either content (final) or
+        # a tool_call event + tool result + continued generation.
+        stream_function_schemas = [tool_to_function_schema(t) for t in selected_tools] if selected_tools else None
+        stream_tools_by_name = {t.name: t for t in selected_tools}
+
+        async def _execute_one_stream_tool(tool_call: dict) -> tuple[dict, str | None, str | None]:
+            tool = stream_tools_by_name.get(tool_call["name"])
+            if tool is None:
+                return tool_call, None, f"Unknown tool: {tool_call['name']!r}"
+            errors = get_validation_errors(tool_call["arguments"], tool_input_schema(tool))
+            if errors:
+                return tool_call, None, f"Invalid arguments for {tool.name!r}: {errors}"
+            async with self._db_lock:
+                tool_timeout = await get_tool_timeout(db, tool.name)
+            try:
+                output = await execute_tool_with_timeout(tool, tool_call["arguments"], timeout=tool_timeout)
+                return tool_call, output, None
+            except ToolTimeoutError as exc:
+                return tool_call, None, str(exc)
+            except Exception as exc:  # noqa: BLE001 -- tool failure is reportable data, not a crash of the whole stream
+                return tool_call, None, str(exc)
+
         try:
-            async for token in chat_completion_stream(
-                messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
-                top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"], usage_sink=stream_usage, **stream_key_override,
-            ):
-                accumulated.append(token)
-                yield {"type": "token", "token": token}
-                if time.monotonic() > deadline:
-                    raise asyncio.TimeoutError("stream_response exceeded SSE_TIMEOUT")
+            for stream_iteration in range(1, settings.AGENT_MAX_TOOL_ITERATIONS + 1):
+                stream_call_kwargs = {"tools": stream_function_schemas, "tool_choice": "auto"} if stream_function_schemas else {}
+                pending_tool_calls: list[dict] = []
+
+                async for event in chat_completion_stream_with_tools(
+                    messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
+                    top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"], usage_sink=stream_usage,
+                    **stream_key_override, **stream_call_kwargs,
+                ):
+                    if time.monotonic() > deadline:
+                        raise asyncio.TimeoutError("stream_response exceeded SSE_TIMEOUT")
+                    if isinstance(event, dict) and event.get("type") == "tool_calls":
+                        pending_tool_calls = event.get("tool_calls", [])
+                        break
+                    # Real content token
+                    accumulated.append(event)
+                    yield {"type": "token", "token": event}
+                    if time.monotonic() > deadline:
+                        raise asyncio.TimeoutError("stream_response exceeded SSE_TIMEOUT")
+
+                if not pending_tool_calls:
+                    # Real final answer reached -- no more tool calls, exit loop.
+                    break
+
+                # Real, honest client signal: a tool call is about to happen.
+                yield {"type": "tool_call", "tools": [tc["name"] for tc in pending_tool_calls], "iteration": stream_iteration}
+
+                # Echo the assistant's tool_calls back, then run them.
+                messages.append({
+                    "role": "assistant", "content": None,
+                    "tool_calls": [
+                        {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])}}
+                        for tc in pending_tool_calls
+                    ],
+                })
+
+                if len(pending_tool_calls) > 1:
+                    stream_results = await asyncio.gather(*[_execute_one_stream_tool(tc) for tc in pending_tool_calls])
+                else:
+                    stream_results = [await _execute_one_stream_tool(pending_tool_calls[0])]
+
+                for tool_call, output, error in stream_results:
+                    messages.append({
+                        "role": "tool", "tool_call_id": tool_call["id"],
+                        "content": error if error is not None else (output or ""),
+                    })
+                    yield {"type": "tool_result", "tool": tool_call["name"], "error": error}
+            else:
+                raise LLMError(
+                    f"stream_response did not reach a final answer within {settings.AGENT_MAX_TOOL_ITERATIONS} tool-calling iterations"
+                )
             # AI Pack -- same real, post-call, usage-based debit as the
             # non-streaming path (run_agent), using the real token
             # counts litellm's own stream_options={"include_usage": True}

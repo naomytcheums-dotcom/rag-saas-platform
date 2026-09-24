@@ -327,6 +327,99 @@ async def chat_completion_stream(messages: list[dict], provider: str | None = No
             yield delta
 
 
+async def chat_completion_stream_with_tools(
+    messages: list[dict], provider: str | None = None, model: str | None = None,
+    usage_sink: dict | None = None, **kwargs,
+):
+    """Partie 8.1.1's streaming sibling WITH tool-call support.
+
+    Real, additive, SEPARATE from `chat_completion_stream` on purpose:
+    the plain streamer's contract is "yield content tokens"; this one's
+    contract is "yield content tokens AND, if the model decides to call
+    tools, collect those calls so the caller can execute them and
+    resume the loop". Keeping them separate means the ~5 existing plain
+    callers of `chat_completion_stream` are unaffected.
+
+    Yields:
+        - str: a real content token from the stream (same as the plain
+          streamer)
+        - dict: a single terminal event of shape
+          `{"type": "tool_calls", "tool_calls": [...]}` emitted ONCE at
+          the very end, ONLY when the model produced tool calls instead
+          of (or in addition to) content. Each tool call is
+          `{"id", "name", "arguments"}` -- same shape
+          `chat_completion_with_usage` returns.
+
+    In every real provider this codebase uses, content and tool_calls
+    are mutually exclusive per turn, so a caller that sees a `tool_calls`
+    event must NOT treat the accumulated content as a final answer --
+    it must execute the tools, append the `role:tool` results to
+    `messages`, and call this function again.
+
+    `usage_sink`, when given, is populated exactly like the plain
+    streamer's (real, provider-reported token usage from the stream's
+    final usage-bearing chunk).
+
+    Same real, deliberate no-retry contract as `chat_completion_stream`:
+    once tokens have reached a client, a mid-stream retry is not safe.
+    A real failure raises -- the caller decides what to send.
+    """
+    import json as _json
+    import litellm
+
+    provider = provider or get_default_provider()
+    call_kwargs = _provider_kwargs(provider, model)
+    call_kwargs.update(kwargs)
+    call_kwargs["stream"] = True
+    if usage_sink is not None:
+        call_kwargs["stream_options"] = {"include_usage": True}
+
+    stream = await litellm.acompletion(messages=messages, **call_kwargs)
+    tool_call_accum: dict[int, dict] = {}
+
+    async for chunk in stream:
+        if usage_sink is not None and getattr(chunk, "usage", None) is not None:
+            usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
+            usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
+        if not chunk.choices:
+            continue
+        delta_obj = chunk.choices[0].delta
+        content = getattr(delta_obj, "content", None)
+        if content:
+            yield content
+        raw_tool_calls = getattr(delta_obj, "tool_calls", None)
+        if raw_tool_calls:
+            for tc in raw_tool_calls:
+                idx = getattr(tc, "index", 0) or 0
+                accum = tool_call_accum.setdefault(idx, {"id": None, "name": None, "arguments": ""})
+                if getattr(tc, "id", None):
+                    accum["id"] = tc.id
+                fn = getattr(tc, "function", None)
+                if fn is not None:
+                    if getattr(fn, "name", None):
+                        accum["name"] = fn.name
+                    if getattr(fn, "arguments", None):
+                        accum["arguments"] += fn.arguments
+
+    if tool_call_accum:
+        calls = []
+        for idx in sorted(tool_call_accum):
+            accum = tool_call_accum[idx]
+            if not accum.get("name"):
+                continue
+            try:
+                parsed_args = _json.loads(accum["arguments"]) if accum["arguments"] else {}
+            except (ValueError, TypeError):
+                parsed_args = {}
+            calls.append({
+                "id": accum.get("id") or f"call_{idx}",
+                "name": accum["name"],
+                "arguments": parsed_args,
+            })
+        if calls:
+            yield {"type": "tool_calls", "tool_calls": calls}
+
+
 async def completion(prompt: str, provider: str | None = None, model: str | None = None, **kwargs) -> str:
     """Item 3's own literal function (4.1.7) -- a real, single-message
     convenience wrapper around `chat_completion` above."""
