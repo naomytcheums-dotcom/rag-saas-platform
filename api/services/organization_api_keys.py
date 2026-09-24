@@ -379,6 +379,24 @@ async def check_quota(key: OrganizationAPIKey) -> None:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="API key quota exceeded for this period")
 
 
+async def check_quota_with_notification(db, key: OrganizationAPIKey) -> None:
+    """Same as check_quota, plus a real notification to the org owner
+    when the quota is crossed (warning at 80%, exceeded at 100%)."""
+    if key.quota_limit is None:
+        return
+
+    ratio = key.quota_used / key.quota_limit if key.quota_limit > 0 else 0
+
+    if ratio >= 1.0:
+        try:
+            from api.services.notifications import notify_billing_quota_exceeded
+            await notify_billing_quota_exceeded(db, key.organization_id, float(key.quota_used), float(key.quota_limit))
+        except Exception:
+            pass  # notification failure must never block the quota check itself
+
+    await check_quota(key)
+
+
 async def increment_quota(db: AsyncSession, key: OrganizationAPIKey, amount: int = 1) -> None:
     """Item 2's own literal function."""
     key.quota_used += amount

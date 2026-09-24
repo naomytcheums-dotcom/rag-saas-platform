@@ -322,3 +322,47 @@ async def update_preference(db: AsyncSession, user_id: uuid.UUID, organization_i
         pref.email_enabled = email_enabled
     await db.flush()
     return pref
+
+
+async def notify_billing_quota_warning(
+    db: AsyncSession, organization_id: uuid.UUID, usage: float, limit: float,
+) -> None:
+    """Real trigger for the "approaching quota" warning. Called when
+    usage crosses the configured warning threshold (e.g. 80%)."""
+    from api.models.organization import Organization
+
+    owner_id = await get_org_owner_user_id(db, organization_id)
+    if owner_id is None:
+        return
+    organization = await db.get(Organization, organization_id)
+    await create_notification(
+        db, organization_id=organization_id, user_id=owner_id, notification_type="billing_quota_warning",
+        priority="normal",
+        context={
+            "organization_name": organization.name if organization else str(organization_id),
+            "usage": usage,
+            "limit": limit,
+        },
+    )
+
+
+async def notify_billing_quota_exceeded(
+    db: AsyncSession, organization_id: uuid.UUID, usage: float, limit: float,
+) -> None:
+    """Real trigger for the "quota exceeded" notification. Called when
+    usage crosses the configured hard limit."""
+    from api.models.organization import Organization
+
+    owner_id = await get_org_owner_user_id(db, organization_id)
+    if owner_id is None:
+        return
+    organization = await db.get(Organization, organization_id)
+    await create_notification(
+        db, organization_id=organization_id, user_id=owner_id, notification_type="billing_quota_exceeded",
+        priority="urgent",
+        context={
+            "organization_name": organization.name if organization else str(organization_id),
+            "usage": usage,
+            "limit": limit,
+        },
+    )

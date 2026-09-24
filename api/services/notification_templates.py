@@ -43,6 +43,16 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "body": "A payment for {{ organization_name }} failed. Please update your payment method to avoid service interruption.",
         "email_subject": "Action needed: payment failed for {{ organization_name }}",
     },
+    "billing_quota_warning": {
+        "title": "Approaching your quota",
+        "body": "You've used {{ usage }} of your {{ limit }} quota for {{ organization_name }}. Consider upgrading to avoid interruption.",
+        "email_subject": "You're approaching your quota for {{ organization_name }}",
+    },
+    "billing_quota_exceeded": {
+        "title": "Quota exceeded",
+        "body": "You've exceeded your quota ({{ usage }} / {{ limit }}) for {{ organization_name }}. Upgrade now to continue using the service.",
+        "email_subject": "Action needed: quota exceeded for {{ organization_name }}",
+    },
     "invitation_received": {
         "title": "You've been invited to join {{ organization_name }}",
         "body": "You've been invited to join {{ organization_name }} as {{ role }}.",
