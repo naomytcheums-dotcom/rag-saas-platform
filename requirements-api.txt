@@ -36,7 +36,7 @@ httpx==0.28.1
 httpcore==1.0.9
 
 # -- Database (PostgreSQL, async) --------------------------------------------
-sqlalchemy[asyncio]==2.0.52
+sqlalchemy[asyncio]==2.0.40
 asyncpg==0.31.0
 psycopg2-binary==2.9.12
 alembic==1.19.1
