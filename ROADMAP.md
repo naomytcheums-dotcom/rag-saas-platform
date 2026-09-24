@@ -2104,3 +2104,14 @@ Récapitulatif de tout ce qui a été fait dans cette session :
   6. Pool réduit à `pool_size=1, max_overflow=0`
 - **Vérification** : Workflow Engine + Document Processing traités avec `--concurrency=16` sans erreur
 - **Conclusion** : P0 fermé.
+
+### 2026-09-24 — P2 Branding UI : FERMÉ (déjà fait à l'Étape 15)
+
+- **Statut** : ✅ FERMÉ
+- **Découverte** : Le branding UI était **déjà complètement implémenté** à l'Étape 15 :
+  - `frontend/lib/branding-context.tsx` (BrandingProvider, useBranding)
+  - `frontend/lib/branding-colors.ts` (darken, lighten)
+  - `frontend/components/BrandingApplier.tsx` (couleurs, logo, CSS custom)
+  - Branché dans `frontend/app/dashboard/layout.tsx`
+- **Action** : Le ROADMAP disait à tort que c'était "non appliqué dans l'UI". Correction faite.
+- **Conclusion** : Rien à faire, c'était déjà fait.
