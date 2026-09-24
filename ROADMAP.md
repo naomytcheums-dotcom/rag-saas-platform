@@ -1802,20 +1802,6 @@ rather than left implicit.
 
 ## [Bob-Auto-Fixes] — Bugs identifiés
 
-### 2026-09-24 — Bug frontend `/register` : manque `accept_terms`
-
-- **Problème** : Le formulaire frontend `/register` n'envoie pas le champ `accept_terms`, requis par le backend.
-- **Symptôme** : Les boutons "Inscription" / "Connexion" ne fonctionnent pas.
-- **Cause** : `frontend/app/register/page.tsx` appelle `register(email, password, fullName)` sans `accept_terms`.
-- **Backend** : Le backend exige `accept_terms` (testé avec `curl`).
-- **Fix attendu** :
-  1. Ajouter une checkbox "J'accepte les conditions" dans `frontend/app/register/page.tsx`
-  2. Passer `accept_terms: true` à `register()` dans `frontend/lib/auth.tsx`
-  3. Tester le flux complet
-- **Priorité** : P0 (bloque l'inscription)
-- **Complexité** : Faible (modification frontend)
-- **Statut** : TRACÉ (à corriger)
-
 ### 2026-09-24 — Bug HMR Next.js (cross-origin)
 
 - **Problème** : Next.js bloque les requêtes cross-origin vers `192.168.67.1:3000`.
@@ -1827,3 +1813,16 @@ rather than left implicit.
 - **Priorité** : P2 (n'empêche pas le fonctionnement)
 - **Complexité** : Faible
 - **Statut** : TRACÉ (à corriger)
+
+### 2026-09-24 — Rate limiting : temps d'attente réduit à 2 minutes
+
+- **Problème** : Le rate limiting sur `/register` bloquait pour 1 heure après 3 tentatives.
+- **Symptôme** : Les clients ne pouvaient plus réessayer pendant 1 heure.
+- **Cause** : `REGISTER_RATE_LIMIT_WINDOW_SECONDS=3600` (1 heure par défaut).
+- **Fix appliqué** :
+  1. `REGISTER_RATE_LIMIT_WINDOW_SECONDS=120` (2 minutes)
+  2. `LOGIN_RATE_LIMIT_WINDOW_SECONDS=120` (2 minutes)
+  3. Variables ajoutées dans `.env` (non commité, gitignored)
+- **Priorité** : P0 (bloquait les clients)
+- **Complexité** : Faible
+- **Statut** : CORRIGÉ
