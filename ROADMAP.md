@@ -1992,3 +1992,20 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Permissions par défaut** : manager/member/viewer
 - **Tests** : `tests/test_rbac_custom.py` (10 tests)
 - **Resource-level** : 43 patterns `require_dataset_admin`/etc. restent inchangés (plus granulaires, plus sécurisés)
+
+### 2026-09-24 — 26 CRM connecteurs réels (mis à jour)
+
+- **Statut** : ✅ CORRIGÉ
+- **Connecteurs créés** (26) :
+  - **Batch 1** (17) : Salesforce, HubSpot, Jira, Zendesk, Pipedrive, Linear, Asana, Trello, Airtable, Dropbox, Box, ClickUp, Intercom, Zoho, Shopify, WooCommerce, DocuSign
+  - **Batch 2** (9) : Monday, GitLab, Bitbucket, Azure DevOps, Basecamp, Wrike, Smartsheet, Coda, Miro
+- **Endpoints** : 26 endpoints `/organizations/{org_id}/crm/{provider}/import`
+- **Tests** : `tests/test_crm_endpoints.py` (4 tests, tous passent)
+- **Auth** : Chaque module utilise la vraie convention du provider (Bearer, Basic, query param, header custom, etc.)
+- **Settings** : Ajoutés dans `api/config.py`
+
+### 2026-09-24 — Connecteurs existants (déjà présents)
+
+- Google Drive, GitHub, Notion, OneDrive, Confluence, Slack, Discord, Teams
+
+**Total : ~34 connecteurs natifs + 5000+ via Zapier.**
