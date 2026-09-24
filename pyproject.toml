@@ -37,6 +37,7 @@ markers = [
     # addopts, unlike network_flaky) so `pytest -m paystack_live` without
     # a key still reports them as skipped, not silently deselected.
     "paystack_live: needs a real PAYSTACK_SECRET_KEY (sandbox) to run -- see tests/test_billing_paystack_live.py",
+    "stripe_live: needs a real STRIPE_SECRET_KEY (test mode) to run -- see tests/test_billing_stripe_live.py",
 ]
 addopts = "-m \"not network_flaky\""
 

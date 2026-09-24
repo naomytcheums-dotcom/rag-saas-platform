@@ -2115,3 +2115,16 @@ Récapitulatif de tout ce qui a été fait dans cette session :
   - Branché dans `frontend/app/dashboard/layout.tsx`
 - **Action** : Le ROADMAP disait à tort que c'était "non appliqué dans l'UI". Correction faite.
 - **Conclusion** : Rien à faire, c'était déjà fait.
+
+### 2026-09-24 — P2 `stripe_live` tests : FERMÉ
+
+- **Statut** : ✅ FERMÉ
+- **Créé** : `tests/test_billing_stripe_live.py` (4 tests)
+  - `test_live_checkout_session_returns_a_real_stripe_authorization_url`
+  - `test_live_webhook_signature_verifies_against_a_real_captured_payload`
+  - `test_live_portal_session_returns_a_real_manage_subscription_link`
+  - `test_live_cancel_really_disables_the_test_subscription`
+- **Marker** : `stripe_live` ajouté dans `pyproject.toml`
+- **Symétrie** : identique à `tests/test_billing_paystack_live.py`
+- **Vérification** : `pytest -m stripe_live` → 4 skipped (pas de clé API)
+- **Conclusion** : Le gap "aucune suite `stripe_live`" est fermé. Les tests s'exécuteront quand une clé Stripe test sera disponible.
