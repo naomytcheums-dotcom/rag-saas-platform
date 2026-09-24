@@ -159,3 +159,244 @@ async def import_pipedrive(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     count = await _ingest_records_as_documents(db, org_id, current_user.id, "pipedrive", records)
     return CRMImportResponse(imported=count, source="pipedrive")
+
+
+
+# -- Phase 5, Étape 18 -- 12 additional real connectors ---------------------
+
+
+@router.post("/organizations/{org_id}/crm/linear/import", response_model=CRMImportResponse)
+async def import_linear(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.linear_extraction import LinearError, fetch_linear_issues
+    if not settings.LINEAR_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Linear integration is disabled")
+    try:
+        records = await fetch_linear_issues(limit=payload.limit)
+    except LinearError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "linear", records)
+    return CRMImportResponse(imported=count, source="linear")
+
+
+@router.post("/organizations/{org_id}/crm/asana/import", response_model=CRMImportResponse)
+async def import_asana(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.asana_extraction import AsanaError, fetch_asana_tasks
+    if not settings.ASANA_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asana integration is disabled")
+    try:
+        records = await fetch_asana_tasks(limit=payload.limit)
+    except AsanaError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "asana", records)
+    return CRMImportResponse(imported=count, source="asana")
+
+
+@router.post("/organizations/{org_id}/crm/trello/import", response_model=CRMImportResponse)
+async def import_trello(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.trello_extraction import TrelloError, fetch_trello_cards
+    if not settings.TRELLO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Trello integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="board_id required (project_key)")
+    try:
+        records = await fetch_trello_cards(board_id=payload.project_key, limit=payload.limit)
+    except TrelloError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "trello", records)
+    return CRMImportResponse(imported=count, source="trello")
+
+
+@router.post("/organizations/{org_id}/crm/airtable/import", response_model=CRMImportResponse)
+async def import_airtable(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.airtable_extraction import AirtableError, fetch_airtable_records
+    if not settings.AIRTABLE_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Airtable integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="base_id/table_name required (project_key, format: base_id/table)")
+    parts = payload.project_key.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_key must be base_id/table_name")
+    try:
+        records = await fetch_airtable_records(base_id=parts[0], table_name=parts[1], limit=payload.limit)
+    except AirtableError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "airtable", records)
+    return CRMImportResponse(imported=count, source="airtable")
+
+
+@router.post("/organizations/{org_id}/crm/dropbox/import", response_model=CRMImportResponse)
+async def import_dropbox(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.dropbox_extraction import DropboxError, fetch_dropbox_files
+    if not settings.DROPBOX_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dropbox integration is disabled")
+    try:
+        records = await fetch_dropbox_files(path=payload.project_key or "", limit=payload.limit)
+    except DropboxError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "dropbox", records)
+    return CRMImportResponse(imported=count, source="dropbox")
+
+
+@router.post("/organizations/{org_id}/crm/box/import", response_model=CRMImportResponse)
+async def import_box(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.box_extraction import BoxError, fetch_box_files
+    if not settings.BOX_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Box integration is disabled")
+    try:
+        records = await fetch_box_files(folder_id=payload.project_key or "0", limit=payload.limit)
+    except BoxError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "box", records)
+    return CRMImportResponse(imported=count, source="box")
+
+
+@router.post("/organizations/{org_id}/crm/clickup/import", response_model=CRMImportResponse)
+async def import_clickup(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.clickup_extraction import ClickUpError, fetch_clickup_tasks
+    if not settings.CLICKUP_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ClickUp integration is disabled")
+    if not payload.project_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="list_id required (project_key)")
+    try:
+        records = await fetch_clickup_tasks(list_id=payload.project_key, limit=payload.limit)
+    except ClickUpError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "clickup", records)
+    return CRMImportResponse(imported=count, source="clickup")
+
+
+@router.post("/organizations/{org_id}/crm/intercom/import", response_model=CRMImportResponse)
+async def import_intercom(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.intercom_extraction import IntercomError, fetch_intercom_conversations
+    if not settings.INTERCOM_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Intercom integration is disabled")
+    try:
+        records = await fetch_intercom_conversations(limit=payload.limit)
+    except IntercomError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "intercom", records)
+    return CRMImportResponse(imported=count, source="intercom")
+
+
+@router.post("/organizations/{org_id}/crm/zoho/import", response_model=CRMImportResponse)
+async def import_zoho(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.zoho_extraction import ZohoError, fetch_zoho_records
+    if not settings.ZOHO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zoho integration is disabled")
+    try:
+        records = await fetch_zoho_records(module=payload.project_key or "Leads", limit=payload.limit)
+    except ZohoError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "zoho", records)
+    return CRMImportResponse(imported=count, source="zoho")
+
+
+@router.post("/organizations/{org_id}/crm/shopify/import", response_model=CRMImportResponse)
+async def import_shopify(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.shopify_extraction import ShopifyError, fetch_shopify_orders
+    if not settings.SHOPIFY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shopify integration is disabled")
+    try:
+        records = await fetch_shopify_orders(limit=payload.limit)
+    except ShopifyError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "shopify", records)
+    return CRMImportResponse(imported=count, source="shopify")
+
+
+@router.post("/organizations/{org_id}/crm/woocommerce/import", response_model=CRMImportResponse)
+async def import_woocommerce(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.woocommerce_extraction import WooCommerceError, fetch_woocommerce_orders
+    if not settings.WOOCOMMERCE_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="WooCommerce integration is disabled")
+    try:
+        records = await fetch_woocommerce_orders(limit=payload.limit)
+    except WooCommerceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "woocommerce", records)
+    return CRMImportResponse(imported=count, source="woocommerce")
+
+
+@router.post("/organizations/{org_id}/crm/docusign/import", response_model=CRMImportResponse)
+async def import_docusign(
+    org_id: uuid.UUID,
+    payload: CRMImportRequest,
+    _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from api.services.docusign_extraction import DocuSignError, fetch_docusign_envelopes
+    if not settings.DOCUSIGN_ENABLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="DocuSign integration is disabled")
+    try:
+        records = await fetch_docusign_envelopes(limit=payload.limit)
+    except DocuSignError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    count = await _ingest_records_as_documents(db, org_id, current_user.id, "docusign", records)
+    return CRMImportResponse(imported=count, source="docusign")
