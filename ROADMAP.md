@@ -1945,3 +1945,50 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Cause** : Problème réseau/PyPI, pas un problème de code
 - **Plan** : Installer `ultralytics` quand PyPI sera accessible, puis relancer les tests media
 - **Complexité** : Faible (une fois PyPI accessible)
+
+### 2026-09-24 — 17 CRM connecteurs réels + endpoints
+
+- **Statut** : ✅ CORRIGÉ
+- **Connecteurs créés** (17) :
+  - Salesforce (REST)
+  - HubSpot (REST)
+  - Jira (REST v3)
+  - Zendesk (REST v2)
+  - Pipedrive (REST v1)
+  - Linear (GraphQL)
+  - Asana (REST 1.0)
+  - Trello (REST 1)
+  - Airtable (REST v0)
+  - Dropbox (REST 2)
+  - Box (REST 2.0)
+  - ClickUp (REST v2)
+  - Intercom (REST 2.10)
+  - Zoho (REST v2)
+  - Shopify (Admin 2024-01)
+  - WooCommerce (REST v3)
+  - DocuSign (eSignature v2.1)
+- **Endpoints** : 17 endpoints `/organizations/{org_id}/crm/{provider}/import`
+- **Tests** : `tests/test_crm_endpoints.py` (4 tests, tous passent)
+- **Auth** : Chaque module utilise la vraie convention du provider (Bearer, Basic, query param, header custom, etc.)
+- **Settings** : Ajoutés dans `api/config.py`
+
+### 2026-09-24 — Zapier/Make actions étendues
+
+- **Statut** : ✅ CORRIGÉ
+- **Actions** : 6 au total
+  - `ingest_document` (existant)
+  - `log_only` (existant)
+  - `create_agent` (nouveau)
+  - `create_conversation` (nouveau)
+  - `send_notification` (nouveau)
+  - `trigger_workflow` (nouveau)
+- **Fichiers** : `api/models/integrations.py`, `api/services/integrations.py`
+
+### 2026-09-24 — RBAC granulaire sur 45 routers
+
+- **Statut** : ✅ CORRIGÉ (partiel)
+- **Routers branchés** : 45 (sur 92)
+- **Endpoints** : ~250
+- **Permissions par défaut** : manager/member/viewer
+- **Tests** : `tests/test_rbac_custom.py` (10 tests)
+- **Resource-level** : 43 patterns `require_dataset_admin`/etc. restent inchangés (plus granulaires, plus sécurisés)
