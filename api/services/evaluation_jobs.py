@@ -249,3 +249,46 @@ async def get_evaluation_job_results(db: AsyncSession, job_id: uuid.UUID, limit:
         select(EvaluationResult).where(*conditions).order_by(EvaluationResult.created_at.desc()).limit(limit).offset(offset)
     )).all()
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
+
+
+async def compare_evaluation_jobs(
+    db, job_id_a, job_id_b,
+) -> dict:
+    """Compare two real evaluation jobs' own real, averaged metrics."""
+    from sqlalchemy import select
+    from api.models.evaluation import EvaluationResult
+
+    async def _fetch_metrics(job_id):
+        result = await db.execute(
+            select(EvaluationResult).where(EvaluationResult.evaluation_job_id == job_id)
+        )
+        rows = result.scalars().all()
+        if not rows:
+            return (str(job_id), {})
+
+        totals = {}
+        counts = {}
+        for row in rows:
+            for key, value in (row.metrics or {}).items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    totals[key] = totals.get(key, 0.0) + float(value)
+                    counts[key] = counts.get(key, 0) + 1
+
+        averages = {k: totals[k] / counts[k] for k in totals}
+        return (str(job_id), averages)
+
+    name_a, metrics_a = await _fetch_metrics(job_id_a)
+    name_b, metrics_b = await _fetch_metrics(job_id_b)
+
+    all_metrics = sorted(set(metrics_a.keys()) | set(metrics_b.keys()))
+    diff = []
+    for metric in all_metrics:
+        a = metrics_a.get(metric, 0.0)
+        b = metrics_b.get(metric, 0.0)
+        diff.append({"metric": metric, "a": a, "b": b, "delta": b - a})
+
+    return {
+        "run_a": {"id": name_a, "name": f"Job {name_a[:8]}", "metrics": metrics_a},
+        "run_b": {"id": name_b, "name": f"Job {name_b[:8]}", "metrics": metrics_b},
+        "diff": diff,
+    }

@@ -3,6 +3,8 @@ resolves its own resource AND the caller's real Admin+ role together
 (`api/security/evaluation.py`'s own `require_dataset_admin`/
 `require_evaluation_job_admin`)."""
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,7 @@ from api.schemas.evaluation import (
 from api.security.evaluation import require_dataset_admin, require_evaluation_job_admin
 from api.services.evaluation_jobs import (
     cancel_evaluation_job, categorize_job_failures, create_evaluation_job, get_evaluation_job_results,
-    get_job_failures, list_evaluation_jobs, schedule_evaluation_job_processing,
+    get_job_failures, list_evaluation_jobs, schedule_evaluation_job_processing, compare_evaluation_jobs,
 )
 
 router = APIRouter(tags=["evaluation-jobs"])
@@ -92,3 +94,19 @@ async def get_evaluation_job_failure_categories_endpoint(
 ):
     job, _caller = job_ctx
     return await categorize_job_failures(db, job.id)
+
+
+@router.get("/jobs/{job_id}/comparison")
+async def compare_evaluation_jobs_endpoint(
+    job_id: uuid.UUID,
+    with_job_id: uuid.UUID = Query(..., alias="with"),
+    job_ctx: tuple[EvaluationJob, OrganizationMember] = Depends(require_evaluation_job_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare this job's own real, averaged metrics against another
+    real job's own. Both jobs must belong to the same organization."""
+    other_job = await db.get(EvaluationJob, with_job_id)
+    if other_job is None or other_job.organization_id != job_ctx[0].organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    return await compare_evaluation_jobs(db, job_id, with_job_id)

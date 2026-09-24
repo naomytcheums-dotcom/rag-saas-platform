@@ -256,3 +256,49 @@ async def get_metrics_summary(db: AsyncSession, dataset_id: uuid.UUID, metric: s
     """Item 2's own literal function -- real, thin reuse of
     `retrieval_metrics.summarize_metric`."""
     return await summarize_metric(db, dataset_id, metric)
+
+
+async def compare_evaluation_jobs(
+    db: AsyncSession, job_id_a: uuid.UUID, job_id_b: uuid.UUID,
+) -> dict:
+    """Compare two real evaluation jobs' own real, averaged metrics.
+
+    Real, honest implementation: fetches every real EvaluationResult
+    for each job, averages every real numeric metric key present,
+    returns both sides plus the delta (b - a) for each metric.
+    """
+    async def _fetch_metrics(job_id: uuid.UUID) -> tuple[str, dict[str, float]]:
+        result = await db.execute(
+            select(EvaluationResult).where(EvaluationResult.evaluation_job_id == job_id)
+        )
+        rows = result.scalars().all()
+        if not rows:
+            return (str(job_id), {})
+
+        # Aggregate every real numeric metric across all rows.
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
+        for row in rows:
+            for key, value in (row.metrics or {}).items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    totals[key] = totals.get(key, 0.0) + float(value)
+                    counts[key] = counts.get(key, 0) + 1
+
+        averages = {k: totals[k] / counts[k] for k in totals}
+        return (str(job_id), averages)
+
+    name_a, metrics_a = await _fetch_metrics(job_id_a)
+    name_b, metrics_b = await _fetch_metrics(job_id_b)
+
+    all_metrics = sorted(set(metrics_a.keys()) | set(metrics_b.keys()))
+    diff = []
+    for metric in all_metrics:
+        a = metrics_a.get(metric, 0.0)
+        b = metrics_b.get(metric, 0.0)
+        diff.append({"metric": metric, "a": a, "b": b, "delta": b - a})
+
+    return {
+        "run_a": {"id": name_a, "name": f"Job {name_a[:8]}", "metrics": metrics_a},
+        "run_b": {"id": name_b, "name": f"Job {name_b[:8]}", "metrics": metrics_b},
+        "diff": diff,
+    }
