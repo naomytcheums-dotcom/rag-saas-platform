@@ -338,6 +338,26 @@ class Settings(BaseSettings):
     HUBSPOT_ENABLED: bool = False
     HUBSPOT_API_TOKEN: str | None = None
     HUBSPOT_API_BASE_URL: str = "https://api.hubapi.com"
+
+    # -- Jira integration (Phase 5, Étape 17) ------------------------------
+    # Real, static API token + email (Basic auth), admin-configured once.
+    JIRA_ENABLED: bool = False
+    JIRA_BASE_URL: str | None = None
+    JIRA_EMAIL: str | None = None
+    JIRA_API_TOKEN: str | None = None
+
+    # -- Zendesk integration (Phase 5, Étape 17) ---------------------------
+    # Real, static API token (Bearer auth), admin-configured once.
+    ZENDESK_ENABLED: bool = False
+    ZENDESK_SUBDOMAIN: str | None = None
+    ZENDESK_EMAIL: str | None = None
+    ZENDESK_API_TOKEN: str | None = None
+
+    # -- Pipedrive integration (Phase 5, Étape 17) -------------------------
+    # Real, static API token (query param auth), admin-configured once.
+    PIPEDRIVE_ENABLED: bool = False
+    PIPEDRIVE_API_TOKEN: str | None = None
+    PIPEDRIVE_API_BASE_URL: str = "https://api.pipedrive.com/v1"
     # This step's own literal default -- a real, defensible cap on the
     # FETCH phase's own real, recursive block-tree walk (see
     # api/services/notion_extraction.py's own module docstring).
