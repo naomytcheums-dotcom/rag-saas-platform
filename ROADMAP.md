@@ -2262,3 +2262,25 @@ Le travail a été **vraiment fait** :
 
 **Verdict #8** : fermé **proprement**. Plus de dette.
 
+
+---
+
+## P2 #6 — NotificationTemplate DB : FERMÉ COMPLET (session SSRF épinglé)
+
+**Correction de la clôture précédente** (qui disait "modèle seul,
+pas d'endpoints") :
+
+Le travail a été **vraiment fait** (commit `ee73de1`) :
+
+| Élément | État |
+|---------|------|
+| `render_notification_from_db` | ✅ Créé (org-specific → global → code default) |
+| Schémas Pydantic | ✅ Créés |
+| Router (6 endpoints CRUD + preview + test) | ✅ Créés |
+| Service sécurité (org-scoped) | ✅ Créé |
+| Router enregistré dans `main.py` | ✅ |
+| Tests | ✅ **8 passed** (create, cross-org 404, update, delete, 3 preview cases, list) |
+
+**Verdict #6** : fermé **proprement**. Les admins peuvent maintenant
+customiser les templates de notification par org, avec preview et test.
+
