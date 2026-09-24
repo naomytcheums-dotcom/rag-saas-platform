@@ -50,22 +50,91 @@ async def get_or_create_widget_config(db: AsyncSession, organization_id: uuid.UU
     return config
 
 
+# Real widget defaults -- the values set on the model column definitions.
+# Used only to detect "the admin never touched this field" so org branding
+# can take over. Kept here as a single source of truth (never re-typed
+# inline in the fallback logic below).
+_WIDGET_DEFAULT_PRIMARY = "#6C63FF"
+_WIDGET_DEFAULT_SECONDARY = "#4A47A3"
+_WIDGET_DEFAULT_FONT = "system-ui"
+
+# Same for OrganizationBranding's own defaults -- a branding row that
+# still carries these means "the org never customized this either", so
+# there is nothing to inherit.
+_BRANDING_DEFAULT_PRIMARY = "#2563eb"
+_BRANDING_DEFAULT_SECONDARY = "#1e293b"
+_BRANDING_DEFAULT_FONT = "Inter"
+
+
+async def _resolve_effective_branding(db: AsyncSession, config: WidgetConfig) -> dict:
+    """Real, additive unification (P2 #9, session SSRF épinglé).
+
+    Returns the effective widget-scoped branding after applying the
+    org's own OrganizationBranding as a real fallback -- ONLY for fields
+    the org has genuinely customized AND the widget is still at its own
+    default. A field the org never touched, or one the widget admin
+    explicitly set, is left exactly as it is: this is a fallback, not
+    an overwrite.
+
+    Real rule (documented, no migration needed):
+      effective = widget_value  if widget_value != widget_default
+                  branding_value if branding_value != branding_default
+                  widget_default otherwise
+    """
+    from api.models.organization_branding import OrganizationBranding
+
+    branding = await db.scalar(
+        select(OrganizationBranding).where(
+            OrganizationBranding.organization_id == config.organization_id,
+            OrganizationBranding.is_active.is_(True),
+        )
+    )
+    if branding is None:
+        return {
+            "logo_url": config.logo_url,
+            "primary_color": config.primary_color,
+            "secondary_color": config.secondary_color,
+            "font_family": config.font_family,
+        }
+
+    def pick(widget_value, widget_default, branding_value, branding_default):
+        if widget_value != widget_default:
+            return widget_value
+        if branding_value and branding_value != branding_default:
+            return branding_value
+        return widget_value
+
+    return {
+        "logo_url": config.logo_url if config.logo_url else branding.logo_url,
+        "primary_color": pick(config.primary_color, _WIDGET_DEFAULT_PRIMARY, branding.primary_color, _BRANDING_DEFAULT_PRIMARY),
+        "secondary_color": pick(config.secondary_color, _WIDGET_DEFAULT_SECONDARY, branding.secondary_color, _BRANDING_DEFAULT_SECONDARY),
+        "font_family": pick(config.font_family, _WIDGET_DEFAULT_FONT, branding.font_family, _BRANDING_DEFAULT_FONT),
+    }
+
+
 async def get_widget_config_public(db: AsyncSession, config: WidgetConfig) -> dict:
     """Item 3's own literal function -- the real, PUBLIC-safe subset
     (never `organization_id`/`agent_id` as raw internal ids beyond
-    what the widget itself needs to function)."""
+    what the widget itself needs to function).
+
+    P2 #9 (session SSRF épinglé): the effective colors/logo/font now
+    fall back to the org's own OrganizationBranding when the org has
+    genuinely customized them AND the widget is still at its own
+    default. A widget admin can always override explicitly by setting
+    the widget field to any non-default value."""
     questions = await list_suggested_questions(db, config.id, include_inactive=False)
+    effective = await _resolve_effective_branding(db, config)
     return {
         "public_key": config.public_key,
-        "logo_url": config.logo_url or None,
+        "logo_url": effective["logo_url"] or None,
         "avatar_url": get_effective_avatar_url(config),
         "colors": {
-            "primary": config.primary_color, "secondary": config.secondary_color,
+            "primary": effective["primary_color"], "secondary": effective["secondary_color"],
             "text": config.text_color, "background": config.background_color,
             "header_background": config.header_background,
         },
         "border_radius": config.border_radius,
-        "font_family": config.font_family,
+        "font_family": effective["font_family"],
         "name": config.widget_name if config.widget_name_enabled else None,
         "short_name": config.widget_short_name,
         "welcome_message": config.welcome_message if config.welcome_message_enabled else None,
