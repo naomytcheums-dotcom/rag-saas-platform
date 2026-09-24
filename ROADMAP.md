@@ -1797,3 +1797,33 @@ Nothing in this section is scheduled. If you're evaluating the platform
 for a specific gap, check the linked docs above first — the honest
 answer for most "is X supported" questions is already written down
 rather than left implicit.
+
+---
+
+## [Bob-Auto-Fixes] — Bugs identifiés
+
+### 2026-09-24 — Bug frontend `/register` : manque `accept_terms`
+
+- **Problème** : Le formulaire frontend `/register` n'envoie pas le champ `accept_terms`, requis par le backend.
+- **Symptôme** : Les boutons "Inscription" / "Connexion" ne fonctionnent pas.
+- **Cause** : `frontend/app/register/page.tsx` appelle `register(email, password, fullName)` sans `accept_terms`.
+- **Backend** : Le backend exige `accept_terms` (testé avec `curl`).
+- **Fix attendu** :
+  1. Ajouter une checkbox "J'accepte les conditions" dans `frontend/app/register/page.tsx`
+  2. Passer `accept_terms: true` à `register()` dans `frontend/lib/auth.tsx`
+  3. Tester le flux complet
+- **Priorité** : P0 (bloque l'inscription)
+- **Complexité** : Faible (modification frontend)
+- **Statut** : TRACÉ (à corriger)
+
+### 2026-09-24 — Bug HMR Next.js (cross-origin)
+
+- **Problème** : Next.js bloque les requêtes cross-origin vers `192.168.67.1:3000`.
+- **Symptôme** : Erreurs WebSocket dans la console.
+- **Cause** : Next.js utilise `192.168.67.1` au lieu de `localhost`.
+- **Fix attendu** :
+  1. Ajouter `allowedDevOrigins: ['192.168.67.1']` dans `frontend/next.config.ts`
+  2. Ou utiliser `localhost:3000` au lieu de `192.168.67.1:3000`
+- **Priorité** : P2 (n'empêche pas le fonctionnement)
+- **Complexité** : Faible
+- **Statut** : TRACÉ (à corriger)
