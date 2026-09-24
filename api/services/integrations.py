@@ -180,8 +180,18 @@ async def handle_inbound_payload(db: AsyncSession, connection: IntegrationConnec
     mapped = apply_mapping(payload, mappings)
 
     try:
+        data = mapped or payload
         if connection.action == IntegrationAction.ingest_document:
-            await _ingest_as_document(db, connection, mapped or payload)
+            await _ingest_as_document(db, connection, data)
+        elif connection.action == IntegrationAction.create_agent:
+            await _create_agent(db, connection, data)
+        elif connection.action == IntegrationAction.create_conversation:
+            await _create_conversation(db, connection, data)
+        elif connection.action == IntegrationAction.send_notification:
+            await _send_notification(db, connection, data)
+        elif connection.action == IntegrationAction.trigger_workflow:
+            await _trigger_workflow(db, connection, data)
+        # log_only: no side effect
         log = IntegrationLog(connection_id=connection.id, status=IntegrationLogStatus.accepted, payload=payload)
     except Exception as exc:  # noqa: BLE001 -- an external system's bad payload must never 500 this endpoint
         log = IntegrationLog(connection_id=connection.id, status=IntegrationLogStatus.error, payload=payload, detail=str(exc))
@@ -200,6 +210,84 @@ async def _ingest_as_document(db: AsyncSession, connection: IntegrationConnectio
     content = "\n".join(text_parts).encode("utf-8")
     filename = f"{connection.name}-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d%H%M%S')}.txt"
     await upload_document(db, connection.organization_id, None, connection.created_by, filename, content)
+
+
+async def _create_agent(db: AsyncSession, connection: IntegrationConnection, data: dict) -> None:
+    """Real: creates a new Agent in this organization from the payload."""
+    from api.models.agent import Agent
+
+    name = data.get("name") or data.get("title") or f"Agent from {connection.name}"
+    description = data.get("description") or ""
+    system_prompt = data.get("system_prompt") or "You are a helpful assistant."
+
+    agent = Agent(
+        organization_id=connection.organization_id,
+        name=str(name)[:200],
+        description=str(description),
+        system_prompt=str(system_prompt),
+        created_by=connection.created_by,
+    )
+    db.add(agent)
+    await db.flush()
+
+
+async def _create_conversation(db: AsyncSession, connection: IntegrationConnection, data: dict) -> None:
+    """Real: creates a new Conversation from the payload."""
+    from api.models.conversation import Conversation
+
+    title = data.get("title") or data.get("subject") or f"Conversation from {connection.name}"
+
+    conversation = Conversation(
+        organization_id=connection.organization_id,
+        title=str(title)[:500],
+        created_by=connection.created_by,
+    )
+    db.add(conversation)
+    await db.flush()
+
+
+async def _send_notification(db: AsyncSession, connection: IntegrationConnection, data: dict) -> None:
+    """Real: sends an in-app notification to the org owner."""
+    from api.services.notifications import create_notification, get_org_owner_user_id
+
+    owner_id = await get_org_owner_user_id(db, connection.organization_id)
+    if owner_id is None:
+        return
+
+    title = data.get("title") or "Integration notification"
+    body = data.get("body") or data.get("message") or str(data)
+
+    await create_notification(
+        db,
+        organization_id=connection.organization_id,
+        user_id=owner_id,
+        notification_type="integration_received",
+        priority="normal",
+        context={"title": str(title), "body": str(body)[:500]},
+    )
+
+
+async def _trigger_workflow(db: AsyncSession, connection: IntegrationConnection, data: dict) -> None:
+    """Real: triggers a Workflow run for this organization's workflow
+    matching the payload's `workflow_name` (or the first active one)."""
+    from api.models.workflow import Workflow
+    from sqlalchemy import select
+
+    workflow_name = data.get("workflow_name")
+    query = select(Workflow).where(
+        Workflow.organization_id == connection.organization_id,
+        Workflow.is_active == True,  # noqa: E712
+    )
+    if workflow_name:
+        query = query.where(Workflow.name == workflow_name)
+
+    workflow = (await db.scalars(query.limit(1))).first()
+    if workflow is None:
+        raise ValueError(f"No active workflow found for organization (workflow_name={workflow_name!r})")
+
+    # Real trigger: enqueue the workflow run via Celery
+    from api.tasks.workflows import run_workflow_task
+    run_workflow_task.delay(str(workflow.id), data)
 
 
 async def get_logs(db: AsyncSession, connection_id: uuid.UUID, limit: int = 50) -> list[IntegrationLog]:

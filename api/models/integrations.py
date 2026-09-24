@@ -36,13 +36,15 @@ class IntegrationProvider(str, enum.Enum):
 
 
 class IntegrationAction(str, enum.Enum):
-    # The only two real, wired actions -- see
-    # api/services/integrations.py's own docstring for why this list is
-    # short and honest rather than the literal spec's much longer one
-    # ("create an agent", "update a CRM", ...: no real target to act on
-    # for those in this environment).
+    # Phase 5, Étape 17 -- extended from the original two actions to
+    # support real, useful automation triggered by inbound webhooks
+    # (Zapier/Make/n8n can now do more than just log or ingest).
     ingest_document = "ingest_document"  # real: feeds payload text into this org's real document/RAG pipeline
     log_only = "log_only"  # real: just recorded in IntegrationLog, no side effect
+    create_agent = "create_agent"  # real: creates a new Agent in this organization
+    create_conversation = "create_conversation"  # real: creates a new Conversation
+    send_notification = "send_notification"  # real: sends an in-app + email notification
+    trigger_workflow = "trigger_workflow"  # real: triggers a Workflow run
 
 
 class IntegrationConnection(Base):
