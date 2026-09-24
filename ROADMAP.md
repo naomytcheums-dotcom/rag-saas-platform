@@ -167,7 +167,7 @@ itemized breakdown of each part.
   Trouvé par ce même premier vrai run CI. Corrigé
   (`tests/test_api_key_management.py`, les deux assertions + une
   nouvelle assertion explicite `"mcp:tools" in scopes`).
-- **[TRACÉE, P0] ~15 tests réels de `tests/test_auth_api.py` +
+- **[FERMÉE, P0] ~15 tests réels de `tests/test_auth_api.py` +
   `tests/test_enterprise_sso_integration.py` échouent SEULEMENT sur le
   runner CI, jamais en local.** Vérifié rigoureusement, pas supposé :
   `python -m pytest tests/test_auth_api.py` en local → **171/171
@@ -2053,3 +2053,12 @@ Récapitulatif de tout ce qui a été fait dans cette session :
   - `CLIPModel`, `CLIPProcessor` importent ✅
 - **Note** : Les tests CLIP échouent sur `ultralytics` (module manquant, P2 préexistant). Ce n'est PAS un problème de `transformers`.
 - **Conclusion** : Les 12 CVE sont corrigées. Le P1 est fermé.
+
+### 2026-09-24 — P0 auth/SSO CI : FERMÉ (corrigé par Étape 12)
+
+- **Statut** : ✅ FERMÉ
+- **Cause réelle** : `COOKIE_SECURE=True` par défaut (`api/config.py`), jamais surchargé en CI
+- **Correction** : `COOKIE_SECURE: "False"` ajouté à l'env du job `backend-tests` (Étape 12)
+- **Vérification** : `COOKIE_SECURE=True pytest tests/test_auth_api.py` reproduit les 15 échecs en local ; `COOKIE_SECURE=False` → 171/171 passent
+- **Note** : Le service Redis ajouté à l'Étape 11 était une hypothèse infirmée. La vraie cause était `COOKIE_SECURE`.
+- **Conclusion** : Le P0 est fermé.
