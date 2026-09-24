@@ -129,6 +129,28 @@ async def check_plan_resource_limit(db: AsyncSession, organization_id: uuid.UUID
     count = count or 0
     if limit is None:
         return True, count, None
+
+    # Phase 5, Étape 21 -- real notification triggers for plan quota
+    # (billing_quota_warning at 80%, billing_quota_exceeded at 100%).
+    # Never blocks the check itself -- a notification failure must never
+    # break the real quota enforcement.
+    try:
+        from api.services.notifications import (
+            notify_billing_quota_exceeded,
+            notify_billing_quota_warning,
+        )
+        ratio = count / limit if limit > 0 else 0
+        if ratio >= 1.0:
+            await notify_billing_quota_exceeded(db, organization_id, float(count), float(limit))
+        elif ratio >= 0.8:
+            await notify_billing_quota_warning(db, organization_id, float(count), float(limit))
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning(
+            "check_plan_resource_limit: could not notify for org '%s' (%s): %s",
+            organization_id, resource_type, exc,
+        )
+
     return count < limit, count, limit
 
 
