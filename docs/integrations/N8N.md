@@ -1,35 +1,60 @@
-# n8n (local, via Docker Compose)
+# n8n Integration
 
-## Start
+Connect RAG SaaS Platform to 400+ apps via n8n's HTTP Request node.
 
-```bash
-docker compose -f docker-compose.observability.yml up -d n8n n8n-postgres
-```
+## How it works
 
-Real Postgres persistence (`n8n-postgres`, its own credentials in
-`docker-compose.observability.yml` — not the app's own database).
-n8n UI: http://localhost:5678 — first launch prompts you to create an
-owner account (real n8n behavior, not something this app configures).
+n8n uses a standard **HTTP Request node** to POST JSON to our inbound
+webhook. No OAuth, no n8n-specific node -- just a URL + a bearer token.
 
-## Connect n8n to this app
+## Setup
 
-- **n8n → this app (real, already built)**: use n8n's own "HTTP Request"
-  node against any of this app's real endpoints, authenticated with a
-  real API key (`/dashboard/settings/api-keys`) or an organization's
-  member account.
-- **this app → n8n (real, already built)**: create a real inbound
-  connection (`POST /organizations/{org_id}/integrations/connections`,
-  `provider: "n8n"`, Partie 15.1/15.2) and give n8n the resulting
-  `POST /integrations/inbound/{connection_id}` URL + bearer token as an
-  n8n "Webhook" trigger's target, OR — the other direction — point an
-  n8n workflow's own Webhook node's URL at this app's real outbound
-  webhook system (`Webhook`/`WebhookDelivery`, Partie 9.2.7,
-  `/organizations/{org_id}/webhooks`) to have n8n react to real
-  platform events.
+### 1. Create an Integration Connection
 
-## Status check
+In RAG SaaS Platform:
+1. Go to **Dashboard → Integrations**
+2. Click **New connection**
+3. Provider: **n8n**
+4. Action: choose one of:
+   - `ingest_document` — feeds payload text into the RAG pipeline
+   - `log_only` — just records the payload
+   - `create_agent` — creates a new Agent
+   - `create_conversation` — creates a new Conversation
+   - `send_notification` — sends an in-app + email notification
+   - `trigger_workflow` — triggers a Workflow run
+5. Copy the generated **token** (shown once)
 
-`GET /integrations/n8n/status` — real reachability check against
-`N8N_URL` (`.env`: `N8N_URL=http://localhost:5678`). Honestly reports
-`{"configured": false, "reachable": false}` until `N8N_URL` is set and
-`{"reachable": false}` if set but n8n isn't actually up.
+### 2. Create an n8n Workflow
+
+In n8n:
+1. Create a new workflow
+2. Add a trigger node (any app -- Gmail, Slack, HubSpot, etc.)
+3. Add an **HTTP Request** node
+4. Configure:
+   - **Method**: `POST`
+   - **URL**: `https://your-instance.example.com/integrations/{connection_id}/inbound`
+   - **Authentication**: `Generic Credential Type`
+   - **Generic Auth Type**: `Header Auth`
+   - **Header Name**: `Authorization`
+   - **Header Value**: `Bearer {your_token}`
+   - **Send Body**: `true`
+   - **Body Content Type**: `JSON`
+   - **JSON**: `{"title": "{{ $json.subject }}", "body": "{{ $json.text }}"}`
+
+### 3. Test
+
+Click **Execute Workflow** in n8n. The connection's **Logs** tab in
+RAG SaaS Platform shows every accepted or rejected POST.
+
+## Self-hosted n8n
+
+Works identically. n8n calls our webhook over the public internet (or
+your private network). Make sure our webhook URL is reachable from n8n.
+
+## Actions reference
+
+Same as Make -- see [MAKE.md](./MAKE.md#actions-reference).
+
+## Troubleshooting
+
+Same as Make -- see [MAKE.md](./MAKE.md#troubleshooting).

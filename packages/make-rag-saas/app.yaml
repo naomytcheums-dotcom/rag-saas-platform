@@ -1,0 +1,124 @@
+name: rag-saas
+version: 1.0.0
+label: RAG SaaS Platform
+description: |
+  RAG SaaS Platform — multi-tenant RAG/agents platform. Ingest documents,
+  create agents, send notifications, trigger workflows.
+author:
+  name: Naomy Tcheums
+  email: contact@example.com
+  url: https://github.com/naomytcheums-dotcom/rag-saas-platform
+homepage: https://github.com/naomytcheums-dotcom/rag-saas-platform
+docs: https://github.com/naomytcheums-dotcom/rag-saas-platform/blob/main/docs/integrations/MAKE.md
+
+baseUrl: "{{connection.baseUrl}}"
+
+connection:
+  type: bearer
+  fields:
+    - name: baseUrl
+      type: text
+      label: "Base URL"
+      required: true
+      help: "The URL of your RAG SaaS Platform instance"
+    - name: connectionId
+      type: text
+      label: "Connection ID"
+      required: true
+      help: "The integration connection ID from your dashboard"
+    - name: token
+      type: password
+      label: "Bearer Token"
+      required: true
+      help: "The token shown once when the connection was created"
+
+modules:
+  - name: ingestDocument
+    label: "Ingest Document"
+    description: "Send text/data to the RAG pipeline"
+    type: action
+    url: "/integrations/{{connection.connectionId}}/inbound"
+    method: POST
+    body:
+      action: "ingest_document"
+      title: "{{parameters.title}}"
+      body: "{{parameters.body}}"
+    parameters:
+      - name: title
+        type: text
+        label: "Title"
+        required: true
+      - name: body
+        type: textarea
+        label: "Body"
+        required: true
+
+  - name: createAgent
+    label: "Create Agent"
+    description: "Create a new Agent in an organization"
+    type: action
+    url: "/integrations/{{connection.connectionId}}/inbound"
+    method: POST
+    body:
+      action: "create_agent"
+      name: "{{parameters.name}}"
+      system_prompt: "{{parameters.system_prompt}}"
+    parameters:
+      - name: name
+        type: text
+        label: "Name"
+        required: true
+      - name: system_prompt
+        type: textarea
+        label: "System prompt"
+        required: false
+
+  - name: createConversation
+    label: "Create Conversation"
+    description: "Create a new Conversation"
+    type: action
+    url: "/integrations/{{connection.connectionId}}/inbound"
+    method: POST
+    body:
+      action: "create_conversation"
+      title: "{{parameters.title}}"
+    parameters:
+      - name: title
+        type: text
+        label: "Title"
+        required: true
+
+  - name: sendNotification
+    label: "Send Notification"
+    description: "Send an in-app + email notification"
+    type: action
+    url: "/integrations/{{connection.connectionId}}/inbound"
+    method: POST
+    body:
+      action: "send_notification"
+      title: "{{parameters.title}}"
+      body: "{{parameters.body}}"
+    parameters:
+      - name: title
+        type: text
+        label: "Title"
+        required: true
+      - name: body
+        type: textarea
+        label: "Body"
+        required: true
+
+  - name: triggerWorkflow
+    label: "Trigger Workflow"
+    description: "Trigger a Workflow run"
+    type: action
+    url: "/integrations/{{connection.connectionId}}/inbound"
+    method: POST
+    body:
+      action: "trigger_workflow"
+      workflow_name: "{{parameters.workflow_name}}"
+    parameters:
+      - name: workflow_name
+        type: text
+        label: "Workflow name"
+        required: true
