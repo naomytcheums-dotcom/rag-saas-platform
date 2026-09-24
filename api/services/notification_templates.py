@@ -96,3 +96,48 @@ def render_notification(notification_type: str, context: dict) -> dict:
     doesn't get a purpose-written template until one is added above."""
     template = TEMPLATES.get(notification_type, _GENERIC_TEMPLATE)
     return {key: _ENV.from_string(value).render(**context) for key, value in template.items()}
+
+
+async def render_notification_from_db(
+    db, organization_id, notification_type: str, context: dict,
+) -> dict:
+    """Real DB-backed renderer -- same output shape as render_notification,
+    but checks the real NotificationTemplate table first:
+
+    Lookup order:
+    1. Organization-specific row (organization_id = the org, type = the type, is_active=True)
+    2. Global row (organization_id IS NULL, type = the type, is_active=True)
+    3. Code-defined TEMPLATES[type] (always present)
+
+    Uses the same Jinja2 _ENV as render_notification, same autoescape=True,
+    same StrictUndefined -- a DB template with an undefined variable is a
+    real error, not a silent empty string.
+    """
+    from sqlalchemy import select, or_
+
+    from api.models.notification_template import NotificationTemplate
+
+    stmt = (
+        select(NotificationTemplate)
+        .where(
+            NotificationTemplate.notification_type == notification_type,
+            NotificationTemplate.is_active.is_(True),
+            or_(
+                NotificationTemplate.organization_id == organization_id,
+                NotificationTemplate.organization_id.is_(None),
+            ),
+        )
+        .order_by(NotificationTemplate.organization_id.is_(None))  # org-specific first
+    )
+    row = (await db.scalars(stmt)).first()
+
+    if row is not None:
+        template = {
+            "title": row.title,
+            "body": row.body,
+            "email_subject": row.email_subject or row.title,
+        }
+    else:
+        template = TEMPLATES.get(notification_type, _GENERIC_TEMPLATE)
+
+    return {key: _ENV.from_string(value).render(**context) for key, value in template.items()}
