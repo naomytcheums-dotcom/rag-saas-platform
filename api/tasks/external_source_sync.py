@@ -23,12 +23,13 @@ from api.config import settings
 from api.models.external_source import ExternalSource
 from api.security.external_sources import detect_source_changes, sync_all_sources, sync_external_source
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
 
 async def _sync_source_async(source_id: str, triggered_by: str | None) -> str:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:
@@ -55,7 +56,7 @@ def sync_source_task(source_id: str, triggered_by: str | None = None) -> str:
 
 
 async def _sync_all_sources_async(organization_id: str, triggered_by: str | None) -> dict:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:
@@ -74,7 +75,7 @@ def sync_all_sources_task(organization_id: str, triggered_by: str | None = None)
 
 
 async def _sync_all_sources_periodic_async() -> dict:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     checked = 0
     synced = 0

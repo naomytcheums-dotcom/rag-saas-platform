@@ -18,6 +18,7 @@ from api.models.plugins import Plugin, PluginExecution, PluginInstallation, Plug
 from api.security.plugin_manifest import PluginCodeSecurityError, scan_plugin_code
 from api.tasks.celery_app import celery_app
 from api.tasks._sync_engine import sync_engine as _sync_engine
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ async def _fire_scheduled_hook_async() -> dict:
     from api.models.organization import OrganizationMember
     from api.services.plugin_hooks import PluginHook, trigger_hook
 
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     checked_orgs = 0
     total_executions = 0

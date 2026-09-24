@@ -31,6 +31,7 @@ from api.config import settings
 from api.models.integrations import AirbyteConnection, IntegrationConnection
 from api.tasks.celery_app import celery_app
 from api.tasks._sync_engine import sync_engine as _sync_engine
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def cleanup_integration_logs() -> int:
 async def _retry_failed_syncs_async() -> dict:
     from api.services.integrations import retry_failed_logs
 
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     checked = 0
     retried = 0
@@ -109,7 +110,7 @@ def process_integration_webhooks() -> dict:
 async def _sync_integrations_async() -> dict:
     from api.services import airbyte_client
 
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     checked = 0
     triggered = 0

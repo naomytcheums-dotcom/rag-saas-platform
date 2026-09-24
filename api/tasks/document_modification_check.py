@@ -24,12 +24,13 @@ from api.config import settings
 from api.models.document import Document
 from api.security.documents import check_document_modified, mark_document_checked
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
 
 async def _check_modified_documents_async() -> dict:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     checked = 0
     modified = 0

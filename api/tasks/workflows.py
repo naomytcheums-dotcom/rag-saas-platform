@@ -17,12 +17,13 @@ from api.config import settings
 from api.models.workflow_human_input import WorkflowHumanInput
 from api.models.workflow_run import WorkflowRun
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
 
 def _session_factory():
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     return engine, async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 
 

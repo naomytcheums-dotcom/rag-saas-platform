@@ -18,12 +18,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from api.config import settings
 from api.security.reindex_schedules import run_scheduled_reindexes, schedule_reindex
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
 
 async def _execute_scheduled_reindex_async(schedule_id: str) -> int:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:
@@ -49,7 +50,7 @@ def execute_scheduled_reindex_task(schedule_id: str) -> int:
 
 
 async def _check_scheduled_reindexes_async() -> dict:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:

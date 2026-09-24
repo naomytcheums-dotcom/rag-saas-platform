@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # -- Database -----------------------------------------------------
     # postgresql+asyncpg://user:password@host:port/dbname
     DATABASE_URL: str
+    # Real, optional: Supabase's TRANSACTION-mode pooler (port 6543).
+    # Falls back to DATABASE_URL if unset. See .env's own comment.
+    DATABASE_URL_TRANSACTION: str | None = None
+
 
     # -- JWT ------------------------------------------------------------
     JWT_SECRET_KEY: str = Field(min_length=32)

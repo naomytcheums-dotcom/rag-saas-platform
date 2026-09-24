@@ -26,7 +26,29 @@ from api.config import settings
 # with their own engine and their own pool). Set explicitly smaller and
 # conservative rather than left at SQLAlchemy's defaults, which were
 # never sized against this specific pooler's real, tight ceiling.
-engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True, pool_size=3, max_overflow=2)
+# Real fix (2026-09-24, found when Celery --concurrency=16 hit Supabase's
+# session-mode 15-connection cap): use the TRANSACTION-mode pooler
+# (port 6543) for the async app engine. Falls back to DATABASE_URL if
+# unset (e.g. local dev without a Supabase transaction-mode port).
+#
+# IMPORTANT: pgBouncer in transaction mode does NOT support prepared
+# statements -- asyncpg's own caches MUST be disabled or every query
+# fails with "prepared statement ... already exists".
+_engine_url = settings.DATABASE_URL_TRANSACTION or settings.DATABASE_URL
+_engine_connect_args = {}
+if settings.DATABASE_URL_TRANSACTION:
+    _engine_connect_args = {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
+
+engine = create_async_engine(
+    _engine_url,
+    pool_pre_ping=True,
+    pool_size=1,
+    max_overflow=0,
+    connect_args=_engine_connect_args,
+)
 
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 

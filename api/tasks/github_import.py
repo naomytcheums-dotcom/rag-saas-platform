@@ -46,6 +46,7 @@ from api.security.documents import (
     process_github_repo,
 )
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 async def _import_and_process_github_file_async(
     file_url: str, organization_id: str, workspace_id: str | None, created_by: str | None,
 ) -> str:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:
@@ -103,7 +104,7 @@ def process_github_repo_task(
 async def _import_and_process_github_issue_async(
     issue_data: dict, organization_id: str, workspace_id: str | None, created_by: str | None,
 ) -> str:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:

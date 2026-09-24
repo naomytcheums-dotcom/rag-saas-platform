@@ -39,12 +39,13 @@ from api.config import settings
 from api.models.ssl_certificate import SSLCertificate, SSLCertificateStatus
 from api.security.ssl_certificates import renew_ssl_certificate
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
 
 async def _check_ssl_renewals_async() -> int:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     renewed_count = 0
     try:
@@ -89,7 +90,7 @@ def check_ssl_renewals() -> int:
 
 
 async def _check_ssl_expirations_async() -> list[str]:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:

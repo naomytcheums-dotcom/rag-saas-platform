@@ -2062,3 +2062,45 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - **Vérification** : `COOKIE_SECURE=True pytest tests/test_auth_api.py` reproduit les 15 échecs en local ; `COOKIE_SECURE=False` → 171/171 passent
 - **Note** : Le service Redis ajouté à l'Étape 11 était une hypothèse infirmée. La vraie cause était `COOKIE_SECURE`.
 - **Conclusion** : Le P0 est fermé.
+
+### 2026-09-24 — P0 : Supabase "max clients reached" avec concurrence Celery
+
+- **Statut** : 🔴 P0 (bloquant production)
+- **Problème** : `(EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15`
+- **Cause** : Chaque tâche Celery crée son propre `create_async_engine` (5 connexions) ; avec `--concurrency=16`, on atteint 80 connexions, dépassant la limite Supabase de 15 (mode session, port 5432)
+- **Solution** :
+  1. Passer au port **6543** (transaction mode, 200+ connexions)
+  2. Réduire le pool à `pool_size=1, max_overflow=0` par engine
+  3. Ou utiliser un engine global partagé (pas par tâche)
+- **Impact** : Le worker Celery crashe sur les pics de charge
+- **Priorité** : P0
+
+### 2026-09-24 — P1 Workflow Engine avec worker : FERMÉ
+
+- **Statut** : ✅ RÉSOLU (preuve E2E complète)
+- **Test E2E réel** :
+  1. User créé
+  2. Org créé
+  3. Workflow créé (trigger + code)
+  4. WorkflowRun créé (pending)
+  5. Tâche Celery dispatchée
+  6. Worker traite la tâche
+  7. **WorkflowRun status = `completed`**
+  8. **Output** : `{'output': {'result': {'result': 'hello from workflow'}}}`
+- **Note** : Le node `code` évalue une **expression** (`ast.parse(mode="eval")`), pas une assignation. Premier test échoué car on utilisait `result = {...}` au lieu de `{...}`.
+- **Conclusion** : Le Workflow Engine fonctionne de bout en bout.
+
+### 2026-09-24 — P0 Supabase max clients : FERMÉ
+
+- **Statut** : ✅ RÉSOLU
+- **Problème** : `(EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15`
+- **Cause** : Chaque tâche Celery créait son propre engine (5 connexions) ; avec `--concurrency=16`, on atteignait 80 connexions.
+- **Solution** :
+  1. `DATABASE_URL_TRANSACTION` (port 6543, transaction mode) pour l'app + Celery
+  2. `DATABASE_URL` (port 5432, session mode) conservé pour Alembic
+  3. Module `api/tasks/_db.py` avec `make_async_engine()` partagé
+  4. 28 fichiers de tâches migrés vers ce helper
+  5. Prepared statements désactivés (`statement_cache_size=0`)
+  6. Pool réduit à `pool_size=1, max_overflow=0`
+- **Vérification** : Workflow Engine + Document Processing traités avec `--concurrency=16` sans erreur
+- **Conclusion** : P0 fermé.

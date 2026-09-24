@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from api.config import settings
 from api.security.documents import import_and_process_google_doc, process_google_docs_batch
 from api.tasks.celery_app import celery_app
+from api.tasks._db import make_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 async def _import_and_process_google_doc_async(
     document_id: str, organization_id: str, workspace_id: str | None, export_format: str | None, created_by: str | None,
 ) -> str:
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    engine = make_async_engine()
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         async with session_factory() as db:
