@@ -1844,3 +1844,16 @@ rather than left implicit.
 - **Tools per-run non exposés** : `execute_sql_query` n'est pas exposé (nécessite `organization_id` et `db`).
 - **Scope délibéré** : Seuls les tools builtin sont exposés.
 - **Statut** : TRACÉ (P2, à élargir si nécessaire)
+
+### 2026-09-24 — MCP client vérifié avec un serveur HTTP
+
+- **Statut** : ✅ VÉRIFIÉ
+- **Test** : serveur MCP HTTP local (`/tmp/test_mcp_http_server.py`)
+- **Méthode** : JSON-RPC 2.0 sur HTTP (`POST /mcp`)
+- **Tests réussis** :
+  1. `tools/list` → 2 tools (`hello`, `add`)
+  2. `tools/call` (hello) → `Hello, IBM Bob!`
+  3. `tools/call` (add) → `12`
+- **Conclusion** : le MCP client du projet peut se connecter à un serveur MCP externe compatible `streamable_http`.
+- **Prêt pour IBM Bob** : OUI
+- **Endpoint serveur test** : `http://127.0.0.1:8001/mcp`
