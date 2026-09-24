@@ -213,7 +213,7 @@ bleach==6.4.0
 # (api/services/conversation_export.py imports weasyprint LAZILY,
 # inside export_to_pdf only) -- only an actual PDF export attempt
 # fails, with a real, honest ExportError instead of a crash.
-weasyprint==63.1
+weasyprint==65.0
 
 # Partie 12.2 -- Stripe SDK. Real dependency, genuinely used by
 # api/services/billing_stripe.py -- but every function there checks
