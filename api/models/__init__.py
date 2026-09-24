@@ -49,6 +49,8 @@ from api.models.workflow_node_execution import WorkflowNodeExecution
 from api.models.workflow_run import WorkflowRun, WorkflowTrigger
 from api.models.workflow_version import WorkflowVersion
 from api.models.workspace import Workspace
+from api.models.notification import Notification, NotificationPreference
+from api.models.notification_template import NotificationTemplate
 
 __all__ = [
     "Base", "User", "OAuthAccount", "Session", "PasswordResetToken", "EmailVerificationToken",
