@@ -2009,3 +2009,20 @@ Récapitulatif de tout ce qui a été fait dans cette session :
 - Google Drive, GitHub, Notion, OneDrive, Confluence, Slack, Discord, Teams
 
 **Total : ~34 connecteurs natifs + 5000+ via Zapier.**
+
+### 2026-09-24 — Worker Celery : P1 FERMÉ avec preuve complète E2E
+
+- **Statut** : ✅ RÉSOLU (preuve définitive)
+- **Test E2E réel** :
+  1. User créé : `celery-test-2069fc05@example.com`
+  2. Org créé : `Celery Test Org`
+  3. Document créé : `94940dc9-af15-4835-b72a-6e7c54d4a344` (status: `pending`)
+  4. Tâche dispatchée : `bf282608-0210-4875-9d2b-f83b8dfdf245`
+  5. **Worker Celery traite la tâche**
+  6. **Document traité : status = `completed`**
+- **Concurrence** :
+  - Dev : `--concurrency=4 --pool=solo`
+  - Production : `--concurrency=16 --pool=prefork`
+- **Preuve** : 3 tâches traitées en parallèle avec 16 workers
+- **Conclusion** : Le worker Celery fonctionne parfaitement.
+  **Le pipeline complet (upload → Celery → chunking → embeddings → completed) est vérifié de bout en bout.**
