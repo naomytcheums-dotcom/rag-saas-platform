@@ -22,7 +22,7 @@ export default function RunComparisonPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get<RunComparison>(`/eval/runs/${runId}/comparison?with=${withRunId}`);
+      const data = await api.get<RunComparison>(`/jobs/${runId}/comparison?with=${withRunId}`);
       setComparison(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
