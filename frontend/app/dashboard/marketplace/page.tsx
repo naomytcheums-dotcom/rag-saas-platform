@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 import { deletePlugin, listPublishedPlugins } from "@/lib/services/plugins";
 import type { Plugin } from "@/lib/types";
 import InstalledPlugins from "@/components/plugins/InstalledPlugins";
@@ -14,7 +15,11 @@ import PluginVersionForm from "@/components/plugins/PluginVersionForm";
 
 const TABS = ["Browse", "My plugins", "Installed"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = { Browse: "Parcourir", "My plugins": "Mes plugins", Installed: "Installés" };
+const TAB_LABEL_KEYS: Record<Tab, string> = {
+  Browse: "marketplace.tab_browse",
+  "My plugins": "marketplace.tab_my_plugins",
+  Installed: "marketplace.tab_installed",
+};
 
 // Partie 16 (ter) -- one consolidated page composing the real,
 // separate plugin components (PluginMarketplace/InstalledPlugins/
@@ -24,6 +29,7 @@ const TAB_LABELS: Record<Tab, string> = { Browse: "Parcourir", "My plugins": "Me
 export default function MarketplacePage() {
   const { org, loading: orgLoading } = useCurrentOrg();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("Browse");
   const [error, setError] = useState<string | null>(null);
 
@@ -33,8 +39,8 @@ export default function MarketplacePage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-xl font-semibold text-foreground">Marketplace</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Parcourez, publiez et gérez les plugins pour {org.name}.</p>
+      <h1 className="text-xl font-semibold text-foreground">{t("marketplace.title")}</h1>
+      <p className="mt-1 text-sm text-foreground-muted">{t("marketplace.subtitle")} {org.name}.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -48,7 +54,7 @@ export default function MarketplacePage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {TAB_LABELS[t]}
+            {t(TAB_LABEL_KEYS[t])}
           </button>
         ))}
       </div>
@@ -62,17 +68,18 @@ export default function MarketplacePage() {
   );
 }
 
-function statusBadge(status: Plugin["status"]) {
+function statusBadge(status: Plugin["status"], t: (key: string) => string) {
   const classes: Record<Plugin["status"], string> = {
     pending: "bg-accent-soft/40 text-accent-hover",
     approved: "bg-success-soft text-success",
     rejected: "bg-danger-soft text-danger",
     suspended: "bg-danger-soft text-danger",
   };
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${classes[status]}`}>{status}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${classes[status]}`}>{t(`marketplace.status_${status}`)}</span>;
 }
 
 function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [published, setPublished] = useState<Plugin[]>([]);
   const [managingId, setManagingId] = useState<string | null>(null);
 
@@ -80,7 +87,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
     try {
       setPublished(await listPublishedPlugins(orgId));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de vos plugins");
+      onError(err instanceof ApiError ? String(err.detail) : t("marketplace.error_plugins_load"));
     }
   }, [orgId, onError]);
 
@@ -94,7 +101,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
       await deletePlugin(orgId, pluginId);
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de la suppression de ce plugin");
+      onError(err instanceof ApiError ? String(err.detail) : t("marketplace.error_plugin_delete"));
     }
   }
 
@@ -107,17 +114,17 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
           <div key={plugin.id} className="rounded-xl border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-foreground">{plugin.name} <span className="ml-1">{statusBadge(plugin.status)}</span></h3>
+                <h3 className="text-sm font-semibold text-foreground">{plugin.name} <span className="ml-1">{statusBadge(plugin.status, t)}</span></h3>
                 <p className="mt-0.5 text-xs text-foreground-muted">v{plugin.version} — {plugin.description}</p>
                 {plugin.status === "rejected" && plugin.rejection_reason && (
-                  <p className="mt-1 text-xs text-danger">Rejeté : {plugin.rejection_reason}</p>
+                  <p className="mt-1 text-xs text-danger">{t("marketplace.rejected")} {plugin.rejection_reason}</p>
                 )}
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setManagingId(managingId === plugin.id ? null : plugin.id)} className="text-xs font-medium text-accent-hover hover:underline">
                   Nouvelle version
                 </button>
-                <button type="button" onClick={() => void remove(plugin.id)} className="text-xs font-medium text-danger hover:underline">Supprimer</button>
+                <button type="button" onClick={() => void remove(plugin.id)} className="text-xs font-medium text-danger hover:underline">{t("marketplace.delete")}</button>
               </div>
             </div>
             {managingId === plugin.id && managedPlugin && (
@@ -135,7 +142,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
             )}
           </div>
         ))}
-        {published.length === 0 && <p className="text-sm text-foreground-muted">Vous n&apos;avez pas encore publié de plugin.</p>}
+        {published.length === 0 && <p className="text-sm text-foreground-muted">{t("marketplace.empty")}</p>}
       </div>
 
       <PluginCreateForm orgId={orgId} onPublished={() => void load()} onError={onError} />

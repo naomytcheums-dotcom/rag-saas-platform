@@ -4,6 +4,7 @@ import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 interface Plan {
   id: string;
@@ -70,8 +71,9 @@ interface UsageSummary {
 
 const TABS = ["Overview", "Plans", "Usage", "Credits", "Invoices", "Payment"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = {
-  Overview: "Vue d'ensemble", Plans: "Forfaits", Usage: "Usage", Credits: "Crédits", Invoices: "Factures", Payment: "Paiement",
+const TAB_LABEL_KEYS: Record<Tab, string> = {
+  Overview: "billing.tab_overview", Plans: "billing.tab_plans", Usage: "billing.tab_usage",
+  Credits: "billing.tab_credits", Invoices: "billing.tab_invoices", Payment: "billing.tab_payment",
 };
 
 function money(cents: number, currency = "EUR"): string {
@@ -80,6 +82,7 @@ function money(cents: number, currency = "EUR"): string {
 
 export default function BillingPage() {
   const { org, loading: orgLoading } = useCurrentOrg();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("Overview");
   const [error, setError] = useState<string | null>(null);
 
@@ -89,8 +92,8 @@ export default function BillingPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-xl font-semibold text-foreground">Facturation</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Forfait, abonnement, usage, crédits et factures pour {org.name}.</p>
+      <h1 className="text-xl font-semibold text-foreground">{t("billing.title")}</h1>
+      <p className="mt-1 text-sm text-foreground-muted">{t("billing.subtitle")} {org.name}.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -104,7 +107,7 @@ export default function BillingPage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {TAB_LABELS[t]}
+            {t(TAB_LABEL_KEYS[t])}
           </button>
         ))}
       </div>
@@ -122,6 +125,7 @@ export default function BillingPage() {
 }
 
 function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [credit, setCredit] = useState<Credit | null>(null);
@@ -140,7 +144,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       setCredit(creditRes);
       setInvoices(invoicesRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de l'aperçu de facturation");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_overview"));
     }
   }, [orgId, onError]);
 
@@ -153,29 +157,29 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-xs font-medium uppercase text-foreground-muted">Forfait actuel</h2>
+          <h2 className="text-xs font-medium uppercase text-foreground-muted">{t("billing.current_plan")}</h2>
           <p className="mt-2 text-2xl font-semibold text-foreground">{plan?.name ?? "…"}</p>
           <p className="mt-1 text-xs text-foreground-muted">
             {plan ? money(sub?.billing_period === "yearly" ? plan.yearly_price_cents : plan.monthly_price_cents) : ""}
-            {plan ? ` / ${sub?.billing_period === "yearly" ? "an" : "mois"}` : ""}
+            {plan ? ` ${sub?.billing_period === "yearly" ? t("billing.per_year") : t("billing.per_month")}` : ""}
           </p>
-          <p className="mt-2 text-xs text-foreground-muted">Statut : {sub?.status ?? "…"}</p>
+          <p className="mt-2 text-xs text-foreground-muted">{t("billing.status")} {sub?.status ?? "…"}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-xs font-medium uppercase text-foreground-muted">Crédits</h2>
+          <h2 className="text-xs font-medium uppercase text-foreground-muted">{t("billing.credits")}</h2>
           <p className="mt-2 text-2xl font-semibold text-foreground">{credit?.balance ?? "…"}</p>
-          <p className="mt-1 text-xs text-foreground-muted">disponibles</p>
+          <p className="mt-1 text-xs text-foreground-muted">{t("billing.credits_available")}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-xs font-medium uppercase text-foreground-muted">Renouvellement</h2>
+          <h2 className="text-xs font-medium uppercase text-foreground-muted">{t("billing.renewal")}</h2>
           <p className="mt-2 text-lg font-semibold text-foreground">{sub?.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "—"}</p>
         </div>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Factures récentes</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("billing.recent_invoices")}</h2>
         {invoices.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune facture pour l&apos;instant.</p>
+          <p className="text-sm text-foreground-muted">{t("billing.no_invoices")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {invoices.map((inv) => (
@@ -193,6 +197,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
 }
 
 function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
@@ -206,7 +211,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       setPlans(plansRes);
       setSub(subRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des forfaits");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plans"));
     }
   }, [orgId, onError]);
 
@@ -220,15 +225,15 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       await api.post(`/organizations/${orgId}/billing/subscribe`, { plan_id: planId, billing_period: period });
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du changement de forfait");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plan_change"));
     }
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setPeriod("monthly")} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${period === "monthly" ? "bg-accent text-white" : "border border-border text-foreground-muted"}`}>Mensuel</button>
-        <button type="button" onClick={() => setPeriod("yearly")} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${period === "yearly" ? "bg-accent text-white" : "border border-border text-foreground-muted"}`}>Annuel</button>
+        <button type="button" onClick={() => setPeriod("monthly")} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${period === "monthly" ? "bg-accent text-white" : "border border-border text-foreground-muted"}`}>{t("billing.monthly")}</button>
+        <button type="button" onClick={() => setPeriod("yearly")} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${period === "yearly" ? "bg-accent text-white" : "border border-border text-foreground-muted"}`}>{t("billing.yearly")}</button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -238,14 +243,14 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           return (
             <div key={plan.id} className={`rounded-xl border p-5 ${isCurrent ? "border-accent" : "border-border"} bg-surface`}>
               <h3 className="text-sm font-semibold text-foreground">{plan.name}</h3>
-              <p className="mt-2 text-2xl font-semibold text-foreground">{money(price)}<span className="text-sm font-normal text-foreground-muted"> / {period === "yearly" ? "an" : "mois"}</span></p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{money(price)}<span className="text-sm font-normal text-foreground-muted"> {period === "yearly" ? t("billing.per_year") : t("billing.per_month")}</span></p>
               <ul className="mt-3 flex flex-col gap-1 text-xs text-foreground-muted">
-                <li>{plan.max_documents ?? "Illimité"} documents</li>
-                <li>{plan.max_agents ?? "Illimité"} agents</li>
-                <li>{plan.max_members ?? "Illimité"} membres</li>
-                {plan.priority_support && <li>Support prioritaire</li>}
-                {plan.advanced_features && <li>Fonctionnalités avancées</li>}
-                {plan.sla && <li>SLA</li>}
+                <li>{plan.max_documents ?? t("billing.limited")} {t("billing.documents_count")}</li>
+                <li>{plan.max_agents ?? t("billing.limited")} {t("billing.agents_count")}</li>
+                <li>{plan.max_members ?? t("billing.limited")} {t("billing.members_count")}</li>
+                {plan.priority_support && <li>{t("billing.priority_support")}</li>}
+                {plan.advanced_features && <li>{t("billing.advanced_features")}</li>}
+                {plan.sla && <li>{t("billing.sla")}</li>}
               </ul>
               <button
                 type="button"
@@ -253,7 +258,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
                 onClick={() => void choosePlan(plan.id)}
                 className="mt-4 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCurrent ? "Forfait actuel" : "Choisir ce forfait"}
+                {isCurrent ? t("billing.current_plan_button") : t("billing.choose_plan")}
               </button>
             </div>
           );
@@ -268,7 +273,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
               await api.post(`/organizations/${orgId}/billing/cancel`, { reason: null });
               await load();
             } catch (err) {
-              onError(err instanceof ApiError ? String(err.detail) : "Échec de l'annulation de l'abonnement");
+              onError(err instanceof ApiError ? String(err.detail) : t("billing.error_cancel"));
             }
           }}
           className="self-start text-xs font-medium text-danger hover:underline"
@@ -284,7 +289,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
               await api.post(`/organizations/${orgId}/billing/reactivate`);
               await load();
             } catch (err) {
-              onError(err instanceof ApiError ? String(err.detail) : "Échec de la réactivation de l'abonnement");
+              onError(err instanceof ApiError ? String(err.detail) : t("billing.error_reactivate"));
             }
           }}
           className="self-start text-xs font-medium text-accent hover:underline"
@@ -297,6 +302,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
 }
 
 function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [forecast, setForecast] = useState<{ projected_next_period: Record<string, number> } | null>(null);
 
@@ -309,7 +315,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       setUsage(usageRes);
       setForecast(forecastRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de l'usage");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_usage"));
     }
   }, [orgId, onError]);
 
@@ -323,9 +329,9 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Usage — 30 derniers jours</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("billing.usage_30d")}</h2>
         {metrics.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun usage enregistré pour l&apos;instant pour cette organisation.</p>
+          <p className="text-sm text-foreground-muted">{t("billing.usage_empty")}</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {metrics.map(([metric, total]) => (
@@ -333,7 +339,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
                 <p className="text-xs font-medium uppercase text-foreground-muted">{metric.replace(/_/g, " ")}</p>
                 <p className="mt-1 text-xl font-semibold text-foreground">{total}</p>
                 {forecast?.projected_next_period[metric] !== undefined && (
-                  <p className="mt-1 text-xs text-foreground-muted">≈ {forecast.projected_next_period[metric]} projeté pour la prochaine période</p>
+                  <p className="mt-1 text-xs text-foreground-muted">t("billing.usage_projected", { value: forecast.projected_next_period[metric] ?? 0 })</p>
                 )}
               </div>
             ))}
@@ -345,6 +351,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
 }
 
 function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [credit, setCredit] = useState<Credit | null>(null);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [packs, setPacks] = useState<CreditPack[]>([]);
@@ -360,7 +367,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
       setTransactions(txRes);
       setPacks(packsRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des crédits");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_credits"));
     }
   }, [orgId, onError]);
 
@@ -374,35 +381,35 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
       await api.post(`/organizations/${orgId}/billing/credits/purchase`, { pack_id: packId });
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de l'achat de crédits");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_credit_purchase"));
     }
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-xs font-medium uppercase text-foreground-muted">Solde</h2>
+        <h2 className="text-xs font-medium uppercase text-foreground-muted">{t("billing.balance")}</h2>
         <p className="mt-2 text-3xl font-semibold text-foreground">{credit?.balance ?? "…"}</p>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Packs de crédits</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("billing.credit_packs")}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           {packs.map((pack) => (
             <div key={pack.id} className="rounded-xl border border-border bg-surface p-4">
               <p className="text-sm font-semibold text-foreground">{pack.name}</p>
-              <p className="mt-1 text-xs text-foreground-muted">{pack.credits.toLocaleString()} crédits</p>
+              <p className="mt-1 text-xs text-foreground-muted">{pack.credits.toLocaleString()} {t("billing.credits_count")}</p>
               <p className="mt-1 text-sm font-medium text-foreground">{money(pack.price_cents)}</p>
-              <button type="button" onClick={() => void purchase(pack.id)} className="mt-3 w-full rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">Acheter</button>
+              <button type="button" onClick={() => void purchase(pack.id)} className="mt-3 w-full rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">{t("billing.buy")}</button>
             </div>
           ))}
         </div>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Historique des transactions</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("billing.transactions_history")}</h2>
         {transactions.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune transaction pour l&apos;instant.</p>
+          <p className="text-sm text-foreground-muted">{t("billing.transactions_empty")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {transactions.map((tx) => (
@@ -420,13 +427,14 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
 }
 
 function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   const load = useCallback(async () => {
     try {
       setInvoices(await api.get<Invoice[]>(`/organizations/${orgId}/billing/invoices`));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des factures");
+      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_invoices"));
     }
   }, [orgId, onError]);
 
@@ -452,14 +460,14 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Échec du téléchargement du PDF de la facture");
+      onError(err instanceof Error ? err.message : t("billing.error_pdf"));
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
       {invoices.length === 0 ? (
-        <p className="text-sm text-foreground-muted">Aucune facture pour l&apos;instant — les factures sont générées automatiquement une fois un vrai forfait payant actif.</p>
+        <p className="text-sm text-foreground-muted">{t("billing.invoices_empty")}</p>
       ) : (
         invoices.map((inv) => (
           <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3 text-sm">
@@ -467,7 +475,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
             <span className="text-xs uppercase text-foreground-muted">{inv.status}</span>
             <span className="text-foreground-muted">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}</span>
             <span className="font-medium text-foreground">{money(inv.total_cents, inv.currency)}</span>
-            <button type="button" onClick={() => void downloadPdf(inv.id, inv.number)} className="text-xs font-medium text-accent hover:underline">Télécharger le PDF</button>
+            <button type="button" onClick={() => void downloadPdf(inv.id, inv.number)} className="text-xs font-medium text-accent hover:underline">{t("billing.download_pdf")}</button>
           </div>
         ))
       )}
@@ -476,6 +484,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
 }
 
 function PaymentTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [portalLoading, setPortalLoading] = useState(false);
 
   async function openPortal() {
@@ -485,9 +494,9 @@ function PaymentTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
       window.location.href = res.url;
     } catch (err) {
       if (err instanceof ApiError && err.status === 501) {
-        onError("Le traitement des paiements n'est pas encore configuré sur ce déploiement (aucun compte Stripe connecté).");
+        onError(t("billing.payment_not_configured"));
       } else {
-        onError(err instanceof ApiError ? String(err.detail) : "Échec de l'ouverture du portail de paiement");
+        onError(err instanceof ApiError ? String(err.detail) : t("billing.error_portal"));
       }
     } finally {
       setPortalLoading(false);
@@ -497,10 +506,10 @@ function PaymentTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-semibold text-foreground">Moyen de paiement</h2>
-        <p className="mt-1 text-sm text-foreground-muted">Gérez vos cartes enregistrées et votre historique de paiement via le portail sécurisé de Stripe.</p>
+        <h2 className="text-sm font-semibold text-foreground">{t("billing.payment_method")}</h2>
+        <p className="mt-1 text-sm text-foreground-muted">{t("billing.payment_method_desc")}</p>
         <button type="button" onClick={() => void openPortal()} disabled={portalLoading} className="mt-3 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-          {portalLoading ? "Ouverture…" : "Gérer les moyens de paiement"}
+          {portalLoading ? t("billing.opening") : t("billing.manage_payments")}
         </button>
       </div>
     </div>
