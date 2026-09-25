@@ -179,14 +179,13 @@ async def run_eval_benchmark(
 
     Returns `{"run_id": ..., "status": "queued"}`.
     """
-    from api.services.evaluation_jobs import create_job
+    from api.services.evaluation_jobs import create_evaluation_job
 
-    job = await create_job(
+    job = await create_evaluation_job(
         db,
-        organization_id=organization_id,
         dataset_id=dataset_id,
         agent_id=agent_id,
-        config=config or {},
+        model_config=config or None,
     )
     return {"run_id": str(job.id), "status": "queued"}
 
