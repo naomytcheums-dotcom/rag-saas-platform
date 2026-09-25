@@ -4,6 +4,7 @@ import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 interface Member {
   user_id: string;
@@ -71,13 +72,19 @@ interface SecurityPolicy {
 
 const TABS = ["Overview", "Roles & Permissions", "Audit log", "Encryption", "Compliance", "Vulnerability scan", "Policies"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = {
-  Overview: "Vue d'ensemble", "Roles & Permissions": "Rôles et permissions", "Audit log": "Journal d'audit",
-  Encryption: "Chiffrement", Compliance: "Conformité", "Vulnerability scan": "Analyse de vulnérabilités", Policies: "Politiques",
+const TAB_LABEL_KEYS: Record<Tab, string> = {
+  Overview: "security.tab_overview",
+  "Roles & Permissions": "security.tab_roles",
+  "Audit log": "security.tab_audit",
+  Encryption: "security.tab_encryption",
+  Compliance: "security.tab_compliance",
+  "Vulnerability scan": "security.tab_scan",
+  Policies: "security.tab_policies",
 };
 
 export default function SecurityPage() {
   const { org, loading: orgLoading } = useCurrentOrg();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("Overview");
   const [error, setError] = useState<string | null>(null);
 
@@ -87,8 +94,8 @@ export default function SecurityPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-xl font-semibold text-foreground">Sécurité</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Rôles, journal d&apos;audit, chiffrement, conformité et analyse de vulnérabilités pour {org.name}.</p>
+      <h1 className="text-xl font-semibold text-foreground">{t("security.title")}</h1>
+      <p className="mt-1 text-sm text-foreground-muted">{t("security.subtitle")} {org.name}.</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -102,7 +109,7 @@ export default function SecurityPage() {
               tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {TAB_LABELS[t]}
+            {t(TAB_LABEL_KEYS[t])}
           </button>
         ))}
       </div>
@@ -121,6 +128,7 @@ export default function SecurityPage() {
 }
 
 function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [score, setScore] = useState<number | null>(null);
   const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
 
@@ -133,7 +141,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       setScore(scoreRes.score);
       setAlerts(alertsRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement de la vue d'ensemble");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_overview_load"));
     }
   }, [orgId, onError]);
 
@@ -180,6 +188,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
 }
 
 function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<CustomRole[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -196,7 +205,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       setPermissions(permsRes);
       setMembers(membersRes.items);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des rôles");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_roles_load"));
     }
   }, [orgId, onError]);
 
@@ -212,7 +221,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       setNewRoleName("");
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de la création du rôle");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_role_create"));
     }
   }
 
@@ -231,7 +240,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
       }
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de la mise à jour de la permission");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_permission"));
     }
   }
 
@@ -248,11 +257,11 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-semibold text-foreground">Créer un rôle personnalisé</h2>
-        <p className="mt-1 text-xs text-foreground-muted">En plus de Propriétaire/Admin/Manager/Membre/Lecteur, accordez un ensemble plus restreint et spécifique de permissions à un rôle que vous nommez.</p>
+        <h2 className="text-sm font-semibold text-foreground">{t("security.roles.create_heading")}</h2>
+        <p className="mt-1 text-xs text-foreground-muted">{t("security.roles.create_desc")}</p>
         <div className="mt-2 flex gap-2">
-          <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="ex. Agent support" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
-          <button type="button" onClick={() => void createRole()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Créer</button>
+          <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder={t("security.roles.name_placeholder")} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+          <button type="button" onClick={() => void createRole()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">{t("security.roles.create_button")}</button>
         </div>
       </div>
 
@@ -260,7 +269,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
         <div key={role.id} className="rounded-xl border border-border bg-surface p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">{role.name}</h3>
-            <button type="button" onClick={() => void deleteRole(role.id)} className="text-xs font-medium text-danger hover:underline">Supprimer le rôle</button>
+            <button type="button" onClick={() => void deleteRole(role.id)} className="text-xs font-medium text-danger hover:underline">{t("security.roles.delete")}</button>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
@@ -282,13 +291,13 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           </div>
 
           <div className="mt-3 border-t border-border pt-3">
-            <p className="text-xs font-semibold text-foreground-muted">Attribuer à un membre</p>
+            <p className="text-xs font-semibold text-foreground-muted">{t("security.roles.assign_to")}</p>
             <select
               defaultValue=""
               onChange={(e) => { void assignRoleToUser(e.target.value, role.id); e.target.value = ""; }}
               className="mt-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
             >
-              <option value="" disabled>Choisir un membre…</option>
+              <option value="" disabled>{t("security.roles.choose_member")}</option>
               {members.map((m) => (
                 <option key={m.user_id} value={m.user_id}>{m.email}</option>
               ))}
@@ -301,6 +310,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
 }
 
 function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
 
@@ -310,7 +320,7 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
       setLogs(response.items);
       setTotal(response.total);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement du journal d'audit");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_audit_load"));
     }
   }, [orgId, onError]);
 
@@ -322,24 +332,25 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm text-foreground-muted">{total} événement(s) enregistré(s) pour cette organisation.</p>
-        <a href={fileUrl(`/audit/export?fmt=csv`)} target="_blank" rel="noreferrer" className="text-xs font-medium text-accent hover:underline">Exporter en CSV →</a>
+        <p className="text-sm text-foreground-muted">{total} {t("security.audit.total")}</p>
+        <a href={fileUrl(`/audit/export?fmt=csv`)} target="_blank" rel="noreferrer" className="text-xs font-medium text-accent hover:underline">{t("security.audit.export")}</a>
       </div>
       <div className="flex flex-col gap-1">
         {logs.map((log) => (
           <div key={log.id} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs">
             <span className="font-medium text-foreground">{log.action}</span>
             <span className="text-foreground-muted">{log.ip ?? "—"} · {new Date(log.timestamp).toLocaleString()}</span>
-            <span className={log.success ? "text-success" : "text-danger"}>{log.success ? "succès" : "échec"}</span>
+            <span className={log.success ? "text-success" : "text-danger"}>{log.success ? t("security.audit.success") : t("security.audit.failure")}</span>
           </div>
         ))}
-        {logs.length === 0 && <p className="text-sm text-foreground-muted">Aucun événement enregistré pour cette organisation pour l&apos;instant.</p>}
+        {logs.length === 0 && <p className="text-sm text-foreground-muted">{t("security.audit.empty")}</p>}
       </div>
     </div>
   );
 }
 
 function EncryptionTab({ onError }: { onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<{ enabled: boolean; algorithm: string; key_storage: string; encrypted_fields: string[]; last_rotation_at: string | null } | null>(null);
   const [restricted, setRestricted] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -349,7 +360,7 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
       setStatus(await api.get("/encryption/status"));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setRestricted(true);
-      else onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement du statut de chiffrement");
+      else onError(err instanceof ApiError ? String(err.detail) : t("security.error_encryption_load"));
     }
   }, [onError]);
 
@@ -364,14 +375,14 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
       await api.post("/encryption/rotate-keys");
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de la rotation des clés (réservé à un superadmin plateforme)");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_encryption_rotate"));
     } finally {
       setRotating(false);
     }
   }
 
   if (restricted) {
-    return <p className="text-sm text-foreground-muted">Le statut de chiffrement est réservé aux administrateurs de la plateforme.</p>;
+    return <p className="text-sm text-foreground-muted">{t("security.encryption.restricted")}</p>;
   }
   if (!status) {
     return <LoadingState fullScreen={false} />;
@@ -381,25 +392,26 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${status.enabled ? "bg-success" : "bg-danger"}`} />
-        <h2 className="text-sm font-semibold text-foreground">Chiffrement {status.enabled ? "activé" : "désactivé"}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{status.enabled ? t("security.encryption.enabled") : t("security.encryption.disabled")}</h2>
       </div>
-      <p className="mt-2 text-sm text-foreground-muted">Algorithme : <span className="text-foreground">{status.algorithm}</span></p>
-      <p className="text-sm text-foreground-muted">Stockage des clés : <span className="text-foreground">{status.key_storage}</span></p>
-      <p className="text-sm text-foreground-muted">Dernière rotation : <span className="text-foreground">{status.last_rotation_at ? new Date(status.last_rotation_at).toLocaleString() : "jamais"}</span></p>
+      <p className="mt-2 text-sm text-foreground-muted">{t("security.encryption.algorithm")} <span className="text-foreground">{status.algorithm}</span></p>
+      <p className="text-sm text-foreground-muted">{t("security.encryption.key_storage")} <span className="text-foreground">{status.key_storage}</span></p>
+      <p className="text-sm text-foreground-muted">{t("security.encryption.last_rotation")} <span className="text-foreground">{status.last_rotation_at ? new Date(status.last_rotation_at).toLocaleString() : t("security.encryption.never")}</span></p>
       <div className="mt-3">
-        <p className="text-xs font-semibold text-foreground-muted">Champs chiffrés</p>
+        <p className="text-xs font-semibold text-foreground-muted">{t("security.encryption.fields")}</p>
         <ul className="mt-1 list-inside list-disc text-xs text-foreground-muted">
           {status.encrypted_fields.map((field) => <li key={field}>{field}</li>)}
         </ul>
       </div>
       <button type="button" onClick={() => void rotate()} disabled={rotating} className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-        {rotating ? "Rotation…" : "Faire pivoter les clés (superadmin)"}
+        {rotating ? t("security.encryption.rotating") : t("security.encryption.rotate")}
       </button>
     </div>
   );
 }
 
 function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [consents, setConsents] = useState<{ consent_type: string; granted: boolean }[]>([]);
   const [status, setStatus] = useState<{ pending_data_requests: number; unnotified_breaches: number; compliant: boolean } | null>(null);
   const [statusRestricted, setStatusRestricted] = useState(false);
@@ -408,7 +420,7 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
     try {
       setConsents(await api.get("/compliance/consent"));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement du consentement");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_consent_load"));
     }
     try {
       setStatus(await api.get("/compliance/status"));
@@ -437,15 +449,15 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-semibold text-foreground">Mes données (RGPD/CCPA)</h2>
-        <p className="mt-1 text-xs text-foreground-muted">Accessible à chaque membre, pas seulement aux admins.</p>
+        <h2 className="text-sm font-semibold text-foreground">{t("security.compliance.my_data")}</h2>
+        <p className="mt-1 text-xs text-foreground-muted">{t("security.compliance.my_data_desc")}</p>
         <div className="mt-3 flex gap-3">
-          <a href={fileUrl("/compliance/data-export?fmt=json")} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">Exporter mes données →</a>
-          <a href="/dashboard/profile" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">Supprimer mon compte →</a>
+          <a href={fileUrl("/compliance/data-export?fmt=json")} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">{t("security.compliance.export_data")}</a>
+          <a href="/dashboard/profile" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">{t("security.compliance.delete_account")}</a>
         </div>
 
         <div className="mt-4">
-          <p className="text-xs font-semibold text-foreground-muted">Consentement</p>
+          <p className="text-xs font-semibold text-foreground-muted">{t("security.compliance.consent")}</p>
           {consentTypes.map((type) => (
             <label key={type} className="mt-1 flex items-center gap-2 text-sm text-foreground">
               <input type="checkbox" checked={consentMap.get(type) ?? false} onChange={() => void toggleConsent(type, consentMap.get(type) ?? false)} />
@@ -457,9 +469,9 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
 
       {!statusRestricted && status && (
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-sm font-semibold text-foreground">Statut de conformité de l&apos;organisation</h2>
-          <p className="mt-2 text-sm"><span className={status.compliant ? "text-success" : "text-warning"}>{status.compliant ? "Conforme" : "Nécessite une attention"}</span></p>
-          <p className="mt-1 text-xs text-foreground-muted">{status.pending_data_requests} demande(s) de données en attente · {status.unnotified_breaches} violation(s) non notifiée(s)</p>
+          <h2 className="text-sm font-semibold text-foreground">{t("security.compliance.org_status")}</h2>
+          <p className="mt-2 text-sm"><span className={status.compliant ? "text-success" : "text-warning"}>{status.compliant ? t("security.compliance.compliant") : t("security.compliance.needs_attention")}</span></p>
+          <p className="mt-1 text-xs text-foreground-muted">{status.pending_data_requests} {t("security.compliance.pending_requests")} · {status.unnotified_breaches} {t("security.compliance.unnotified_breaches")}</p>
         </div>
       )}
     </div>
@@ -467,6 +479,7 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
 }
 
 function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [scans, setScans] = useState<SecurityScan[]>([]);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [running, setRunning] = useState<string | null>(null);
@@ -480,7 +493,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
       setScans(scansRes);
       setVulnerabilities(vulnsRes);
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des analyses");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_scan_load"));
     }
   }, [orgId, onError]);
 
@@ -495,7 +508,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
       await api.post(`/organizations/${orgId}/security/scan`, { scan_type: scanType });
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du lancement de l'analyse");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_scan_run"));
     } finally {
       setRunning(null);
     }
@@ -511,15 +524,15 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
       <div className="flex flex-wrap gap-2">
         {["dependency", "code", "secret", "container", "infrastructure"].map((type) => (
           <button key={type} type="button" onClick={() => void runScan(type)} disabled={running !== null} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted disabled:opacity-50">
-            {running === type ? "En cours…" : `Analyse : ${type}`}
+            {running === type ? t("security.scan.running") : `${t("security.scan.run")} ${type}`}
           </button>
         ))}
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Vulnérabilités ouvertes</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("security.scan.open_vulns")}</h2>
         {vulnerabilities.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune trouvée.</p>
+          <p className="text-sm text-foreground-muted">{t("security.scan.none_found")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {vulnerabilities.map((v) => (
@@ -529,7 +542,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
                   <span className="text-foreground">{v.title}</span>
                   {v.location && <p className="mt-0.5 text-foreground-muted">{v.location}</p>}
                 </div>
-                <button type="button" onClick={() => void resolveVulnerability(v.id)} className="font-medium text-accent hover:underline">Marquer résolu</button>
+                <button type="button" onClick={() => void resolveVulnerability(v.id)} className="font-medium text-accent hover:underline">{t("security.scan.mark_resolved")}</button>
               </div>
             ))}
           </div>
@@ -537,7 +550,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Historique des analyses</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("security.scan.history")}</h2>
         <div className="flex flex-col gap-1">
           {scans.map((s) => (
             <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs">
@@ -553,6 +566,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
 }
 
 function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) => void }) {
+  const { t } = useTranslation();
   const [policy, setPolicy] = useState<SecurityPolicy | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -560,7 +574,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     try {
       setPolicy(await api.get(`/organizations/${orgId}/security/policies`));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des politiques");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_policies_load"));
     }
   }, [orgId, onError]);
 
@@ -575,7 +589,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     try {
       setPolicy(await api.patch(`/organizations/${orgId}/security/policies`, policy));
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement des politiques (réservé au propriétaire)");
+      onError(err instanceof ApiError ? String(err.detail) : t("security.error_policies_save"));
     } finally {
       setSaving(false);
     }
@@ -596,22 +610,22 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="policy-session-timeout" className="text-xs font-medium text-foreground-muted">Expiration de session (minutes)</label>
+          <label htmlFor="policy-session-timeout" className="text-xs font-medium text-foreground-muted">{t("security.policies.session_timeout")}</label>
           <input id="policy-session-timeout" type="number" value={policy.session_timeout_minutes} onChange={(e) => setPolicy({ ...policy, session_timeout_minutes: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
         </div>
         <div>
-          <label htmlFor="policy-max-login-attempts" className="text-xs font-medium text-foreground-muted">Tentatives de connexion max</label>
+          <label htmlFor="policy-max-login-attempts" className="text-xs font-medium text-foreground-muted">{t("security.policies.max_attempts")}</label>
           <input id="policy-max-login-attempts" type="number" value={policy.max_login_attempts} onChange={(e) => setPolicy({ ...policy, max_login_attempts: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
         </div>
       </div>
 
       <div className="mt-3">
-        <label htmlFor="policy-ip-allowlist" className="text-xs font-medium text-foreground-muted">Liste blanche d&apos;IP (une par ligne, vide = illimité)</label>
+        <label htmlFor="policy-ip-allowlist" className="text-xs font-medium text-foreground-muted">{t("security.policies.ip_allowlist")}</label>
         <textarea id="policy-ip-allowlist" value={policy.ip_allowlist ?? ""} onChange={(e) => setPolicy({ ...policy, ip_allowlist: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
       </div>
 
       <button type="button" onClick={() => void save()} disabled={saving} className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-        {saving ? "Enregistrement…" : "Enregistrer les politiques"}
+        {saving ? t("security.policies.saving") : t("security.policies.save")}
       </button>
     </div>
   );

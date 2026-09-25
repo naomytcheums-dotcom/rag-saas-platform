@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 interface Member {
   user_id: string;
@@ -13,6 +14,7 @@ interface Member {
 
 export default function OrganizationSettingsPage() {
   const { org } = useCurrentOrg();
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -28,7 +30,7 @@ export default function OrganizationSettingsPage() {
       const data = await api.get<{ items: Member[] }>(`/organizations/${org.id}/members`);
       setMembers(data.items);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des membres");
+      setError(err instanceof ApiError ? String(err.detail) : t("organization.error_load"));
     }
   }, [org]);
 
@@ -46,7 +48,7 @@ export default function OrganizationSettingsPage() {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'enregistrement");
+      setError(err instanceof ApiError ? String(err.detail) : t("organization.error_save"));
     } finally {
       setSaving(false);
     }
@@ -60,7 +62,7 @@ export default function OrganizationSettingsPage() {
       setInviteEmail("");
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'invitation du membre");
+      setError(err instanceof ApiError ? String(err.detail) : t("organization.error_invite"));
     }
   }
 
@@ -72,36 +74,36 @@ export default function OrganizationSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold text-foreground">Paramètres de l&apos;organisation</h1>
+      <h1 className="text-xl font-semibold text-foreground">{t("organization.title")}</h1>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">Enregistré !</p>}
+      {savedFlash && <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">{t("organization.saved")}</p>}
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Nom</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("organization.name_heading")}</h2>
         <div className="mt-2 flex gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
           <button type="button" onClick={() => void saveName()} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving ? t("organization.saving") : t("organization.save")}
           </button>
         </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Inviter un membre</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("organization.invite_heading")}</h2>
         <div className="mt-2 flex gap-2">
-          <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="collegue@exemple.com" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+          <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t("organization.invite_placeholder")} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
           <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="rounded-lg border border-border bg-background px-2 text-sm">
-            <option value="member">Membre</option>
-            <option value="admin">Admin</option>
-            <option value="viewer">Lecteur</option>
+            <option value="member">{t("organization.role_member")}</option>
+            <option value="admin">{t("organization.role_admin")}</option>
+            <option value="viewer">{t("organization.role_viewer")}</option>
           </select>
-          <button type="button" onClick={() => void invite()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">Inviter</button>
+          <button type="button" onClick={() => void invite()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">{t("organization.invite_button")}</button>
         </div>
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Membres</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("organization.members_heading")}</h2>
         <div className="flex flex-col gap-2">
           {members.map((member) => (
             <div key={member.user_id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
@@ -110,7 +112,7 @@ export default function OrganizationSettingsPage() {
                 <p className="text-xs text-foreground-muted">{member.role}</p>
               </div>
               {member.role !== "owner" && (
-                <button type="button" onClick={() => void removeMember(member.user_id)} className="text-xs font-medium text-danger hover:underline">Retirer</button>
+                <button type="button" onClick={() => void removeMember(member.user_id)} className="text-xs font-medium text-danger hover:underline">{t("organization.remove")}</button>
               )}
             </div>
           ))}
