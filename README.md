@@ -1,51 +1,126 @@
-# RAG SaaS Platform
+# IBM BOB 2.0 — RAG EVOLUTION FACTORY
 
-**A multi-tenant, production-oriented RAG SaaS platform, built across 25 documented development parts.**
+**An IBM Bob-powered autonomous engineering system that creates, evaluates, diagnoses and improves RAG agents through a closed-loop workflow.**
 
-🌐 **Live demo**: [https://rag-saas-platform-rho.vercel.app](https://rag-saas-platform-rho.vercel.app)
-🔧 **Live API**: [https://rag-saas-api-sjsm.onrender.com](https://rag-saas-api-sjsm.onrender.com)
-📖 **API Docs (Swagger)**: [https://rag-saas-api-sjsm.onrender.com/docs](https://rag-saas-api-sjsm.onrender.com/docs)
-📊 **Metrics (Prometheus)**: [https://rag-saas-api-sjsm.onrender.com/metrics](https://rag-saas-api-sjsm.onrender.com/metrics)
+> **IBM Bob** is the autonomous engineering brain.
+> **RAG Evolution Factory** is the orchestration system.
+> **The RAG platform** is the real environment Bob operates, measures and evolves.
+> **MCP** is the control interface between Bob and the platform.
+
+🌐 **Live demo**: https://rag-saas-platform-rho.vercel.app
+🔧 **Live API**: https://rag-saas-api-sjsm.onrender.com
+📖 **Submission doc**: [docs/ibm_bob_2/SUBMISSION.md](docs/ibm_bob_2/SUBMISSION.md)
 
 ---
 
-## 🎯 IBM Bob 2.0 Submission
+## The closed loop
++----------------------+
+| IBM BOB 2.0 |
+| Autonomous Engineer |
++----------+-----------+
+|
+v
++-------------------------+
+| RAG EVOLUTION FACTORY |
++------------+------------+
+|
++-----------------+-----------------+
+v v v
++---------+ +----------+ +---------+
+| FACTORY |------>| GUARDIAN |----->| AUTOPSY |
++---------+ +----------+ +----+----+
+|
+v
++------------+
+| CHANGELAB |
++-----+------+
+|
+tests + benchmark
+|
+v
++------------------+
+| KEEP / ROLLBACK |
++--------+---------+
+|
+v
+GUARDIAN
 
-**The 4 modes from the [`agents.md`](agents.md) contract are actually implemented and exposed via MCP**:
+text
 
-| Mode | MCP Tool | Description |
-|------|----------|-------------|
-| **Mode 1 — FACTORY** | `create_rag_agent` | Provision a multi-tenant RAG agent |
-| **Mode 2 — GUARDIAN** | `run_eval_benchmark` | Monitor metrics (Recall@K, MRR, NDCG, hallucination) |
-| **Mode 3 — AUTOPSY** | `get_failure_report` | Investigate and categorize failures (RETRIEVAL_FAILURE, GENERATION_HALLUCINATION, …) |
-| **Mode 4 — CHANGELAB** | `update_retrieval_config` | A/B auto-tuning + automatic rollback |
+---
 
-**Exposed by**:
+## The 4 modes (agents.md contract)
+
+| Mode | MCP Tool | What Bob does |
+|------|----------|---------------|
+| **1 - FACTORY** | `create_rag_agent` | Bob provisions a real multi-tenant RAG agent |
+| **2 - GUARDIAN** | `run_eval_benchmark` | Bob monitors real metrics (Recall@K, MRR, NDCG, hallucination) |
+| **3 - AUTOPSY** | `get_failure_report` | Bob investigates and categorizes failures |
+| **4 - CHANGELAB** | `update_retrieval_config` | Bob experiments, re-benchmarks, keeps or rolls back |
+
+**Exposed via MCP**:
 - `GET /mcp/v1/tools` — lists the 4 tools
 - `POST /mcp/v1/tools/{name}/call` — executes a tool
 
-**Source**: [`api/services/mcp/builtin_tools.py`](api/services/mcp/builtin_tools.py)
-**Tests**: [`tests/test_mcp_builtin_tools.py`](tests/test_mcp_builtin_tools.py) — 9 cases, all passing.
+**Source**: [api/services/mcp/builtin_tools.py](api/services/mcp/builtin_tools.py)
+**Tests**: [tests/test_mcp_builtin_tools.py](tests/test_mcp_builtin_tools.py) — 9 cases, all passing.
 
 ---
 
-## 📊 Key numbers
+## What Bob actually does end-to-end
+PROBLEM
+RAG systems degrade over time. Developers currently have to manually
+detect, diagnose and fix those regressions.
+|
+v
+BOB DETECTS
+GUARDIAN -> run_eval_benchmark -> Recall@5 = 0.72 (WARNING)
+|
+v
+BOB DIAGNOSES
+AUTOPSY -> get_failure_report -> RETRIEVAL_FAILURE dominant (18/28)
+|
+v
+BOB EXPERIMENTS
+CHANGELAB -> update_retrieval_config (top_k 5 -> 10)
+|
+v
+BOB VALIDATES
+GUARDIAN -> run_eval_benchmark -> Recall@5 = 0.84 (MERGED)
+|
+v
+RESULT
++0.12 Recall@5 improvement, automatic rollback if regression
+
+text
+
+**Full example**: [ROADMAP.md](ROADMAP.md) under `[Bob-Auto-Fixes]`.
+
+---
+
+## Underlying RAG SaaS platform
+
+The RAG SaaS platform below provides the **real, production-oriented environment** on which Bob operates. It is not the hero of this repository — it is the **complex, real system** that makes Bob's autonomous engineering loop meaningful.
+
+---
+
+## Key numbers
 
 | Metric | Value |
 |--------|-------|
-| **API routers** | 89 |
-| **Frontend sections** | 17 |
-| **Backend test files** | 314 |
-| **i18n languages** | 6 (EN, FR, ES, DE, PT, AR) |
-| **Translations** | ~4,200 keys |
-| **RBAC permissions** | 52 |
-| **Alembic migrations** | 118 |
-| **Documented parts** | 25 |
-| **IBM Bob 2.0 modes** | 4 (all implemented) |
+| API routers | 89 |
+| Frontend sections | 17 |
+| Backend test files | 314 |
+| i18n languages | 6 (EN, FR, ES, DE, PT, AR) |
+| Translations | ~4,200 keys |
+| RBAC permissions | 52 |
+| CRM connectors | 36 |
+| Alembic migrations | 118 |
+| IBM Bob 2.0 modes | 4 (all implemented) |
 
 ---
 
-## 🚀 What the platform does
+## What the RAG platform does
 
 ### Multi-tenant
 - Organizations, teams, workspaces, members
@@ -64,8 +139,8 @@
 - Embeddable widget (unified theme, allowed domains)
 
 ### Agents
-- **Configured agents**: prompt + tools + guardrails + BYOK
-- **Autonomous agents**: multi-step planning, tool-calling loop, long-term memory, bounded agent-to-agent collaboration, guardrails, per-step/per-agent USD cost tracking
+- Configured agents: prompt + tools + guardrails + BYOK
+- Autonomous agents: multi-step planning, tool-calling loop, long-term memory, bounded agent-to-agent collaboration, guardrails, per-step/per-agent USD cost tracking
 
 ### Workflows
 - Multi-step orchestration on Celery
@@ -86,7 +161,7 @@
 ### Media & vision
 - Media processing, vision-in-documents
 - Object detection (YOLOv8, local inference)
-- CLIP visual search (image→image, text→image)
+- CLIP visual search (image-to-image, text-to-image)
 
 ### Analytics & observability
 - Usage analytics, audit logs, agent traces
@@ -117,29 +192,29 @@
 - Organization/user/subscription management for platform operators
 
 ### MCP (Model Context Protocol)
-- **MCP Server**: exposes internal tools + the 4 IBM Bob modes
-- **MCP Client**: consumes external MCP servers
+- MCP Server: exposes internal tools + the 4 IBM Bob modes
+- MCP Client: consumes external MCP servers
 
 ---
 
-## 🛠 Tech stack
+## Tech stack
 
 | Layer | Choice |
 |-------|--------|
-| **API** | FastAPI, SQLAlchemy 2.0 (async), PostgreSQL (Supabase), Alembic |
-| **Background jobs** | Celery + Redis |
-| **LLM access** | litellm (Anthropic, OpenAI, Mistral, + BYOK) |
-| **Frontend** | Next.js 16, React, TypeScript, TailwindCSS |
-| **Frontend tests** | Vitest |
-| **Backend tests** | pytest (314 files) |
-| **Object storage** | S3-compatible (AWS, Cloudflare R2) |
-| **Vision / media** | YOLOv8 (ultralytics, local), CLIP (openai/clip-vit-base-patch32) + faiss-cpu |
-| **Monitoring** | Prometheus, Grafana, Sentry, Loki |
-| **i18n** | 6 languages (EN, FR, ES, DE, PT, AR), English by default |
+| API | FastAPI, SQLAlchemy 2.0 (async), PostgreSQL (Supabase), Alembic |
+| Background jobs | Celery + Redis |
+| LLM access | litellm (Anthropic, OpenAI, Mistral, + BYOK) |
+| Frontend | Next.js 16, React, TypeScript, TailwindCSS |
+| Frontend tests | Vitest |
+| Backend tests | pytest (314 files) |
+| Object storage | S3-compatible (AWS, Cloudflare R2) |
+| Vision / media | YOLOv8 (ultralytics, local), CLIP (openai/clip-vit-base-patch32) + faiss-cpu |
+| Monitoring | Prometheus, Grafana, Sentry, Loki |
+| i18n | 6 languages (EN, FR, ES, DE, PT, AR), English by default |
 
 ---
 
-## 🚀 Getting started
+## Getting started
 
 ### Self-hosted (Docker)
 
@@ -147,30 +222,31 @@
 git clone https://github.com/naomytcheums-dotcom/rag-saas-platform.git
 cd rag-saas-platform
 cp .env.example .env
-# fill in the required secrets in .env (see docs/install/ENVIRONMENT.md)
 ./install.sh
 docker compose -f docker-compose.selfhosted.yml up -d
 SaaS (Vercel + Render)
-Frontend: deployed on Vercel → https://rag-saas-platform-rho.vercel.app
+Frontend: https://rag-saas-platform-rho.vercel.app
 
-Backend: deployed on Render → https://rag-saas-api-sjsm.onrender.com
+Backend: https://rag-saas-api-sjsm.onrender.com
 
-📖 Documentation
+Documentation
 Full documentation lives under docs/ — start at docs/index.md:
 
 docs/user/ — end-user guides
 
 docs/admin/ — org + platform administration
 
-docs/developer/ — architecture, API, SDKs (Python, JS, React, Vue), webhooks
+docs/developer/ — architecture, API, SDKs, webhooks
 
 docs/install/ — deployment, environment, upgrades, backups
 
 docs/api/ — REST API, OpenAPI, Swagger, Redoc
 
-docs/advanced/ — RAG pipeline (chunking, embeddings, retrieval, reranking)
+docs/advanced/ — RAG pipeline internals
 
-docs/diagrams/ — architecture, database, RAG, auth, deployment, multi-tenancy
+docs/diagrams/ — architecture, database, RAG, auth, deployment
+
+docs/ibm_bob_2/SUBMISSION.md — IBM Bob 2.0 submission document
 
 agents.md — IBM Bob 2.0 contract (10 sections)
 
@@ -182,41 +258,32 @@ ROADMAP.md — what's planned + [Bob-Auto-Fixes]
 
 GLOSSARY.md — platform-specific terminology
 
-🧪 Tests
+Tests
 bash
-# Backend tests
 pytest tests/ -x
-
-# Eval Lab tests
 pytest tests/eval/ -x
-
-# Backend lint
 ruff check api/
-
-# Frontend type check
 cd frontend && npm run type-check
 314 backend test files, all green.
 
-🌍 Internationalization
+Internationalization
 6 languages: English (default), French, Spanish, German, Portuguese, Arabic
 
 ~4,200 translations in locales/
 
 i18n system: custom (frontend/lib/i18n.tsx), backend (api/services/i18n.py)
 
-Selector: frontend/components/LanguageSelector.tsx
-
-📜 License
+License
 MIT — see LICENSE.
 
-📚 Project history
+Project history
 Built incrementally across 25 documented development parts, each with its own audit, real (never fabricated) test results, and honest documentation of gaps and limitations.
 
-The full history — including which features were genuinely new vs. extensions of existing infrastructure, every real bug found and fixed, and every deliberate scope decision — is in docs/CAHIER_DES_CHARGES.md.
+The full history is in docs/CAHIER_DES_CHARGES.md.
 
-The project's origin as a single-tenant, hand-evaluated RAG demo, with its own real retrieval-quality measurements and honestly-documented methodology caveats, is preserved at src/README.md.
+IBM Bob 2.0 integration (Phase 5): see ROADMAP.md.
 
-🤝 Contributing
+Contributing
 See CONTRIBUTING.md and CODE_OF_CONDUCT.md. Security issues should be reported per SECURITY.md.
 
 IBM Bob 2.0 Submission — 2026
