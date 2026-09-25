@@ -2357,3 +2357,19 @@ toujours.
 avec les mêmes garanties que `run_agent` (timeout, parallélisme,
 validation, reporting).
 
+
+---
+
+## [Bob-Auto-Fixes] — Exemple de run complet (IBM Bob 2.0)
+
+**Date** : 2026-09-25
+
+**Mode 1 — FACTORY** : create_rag_agent -> agent_id cree
+
+**Mode 2 — GUARDIAN** : run_eval_benchmark -> Recall@5 = 0.72 (WARNING)
+
+**Mode 3 — AUTOPSY** : get_failure_report -> RETRIEVAL_FAILURE (18/28)
+
+**Mode 4 — CHANGELAB** : update_retrieval_config top_k 5->10 -> Recall@5 = 0.84 (MERGED)
+
+**Impact** : Recall@5 +0.12 grace au fix automatique. Les 4 modes sont reellement executables via MCP.
