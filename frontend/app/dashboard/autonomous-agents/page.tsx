@@ -5,9 +5,11 @@ import { useState } from "react";
 import { AgentCreateForm } from "@/components/autonomous/AgentCreateForm";
 import { AgentList } from "@/components/autonomous/AgentList";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 export default function Page() {
   const { org, loading } = useCurrentOrg();
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -17,11 +19,11 @@ export default function Page() {
     <div className="mx-auto max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Agents autonomes</h1>
-          <p className="mt-1 text-sm text-foreground-muted">Des agents qui planifient et exécutent un objectif de façon autonome.</p>
+          <h1 className="text-xl font-semibold text-foreground">{t("autonomous.title")}</h1>
+          <p className="mt-1 text-sm text-foreground-muted">{t("autonomous.subtitle")}</p>
         </div>
         <button type="button" onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">
-          {showForm ? "Annuler" : "Nouvel agent"}
+          {showForm ? t("autonomous.cancel") : t("autonomous.new_agent")}
         </button>
       </div>
 

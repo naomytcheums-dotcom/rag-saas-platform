@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 interface RunComparison {
   run_a: { id: string; name: string; metrics: Record<string, number> };
@@ -13,6 +14,7 @@ interface RunComparison {
 export default function RunComparisonPage() {
   const params = useParams();
   const runId = params.runId as string;
+  const { t } = useTranslation();
   const [comparison, setComparison] = useState<RunComparison | null>(null);
   const [otherRunId, setOtherRunId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +27,7 @@ export default function RunComparisonPage() {
       const data = await api.get<RunComparison>(`/jobs/${runId}/comparison?with=${withRunId}`);
       setComparison(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur");
+      setError(err instanceof Error ? err.message : t("eval_comparison.error_generic"));
     } finally {
       setLoading(false);
     }
@@ -33,20 +35,20 @@ export default function RunComparisonPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-4">Comparaison de runs</h1>
+      <h1 className="text-2xl font-semibold mb-4">{t("eval_comparison.title")}</h1>
       <div className="mb-4 flex gap-2">
-        <input type="text" value={otherRunId} onChange={(e) => setOtherRunId(e.target.value)} placeholder="ID du run à comparer" className="border rounded px-3 py-2 flex-1" />
-        <button onClick={() => loadComparison(otherRunId)} disabled={!otherRunId || loading} className="bg-accent text-white px-4 py-2 rounded disabled:opacity-50">{loading ? "Chargement..." : "Comparer"}</button>
+        <input type="text" value={otherRunId} onChange={(e) => setOtherRunId(e.target.value)} placeholder={t("eval_comparison.run_id_placeholder")} className="border rounded px-3 py-2 flex-1" />
+        <button onClick={() => loadComparison(otherRunId)} disabled={!otherRunId || loading} className="bg-accent text-white px-4 py-2 rounded disabled:opacity-50">{loading ? t("eval_comparison.loading") : t("eval_comparison.compare")}</button>
       </div>
       {error && <p className="text-danger mb-4">{error}</p>}
       {comparison && (
         <table className="w-full border">
           <thead>
             <tr className="bg-gray-100">
-              <th className="border p-2">Métrique</th>
+              <th className="border p-2">{t("eval_comparison.metric")}</th>
               <th className="border p-2">{comparison.run_a.name}</th>
               <th className="border p-2">{comparison.run_b.name}</th>
-              <th className="border p-2">Delta</th>
+              <th className="border p-2">{t("eval_comparison.delta")}</th>
             </tr>
           </thead>
           <tbody>
