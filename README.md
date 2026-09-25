@@ -14,41 +14,27 @@
 ---
 
 ## The closed loop
-+----------------------+
-| IBM BOB 2.0 |
-| Autonomous Engineer |
-+----------+-----------+
-|
-v
-+-------------------------+
-| RAG EVOLUTION FACTORY |
-+------------+------------+
-|
-+-----------------+-----------------+
-v v v
-+---------+ +----------+ +---------+
-| FACTORY |------>| GUARDIAN |----->| AUTOPSY |
-+---------+ +----------+ +----+----+
-|
-v
-+------------+
-| CHANGELAB |
-+-----+------+
-|
-tests + benchmark
-|
-v
-+------------------+
-| KEEP / ROLLBACK |
-+--------+---------+
-|
-v
-GUARDIAN
 
-text
+```mermaid
+flowchart TD
+    BOB["IBM BOB 2.0<br/>Autonomous Engineer"]
+    FACTORY["FACTORY<br/>create_rag_agent"]
+    GUARDIAN["GUARDIAN<br/>run_eval_benchmark"]
+    AUTOPSY["AUTOPSY<br/>get_failure_report"]
+    CHANGELAB["CHANGELAB<br/>update_retrieval_config"]
+    DECIDE{"KEEP or ROLLBACK?"}
+    KEEP["MERGED<br/>+0.12 Recall@5"]
+    ROLLBACK["ROLLED BACK<br/>no regression kept"]
 
----
-
+    BOB --> FACTORY
+    FACTORY --> GUARDIAN
+    GUARDIAN --> AUTOPSY
+    AUTOPSY --> CHANGELAB
+    CHANGELAB --> DECIDE
+    DECIDE -->|improved| KEEP
+    DECIDE -->|regressed| ROLLBACK
+    KEEP --> GUARDIAN
+    ROLLBACK --> GUARDIAN
 ## The 4 modes (agents.md contract)
 
 | Mode | MCP Tool | What Bob does |
