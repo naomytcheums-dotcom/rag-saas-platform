@@ -27,3 +27,4 @@ snyk.exe
 # runtime from ultralytics' own GitHub releases, never committed, same
 # reasoning as .tools/ above.
 storage/ml_models/
+SESSION_CONTEXT.md
