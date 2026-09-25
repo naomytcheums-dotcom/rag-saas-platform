@@ -14,33 +14,10 @@
 ---
 
 ## The closed loop
-+----------------------+
-| IBM BOB 2.0 |
-| Autonomous Engineer |
-+----------+-----------+
-|
-v
-+-------------------------+
-| RAG EVOLUTION FACTORY |
-+------------+------------+
-|
-+---------+---------+---------+
-v v v v
-+---------+ +----------+ +---------+ +------------+
-| FACTORY | | GUARDIAN | | AUTOPSY | | CHANGELAB |
-+---------+ +----------+ +---------+ +-----+------+
-|
-tests + benchmark
-|
-v
-+------------------+
-| KEEP / ROLLBACK |
-+--------+---------+
-|
-v
-GUARDIAN
 
-text
+Bob orchestrates a full engineering loop:
+
+**FACTORY → GUARDIAN → AUTOPSY → CHANGELAB → KEEP/ROLLBACK → GUARDIAN**
 
 ---
 
