@@ -171,16 +171,16 @@ export default function AdminPage() {
       <p className="mt-1 text-sm text-foreground-muted">{t("admin.subtitle")}</p>
 
       <div className="mt-5 flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.map((tabKey) => (
           <button
-            key={t}
+            key={tabKey}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tabKey)}
             className={`px-3 py-2 text-sm font-medium transition-colors ${
-              tab === t ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
+              tab === tabKey ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
             }`}
           >
-            {t(TAB_LABEL_KEYS[t])}
+            {t(TAB_LABEL_KEYS[tabKey])}
           </button>
         ))}
       </div>

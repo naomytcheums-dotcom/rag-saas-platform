@@ -8,6 +8,7 @@ import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import { ExportButton } from "@/components/analytics/ExportButton";
 import { ProductMetrics } from "@/components/analytics/ProductMetrics";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 // Both pull in recharts (~390KB) -- deferred so visiting the default
 // Overview/Business/Product tabs never downloads it, only actually
@@ -21,25 +22,30 @@ const DashboardBuilder = dynamic(() => import("@/components/analytics/DashboardB
 
 const TABS = ["Overview", "Business", "Product", "Technical", "Dashboards"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = {
-  Overview: "Vue d'ensemble", Business: "Métier", Product: "Produit", Technical: "Technique", Dashboards: "Tableaux de bord",
+const TAB_LABEL_KEYS: Record<Tab, string> = {
+  Overview: "analytics.tab_overview",
+  Business: "analytics.tab_business",
+  Product: "analytics.tab_product",
+  Technical: "analytics.tab_technical",
+  Dashboards: "analytics.tab_dashboards",
 };
 
 export function AnalyticsDashboard() {
   const { org, loading: orgLoading } = useCurrentOrg();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("Overview");
   const [dateRange, setDateRange] = useState("30d");
 
   if (orgLoading || !org) {
-    return <p className="mx-auto max-w-5xl text-sm text-foreground-muted">Chargement…</p>;
+    return <p className="mx-auto max-w-5xl text-sm text-foreground-muted">{t("analytics.loading")}</p>;
   }
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
-          <p className="mt-1 text-sm text-foreground-muted">Métriques métier, produit et techniques pour {org.name}.</p>
+          <h1 className="text-xl font-semibold text-foreground">{t("analytics.title")}</h1>
+          <p className="mt-1 text-sm text-foreground-muted">{t("analytics.subtitle")} {org.name}.</p>
         </div>
         <div className="flex items-center gap-2">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -48,12 +54,12 @@ export function AnalyticsDashboard() {
       </div>
 
       <div className="mt-5 flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.map((tabKey) => (
           <button
-            key={t} type="button" onClick={() => setTab(t)}
-            className={`rounded-t-lg px-3 py-2 text-sm font-medium ${tab === t ? "border-b-2 border-accent text-foreground" : "text-foreground-muted"}`}
+            key={tabKey} type="button" onClick={() => setTab(tabKey)}
+            className={`rounded-t-lg px-3 py-2 text-sm font-medium ${tab === tabKey ? "border-b-2 border-accent text-foreground" : "text-foreground-muted"}`}
           >
-            {TAB_LABELS[t]}
+            {t(TAB_LABEL_KEYS[tabKey])}
           </button>
         ))}
       </div>

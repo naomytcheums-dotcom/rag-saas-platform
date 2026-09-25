@@ -7,6 +7,7 @@
 // silently no-op at execution time.
 
 import type { WorkflowNode, WorkflowNodeType } from "@/lib/services/workflows";
+import { useTranslation } from "@/lib/i18n";
 
 interface Props {
   node: WorkflowNode;
@@ -51,62 +52,62 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   );
 }
 
-function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (key: string, value: unknown) => void, allNodeIds: string[]) {
+function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (key: string, value: unknown) => void, allNodeIds: string[], t: (key: string, params?: Record<string, string | number>) => string) {
   const str = (key: string) => (typeof data[key] === "string" ? (data[key] as string) : "");
 
   switch (type) {
     case "llm_call":
       return (
         <>
-          <TextField label="Prompt utilisateur ({{ variable }} supporté)" value={str("user_prompt")} onChange={(v) => set("user_prompt", v)} multiline />
-          <TextField label="Modèle (optionnel)" value={str("model")} onChange={(v) => set("model", v)} />
+          <TextField label={t("node_editor.llm_prompt")} value={str("user_prompt")} onChange={(v) => set("user_prompt", v)} multiline />
+          <TextField label={t("node_editor.llm_model")} value={str("model")} onChange={(v) => set("model", v)} />
         </>
       );
     case "rag_search":
       return (
         <>
-          <TextField label="Base de connaissances (ID)" value={str("knowledge_base_id")} onChange={(v) => set("knowledge_base_id", v)} />
-          <TextField label="Requête ({{ variable }} supporté)" value={str("query")} onChange={(v) => set("query", v)} />
+          <TextField label={t("node_editor.rag_kb")} value={str("knowledge_base_id")} onChange={(v) => set("knowledge_base_id", v)} />
+          <TextField label={t("node_editor.rag_query")} value={str("query")} onChange={(v) => set("query", v)} />
         </>
       );
     case "web_search":
     case "database":
-      return <TextField label="Requête" value={str("query")} onChange={(v) => set("query", v)} />;
+      return <TextField label={t("node_editor.query")} value={str("query")} onChange={(v) => set("query", v)} />;
     case "http_call":
       return (
         <>
-          <TextField label="URL" value={str("url")} onChange={(v) => set("url", v)} />
-          <SelectField label="Méthode" value={str("method") || "GET"} options={["GET", "POST", "PUT", "PATCH", "DELETE"]} onChange={(v) => set("method", v)} />
+          <TextField label={t("node_editor.url")} value={str("url")} onChange={(v) => set("url", v)} />
+          <SelectField label={t("node_editor.method")} value={str("method") || "GET"} options={["GET", "POST", "PUT", "PATCH", "DELETE"]} onChange={(v) => set("method", v)} />
         </>
       );
     case "condition":
       return (
         <>
-          <TextField label="Expression (ex: score > 0.8)" value={str("condition")} onChange={(v) => set("condition", v)} />
-          <SelectField label="Branche si vrai" value={str("true_branch")} options={["", ...allNodeIds]} onChange={(v) => set("true_branch", v)} />
-          <SelectField label="Branche si faux" value={str("false_branch")} options={["", ...allNodeIds]} onChange={(v) => set("false_branch", v)} />
+          <TextField label={t("node_editor.condition")} value={str("condition")} onChange={(v) => set("condition", v)} />
+          <SelectField label={t("node_editor.true_branch")} value={str("true_branch")} options={["", ...allNodeIds]} onChange={(v) => set("true_branch", v)} />
+          <SelectField label={t("node_editor.false_branch")} value={str("false_branch")} options={["", ...allNodeIds]} onChange={(v) => set("false_branch", v)} />
         </>
       );
     case "code":
       return (
         <>
-          <SelectField label="Langage" value={str("language") || "python"} options={["python"]} onChange={(v) => set("language", v)} />
-          <TextField label="Code" value={str("code")} onChange={(v) => set("code", v)} multiline />
+          <SelectField label={t("node_editor.language")} value={str("language") || "python"} options={["python"]} onChange={(v) => set("language", v)} />
+          <TextField label={t("node_editor.code")} value={str("code")} onChange={(v) => set("code", v)} multiline />
         </>
       );
     case "email":
       return (
         <>
-          <TextField label="Destinataire(s), séparés par une virgule" value={str("to")} onChange={(v) => set("to", v)} />
-          <TextField label="Sujet" value={str("subject")} onChange={(v) => set("subject", v)} />
-          <TextField label="Corps ({{ variable }} supporté)" value={str("body")} onChange={(v) => set("body", v)} multiline />
+          <TextField label={t("node_editor.email_to")} value={str("to")} onChange={(v) => set("to", v)} />
+          <TextField label={t("node_editor.email_subject")} value={str("subject")} onChange={(v) => set("subject", v)} />
+          <TextField label={t("node_editor.email_body")} value={str("body")} onChange={(v) => set("body", v)} multiline />
         </>
       );
     case "calendar":
       return (
         <>
-          <SelectField label="Action" value={str("action") || "create"} options={["create", "update", "delete", "find_slots"]} onChange={(v) => set("action", v)} />
-          <TextField label="Titre" value={str("title")} onChange={(v) => set("title", v)} />
+          <SelectField label={t("node_editor.calendar_action")} value={str("action") || "create"} options={["create", "update", "delete", "find_slots"]} onChange={(v) => set("action", v)} />
+          <TextField label={t("node_editor.calendar_title")} value={str("title")} onChange={(v) => set("title", v)} />
         </>
       );
     case "human": {
@@ -130,29 +131,29 @@ function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (
 
       return (
         <>
-          <TextField label="Message ({{ variable }} supporté)" value={str("message")} onChange={(v) => set("message", v)} multiline />
-          <SelectField label="Type de réponse" value={inputType} options={["text", "confirm", "choice"]} onChange={(v) => set("input_type", v)} />
-          <TextField label="Label du bouton d'approbation" value={str("approve_label") || "Approuver"} onChange={(v) => set("approve_label", v)} />
-          <TextField label="Label du bouton de rejet" value={str("reject_label") || "Rejeter"} onChange={(v) => set("reject_label", v)} />
-          <TextField label="Timeout (secondes, vide = pas de timeout)" value={str("timeout_seconds") || ""} onChange={(v) => set("timeout_seconds", v)} />
+          <TextField label={t("node_editor.human_message")} value={str("message")} onChange={(v) => set("message", v)} multiline />
+          <SelectField label={t("node_editor.human_input_type")} value={inputType} options={["text", "confirm", "choice"]} onChange={(v) => set("input_type", v)} />
+          <TextField label={t("node_editor.human_approve_label")} value={str("approve_label") || t("node_editor.default_approve")} onChange={(v) => set("approve_label", v)} />
+          <TextField label={t("node_editor.human_reject_label")} value={str("reject_label") || t("node_editor.default_reject")} onChange={(v) => set("reject_label", v)} />
+          <TextField label={t("node_editor.human_timeout")} value={str("timeout_seconds") || ""} onChange={(v) => set("timeout_seconds", v)} />
 
           {inputType === "choice" ? (
             <div className="rounded-md border border-border bg-background p-2">
-              <p className="mb-2 text-xs font-medium text-foreground">Options de choix</p>
+              <p className="mb-2 text-xs font-medium text-foreground">{t("node_editor.human_choices")}</p>
               {choices.map((choice, index) => (
                 <div key={index} className="mb-1 flex gap-1">
                   <input
                     type="text"
                     value={choice}
                     onChange={(e) => updateChoice(index, e.target.value)}
-                    placeholder={`Option ${index + 1}`}
+                    placeholder={t("node_editor.human_option_placeholder", { number: index + 1 })}
                     className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-foreground"
                   />
                   <button
                     type="button"
                     onClick={() => removeChoice(index)}
                     className="rounded-md border border-border px-2 py-1 text-xs text-danger hover:border-danger"
-                    title="Supprimer cette option"
+                    title={t("node_editor.human_remove_option")}
                   >
                     ×
                   </button>
@@ -163,7 +164,7 @@ function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (
                 onClick={addChoice}
                 className="mt-1 w-full rounded-md border border-border px-2 py-1 text-xs text-foreground-muted hover:border-accent"
               >
-                + Ajouter une option
+                {t("node_editor.human_add_option")}
               </button>
             </div>
           ) : null}
@@ -171,30 +172,31 @@ function fieldsFor(type: WorkflowNodeType, data: Record<string, unknown>, set: (
       );
     }
     default:
-      return <p className="text-xs text-foreground-muted">Ce type de nœud n&apos;a pas de configuration.</p>;
+      return <p className="text-xs text-foreground-muted">{t("node_editor.no_config")}</p>;
   }
 }
 
 export function NodeEditor({ node, allNodeIds, onChange, onClose, onDelete }: Props) {
+  const { t } = useTranslation();
   const data = node.data ?? {};
   const set = (key: string, value: unknown) => onChange({ ...data, [key]: value });
 
   return (
     <aside className="flex w-80 flex-col gap-3 border-l border-border bg-surface p-4" data-testid="node-editor">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Éditer le nœud</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t("node_editor.title")}</h3>
         <button type="button" onClick={onClose} className="text-xs text-foreground-muted hover:text-foreground">
-          Fermer
+          {t("node_editor.close")}
         </button>
       </div>
-      <TextField label="Libellé" value={(data.label as string) || ""} onChange={(v) => set("label", v)} />
-      {fieldsFor(node.type, data, set, allNodeIds)}
+      <TextField label={t("node_editor.label")} value={(data.label as string) || ""} onChange={(v) => set("label", v)} />
+      {fieldsFor(node.type, data, set, allNodeIds, t)}
       <button
         type="button"
         onClick={onDelete}
         className="mt-2 rounded-md border border-danger px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger-soft"
       >
-        Supprimer ce nœud
+        {t("node_editor.delete")}
       </button>
     </aside>
   );

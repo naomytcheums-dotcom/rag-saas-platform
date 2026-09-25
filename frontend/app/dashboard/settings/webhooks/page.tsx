@@ -30,6 +30,7 @@ interface Delivery {
 }
 
 function DeliveryStatusBadge({ delivery }: { delivery: Delivery }) {
+  const { t } = useTranslation();
   if (delivery.status_code && delivery.status_code >= 200 && delivery.status_code < 300) {
     return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{delivery.status_code}</span>;
   }

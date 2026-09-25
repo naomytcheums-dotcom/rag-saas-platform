@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as workflowService from "@/lib/services/workflows";
+import { useTranslation } from "@/lib/i18n";
 
 interface RunEvent {
   event: string;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function DebugPanel({ workflowId, onCurrentNodeChange, onRunStarted }: Props) {
+  const { t } = useTranslation();
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function DebugPanel({ workflowId, onCurrentNodeChange, onRunStarted }: Pr
         () => setRunning(false),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start run");
+      setError(err instanceof Error ? err.message : t("workflow_debug.error_start"));
       setRunning(false);
     }
   };
@@ -61,7 +63,7 @@ export function DebugPanel({ workflowId, onCurrentNodeChange, onRunStarted }: Pr
   return (
     <div className="border-t border-border p-3" data-testid="debug-panel">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-foreground">Debug / Exécution</h3>
+        <h3 className="text-xs font-semibold text-foreground">{t("workflow_debug.title")}</h3>
         <button
           type="button"
           onClick={() => void handleRun()}
@@ -69,7 +71,7 @@ export function DebugPanel({ workflowId, onCurrentNodeChange, onRunStarted }: Pr
           className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
           data-testid="run-button"
         >
-          {running ? "En cours…" : "Lancer"}
+          {running ? t("workflow_debug.running") : t("workflow_debug.run")}
         </button>
       </div>
       {runId && <p className="mt-1 text-[11px] text-foreground-muted">Run: {runId}</p>}

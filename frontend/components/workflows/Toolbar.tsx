@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { NODE_TYPE_OPTIONS } from "@/components/workflows/nodeTypes";
 import { WORKFLOW_TEMPLATES } from "@/components/workflows/templates";
 import type { WorkflowNodeType } from "@/lib/services/workflows";
+import { useTranslation } from "@/lib/i18n";
 
 interface Props {
   onAddNode: (type: WorkflowNodeType) => void;
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTemplate, onUndo, onRedo, canUndo, canRedo, validationErrors, validationWarnings }: Props) {
+  const { t } = useTranslation();
   const [showTemplates, setShowTemplates] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,9 +38,9 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
           }}
           data-testid="add-node-select"
         >
-          <option value="" disabled>+ Ajouter un nœud</option>
+          <option value="" disabled>{t("workflow_toolbar.add_node")}</option>
           {NODE_TYPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
           ))}
         </select>
 
@@ -47,10 +49,10 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
           onClick={onUndo}
           disabled={!canUndo}
           className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent disabled:opacity-30"
-          title="Annuler (Ctrl+Z)"
+          title={t("workflow_toolbar.undo_title")}
           data-testid="undo-button"
         >
-          ↶ Annuler
+          {t("workflow_toolbar.undo")}
         </button>
 
         <button
@@ -58,22 +60,22 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
           onClick={onRedo}
           disabled={!canRedo}
           className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent disabled:opacity-30"
-          title="Rétablir (Ctrl+Y)"
+          title={t("workflow_toolbar.redo_title")}
           data-testid="redo-button"
         >
-          ↷ Rétablir
+          {t("workflow_toolbar.redo")}
         </button>
 
         <button type="button" onClick={onSave} disabled={saving} className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50" data-testid="save-button">
-          {saving ? "Enregistrement…" : "Enregistrer"}
+          {saving ? t("workflow_toolbar.saving") : t("workflow_toolbar.save")}
         </button>
 
         <button type="button" onClick={onExport} className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent" data-testid="export-button">
-          Exporter
+          {t("workflow_toolbar.export")}
         </button>
 
         <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent" data-testid="import-button">
-          Importer
+          {t("workflow_toolbar.import")}
         </button>
         <input
           ref={fileInputRef}
@@ -89,7 +91,7 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
 
         <div className="relative">
           <button type="button" onClick={() => setShowTemplates((v) => !v)} className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:border-accent" data-testid="templates-button">
-            Modèles
+            {t("workflow_toolbar.templates")}
           </button>
           {showTemplates && (
             <ul className="absolute z-10 mt-1 w-64 rounded-md border border-border bg-surface p-1 shadow-lg">
@@ -104,8 +106,8 @@ export function Toolbar({ onAddNode, onSave, saving, onExport, onImport, onUseTe
                     className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-surface-muted"
                     data-testid={`use-template-${template.id}`}
                   >
-                    <span className="font-medium text-foreground">{template.name}</span>
-                    <span className="block text-[11px] text-foreground-muted">{template.description}</span>
+                    <span className="font-medium text-foreground">{t(template.nameKey)}</span>
+                    <span className="block text-[11px] text-foreground-muted">{t(template.descriptionKey)}</span>
                   </button>
                 </li>
               ))}

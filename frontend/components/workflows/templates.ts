@@ -11,8 +11,10 @@ import type { WorkflowEdge, WorkflowNode } from "@/lib/services/workflows";
 
 export interface WorkflowTemplate {
   id: string;
-  name: string;
-  description: string;
+  /** i18n key, resolved with t() by the consumer */
+  nameKey: string;
+  /** i18n key, resolved with t() by the consumer */
+  descriptionKey: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
 }
@@ -20,22 +22,22 @@ export interface WorkflowTemplate {
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
     id: "simple-chatbot",
-    name: "Chatbot simple",
-    description: "Déclencheur → réponse LLM directe.",
+    nameKey: "workflow_tpl.chatbot_name",
+    descriptionKey: "workflow_tpl.chatbot_desc",
     nodes: [
       { id: "trigger", type: "trigger", position: { x: 0, y: 0 } },
-      { id: "llm", type: "llm_call", position: { x: 250, y: 0 }, data: { label: "Répondre", user_prompt: "{{ question }}" } },
+      { id: "llm", type: "llm_call", position: { x: 250, y: 0 }, data: { labelKey: "workflow_tpl.chatbot_node_respond", user_prompt: "{{ question }}" } },
     ],
     edges: [{ id: "e1", source: "trigger", target: "llm" }],
   },
   {
     id: "rag-pipeline",
-    name: "Pipeline RAG",
-    description: "Déclencheur → recherche dans la base de connaissances → réponse LLM.",
+    nameKey: "workflow_tpl.rag_name",
+    descriptionKey: "workflow_tpl.rag_desc",
     nodes: [
       { id: "trigger", type: "trigger", position: { x: 0, y: 0 } },
-      { id: "rag", type: "rag_search", position: { x: 250, y: 0 }, data: { label: "Rechercher", query: "{{ question }}" } },
-      { id: "llm", type: "llm_call", position: { x: 500, y: 0 }, data: { label: "Répondre", user_prompt: "Contexte: {{ output }}\n\nQuestion: {{ question }}" } },
+      { id: "rag", type: "rag_search", position: { x: 250, y: 0 }, data: { labelKey: "workflow_tpl.rag_node_search", query: "{{ question }}" } },
+      { id: "llm", type: "llm_call", position: { x: 500, y: 0 }, data: { labelKey: "workflow_tpl.chatbot_node_respond", user_prompt: "Contexte: {{ output }}\n\nQuestion: {{ question }}" } },
     ],
     edges: [
       { id: "e1", source: "trigger", target: "rag" },
@@ -44,13 +46,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "approval-workflow",
-    name: "Workflow avec approbation",
-    description: "Déclencheur → génération LLM → approbation humaine avant envoi email.",
+    nameKey: "workflow_tpl.approval_name",
+    descriptionKey: "workflow_tpl.approval_desc",
     nodes: [
       { id: "trigger", type: "trigger", position: { x: 0, y: 0 } },
-      { id: "llm", type: "llm_call", position: { x: 250, y: 0 }, data: { label: "Générer", user_prompt: "{{ question }}" } },
-      { id: "approve", type: "human", position: { x: 500, y: 0 }, data: { label: "Approuver ?", message: "Approuvez-vous l'envoi de cette réponse ?", input_type: "confirm" } },
-      { id: "send", type: "email", position: { x: 750, y: 0 }, data: { label: "Envoyer", to: "", subject: "Réponse", body: "{{ output }}" } },
+      { id: "llm", type: "llm_call", position: { x: 250, y: 0 }, data: { labelKey: "workflow_tpl.approval_node_generate", user_prompt: "{{ question }}" } },
+      { id: "approve", type: "human", position: { x: 500, y: 0 }, data: { labelKey: "workflow_tpl.approval_node_approve", messageKey: "workflow_tpl.approval_node_approve_msg", input_type: "confirm" } },
+      { id: "send", type: "email", position: { x: 750, y: 0 }, data: { labelKey: "workflow_tpl.approval_node_send", to: "", subjectKey: "workflow_tpl.approval_email_subject", body: "{{ output }}" } },
     ],
     edges: [
       { id: "e1", source: "trigger", target: "llm" },

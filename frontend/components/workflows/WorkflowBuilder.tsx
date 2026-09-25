@@ -20,6 +20,7 @@ import { NodeEditor } from "@/components/workflows/NodeEditor";
 import { nodeTypes } from "@/components/workflows/nodeTypes";
 import { Toolbar } from "@/components/workflows/Toolbar";
 import { WORKFLOW_TEMPLATES } from "@/components/workflows/templates";
+import { useTranslation } from "@/lib/i18n";
 import { validateWorkflow } from "@/components/workflows/validator";
 import { useHistory } from "@/lib/hooks/useHistory";
 import { VariablePanel, type WorkflowVariable } from "@/components/workflows/VariablePanel";
@@ -54,6 +55,7 @@ const WORKFLOW_TEMPLATES_MAP = Object.fromEntries(WORKFLOW_TEMPLATES.map((t) => 
 let nodeCounter = 0;
 
 export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onSaved?: (w: Workflow) => void }) {
+  const { t } = useTranslation();
   const history = useHistory<{ nodes: Node[]; edges: Edge[] }>({
     nodes: workflow.nodes.map(toRFNode),
     edges: workflow.edges.map(toRFEdge),
@@ -178,7 +180,7 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
       setEdges((data.edges ?? []).map(toRFEdge));
       setVariables(data.variables ?? []);
     } catch {
-      setSaveError("Le fichier importé n'est pas un JSON de workflow valide");
+      setSaveError(t("workflow_builder.error_invalid_json"));
     }
   }, []);
 

@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { useWorkflowRuns } from "@/lib/hooks/useWorkflowRuns";
 import type { WorkflowRun } from "@/lib/services/workflows";
+import { useTranslation } from "@/lib/i18n";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-surface-muted text-foreground-muted",
@@ -24,6 +25,7 @@ function durationLabel(run: WorkflowRun): string {
 }
 
 export function ExecutionHistory({ workflowId, refreshSignal }: { workflowId: string; refreshSignal?: number }) {
+  const { t } = useTranslation();
   const { runs, loading, reload } = useWorkflowRuns(workflowId);
   const [selected, setSelected] = useState<WorkflowRun | null>(null);
 
@@ -36,12 +38,12 @@ export function ExecutionHistory({ workflowId, refreshSignal }: { workflowId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately re-runs only when refreshSignal changes, not on every `reload` identity change
   }, [refreshSignal]);
 
-  if (loading) return <p className="p-3 text-xs text-foreground-muted">Chargement de l&apos;historique…</p>;
+  if (loading) return <p className="p-3 text-xs text-foreground-muted">{t("workflow_history.loading")}</p>;
 
   return (
     <div className="border-t border-border p-3" data-testid="execution-history">
-      <h3 className="text-xs font-semibold text-foreground">Historique d&apos;exécution</h3>
-      {runs.length === 0 && <p className="mt-2 text-xs text-foreground-muted">Aucune exécution.</p>}
+      <h3 className="text-xs font-semibold text-foreground">{t("workflow_history.title")}</h3>
+      {runs.length === 0 && <p className="mt-2 text-xs text-foreground-muted">{t("workflow_history.empty")}</p>}
       <ul className="mt-2 space-y-1">
         {runs.map((run) => (
           <li key={run.id}>
@@ -60,9 +62,9 @@ export function ExecutionHistory({ workflowId, refreshSignal }: { workflowId: st
       </ul>
       {selected && (
         <div className="mt-3 rounded-md border border-border bg-surface-muted p-2 text-[11px]" data-testid="run-detail">
-          <p><span className="font-medium">Statut :</span> {selected.status}</p>
-          <p><span className="font-medium">Nœud courant :</span> {selected.current_node_id ?? "—"}</p>
-          {selected.error && <p className="text-danger"><span className="font-medium">Erreur :</span> {selected.error}</p>}
+          <p><span className="font-medium">{t("workflow_history.status")}</span> {selected.status}</p>
+          <p><span className="font-medium">{t("workflow_history.current_node")}</span> {selected.current_node_id ?? "—"}</p>
+          {selected.error && <p className="text-danger"><span className="font-medium">{t("workflow_history.error")}</span> {selected.error}</p>}
           <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-all text-[10px]">{JSON.stringify(selected.context, null, 2)}</pre>
         </div>
       )}
