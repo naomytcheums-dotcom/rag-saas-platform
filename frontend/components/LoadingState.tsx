@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/lib/i18n";
 
 interface LoadingStateProps {
   /** Milliseconds before showing the "taking longer than expected"
@@ -17,13 +18,8 @@ interface LoadingStateProps {
   fullScreen?: boolean;
 }
 
-// Real gap found via audit (2026-09-19): every "Chargement…" state in
-// this app was a plain, static label with no time limit and no way
-// out if the backend was genuinely slow or stuck -- observed directly
-// this session on a cold-started Render instance. This component is a
-// drop-in replacement: same look while loading normally, a reassuring
-// message plus an optional retry button once it's taken too long.
 export default function LoadingState({ slowAfterMs = 6000, onRetry, fullScreen = true }: LoadingStateProps) {
+  const { t } = useTranslation();
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
@@ -33,17 +29,17 @@ export default function LoadingState({ slowAfterMs = 6000, onRetry, fullScreen =
 
   return (
     <div className={`flex flex-col items-center justify-center gap-2 text-sm text-foreground-muted ${fullScreen ? "h-screen" : "py-10"}`}>
-      <p>Chargement…</p>
+      <p>{t("loading.label")}</p>
       {slow && (
         <div className="flex flex-col items-center gap-2 text-center">
-          <p>Ca prend plus de temps que prevu...</p>
+          <p>{t("loading.slow")}</p>
           {onRetry && (
             <button
               type="button"
               onClick={onRetry}
               className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-foreground hover:bg-surface-muted"
             >
-              Reessayer
+              {t("loading.retry")}
             </button>
           )}
         </div>

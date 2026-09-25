@@ -8,70 +8,73 @@ import LanguageSelector from "@/components/LanguageSelector";
 import LoadingState from "@/components/LoadingState";
 import { BrandingApplier } from "@/components/BrandingApplier";
 import { BrandingProvider, useBranding } from "@/lib/branding-context";
-
-const NAV_SECTIONS = [
-  {
-    label: "Espace de travail",
-    items: [
-      { href: "/dashboard", label: "Vue d'ensemble" },
-      { href: "/chat", label: "Conversation" },
-      { href: "/dashboard/documents", label: "Documents" },
-      { href: "/dashboard/agents", label: "Agents" },
-      { href: "/dashboard/autonomous-agents", label: "Agents autonomes" },
-      { href: "/dashboard/workflows", label: "Workflows" },
-      { href: "/dashboard/fine-tuning", label: "Fine-tuning" },
-      { href: "/dashboard/analytics", label: "Analytics" },
-      { href: "/dashboard/eval", label: "Eval Lab" },
-    ],
-  },
-  {
-    label: "Développeur",
-    items: [
-      { href: "/dashboard/settings/api-keys", label: "Clés API" },
-      { href: "/dashboard/settings/webhooks", label: "Webhooks" },
-      { href: "/dashboard/settings/llm-config", label: "Configuration IA (BYOK)" },
-      { href: "/dashboard/api-docs", label: "Documentation API" },
-    ],
-  },
-  {
-    label: "Widget et intégrations",
-    items: [
-      { href: "/dashboard/settings/widget", label: "Widget" },
-      { href: "/dashboard/settings/integrations", label: "Intégrations" },
-      { href: "/dashboard/marketplace", label: "Marketplace" },
-    ],
-  },
-  {
-    label: "Compte",
-    items: [
-      { href: "/dashboard/profile", label: "Profil" },
-      { href: "/dashboard/settings/organization", label: "Organisation" },
-    ],
-  },
-  {
-    label: "Plateforme",
-    items: [
-      { href: "/dashboard/billing", label: "Facturation" },
-      { href: "/dashboard/security", label: "Sécurité" },
-      { href: "/admin", label: "Administration" },
-    ],
-  },
-];
+import { useTranslation } from "@/lib/i18n";
 
 function BrandLogo({ className }: { className?: string }) {
   const { branding } = useBranding();
+  const { t } = useTranslation();
   if (branding.logo_url) {
     // eslint-disable-next-line @next/next/no-img-element -- an organization's own uploaded logo is an arbitrary external/S3 URL, not a static local asset next/image can optimize
     return <img src={branding.logo_url} alt={branding.brand_name ?? ""} className={`max-h-8 max-w-[140px] object-contain ${className ?? ""}`} />;
   }
-  return <span className={`text-sm font-semibold text-foreground ${className ?? ""}`}>{branding.brand_name ?? "RAG SaaS Platform"}</span>;
+  return <span className={`text-sm font-semibold text-foreground ${className ?? ""}`}>{branding.brand_name ?? t("nav.brand_fallback")}</span>;
 }
 
 function DashboardLayoutInner({ children }: { children: ReactNode }) {
   const { user, loading } = useRequireAuth();
   const { logout } = useAuth();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const NAV_SECTIONS = [
+    {
+      label: t("nav.section.workspace"),
+      items: [
+        { href: "/dashboard", label: t("nav.dashboard") },
+        { href: "/chat", label: t("nav.chat") },
+        { href: "/dashboard/documents", label: t("nav.documents") },
+        { href: "/dashboard/agents", label: t("nav.agents") },
+        { href: "/dashboard/autonomous-agents", label: t("nav.autonomous_agents") },
+        { href: "/dashboard/workflows", label: t("nav.workflows") },
+        { href: "/dashboard/fine-tuning", label: t("nav.fine_tuning") },
+        { href: "/dashboard/analytics", label: t("nav.analytics") },
+        { href: "/dashboard/eval", label: t("nav.eval") },
+      ],
+    },
+    {
+      label: t("nav.section.developer"),
+      items: [
+        { href: "/dashboard/settings/api-keys", label: t("nav.api_keys") },
+        { href: "/dashboard/settings/webhooks", label: t("nav.webhooks") },
+        { href: "/dashboard/settings/llm-config", label: t("nav.llm_config") },
+        { href: "/dashboard/api-docs", label: t("nav.api_docs") },
+      ],
+    },
+    {
+      label: t("nav.section.widget"),
+      items: [
+        { href: "/dashboard/settings/widget", label: t("nav.widget") },
+        { href: "/dashboard/settings/integrations", label: t("nav.integrations") },
+        { href: "/dashboard/marketplace", label: t("nav.marketplace") },
+      ],
+    },
+    {
+      label: t("nav.section.account"),
+      items: [
+        { href: "/dashboard/profile", label: t("nav.profile") },
+        { href: "/dashboard/settings/organization", label: t("nav.organization") },
+      ],
+    },
+    {
+      label: t("nav.section.platform"),
+      items: [
+        { href: "/dashboard/billing", label: t("nav.billing") },
+        { href: "/dashboard/security", label: t("nav.security") },
+        { href: "/admin", label: t("nav.admin") },
+      ],
+    },
+  ];
 
   if (loading || !user) {
     return <LoadingState onRetry={() => window.location.reload()} />;
@@ -93,7 +96,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            aria-label="Fermer le menu"
+            aria-label={t("nav.close_menu")}
             className="rounded-lg p-1 text-foreground-muted hover:bg-surface-muted md:hidden"
           >
             ✕
@@ -131,7 +134,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
           </div>
           <p className="truncate text-xs text-foreground-muted">{user.email}</p>
           <button type="button" onClick={() => void logout()} className="mt-1 text-xs font-medium text-accent hover:underline">
-            Se déconnecter
+            {t("nav.logout")}
           </button>
         </div>
       </aside>
@@ -141,7 +144,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            aria-label="Ouvrir le menu"
+            aria-label={t("nav.open_menu")}
             className="rounded-lg p-1.5 text-foreground-muted hover:bg-surface-muted"
           >
             ☰
