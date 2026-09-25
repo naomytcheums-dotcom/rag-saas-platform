@@ -36,7 +36,7 @@ Bob agit de manière autonome mais disciplinée :
 - Tâches de fond : Celery + Redis
 - Cache : Redis
 - LLM : LiteLLM (Anthropic, OpenAI, Mistral)
-- Frontend : Next.js 14, React, TypeScript
+- Frontend : Next.js 16, React, TypeScript
 - Styling : TailwindCSS
 - Vector : pgvector
 - Monitoring : Prometheus, Grafana, Sentry
@@ -53,7 +53,7 @@ rag-saas-platform/
 │   ├── tasks/                # Celery tasks
 │   ├── config.py             # Configuration
 │   └── main.py               # Point d'entrée
-├── frontend/                 # Next.js TypeScript
+├── frontend/                 # Next.js 16 TypeScript
 ├── sdks/                     # SDK Python, JS, React, Vue
 ├── tests/                    # Tests pytest
 ├── docs/                     # Documentation
@@ -79,7 +79,7 @@ Endpoints :
 
 ### 1.5 MCP (Model Context Protocol)
 
-Localisation : /api/mcp/
+Localisation : /mcp/v1/
 
 Rôle : Interopérabilité bidirectionnelle (client + serveur).
 
@@ -88,11 +88,11 @@ Client MCP : se connecte à des serveurs MCP externes, découvre leurs tools, le
 Serveur MCP : expose nos tools internes, authentifié par API key.
 
 Endpoints :
-- GET/POST /api/mcp/servers
-- GET /api/mcp/servers/{id}/tools
-- POST /api/mcp/servers/{id}/tools/{name}/call
-- GET /api/mcp/v1/tools
-- POST /api/mcp/v1/tools/{name}/call
+- GET/POST /mcp/v1/servers
+- GET /mcp/v1/servers/{id}/tools
+- POST /mcp/v1/servers/{id}/tools/{name}/call
+- GET /mcp/v1/tools
+- POST /mcp/v1/tools/{name}/call
 
 ---
 
@@ -104,7 +104,7 @@ Rôle : Provisionner et configurer des agents RAG multi-tenant.
 
 Commande :
 
-curl -X POST http://localhost:8000/api/mcp/create_rag_agent \
+curl -X POST http://localhost:8000/mcp/v1/tools/create_rag_agent/call \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"organization_id": "uuid", "name": "Support Agent", "model": "claude-3-5-sonnet", "retrieval_config": {"strategy": "hybrid", "top_k": 10, "reranker": "cross-encoder"}}'
@@ -148,7 +148,7 @@ Catégories : RETRIEVAL_FAILURE, GENERATION_HALLUCINATION, GENERATION_INCOMPLETE
 
 Commande :
 
-curl "http://localhost:8000/api/mcp/get_failure_report?run_id={id}" \
+curl -X POST http://localhost:8000/mcp/v1/tools/get_failure_report/call \
   -H "X-API-Key: $API_KEY"
 
 ### Mode 4 — CHANGELAB
@@ -170,7 +170,7 @@ Rôle : Auto-tuning (modification + test + évaluation + rollback).
    git branch -D bob/auto-fix-...
 
 5. Lancer le benchmark :
-   curl -X POST http://localhost:8000/api/mcp/run_eval_benchmark \
+   curl -X POST http://localhost:8000/mcp/v1/tools/run_eval_benchmark/call \
      -H "X-API-Key: $API_KEY" \
      -d '{"dataset_id": "uuid", "agent_id": "uuid"}'
 
@@ -193,20 +193,20 @@ Rôle : Auto-tuning (modification + test + évaluation + rollback).
 ## 3. INTERFACE MCP & TOOLS
 
 ### 3.1 create_rag_agent
-- POST /api/mcp/create_rag_agent
+- POST /mcp/v1/tools/create_rag_agent/call
 - Payload : {organization_id, name, model, retrieval_config}
 - Réponse : {agent_id, status}
 
 ### 3.2 get_failure_report
-- GET /api/mcp/get_failure_report?run_id={id}
+- POST /mcp/v1/tools/get_failure_report/call
 - Réponse : {failures: [{question, category, expected, actual}]}
 
 ### 3.3 update_retrieval_config
-- PATCH /api/mcp/update_retrieval_config
+- POST /mcp/v1/tools/update_retrieval_config/call
 - Payload : {agent_id, config}
 
 ### 3.4 run_eval_benchmark
-- POST /api/mcp/run_eval_benchmark
+- POST /mcp/v1/tools/run_eval_benchmark/call
 - Payload : {dataset_id, agent_id, config}
 - Réponse : {run_id, status, metrics}
 
@@ -334,24 +334,24 @@ alembic upgrade head
 
 ### 8.1 Créer un agent RAG
 
-curl -X POST http://localhost:8000/api/mcp/create_rag_agent \
+curl -X POST http://localhost:8000/mcp/v1/tools/create_rag_agent/call \
   -H "X-API-Key: $API_KEY" \
   -d '{"organization_id": "...", "name": "Support", "model": "claude-3-5-sonnet"}'
 
 curl http://localhost:8000/api/agents/{agent_id} \
   -H "X-API-Key: $API_KEY"
 
-curl -X POST http://localhost:8000/api/mcp/run_eval_benchmark \
+curl -X POST http://localhost:8000/mcp/v1/tools/run_eval_benchmark/call \
   -H "X-API-Key: $API_KEY" \
   -d '{"dataset_id": "...", "agent_id": "..."}'
 
 ### 8.2 Corriger une régression
 
 curl http://localhost:8000/api/eval/runs/{run_id}/metrics -H "X-API-Key: $API_KEY"
-curl "http://localhost:8000/api/mcp/get_failure_report?run_id={run_id}" -H "X-API-Key: $API_KEY"
+curl -X POST http://localhost:8000/mcp/v1/tools/get_failure_report/call -H "X-API-Key: $API_KEY"
 git checkout -b bob/auto-fix-$(date +%Y%m%d-%H%M)
 pytest tests/eval/ -x
-curl -X POST http://localhost:8000/api/mcp/run_eval_benchmark -H "X-API-Key: $API_KEY" -d '{"dataset_id": "...", "agent_id": "..."}'
+curl -X POST http://localhost:8000/mcp/v1/tools/run_eval_benchmark/call -H "X-API-Key: $API_KEY" -d '{"dataset_id": "...", "agent_id": "..."}'
 git add . && git commit -m "fix: increase top_k to 10"
 git push origin bob/auto-fix-...
 gh pr create
