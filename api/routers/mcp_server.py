@@ -36,6 +36,11 @@ from api.security.public_api_auth import require_public_api_scope
 from api.services.custom_tools import execute_custom_tool, get_available_custom_tools
 from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout
 from api.services.tool_validation import get_validation_errors
+from api.services.mcp.builtin_tools import (
+    call_builtin_tool,
+    get_builtin_tool,
+    list_builtin_tools,
+)
 from api.services.tool_wiring import build_sql_query_tool
 from api.services.tools import get_tool, list_tools, tool_input_schema
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +76,10 @@ async def list_tools_endpoint(
         "input_schema": {"type": "object", "properties": sql_tool.parameters},
     }
 
-    return {"tools": builtin + custom + [sql_shape]}
+    # IBM Bob 2.0 -- the 4 real tools the `agents.md` contract names.
+    bob_builtin = list_builtin_tools()
+
+    return {"tools": builtin + custom + [sql_shape] + bob_builtin}
 
 
 @router.post("/tools/{tool_name}/call")
@@ -87,6 +95,11 @@ async def call_tool_endpoint(
     (same `tool_validation.get_validation_errors` the internal
     function-calling loop already uses, api/services/agent_orchestrator.py)
     before ever invoking the real handler."""
+    # IBM Bob 2.0 -- the 4 named tools take priority over the generic
+    # builtin registry: they are the contract exposed by agents.md.
+    if get_builtin_tool(tool_name) is not None:
+        return await call_builtin_tool(db, tool_name, payload)
+
     # Special case: execute_sql_query is a per-run tool bound by closure
     if tool_name == "execute_sql_query":
         arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
