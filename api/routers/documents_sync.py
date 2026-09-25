@@ -1,21 +1,20 @@
 """
 Synchronous document reindex endpoint -- no Celery worker required.
 
-Real, additive: this is a thin wrapper around the existing
-`reindex_document_task` (api/tasks/reindex.py) that calls it
-SYNCHRONOUSLY via `.apply()` instead of `.delay()`. This lets a
-deployment without a running Celery worker still process documents
-on demand (e.g. Render free tier, hackathon demo).
+Real, additive: this calls the underlying async reindex function
+DIRECTLY (same real `process_document` pipeline every format already
+uses) instead of going through Celery's `.delay()` or `.apply()`.
 
-The underlying task is UNCHANGED -- same real `process_document`
-pipeline every format already uses. Only the dispatch mode differs.
+Why not `.apply()`: Celery tasks wrapped with `asyncio.run()` conflict
+with FastAPI's own running event loop. This wrapper awaits the async
+function directly, staying inside the same loop.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
-from api.tasks.reindex import reindex_document_task
+from api.tasks.reindex import _reindex_document_async
 
 router = APIRouter(tags=["documents-sync"])
 
@@ -28,14 +27,7 @@ async def reindex_document_sync(document_id: str, db: AsyncSession = Depends(get
     processed (or failed).
     """
     try:
-        result = reindex_document_task.apply(args=[document_id, None])
-        if result.failed():
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Reindex failed: {result.result}",
-            )
-        return {"status": "completed", "document_id": document_id, "result": str(result.result)}
-    except HTTPException:
-        raise
+        result = await _reindex_document_async(document_id, None)
+        return {"status": "completed", "document_id": document_id, "result": str(result)}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
