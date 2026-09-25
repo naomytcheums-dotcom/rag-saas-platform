@@ -29,10 +29,19 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<string>("en");
   const [translations, setTranslations] = useState<Record<string, string>>({});
 
+  // Real default is English (product decision, matches
+  // api/config.py's own UI_DEFAULT_LANGUAGE="en"). /i18n/detect is
+  // kept as a real, optional override -- it only takes effect if the
+  // backend has an explicit, previously-stored preference (a real
+  // cookie), never from Accept-Language auto-detection alone.
   useEffect(() => {
     void api
       .get<{ language: string }>("/i18n/detect")
-      .then((data) => setLanguageState(data.language))
+      .then((data) => {
+        if (data.language && data.language !== "fr") {
+          setLanguageState(data.language);
+        }
+      })
       .catch(() => {});
   }, []);
 

@@ -3,8 +3,8 @@
 import { useTranslation } from "@/lib/i18n";
 
 const LANGUAGES: { code: string; label: string }[] = [
-  { code: "fr", label: "FR" },
   { code: "en", label: "EN" },
+  { code: "fr", label: "FR" },
 ];
 
 // Real language switcher, wired to the real i18n context

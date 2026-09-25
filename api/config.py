@@ -1585,7 +1585,7 @@ class Settings(BaseSettings):
     # content, kept on disk (not deleted) in case those languages are
     # reintroduced later, but no longer offered through the UI. See
     # docs/developer/I18N.md.
-    UI_DEFAULT_LANGUAGE: str = "fr"
+    UI_DEFAULT_LANGUAGE: str = "en"
     UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
 
