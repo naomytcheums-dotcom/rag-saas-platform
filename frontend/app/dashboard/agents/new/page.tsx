@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 const MODELS = [
   { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
@@ -20,6 +21,7 @@ const AVAILABLE_TOOLS = [
 export default function NewAgentPage() {
   const router = useRouter();
   const { org, loading: orgLoading } = useCurrentOrg();
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -46,41 +48,41 @@ export default function NewAgentPage() {
       });
       router.push(`/dashboard/agents/${agent.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur");
+      setError(err instanceof Error ? err.message : t("agents.new.error_generic"));
     } finally {
       setLoading(false);
     }
   }
 
-  if (orgLoading || !org) return <p className="p-6">Loading…</p>;
+  if (orgLoading || !org) return <p className="p-6">{t("agents.new.loading")}</p>;
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-6">Créer un agent</h1>
+      <h1 className="text-2xl font-semibold mb-6">{t("agents.new.title")}</h1>
       {error && <p className="text-danger mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label>Nom
+        <label>{t("agents.new.name")}
           <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" />
         </label>
-        <label>Description
+        <label>{t("agents.new.description")}
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" />
         </label>
-        <label>Prompt système
+        <label>{t("agents.new.system_prompt")}
           <textarea required value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={6} className="mt-1 w-full border rounded px-3 py-2" />
         </label>
-        <label>Modèle
+        <label>{t("agents.new.model")}
           <select value={model} onChange={(e) => setModel(e.target.value)} className="mt-1 w-full border rounded px-3 py-2">
             {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
         </label>
-        <label>Température : {temperature}
+        <label>{t("agents.new.temperature", { value: temperature })}
           <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="mt-1 w-full" />
         </label>
-        <label>Max itérations
+        <label>{t("agents.new.max_iterations")}
           <input type="number" min="1" max="20" value={maxIterations} onChange={(e) => setMaxIterations(parseInt(e.target.value))} className="mt-1 w-full border rounded px-3 py-2" />
         </label>
         <div>
-          <p className="mb-2">Outils autorisés :</p>
+          <p className="mb-2">{t("agents.new.allowed_tools")}</p>
           <div className="grid grid-cols-2 gap-2">
             {AVAILABLE_TOOLS.map((tool) => (
               <label key={tool} className="flex items-center gap-2">
@@ -91,7 +93,7 @@ export default function NewAgentPage() {
           </div>
         </div>
         <button type="submit" disabled={loading} className="bg-accent text-white px-4 py-2 rounded disabled:opacity-50">
-          {loading ? "Création..." : "Créer l'agent"}
+          {loading ? t("agents.new.submitting") : t("agents.new.submit")}
         </button>
       </form>
     </div>

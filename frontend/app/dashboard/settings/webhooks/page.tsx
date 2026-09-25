@@ -4,6 +4,7 @@ import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 const WEBHOOK_EVENTS = [
   "message.created", "message.updated", "document.uploaded", "document.processed",
@@ -33,12 +34,13 @@ function DeliveryStatusBadge({ delivery }: { delivery: Delivery }) {
     return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{delivery.status_code}</span>;
   }
   if (delivery.error || delivery.status_code) {
-    return <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">{delivery.status_code ?? "échec"}</span>;
+    return <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">{delivery.status_code ?? t("webhooks.delivery_failed")}</span>;
   }
-  return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted">en attente</span>;
+  return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted">{t("webhooks.delivery_pending")}</span>;
 }
 
 function WebhookDeliveries({ webhookId }: { webhookId: string }) {
+  const { t } = useTranslation();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,15 +58,15 @@ function WebhookDeliveries({ webhookId }: { webhookId: string }) {
     void load();
   }, [load]);
 
-  if (loading) return <p className="text-xs text-foreground-muted">Chargement des livraisons…</p>;
-  if (deliveries.length === 0) return <p className="text-xs text-foreground-muted">Aucune livraison pour l&apos;instant.</p>;
+  if (loading) return <p className="text-xs text-foreground-muted">{t("webhooks.delivery_loading")}</p>;
+  if (deliveries.length === 0) return <p className="text-xs text-foreground-muted">{t("webhooks.delivery_empty")}</p>;
 
   return (
     <div className="flex flex-col gap-1.5">
       {deliveries.map((delivery) => (
         <div key={delivery.id} className="flex items-center justify-between rounded-lg bg-background px-2.5 py-1.5 text-xs">
           <span className="font-medium text-foreground">{delivery.event}</span>
-          <span className="text-foreground-muted">tentative {delivery.attempt}</span>
+          <span className="text-foreground-muted">{t("webhooks.delivery_attempt")} {delivery.attempt}</span>
           <DeliveryStatusBadge delivery={delivery} />
           <span className="text-foreground-muted">{new Date(delivery.created_at).toLocaleString()}</span>
         </div>
@@ -75,6 +77,7 @@ function WebhookDeliveries({ webhookId }: { webhookId: string }) {
 
 export default function WebhooksPage() {
   const { org } = useCurrentOrg();
+  const { t } = useTranslation();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -91,7 +94,7 @@ export default function WebhooksPage() {
     try {
       setWebhooks(await api.get<Webhook[]>(`/organizations/${org.id}/webhooks`));
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des webhooks");
+      setError(err instanceof ApiError ? String(err.detail) : t("webhooks.error_load"));
     } finally {
       setLoading(false);
     }
@@ -113,7 +116,7 @@ export default function WebhooksPage() {
       setEvents([]);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de la création du webhook");
+      setError(err instanceof ApiError ? String(err.detail) : t("webhooks.error_create"));
     } finally {
       setCreating(false);
     }
@@ -137,7 +140,7 @@ export default function WebhooksPage() {
       setExpanded(id);
       setTimeout(() => setTestFlash(null), 2500);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de la livraison de test");
+      setError(err instanceof ApiError ? String(err.detail) : t("webhooks.error_test"));
     }
   }
 
@@ -147,15 +150,15 @@ export default function WebhooksPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold text-foreground">Webhooks</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Recevez un vrai POST HTTP à chaque fois qu&apos;un événement survient dans votre organisation.</p>
+      <h1 className="text-xl font-semibold text-foreground">{t("webhooks.title")}</h1>
+      <p className="mt-1 text-sm text-foreground-muted">{t("webhooks.subtitle")}</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Ajouter un webhook</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("webhooks.add_heading")}</h2>
         <input
-          type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom"
+          type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("webhooks.name_placeholder")}
           className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <input
@@ -178,16 +181,16 @@ export default function WebhooksPage() {
           type="button" onClick={() => void createWebhook()} disabled={creating || !name.trim() || !url.trim() || events.length === 0}
           className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
-          {creating ? "Ajout…" : "Ajouter le webhook"}
+          {creating ? t("webhooks.adding") : t("webhooks.add_button")}
         </button>
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Webhooks configurés</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("webhooks.configured")}</h2>
         {loading ? (
           <LoadingState fullScreen={false} />
         ) : webhooks.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun webhook pour l&apos;instant.</p>
+          <p className="text-sm text-foreground-muted">{t("webhooks.empty")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {webhooks.map((webhook) => (
@@ -197,7 +200,7 @@ export default function WebhooksPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{webhook.name}</p>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${webhook.is_active ? "bg-success-soft text-success" : "bg-surface-muted text-foreground-muted"}`}>
-                        {webhook.is_active ? "actif" : "inactif"}
+                        {webhook.is_active ? t("webhooks.status_active") : t("webhooks.status_inactive")}
                       </span>
                     </div>
                     <p className="text-xs text-foreground-muted">{webhook.url}</p>
@@ -205,16 +208,16 @@ export default function WebhooksPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <button type="button" onClick={() => void testWebhook(webhook.id)} className="text-xs font-medium text-accent hover:underline">
-                      {testFlash === webhook.id ? "Envoyé !" : "Tester"}
+                      {testFlash === webhook.id ? t("webhooks.sent") : t("webhooks.test")}
                     </button>
                     <button type="button" onClick={() => setExpanded(expanded === webhook.id ? null : webhook.id)} className="text-xs font-medium text-foreground-muted hover:underline">
-                      {expanded === webhook.id ? "Masquer les livraisons" : "Livraisons"}
+                      {expanded === webhook.id ? t("webhooks.hide_deliveries") : t("webhooks.deliveries")}
                     </button>
                     <button type="button" onClick={() => void toggleActive(webhook)} className="text-xs font-medium text-accent hover:underline">
-                      {webhook.is_active ? "Désactiver" : "Activer"}
+                      {webhook.is_active ? t("webhooks.disable") : t("webhooks.enable")}
                     </button>
                     <button type="button" onClick={() => void deleteWebhook(webhook.id)} className="text-xs font-medium text-danger hover:underline">
-                      Supprimer
+                      {t("webhooks.delete")}
                     </button>
                   </div>
                 </div>

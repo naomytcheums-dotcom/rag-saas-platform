@@ -4,6 +4,7 @@ import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 interface ApiKey {
   id: string;
@@ -25,6 +26,7 @@ interface QuotaStatus {
 }
 
 function KeyStatusBadge({ apiKey }: { apiKey: ApiKey }) {
+  const { t } = useTranslation();
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
@@ -32,23 +34,24 @@ function KeyStatusBadge({ apiKey }: { apiKey: ApiKey }) {
     setNow(Date.now());
   }, []);
 
-  if (!apiKey.is_active) return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted">révoquée</span>;
+  if (!apiKey.is_active) return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted">{t("apikeys.status_revoked")}</span>;
   if (apiKey.expires_at && now !== null) {
     const daysLeft = (new Date(apiKey.expires_at).getTime() - now) / 86_400_000;
-    if (daysLeft < 0) return <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">expirée</span>;
-    if (daysLeft < 7) return <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">expire bientôt</span>;
+    if (daysLeft < 0) return <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">{t("apikeys.status_expired")}</span>;
+    if (daysLeft < 7) return <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">{t("apikeys.status_expires_soon")}</span>;
   }
-  return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">active</span>;
+  return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{t("apikeys.status_active")}</span>;
 }
 
 function KeyUsageStats({ keyId }: { keyId: string }) {
+  const { t } = useTranslation();
   const [quota, setQuota] = useState<QuotaStatus | null>(null);
 
   useEffect(() => {
     void api.get<QuotaStatus>(`/api-keys/${keyId}/quota/status`).then(setQuota).catch(() => setQuota(null));
   }, [keyId]);
 
-  if (!quota || quota.quota_limit === null) return <p className="text-xs text-foreground-muted">Aucun quota configuré — usage illimité.</p>;
+  if (!quota || quota.quota_limit === null) return <p className="text-xs text-foreground-muted">{t("apikeys.no_quota")}</p>;
 
   const pct = Math.min(100, Math.round((quota.quota_used / quota.quota_limit) * 100));
   return (
@@ -60,6 +63,7 @@ function KeyUsageStats({ keyId }: { keyId: string }) {
 
 export default function ApiKeysPage() {
   const { org } = useCurrentOrg();
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [availableScopes, setAvailableScopes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +85,7 @@ export default function ApiKeysPage() {
       setKeys(keysData);
       setAvailableScopes(scopesData.scopes);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des clés API");
+      setError(err instanceof ApiError ? String(err.detail) : t("apikeys.error_load"));
     } finally {
       setLoading(false);
     }
@@ -103,7 +107,7 @@ export default function ApiKeysPage() {
       setNewScopes([]);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de la création de la clé");
+      setError(err instanceof ApiError ? String(err.detail) : t("apikeys.error_create"));
     } finally {
       setCreating(false);
     }
@@ -122,7 +126,7 @@ export default function ApiKeysPage() {
       setRevealedKey(result.key);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de la rotation de la clé");
+      setError(err instanceof ApiError ? String(err.detail) : t("apikeys.error_rotate"));
     }
   }
 
@@ -136,33 +140,33 @@ export default function ApiKeysPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold text-foreground">Clés API</h1>
+      <h1 className="text-xl font-semibold text-foreground">{t("apikeys.title")}</h1>
       <p className="mt-1 text-sm text-foreground-muted">
-        Clés réelles, révocables, propres à l&apos;organisation, pour l&apos;API publique <code>/v1/*</code>.
+        {t("apikeys.subtitle")} <code>/v1/*</code>.
       </p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       {revealedKey && (
         <div className="mt-4 rounded-lg border border-accent bg-accent-soft p-3 text-sm">
-          <p className="font-medium text-foreground">Votre clé (affichée une seule fois — copiez-la maintenant) :</p>
+          <p className="font-medium text-foreground">{t("apikeys.your_key")}</p>
           <div className="mt-1 flex items-center gap-2">
             <code className="block flex-1 break-all rounded bg-surface px-2 py-1 text-xs">{revealedKey}</code>
             <button type="button" onClick={() => copyToClipboard(revealedKey)} className="shrink-0 rounded-md bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover">
-              Copier
+              {t("apikeys.copy")}
             </button>
           </div>
-          <button type="button" onClick={() => setRevealedKey(null)} className="mt-2 text-xs text-accent hover:underline">Fermer</button>
+          <button type="button" onClick={() => setRevealedKey(null)} className="mt-2 text-xs text-accent hover:underline">{t("apikeys.close")}</button>
         </div>
       )}
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold text-foreground">Créer une nouvelle clé</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("apikeys.create_heading")}</h2>
         <input
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nom de la clé (ex. Serveur de production)"
+          placeholder={t("apikeys.name_placeholder")}
           className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -185,16 +189,16 @@ export default function ApiKeysPage() {
           disabled={creating || !newName.trim() || newScopes.length === 0}
           className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
-          {creating ? "Création…" : "Créer la clé"}
+          {creating ? t("apikeys.creating") : t("apikeys.create_button")}
         </button>
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Clés existantes</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("apikeys.existing")}</h2>
         {loading ? (
           <LoadingState fullScreen={false} />
         ) : keys.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucune clé API pour l&apos;instant.</p>
+          <p className="text-sm text-foreground-muted">{t("apikeys.empty")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {keys.map((key) => (
@@ -213,13 +217,13 @@ export default function ApiKeysPage() {
                   {key.is_active && (
                     <div className="flex items-center gap-3">
                       <button type="button" onClick={() => setExpanded(expanded === key.id ? null : key.id)} className="text-xs font-medium text-foreground-muted hover:underline">
-                        {expanded === key.id ? "Masquer l'usage" : "Usage"}
+                        {expanded === key.id ? t("apikeys.hide_usage") : t("apikeys.show_usage")}
                       </button>
                       <button type="button" onClick={() => void rotateKey(key.id)} className="text-xs font-medium text-accent hover:underline">
                         Renouveler
                       </button>
                       <button type="button" onClick={() => void revokeKey(key.id)} className="text-xs font-medium text-danger hover:underline">
-                        Révoquer
+                        {t("apikeys.revoke")}
                       </button>
                     </div>
                   )}

@@ -10,8 +10,6 @@ import { useTranslation } from "@/lib/i18n";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useRealChat } from "@/lib/useRealChat";
 
-const STARTER_QUESTIONS = ["What is retrieval-augmented generation?", "How does semantic chunking work?", "Which retriever should I use?"];
-
 // The full, real, responsive chat interface -- every Partie 8.1/8.2
 // component assembled into one real page: sidebar (conversations,
 // search), message thread (citations, copy, feedback, regenerate,
@@ -29,6 +27,8 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const STARTER_QUESTIONS = [t("chat.starter_q1"), t("chat.starter_q2"), t("chat.starter_q3")];
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -50,7 +50,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              aria-label={t("open_conversations")}
+              aria-label={t("chat.open_conversations")}
               className="rounded-lg p-1.5 text-foreground-muted hover:bg-surface-muted md:hidden"
             >
               ☰
@@ -88,7 +88,7 @@ export default function Home() {
                     onClick={stopGeneration}
                     className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-foreground hover:bg-accent-soft"
                   >
-                    {t("stop")}
+                    {t("chat.stop")}
                   </button>
                 </div>
               </div>
@@ -96,7 +96,7 @@ export default function Home() {
 
             {messages.length <= 2 && (
               <div>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">{t("suggested_questions")}</h2>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">{t("chat.suggested_questions")}</h2>
                 <div className="flex flex-wrap gap-2">
                   {STARTER_QUESTIONS.map((question) => (
                     <button

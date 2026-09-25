@@ -4,6 +4,7 @@ import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
+import { useTranslation } from "@/lib/i18n";
 
 interface DocumentEntry {
   id: string;
@@ -21,6 +22,7 @@ function formatSize(bytes: number): string {
 
 export default function DocumentsPage() {
   const { org } = useCurrentOrg();
+  const { t } = useTranslation();
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -33,11 +35,11 @@ export default function DocumentsPage() {
       const data = await api.get<{ items: DocumentEntry[] }>(`/organizations/${org.id}/documents`);
       setDocuments(data.items);
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec du chargement des documents");
+      setError(err instanceof ApiError ? String(err.detail) : t("documents.error_load"));
     } finally {
       setLoading(false);
     }
-  }, [org]);
+  }, [org, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -52,7 +54,7 @@ export default function DocumentsPage() {
       await api.postFile(`/organizations/${org.id}/documents`, file);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : "Échec de l'envoi");
+      setError(err instanceof ApiError ? String(err.detail) : t("documents.error_upload"));
     } finally {
       setUploading(false);
     }
@@ -65,23 +67,23 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold text-foreground">Documents</h1>
-      <p className="mt-1 text-sm text-foreground-muted">Envoyez de vrais documents pour ancrer les réponses de vos agents.</p>
+      <h1 className="text-xl font-semibold text-foreground">{t("documents.title")}</h1>
+      <p className="mt-1 text-sm text-foreground-muted">{t("documents.subtitle")}</p>
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       <label className="mt-6 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface p-8 text-center hover:border-accent">
-        <span className="text-sm font-medium text-foreground">{uploading ? "Envoi en cours…" : "Cliquez pour envoyer un document"}</span>
-        <span className="text-xs text-foreground-muted">PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, et plus</span>
+        <span className="text-sm font-medium text-foreground">{uploading ? t("documents.uploading") : t("documents.upload_prompt")}</span>
+        <span className="text-xs text-foreground-muted">{t("documents.supported_formats")}</span>
         <input type="file" className="hidden" disabled={uploading} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
       </label>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Vos documents</h2>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">{t("documents.your_documents")}</h2>
         {loading ? (
           <LoadingState fullScreen={false} />
         ) : documents.length === 0 ? (
-          <p className="text-sm text-foreground-muted">Aucun document pour l&apos;instant.</p>
+          <p className="text-sm text-foreground-muted">{t("documents.empty")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {documents.map((doc) => (
@@ -90,7 +92,7 @@ export default function DocumentsPage() {
                   <p className="text-sm font-medium text-foreground">{doc.name}</p>
                   <p className="text-xs text-foreground-muted">{formatSize(doc.file_size)} · {doc.file_type} · {doc.status}</p>
                 </div>
-                <button type="button" onClick={() => void remove(doc.id)} className="text-xs font-medium text-danger hover:underline">Supprimer</button>
+                <button type="button" onClick={() => void remove(doc.id)} className="text-xs font-medium text-danger hover:underline">{t("documents.delete")}</button>
               </div>
             ))}
           </div>
