@@ -1,0 +1,204 @@
+{
+  "questions": [
+    {
+      "id": "q001",
+      "question": "What is Retrieval-Augmented Generation (RAG)?",
+      "expected_answer": "Retrieval-Augmented Generation (RAG) is an architectural pattern that combines an information retrieval system with a generative language model. It dynamically fetches relevant factual documents from external knowledge bases to ground the model's responses. This approach significantly reduces hallucinations and keeps generated content up to date without retraining.",
+      "expected_documents": ["doc_001"],
+      "category": "definition",
+      "difficulty": "easy",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q002",
+      "question": "How does dense vector retrieval differ from sparse keyword search in RAG?",
+      "expected_answer": "Dense vector retrieval uses continuous embedding representations to capture semantic context and intent even when exact keywords do not match. Sparse search relies on exact token matching mechanisms like BM25 to score term frequency and document rarity. Combining both in a hybrid retrieval setup often yields the highest recall and precision.",
+      "expected_documents": ["doc_002", "doc_003"],
+      "category": "comparison",
+      "difficulty": "easy",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q003",
+      "question": "How do you configure character-level chunking with overlap in LangChain?",
+      "expected_answer": "You can instantiate a RecursiveCharacterTextSplitter specifying chunk_size and chunk_overlap parameters. The splitter attempts to split on natural document boundaries like paragraphs and newlines first before falling back to individual characters. Overlap ensures continuous context across adjacent text boundaries.",
+      "expected_documents": ["doc_004"],
+      "category": "how_to",
+      "difficulty": "medium",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q004",
+      "question": "What steps are required to implement cross-encoder re-ranking in a retrieval pipeline?",
+      "expected_answer": "After retrieving an initial set of candidate documents using vector similarity, pass both the query and document pairs into a cross-encoder model. The cross-encoder evaluates full joint attention across the query and text to compute precise relevance scores. Finally, sort the candidate list by these new scores and truncate to the desired final context limit.",
+      "expected_documents": ["doc_005"],
+      "category": "how_to",
+      "difficulty": "medium",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q005",
+      "question": "Why is your RAG system generating hallucinations despite retrieving relevant documents?",
+      "expected_answer": "Hallucinations can occur when the system prompt does not strictly constrain the LLM to answer solely from the provided context. It can also happen if the context length exceeds the model's effective attention window or if retrieved chunks contain conflicting information. Enforcing strict system instructions and filtering irrelevant context reduces this risk.",
+      "expected_documents": ["doc_006"],
+      "category": "troubleshooting",
+      "difficulty": "medium",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q006",
+      "question": "What is the primary trade-off between naive chunking and semantic chunking?",
+      "expected_answer": "Naive chunking splits documents by fixed token lengths, which is fast and simple but risks cutting off ideas mid-sentence or mid-paragraph. Semantic chunking uses embedding distance or natural document headers to group related sentences together, improving retrieval relevance at the cost of higher preprocessing latency.",
+      "expected_documents": ["doc_007"],
+      "category": "comparison",
+      "difficulty": "easy",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q007",
+      "question": "How can you debug slow query latency in a pgvector vector store?",
+      "expected_answer": "Check whether an appropriate HNSW or IVFFlat vector index is created on the embedding column and ensure query parameters like hnsw.ef_search are tuned. Profile execution using EXPLAIN ANALYZE to verify that the query utilizes the index rather than performing a full sequential scan. Additionally, monitor connection pool limits and database memory allocation.",
+      "expected_documents": ["doc_008"],
+      "category": "troubleshooting",
+      "difficulty": "hard",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q008",
+      "question": "What is Maximum Marginal Relevance (MMR) in context retrieval?",
+      "expected_answer": "Maximum Marginal Relevance is a selection strategy that balances document relevance against diversity among selected results. It prevents the retrieval of multiple nearly-identical chunks by penalizing candidates that are highly similar to already chosen documents. This ensures a broader coverage of distinct factual information for the LLM.",
+      "expected_documents": ["doc_009"],
+      "category": "definition",
+      "difficulty": "easy",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q009",
+      "question": "How do you implement metadata filtering alongside vector similarity search?",
+      "expected_answer": "In corporate setups, pass structured filtering criteria such as tenant ID, date ranges, or document types directly into the vector database search query. The database engine applies these logical predicates either during index traversal or as a pre/post-retrieval filtering step. This restricts semantic search strictly to authorized and relevant subsets of data.",
+      "expected_documents": ["doc_010"],
+      "category": "how_to",
+      "difficulty": "medium",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q010",
+      "question": "What causes the 'lost in the middle' phenomenon in RAG systems?",
+      "expected_answer": "Language models tend to pay highest attention to information located at the very beginning or end of long context prompts. When relevant chunks are placed in the middle of a large context window, performance and retrieval utilization degrade significantly. Re-ordering chunks by placing the most critical evidence at the prompt boundaries mitigates this issue.",
+      "expected_documents": ["doc_011"],
+      "category": "troubleshooting",
+      "difficulty": "medium",
+      "top_k_5_recall": 1,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q011",
+      "question": "Which edge cases in multi-page financial compliance policies require higher top_k retrieval depths to capture full regulatory dependencies across dispersed sections?",
+      "expected_answer": "Complex compliance guidelines span multiple cross-referenced chapters covering exemptions, definitions, and jurisdictional nuances. Standard similarity searches prioritize superficial definitions in top results while dropping essential downstream clauses when context limits are tight. Expanding retrieval depth captures all interconnected regulatory constraints required for an accurate analysis.",
+      "expected_documents": ["doc_012", "doc_013", "doc_014", "doc_015", "doc_016", "doc_017"],
+      "category": "troubleshooting",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q012",
+      "question": "How do you perform a cross-system audit of distributed API authentication protocols spanning technical whitepapers, legacy SDK docs, and migration guides?",
+      "expected_answer": "Conducting a comprehensive audit requires gathering disparate authentication procedures across historical documentation versions. A narrow candidate window returns only high-level overview pages, missing specific token refresh implementations and deprecation notices. Broadening candidate retrieval guarantees all dependent API specifications are retrieved for unified review.",
+      "expected_documents": ["doc_018", "doc_019", "doc_020", "doc_021", "doc_022", "doc_023"],
+      "category": "how_to",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q013",
+      "question": "What is parent-document retrieval and how does it compare to standard single-chunk retrieval for extensive technical manuals?",
+      "expected_answer": "Parent-document retrieval indexes small sub-chunks for precise vector matching but returns the larger parent document or full enclosing section to the LLM. Standard chunk retrieval only sends the narrow snippet, often losing essential broad context. Returning larger parent blocks provides superior contextual coherence at the expense of higher token usage.",
+      "expected_documents": ["doc_024", "doc_025", "doc_026", "doc_027", "doc_028", "doc_029"],
+      "category": "comparison",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q014",
+      "question": "How can you resolve subtle context drift when aggregating microservice error codes across multi-repository architecture guides?",
+      "expected_answer": "Context drift happens when generic error signatures overlap across multiple microservice definitions in a codebase. Narrow search filters return duplicate entries for top services while missing secondary downstream dependency errors. Increasing the retrieval candidate count surfaces the missing error definitions from regional service modules.",
+      "expected_documents": ["doc_030", "doc_031", "doc_032", "doc_033", "doc_034", "doc_035"],
+      "category": "troubleshooting",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q015",
+      "question": "How do hypothetical document embeddings (HyDE) improve recall for abstract technical questions?",
+      "expected_answer": "HyDE generates a plausible hypothetical answer using an LLM, then embeds that synthetic document to retrieve actual contextually similar text. This bridges the semantic gap between short user questions and long descriptive documents. It enhances retrieval accuracy for vague or abstract queries where direct question-to-document vector similarity performs poorly.",
+      "expected_documents": ["doc_036", "doc_037", "doc_038", "doc_039", "doc_040", "doc_041"],
+      "category": "definition",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q016",
+      "question": "What causes out-of-memory errors when processing massive PDF tables with unstructured parsing layouts?",
+      "expected_answer": "Out-of-memory errors occur when parser processes attempt to load dense multi-page raster graphics or huge nested tables simultaneously without stream batching. Splitting execution into dynamic page ranges prevents memory allocation spikes during table extraction. Increasing chunk retrieval capacity ensures related table headers and footnotes remain associated during generation.",
+      "expected_documents": ["doc_042", "doc_043", "doc_044", "doc_045", "doc_046", "doc_047"],
+      "category": "troubleshooting",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q017",
+      "question": "How do you evaluate RAG pipeline performance using synthetic query generation and Ragas metrics?",
+      "expected_answer": "Synthetic query generation uses an LLM to automatically generate diverse question-ground truth pairs directly from underlying document chunks. Frameworks like Ragas calculate key metrics such as faithfulness, answer relevance, context recall, and context precision without requiring human labels. This enables automated continuous integration testing for vector pipeline changes.",
+      "expected_documents": ["doc_048", "doc_049", "doc_050", "doc_051", "doc_052", "doc_053"],
+      "category": "how_to",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q018",
+      "question": "Compare Cohere ReRank v3 performance against BGE-Reranker-Large across multilingual Enterprise datasets.",
+      "expected_answer": "Cohere ReRank v3 is a managed API optimized for high-throughput multi-aspect domain data with strong structured JSON awareness. BGE-Reranker-Large is an open-weights model capable of local deployment for strict data privacy requirements. While Cohere excels in cross-lingual context handling out of the box, BGE offers lower operational costs when hosted on self-managed GPUs.",
+      "expected_documents": ["doc_054", "doc_055", "doc_056", "doc_057", "doc_058", "doc_059"],
+      "category": "comparison",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q019",
+      "question": "How do you configure contextual compression retrievers to eliminate noise in long document processing?",
+      "expected_answer": "Contextual compression wraps a base retriever with a document transformer or LLM compressor that filters or summarizes chunks before passing them to the prompt. Chunks are evaluated against the specific query, and non-relevant sentences are stripped out dynamically. This reduces context length, saves generation token cost, and minimizes model distraction.",
+      "expected_documents": ["doc_060", "doc_061", "doc_062", "doc_063", "doc_064", "doc_065"],
+      "category": "how_to",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    },
+    {
+      "id": "q020",
+      "question": "What architecture pattern resolves high-latency bottleneck issues in real-time multi-agent RAG synthesis?",
+      "expected_answer": "Asynchronous parallel retrieval with streaming intermediate tool calls reduces perception latency for multi-agent setups. Instead of running sequential sub-queries, an orchestrator fans out parallel requests across vector indices and caches sub-responses in Redis. Streamed responses present partial context to the generative layer immediately as chunks resolve.",
+      "expected_documents": ["doc_066", "doc_067", "doc_068", "doc_069", "doc_070", "doc_071"],
+      "category": "troubleshooting",
+      "difficulty": "hard",
+      "top_k_5_recall": 0,
+      "top_k_10_recall": 1
+    }
+  ]
+}
