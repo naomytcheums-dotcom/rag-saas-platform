@@ -98,7 +98,14 @@ async def call_tool_endpoint(
     # IBM Bob 2.0 -- the 4 named tools take priority over the generic
     # builtin registry: they are the contract exposed by agents.md.
     if get_builtin_tool(tool_name) is not None:
-        return await call_builtin_tool(db, tool_name, payload)
+        result = await call_builtin_tool(db, tool_name, payload)
+        # IBM Bob 2.0 -- the 4 real tools use db.flush() internally (via
+        # `call_builtin_tool`), NOT db.commit(), so an agent/dataset created
+        # here would otherwise be rolled back when the request's session
+        # closes. Real, deliberate commit only when the handler succeeded.
+        if not result.get("is_error"):
+            await db.commit()
+        return result
 
     # Special case: execute_sql_query is a per-run tool bound by closure
     if tool_name == "execute_sql_query":
