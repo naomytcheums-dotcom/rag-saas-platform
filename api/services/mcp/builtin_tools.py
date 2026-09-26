@@ -177,9 +177,17 @@ async def run_eval_benchmark(
     with a `run_id` (the job is queued asynchronously, like the REST
     endpoint).
 
-    Returns `{"run_id": ..., "status": "queued"}`.
+    Returns `{"run_id": ..., "status": "completed"}`.
+
+    IBM Bob 2.0 -- this tool executes the job synchronously so the
+    caller (Bob, or any MCP client) gets real results in the same
+    call. The alternative (queue + Celery worker) requires a
+    dedicated worker process which Render Free does not provide.
     """
-    from api.services.evaluation_jobs import create_evaluation_job
+    from api.services.evaluation_jobs import (
+        create_evaluation_job,
+        run_evaluation_job,
+    )
 
     job = await create_evaluation_job(
         db,
@@ -187,7 +195,20 @@ async def run_eval_benchmark(
         agent_id=agent_id,
         model_config=config or None,
     )
-    return {"run_id": str(job.id), "status": "queued"}
+    await db.flush()
+
+    # Execute the job synchronously so the caller gets real results.
+    await run_evaluation_job(db, job.id)
+    await db.refresh(job)
+
+    return {
+        "run_id": str(job.id),
+        "status": job.status,
+        "progress": job.progress,
+        "total_questions": job.total_questions,
+        "completed_questions": job.completed_questions,
+        "metrics": job.results if job.results else None,
+    }
 
 
 # ---------------------------------------------------------------------------
