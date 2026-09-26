@@ -147,11 +147,21 @@ async def run_evaluation(
             system_prompt = f"{system_prompt}\n\n{CITATION_INSTRUCTIONS}\n\nContext:\n{context_text}"
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": question.question}]
         try:
+            # Anthropic's newer models (Claude 4.x) reject requests that
+            # specify BOTH `temperature` and `top_p` -- keep `temperature`,
+            # drop `top_p` for that provider only. Other providers still
+            # receive both unchanged.
+            llm_kwargs = {
+                "provider": llm_cfg["provider"],
+                "model": llm_cfg["model"],
+                "temperature": llm_cfg["temperature"],
+                "max_tokens": llm_cfg["max_tokens"],
+            }
+            if llm_cfg["provider"] != "anthropic":
+                llm_kwargs["top_p"] = llm_cfg["top_p"]
+
             completion = await asyncio.wait_for(
-                chat_completion_with_usage(
-                    messages, provider=llm_cfg["provider"], model=llm_cfg["model"], temperature=llm_cfg["temperature"],
-                    top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
-                ),
+                chat_completion_with_usage(messages, **llm_kwargs),
                 timeout=settings.EVALUATION_TIMEOUT,
             )
         except asyncio.TimeoutError:

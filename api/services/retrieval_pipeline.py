@@ -98,7 +98,7 @@ def _get_reranker(model_name: str):
     return _RERANKER_CACHE[model_name]
 
 
-async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_filters: dict | None = None) -> list[dict]:
+async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_filters: dict | None = None, document_ids: list | None = None) -> list[dict]:
     """A real, shared, multi-tenant-isolated fetch -- every real search
     function below calls this, never a raw query of its own, so the
     real isolation boundary (`DocumentChunk.organization_id ==
@@ -123,6 +123,8 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_
     the first place -- not a real, wasteful post-hoc filter applied
     after those already ran."""
     filters = [DocumentChunk.organization_id == organization_id, Document.deleted_at.is_(None), DocumentChunk.embedding.is_not(None)]
+    if document_ids:
+        filters.append(DocumentChunk.document_id.in_(document_ids))
     if metadata_filters:
         from api.config import settings as app_settings
         from api.services.metadata_filtering import build_metadata_filter_clauses
@@ -189,6 +191,7 @@ _cosine_similarities = cosine_similarities  # internal alias, unchanged call sit
 async def vector_search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None, org_settings: dict | None = None,
     query_embedding: list[float] | None = None, metadata_filters: dict | None = None,
+    document_ids: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- real, dense semantic search:
     one real query embedding, real cosine similarity against every
@@ -229,11 +232,11 @@ async def vector_search(
         # the reranked strategy.
         loop = asyncio.get_running_loop()
         query_embedding = (await loop.run_in_executor(None, generate_embeddings, [query], model_name))[0]
-    return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters)
+    return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
 
 
 async def rank_chunks_by_embedding(
-    db: AsyncSession, organization_id, embedding: list[float], top_k: int, metadata_filters: dict | None = None,
+    db: AsyncSession, organization_id, embedding: list[float], top_k: int, metadata_filters: dict | None = None, document_ids: list | None = None,
 ) -> list[dict]:
     """A real, shared building block, made public specifically so
     Partie 3.4.3's own `api.services.hyde` can rank this organization's
@@ -249,7 +252,7 @@ async def rank_chunks_by_embedding(
     ranks, so HyDE's own real hypothetical-document embedding (the one
     real caller that reaches this function directly) automatically
     respects the SAME real filter a plain `vector_search` would."""
-    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters)
+    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids)
     if not chunks:
         return []
     similarities = _cosine_similarities(embedding, [c["embedding"] for c in chunks])
@@ -259,7 +262,7 @@ async def rank_chunks_by_embedding(
 
 async def bm25_search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None, org_settings: dict | None = None,
-    metadata_filters: dict | None = None,
+    metadata_filters: dict | None = None, document_ids: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- real, sparse keyword search
     over this organization's own real chunk text, via a real, freshly
@@ -274,7 +277,7 @@ async def bm25_search(
     index is even built: an excluded real chunk's own real text can
     never contribute to a real BM25 score, let alone be returned."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
-    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters)
+    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids)
     if not chunks:
         return []
 
@@ -300,6 +303,7 @@ def reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> dic
 async def hybrid_search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None, rrf_k: int | None = None,
     org_settings: dict | None = None, query_embedding: list[float] | None = None, metadata_filters: dict | None = None,
+    document_ids: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- real vector + real BM25,
     combined via real Reciprocal Rank Fusion (the same real, standard
@@ -332,10 +336,11 @@ async def hybrid_search(
 
     semantic_results = await vector_search(
         db, organization_id, query, top_k=candidate_pool, org_settings=org_settings, query_embedding=query_embedding,
-        metadata_filters=metadata_filters,
+        metadata_filters=metadata_filters, document_ids=document_ids,
     )
     bm25_results = await bm25_search(
         db, organization_id, query, top_k=candidate_pool, org_settings=org_settings, metadata_filters=metadata_filters,
+        document_ids=document_ids,
     )
     if not semantic_results and not bm25_results:
         return []
@@ -445,6 +450,7 @@ async def search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None,
     strategy: str | None = None, reranker: str | None = None, score_threshold: float | None = None,
     org_settings: dict | None = None, metadata_filters: dict | None = None,
+    document_ids: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- the real, live entry point:
     resolves `strategy`/`top_k`/`reranker`/`score_threshold` from
@@ -578,6 +584,8 @@ async def search(
     # `query_rewriting.py`/`multi_query.py`/`hyde.py`/`mmr.py` themselves.
     if metadata_filters:
         call_kwargs["metadata_filters"] = metadata_filters
+    if document_ids:
+        call_kwargs["document_ids"] = document_ids
 
     if resolved_strategy != "bm25_only" and resolve_hyde_enabled(org_settings):
         from api.services.hyde import embed_hypothetical_document, generate_hypothetical_document
@@ -652,7 +660,7 @@ async def search(
 async def search_with_context(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None,
     strategy: str | None = None, reranker: str | None = None, score_threshold: float | None = None,
-    org_settings: dict | None = None, metadata_filters: dict | None = None,
+    org_settings: dict | None = None, metadata_filters: dict | None = None, document_ids: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- the same real search as
     `search` above, each real result additionally carrying its own
