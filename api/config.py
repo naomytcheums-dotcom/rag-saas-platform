@@ -1276,7 +1276,7 @@ class Settings(BaseSettings):
     # -- Evaluation runs (Partie 7.2.1) ----------------------------------------
     EVALUATION_RETRIEVAL_K: list[int] = Field(default_factory=lambda: [1, 3, 5, 10])
     EVALUATION_BATCH_SIZE: int = 10
-    EVALUATION_TIMEOUT: float = 30.0
+    EVALUATION_TIMEOUT: float = 180.0
 
     # -- NDCG (Partie 7.2.6) ----------------------------------------------------
     # A real, deliberate upgrade of Partie 7.1.4's own simpler, linear-gain
