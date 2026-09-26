@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-09-25T18:27:44.871384+00:00",
+  "status": 422,
+  "body_keys": [
+    "detail"
+  ],
+  "server_reachable": true,
+  "auth_enforced": false
+}

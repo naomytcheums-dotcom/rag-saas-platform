@@ -1,0 +1,103 @@
+
+============================================================
+  IBM BOB 2.0 — AUTONOMOUS LIVE EXPERIMENT
+  Started: 2026-09-25T18:13:02.650131+00:00
+============================================================
+
+============================================================
+  PHASE 0 — B5 CHECK (unauthenticated probe)
+============================================================
+  GET /mcp/v1/tools (no auth): HTTP 422
+  → saved bob\lab\results\phase00_b5_check.json
+
+============================================================
+  PHASE 1 — REGISTER BOB-LAB-OWNER
+============================================================
+  POST /auth/register: HTTP 201
+  ✅ Registration successful — token_type=bearer
+  → saved bob\lab\results\phase01_register.json
+
+============================================================
+  PHASE 2 — VALIDATE IDENTITY
+============================================================
+  GET /account/me: HTTP 200
+  GET /organizations: HTTP 200
+  org_id=948f4b6e-0093-4150-b7af-a8d7b59c3235  role=owner
+  → saved bob\lab\results\phase02_identity.json
+
+============================================================
+  PHASE 3 — CREATE MCP API KEY
+============================================================
+  POST /organizations/948f4b6e-0093-4150-b7af-a8d7b59c3235/api-keys: HTTP 200
+  ✅ API key created — prefix=pk_  scopes=['mcp:tools', 'kb:write', 'documents:write']
+  → saved bob\lab\results\phase03_apikey.json
+
+============================================================
+  PHASE 4 — VERIFY MCP WITH KEY
+============================================================
+  GET /mcp/v1/tools: HTTP 200
+  Tools: 13 total, Bob tools present: ['create_rag_agent', 'get_failure_report', 'run_eval_benchmark', 'update_retrieval_config']
+  → saved bob\lab\results\phase04_mcp_tools.json
+
+============================================================
+  PHASE 5 — FACTORY: BOB-LAB-BASELINE
+============================================================
+  POST /mcp/v1/tools/create_rag_agent/call: HTTP 200
+  agent_id=f5483d5e-1fc3-4e0e-87a1-739293958f4e  is_error=False
+  → saved bob\lab\results\phase05_agent_baseline.json
+
+============================================================
+  PHASE 6 — CORPUS DISCOVERY
+============================================================
+  Corpus loaded: 155 documents from data\processed\fastapi_docs.json
+
+============================================================
+  PHASE 7 — SMOKE TEST INGESTION (3 docs)
+============================================================
+  [0] _llm-test.md: HTTP 200, doc_id=a203c9e6-c357-4eb1-818b-7db802a11da6
+  [1] about/index.md: HTTP 200, doc_id=604f4363-dc8a-4ab9-b105-89489a726c7a
+  [2] advanced/additional-responses.md: HTTP 200, doc_id=c6ad8393-a2df-4b66-b21d-68f16241c34b
+  Smoke test: ✅ PASS
+  → saved bob\lab\results\phase07_smoke_test.json
+
+============================================================
+  PHASE 8 — FULL INGESTION (152 remaining docs)
+============================================================
+  [3/155] uploaded...
+  [23/155] uploaded...
+  [43/155] uploaded...
+  [63/155] uploaded...
+  [83/155] uploaded...
+  [103/155] uploaded...
+  [123/155] uploaded...
+  [143/155] uploaded...
+  ❌ [154] virtual-environments.md: HTTP 403
+  Uploaded: 154/155, Failed: 1
+  → saved bob\lab\results\phase08_ingestion.json
+
+============================================================
+  PHASE 9 — INDEX HEALTH CHECK
+============================================================
+  Waiting 30s for Celery processing...
+  GET /v1/documents: HTTP 403
+  Status counts: {'completed': 0, 'processing': 0, 'pending': 0, 'failed': 0, 'unknown': 0}
+  → saved bob\lab\results\phase09_index_health.json
+
+🟡 Index not yet ready — waiting additional 60s
+
+============================================================
+  PHASE 9 — INDEX HEALTH CHECK
+============================================================
+  Waiting 30s for Celery processing...
+  GET /v1/documents: HTTP 403
+  Status counts: {'completed': 0, 'processing': 0, 'pending': 0, 'failed': 0, 'unknown': 0}
+  → saved bob\lab\results\phase09_index_health.json
+
+============================================================
+  PHASE 10 — PATH → UUID MAPPING
+============================================================
+  Resolved: 0, Unresolved: 46
+  ❌ Unresolved paths (first 5): ['tutorial/first-steps.md', 'tutorial/body.md', 'tutorial/body-updates.md', 'tutorial/path-params.md', 'tutorial/query-params.md']
+  → saved bob\lab\results\phase10_path_uuid_map.json
+
+🔴 B4 BLOCKED — 46 unresolved paths — STOPPING before dataset creation

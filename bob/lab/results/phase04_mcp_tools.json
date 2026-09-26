@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-09-25T18:13:27.595212+00:00",
+  "http_status": 200,
+  "tool_count": 13,
+  "tool_names": [
+    "calculator",
+    "word_count",
+    "github_get_repo",
+    "github_list_issues",
+    "calendar_list_events",
+    "calendar_create_event",
+    "email_read",
+    "http_request",
+    "execute_sql_query",
+    "create_rag_agent",
+    "get_failure_report",
+    "update_retrieval_config",
+    "run_eval_benchmark"
+  ],
+  "bob_tools_present": [
+    "create_rag_agent",
+    "get_failure_report",
+    "run_eval_benchmark",
+    "update_retrieval_config"
+  ],
+  "bob_tools_missing": [],
+  "all_bob_tools_present": true
+}

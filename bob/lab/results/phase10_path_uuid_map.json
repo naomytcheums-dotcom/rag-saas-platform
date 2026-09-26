@@ -1,0 +1,194 @@
+{
+  "timestamp": "2026-09-25T18:28:49.001325+00:00",
+  "total_expected_doc_refs": 52,
+  "resolved": 0,
+  "unresolved_count": 46,
+  "unresolved_paths": [
+    {
+      "path": "tutorial/first-steps.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/body.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/body-updates.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/path-params.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/query-params.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/header-params.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/cookie-params.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/path-params-numeric-validations.md",
+      "uuid": null
+    },
+    {
+      "path": "async.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/handling-errors.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/response-status-code.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/metadata.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/static-files.md",
+      "uuid": null
+    },
+    {
+      "path": "features.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/body-multiple-params.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/dependencies/index.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/dependencies/classes-as-dependencies.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/dependencies/dependencies-with-yield.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/dependencies/global-dependencies.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/middleware.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/cors.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/security/first-steps.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/security/get-current-user.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/security/oauth2-jwt.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/websockets.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/background-tasks.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/testing.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/response-model.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/request-files.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/request-forms-and-files.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/bigger-applications.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/query-params-str-validations.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/body-nested-models.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/body-fields.md",
+      "uuid": null
+    },
+    {
+      "path": "deployment/index.md",
+      "uuid": null
+    },
+    {
+      "path": "deployment/concepts.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/security/oauth2-scopes.md",
+      "uuid": null
+    },
+    {
+      "path": "tutorial/dependencies/sub-dependencies.md",
+      "uuid": null
+    },
+    {
+      "path": "how-to/extending-openapi.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/sub-applications.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/behind-a-proxy.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/testing-websockets.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/testing-dependencies.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/stream-data.md",
+      "uuid": null
+    },
+    {
+      "path": "advanced/events.md",
+      "uuid": null
+    },
+    {
+      "path": "deployment/docker.md",
+      "uuid": null
+    }
+  ],
+  "path_to_uuid_sample": {},
+  "go": false
+}

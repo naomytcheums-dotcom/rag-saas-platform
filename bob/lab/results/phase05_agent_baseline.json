@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-09-25T18:13:30.595328+00:00",
+  "http_status": 200,
+  "is_error": false,
+  "agent_id": "f5483d5e-1fc3-4e0e-87a1-739293958f4e",
+  "organization_id": "948f4b6e-0093-4150-b7af-a8d7b59c3235",
+  "config": {
+    "strategy": "hybrid",
+    "top_k": 5,
+    "reranker": "none",
+    "hyde": false,
+    "mmr": false,
+    "multi_query": false
+  },
+  "raw_response": "{\"agent_id\": \"f5483d5e-1fc3-4e0e-87a1-739293958f4e\", \"status\": \"created\"}",
+  "success": true
+}

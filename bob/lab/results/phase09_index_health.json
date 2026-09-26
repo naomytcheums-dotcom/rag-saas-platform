@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-09-25T18:54:32.612011+00:00",
+  "http_status": 403,
+  "total_docs_in_db": 0,
+  "status_counts": {
+    "completed": 0,
+    "processing": 0,
+    "pending": 0,
+    "failed": 0,
+    "unknown": 0
+  },
+  "index_ready": false,
+  "chunks_available": null
+}

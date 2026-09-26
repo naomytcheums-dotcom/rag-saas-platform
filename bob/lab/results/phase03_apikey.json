@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-09-25T18:13:24.582645+00:00",
+  "http_status": 200,
+  "key_id": "1c137190-b6a4-4a9f-af99-c4f221900973",
+  "key_prefix": "pk_",
+  "name": "bob-lab-mcp-key",
+  "scopes": [
+    "mcp:tools",
+    "kb:write",
+    "documents:write"
+  ],
+  "expires_at": null,
+  "api_key": "REDACTED",
+  "success": true
+}

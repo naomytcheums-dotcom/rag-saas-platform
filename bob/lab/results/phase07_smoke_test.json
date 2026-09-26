@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-25T18:38:18.962394+00:00",
+  "smoke_docs_tested": 3,
+  "passed": true,
+  "results": [
+    {
+      "logical_id": 0,
+      "path": "_llm-test.md",
+      "title": "LLM test file",
+      "http_status": 200,
+      "document_id": "aebbfa00-70e7-4383-b233-0fabdf9edc2a",
+      "success": true
+    },
+    {
+      "logical_id": 1,
+      "path": "about/index.md",
+      "title": "About",
+      "http_status": 200,
+      "document_id": "a6c04191-3e60-47c0-aae7-d14bfc629352",
+      "success": true
+    },
+    {
+      "logical_id": 2,
+      "path": "advanced/additional-responses.md",
+      "title": "Additional Responses in OpenAPI",
+      "http_status": 200,
+      "document_id": "92bd592a-74b3-48ab-9342-5d2e596c9e77",
+      "success": true
+    }
+  ]
+}

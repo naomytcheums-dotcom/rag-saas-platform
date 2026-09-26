@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-09-25T18:27:48.562513+00:00",
+  "http_status": 429,
+  "email": "bob-lab-v2@rag-saas-test.internal",
+  "full_name": "BOB-LAB-OWNER",
+  "token_type": null,
+  "expires_in": null,
+  "access_token": "REDACTED",
+  "success": false,
+  "error": {
+    "detail": "Too many attempts, try again in 2009 seconds"
+  }
+}

@@ -1,0 +1,1258 @@
+{
+  "timestamp": "2026-09-25T18:52:19.495458+00:00",
+  "total_attempted": 155,
+  "uploaded": 154,
+  "failed": 1,
+  "failed_details": [
+    {
+      "logical_id": 154,
+      "path": "virtual-environments.md",
+      "title": "Virtual Environments",
+      "http_status": null,
+      "document_id": null,
+      "success": false
+    }
+  ],
+  "all_results": [
+    {
+      "logical_id": 0,
+      "path": "_llm-test.md",
+      "title": "LLM test file",
+      "http_status": 200,
+      "document_id": "aebbfa00-70e7-4383-b233-0fabdf9edc2a",
+      "success": true
+    },
+    {
+      "logical_id": 1,
+      "path": "about/index.md",
+      "title": "About",
+      "http_status": 200,
+      "document_id": "a6c04191-3e60-47c0-aae7-d14bfc629352",
+      "success": true
+    },
+    {
+      "logical_id": 2,
+      "path": "advanced/additional-responses.md",
+      "title": "Additional Responses in OpenAPI",
+      "http_status": 200,
+      "document_id": "92bd592a-74b3-48ab-9342-5d2e596c9e77",
+      "success": true
+    },
+    {
+      "logical_id": 3,
+      "path": "advanced/additional-status-codes.md",
+      "title": "Additional Status Codes",
+      "http_status": 200,
+      "document_id": "66ab025a-a903-4df2-8bbf-de97808d7ada",
+      "success": true
+    },
+    {
+      "logical_id": 4,
+      "path": "advanced/advanced-dependencies.md",
+      "title": "Advanced Dependencies",
+      "http_status": 200,
+      "document_id": "25df0651-4b78-4b85-831e-5c37f052ea8d",
+      "success": true
+    },
+    {
+      "logical_id": 5,
+      "path": "advanced/advanced-python-types.md",
+      "title": "Advanced Python Types",
+      "http_status": 200,
+      "document_id": "296182be-ce1e-46f8-8e73-74eab116e378",
+      "success": true
+    },
+    {
+      "logical_id": 6,
+      "path": "advanced/async-tests.md",
+      "title": "Async Tests",
+      "http_status": 200,
+      "document_id": "071e6795-d9d1-444e-82e5-1b11d8f2f712",
+      "success": true
+    },
+    {
+      "logical_id": 7,
+      "path": "advanced/behind-a-proxy.md",
+      "title": "Behind a Proxy",
+      "http_status": 200,
+      "document_id": "6eb2b150-7e93-4673-8599-2dd39248038b",
+      "success": true
+    },
+    {
+      "logical_id": 8,
+      "path": "advanced/custom-response.md",
+      "title": "Custom Response - HTML, Stream, File, others",
+      "http_status": 200,
+      "document_id": "ed3eb9c1-860b-4357-85d9-1b9ce7535038",
+      "success": true
+    },
+    {
+      "logical_id": 9,
+      "path": "advanced/dataclasses.md",
+      "title": "Using Dataclasses",
+      "http_status": 200,
+      "document_id": "fd28732b-2c50-4ebc-873f-3976d8642e04",
+      "success": true
+    },
+    {
+      "logical_id": 10,
+      "path": "advanced/events.md",
+      "title": "Lifespan Events",
+      "http_status": 200,
+      "document_id": "6597b234-7356-4c47-9b61-aa65c3ccfca3",
+      "success": true
+    },
+    {
+      "logical_id": 11,
+      "path": "advanced/generate-clients.md",
+      "title": "Generating SDKs",
+      "http_status": 200,
+      "document_id": "bcd0f792-520f-4f9e-b308-8908fe08ee40",
+      "success": true
+    },
+    {
+      "logical_id": 12,
+      "path": "advanced/index.md",
+      "title": "Advanced User Guide",
+      "http_status": 200,
+      "document_id": "0f5ea06e-87cf-47ad-868f-7c3ad96bc265",
+      "success": true
+    },
+    {
+      "logical_id": 13,
+      "path": "advanced/json-base64-bytes.md",
+      "title": "JSON with Bytes as Base64",
+      "http_status": 200,
+      "document_id": "399c9cb7-7881-4f3a-80c4-3e24b789debd",
+      "success": true
+    },
+    {
+      "logical_id": 14,
+      "path": "advanced/middleware.md",
+      "title": "Advanced Middleware",
+      "http_status": 200,
+      "document_id": "baedc517-0c70-4b2a-b181-bbfc81b1c367",
+      "success": true
+    },
+    {
+      "logical_id": 15,
+      "path": "advanced/openapi-callbacks.md",
+      "title": "OpenAPI Callbacks",
+      "http_status": 200,
+      "document_id": "ff37e281-0bff-4e54-9519-b88f70054adc",
+      "success": true
+    },
+    {
+      "logical_id": 16,
+      "path": "advanced/openapi-webhooks.md",
+      "title": "OpenAPI Webhooks",
+      "http_status": 200,
+      "document_id": "cb737848-f927-48c2-9db4-0bcbadba6657",
+      "success": true
+    },
+    {
+      "logical_id": 17,
+      "path": "advanced/path-operation-advanced-configuration.md",
+      "title": "Path Operation Advanced Configuration",
+      "http_status": 200,
+      "document_id": "74452234-de03-41aa-9a91-839b072fc908",
+      "success": true
+    },
+    {
+      "logical_id": 18,
+      "path": "advanced/response-change-status-code.md",
+      "title": "Response - Change Status Code",
+      "http_status": 200,
+      "document_id": "6e30ec51-5eaa-4a1f-a545-58844306fae8",
+      "success": true
+    },
+    {
+      "logical_id": 19,
+      "path": "advanced/response-cookies.md",
+      "title": "Response Cookies",
+      "http_status": 200,
+      "document_id": "af0958d9-0be4-44fe-86ec-13f2b4d069c2",
+      "success": true
+    },
+    {
+      "logical_id": 20,
+      "path": "advanced/response-directly.md",
+      "title": "Return a Response Directly",
+      "http_status": 200,
+      "document_id": "50a78160-da28-40da-84ff-17a546ef42b2",
+      "success": true
+    },
+    {
+      "logical_id": 21,
+      "path": "advanced/response-headers.md",
+      "title": "Response Headers",
+      "http_status": 200,
+      "document_id": "4e7fbdd2-635c-4149-beb5-099a221ed2c6",
+      "success": true
+    },
+    {
+      "logical_id": 22,
+      "path": "advanced/security/http-basic-auth.md",
+      "title": "HTTP Basic Auth",
+      "http_status": 200,
+      "document_id": "413fe074-0f85-44ff-baa0-60f16f9a3839",
+      "success": true
+    },
+    {
+      "logical_id": 23,
+      "path": "advanced/security/index.md",
+      "title": "Advanced Security",
+      "http_status": 200,
+      "document_id": "e3f11396-2111-41ea-a586-3027594dda8d",
+      "success": true
+    },
+    {
+      "logical_id": 24,
+      "path": "advanced/security/oauth2-scopes.md",
+      "title": "OAuth2 scopes",
+      "http_status": 200,
+      "document_id": "ea17de4e-cf50-43d3-bd58-5cda4b0e6423",
+      "success": true
+    },
+    {
+      "logical_id": 25,
+      "path": "advanced/settings.md",
+      "title": "Settings and Environment Variables",
+      "http_status": 200,
+      "document_id": "6bd88ab9-6647-40f4-8761-4e64997d3f76",
+      "success": true
+    },
+    {
+      "logical_id": 26,
+      "path": "advanced/stream-data.md",
+      "title": "Stream Data",
+      "http_status": 200,
+      "document_id": "4c012471-3f53-4de3-a2b0-2a2d23a1d99b",
+      "success": true
+    },
+    {
+      "logical_id": 27,
+      "path": "advanced/strict-content-type.md",
+      "title": "Strict Content-Type Checking",
+      "http_status": 200,
+      "document_id": "0c873ea5-a62d-4f24-8c02-ebca80c9fb9a",
+      "success": true
+    },
+    {
+      "logical_id": 28,
+      "path": "advanced/sub-applications.md",
+      "title": "Sub Applications - Mounts",
+      "http_status": 200,
+      "document_id": "b471955d-8fc0-4add-9253-560536e19f3a",
+      "success": true
+    },
+    {
+      "logical_id": 29,
+      "path": "advanced/templates.md",
+      "title": "Templates",
+      "http_status": 200,
+      "document_id": "e745615b-d94a-4725-b565-55bb7f14f053",
+      "success": true
+    },
+    {
+      "logical_id": 30,
+      "path": "advanced/testing-dependencies.md",
+      "title": "Testing Dependencies with Overrides",
+      "http_status": 200,
+      "document_id": "2767d073-43ef-491f-a0e0-9e1489799dce",
+      "success": true
+    },
+    {
+      "logical_id": 31,
+      "path": "advanced/testing-events.md",
+      "title": "Testing Events: lifespan and startup - shutdown",
+      "http_status": 200,
+      "document_id": "4769f830-0710-453f-8f1f-343415f7f7c3",
+      "success": true
+    },
+    {
+      "logical_id": 32,
+      "path": "advanced/testing-websockets.md",
+      "title": "Testing WebSockets",
+      "http_status": 200,
+      "document_id": "aaa14ec4-5d54-4a32-96c7-e37c36cb4f64",
+      "success": true
+    },
+    {
+      "logical_id": 33,
+      "path": "advanced/using-request-directly.md",
+      "title": "Using the Request Directly",
+      "http_status": 200,
+      "document_id": "ed07f9d4-7e9f-4ca6-aede-aebf27ac07be",
+      "success": true
+    },
+    {
+      "logical_id": 34,
+      "path": "advanced/websockets.md",
+      "title": "WebSockets",
+      "http_status": 200,
+      "document_id": "9e405f9c-a190-45ec-869f-40aae5ed1a7c",
+      "success": true
+    },
+    {
+      "logical_id": 35,
+      "path": "advanced/wsgi.md",
+      "title": "Including WSGI - Flask, Django, others",
+      "http_status": 200,
+      "document_id": "48053371-82d5-41fe-8f34-84fc2d1cf03c",
+      "success": true
+    },
+    {
+      "logical_id": 36,
+      "path": "alternatives.md",
+      "title": "Alternatives, Inspiration and Comparisons",
+      "http_status": 200,
+      "document_id": "0c31dba2-5c19-4823-83a8-094848eef74c",
+      "success": true
+    },
+    {
+      "logical_id": 37,
+      "path": "async.md",
+      "title": "Concurrency and async / await",
+      "http_status": 200,
+      "document_id": "09c4856f-8b9d-4b57-b6d7-b412fa8aff5f",
+      "success": true
+    },
+    {
+      "logical_id": 38,
+      "path": "benchmarks.md",
+      "title": "Benchmarks",
+      "http_status": 200,
+      "document_id": "a6a353bb-5059-411d-ae6a-d049262c3989",
+      "success": true
+    },
+    {
+      "logical_id": 39,
+      "path": "contributing.md",
+      "title": "Contributing",
+      "http_status": 200,
+      "document_id": "a3b44edb-b07e-4a3e-9fbf-905a0819331e",
+      "success": true
+    },
+    {
+      "logical_id": 40,
+      "path": "deployment/cloud.md",
+      "title": "Deploy FastAPI on Cloud Providers",
+      "http_status": 200,
+      "document_id": "df154b81-203e-4e46-a74a-4d089ebe9ca8",
+      "success": true
+    },
+    {
+      "logical_id": 41,
+      "path": "deployment/concepts.md",
+      "title": "Deployments Concepts",
+      "http_status": 200,
+      "document_id": "1aae508f-bdef-4e17-9851-c047ce0f6307",
+      "success": true
+    },
+    {
+      "logical_id": 42,
+      "path": "deployment/docker.md",
+      "title": "FastAPI in Containers - Docker",
+      "http_status": 200,
+      "document_id": "e43acbb2-5e4a-4ecf-a743-c4968fac6432",
+      "success": true
+    },
+    {
+      "logical_id": 43,
+      "path": "deployment/fastapicloud.md",
+      "title": "FastAPI Cloud",
+      "http_status": 200,
+      "document_id": "0303ea8e-ec46-4a18-98d9-977330265003",
+      "success": true
+    },
+    {
+      "logical_id": 44,
+      "path": "deployment/https.md",
+      "title": "About HTTPS",
+      "http_status": 200,
+      "document_id": "d5dd6460-c5da-4fe3-aaac-b1746f861b26",
+      "success": true
+    },
+    {
+      "logical_id": 45,
+      "path": "deployment/index.md",
+      "title": "Deployment",
+      "http_status": 200,
+      "document_id": "a0f8a0d7-fde6-4b3a-a5af-99adeb7a3528",
+      "success": true
+    },
+    {
+      "logical_id": 46,
+      "path": "deployment/manually.md",
+      "title": "Run a Server Manually",
+      "http_status": 200,
+      "document_id": "28c25a40-00eb-42b5-8e00-9b70e4b03592",
+      "success": true
+    },
+    {
+      "logical_id": 47,
+      "path": "deployment/server-workers.md",
+      "title": "Server Workers - Uvicorn with Workers",
+      "http_status": 200,
+      "document_id": "23f3f9fe-2e5a-4dc5-b206-2e4908f7a697",
+      "success": true
+    },
+    {
+      "logical_id": 48,
+      "path": "deployment/versions.md",
+      "title": "About FastAPI versions",
+      "http_status": 200,
+      "document_id": "0e50c46d-38da-4c26-87fe-e59c78a57c34",
+      "success": true
+    },
+    {
+      "logical_id": 49,
+      "path": "editor-support.md",
+      "title": "Editor Support",
+      "http_status": 200,
+      "document_id": "53e13b22-7c69-4324-a444-cbcae2b12404",
+      "success": true
+    },
+    {
+      "logical_id": 50,
+      "path": "environment-variables.md",
+      "title": "Environment Variables",
+      "http_status": 200,
+      "document_id": "c1f4e43e-e804-4e74-a55a-5e554e2c1fd1",
+      "success": true
+    },
+    {
+      "logical_id": 51,
+      "path": "external-links.md",
+      "title": "External Links",
+      "http_status": 200,
+      "document_id": "17ab4c50-8f16-4a2f-bb67-657eeafe00c2",
+      "success": true
+    },
+    {
+      "logical_id": 52,
+      "path": "fastapi-cli.md",
+      "title": "FastAPI CLI",
+      "http_status": 200,
+      "document_id": "3506e1bc-e920-4dd3-bb4b-9df79c9a1ae2",
+      "success": true
+    },
+    {
+      "logical_id": 53,
+      "path": "fastapi-people.md",
+      "title": "FastAPI People",
+      "http_status": 200,
+      "document_id": "f3cf21a2-c05d-4147-8dc7-7e43cf06a1a8",
+      "success": true
+    },
+    {
+      "logical_id": 54,
+      "path": "features.md",
+      "title": "Features",
+      "http_status": 200,
+      "document_id": "a5eb82fb-2422-4ccc-ae06-be153c88ae0d",
+      "success": true
+    },
+    {
+      "logical_id": 55,
+      "path": "help-fastapi.md",
+      "title": "Help",
+      "http_status": 200,
+      "document_id": "f00ba521-9f8c-4de6-892a-1a3179ee7143",
+      "success": true
+    },
+    {
+      "logical_id": 56,
+      "path": "history-design-future.md",
+      "title": "History, Design and Future",
+      "http_status": 200,
+      "document_id": "e1afd6f2-8c8b-4238-bf92-5f17db6a74c6",
+      "success": true
+    },
+    {
+      "logical_id": 57,
+      "path": "how-to/authentication-error-status-code.md",
+      "title": "Use Old 403 Authentication Error Status Codes",
+      "http_status": 200,
+      "document_id": "90e787ee-6f71-41ea-97f6-8b4f6aca3fbe",
+      "success": true
+    },
+    {
+      "logical_id": 58,
+      "path": "how-to/conditional-openapi.md",
+      "title": "Conditional OpenAPI",
+      "http_status": 200,
+      "document_id": "f27d7e7e-d53c-4572-8382-18625221ae3f",
+      "success": true
+    },
+    {
+      "logical_id": 59,
+      "path": "how-to/configure-swagger-ui.md",
+      "title": "Configure Swagger UI",
+      "http_status": 200,
+      "document_id": "abd98a0e-3fe8-43fb-8787-2551f027f04f",
+      "success": true
+    },
+    {
+      "logical_id": 60,
+      "path": "how-to/custom-docs-ui-assets.md",
+      "title": "Custom Docs UI Static Assets (Self-Hosting)",
+      "http_status": 200,
+      "document_id": "d609a1a7-6ef2-45cf-9595-612e210ed2ee",
+      "success": true
+    },
+    {
+      "logical_id": 61,
+      "path": "how-to/custom-request-and-route.md",
+      "title": "Custom Request and APIRoute class",
+      "http_status": 200,
+      "document_id": "e45fc42e-88d7-4705-84e4-c729a42117eb",
+      "success": true
+    },
+    {
+      "logical_id": 62,
+      "path": "how-to/extending-openapi.md",
+      "title": "Extending OpenAPI",
+      "http_status": 200,
+      "document_id": "1269c51d-0834-45e8-afdb-13dabebae642",
+      "success": true
+    },
+    {
+      "logical_id": 63,
+      "path": "how-to/general.md",
+      "title": "General - How To - Recipes",
+      "http_status": 200,
+      "document_id": "93ac7096-b96d-4429-a6eb-ac9fb88169c9",
+      "success": true
+    },
+    {
+      "logical_id": 64,
+      "path": "how-to/graphql.md",
+      "title": "GraphQL",
+      "http_status": 200,
+      "document_id": "ab1c656d-d424-484c-bfa7-75b6c6f8ceb6",
+      "success": true
+    },
+    {
+      "logical_id": 65,
+      "path": "how-to/index.md",
+      "title": "How To - Recipes",
+      "http_status": 200,
+      "document_id": "0bef05e5-7869-43f8-bf81-a605ed2f7714",
+      "success": true
+    },
+    {
+      "logical_id": 66,
+      "path": "how-to/migrate-from-pydantic-v1-to-pydantic-v2.md",
+      "title": "Migrate from Pydantic v1 to Pydantic v2",
+      "http_status": 200,
+      "document_id": "18769516-d20b-4605-b270-a69b6b01ad4f",
+      "success": true
+    },
+    {
+      "logical_id": 67,
+      "path": "how-to/separate-openapi-schemas.md",
+      "title": "Separate OpenAPI Schemas for Input and Output or Not",
+      "http_status": 200,
+      "document_id": "65b88790-8e28-4ed1-826b-5aafc304aefe",
+      "success": true
+    },
+    {
+      "logical_id": 68,
+      "path": "how-to/testing-database.md",
+      "title": "Testing a Database",
+      "http_status": 200,
+      "document_id": "3b4c6cf5-2ee7-4891-b587-f43eddac486e",
+      "success": true
+    },
+    {
+      "logical_id": 69,
+      "path": "index.md",
+      "title": "FastAPI",
+      "http_status": 200,
+      "document_id": "5df8e0b8-d567-4d7f-9837-e369c3d53cf1",
+      "success": true
+    },
+    {
+      "logical_id": 70,
+      "path": "learn/index.md",
+      "title": "Learn",
+      "http_status": 200,
+      "document_id": "16bfade8-d8af-4e05-858d-a9ef4af5376f",
+      "success": true
+    },
+    {
+      "logical_id": 71,
+      "path": "management.md",
+      "title": "Repository Management",
+      "http_status": 200,
+      "document_id": "22bdc6f3-01e6-4147-8306-270ae0afccbc",
+      "success": true
+    },
+    {
+      "logical_id": 72,
+      "path": "newsletter.md",
+      "title": "FastAPI and friends newsletter",
+      "http_status": 200,
+      "document_id": "e9825f82-912d-4b31-a0fa-7015f0158ddb",
+      "success": true
+    },
+    {
+      "logical_id": 73,
+      "path": "project-generation.md",
+      "title": "Full Stack FastAPI Template",
+      "http_status": 200,
+      "document_id": "99fb6ad2-0c15-4c5a-aed3-8da47a4bd0f0",
+      "success": true
+    },
+    {
+      "logical_id": 74,
+      "path": "python-types.md",
+      "title": "Python Types Intro",
+      "http_status": 200,
+      "document_id": "0fd41eaa-e8fd-42e1-956e-0664f8b83203",
+      "success": true
+    },
+    {
+      "logical_id": 75,
+      "path": "reference/apirouter.md",
+      "title": "`APIRouter` class",
+      "http_status": 200,
+      "document_id": "76345476-0ab5-40c3-a271-e9bb9ebd3255",
+      "success": true
+    },
+    {
+      "logical_id": 76,
+      "path": "reference/background.md",
+      "title": "Background Tasks - `BackgroundTasks`",
+      "http_status": 200,
+      "document_id": "4b5b1ab3-c36a-40f8-98a0-63cf402eb96a",
+      "success": true
+    },
+    {
+      "logical_id": 77,
+      "path": "reference/dependencies.md",
+      "title": "Dependencies - `Depends()` and `Security()`",
+      "http_status": 200,
+      "document_id": "b7af8c30-ecdc-45b3-9d28-ca1a7fe46646",
+      "success": true
+    },
+    {
+      "logical_id": 78,
+      "path": "reference/encoders.md",
+      "title": "Encoders - `jsonable_encoder`",
+      "http_status": 200,
+      "document_id": "5f5d3335-58c9-45ce-ab14-81045d7c38e8",
+      "success": true
+    },
+    {
+      "logical_id": 79,
+      "path": "reference/exceptions.md",
+      "title": "Exceptions - `HTTPException` and `WebSocketException`",
+      "http_status": 200,
+      "document_id": "0edf8c68-dddf-4dbc-bb9a-9e00ddbe3f43",
+      "success": true
+    },
+    {
+      "logical_id": 80,
+      "path": "reference/fastapi.md",
+      "title": "`FastAPI` class",
+      "http_status": 200,
+      "document_id": "4e0610a0-4ff6-4d68-b614-e418b14d8620",
+      "success": true
+    },
+    {
+      "logical_id": 81,
+      "path": "reference/httpconnection.md",
+      "title": "`HTTPConnection` class",
+      "http_status": 200,
+      "document_id": "6b8499d3-7d3e-4514-91f3-34dfccbbb9b3",
+      "success": true
+    },
+    {
+      "logical_id": 82,
+      "path": "reference/index.md",
+      "title": "Reference",
+      "http_status": 200,
+      "document_id": "94413769-221f-4495-8444-4bb97ab1b133",
+      "success": true
+    },
+    {
+      "logical_id": 83,
+      "path": "reference/middleware.md",
+      "title": "Middleware",
+      "http_status": 200,
+      "document_id": "5f87296a-3013-43f8-a6d9-9775979204bf",
+      "success": true
+    },
+    {
+      "logical_id": 84,
+      "path": "reference/openapi/docs.md",
+      "title": "OpenAPI `docs`",
+      "http_status": 200,
+      "document_id": "36d545ea-46c9-4626-8b60-0902ba65b1f3",
+      "success": true
+    },
+    {
+      "logical_id": 85,
+      "path": "reference/openapi/index.md",
+      "title": "OpenAPI",
+      "http_status": 200,
+      "document_id": "0bd11154-4bad-4f7d-9d32-926d34f497c7",
+      "success": true
+    },
+    {
+      "logical_id": 86,
+      "path": "reference/openapi/models.md",
+      "title": "OpenAPI `models`",
+      "http_status": 200,
+      "document_id": "eb6581a2-6f67-438d-923c-f62c90cd5ae5",
+      "success": true
+    },
+    {
+      "logical_id": 87,
+      "path": "reference/parameters.md",
+      "title": "Request Parameters",
+      "http_status": 200,
+      "document_id": "dfc9d05c-a97b-476f-8726-55312c299cb4",
+      "success": true
+    },
+    {
+      "logical_id": 88,
+      "path": "reference/request.md",
+      "title": "`Request` class",
+      "http_status": 200,
+      "document_id": "cd261fd2-fe7e-4e1f-8bcc-9d9d01ed06c3",
+      "success": true
+    },
+    {
+      "logical_id": 89,
+      "path": "reference/response.md",
+      "title": "`Response` class",
+      "http_status": 200,
+      "document_id": "274b54fa-97e6-4bb9-be83-cbe4ba4fa571",
+      "success": true
+    },
+    {
+      "logical_id": 90,
+      "path": "reference/responses.md",
+      "title": "Custom Response Classes - File, HTML, Redirect, Streaming, etc.",
+      "http_status": 200,
+      "document_id": "c3771c61-11a6-48fc-8d45-c18cf14c2f9e",
+      "success": true
+    },
+    {
+      "logical_id": 91,
+      "path": "reference/security/index.md",
+      "title": "Security Tools",
+      "http_status": 200,
+      "document_id": "8e23abc5-28f5-4edd-9615-fe08b28d5bb0",
+      "success": true
+    },
+    {
+      "logical_id": 92,
+      "path": "reference/sse.md",
+      "title": "Server-Sent Events - `EventSourceResponse` and `ServerSentEvent`",
+      "http_status": 200,
+      "document_id": "956e277c-7ca3-4dba-8917-f9fea82fb23d",
+      "success": true
+    },
+    {
+      "logical_id": 93,
+      "path": "reference/staticfiles.md",
+      "title": "Static Files - `StaticFiles`",
+      "http_status": 200,
+      "document_id": "5dd136db-4d20-4a9f-b7f7-748b1b24ae81",
+      "success": true
+    },
+    {
+      "logical_id": 94,
+      "path": "reference/status.md",
+      "title": "Status Codes",
+      "http_status": 200,
+      "document_id": "1978fea5-8562-4904-8a3e-1ba787c0e57e",
+      "success": true
+    },
+    {
+      "logical_id": 95,
+      "path": "reference/templating.md",
+      "title": "Templating - `Jinja2Templates`",
+      "http_status": 200,
+      "document_id": "00f286f9-a0f7-4784-837e-a5d7bc987609",
+      "success": true
+    },
+    {
+      "logical_id": 96,
+      "path": "reference/testclient.md",
+      "title": "Test Client - `TestClient`",
+      "http_status": 200,
+      "document_id": "f6d783b8-4792-48b5-8cf1-715673972b0f",
+      "success": true
+    },
+    {
+      "logical_id": 97,
+      "path": "reference/uploadfile.md",
+      "title": "`UploadFile` class",
+      "http_status": 200,
+      "document_id": "c706de33-39ee-47f2-b7ba-fa73cc5a9113",
+      "success": true
+    },
+    {
+      "logical_id": 98,
+      "path": "reference/websockets.md",
+      "title": "WebSockets",
+      "http_status": 200,
+      "document_id": "784a3015-8dbc-4cfb-a7ad-182f37810649",
+      "success": true
+    },
+    {
+      "logical_id": 99,
+      "path": "release-notes.md",
+      "title": "Release Notes",
+      "http_status": 200,
+      "document_id": "b9599cbf-f3be-4d41-9adc-1283dbdef4c9",
+      "success": true
+    },
+    {
+      "logical_id": 100,
+      "path": "resources/index.md",
+      "title": "Resources",
+      "http_status": 200,
+      "document_id": "8a5ad718-d80b-4041-96e8-dd1bfea203aa",
+      "success": true
+    },
+    {
+      "logical_id": 101,
+      "path": "translation-banner.md",
+      "title": "translation-banner",
+      "http_status": 200,
+      "document_id": "50ed6982-acd9-4e9c-a048-782fc915e0d4",
+      "success": true
+    },
+    {
+      "logical_id": 102,
+      "path": "translations.md",
+      "title": "Translations",
+      "http_status": 200,
+      "document_id": "0612869a-b79a-4a49-8f2b-678d5c457473",
+      "success": true
+    },
+    {
+      "logical_id": 103,
+      "path": "tutorial/background-tasks.md",
+      "title": "Background Tasks",
+      "http_status": 200,
+      "document_id": "321167db-4b28-48b7-8530-67b7d0c0ab55",
+      "success": true
+    },
+    {
+      "logical_id": 104,
+      "path": "tutorial/bigger-applications.md",
+      "title": "Bigger Applications - Multiple Files",
+      "http_status": 200,
+      "document_id": "91dd707f-8160-4a23-9b94-fe0ba5be868d",
+      "success": true
+    },
+    {
+      "logical_id": 105,
+      "path": "tutorial/body-fields.md",
+      "title": "Body - Fields",
+      "http_status": 200,
+      "document_id": "a3d3b53c-4c07-42ac-b75e-a68a6be8a76d",
+      "success": true
+    },
+    {
+      "logical_id": 106,
+      "path": "tutorial/body-multiple-params.md",
+      "title": "Body - Multiple Parameters",
+      "http_status": 200,
+      "document_id": "6919c0a9-553a-44d9-8739-1a84c3df5c5b",
+      "success": true
+    },
+    {
+      "logical_id": 107,
+      "path": "tutorial/body-nested-models.md",
+      "title": "Body - Nested Models",
+      "http_status": 200,
+      "document_id": "994ec268-cd82-499f-8e2f-de9509bc59fb",
+      "success": true
+    },
+    {
+      "logical_id": 108,
+      "path": "tutorial/body-updates.md",
+      "title": "Body - Updates",
+      "http_status": 200,
+      "document_id": "f46fd177-0fe6-4fd2-be4d-8382437f31c0",
+      "success": true
+    },
+    {
+      "logical_id": 109,
+      "path": "tutorial/body.md",
+      "title": "Request Body",
+      "http_status": 200,
+      "document_id": "34276d6a-6b3f-4812-9e23-9c259789eace",
+      "success": true
+    },
+    {
+      "logical_id": 110,
+      "path": "tutorial/cookie-param-models.md",
+      "title": "Cookie Parameter Models",
+      "http_status": 200,
+      "document_id": "c3fdd0ae-5bf2-4607-a0e3-53c0b821cfa4",
+      "success": true
+    },
+    {
+      "logical_id": 111,
+      "path": "tutorial/cookie-params.md",
+      "title": "Cookie Parameters",
+      "http_status": 200,
+      "document_id": "e41b860c-86f3-4eac-b61f-71c0a180039c",
+      "success": true
+    },
+    {
+      "logical_id": 112,
+      "path": "tutorial/cors.md",
+      "title": "CORS (Cross-Origin Resource Sharing)",
+      "http_status": 200,
+      "document_id": "d9cbbbc2-7202-4ddb-8eff-f863e54f0c53",
+      "success": true
+    },
+    {
+      "logical_id": 113,
+      "path": "tutorial/debugging.md",
+      "title": "Debugging",
+      "http_status": 200,
+      "document_id": "ff076666-fdce-4f22-b298-60717ae05886",
+      "success": true
+    },
+    {
+      "logical_id": 114,
+      "path": "tutorial/dependencies/classes-as-dependencies.md",
+      "title": "Classes as Dependencies",
+      "http_status": 200,
+      "document_id": "236a6a92-8d2e-4c87-98c2-e78f5a21538e",
+      "success": true
+    },
+    {
+      "logical_id": 115,
+      "path": "tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+      "title": "Dependencies in path operation decorators",
+      "http_status": 200,
+      "document_id": "e78c2c50-c6e7-4ab1-87e4-364c6380d3a1",
+      "success": true
+    },
+    {
+      "logical_id": 116,
+      "path": "tutorial/dependencies/dependencies-with-yield.md",
+      "title": "Dependencies with yield",
+      "http_status": 200,
+      "document_id": "6fcd7c31-f9f8-40dd-82fd-0f12168fedb8",
+      "success": true
+    },
+    {
+      "logical_id": 117,
+      "path": "tutorial/dependencies/global-dependencies.md",
+      "title": "Global Dependencies",
+      "http_status": 200,
+      "document_id": "57319848-77a1-4a4f-8940-f1c6b0822403",
+      "success": true
+    },
+    {
+      "logical_id": 118,
+      "path": "tutorial/dependencies/index.md",
+      "title": "Dependencies",
+      "http_status": 200,
+      "document_id": "9f15e168-56d6-45d6-b655-10e5c8447fb8",
+      "success": true
+    },
+    {
+      "logical_id": 119,
+      "path": "tutorial/dependencies/sub-dependencies.md",
+      "title": "Sub-dependencies",
+      "http_status": 200,
+      "document_id": "885b9884-7b43-46f6-8baa-ac8fd4a06858",
+      "success": true
+    },
+    {
+      "logical_id": 120,
+      "path": "tutorial/encoder.md",
+      "title": "JSON Compatible Encoder",
+      "http_status": 200,
+      "document_id": "9ed49606-6485-4d80-b30e-554976517fe7",
+      "success": true
+    },
+    {
+      "logical_id": 121,
+      "path": "tutorial/extra-data-types.md",
+      "title": "Extra Data Types",
+      "http_status": 200,
+      "document_id": "9c349d55-2abe-4148-90d8-54c127498a2a",
+      "success": true
+    },
+    {
+      "logical_id": 122,
+      "path": "tutorial/extra-models.md",
+      "title": "Extra Models",
+      "http_status": 200,
+      "document_id": "6f053149-4c2d-47e7-982b-38753e1292ae",
+      "success": true
+    },
+    {
+      "logical_id": 123,
+      "path": "tutorial/first-steps.md",
+      "title": "First Steps",
+      "http_status": 200,
+      "document_id": "664be2c9-543e-4fa3-a1d8-787e8063078a",
+      "success": true
+    },
+    {
+      "logical_id": 124,
+      "path": "tutorial/frontend.md",
+      "title": "Frontend",
+      "http_status": 200,
+      "document_id": "f0a0bc85-b1b0-4626-a7dd-71f9ad9b5f2d",
+      "success": true
+    },
+    {
+      "logical_id": 125,
+      "path": "tutorial/handling-errors.md",
+      "title": "Handling Errors",
+      "http_status": 200,
+      "document_id": "80286441-8940-4dcb-a051-a66312af4061",
+      "success": true
+    },
+    {
+      "logical_id": 126,
+      "path": "tutorial/header-param-models.md",
+      "title": "Header Parameter Models",
+      "http_status": 200,
+      "document_id": "48ac20b1-832f-4463-9a51-b50e9506561b",
+      "success": true
+    },
+    {
+      "logical_id": 127,
+      "path": "tutorial/header-params.md",
+      "title": "Header Parameters",
+      "http_status": 200,
+      "document_id": "2c34abb6-0b7c-4916-a167-77bc042afa35",
+      "success": true
+    },
+    {
+      "logical_id": 128,
+      "path": "tutorial/index.md",
+      "title": "Tutorial - User Guide",
+      "http_status": 200,
+      "document_id": "ed53459b-cb18-455d-93ad-88c499b13205",
+      "success": true
+    },
+    {
+      "logical_id": 129,
+      "path": "tutorial/metadata.md",
+      "title": "Metadata and Docs URLs",
+      "http_status": 200,
+      "document_id": "afcd7d4a-e234-476f-988f-008c788cfccf",
+      "success": true
+    },
+    {
+      "logical_id": 130,
+      "path": "tutorial/middleware.md",
+      "title": "Middleware",
+      "http_status": 200,
+      "document_id": "ce23d994-88ab-4240-8a5f-77e78a65a216",
+      "success": true
+    },
+    {
+      "logical_id": 131,
+      "path": "tutorial/path-operation-configuration.md",
+      "title": "Path Operation Configuration",
+      "http_status": 200,
+      "document_id": "52229490-af77-4f77-802c-429745c311dd",
+      "success": true
+    },
+    {
+      "logical_id": 132,
+      "path": "tutorial/path-params-numeric-validations.md",
+      "title": "Path Parameters and Numeric Validations",
+      "http_status": 200,
+      "document_id": "4c627ae4-db95-40c7-8d8a-50e664bf88a0",
+      "success": true
+    },
+    {
+      "logical_id": 133,
+      "path": "tutorial/path-params.md",
+      "title": "Path Parameters",
+      "http_status": 200,
+      "document_id": "c7b3379e-d323-40be-9442-119b75966600",
+      "success": true
+    },
+    {
+      "logical_id": 134,
+      "path": "tutorial/query-param-models.md",
+      "title": "Query Parameter Models",
+      "http_status": 200,
+      "document_id": "a456a724-8bce-4d0a-996c-291f66fc92ba",
+      "success": true
+    },
+    {
+      "logical_id": 135,
+      "path": "tutorial/query-params-str-validations.md",
+      "title": "Query Parameters and String Validations",
+      "http_status": 200,
+      "document_id": "7b80f925-93ee-42d1-9b03-7cdfcebecdbb",
+      "success": true
+    },
+    {
+      "logical_id": 136,
+      "path": "tutorial/query-params.md",
+      "title": "Query Parameters",
+      "http_status": 200,
+      "document_id": "66d544ee-89a9-4a26-9525-bd475c2a34ec",
+      "success": true
+    },
+    {
+      "logical_id": 137,
+      "path": "tutorial/request-files.md",
+      "title": "Request Files",
+      "http_status": 200,
+      "document_id": "edd39b64-cfff-4d4b-8183-6bc26e60256f",
+      "success": true
+    },
+    {
+      "logical_id": 138,
+      "path": "tutorial/request-form-models.md",
+      "title": "Form Models",
+      "http_status": 200,
+      "document_id": "5a46b4e4-7bf2-4b03-bd48-5b8277d1fabd",
+      "success": true
+    },
+    {
+      "logical_id": 139,
+      "path": "tutorial/request-forms-and-files.md",
+      "title": "Request Forms and Files",
+      "http_status": 200,
+      "document_id": "18859987-6d40-48bb-8940-50a5f6289c39",
+      "success": true
+    },
+    {
+      "logical_id": 140,
+      "path": "tutorial/request-forms.md",
+      "title": "Form Data",
+      "http_status": 200,
+      "document_id": "21f7782c-2e87-484f-8446-29614c7d86f9",
+      "success": true
+    },
+    {
+      "logical_id": 141,
+      "path": "tutorial/response-model.md",
+      "title": "Response Model - Return Type",
+      "http_status": 200,
+      "document_id": "6e344416-78b0-4154-961b-c68f08e2cd02",
+      "success": true
+    },
+    {
+      "logical_id": 142,
+      "path": "tutorial/response-status-code.md",
+      "title": "Response Status Code",
+      "http_status": 200,
+      "document_id": "99d77a33-3769-4d88-b3fb-482e1150d7d9",
+      "success": true
+    },
+    {
+      "logical_id": 143,
+      "path": "tutorial/schema-extra-example.md",
+      "title": "Declare Request Example Data",
+      "http_status": 200,
+      "document_id": "20674b4d-f59c-4445-8ed7-211280318051",
+      "success": true
+    },
+    {
+      "logical_id": 144,
+      "path": "tutorial/security/first-steps.md",
+      "title": "Security - First Steps",
+      "http_status": 200,
+      "document_id": "3af26d6f-f240-4855-8b00-0f1c8e263b61",
+      "success": true
+    },
+    {
+      "logical_id": 145,
+      "path": "tutorial/security/get-current-user.md",
+      "title": "Get Current User",
+      "http_status": 200,
+      "document_id": "d35af187-4983-46d6-a0d6-2c10f0758fc5",
+      "success": true
+    },
+    {
+      "logical_id": 146,
+      "path": "tutorial/security/index.md",
+      "title": "Security",
+      "http_status": 200,
+      "document_id": "38aaca4b-cc9f-4398-a705-1e04bfe8711a",
+      "success": true
+    },
+    {
+      "logical_id": 147,
+      "path": "tutorial/security/oauth2-jwt.md",
+      "title": "OAuth2 with Password (and hashing), Bearer with JWT tokens",
+      "http_status": 200,
+      "document_id": "82848964-b0e9-421d-8bb4-20dcf5b76df3",
+      "success": true
+    },
+    {
+      "logical_id": 148,
+      "path": "tutorial/security/simple-oauth2.md",
+      "title": "Simple OAuth2 with Password and Bearer",
+      "http_status": 200,
+      "document_id": "8cfeead1-de29-4125-9f08-86c1f2abb298",
+      "success": true
+    },
+    {
+      "logical_id": 149,
+      "path": "tutorial/server-sent-events.md",
+      "title": "Server-Sent Events (SSE)",
+      "http_status": 200,
+      "document_id": "b39b32f2-55dc-4cc9-9e93-14a2de0cee4f",
+      "success": true
+    },
+    {
+      "logical_id": 150,
+      "path": "tutorial/sql-databases.md",
+      "title": "SQL (Relational) Databases",
+      "http_status": 200,
+      "document_id": "bd50ba3b-bea2-4647-aaeb-6bf5fca9db95",
+      "success": true
+    },
+    {
+      "logical_id": 151,
+      "path": "tutorial/static-files.md",
+      "title": "Static Files",
+      "http_status": 200,
+      "document_id": "4671545d-0d5c-4527-b06d-3dd0fdb1ac05",
+      "success": true
+    },
+    {
+      "logical_id": 152,
+      "path": "tutorial/stream-json-lines.md",
+      "title": "Stream JSON Lines",
+      "http_status": 200,
+      "document_id": "e218f8bb-f482-47d6-8387-b05075a233f0",
+      "success": true
+    },
+    {
+      "logical_id": 153,
+      "path": "tutorial/testing.md",
+      "title": "Testing",
+      "http_status": 200,
+      "document_id": "197dd273-6150-470e-a444-2c52605f36a1",
+      "success": true
+    },
+    {
+      "logical_id": 154,
+      "path": "virtual-environments.md",
+      "title": "Virtual Environments",
+      "http_status": null,
+      "document_id": null,
+      "success": false
+    }
+  ]
+}

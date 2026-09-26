@@ -1,0 +1,1 @@
+{"content":[{"type":"text","text":"Tool execution failed: Table 'organizations' is not in the real, configured allowlist (['documents', 'document_chunks', 'conversations'])"}],"is_error":true}
