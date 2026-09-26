@@ -47,5 +47,9 @@ def make_async_engine():
         pool_timeout=_pool_timeout,
         connect_args=transaction_connect_args(),
     )
-    print(f"[RUNTIME_DB_CONFIG] source=TRANSACTION_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={engine.url.port}", flush=True)
+    try:
+        _port = engine.url.port
+    except Exception as _exc:
+        _port = f"<err>"
+    print(f"[RUNTIME_DB_CONFIG] source=TRANSACTION_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={_port}", flush=True)
     return engine

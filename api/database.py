@@ -60,7 +60,11 @@ engine = create_async_engine(
     connect_args=_engine_connect_args,
 )
 
-print(f"[RUNTIME_DB_CONFIG] source=MAIN_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={engine.url.port}", flush=True)
+try:
+    _port = engine.url.port
+except Exception as _exc:
+    _port = f"<err>"
+print(f"[RUNTIME_DB_CONFIG] source=MAIN_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={_port}", flush=True)
 
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 
