@@ -189,13 +189,22 @@ async def run_evaluation(
         pass
     latency_ms = int((time.perf_counter() - started) * 1000)
 
+    print(f'[RAG_TRACE] question_id={question_id}', flush=True)
+    print(f'[RAG_TRACE] chunks_count={len(chunks)}', flush=True)
+    print(f'[RAG_TRACE] answer_len={len(answer)}', flush=True)
+    print(f'[RAG_TRACE] latency_ms={latency_ms}', flush=True)
+    for i, c in enumerate(chunks[:5]):
+        print(f'[RAG_TRACE] chunk[{i}] id={c.get("chunk_id")} doc={c.get("document_id")} score={c.get("score")}', flush=True)
+
     result = EvaluationResult(
         question_id=question_id, agent_id=agent_id, model_config_json=model_config or {},
         retrieved_documents=_deduplicate_documents(chunks), retrieved_chunks=chunks, actual_answer=answer,
         metrics=initial_metrics, latency_ms=latency_ms,
     )
+    print(f'[RAG_TRACE_AFTER_CREATE] retrieved_docs={len(result.retrieved_documents or [])} retrieved_chunks={len(result.retrieved_chunks or [])} answer_len={len(result.actual_answer or "")}', flush=True)
     db.add(result)
     await db.flush()
+    print(f'[RAG_TRACE_AFTER_FLUSH] result.id={result.id} retrieved_docs={len(result.retrieved_documents or [])} retrieved_chunks={len(result.retrieved_chunks or [])}', flush=True)
 
     await extend_evaluation_metrics(db, question_id)
     await db.refresh(result)
