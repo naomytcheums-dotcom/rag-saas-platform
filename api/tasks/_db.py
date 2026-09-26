@@ -31,10 +31,16 @@ def make_async_engine():
     """Create a properly-configured async engine for a Celery task."""
     from sqlalchemy.ext.asyncio import create_async_engine
 
+    # PgBouncer (Supabase port 6543, DATABASE_URL_TRANSACTION) pools
+    # connections server-side, so the client-side pool can safely hold
+    # more than one connection. pool_size=1 + max_overflow=0 was causing
+    # QueuePool timeouts whenever run_eval_benchmark held the single
+    # connection during a long retrieval, silently producing empty
+    # EvaluationResult rows (retrieved_chunks=0, recall=0).
     return create_async_engine(
         transaction_url(),
         pool_pre_ping=True,
-        pool_size=1,
-        max_overflow=0,
+        pool_size=5,
+        max_overflow=10,
         connect_args=transaction_connect_args(),
     )

@@ -45,8 +45,8 @@ if settings.DATABASE_URL_TRANSACTION:
 engine = create_async_engine(
     _engine_url,
     pool_pre_ping=True,
-    pool_size=1,
-    max_overflow=0,
+    pool_size=5,
+    max_overflow=10,
     connect_args=_engine_connect_args,
 )
 
