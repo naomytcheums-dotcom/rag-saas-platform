@@ -42,13 +42,25 @@ if settings.DATABASE_URL_TRANSACTION:
         "prepared_statement_cache_size": 0,
     }
 
+import os as _os
+
+# Hackathon fix: allow forcing pool_size/max_overflow via env vars so
+# Render Free can override the defaults without a code change. The
+# default remains 5/10 as patched above.
+_pool_size = int(_os.environ.get("SQLALCHEMY_POOL_SIZE", "5"))
+_max_overflow = int(_os.environ.get("SQLALCHEMY_MAX_OVERFLOW", "10"))
+_pool_timeout = int(_os.environ.get("SQLALCHEMY_POOL_TIMEOUT", "60"))
+
 engine = create_async_engine(
     _engine_url,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=_pool_size,
+    max_overflow=_max_overflow,
+    pool_timeout=_pool_timeout,
     connect_args=_engine_connect_args,
 )
+
+print(f"[RUNTIME_DB_CONFIG] source=MAIN_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={engine.url.port}", flush=True)
 
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 

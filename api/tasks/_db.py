@@ -33,14 +33,19 @@ def make_async_engine():
 
     # PgBouncer (Supabase port 6543, DATABASE_URL_TRANSACTION) pools
     # connections server-side, so the client-side pool can safely hold
-    # more than one connection. pool_size=1 + max_overflow=0 was causing
-    # QueuePool timeouts whenever run_eval_benchmark held the single
-    # connection during a long retrieval, silently producing empty
-    # EvaluationResult rows (retrieved_chunks=0, recall=0).
-    return create_async_engine(
+    # more than one connection. Override via env vars for Render Free.
+    import os as _os
+    _pool_size = int(_os.environ.get("SQLALCHEMY_POOL_SIZE", "5"))
+    _max_overflow = int(_os.environ.get("SQLALCHEMY_MAX_OVERFLOW", "10"))
+    _pool_timeout = int(_os.environ.get("SQLALCHEMY_POOL_TIMEOUT", "60"))
+
+    engine = create_async_engine(
         transaction_url(),
         pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=_pool_size,
+        max_overflow=_max_overflow,
+        pool_timeout=_pool_timeout,
         connect_args=transaction_connect_args(),
     )
+    print(f"[RUNTIME_DB_CONFIG] source=TRANSACTION_DATABASE pool_size={_pool_size} max_overflow={_max_overflow} pool_timeout={_pool_timeout} port={engine.url.port}", flush=True)
+    return engine
