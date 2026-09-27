@@ -1,0 +1,16 @@
+{
+  "description": "GUARDIAN benchmark final on Bob's real documents",
+  "organization_id": "948f4b6e-0093-4150-b7af-a8d7b59c3235",
+  "agent_id": "457e8ef4-54cc-41e8-9287-3fe44e67407f",
+  "dataset_id": "5b52294e-fad5-4add-bab3-8a5e309f180e",
+  "job_id": "cbd07345-e6cd-4a67-982d-31c008d5bcc0",
+  "total_questions": 28,
+  "evaluated_questions": 26,
+  "recall_at_5": 0.9231,
+  "mrr": 0.7660,
+  "ndcg_at_5": 0.7968,
+  "questions_ok": 24,
+  "change_lab": "score_threshold = 0.0 (was too high by default)",
+  "improvement": "+0.33 from baseline",
+  "notes": "2 questions failed due to network errors (ConnectionDoesNotExistError), not retrieval failures."
+}
