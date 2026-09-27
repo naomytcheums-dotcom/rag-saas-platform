@@ -1,0 +1,22 @@
+{
+  "description": "Global GUARDIAN metrics on Bob's real documents (50 questions total)",
+  "organization_id": "948f4b6e-0093-4150-b7af-a8d7b59c3235",
+  "agent_id": "457e8ef4-54cc-41e8-9287-3fe44e67407f",
+  "part_1": {
+    "job_id": "7776f206-95f7-40b7-9bb2-8a7cfe0f7a2f",
+    "questions_evaluated": 22,
+    "recall_at_5": 0.5909
+  },
+  "part_2": {
+    "job_id": "cbd07345-e6cd-4a67-982d-31c008d5bcc0",
+    "questions_evaluated": 26,
+    "recall_at_5": 0.9231,
+    "mrr": 0.7660,
+    "ndcg_at_5": 0.7968
+  },
+  "global": {
+    "questions_evaluated": 48,
+    "recall_at_5": 0.7708,
+    "questions_ok": 37
+  }
+}
