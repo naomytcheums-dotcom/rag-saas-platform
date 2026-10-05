@@ -103,11 +103,18 @@ docker compose -f docker-compose.selfhosted.yml up -d
 
 ```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements-api.txt
+pip install -r requirements-api.txt -r requirements-optional.txt
 alembic upgrade head
 uvicorn api.main:app --reload
 cd frontend && npm install && npm run dev
 ```
+
+The API image installs the lazily loaded integrations in
+`requirements-optional.txt` by default. A minimal image can explicitly use
+`docker build -f Dockerfile.api --build-arg INSTALL_OPTIONAL_RAG_DEPS=0 .`;
+features requiring those packages then remain unavailable.
+`python scripts/check_optional_deps.py` verifies API import with all nine
+optional module roots blocked, without connecting to a database.
 
 ---
 

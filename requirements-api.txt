@@ -140,22 +140,18 @@ pandas==3.0.5
 # Optional, additive PDF extraction engine (IBM Docling, MIT, donated to
 # the Linux Foundation) -- api/services/docling_extraction.py's own
 # docstring for why this is opt-in per organization, never the default.
-docling==2.130.0
 # Real PII detection (Microsoft Presidio, MIT) -- api/services/pii_detection.py's
 # own module docstring for why presidio-anonymizer is deliberately NOT
 # installed alongside it (a real cryptography<49.0.0 vs. cryptography==50.0.1
 # WebAuthn conflict, verified before deciding). Needs a one-time
 # `python -m spacy download en_core_web_lg` after install -- see
 # docs/install/ENVIRONMENT.md.
-presidio-analyzer==2.2.364
 # Real GraphRAG (LightRAG, MIT) -- api/services/graph_rag.py's own
 # module docstring for the honest scope (a real, working building
 # block, not yet wired into the main /search retrieval strategy).
-lightrag-hku==1.5.7
 # Real agent orchestration (IBM's own BeeAI Framework, Linux Foundation
 # governed) -- api/services/beeai_orchestrator.py's own module docstring
 # for why this was chosen over CrewAI/AutoGen for this project.
-beeai-framework==0.1.85
 # -- Embeddings for document chunks (also Partie 2.1.1's own
 # process_document spec, "chunking + embedding") -- the SAME model
 # already configured as organization_settings.embedding_model's default
@@ -516,10 +512,8 @@ sentry-sdk[fastapi,celery]==2.40.0
 # `LiteLLMModel`, never its independent OpenAI default) -- a second,
 # OPT-IN cross-check layer, never a replacement for this codebase's own
 # already-real faithfulness.py/hallucination_rate.py/etc modules.
-deepeval==4.2.6
 
 # Prompt optimization uses DSPy Predict/Example and BootstrapFewShot.
-dspy==3.4.0
 
 # -- Conversational memory (mem0, Apache 2.0) --------------------------------
 # Real, automatic extraction + semantic retrieval -- api/services/mem0_service.py's
@@ -531,7 +525,6 @@ dspy==3.4.0
 # the one real, honest limitation this implies (no two live `Memory()`
 # instances in the same process; a real Qdrant server is required for
 # genuine concurrent multi-tenant use).
-mem0ai==2.2.1
 
 # -- Data lineage (OpenLineage, Apache 2.0, Linux Foundation AI & Data) -----
 # Real, standard Job/Run/Dataset lineage model -- api/services/lineage_tracking.py's
@@ -539,14 +532,12 @@ mem0ai==2.2.1
 # generate_response), off by default (LINEAGE_ENABLED). Directly
 # foundational to a future real Provenance/Data Lineage Graph feature
 # (never a bespoke, this-codebase-only lineage format).
-openlineage-python==1.53.0
 
 # -- Real, external policy engine (Open Policy Agent client, Apache 2.0) ----
 # Real, ADVISORY (fail-open) attribute-based policy check, additional to
 # (never replacing) the existing real Casbin RBAC (api/security/rbac.py)
 # -- api/services/opa_policy.py's own module docstring for the full real
 # design decision (fail-open, not fail-closed, and why).
-opa-python-client==2.1.0
 
 # -- Agent-to-agent interoperability (A2A, Google/Linux Foundation) ---------
 # Real, minimal AgentExecutor wrapping this codebase's own existing agent

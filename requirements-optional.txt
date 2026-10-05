@@ -1,0 +1,11 @@
+# Lazily imported integrations, activated by settings or explicit feature calls.
+# Installed by default in the API image; disable with INSTALL_OPTIONAL_RAG_DEPS=0.
+docling==2.130.0
+deepeval==4.2.6
+dspy==3.4.0
+mem0ai==2.2.1
+lightrag-hku==1.5.7
+beeai-framework==0.1.85
+presidio-analyzer==2.2.364
+openlineage-python==1.53.0
+opa-python-client==2.1.0

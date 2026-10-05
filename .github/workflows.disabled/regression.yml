@@ -133,7 +133,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install api/ dependencies (only requirements-api.txt -- api/ has no import dependency on the RAG pipeline's requirements.txt, see api/config.py's docstring, and that file additionally pulls in a private unpublished package this job doesn't need to resolve)
-        run: pip install -r requirements-api.txt
+        run: pip install -r requirements-api.txt -r requirements-optional.txt
 
       - name: Install real Tesseract OCR engine + poppler (Partie 3.1.6 -- api/services/ocr.py's own pytesseract/pdf2image are thin Python wrappers around these real system binaries, neither installable via pip; without this step tests/test_ocr.py's own real, end-to-end OCR tests SKIP instead of actually exercising the real engine)
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-fra poppler-utils
@@ -273,7 +273,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install api/ dependencies
-        run: pip install -r requirements-api.txt
+        run: pip install -r requirements-api.txt -r requirements-optional.txt
 
       - name: Snyk -- dependency vulnerability scan of requirements-api.txt
         uses: snyk/actions/python@master
@@ -282,6 +282,14 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --file=requirements-api.txt --severity-threshold=high
+
+      - name: Snyk -- dependency vulnerability scan of requirements-optional.txt
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=requirements-optional.txt --severity-threshold=high
 
       - name: Run Alembic migrations
         run: python -m alembic upgrade head

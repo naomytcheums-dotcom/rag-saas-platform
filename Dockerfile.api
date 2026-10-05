@@ -16,8 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+COPY requirements-api.txt requirements-optional.txt ./
+ARG INSTALL_OPTIONAL_RAG_DEPS=1
+RUN case "$INSTALL_OPTIONAL_RAG_DEPS" in \
+      1) pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt ;; \
+      0) pip install --no-cache-dir -r requirements-api.txt ;; \
+      *) echo "INSTALL_OPTIONAL_RAG_DEPS must be 0 or 1" >&2; exit 1 ;; \
+    esac
 
 FROM python:3.13-slim-bookworm
 

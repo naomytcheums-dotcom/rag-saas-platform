@@ -121,7 +121,7 @@ jobs:
             done
       - run:
           name: Install api/ dependencies
-          command: pip install -r requirements-api.txt
+          command: pip install -r requirements-api.txt -r requirements-optional.txt
       - run:
           name: Install real Tesseract OCR + poppler (Partie 3.1.6) and Pango/cairo for WeasyPrint (Partie 8.1.14)
           command: |
