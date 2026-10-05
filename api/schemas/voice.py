@@ -58,4 +58,3 @@ class VoiceAgentResponse(BaseModel):
     response_id: uuid.UUID
     sources: list[VoiceAgentSource] = []
     credits_charged: int = 0
-

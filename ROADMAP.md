@@ -3940,7 +3940,7 @@ Les 25 lots ont tourné ; chaque échec a été rejoué isolément avec sa trace
 
 ## [Bob-Auto-Fixes] — Phase 2 : persistance Workspace.description et revue tenant/RLS
 
-**Date** : 2026-10-03  
+**Date** : 2026-10-03
 **Branche** : `bob/auto-fix-20261003-1518`
 
 - **Problème** : l'API publique Knowledge Base acceptait et renvoyait `description`, mais le modèle Workspace et la lecture persistée ne conservaient pas la valeur.
@@ -3951,7 +3951,7 @@ Les 25 lots ont tourné ; chaque échec a été rejoué isolément avec sa trace
 
 ## [Bob-Auto-Fixes] — Phase 2 corrective : IDOR, lifecycle A2A et audits
 
-**Date** : 2026-10-03  
+**Date** : 2026-10-03
 **Branche connue par le journal antérieur** : `bob/auto-fix-20261003-1518`; l'état Git courant n'a pas pu être vérifié car la commande `git` n'est pas disponible dans l'environnement courant.
 
 - **Défaut confirmé — historique de message** : un utilisateur possédant sa conversation pouvait combiner son ID avec le `message_id` d'un autre utilisateur et lire son historique d'édition. Le routeur lie maintenant le message à la conversation autorisée et renvoie 404 en cas de mismatch. Test dédié rejoué avec succès sur SQLite.

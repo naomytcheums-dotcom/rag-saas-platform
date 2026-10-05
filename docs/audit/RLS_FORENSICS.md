@@ -61,4 +61,3 @@ staging explicitement identifié : catalogues `pg_class`, `pg_policies`,
 `pg_roles`, grants et test de visibilité avec deux organisations et rôles
 distincts. Aucun `ALTER TABLE`, `CREATE POLICY` ni `SET ROLE` sur une cible
 inconnue.
-

@@ -71,4 +71,3 @@ aucune version réelle exploitable et ne permet pas de conclure à l'état DB.
   aucun `upgrade`, `downgrade` ni SQL n'a été exécuté.
 - Lecture de configuration d'URL limitée à classifier le driver et la catégorie
   du host; aucune valeur confidentielle n'a été imprimée.
-

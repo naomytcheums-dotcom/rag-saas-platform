@@ -92,4 +92,3 @@ Révision réelle, migrations en attente côté DB, schéma des catalogues,
 extensions/index présents, état de RLS, policies, rôle courant et sauvegardes
 restaurables : **non vérifiés**. Ne pas en déduire une migration manquante ou
 appliquée.
-

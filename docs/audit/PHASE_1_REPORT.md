@@ -150,4 +150,3 @@ résoudre d'abord l'incertitude d'environnement DB et la provenance des
 changements, puis établir une cible staging explicitement isolée, obtenir
 revision/catalogues/sauvegarde read-only et préparer une matrice migration/RLS
 sans mutation.
-

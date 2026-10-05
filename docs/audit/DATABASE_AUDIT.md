@@ -81,4 +81,3 @@ application automatique.
 **État DB : `UNVERIFIED`.** Ne pas appliquer de migration à la base réelle
 avant d'obtenir la révision courante, une sauvegarde vérifiée, un diff du
 schéma et une revue ciblée du graphe, surtout 0131 et le fichier pending 0132.
-
