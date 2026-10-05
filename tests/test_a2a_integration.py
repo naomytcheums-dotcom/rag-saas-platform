@@ -66,3 +66,37 @@ async def test_rag_agent_executor_cancel_is_a_real_honest_noop():
     executor = RagAgentExecutor(db_session_factory=MagicMock(), organization_id=uuid.uuid4())
     await executor.cancel(MagicMock(), MagicMock())
     # No exception raised -- the real, documented "no cancellation hook" behavior.
+
+
+async def _execute_with_failure(monkeypatch, error):
+    from a2a.helpers import get_message_text
+
+    monkeypatch.setattr("api.services.beeai_orchestrator.run_requirement_agent", AsyncMock(side_effect=error))
+
+    class _Factory:
+        async def __aenter__(self):
+            return MagicMock()
+
+        async def __aexit__(self, *args):
+            return False
+
+    context = MagicMock()
+    context.get_user_input.return_value = "hi"
+    context.context_id, context.task_id = "ctx", "task"
+    event_queue = MagicMock()
+    event_queue.enqueue_event = AsyncMock()
+    await RagAgentExecutor(db_session_factory=_Factory, organization_id=uuid.uuid4()).execute(context, event_queue)
+    event_queue.enqueue_event.assert_awaited_once()
+    return get_message_text(event_queue.enqueue_event.call_args.args[0])
+
+
+async def test_executor_answers_in_plain_words_when_the_agent_framework_is_not_installed(monkeypatch):
+    from api.services.beeai_orchestrator import BeeAINotAvailableError
+
+    text = await _execute_with_failure(monkeypatch, BeeAINotAvailableError("beeai-framework is not installed"))
+    assert "not available" in text and "beeai" not in text.lower()
+
+
+async def test_executor_never_leaks_an_internal_error_to_the_a2a_client(monkeypatch):
+    text = await _execute_with_failure(monkeypatch, RuntimeError("secret internal detail: postgres://u:p@h/db"))
+    assert text == "The agent could not process this request." and "secret" not in text

@@ -56,6 +56,9 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
 
+      - name: Lint (runtime-error rules)
+        run: pip install --no-cache-dir ruff && ruff check api/
+
       - name: Run test suite
         env:
           # Real root cause found (Phase 5, Étape 12) for the ~15

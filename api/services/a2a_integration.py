@@ -48,7 +48,7 @@ class A2ANotAvailableError(Exception):
     api/services/graph_rag.py's own GraphRAGNotAvailableError."""
 
 
-def build_agent_card(organization_name: str) -> "AgentCard":
+def build_agent_card(organization_name: str) -> "AgentCard":  # noqa: F821 -- optional a2a-sdk type, resolved lazily
     """Real, minimal `AgentCard` (verified directly against the
     installed package's own real protobuf field names -- `name`/
     `description`/`version`/`capabilities`/`skills`, never guessed)
@@ -106,11 +106,20 @@ class RagAgentExecutor:
         returns the real answer."""
         from a2a.helpers import new_text_message
 
-        from api.services.beeai_orchestrator import run_requirement_agent
+        from api.services.beeai_orchestrator import BeeAINotAvailableError, run_requirement_agent
 
         task_text = context.get_user_input()
-        async with self._db_session_factory() as db:
-            answer = await run_requirement_agent(db, self._organization_id, task_text)
+        try:
+            async with self._db_session_factory() as db:
+                answer = await run_requirement_agent(db, self._organization_id, task_text)
+        except BeeAINotAvailableError as exc:
+            # The optional agent framework is not installed on this deployment: tell the A2A client so in plain words instead of
+            # letting the SDK turn the exception into an opaque "internal error" protocol response.
+            logger.warning("a2a task for organization %s: agent runtime unavailable: %s", self._organization_id, exc)
+            answer = "This agent is not available on this deployment right now."
+        except Exception:  # noqa: BLE001 -- a failed task must still produce a well-formed reply; the details stay in the server log
+            logger.exception("a2a task for organization %s failed", self._organization_id)
+            answer = "The agent could not process this request."
         await event_queue.enqueue_event(new_text_message(answer, context_id=context.context_id, task_id=context.task_id))
 
     async def cancel(self, context, event_queue) -> None:

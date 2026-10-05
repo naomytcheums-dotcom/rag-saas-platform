@@ -174,3 +174,16 @@ async def test_run_evolution_cycle_rejects_a_candidate_that_exceeds_the_runtime_
 
     assert result["decision"] == "candidate_rejected"
     assert result["candidate_job_id"] is None
+
+
+async def test_run_evolution_cycle_reports_an_unavailable_optimizer_instead_of_failing(db_session):
+    """e.g. the optional `dspy` package is not installed: the baseline is still measured and the cycle ends with an explicit decision."""
+    from api.services.prompt_optimization import PromptOptimizationError
+
+    baseline_id = uuid.uuid4()
+    with patch("api.services.evaluation_jobs.create_evaluation_job", AsyncMock(return_value=_fake_job(baseline_id))),          patch("api.services.evaluation_jobs.run_evaluation_job", AsyncMock(return_value=_fake_job(baseline_id))),          patch("api.services.prompt_optimization.optimize_system_prompt", AsyncMock(side_effect=PromptOptimizationError("dspy is not installed: No module named 'dspy'"))):
+        result = await run_evolution_cycle(db_session, uuid.uuid4(), "anthropic")
+
+    assert result["decision"] == "optimizer_unavailable"
+    assert result["baseline_job_id"] == baseline_id and result["candidate_job_id"] is None
+    assert "dspy" in result["reason"]

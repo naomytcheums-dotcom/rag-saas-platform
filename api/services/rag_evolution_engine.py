@@ -64,7 +64,7 @@ async def run_evolution_cycle(
        `"candidate_recommended"` vs `"baseline_kept"` -- NEVER
        auto-applied (see this module's own top docstring)."""
     from api.services.evaluation_jobs import compare_evaluation_jobs, create_evaluation_job, run_evaluation_job
-    from api.services.prompt_optimization import NotEnoughGroundTruthError, optimize_system_prompt
+    from api.services.prompt_optimization import NotEnoughGroundTruthError, PromptOptimizationError, optimize_system_prompt
 
     baseline_job = await create_evaluation_job(db, dataset_id)
     await db.commit()
@@ -75,6 +75,13 @@ async def run_evolution_cycle(
     except NotEnoughGroundTruthError as exc:
         return {
             "baseline_job_id": baseline_job.id, "candidate_job_id": None, "decision": "insufficient_ground_truth",
+            "reason": str(exc),
+        }
+    except PromptOptimizationError as exc:
+        # The optimizer itself is unavailable (e.g. the optional `dspy` package is not installed on this deployment): an honest,
+        # explainable outcome of the cycle -- the baseline was still measured -- not a server error.
+        return {
+            "baseline_job_id": baseline_job.id, "candidate_job_id": None, "decision": "optimizer_unavailable",
             "reason": str(exc),
         }
 
