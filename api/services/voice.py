@@ -30,8 +30,10 @@ until a real key is added later. `web_speech` (STT default) needs
 none at all."""
 
 import io
+import uuid
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 
@@ -72,6 +74,8 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
     resolved_provider = provider or settings.STT_PROVIDER
     if resolved_provider == "web_speech":
         raise VoiceError("web_speech runs entirely client-side; there is no server-side transcription for it")
+    if resolved_provider == "local_whisper":
+        return await transcribe_local_whisper(audio_bytes, language=language)
     model = _STT_MODELS.get(resolved_provider)
     if model is None:
         raise VoiceError(f"Unknown STT provider '{resolved_provider}'")
@@ -86,6 +90,49 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
     audio_file.name = filename
     response = await litellm.atranscription(model=model, file=audio_file, language=language)
     return response.text
+
+
+_LOCAL_WHISPER_MODELS: dict[tuple[str, str, str], object] = {}
+
+
+def local_whisper_available() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("faster_whisper") is not None
+
+
+def _load_local_whisper():
+    """One cached model per (size, device, compute type): loading is the expensive part, so it happens once per process."""
+    key = (settings.LOCAL_WHISPER_MODEL, settings.LOCAL_WHISPER_DEVICE, settings.LOCAL_WHISPER_COMPUTE_TYPE)
+    if key not in _LOCAL_WHISPER_MODELS:
+        from faster_whisper import WhisperModel
+
+        _LOCAL_WHISPER_MODELS[key] = WhisperModel(key[0], device=key[1], compute_type=key[2])
+    return _LOCAL_WHISPER_MODELS[key]
+
+
+def _transcribe_local_sync(audio_bytes: bytes, language: str | None) -> str:
+    model = _load_local_whisper()
+    # faster-whisper takes a language code ("fr"), not a locale ("fr-FR").
+    code = language.split("-")[0].lower() if language else None
+    segments, _info = model.transcribe(io.BytesIO(audio_bytes), language=code, vad_filter=True)
+    return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+async def transcribe_local_whisper(audio_bytes: bytes, *, language: str | None = None) -> str:
+    """Open-source, self-hosted STT (faster-whisper): no API key, audio never leaves the server. Runs in a worker thread
+    so a multi-second CPU transcription cannot block the event loop. Honest degradation: when the optional package is not
+    installed this raises a VoiceError naming the exact install command -- never a silent stub."""
+    import asyncio
+
+    if not local_whisper_available():
+        raise VoiceError("the 'local_whisper' STT provider needs the optional open-source package: pip install faster-whisper")
+    try:
+        return await asyncio.get_running_loop().run_in_executor(None, _transcribe_local_sync, audio_bytes, language)
+    except VoiceError:
+        raise
+    except Exception as exc:  # undecodable audio, model download failure, out-of-memory...
+        raise VoiceError(f"local transcription failed: {type(exc).__name__}: {exc}") from exc
 
 
 def _parse_diarization_segments(response) -> list[dict] | None:
@@ -194,6 +241,80 @@ async def synthesize_with_elevenlabs(text: str, voice_id: str | None = None, spe
     if response.status_code >= 400:
         raise VoiceError(f"ElevenLabs synthesis failed ({response.status_code}): {response.text}")
     return response.content
+
+
+# -------------------------------------------------- Voice chat round-trip (item 17)
+
+
+async def voice_chat(
+    db: AsyncSession, organization_id: uuid.UUID, audio_bytes: bytes, *, filename: str = "audio.wav",
+    stt_provider: str | None = None, language: str | None = None, voice_id: str | None = None,
+) -> dict:
+    """Bricks open source, item 17 -- real, end-to-end voice round-trip:
+    closes the real gap the user's own consolidated list named ("les
+    composants voix STT/TTS existent déjà... mais ne sont pas intégrés
+    au chat"). Real, sequential composition of 3 already-real,
+    already-tested functions -- `transcribe_audio` (this module),
+    `generate_response` (`api.services.generation`, the real RAG
+    retrieval+generation pipeline), `synthesize_with_elevenlabs` (this
+    module) -- no new provider, no new infrastructure, just the
+    missing real wiring between pieces that already existed in
+    isolation.
+
+    **Real, deliberate scope**: a round-trip (record -> upload -> wait
+    -> play), not real-time streaming voice (continuous mic -> partial
+    transcripts -> speaking response) -- see this étape's own ROADMAP.md
+    entry for why a full real-time WebRTC pipeline (FastRTC) was
+    evaluated and not pulled in for this pass (a real, disproportionate
+    dependency footprint for this codebase's own backend service, found
+    via a real `pip install --dry-run`, not guessed)."""
+    from api.services.generation import GenerationBlockedError, generate_response
+
+    transcript = await transcribe_audio(audio_bytes, filename=filename, provider=stt_provider, language=language)
+    try:
+        response = await generate_response(db, organization_id, transcript)
+    except GenerationBlockedError as exc:
+        # Hardening Mission, Phase 4 -- re-raised as this module's own
+        # real, already-handled VoiceError (api/routers/voice.py's own
+        # voice_chat_endpoint already turns this into a clean 400) so a
+        # real injection attempt spoken into the microphone fails the
+        # same honest way a blocked guardrail does everywhere else in
+        # this codebase, never a bare, unhandled 500.
+        raise VoiceError(str(exc)) from exc
+    answer_audio = await synthesize_with_elevenlabs(response.answer, voice_id=voice_id)
+    return {"transcript": transcript, "answer_text": response.answer, "answer_audio": answer_audio, "response_id": response.id}
+
+
+async def voice_agent_turn(
+    db: AsyncSession, organization_id: uuid.UUID, audio_bytes: bytes, *, filename: str = "audio.wav", stt_provider: str | None = None,
+    language: str | None = None, speak: bool = False, voice_id: str | None = None, user_id: uuid.UUID | None = None,
+    workspace_id: uuid.UUID | None = None,
+) -> dict:
+    """Voice agent, one turn: speech -> transcript -> the organization's RAG pipeline (retrieval, guardrails, citations) ->
+    answer text (+ optional synthesized speech). Unlike `voice_chat`, the answer's TTS is OPTIONAL (the browser can speak the
+    text itself via Web Speech, free), the citations are returned, and the transcript is bounded before it reaches the LLM.
+    Turn-based, not streaming: record -> upload -> answer."""
+    from api.services.citations import get_citations_by_response, resolve_citation_source
+    from api.services.generation import GenerationBlockedError, generate_response
+
+    if len(audio_bytes) > settings.VOICE_AGENT_MAX_AUDIO_BYTES:
+        raise VoiceError(f"audio too large ({len(audio_bytes)} bytes, max {settings.VOICE_AGENT_MAX_AUDIO_BYTES})")
+    if not audio_bytes:
+        raise VoiceError("empty audio")
+    transcript = (await transcribe_audio(audio_bytes, filename=filename, provider=stt_provider, language=language)).strip()
+    if not transcript:
+        raise VoiceError("no speech detected in the audio")
+    transcript = transcript[: settings.VOICE_AGENT_MAX_TRANSCRIPT_CHARS]
+    try:
+        response = await generate_response(db, organization_id, transcript, workspace_id=workspace_id, created_by=user_id)
+    except GenerationBlockedError as exc:
+        raise VoiceError(str(exc)) from exc
+    answer_audio = await synthesize_with_elevenlabs(response.answer, voice_id=voice_id) if speak else None
+    sources = [
+        {"citation_number": c.citation_number, **{k: (str(v) if isinstance(v, uuid.UUID) else v) for k, v in resolve_citation_source(c).items()}}
+        for c in await get_citations_by_response(db, response.id)
+    ]
+    return {"transcript": transcript, "answer_text": response.answer, "answer_audio": answer_audio, "response_id": response.id, "sources": sources}
 
 
 def get_elevenlabs_voice_preview(voice_id: str) -> str | None:

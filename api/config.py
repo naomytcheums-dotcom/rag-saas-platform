@@ -13,6 +13,7 @@ failing later with a confusing AttributeError the first time a route uses
 one, so a misconfigured deployment is caught at process startup.
 """
 
+import os
 from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
@@ -23,7 +24,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", env_prefix="", case_sensitive=True, extra="ignore"
+        env_file=PROJECT_ROOT / os.environ.get("RAG_ENV_FILE", ".env"),
+        env_file_encoding="utf-8", env_prefix="", case_sensitive=True, extra="ignore"
     )
 
     # -- Database -----------------------------------------------------
@@ -698,6 +700,23 @@ class Settings(BaseSettings):
     OPENAI_COMPATIBLE_MAX_TOKENS: int = 4096
     OPENAI_COMPATIBLE_TEMPERATURE: float = 0.7
 
+    # IBM watsonx.ai -- hosts IBM's own real, open-weight Granite models
+    # (also reachable via Ollama/HuggingFace, but watsonx.ai is IBM's
+    # own real, managed inference endpoint). litellm supports this
+    # provider natively (`litellm.llms.watsonx`, already vendored --
+    # verified against the installed package, no new SDK dependency),
+    # the same "no extra heavy SDK" restraint as every other provider
+    # above. Needs THREE real credentials, not just an API key --
+    # `project_id` scopes the call to a real watsonx.ai project, the
+    # same way `organization_id` scopes everything else in this
+    # codebase; there is no real watsonx call without one.
+    WATSONX_API_KEY: str = ""
+    WATSONX_URL: str = ""
+    WATSONX_PROJECT_ID: str = ""
+    WATSONX_MODEL: str = "watsonx/ibm/granite-3-8b-instruct"
+    WATSONX_MAX_TOKENS: int = 4096
+    WATSONX_TEMPERATURE: float = 0.7
+
     # -- Metadata filtering (Partie 3.4.5) -----------------------------------
     METADATA_FILTERING_ENABLED: bool = True
     METADATA_FILTER_MAX_OPERATORS: int = 5
@@ -716,6 +735,26 @@ class Settings(BaseSettings):
     MMR_ENABLED: bool = True
     MMR_LAMBDA: float = 0.7
     MMR_TOP_K: int = 5
+
+    # -- pgvector (Hardening Mission, Phase 1) ---------------------------------
+    # Real native Postgres vector search, additive to (never a replacement
+    # for) the existing numpy cosine fallback in api/services/retrieval_pipeline.py.
+    # DocumentChunk.embedding_vector uses pgvector's Vector type on Postgres,
+    # degrading to a plain JSON column on SQLite (api/models/document.py's own
+    # docstring already documented pgvector's SQLite gap as the reason the
+    # ORIGINAL `embedding` column stayed plain JSON -- this flag/column pair
+    # is the real follow-up work that module docstring explicitly deferred,
+    # not a contradiction of it). A single fixed dimension is required for a
+    # real ANN index (HNSW): EMBEDDING_VECTOR_DIM matches the DEFAULT embedding
+    # model's own real dimension (all-MiniLM-L6-v2, 384) -- an org on a
+    # different-dimension model still gets fully correct results via the
+    # dimension-safe numpy fallback (api.services.retrieval_pipeline.cosine_similarities
+    # now groups chunks by embedding_dim before ranking, the real fix for the
+    # audit's confirmed embedding-dimension-mismatch crash), just without the
+    # native index speedup for that organization until it reindexes onto the
+    # default-dimension model.
+    PGVECTOR_ENABLED: bool = True
+    EMBEDDING_VECTOR_DIM: int = 384
 
     # -- Query rewriting (Partie 3.4.2) ----------------------------------------
     QUERY_REWRITING_ENABLED: bool = True
@@ -875,6 +914,10 @@ class Settings(BaseSettings):
     SQL_TOOL_ENABLED: bool = True
     SQL_TOOL_MAX_ROWS: int = 100
     SQL_TOOL_MAX_QUERY_LENGTH: int = 5000
+    # Hardening Mission (§29) -- hard server-side time bound for every SQL-tool query
+    # (Postgres only; SQLite has no such setting). A single `SELECT pg_sleep(60)` used
+    # to hold one of the few pooled connections for a minute per call.
+    SQL_TOOL_STATEMENT_TIMEOUT_MS: int = 5000
     # "conversation_messages" deliberately excluded from the real
     # default -- see api/tools/sql_tool.py's own top docstring: it has
     # no real organization_id column of its own (only reachable via a
@@ -945,6 +988,37 @@ class Settings(BaseSettings):
     APP_CACHE_ENABLED: bool = True
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
+    # -- Account lockout (Hardening Mission, Phase 2) --------------------------
+    # Real, DB-persistent lockout -- deliberately INDEPENDENT of Redis
+    # (unlike LOGIN_RATE_LIMIT_* above, api/security/rate_limit.py's own
+    # real, documented fail-open behavior means Redis being down today
+    # means zero brute-force protection at all). `User.failed_login_attempts`/
+    # `locked_until` (api/models/user.py) are real columns on the SAME row
+    # already being read for every login attempt -- no new dependency, no
+    # new failure mode: a real outage of Postgres itself already fails the
+    # whole login endpoint regardless of this feature.
+    ACCOUNT_LOCKOUT_ENABLED: bool = True
+    ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 10
+    ACCOUNT_LOCKOUT_DURATION_SECONDS: int = 900
+
+    # -- Rate limiting expansion (Hardening Mission, Phase 2) -------------------
+    # A real, confirmed audit gap: RATE_LIMIT_ENABLED's own
+    # enforce_rate_limit (api/security/rate_limit.py) was only ever
+    # actually called by the 5 auth endpoints -- search/chat/ingestion/
+    # eval/MCP/public-API/webhooks had zero rate limiting at all. This is
+    # the real, FIRST extension: per-organization, applied at
+    # `api.services.public_api.handle_public_chat`'s own single real
+    # choke point (shared by the public /v1/chat API, the embeddable
+    # widget, and any future caller) -- the most exposed real surface,
+    # since a widget's public key is shared by every visitor of whatever
+    # site embeds it, not gated by an individual user session at all.
+    # Same real fail-open-on-Redis-down behavior as every other
+    # enforce_rate_limit call in this codebase (unlike account lockout
+    # above, this one is explicitly allowed to degrade, per
+    # api/security/rate_limit.py's own documented, deliberate choice).
+    PUBLIC_CHAT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    PUBLIC_CHAT_RATE_LIMIT_WINDOW_SECONDS: int = 60
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3
@@ -960,6 +1034,24 @@ class Settings(BaseSettings):
     # against -- same shape as REGISTER's own IP-based limit.
     INVITATION_ACCEPT_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     INVITATION_ACCEPT_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+
+    # Hardening Mission (§4, rate limiting) -- real, confirmed gaps: the
+    # public chat widget already had an org-scoped rate limit
+    # (PUBLIC_CHAT_RATE_LIMIT_* above), but the authenticated-dashboard
+    # surfaces that trigger genuinely costly backend work (an embedding
+    # call per chunk on ingestion, a real retrieval call on search, an
+    # external subprocess/HTTP round-trip per MCP tool call, a full
+    # LLM-generation pass per question on evaluation) had none at all --
+    # scoped per organization, same fail-open-on-Redis-down behavior as
+    # every other enforce_rate_limit call in this codebase.
+    DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
+    DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    SEARCH_RATE_LIMIT_MAX_ATTEMPTS: int = 120
+    SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60
+    MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     # -- 2FA lockout recovery (lost device AND all recovery codes) --------
     # How long a requested 2FA removal must wait before it can be
@@ -2097,6 +2189,49 @@ class Settings(BaseSettings):
     # -- Partie 12.3: Credits / usage ----------------------------------------
     CREDITS_ENABLED: bool = True
     CREDITS_DEFAULT_AMOUNT: int = 1000
+    # Hardening Mission (§15/§6, A2A + cost control) -- flat credit cost
+    # per A2A task. An ESTIMATE, not a measured value: BeeAI's
+    # `RequirementAgent.run` (api/services/beeai_orchestrator.py) does not
+    # expose token usage to this codebase, so a per-token debit like
+    # agent_orchestrator's is impossible here. ~25 credits is roughly a
+    # 2,500-input-token run at CREDIT_CONVERSION's rate.
+    A2A_TASK_CREDIT_COST: int = 25
+    # Hardening Mission (§23, billing integrity) -- `POST .../billing/credits/purchase` grants credits WITHOUT
+    # charging anything (it exists so a self-hosted / dev instance with no payment processor can still top up).
+    # It is refused outright whenever a payment provider is configured for the organization (credits must then
+    # come from a real checkout), and -- on a deployment with NO provider -- only while this flag is True.
+    # Explicitly opt in on a self-hosted / development deployment with no
+    # payment processor; public deployments fail closed by default.
+    CREDITS_ALLOW_UNPAID_TOPUP: bool = False
+    # Currency the fixed credit packs (api/security/credit_packs.py `price_cents`) are charged in at checkout.
+    CREDIT_PACK_CURRENCY: str = "usd"
+    # Hardening Mission (§8, retrieval) -- when policy-aware retrieval is active, the strategy fetches
+    # `top_k x this` candidates BEFORE the access-policy filter so a restricted user still gets up to `top_k`
+    # permitted results (it used to filter an already-cut top_k list and silently return fewer).
+    POLICY_OVERFETCH_FACTOR: int = 3
+    # Hardening Mission (§9, Eval Lab) -- when True, an evaluation job's
+    # retrieval is restricted to the documents named in the dataset's own
+    # ground truth (`expected_documents`). That was the unconditional
+    # behavior, added so a free-tier demo stayed under an HTTP timeout, and
+    # it silently INFLATES Recall/MRR/NDCG: the search can only ever pick
+    # among the answer documents, never a distractor. Default False = the
+    # job searches the organization's WHOLE corpus, exactly like production.
+    # Every job records which mode measured it (`results.corpus_constrained`).
+    EVALUATION_RESTRICT_RETRIEVAL_TO_GROUND_TRUTH_DOCS: bool = False
+    A2A_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    A2A_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # -- Voice agent (open-source STT, voice -> RAG -> answer) ------------------------------
+    # `local_whisper` STT provider = faster-whisper (MIT, CTranslate2) running IN-PROCESS; optional dependency
+    # (`pip install faster-whisper`), the model is downloaded on first use. Tiny/base fit a 16 GB machine; larger ones don't.
+    LOCAL_WHISPER_MODEL: str = "base"
+    LOCAL_WHISPER_COMPUTE_TYPE: str = "int8"
+    LOCAL_WHISPER_DEVICE: str = "cpu"
+    VOICE_AGENT_MAX_AUDIO_BYTES: int = 10 * 1024 * 1024
+    VOICE_AGENT_MAX_TRANSCRIPT_CHARS: int = 2000
+    VOICE_AGENT_TURN_CREDIT_COST: int = 10
+    VOICE_AGENT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    VOICE_AGENT_RATE_LIMIT_WINDOW_SECONDS: int = 60
     CREDITS_CURRENCY: str = "EUR"
     CREDITS_ALERT_THRESHOLDS: str = "50,80,95"
     CREDITS_AUTO_REFILL: bool = False
@@ -2129,6 +2264,25 @@ class Settings(BaseSettings):
     OTEL_SERVICE_NAME: str = "rag-saas-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_TRACES_SAMPLER_ARG: float = 0.1
+
+    # -- Bricks open source, item 12: OpenLineage data lineage --------------
+    # Same real "off by default, no real backend in this environment"
+    # reasoning as OTEL_ENABLED above -- api/services/lineage_tracking.py's
+    # own module docstring for the real Job/Run/Dataset wiring this gates.
+    LINEAGE_ENABLED: bool = False
+    LINEAGE_BACKEND_URL: str | None = None
+
+    # -- Bricks open source, item 13: Open Policy Agent (OPA) ----------------
+    # Same real "off by default, no real backend in this environment"
+    # reasoning as OTEL_ENABLED/LINEAGE_ENABLED above --
+    # api/services/opa_policy.py's own module docstring for the real,
+    # ADVISORY (fail-open) policy check this gates, additional to (never
+    # replacing) the existing real Casbin RBAC (api/security/rbac.py).
+    # host/port (not a single URL) matches opa-python-client's own real
+    # `AsyncOpaClient.__init__` constructor shape.
+    OPA_ENABLED: bool = False
+    OPA_SERVER_HOST: str = "localhost"
+    OPA_SERVER_PORT: int = 8181
 
     # -- Phase 5, Étape 7: Sentry error tracking ---------------------------------
     SENTRY_DSN: str | None = None
@@ -2207,6 +2361,16 @@ class Settings(BaseSettings):
     TEMPO_HOST: str | None = None
     TEMPO_USERNAME: str | None = None
     TEMPO_PASSWORD: str | None = None
+
+    # -- Langfuse (self-hosted or cloud, MIT) -- real GenAI-focused trace
+    # backend, receiving the SAME real OTel GenAI spans
+    # api/services/llm_providers.py already emits (Étape "OpenTelemetry
+    # GenAI") -- no second, parallel `langfuse` SDK/decorator layer, see
+    # api/security/tracing.py's own docstring for why. Real Basic Auth
+    # (base64 public_key:secret_key), same shape as TEMPO_* above.
+    LANGFUSE_HOST: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
 
     # -- Datadog LLM Observability --
     DD_API_KEY: str | None = None
