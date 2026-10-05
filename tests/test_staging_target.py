@@ -42,7 +42,7 @@ def test_confirmed_staging_session_pooler_target():
     ("postgres", STAGING_POOLER_HOST, 5432),
     (STAGING_POOLER_USER, STAGING_HOST, 5432),
     (STAGING_POOLER_USER, STAGING_POOLER_HOST, 6543),
-    (STAGING_POOLER_USER, "aws-0-eu-west-2.pooler.supabase.com", 5432),
+    (STAGING_POOLER_USER, "untrusted.pooler.invalid", 5432),
 ])
 def test_session_pooler_refuses_other_projects_and_transaction_mode(user, host, port):
     with pytest.raises(StagingTargetError):

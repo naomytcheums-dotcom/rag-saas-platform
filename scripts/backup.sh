@@ -9,7 +9,13 @@ mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 FILE="$BACKUP_DIR/backup_${TIMESTAMP}.sql.gz"
 
-docker compose -f docker-compose.selfhosted.yml exec -T postgres pg_dump -U "${POSTGRES_USER:-rag_saas}" "${POSTGRES_DB:-rag_saas}" | gzip > "$FILE"
+TEMP_FILE=$(mktemp "$BACKUP_DIR/.backup_${TIMESTAMP}.XXXXXX")
+trap 'rm -f "$TEMP_FILE"' EXIT
+docker compose -f docker-compose.selfhosted.yml exec -T postgres pg_dump -U "${POSTGRES_USER:-rag_saas}" "${POSTGRES_DB:-rag_saas}" | gzip > "$TEMP_FILE"
+gzip -t "$TEMP_FILE"
+# A hard link publishes the complete dump without overwriting an existing backup.
+ln "$TEMP_FILE" "$FILE"
+rm -f "$TEMP_FILE"
 echo "Backup written to $FILE"
 
 # Phase 5, Étape 7 -- real retention pruning (spec section 3.6, "30
