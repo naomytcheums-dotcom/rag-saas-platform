@@ -873,6 +873,9 @@ class Settings(BaseSettings):
     AGENT_MEMORY_SIZE: int = 100
     AGENT_MEMORY_TTL: int = 3600
     AGENT_MEMORY_ENABLED: bool = True
+    # After a completed agent run, ask the LLM which facts are worth remembering (api/services/agent_long_term_memory.py). It is ONE extra
+    # LLM call per run that is not billed to the organization separately, so it is opt-in.
+    AGENT_MEMORY_AUTO_EXTRACT: bool = False
 
     # -- Conversation memory, cross-session (Partie 5.1.12) ----------------------
     # Not one of this étape's own literal settings -- a real, necessary

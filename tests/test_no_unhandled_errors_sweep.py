@@ -20,6 +20,12 @@ WRITE = {"post", "put", "patch", "delete"}
 EXCLUDED = {
     ("DELETE", "/account"): "deletes the sweep's own user",
     ("POST", "/auth/logout"): "revokes the sweep's own session",
+    ("GET", "/notifications/stream"): "server-sent events stream: by design it never ends",
+    ("POST", "/media/search"): "loads an image/text embedding model on first use (covered by tests/backend/media)",
+    ("POST", "/media/search/similar"): "image embedding model (covered by tests/backend/media)",
+    ("POST", "/media/search/visual"): "image embedding model (covered by tests/backend/media)",
+    ("POST", "/organizations/{org_id}/security/scan"): "runs a real security scan (external tools); slow by nature, covered by tests/test_security_scan*.py",
+    ("POST", "/organizations/{org_id}/search"): "loads the embedding model on first use, too slow for a cold test process (covered by tests/test_search.py)",
 }
 REQUEST_TIMEOUT_SECONDS = 20
 
@@ -49,6 +55,12 @@ EXPECTED_501 = {
     ("POST", "/billing/stripe/webhook"): "Stripe not configured (STRIPE_SECRET_KEY unset)",
     ("POST", "/billing/paystack/webhook"): "Paystack not configured (PAYSTACK_SECRET_KEY unset)",
 }
+
+
+def is_expected_501(method, path, response) -> bool:
+    """501 is how this API says "this provider (Stripe, Airbyte, Twilio...) is not configured on this deployment": an honest,
+    explained answer, not an unhandled error. Any other 501 is still reported."""
+    return response.status_code == 501 and ((method, path) in EXPECTED_501 or "not configured" in response.text)
 
 
 def _resolve(schema, spec):
@@ -180,7 +192,7 @@ async def _sweep(client, headers, org_id, server_errors, escaped, slow, *, schem
         except Exception as exc:  # noqa: BLE001 -- an exception escaping the ASGI app IS the finding
             escaped.append(f"{method} {path} -> {type(exc).__name__}: {str(exc)[:200]}")
             continue
-        if response.status_code == 501 and (method, path) in EXPECTED_501:
+        if is_expected_501(method, path, response):
             continue
         if response.status_code >= 500:
             server_errors.append(f"{method} {path} -> {response.status_code} {response.text[:200]}")
@@ -304,7 +316,7 @@ async def test_anonymous_callers_reach_only_the_endpoints_meant_to_be_public(cli
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{method} {path} -> EXC {type(exc).__name__}")
             continue
-        if response.status_code >= 500 and not (response.status_code == 501 and (method, path) in EXPECTED_501):
+        if response.status_code >= 500 and not is_expected_501(method, path, response):
             errors.append(f"{method} {path} -> {response.status_code}")
         if response.status_code not in (401, 403) and f"{method} {path}" not in PUBLIC_BY_DESIGN:
             unexpected.append(f"{method} {path} -> {response.status_code}")

@@ -22,6 +22,7 @@ run at the CI level (.github/workflows/regression.yml's existing
 security-scan job) and are not duplicated as an in-app "run now" button.
 """
 
+import asyncio
 import json
 import os
 import re
@@ -65,7 +66,8 @@ def _severity_for_pip_audit(vuln: dict) -> VulnerabilitySeverity:
 
 async def _run_dependency_scan(db: AsyncSession, scan: SecurityScan) -> None:
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             ["python", "-m", "pip_audit", "--format", "json", "--progress-spinner", "off"],
             cwd=_REPO_ROOT, capture_output=True, text=True, timeout=300,
         )
@@ -93,7 +95,8 @@ async def _run_dependency_scan(db: AsyncSession, scan: SecurityScan) -> None:
 
 async def _run_code_scan(db: AsyncSession, scan: SecurityScan) -> None:
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             ["python", "-m", "bandit", "-r", "api", "-f", "json", "-q"],
             cwd=_REPO_ROOT, capture_output=True, text=True, timeout=300,
         )
@@ -175,7 +178,8 @@ async def run_security_scan(db: AsyncSession, *, organization_id: uuid.UUID | No
             scan.status = ScanStatus.unavailable
             scan.summary = "trivy is not installed on this host -- container image scanning needs a real trivy binary on PATH."
         else:
-            result = subprocess.run(["trivy", "image", "--format", "json", "rag-saas-platform:latest"], capture_output=True, text=True, timeout=600)
+            result = await asyncio.to_thread(
+            subprocess.run,["trivy", "image", "--format", "json", "rag-saas-platform:latest"], capture_output=True, text=True, timeout=600)
             scan.status = ScanStatus.completed if result.returncode == 0 else ScanStatus.failed
             scan.summary = "trivy image scan ran -- see stdout for parsed results" if result.returncode == 0 else result.stderr[:500]
     elif scan_type == ScanType.infrastructure:

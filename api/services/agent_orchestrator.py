@@ -637,7 +637,7 @@ class AgentOrchestrator:
                     # Phase 5, Étape 6 (suite) -- real, automatic
                     # long-term memory write-back. Best-effort: never
                     # raises, never blocks the run's own result.
-                    if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED:
+                    if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED and settings.AGENT_MEMORY_AUTO_EXTRACT:
                         try:
                             from api.services.agent_long_term_memory import (
                                 extract_and_store_long_term_memory,
