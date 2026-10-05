@@ -1019,6 +1019,11 @@ class Settings(BaseSettings):
     # api/security/rate_limit.py's own documented, deliberate choice).
     PUBLIC_CHAT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
     PUBLIC_CHAT_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS: int = 20
+    LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # When set, GET /metrics requires `Authorization: Bearer <token>` (Prometheus `authorization` / `bearer_token` scrape option).
+    # Unset keeps it open for a scraper inside a private network; set it on any deployment reachable from the Internet.
+    METRICS_AUTH_TOKEN: str | None = None
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3
@@ -1871,12 +1876,19 @@ class Settings(BaseSettings):
     SLACK_MAX_MESSAGE_LENGTH: int = 4000
     SLACK_RESPONSE_TIMEOUT: int = 30
 
+    # Teams (Bot Framework): the inbound webhook is authenticated with the JWT Microsoft signs for the bot. The expected audience is
+    # the bot's Microsoft App ID (TEAMS_BOT_ID or the integration's own bot_id); the signing keys come from this OpenID metadata.
+    TEAMS_OPENID_METADATA_URL: str = "https://login.botframework.com/v1/.well-known/openidconfiguration"
+    TEAMS_JWKS_CACHE_SECONDS: int = 6 * 3600
     TEAMS_BOT_ID: str | None = None
     TEAMS_BOT_TOKEN: str | None = None
     TEAMS_APP_PASSWORD: str | None = None
     TEAMS_MAX_MESSAGE_LENGTH: int = 4000
     TEAMS_RESPONSE_TIMEOUT: int = 30
 
+    # Shared secret the external Discord Gateway bot sends in `X-Gateway-Secret` to POST /integrations/discord/message. Unset = that
+    # endpoint refuses every request (fail closed): it triggers a paid RAG answer, so it must never be open.
+    DISCORD_GATEWAY_SHARED_SECRET: str | None = None
     DISCORD_BOT_TOKEN: str | None = None
     DISCORD_CLIENT_ID: str | None = None
     DISCORD_CLIENT_SECRET: str | None = None
@@ -1980,6 +1992,21 @@ class Settings(BaseSettings):
         total = sum(self.GROUNDEDNESS_FACTORS_WEIGHTS.values())
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"GROUNDEDNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _llm_judged_quality_paths_are_not_available_yet(self) -> "Settings":
+        """The LLM-judged variants of answer relevance, context relevance and claim verification are not implemented (their
+        embedding / heuristic paths are the real ones). Enabling one used to start fine and then fail with an unhandled
+        NotImplementedError (HTTP 500) on the first request that reached it; refuse the configuration at startup instead."""
+        enabled = [
+            name for name in ("ANSWER_RELEVANCE_USE_LLM", "CONTEXT_RELEVANCE_USE_LLM", "CLAIM_VERIFICATION_USE_LLM") if getattr(self, name)
+        ]
+        if enabled:
+            raise ValueError(
+                f"{', '.join(enabled)} cannot be enabled: the LLM-judged path is not implemented. Leave it False to use the "
+                "embedding-based / heuristic path."
+            )
         return self
 
     @model_validator(mode="after")

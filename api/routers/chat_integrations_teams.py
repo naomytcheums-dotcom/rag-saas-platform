@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,9 @@ from api.schemas.chat_integrations import TeamsConfigResponse, TeamsConfigureReq
 from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.organizations import require_org_admin
-from api.utils import client_ip
+from api.config import settings
+from api.security.teams_bot_auth import TeamsAuthError, verify_teams_bearer
+from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.teams import (
     TeamsIntegrationError, parse_teams_webhook, process_teams_message, save_teams_integration, send_teams_response,
 )
@@ -71,17 +73,22 @@ async def teams_send_endpoint(org_id: uuid.UUID, payload: TeamsSendMessageReques
 
 
 @router.post("/integrations/teams/webhook")
-async def teams_webhook_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
-    """Real Bot Framework Activity webhook. ⚠️ Honest limitation: no
-    real, live JWKS-backed bearer-token verification here yet -- see
-    api/services/chat_integrations/teams.py's own top docstring."""
-    payload = await request.json()
+async def teams_webhook_endpoint(request: Request, db: AsyncSession = Depends(get_db), authorization: str | None = Header(default=None)):
+    """Bot Framework Activity webhook. Authenticated with the JWT Microsoft signs for the bot
+    (api/security/teams_bot_auth.py): the audience must be the bot App ID of the integration for the activity's tenant
+    (or the global TEAMS_BOT_ID). A missing, wrong or expired token answers 401 and nothing is processed."""
+    payload = await read_json_object(request)
+    tenant_id = ((payload.get("channelData") or {}).get("tenant") or {}).get("id")
+    integration = await db.scalar(select(TeamsIntegration).where(TeamsIntegration.tenant_id == tenant_id)) if tenant_id else None
+    audiences = [settings.TEAMS_BOT_ID, integration.bot_id if integration is not None else None]
+    try:
+        await verify_teams_bearer(authorization, audiences)
+    except TeamsAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing Bot Framework token") from exc
     if payload.get("type") != "message":
         return {"ok": True}
 
     event = parse_teams_webhook(payload)
-    tenant_id = ((payload.get("channelData") or {}).get("tenant") or {}).get("id")
-    integration = await db.scalar(select(TeamsIntegration).where(TeamsIntegration.tenant_id == tenant_id)) if tenant_id else None
     if integration is not None and integration.is_active:
         await process_teams_message(db, integration, event)
         await db.commit()
