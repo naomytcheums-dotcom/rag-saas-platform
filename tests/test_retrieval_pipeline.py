@@ -11,7 +11,7 @@ the same real, documented exception `tests/test_hyde.py`/
 (embeddings, BM25, MMR's own cosine similarity) stays real."""
 
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import litellm
 import pytest
@@ -22,7 +22,7 @@ from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.organization import Organization
 from api.security.documents import generate_embeddings
 from api.services.retrieval_pipeline import (
-    bm25_search, build_llm_context, hybrid_reranked_search, hybrid_search, search, search_with_context, vector_search,
+    bm25_search, build_llm_context, graph_context, hybrid_reranked_search, hybrid_search, search, search_with_context, vector_search,
 )
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -61,6 +61,71 @@ async def _add_chunks(db_session, org_id, document_id, texts):
     for text, embedding in zip(texts, embeddings):
         db_session.add(DocumentChunk(document_id=document_id, organization_id=org_id, content=text, embedding=embedding))
     await db_session.commit()
+
+
+# -------------------------- Hardening Mission, Phase 12 (multimodal wiring) --------------------------
+
+
+async def test_fetch_organization_chunks_includes_a_real_media_derived_chunk(db_session):
+    """REGRESSION for a real, confirmed structural audit gap: this
+    function's own INNER JOIN against Document used to exclude EVERY
+    real media-derived chunk (document_id always NULL) from the entire
+    retrieval pipeline, no matter how search() was configured. A real
+    chunk from an image/audio/video asset must now be a real, reachable
+    candidate, with the real MediaAsset.filename standing in for the
+    document_name a pure-media chunk has no Document row to provide."""
+    from api.models.media import MediaAsset, MediaStatus, MediaType
+
+    org = await _make_org(db_session, "Multimodal Wiring Org")
+    asset = MediaAsset(
+        organization_id=org.id, media_type=MediaType.image, status=MediaStatus.completed,
+        filename="chart.png", file_key="media/chart.png", file_size=100, mime_type="image/png",
+    )
+    db_session.add(asset)
+    await db_session.flush()
+    [embedding] = generate_embeddings(["A bar chart showing quarterly revenue."], EMBEDDING_MODEL)
+    media_chunk = DocumentChunk(
+        media_asset_id=asset.id, organization_id=org.id, content="A bar chart showing quarterly revenue.", embedding=embedding,
+    )
+    db_session.add(media_chunk)
+    await db_session.commit()
+
+    from api.services.retrieval_pipeline import fetch_organization_chunks
+
+    chunks = await fetch_organization_chunks(db_session, org.id)
+
+    assert len(chunks) == 1
+    assert chunks[0]["document_id"] is None  # real None, never the literal string "None"
+    assert chunks[0]["media_asset_id"] == str(asset.id)
+    assert chunks[0]["document_name"] == "chart.png"
+    assert chunks[0]["file_type"] == "image/png"
+
+
+async def test_vector_search_finds_a_real_media_derived_chunk_alongside_a_real_document_chunk(db_session):
+    """The real, end-to-end proof: a real vector search over an
+    organization that has BOTH a real document and a real media asset
+    must be able to surface the media-derived chunk too, when it's
+    genuinely the most relevant real result."""
+    from api.models.media import MediaAsset, MediaStatus, MediaType
+
+    org = await _make_org(db_session, "Multimodal Search Org")
+    asset = MediaAsset(
+        organization_id=org.id, media_type=MediaType.image, status=MediaStatus.completed,
+        filename="chart.png", file_key="media/chart.png", file_size=100, mime_type="image/png",
+    )
+    db_session.add(asset)
+    await db_session.flush()
+    [embedding] = generate_embeddings(["Quarterly revenue chart showing strong growth in Q3."], EMBEDDING_MODEL)
+    db_session.add(DocumentChunk(
+        media_asset_id=asset.id, organization_id=org.id, content="Quarterly revenue chart showing strong growth in Q3.", embedding=embedding,
+    ))
+    await db_session.commit()
+
+    results = await vector_search(db_session, org.id, "What does the revenue chart show for Q3?", top_k=5)
+
+    assert len(results) == 1
+    assert results[0]["media_asset_id"] == str(asset.id)
+    assert results[0]["document_id"] is None
 
 
 # -------------------------- real multi-tenant isolation (vision critique 1) --------------------------
@@ -1029,3 +1094,192 @@ async def test_search_with_context_full_advanced_retrieval_path_disabled_matches
 
     assert len(results) == 1
     mock_acompletion.assert_not_called()
+
+
+async def test_graph_context_returns_none_when_graphrag_is_disabled(db_session):
+    """Real, deliberate default: `graphrag_enabled` is `False` unless an
+    organization explicitly opts in -- see api/services/retrieval_config.py's
+    own resolve_graphrag_enabled docstring."""
+    org = await _make_org(db_session, "Org GraphRAG Disabled")
+    result = await graph_context(org.id, "What is the impact of X on Y?", org_settings={"graphrag_enabled": False})
+    assert result is None
+
+
+async def test_graph_context_returns_the_real_graph_answer_when_enabled(db_session, monkeypatch):
+    """Validation criterion: an enabled organization's own real query_graph
+    output flows straight through, unmodified."""
+    from api.services import retrieval_pipeline
+
+    org = await _make_org(db_session, "Org GraphRAG Enabled")
+
+    async def _fake_query_graph(organization_id, query, embedding_model, mode="hybrid"):
+        assert organization_id == org.id
+        assert query == "What is the impact of X on Y?"
+        return "X's decision directly affected Y through a real, multi-hop chain."
+
+    monkeypatch.setattr("api.services.graph_rag.query_graph", _fake_query_graph)
+
+    result = await graph_context(org.id, "What is the impact of X on Y?", org_settings={"graphrag_enabled": True})
+    assert result == "X's decision directly affected Y through a real, multi-hop chain."
+
+
+async def test_graph_context_degrades_honestly_when_lightrag_is_not_installed(db_session, monkeypatch):
+    """Real, honest degradation -- a real search must never fail solely
+    because this genuinely optional, additive step's own dependency
+    isn't installed (mirrors api/services/graph_rag.py's own
+    GraphRAGNotAvailableError contract)."""
+    from api.services.graph_rag import GraphRAGNotAvailableError
+
+    org = await _make_org(db_session, "Org GraphRAG Unavailable")
+
+    async def _raise_not_available(*args, **kwargs):
+        raise GraphRAGNotAvailableError("lightrag-hku is not installed")
+
+    monkeypatch.setattr("api.services.graph_rag.query_graph", _raise_not_available)
+
+    result = await graph_context(org.id, "Explain X", org_settings={"graphrag_enabled": True})
+    assert result is None
+
+
+async def test_graph_context_degrades_honestly_on_any_real_failure(db_session, monkeypatch):
+    """A real, unexpected failure (e.g. a real LLM error inside
+    query_graph) must degrade the same way -- never propagate and fail
+    an otherwise-working real search."""
+    async def _raise_generic(*args, **kwargs):
+        raise RuntimeError("real, unexpected graph query failure")
+
+    org = await _make_org(db_session, "Org GraphRAG Failure")
+    monkeypatch.setattr("api.services.graph_rag.query_graph", _raise_generic)
+
+    result = await graph_context(org.id, "Explain X", org_settings={"graphrag_enabled": True})
+    assert result is None
+
+
+async def test_search_applies_the_real_policy_filter_when_enabled_and_user_context_given(db_session, monkeypatch):
+    """Validation criterion: Systèmes internes, item 22 -- an
+    organization that opts in AND a real caller supplies a real
+    `user_context` gets its real results run through the real,
+    already-tested `filter_chunks_by_policy`."""
+    org = await _make_org(db_session, "Org Policy Aware")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["The refund policy allows returns within 30 days of purchase."])
+
+    mock_filter = AsyncMock(side_effect=lambda chunks, user_context: [])
+    monkeypatch.setattr("api.services.policy_aware_retrieval.filter_chunks_by_policy", mock_filter)
+
+    org_settings = {"policy_aware_retrieval_enabled": True}
+    results = await search(db_session, org.id, "refund policy", org_settings=org_settings, user_context={"user_id": "u1"})
+
+    mock_filter.assert_awaited_once()
+    assert results == []
+
+
+async def test_search_skips_the_policy_filter_without_a_real_user_context(db_session, monkeypatch):
+    """Real, deliberate default: even an organization that enabled the
+    setting gets EXACTLY the pre-existing behavior when no real caller
+    passes a real user_context -- every pre-existing call site is
+    unaffected."""
+    org = await _make_org(db_session, "Org Policy Aware No Context")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["The refund policy allows returns within 30 days of purchase."])
+
+    mock_filter = AsyncMock()
+    monkeypatch.setattr("api.services.policy_aware_retrieval.filter_chunks_by_policy", mock_filter)
+
+    org_settings = {"policy_aware_retrieval_enabled": True}
+    results = await search(db_session, org.id, "refund policy", org_settings=org_settings)
+
+    mock_filter.assert_not_awaited()
+    assert len(results) == 1
+
+
+async def test_search_skips_the_policy_filter_when_disabled_even_with_a_real_user_context(db_session, monkeypatch):
+    org = await _make_org(db_session, "Org Policy Disabled")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["The refund policy allows returns within 30 days of purchase."])
+
+    mock_filter = AsyncMock()
+    monkeypatch.setattr("api.services.policy_aware_retrieval.filter_chunks_by_policy", mock_filter)
+
+    results = await search(db_session, org.id, "refund policy", org_settings={}, user_context={"user_id": "u1"})
+
+    mock_filter.assert_not_awaited()
+    assert len(results) == 1
+
+
+async def test_search_uses_adaptive_routing_when_enabled_and_no_explicit_strategy(db_session, monkeypatch):
+    """Validation criterion: Systèmes internes, item 25 -- when an
+    organization opts in and the caller passes no explicit strategy,
+    the real suggested strategy is actually used."""
+    org = await _make_org(db_session, "Org Adaptive Routing")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["refund policy content"])
+
+    mock_suggest = MagicMock(return_value={"strategy": "bm25_only", "graphrag_recommended": False, "reason": "test"})
+    monkeypatch.setattr("api.services.query_router.suggest_retrieval_strategy", mock_suggest)
+
+    org_settings = {"adaptive_routing_enabled": True}
+    await search(db_session, org.id, "refund policy", org_settings=org_settings)
+
+    mock_suggest.assert_called_once()
+
+
+async def test_search_ignores_adaptive_routing_when_an_explicit_strategy_is_given(db_session, monkeypatch):
+    """Real, deliberate precedence: an explicit `strategy` override
+    always wins, even when adaptive routing is enabled."""
+    org = await _make_org(db_session, "Org Adaptive Routing Explicit")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["refund policy content"])
+
+    mock_suggest = MagicMock()
+    monkeypatch.setattr("api.services.query_router.suggest_retrieval_strategy", mock_suggest)
+
+    org_settings = {"adaptive_routing_enabled": True}
+    await search(db_session, org.id, "refund policy", strategy="vector_only", org_settings=org_settings)
+
+    mock_suggest.assert_not_called()
+
+
+async def test_search_never_uses_adaptive_routing_when_disabled(db_session, monkeypatch):
+    org = await _make_org(db_session, "Org Adaptive Routing Disabled")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["refund policy content"])
+
+    mock_suggest = MagicMock()
+    monkeypatch.setattr("api.services.query_router.suggest_retrieval_strategy", mock_suggest)
+
+    await search(db_session, org.id, "refund policy", org_settings={})
+
+    mock_suggest.assert_not_called()
+
+
+async def test_search_populates_real_trace_stages_when_a_list_is_given(db_session):
+    """Validation criterion: Systèmes internes, item 24 -- a real
+    caller supplying a real, empty `trace_stages` list gets it
+    populated with real, ordered stage records."""
+    org = await _make_org(db_session, "Org Flight Trace")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["refund policy content"])
+
+    trace_stages = []
+    await search(db_session, org.id, "refund policy", org_settings={}, trace_stages=trace_stages)
+
+    stage_names = [s["stage"] for s in trace_stages]
+    assert "strategy_dispatch:hybrid" in stage_names
+    assert "threshold_filtering" in stage_names
+    for stage in trace_stages:
+        assert "duration_ms" in stage
+        assert isinstance(stage["duration_ms"], int)
+
+
+async def test_search_never_traces_when_trace_stages_is_none(db_session):
+    """Real, deliberate default: every pre-existing real call site
+    (trace_stages=None) pays zero real StageTimer overhead -- nothing
+    to assert on behavior, but a real caller must not be REQUIRED to
+    pass this new parameter at all."""
+    org = await _make_org(db_session, "Org No Flight Trace")
+    document = await _make_document(db_session, org.id, name="policy.pdf")
+    await _add_chunks(db_session, org.id, document.id, ["refund policy content"])
+
+    results = await search(db_session, org.id, "refund policy", org_settings={})
+    assert len(results) == 1

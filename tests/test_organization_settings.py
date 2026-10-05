@@ -541,3 +541,26 @@ async def test_mmr_lambda_rejects_out_of_bounds_values(client, db_session, regis
         f"/organizations/{org['id']}/settings", json={"mmr_lambda": 1.5}, headers=_auth_header(owner_token),
     )
     assert response.status_code == 422
+
+
+async def test_spend_caps_can_be_set_zeroed_and_cleared_with_an_explicit_null(client, db_session, register_payload):
+    """Hardening Mission (§6): the settings PATCH is keyed on which fields
+    were SENT, so an explicit `null` clears a cap (no limit) while `0` is a
+    real value (freeze all spending) -- the contract the dashboard's
+    Spending-limits form relies on."""
+    owner_token, _owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Caps Org")
+    url = f"/organizations/{org['id']}/settings"
+
+    set_caps = await client.patch(url, json={"daily_credit_limit": 500, "monthly_credit_limit": 0}, headers=_auth_header(owner_token))
+    assert set_caps.status_code == 200
+    assert (set_caps.json()["daily_credit_limit"], set_caps.json()["monthly_credit_limit"]) == (500, 0)
+
+    cleared = await client.patch(url, json={"daily_credit_limit": None, "monthly_credit_limit": None}, headers=_auth_header(owner_token))
+    assert (cleared.json()["daily_credit_limit"], cleared.json()["monthly_credit_limit"]) == (None, None)
+
+    untouched = await client.patch(url, json={"top_k": 7}, headers=_auth_header(owner_token))
+    assert untouched.json()["top_k"] == 7 and untouched.json()["daily_credit_limit"] is None
+
+    negative = await client.patch(url, json={"daily_credit_limit": -1}, headers=_auth_header(owner_token))
+    assert negative.status_code == 422

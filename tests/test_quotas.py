@@ -14,6 +14,17 @@ from api.models.organization_quota import OrganizationQuota
 from api.models.user import User
 
 
+async def _async_noop(*_args, **_kwargs):
+    return None
+
+
+def _async_capture(sink):
+    async def _capture(*args, **_kwargs):
+        sink.append(args)
+
+    return _capture
+
+
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -63,7 +74,7 @@ async def test_the_default_org_created_at_registration_also_gets_a_quota(client,
 
 async def test_a_manager_cannot_invite_past_max_users(client, db_session, register_payload, monkeypatch):
     """Validation criterion: a user cannot exceed max_users."""
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

@@ -11,6 +11,17 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 
 
+async def _async_noop(*_args, **_kwargs):
+    return None
+
+
+def _async_capture(sink):
+    async def _capture(*args, **_kwargs):
+        sink.append(args)
+
+    return _capture
+
+
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -124,7 +135,7 @@ async def test_a_manager_with_can_create_teams_false_is_blocked(client, db_sessi
 async def test_a_member_with_can_invite_members_true_can_invite(monkeypatch, client, db_session, register_payload):
     """The additive OR-gate: a plain Member normally cannot invite, but
     can_invite_members=True lets them, without promoting them."""
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -150,7 +161,7 @@ async def test_a_member_with_can_invite_members_true_can_invite(monkeypatch, cli
 async def test_a_member_with_can_invite_members_true_still_cannot_invite_as_admin(monkeypatch, client, db_session, register_payload):
     """The widened privilege-escalation guard: the additive grant only
     ever allows inviting as member/viewer, same ceiling as a Manager."""
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

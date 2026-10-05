@@ -191,6 +191,74 @@ async def test_login_wrong_password_returns_generic_401(client, register_payload
     assert response.status_code == 401
 
 
+async def test_login_locks_the_account_after_too_many_failed_attempts(client, register_payload, monkeypatch):
+    """Hardening Mission, Phase 2 -- REGRESSION for a real, confirmed
+    audit gap: the only pre-existing brute-force protection was a Redis
+    rate limit that fails OPEN (zero protection during a Redis outage).
+    This is the real, DB-persistent lockout that works independently of
+    Redis -- the fast suite already runs with RATE_LIMIT_ENABLED=False
+    (conftest.py), so any protection observed here is genuinely this
+    new mechanism, not the pre-existing Redis one."""
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 3)
+    await client.post("/auth/register", json=register_payload)
+
+    for _ in range(3):
+        response = await client.post("/auth/login", json={"email": register_payload["email"], "password": "wrong-password"})
+        assert response.status_code == 401
+
+    # The account is now locked -- even the REAL, correct password must
+    # be rejected (same generic error, no enumeration of lockout state).
+    response = await client.post(
+        "/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]},
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Incorrect email or password"
+
+
+async def test_login_resets_the_lockout_counter_on_a_real_successful_login(client, db_session, register_payload, monkeypatch):
+    from sqlalchemy import select
+
+    from api.config import settings
+    from api.models.user import User
+
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 5)
+    await client.post("/auth/register", json=register_payload)
+
+    for _ in range(3):
+        await client.post("/auth/login", json={"email": register_payload["email"], "password": "wrong-password"})
+
+    response = await client.post(
+        "/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]},
+    )
+    assert response.status_code == 200
+
+    user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
+    assert user.failed_login_attempts == 0
+    assert user.locked_until is None
+
+
+async def test_login_lockout_can_be_disabled(client, register_payload, monkeypatch):
+    """Real, documented kill switch -- same convention as every other
+    advanced-feature flag in this codebase."""
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_ENABLED", False)
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 2)
+    await client.post("/auth/register", json=register_payload)
+
+    for _ in range(5):
+        await client.post("/auth/login", json={"email": register_payload["email"], "password": "wrong-password"})
+
+    # Still rejected (wrong password), but never locked out -- the real
+    # password still works immediately after.
+    response = await client.post(
+        "/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]},
+    )
+    assert response.status_code == 200
+
+
 async def test_login_email_scoped_rate_limit_alerts_the_real_account_owner(client, register_payload, monkeypatch):
     """Coverage audit finding: login()'s email-scoped rate limit has its
     own except-and-alert branch distinct from the IP-scoped one right

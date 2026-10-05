@@ -147,6 +147,32 @@ async def test_owner_can_upload_a_pdf_document(client, db_session, register_payl
     assert body["file_type"] == "application/pdf"
 
 
+async def test_upload_is_rate_limited_per_organization(client, db_session, register_payload, monkeypatch):
+    """Hardening Mission (§4, rate limiting) -- REGRESSION for a real,
+    confirmed gap: uploading triggers real extraction/chunking/embedding
+    work and had no rate limit of its own, only a plan-level document
+    COUNT cap (billing_usage.check_plan_resource_limit), which does
+    nothing to stop a burst of uploads within the plan's quota."""
+    from fastapi import HTTPException, status
+
+    _stub_s3(monkeypatch)
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme Rate Limit")
+    expected_key = f"ratelimit:document_upload:org:{org['id']}"
+
+    calls = []
+
+    async def _fake_enforce(key, max_attempts, window_seconds):
+        calls.append(key)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts", headers={"Retry-After": "60"})
+
+    monkeypatch.setattr("api.routers.documents.enforce_rate_limit", _fake_enforce)
+
+    response = await _upload(client, org["id"], owner_token)
+    assert response.status_code == 429
+    assert expected_key in calls
+
+
 async def test_upload_rejects_content_that_is_neither_pdf_docx_nor_text(client, db_session, register_payload, monkeypatch):
     """Since Partie 2.1.3, plain text itself became a legitimate,
     accepted upload (see test_owner_can_upload_a_txt_document below) --

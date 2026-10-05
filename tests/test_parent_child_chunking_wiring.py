@@ -66,7 +66,7 @@ def _mock_extraction(monkeypatch, text: str = _LONG_TEXT, section_metadata: dict
     monkeypatch.setattr("api.security.documents.download_document_file", lambda file_key: b"fake bytes, never really parsed")
     monkeypatch.setattr(
         "api.security.documents.extract_document_content",
-        lambda tmp_path, file_type: {
+        lambda tmp_path, file_type, pdf_engine="pymupdf": {
             "metadata": {}, "sections": [{"text": text, "metadata": section_metadata or {}}], "tables": [], "image_count": 0,
         },
     )

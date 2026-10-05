@@ -13,6 +13,17 @@ from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 
 
+async def _async_noop(*_args, **_kwargs):
+    return None
+
+
+def _async_capture(sink):
+    async def _capture(*args, **_kwargs):
+        sink.append(args)
+
+    return _capture
+
+
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -209,7 +220,7 @@ async def test_accepting_with_a_valid_token_adds_an_existing_user(monkeypatch, c
     existing user."""
     captured = {}
     monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
-    monkeypatch.setattr("api.routers.invitations.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -299,7 +310,7 @@ async def test_accepting_an_already_accepted_invitation_fails(monkeypatch, clien
     """'Acceptée par une autre personne' -- a used token must not work twice."""
     captured = {}
     monkeypatch.setattr("api.routers.invitations.send_branded_organization_invitation_email", AsyncMock(side_effect=lambda *a: captured.update(link=a[4])))
-    monkeypatch.setattr("api.routers.invitations.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.invitations.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

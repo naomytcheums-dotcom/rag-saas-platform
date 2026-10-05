@@ -218,3 +218,46 @@ def test_resolve_llm_config_respects_real_overrides():
     assert config["model"] == settings.MISTRAL_MODEL
     assert config["temperature"] == 1.5
     assert config["max_tokens"] == 500
+
+
+# --------------------------- Systèmes internes, item 26 (Cost-Aware Intelligence) ---------------------------
+
+
+def test_resolve_cost_budget_per_request_defaults_to_none():
+    assert DEFAULT_SETTINGS["cost_budget_per_request"] is None
+    from api.services.llm_config import resolve_cost_budget_per_request
+
+    assert resolve_cost_budget_per_request() is None
+    assert resolve_cost_budget_per_request({}) is None
+
+
+def test_resolve_llm_config_ignores_cost_budget_when_none():
+    """Real, deliberate default: no cost_budget_per_request means the
+    real, unchanged model-resolution behavior."""
+    config = resolve_llm_config({"llm_provider": "anthropic", "llm_model": "claude-3-5-sonnet-20241022"})
+    assert config["model"] == "claude-3-5-sonnet-20241022"
+
+
+def test_resolve_llm_config_applies_a_real_tight_budget():
+    """Validation criterion: a real, tight budget selects the real,
+    cheaper candidate for this organization's own configured provider."""
+    config = resolve_llm_config({"llm_provider": "anthropic", "cost_budget_per_request": 0.005})
+    assert config["model"] == "claude-3-haiku-20240307"
+
+
+def test_resolve_llm_config_respects_an_explicit_model_override_over_the_budget():
+    """Real, deliberate precedence: an explicit `model` override always
+    wins, even when a real cost budget is also configured."""
+    config = resolve_llm_config(
+        {"llm_provider": "anthropic", "cost_budget_per_request": 0.005},
+        overrides={"model": "claude-3-5-sonnet-20241022"},
+    )
+    assert config["model"] == "claude-3-5-sonnet-20241022"
+
+
+def test_resolve_llm_config_does_nothing_for_a_provider_with_no_real_pricing():
+    """Real, honest scope: ollama has no real COST_MODEL_PRICING entry
+    -- a real cost budget must never silently break model resolution
+    for a provider this codebase can't price."""
+    config = resolve_llm_config({"llm_provider": "ollama", "cost_budget_per_request": 0.0001})
+    assert config["provider"] == "ollama"

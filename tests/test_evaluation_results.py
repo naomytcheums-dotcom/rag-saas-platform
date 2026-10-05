@@ -82,6 +82,13 @@ async def test_run_evaluation_persists_a_real_result_with_real_metrics(monkeypat
     assert "reliable" not in result.metrics  # the per-key "reliable" flag is named hallucination_rate_reliable, not bare
     assert "hallucination_rate_reliable" in result.metrics
     assert "token_usage" in result.metrics
+    # Hardening Mission, Phase 9 -- REGRESSION for a real, confirmed bug:
+    # api.services.rag_evolution_engine.run_evolution_cycle's own real,
+    # live default target_metric ("semantic_similarity") used to never
+    # match anything at this top level, only nested inside
+    # answer_relevance_factors -- a real caller using the default never
+    # got a real candidate recommendation, no matter how good.
+    assert result.metrics["semantic_similarity"] == result.metrics["answer_relevance_factors"]["semantic_similarity"]
     assert "cost_per_request_detail" in result.metrics
 
 

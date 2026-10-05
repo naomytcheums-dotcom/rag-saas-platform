@@ -80,6 +80,10 @@ def test_support_email_is_required():
     assert Settings.model_fields["SUPPORT_EMAIL"].is_required()
 
 
+def test_unpaid_credit_topups_are_disabled_by_default():
+    assert Settings.model_fields["CREDITS_ALLOW_UNPAID_TOPUP"].default is False
+
+
 def test_database_url_rejects_the_plain_postgresql_driver():
     """Not new this session -- just previously untested directly (only
     ever exercised implicitly by every other test using the real,

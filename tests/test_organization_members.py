@@ -11,6 +11,17 @@ from api.models.organization import Organization, OrganizationMember, Organizati
 from api.models.user import User
 
 
+async def _async_noop(*_args, **_kwargs):
+    return None
+
+
+def _async_capture(sink):
+    async def _capture(*args, **_kwargs):
+        sink.append(args)
+
+    return _capture
+
+
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -61,7 +72,7 @@ async def test_a_member_cannot_list_members(client, db_session, register_payload
 
 async def test_admin_can_invite_an_existing_user(monkeypatch, client, db_session, register_payload):
     captured = []
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: captured.append(a))
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_capture(captured))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -142,7 +153,7 @@ async def test_cannot_invite_someone_as_owner(client, db_session, register_paylo
 
 async def test_admin_can_change_a_members_role(monkeypatch, client, db_session, register_payload):
     captured = []
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_role_changed_email", lambda *a: captured.append(a))
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_role_changed_email", _async_capture(captured))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -225,7 +236,7 @@ async def test_cannot_promote_a_member_to_owner_via_role_update(client, db_sessi
 
 async def test_admin_can_remove_a_member(monkeypatch, client, db_session, register_payload):
     captured = []
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_removed_email", lambda *a: captured.append(a))
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_removed_email", _async_capture(captured))
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -312,7 +323,7 @@ async def test_manager_can_list_members(client, db_session, register_payload):
 
 
 async def test_manager_can_invite_a_member(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -331,7 +342,7 @@ async def test_manager_can_invite_a_member(monkeypatch, client, db_session, regi
 
 
 async def test_manager_can_invite_a_viewer(monkeypatch, client, db_session, register_payload):
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
@@ -394,7 +405,7 @@ async def test_manager_cannot_invite_as_manager(client, db_session, register_pay
 async def test_admin_can_still_invite_as_admin(monkeypatch, client, db_session, register_payload):
     """The Manager guard must not accidentally tighten what Admin/Owner
     can already do -- only Manager-issued invites are restricted."""
-    monkeypatch.setattr("api.routers.organization_members.send_organization_member_added_email", lambda *a: None)
+    monkeypatch.setattr("api.routers.organization_members.send_branded_organization_member_added_email", _async_noop)
 
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")

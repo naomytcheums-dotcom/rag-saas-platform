@@ -12,7 +12,10 @@ def _auth_header(access_token: str) -> dict:
 
 
 async def _register_and_create_org(client, register_payload):
-    token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    from unittest.mock import AsyncMock, patch
+
+    with patch("api.routers.auth.create_and_send_email_otp", new=AsyncMock()):
+        token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     org_id = (await client.post("/organizations", json={"name": "Billing Org"}, headers=_auth_header(token))).json()["id"]
     return token, org_id
 
@@ -83,7 +86,12 @@ async def test_owner_can_subscribe_upgrade_cancel_reactivate(client, db_session,
     assert reactivate.json()["status"] == "active"
 
 
-async def test_credits_default_grant_and_purchase_pack(client, register_payload):
+async def test_credits_default_grant_and_purchase_pack(monkeypatch, client, register_payload):
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
+    monkeypatch.setattr(settings, "PAYSTACK_SECRET_KEY", None)
+    monkeypatch.setattr(settings, "CREDITS_ALLOW_UNPAID_TOPUP", True)
     token, org_id = await _register_and_create_org(client, register_payload)
 
     credits = await client.get(f"/organizations/{org_id}/billing/credits", headers=_auth_header(token))
@@ -350,3 +358,48 @@ async def test_paystack_webhook_reconciles_subscription_status_via_customer_code
 
     await db_session.refresh(sub)
     assert sub.status == SubscriptionStatus.canceled
+
+
+# ------------------------------------------- Hardening Mission, §23: no free credits when payments are configured
+
+
+async def test_direct_credit_topup_is_refused_when_a_payment_provider_is_configured(monkeypatch, client, register_payload):
+    """`POST .../credits/purchase` grants credits WITHOUT charging. With Stripe/Paystack configured it used to
+    still do so -- any holder of `billing:manage` could mint unlimited credits. Now it must go through a real
+    checkout, and the balance must not move."""
+    from api.config import settings
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    before = (await client.get(f"/organizations/{org_id}/billing/credits", headers=_auth_header(token))).json()["balance"]
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_configured")
+
+    response = await client.post(f"/organizations/{org_id}/billing/credits/purchase", json={"pack_id": "starter"}, headers=_auth_header(token))
+
+    assert response.status_code == 409 and "checkout" in response.json()["detail"]
+    after = (await client.get(f"/organizations/{org_id}/billing/credits", headers=_auth_header(token))).json()["balance"]
+    assert after == before
+
+
+async def test_unpaid_topup_can_be_disabled_on_a_public_deployment(monkeypatch, client, register_payload):
+    from api.config import settings
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    monkeypatch.setattr(settings, "CREDITS_ALLOW_UNPAID_TOPUP", False)
+
+    response = await client.post(f"/organizations/{org_id}/billing/credits/purchase", json={"pack_id": "starter"}, headers=_auth_header(token))
+
+    assert response.status_code == 403
+
+
+async def test_unpaid_topup_still_works_on_a_self_hosted_instance_with_no_provider(monkeypatch, client, register_payload):
+    from api.config import settings
+
+    token, org_id = await _register_and_create_org(client, register_payload)
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
+    monkeypatch.setattr(settings, "PAYSTACK_SECRET_KEY", None)
+    monkeypatch.setattr(settings, "CREDITS_ALLOW_UNPAID_TOPUP", True)
+    before = (await client.get(f"/organizations/{org_id}/billing/credits", headers=_auth_header(token))).json()["balance"]
+
+    response = await client.post(f"/organizations/{org_id}/billing/credits/purchase", json={"pack_id": "starter"}, headers=_auth_header(token))
+
+    assert response.status_code == 200 and response.json()["balance"] == before + 10_000

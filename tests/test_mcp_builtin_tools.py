@@ -93,15 +93,20 @@ async def test_update_retrieval_config_empty_config_returns_error():
 
 @pytest.mark.asyncio
 async def test_get_failure_report_no_results_returns_empty():
+    # The run now has to be OWNED by the calling organization (cross-tenant IDOR fix): db.scalar answers the ownership check.
+    run_id = uuid.uuid4()
     db = AsyncMock()
+    db.scalar = AsyncMock(return_value=run_id)
+    db.execute = AsyncMock(return_value=MagicMock(all=lambda: []))
     db.scalars = AsyncMock(return_value=MagicMock(all=lambda: []))
-    result = await bt.call_builtin_tool(
-        db,
-        "get_failure_report",
-        {
-            "organization_id": str(uuid.uuid4()),
-            "run_id": str(uuid.uuid4()),
-        },
-    )
+    result = await bt.call_builtin_tool(db, "get_failure_report", {"organization_id": str(uuid.uuid4()), "run_id": str(run_id)})
     assert result["is_error"] is False
     assert '"failures": []' in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_get_failure_report_for_a_run_not_owned_by_the_organization_is_an_error():
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=None)
+    result = await bt.call_builtin_tool(db, "get_failure_report", {"organization_id": str(uuid.uuid4()), "run_id": str(uuid.uuid4())})
+    assert result["is_error"] is True

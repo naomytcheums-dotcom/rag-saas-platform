@@ -175,3 +175,74 @@ def test_format_sql_results_renders_a_real_markdown_table():
 
 def test_format_sql_results_handles_empty_results():
     assert format_sql_results([]) == "No rows returned."
+
+
+# ------------------------------------------- Hardening Mission §29 (red team) --
+
+
+_PAREN_ESCAPE_WHERES = [
+    "1=1) OR (1=1",
+    "name = 'x') OR (name IS NOT NULL",
+    "1=1) OR 1=1 OR (1=1",
+    "(1=1",
+    "1=1)",
+]
+
+
+@pytest.mark.parametrize("where", _PAREN_ESCAPE_WHERES)
+def test_validate_sql_query_rejects_a_where_that_could_close_the_wrapping_parenthesis(where):
+    with pytest.raises(SqlToolError, match="Unbalanced"):
+        validate_sql_query(f"SELECT name FROM documents WHERE {where}")
+
+
+async def test_a_parenthesis_escape_can_never_read_another_organizations_rows(db_session):
+    """REAL cross-tenant bypass (mechanism reproduced with the exact pre-fix rendered SQL on plain sqlite3: org A saw org B's row): the
+    user WHERE `1=1) OR (1=1` rendered as `WHERE (1=1) OR (1=1) AND
+    organization_id = :organization_id` (AND binds tighter than OR), so
+    org A's query returned org B's documents. Now rejected before any
+    SQL runs, and -- belt and braces -- B's rows are never returned."""
+    org_a = await _make_org(db_session, "Escape Org A")
+    org_b = await _make_org(db_session, "Escape Org B")
+    await _make_document(db_session, org_a.id, name="a-doc.pdf")
+    await _make_document(db_session, org_b.id, name="b-secret.pdf")
+    await db_session.commit()
+
+    with pytest.raises(SqlToolError):
+        await execute_sql_query(db_session, "SELECT name FROM documents WHERE 1=1) OR (1=1", org_a.id)
+
+
+def test_validate_sql_query_still_accepts_legitimate_balanced_parentheses_and_parens_inside_strings():
+    validate_sql_query("SELECT name FROM documents WHERE (name = 'a' OR name = 'b') AND file_size > 1")
+    validate_sql_query("SELECT name FROM documents WHERE name = 'weird)(name'")
+    validate_sql_query("SELECT name FROM documents WHERE file_size IN (1, 2, 3)")
+
+
+_DANGEROUS_FUNCTION_QUERIES = [
+    "SELECT pg_sleep(60) FROM documents",
+    "SELECT name FROM documents WHERE pg_sleep(60) IS NULL",
+    "SELECT set_config('app.x', 'y', false) FROM documents",
+    "SELECT pg_read_file('/etc/passwd') FROM documents",
+    "SELECT lo_import('/etc/passwd') FROM documents",
+    "SELECT name FROM documents ORDER BY pg_sleep(1)",
+    "SELECT name FROM documents WHERE dblink('x', 'y') IS NOT NULL",
+]
+
+
+@pytest.mark.parametrize("query", _DANGEROUS_FUNCTION_QUERIES)
+def test_validate_sql_query_rejects_non_allow_listed_function_calls(query):
+    """Hardening Mission §29: `SELECT pg_sleep(60) ...` used to pass every check
+    and pin a pooled DB connection for a minute; the same door leads to
+    set_config / pg_* / lo_* / dblink."""
+    with pytest.raises(SqlToolError, match="not allowed"):
+        validate_sql_query(query)
+
+
+def test_validate_sql_query_still_allows_the_harmless_functions_keywords_and_literals():
+    for query in (
+        "SELECT count(*) FROM documents",
+        "SELECT lower(name), length(name) FROM documents WHERE lower(name) LIKE '%pdf'",
+        "SELECT name FROM documents WHERE file_size IN (1, 2, 3) AND (name = 'a' OR name = 'b')",
+        "SELECT date_trunc('day', created_at) FROM documents",
+        "SELECT name FROM documents WHERE name = 'pg_sleep(60)'",  # the text of a function inside a string literal is just text
+    ):
+        validate_sql_query(query)

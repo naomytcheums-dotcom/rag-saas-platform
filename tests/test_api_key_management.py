@@ -217,7 +217,8 @@ def test_get_available_scopes_matches_table():
     assert "chat:read" in scopes
     assert "embed:write" in scopes
     assert "mcp:tools" in scopes  # Phase 5, Étape 9 -- api/routers/mcp_server.py
-    assert len(scopes) == 13
+    assert "a2a:call" in scopes  # Hardening Mission, §15 -- api/routers/a2a.py
+    assert len(scopes) == 14
 
 
 async def test_update_key_scopes_endpoint(client, db_session, register_payload):
@@ -235,7 +236,8 @@ async def test_list_available_scopes_endpoint(client, db_session, register_paylo
     token, _org_id, _user = await _make_org(client, db_session, register_payload)
     response = await client.get("/api-keys/scopes", headers=_auth_header(token))
     assert response.status_code == 200
-    assert len(response.json()["scopes"]) == 13
+    assert len(response.json()["scopes"]) == 14  # +1: "a2a:call" (Hardening Mission, §15)
+    assert "a2a:call" in response.json()["scopes"]
 
 
 # ------------------------------------------------------------------- 9.2.5 Rate limits
