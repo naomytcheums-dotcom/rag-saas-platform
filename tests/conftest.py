@@ -22,8 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from api.config import settings
 from api.database import Base, get_db
 from api.main import app
+from api.services.mem0_service import close_all_memories
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+def pytest_sessionfinish(session, exitstatus):
+    close_all_memories()
 
 
 @pytest.fixture(autouse=True)

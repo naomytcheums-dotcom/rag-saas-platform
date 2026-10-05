@@ -44,6 +44,33 @@ _INSTANCES: dict[tuple[uuid.UUID, uuid.UUID], object] = {}
 _STORAGE_ROOT = Path("storage") / "mem0"
 
 
+def close_all_memories() -> None:
+    """Release cached local clients before Python tears down its import machinery."""
+    closed_clients: set[int] = set()
+    try:
+        for memory in list(_INSTANCES.values()):
+            for name in ("vector_store", "_telemetry_vector_store", "_entity_store"):
+                store = getattr(memory, name, None)
+                if store is None or not getattr(store, "is_local", False):
+                    continue
+                client = getattr(store, "client", None)
+                if client is None or id(client) in closed_clients:
+                    continue
+                closed_clients.add(id(client))
+                try:
+                    client.close()
+                except Exception as exc:
+                    logger.warning("close_all_memories: local %s client close failed (%s)", name, type(exc).__name__)
+            close = getattr(memory, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception as exc:
+                    logger.warning("close_all_memories: memory close failed (%s)", type(exc).__name__)
+    finally:
+        _INSTANCES.clear()
+
+
 class Mem0NotAvailableError(Exception):
     """Same honest-degradation contract as
     api/services/graph_rag.py's own GraphRAGNotAvailableError."""

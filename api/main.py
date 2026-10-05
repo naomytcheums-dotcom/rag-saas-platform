@@ -49,6 +49,7 @@ from api.routers import (
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.services.cache_service import is_redis_reachable as is_cache_redis_reachable
+from api.services.mem0_service import close_all_memories
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
 from api.services.plugin_hooks import plugin_error_hook_middleware
@@ -121,8 +122,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         poll_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await poll_task
+        try:
+            with contextlib.suppress(asyncio.CancelledError):
+                await poll_task
+        finally:
+            close_all_memories()
 
 
 # Partie 9.2.9 -- real OpenAPI/Swagger metadata (title/description/
