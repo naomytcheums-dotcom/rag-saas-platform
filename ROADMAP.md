@@ -4043,3 +4043,26 @@ Les 25 lots ont tourné ; chaque échec a été rejoué isolément avec sa trace
 - Staging: 77 restricted lab-role policies applied; 11 live A/B RLS/IDOR
   tests PASS. Runtime bypass/indirect tenancy not certified.
 - No production access, no historical migration edits, no commit or push.
+
+---
+
+## [Bob-Auto-Fixes] — Balayage de toutes les routes : erreurs non gérées et accès anonymes (2026-10-05)
+
+**Méthode** : `tests/test_no_unhandled_errors_sweep.py` appelle CHAQUE opération du schéma OpenAPI (plus de 700) avec un propriétaire d'organisation (corps vides, puis corps valides générés depuis le schéma de la route) et SANS authentification. Une réponse 5xx, une exception qui s'échappe de l'application, ou une route anonyme absente de la liste `PUBLIC_BY_DESIGN` fait échouer le test. Tous les runs ci-dessous : base injoignable factice (`DATABASE_URL` surchargée), jamais la base du `.env`.
+
+**Trouvé et corrigé**
+- `POST /integrations/teams/webhook` : AUCUNE authentification (quiconque connaissait un identifiant de locataire Microsoft déclenchait une réponse RAG payante) + `JSONDecodeError` sur un corps non JSON. Vérification du jeton Bot Framework (RS256, émetteur, audience = App ID du bot, expiration, clés via le client SSRF-safe, cache + rafraîchissement sur `kid` inconnu) ; échec = 401, sans configuration = 401.
+- `POST /integrations/discord/message` : AUCUNE authentification + même plantage JSON. Secret partagé `X-Gateway-Secret` (`DISCORD_GATEWAY_SHARED_SECRET`), comparaison à temps constant, refus si non configuré.
+- `POST /documents/{id}/reindex-sync` : anonyme, réindexation en tâche de fond de n'importe quel document. Authentification + droits identiques à `/reindex` + limite de débit ; références de tâches conservées.
+- `POST /partners/register` : création de comptes sans limite, consentement présumé, aucun contrôle de mot de passe. Limite par IP, `accept_terms` obligatoire, contrôles fuite/similarité du mot de passe.
+- `GET /integrations/{n8n,airbyte}/status` exposaient l'URL interne des services à un anonyme : authentification requise. `POST /license/validate` : limite par IP.
+- `GET /metrics` : reste ouvert par défaut (choix documenté) ; `METRICS_AUTH_TOKEN` active un jeton Bearer. **Action propriétaire : le définir sur tout déploiement joignable depuis Internet.**
+- Lecture JSON sûre partagée (`api.utils.read_json_object`) appliquée à Slack, Discord, Teams : corps invalide = 400.
+- `/evolution/run` : l'absence de `dspy` renvoyait HTTP 500 ; la décision devient `optimizer_unavailable` (baseline mesurée, raison explicite).
+- A2A : l'absence de `beeai-framework` ou une erreur interne renvoyait une erreur de protocole opaque dans un HTTP 200 ; réponse en clair, sans fuite de détail interne.
+- Activer `ANSWER_RELEVANCE_USE_LLM` / `CONTEXT_RELEVANCE_USE_LLM` / `CLAIM_VERIFICATION_USE_LLM` (chemins non implémentés) démarrait puis levait `NotImplementedError` (500) ; refus au démarrage avec message explicite.
+- Lint : `[tool.ruff]` ajouté (règles qui détectent du code qui planterait : E9, F63, F7, F82, F811, F841), `ruff check api/` = 0 erreur, étape ajoutée à la CI ; 4 variables locales inutiles supprimées.
+
+**Sécurité du processus de test** : les runs de régression du 2 au 5 octobre ont utilisé la base distante du `.env` (distincte du staging). `tests/test_postgres_integration.py` y crée puis supprime des lignes temporaires. Règle appliquée depuis : toute exécution de test surcharge `DATABASE_URL` et `DATABASE_URL_TRANSACTION` par une cible factice injoignable.
+
+**Changements de comportement à connaître** : passerelles Discord (header requis), webhook Teams (jeton Microsoft requis), `partners/register` (`accept_terms`), pages de statut n8n/Airbyte (connexion requise). 9 tests existants mis à jour car ils reposaient sur l'ancien comportement non sécurisé.
