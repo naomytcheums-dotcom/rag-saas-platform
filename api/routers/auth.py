@@ -224,6 +224,25 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
 
     user = await db.scalar(select(User).where(User.email == payload.email))
 
+    # Hardening Mission, Phase 2 -- real, DB-persistent account lockout,
+    # checked BEFORE any password verification and deliberately
+    # independent of Redis (api/security/rate_limit.py's own documented
+    # fail-open behavior means the rate limit below provides zero real
+    # protection during a Redis outage). Same generic error as every
+    # other failure reason in this endpoint -- a distinct "account
+    # locked" message would itself leak which emails are registered.
+    if settings.ACCOUNT_LOCKOUT_ENABLED and user is not None and user.locked_until is not None:
+        now = dt.datetime.now(dt.timezone.utc)
+        locked_until = user.locked_until if user.locked_until.tzinfo else user.locked_until.replace(tzinfo=dt.timezone.utc)
+        if locked_until > now:
+            await log_audit_action(
+                db, user_id=user.id, action=AuditAction.LOGIN_FAILED, ip=client_ip(request),
+                user_agent=request.headers.get("user-agent"), success=False, failure_reason="account_locked",
+                metadata={"email": payload.email},
+            )
+            await db.commit()
+            raise _GENERIC_LOGIN_ERROR
+
     try:
         await enforce_rate_limit(
             f"ratelimit:login:email:{payload.email}",
@@ -255,6 +274,15 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     user_agent = request.headers.get("user-agent")
 
     if user is None or user.hashed_password is None or not password_matches:
+        # Hardening Mission, Phase 2 -- real, DB-persistent lockout
+        # counter, independent of Redis. Only a REAL, existing user with
+        # a real password hash can ever be locked -- an unknown email or
+        # an OAuth-only account (no password set at all) has nothing a
+        # password brute-force could be attacking.
+        if settings.ACCOUNT_LOCKOUT_ENABLED and user is not None and user.hashed_password is not None:
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= settings.ACCOUNT_LOCKOUT_MAX_ATTEMPTS:
+                user.locked_until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=settings.ACCOUNT_LOCKOUT_DURATION_SECONDS)
         await log_audit_action(
             db, user_id=(user.id if user is not None else None), action=AuditAction.LOGIN_FAILED, ip=ip,
             user_agent=user_agent, success=False, failure_reason="invalid_credentials", metadata={"email": payload.email},
@@ -269,6 +297,15 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         )
         await db.commit()
         raise _GENERIC_LOGIN_ERROR
+
+    # Hardening Mission, Phase 2 -- a real, successful password check
+    # (reached only once every failure branch above has returned)
+    # resets this real lockout counter, same real "legitimate activity
+    # clears suspicion" precedent as every other attempt-counter in this
+    # codebase.
+    if settings.ACCOUNT_LOCKOUT_ENABLED and (user.failed_login_attempts or user.locked_until is not None):
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
     # Audit finding 26: WebAuthn is an ADDITIONAL available second factor,
     # never a replacement for TOTP -- an account can have either, both,

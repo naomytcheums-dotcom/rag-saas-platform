@@ -15,7 +15,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -71,6 +71,19 @@ class User(Base):
     # account" (deleted_at below) for real, since both set is_active=False.
     suspended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     suspended_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Hardening Mission, Phase 2 -- real, DB-persistent account lockout,
+    # deliberately independent of Redis (api/security/rate_limit.py's own
+    # documented fail-open behavior means a Redis outage otherwise leaves
+    # zero brute-force protection at all). `failed_login_attempts` resets
+    # to 0 on any real successful login (api/routers/auth.py); reaching
+    # `settings.ACCOUNT_LOCKOUT_MAX_ATTEMPTS` sets `locked_until` to a
+    # real, future timestamp -- checked unconditionally at the very start
+    # of login(), before the password is even verified, so a lockout
+    # cannot be bypassed by guessing correctly once the account is
+    # already locked.
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # -- 1.1.7 2FA (TOTP) ----------------------------------------------------
     # The shared secret used to generate/verify 6-digit codes. Set by

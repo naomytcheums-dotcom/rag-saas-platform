@@ -16,6 +16,7 @@ Two audiences, two sets of endpoints:
 import asyncio
 import datetime as dt
 import logging
+import secrets
 import uuid
 
 import httpx
@@ -193,7 +194,8 @@ async def sso_authorize(connection_id: uuid.UUID, request: Request, db: AsyncSes
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="This identity provider is temporarily unreachable")
 
     client = build_client(connection.client_id, _redirect_uri(connection_id))
-    authorization_url, state = client.create_authorization_url(metadata["authorization_endpoint"])
+    nonce = secrets.token_urlsafe(32)
+    authorization_url, state = client.create_authorization_url(metadata["authorization_endpoint"], nonce=nonce)
 
     # Stashed in the signed session cookie (same SessionMiddleware
     # api/routers/oauth.py's Authlib integration already relies on for
@@ -201,6 +203,7 @@ async def sso_authorize(connection_id: uuid.UUID, request: Request, db: AsyncSes
     # the same CSRF protection Authlib's starlette client provides
     # automatically for Google/GitHub.
     request.session["enterprise_sso_state"] = state
+    request.session["enterprise_sso_nonce"] = nonce
     request.session["enterprise_sso_connection_id"] = str(connection_id)
     return RedirectResponse(url=authorization_url, status_code=status.HTTP_302_FOUND)
 
@@ -212,6 +215,7 @@ async def sso_callback(
 ):
     expected_connection_id = request.session.pop("enterprise_sso_connection_id", None)
     expected_state = request.session.pop("enterprise_sso_state", None)
+    expected_nonce = request.session.pop("enterprise_sso_nonce", None)
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Identity provider returned an error: {error}")
@@ -230,7 +234,7 @@ async def sso_callback(
         id_token = token.get("id_token")
         if not id_token:
             raise _SSO_LOGIN_FAILED
-        claims = await verify_id_token(id_token, metadata, connection.client_id, connection.issuer)
+        claims = await verify_id_token(id_token, metadata, connection.client_id, connection.issuer, expected_nonce=expected_nonce)
     except httpx.HTTPError as exc:
         logger.warning("SSO token exchange failed for connection %s: %s", connection_id, exc)
         raise _SSO_LOGIN_FAILED

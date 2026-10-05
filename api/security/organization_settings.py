@@ -138,6 +138,41 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # never touches this new setting keeps the exact same real chunking
     # behavior it already had before this étape.
     "chunking_strategy": "fixed",
+    # Real, deliberate "pymupdf" default -- an organization that never
+    # touches this keeps the exact same real PDF extraction it already
+    # had. "docling" opts into api/services/docling_extraction.py's
+    # structure-aware parser instead (see that module's own docstring).
+    "pdf_extraction_engine": "pymupdf",
+    # Real, deliberate `False` default -- an organization that never
+    # touches this keeps the exact same real ingestion behavior it
+    # already had (no PII scanning). See
+    # api/services/pii_detection.py's own module docstring.
+    "pii_masking_enabled": False,
+    # Real, deliberate `False` default -- see
+    # api/services/graph_rag.py's own module docstring for the honest
+    # scope (a real, working building block, not yet wired into the
+    # main /search retrieval strategy).
+    "graphrag_enabled": False,
+    # Systèmes internes, item 22 -- gate for
+    # api.services.policy_aware_retrieval.filter_chunks_by_policy, wired
+    # into search() -- default False, same rétrocompatibilité discipline.
+    "policy_aware_retrieval_enabled": False,
+    # Hardening Mission, Phase 4 -- gate for the plain, agent-less RAG
+    # path (api.services.generation.generate_response) to also scan its
+    # own query/retrieved-context for a prompt injection attempt, the
+    # SAME real detector (api.services.prompt_injection_detection) the
+    # Agent-scoped guardrails (api/services/agent_guardrails.py) already
+    # use -- this path has no Agent row at all (it deliberately does not
+    # go through AgentOrchestrator, see generation.py's own module
+    # docstring), so it needed its own, org-level opt-in instead of
+    # reusing Agent.prompt_injection_detection_enabled. Default False,
+    # same rétrocompatibilité discipline as every other advanced-feature
+    # flag in this codebase.
+    "prompt_injection_detection_enabled": False,
+    # Systèmes internes, item 25 -- gate for
+    # api.services.query_router.suggest_retrieval_strategy, wired into
+    # search() -- default False, same rétrocompatibilité discipline.
+    "adaptive_routing_enabled": False,
     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "llm_provider": "anthropic",
     # Real, deliberate `None` -- Partie 7.2.15's own cost-tracking work
@@ -164,6 +199,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "system_prompt": "You are a helpful assistant.",
     "retrieval_strategy": "hybrid",
     "max_tokens": 4096,
+    # Systèmes internes, item 26 -- gate for
+    # api.services.cost_aware_routing.select_model_for_budget, wired
+    # into api.services.llm_config.resolve_llm_config -- default None
+    # (no real budget constraint), same rétrocompatibilité discipline.
+    "cost_budget_per_request": None,
     "citation_required": True,
     "language": "en",
     "timezone": "UTC",
@@ -215,6 +255,20 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # api.config.settings.MMR_LAMBDA already is.
     "mmr_lambda": app_settings.MMR_LAMBDA,
     "context_compression_enabled": False,
+    # Hardening Mission (§6, cost control) -- real, organization-level
+    # spend caps, distinct from `cost_budget_per_request` above (a
+    # PER-CALL model-selection hint) and from `Credit.balance`
+    # (api/models/billing.py -- a real, spendable total that is NOT
+    # time-windowed). `None` means "no cap" -- an organization that
+    # never touches these keeps the exact same, pre-existing behavior
+    # (only the total balance gates spend). A real integer caps total
+    # credits actually consumed (CreditTransactionType.consume) within
+    # the trailing UTC calendar day / calendar month, enforced by
+    # `api/services/billing_credits.py::enforce_spend_caps` BEFORE a new
+    # real LLM call starts (same pre-flight timing as the existing
+    # balance check it sits next to in `agent_orchestrator.py`).
+    "daily_credit_limit": None,
+    "monthly_credit_limit": None,
 }
 
 # Computed once at import time, not per-call -- available_timezones()

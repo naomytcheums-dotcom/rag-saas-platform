@@ -27,6 +27,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
+    a2a, agent_factory, quality_alerts,
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, autonomous_agents, batch_jobs,
     benchmark_versions, billing,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
@@ -40,7 +41,7 @@ from api.routers import (
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
-    question_sets, questions, quotas, rbac, reindex_schedules, regression_detection, regression_thresholds,
+    question_sets, questions, quotas, rag_control_plane, rbac, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, retrieval_diagnostics, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
@@ -333,6 +334,9 @@ app.include_router(custom_tools.router)
 app.include_router(crm.router)
 app.include_router(mcp_servers.router)
 app.include_router(mcp_server.router)
+app.include_router(a2a.router)
+app.include_router(agent_factory.router)
+app.include_router(quality_alerts.router)
 app.include_router(ssl_certificates.router)
 app.include_router(email_domains.router)
 app.include_router(white_label.router)
@@ -344,6 +348,7 @@ app.include_router(batch_jobs.router)
 app.include_router(citations.router)
 app.include_router(chat_stream.router)
 app.include_router(search.router)
+app.include_router(rag_control_plane.router)
 app.include_router(tool_permissions.router)
 app.include_router(tool_config.router)
 app.include_router(human_approval.router)

@@ -22,9 +22,10 @@ risk this fix closes."""
 from sqlalchemy import create_engine
 
 from api.config import settings
+from api.database_url import synchronous_database_url
 
 sync_engine = create_engine(
-    settings.DATABASE_URL.replace("+asyncpg", ""),
+    synchronous_database_url(settings.DATABASE_URL),
     pool_pre_ping=True,
     pool_size=3,
     max_overflow=2,

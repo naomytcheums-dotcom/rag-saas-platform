@@ -410,3 +410,19 @@ class DocumentStatusSummaryResponse(BaseModel):
     organization_id: uuid.UUID
     total: int
     by_status: dict[str, int]
+
+
+class EmbeddingStalenessResponse(BaseModel):
+    """Hardening Mission, Phase 1 -- the real, explicit answer to
+    `GET /organizations/{org_id}/embeddings/status` (see
+    api.security.documents.get_embedding_staleness_summary's own
+    docstring for the real comparison this is built from)."""
+
+    organization_id: uuid.UUID
+    current_embedding_model: str
+    total_embedded_chunks: int
+    current_model_chunks: int
+    stale_chunks: int
+    legacy_chunks: int
+    stale_models: dict[str, int]
+    reindex_recommended: bool

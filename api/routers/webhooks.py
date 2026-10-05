@@ -41,7 +41,17 @@ async def _require_webhook_org_admin(webhook_id: uuid.UUID, current_user: User =
 
 @router.post("/organizations/{org_id}/webhooks", response_model=WebhookResponse)
 async def create_webhook_endpoint(
-    org_id: uuid.UUID, payload: WebhookCreateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("webhooks:manage")), db: AsyncSession = Depends(get_db),
+    # Hardening Mission, Phase 2 -- a real, confirmed RBAC bug fix: this
+    # route used to gate on "webhooks:manage", a key `_DEFAULT_ROLE_PERMISSIONS`
+    # (api/security/permissions.py) never actually grants to Manager/Member
+    # -- only the finer-grained "webhooks:write" (which they DO have by
+    # default). `require_permission` already treats "webhooks:manage" as a
+    # real super-permission for any CustomRole that grants it
+    # (api.services.rbac_custom.get_user_effective_permissions expands
+    # `manage` into read/write/delete), so gating on "webhooks:write" here
+    # loses nothing for a CustomRole-based org -- it only stops silently
+    # excluding Manager/Member's own real, documented default access.
+    org_id: uuid.UUID, payload: WebhookCreateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("webhooks:write")), db: AsyncSession = Depends(get_db),
 ):
     try:
         webhook = await create_webhook(db, org_id, payload.name, payload.url, payload.events, headers=payload.headers, secret=payload.secret, created_by=caller.user_id)
@@ -57,7 +67,11 @@ async def create_webhook_endpoint(
 
 
 @router.get("/organizations/{org_id}/webhooks", response_model=list[WebhookResponse])
-async def list_webhooks_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("webhooks:manage")), db: AsyncSession = Depends(get_db)):
+async def list_webhooks_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("webhooks:read")), db: AsyncSession = Depends(get_db)):
+    # Hardening Mission, Phase 2 -- same real RBAC fix as create_webhook_endpoint
+    # above: "webhooks:read" is the key Manager/Member/Viewer actually hold
+    # by default; "webhooks:manage" still works unchanged for any
+    # CustomRole that grants it (expanded to read/write/delete).
     return await list_webhooks(db, org_id)
 
 

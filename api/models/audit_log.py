@@ -96,6 +96,15 @@ class AuditAction(StrEnum):
     USER_SUSPENDED = "user_suspended"
     USER_ACTIVATED = "user_activated"
 
+    # -- Systèmes internes, item 23 (MCP Firewall) -- every real MCP
+    # tool call, allowed or blocked, gets one real, tamper-evident row
+    # here (api/services/mcp/firewall.py) -- `success=False` +
+    # `failure_reason` covers both a real policy denial and a real
+    # execution failure, same `success` bool convention as
+    # LOGIN_SUCCESS/LOGIN_FAILED above rather than a second, parallel
+    # pair of enum values.
+    MCP_TOOL_CALL = "mcp_tool_call"
+
 
 class AuditLogArchive(Base):
     """Partie 10.2 -- a cold-storage copy of a row moved out of the live

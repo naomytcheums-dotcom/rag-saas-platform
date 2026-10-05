@@ -35,7 +35,16 @@ async def get_organization_settings(
 @router.patch("/organizations/{org_id}/settings", response_model=OrganizationSettingsResponse)
 async def update_organization_settings(
     org_id: uuid.UUID, payload: OrganizationSettingsUpdateRequest,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    # Hardening Mission (§9, RBAC audit) -- a real, confirmed bug: this
+    # module's own docstring always documented PATCH as "Owner-only",
+    # but the actual dependency was `require_permission("settings:manage")`,
+    # which `_effective_permissions_for` (api/security/permissions.py)
+    # grants in full to Admin too (the same `None`-sentinel "bypass every
+    # key" shortcut already fixed once for organizations.py's own
+    # update/delete routes) -- an Admin could silently change the whole
+    # organization's model/prompt/retrieval strategy, an action the
+    # module's own stated design never intended for that role.
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     updates = payload.model_dump(exclude_unset=True)
 
@@ -82,7 +91,11 @@ async def list_organization_llm_config(
 @router.post("/organizations/{org_id}/llm-config", response_model=LLMConfigResponse, status_code=status.HTTP_201_CREATED)
 async def set_organization_llm_config(
     org_id: uuid.UUID, payload: LLMConfigSetRequest,
-    caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    # Hardening Mission (§9, RBAC audit) -- same real bug as PATCH
+    # /settings above: this module's own docstring documents BYOK as
+    # "Owner-only, ... stricter than the Admin+ GET", but used the same
+    # `settings:manage` key an Admin always passes regardless of value.
+    caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     try:
         config = await set_org_llm_config(db, org_id, payload.provider, payload.api_key, created_by=caller.user_id)
@@ -94,7 +107,9 @@ async def set_organization_llm_config(
 
 @router.delete("/organizations/{org_id}/llm-config/{provider}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_organization_llm_config(
-    org_id: uuid.UUID, provider: str, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    # Hardening Mission (§9, RBAC audit) -- same real bug as the other
+    # two Owner-only endpoints above.
+    org_id: uuid.UUID, provider: str, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     deleted = await delete_org_llm_config(db, org_id, provider)
     if not deleted:

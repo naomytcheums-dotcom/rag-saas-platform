@@ -33,10 +33,15 @@ from api.security.white_label import (
 
 router = APIRouter(tags=["white-label"])
 
+# Hardening Mission (§9, RBAC audit) -- this module's docstring has always documented these routes as Owner-only,
+# but they were gated on `require_permission("settings:manage")`, which `_effective_permissions_for` grants in full to
+# Admin too (the `None` bypass sentinel): an Admin could do what the design reserves for the Owner. `require_org_owner`
+# (already imported here, never used) is the real Owner-only gate.
+
 
 @router.get("/organizations/{org_id}/white-label", response_model=WhiteLabelConfigResponse)
 async def get_white_label_route(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     config = await get_white_label_config(db, org_id)
     return WhiteLabelConfigResponse(organization_id=org_id, **config)
@@ -45,7 +50,7 @@ async def get_white_label_route(
 @router.patch("/organizations/{org_id}/white-label", response_model=WhiteLabelConfigResponse)
 async def update_white_label_route(
     org_id: uuid.UUID, payload: WhiteLabelUpdateRequest,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     updates = payload.model_dump(exclude_unset=True)
     if "hide_platform_branding" in updates:

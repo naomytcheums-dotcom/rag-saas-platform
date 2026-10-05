@@ -134,6 +134,9 @@ async def get_current_user(user: User = Depends(get_current_user_any_consent_sta
     """
     if user.terms_version != settings.TERMS_VERSION:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=STALE_TERMS_DETAIL)
+    from api.security.logging_correlation import bind_log_context
+
+    bind_log_context(user_id=user.id)
     return user
 
 

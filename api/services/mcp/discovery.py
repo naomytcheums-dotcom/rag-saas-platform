@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.mcp_server import MCPServerConfig, MCPToolCache
 from api.security.encryption import encrypt_field
-from api.services.mcp.client import MCPClientError, call_tool, discover_tools
+from api.services.mcp.client import MCPClientError, discover_tools
 
 
 async def create_mcp_server(
@@ -71,7 +71,27 @@ async def list_cached_tools(db: AsyncSession, server_id: uuid.UUID) -> list[MCPT
     return list(result.all())
 
 
-async def call_cached_tool(db: AsyncSession, server: MCPServerConfig, tool_name: str, arguments: dict[str, Any]) -> str:
+async def call_cached_tool(
+    db: AsyncSession, server: MCPServerConfig, tool_name: str, arguments: dict[str, Any],
+    user_id: uuid.UUID | None = None, ip: str | None = None, user_agent: str | None = None,
+) -> str:
     """Real `tools/call` -- `server` must belong to the caller's own
-    organization (enforced by the router dependency, not here)."""
-    return await call_tool(server, tool_name, arguments)
+    organization (enforced by the router dependency, not here).
+
+    Systèmes internes, item 23 (MCP Firewall) -- routes through the
+    real `call_tool_with_firewall` (`api/services/mcp/firewall.py`)
+    instead of calling the raw `call_tool` directly: this is the ONE
+    real choke point both of this codebase's own real callers already
+    go through (`api/routers/mcp_servers.py`'s own live endpoint, and
+    `api/services/agent_tools.py`'s own per-agent MCP tool closure) --
+    wiring the real policy check + real, tamper-evident audit log HERE
+    means both get it automatically, never two separate patches that
+    could silently drift apart. `user_id` is honestly `None` for the
+    real agent-tools call site (no synchronous real end-user is acting
+    there) -- `call_tool_with_firewall`'s own real audit log already
+    handles a `None` user_id correctly (same real, existing
+    `AuditLog.user_id` nullable column every other system-initiated
+    audit row already uses)."""
+    from api.services.mcp.firewall import call_tool_with_firewall
+
+    return await call_tool_with_firewall(db, server.organization_id, user_id, server, tool_name, arguments, ip=ip, user_agent=user_agent)

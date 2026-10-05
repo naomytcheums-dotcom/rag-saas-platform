@@ -30,6 +30,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.billing import InvoiceStatus
 from api.models.organization import Organization, OrganizationMember
@@ -176,13 +177,47 @@ async def purchase_credits_endpoint(org_id: uuid.UUID, body: PurchaseCreditsRequ
     pack = get_credit_pack(body.pack_id)
     if pack is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown credit pack")
-    # Real, honest scope: without a configured Stripe account, this
-    # records a real credit grant directly (an admin/owner-initiated
-    # top-up) rather than pretending to charge a card that was never
-    # real -- same "real math, real $0 processor" pattern as Partie 11.4.
+    # Hardening Mission (§23) -- this endpoint grants credits WITHOUT charging anything. The comment that used to
+    # sit here said "without a configured Stripe account", but nothing ever checked that: with Stripe or Paystack
+    # configured, any member holding `billing:manage` could mint unlimited free credits (a direct revenue bypass,
+    # and a bypass of every credit-based cost control). It is now refused whenever the organization has a configured
+    # payment provider (credits must come from a real checkout) and, with no provider, only while the deployment
+    # allows unpaid top-ups (`CREDITS_ALLOW_UNPAID_TOPUP`, for self-hosted / dev instances).
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+    except ProviderNotConfiguredError:
+        provider = None
+    if provider is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Credits are purchased through the payment provider: start a checkout (POST .../billing/credits/checkout) instead of a direct top-up",
+        )
+    if not settings.CREDITS_ALLOW_UNPAID_TOPUP:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unpaid credit top-ups are disabled on this deployment")
     credit = await billing_credits.add_credits(db, org_id, pack["credits"], source=f"Purchased pack '{pack['name']}'", user_id=caller.user_id)
     await db.commit()
     return credit
+
+
+@org_router.post("/credits/checkout", response_model=CheckoutSessionResponse)
+async def credit_pack_checkout_endpoint(
+    org_id: uuid.UUID, body: PurchaseCreditsRequest, caller: OrganizationMember = Depends(require_permission("billing:manage")),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Hardening Mission (§23) -- the REAL way to buy a credit pack when a payment provider is configured: returns a
+    hosted checkout URL; the credits are granted by the provider's webhook once the payment is confirmed."""
+    pack = get_credit_pack(body.pack_id)
+    if pack is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown credit pack")
+    try:
+        provider = await resolve_provider_for_organization(db, org_id)
+        url = await provider.create_credit_pack_checkout(db, org_id, pack=pack, email=current_user.email, org_name=str(org_id))
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await db.commit()  # the checkout may INSERT a PaymentCustomer row
+    return CheckoutSessionResponse(url=url)
 
 
 # -- 12.4 invoices -------------------------------------------------------------
@@ -288,9 +323,16 @@ async def list_payment_methods_endpoint(org_id: uuid.UUID, _caller: Organization
 
 
 @org_router.delete("/stripe/payment-methods/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_payment_method_endpoint(org_id: uuid.UUID, payment_method_id: str, _caller: OrganizationMember = Depends(require_permission("billing:manage"))):
+async def remove_payment_method_endpoint(
+    org_id: uuid.UUID, payment_method_id: str,
+    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
+):
     try:
-        await billing_stripe.detach_payment_method(payment_method_id)
+        await billing_stripe.detach_payment_method(
+            db, org_id, payment_method_id
+        )
+    except billing_stripe.StripePaymentMethodNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment method not found") from exc
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
 

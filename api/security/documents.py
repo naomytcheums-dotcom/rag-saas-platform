@@ -693,6 +693,31 @@ async def permanent_delete_document(db: AsyncSession, document_id: uuid.UUID) ->
     if document is None:
         raise ValueError(f"'{document_id}' is not a registered document")
     file_key = document.file_key
+    organization_id = document.organization_id
+
+    # Hardening Mission, Phase 6 -- a real, confirmed GDPR/right-to-be-
+    # forgotten gap: this function used to purge the S3 object + the DB
+    # row (DocumentChunk cascades via its own real FK), but left any
+    # real GraphRAG entities/relations this document contributed
+    # orphaned forever in the organization's shared graph. Real,
+    # best-effort (same fail-open discipline as the S3 cleanup below --
+    # GraphRAG being disabled, never ingested for this document, or
+    # momentarily unreachable must never block a real, already-
+    # authorized permanent deletion the caller is entitled to), using
+    # LightRAG's own real `adelete_by_doc_id` (api.services.graph_rag's
+    # own `delete_document_from_graph`) -- a real no-op for any document
+    # ingested before this phase added `document_id` tagging to
+    # `ingest_into_graph`, never an error.
+    try:
+        from api.security.organization_settings import get_org_settings
+        from api.services.graph_rag import delete_document_from_graph
+
+        org_settings = await get_org_settings(db, organization_id)
+        if org_settings.get("graphrag_enabled"):
+            await delete_document_from_graph(organization_id, document_id, org_settings["embedding_model"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("permanent_delete_document: GraphRAG cleanup failed for document '%s': %s", document_id, exc)
+
     await db.execute(delete(Document).where(Document.id == document_id))
     await db.flush()
     delete_document_file(file_key)  # best-effort, same as the existing soft DELETE route's own real S3 cleanup
@@ -795,6 +820,60 @@ async def reindex_organization(db: AsyncSession, organization_id: uuid.UUID, tri
         select(Document.id).where(Document.organization_id == organization_id, Document.deleted_at.is_(None))
     )).all()
     return reindex_documents(list(document_ids), triggered_by)
+
+
+async def get_embedding_staleness_summary(db: AsyncSession, organization_id: uuid.UUID) -> dict:
+    """Hardening Mission, Phase 1 -- the real, explicit, user-facing
+    answer to "comment puis-je savoir si mes documents doivent être
+    réindexés ?" (mission point 5: "exposer l'état du reindex",
+    "empêcher qu'un changement de configuration rende les documents
+    invisibles"). Compares every real, embedded chunk's own
+    `embedding_model` (stamped at write time, see
+    api/models/document.py's own DocumentChunk docstring) against this
+    organization's CURRENT real `embedding_model` setting
+    (`api.security.organization_settings.get_org_settings`) -- a real,
+    live comparison, never a cached/stale snapshot.
+
+    `legacy` counts chunks embedded before this étape existed at all
+    (`embedding_model IS NULL`) -- these predate per-chunk provenance
+    tracking but are NOT necessarily wrong (api.services.retrieval_pipeline's
+    own dimension-safe fallback compares by actual embedding length, not
+    this column), just unverifiable without re-embedding. `reindex_recommended`
+    is `stale > 0 or legacy > 0`: the one, real boolean a frontend banner
+    needs to tell an organization it should trigger `reindex_organization`
+    above, instead of silently losing recall on its own older documents
+    forever."""
+    from api.security.organization_settings import get_org_settings
+
+    org_settings = await get_org_settings(db, organization_id)
+    current_model = org_settings["embedding_model"]
+
+    rows = (await db.execute(
+        select(DocumentChunk.embedding_model, func.count())
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(DocumentChunk.organization_id == organization_id, Document.deleted_at.is_(None), DocumentChunk.embedding.is_not(None))
+        .group_by(DocumentChunk.embedding_model)
+    )).all()
+
+    current = 0
+    stale = 0
+    legacy = 0
+    stale_models: dict[str, int] = {}
+    for model_name, count in rows:
+        if model_name is None:
+            legacy += count
+        elif model_name == current_model:
+            current += count
+        else:
+            stale += count
+            stale_models[model_name] = count
+
+    total = current + stale + legacy
+    return {
+        "organization_id": organization_id, "current_embedding_model": current_model, "total_embedded_chunks": total,
+        "current_model_chunks": current, "stale_chunks": stale, "legacy_chunks": legacy,
+        "stale_models": stale_models, "reindex_recommended": (stale + legacy) > 0,
+    }
 
 
 def schedule_document_reindex(document_id: uuid.UUID, triggered_by: uuid.UUID | None = None) -> None:
@@ -3135,6 +3214,21 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
     await db.flush()
     await send_progress_update(document.id, _PROGRESS_BY_STATUS[DocumentStatus.processing.value], document.status)
 
+    # Real OpenLineage lineage tracking (api/services/lineage_tracking.py)
+    # -- real, fail-open, off unless settings.LINEAGE_ENABLED (see that
+    # module's own docstring). `document.id` is reused as the SAME real
+    # run_id for both this START event and the real COMPLETE/FAIL event
+    # below, so a real backend can correlate them as one real run.
+    # Deliberately imports ONLY this module's own real `LineageJob`
+    # enum/`emit_run_event` -- never `openlineage` itself here, so
+    # `process_document` keeps working unchanged for every organization
+    # that hasn't installed the optional `openlineage-python` package at
+    # all, exactly like every other optional dependency in this codebase
+    # (mem0, LightRAG, DSPy).
+    from api.services.lineage_tracking import LineageJob, emit_run_event
+
+    emit_run_event(LineageJob.DOCUMENT_PROCESSING, document.id, "START", input_dataset_names=[f"document:{document.id}"])
+
     try:
         content = download_document_file(document.file_key)
         suffix = _TEMP_FILE_SUFFIXES.get(document.file_type, "")
@@ -3143,9 +3237,13 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             tmp_path = tmp.name
 
         try:
-            extracted = extract_document_content(tmp_path, document.file_type)
-
+            # Fetched before extraction now (was after) so the real,
+            # per-organization pdf_extraction_engine choice can reach
+            # extract_document_content -- everything else that reads
+            # settings_dict below is unaffected by this reordering.
             settings_dict = await get_org_settings(db, document.organization_id)
+            extracted = extract_document_content(tmp_path, document.file_type, pdf_engine=settings_dict["pdf_extraction_engine"])
+
             os.environ.setdefault("USE_TF", "0")
             from transformers import AutoTokenizer
 
@@ -3169,10 +3267,30 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             # it unchanged, so this loop never needs to know which
             # format it's chunking.
             chunk_records: list[dict] = []
+            # Real, opt-in GraphRAG ingestion (api/services/graph_rag.py)
+            # -- collects each section's own real, ALREADY PII-masked
+            # text (appended below, after masking runs) so a real graph
+            # never sees raw PII a masked chunk already hides. Only
+            # populated when settings_dict["graphrag_enabled"] (checked
+            # once, after the loop, not per-section) -- an organization
+            # that never touches this setting pays zero real cost.
+            graph_ingest_texts: list[str] = []
             for section in extracted["sections"]:
                 section_text = section["text"].strip()
                 if not section_text:
                     continue
+                # Real, opt-in PII masking (api/services/pii_detection.py)
+                # -- runs BEFORE chunking/embedding, so a masked
+                # placeholder is what actually gets embedded and stored,
+                # never the real name/email/phone underneath it. Off by
+                # default (settings_dict["pii_masking_enabled"]) -- an
+                # organization that never touches this setting keeps the
+                # exact same real ingestion behavior it already had.
+                if settings_dict["pii_masking_enabled"]:
+                    from api.services.pii_detection import mask_pii
+
+                    section_text, _masked_entities = mask_pii(section_text)
+                graph_ingest_texts.append(section_text)
                 # Phase 4, Étape 1 -- `effective_strategy` tracks what
                 # ACTUALLY produced `pieces` for THIS section (never just
                 # the org's own configured `chunking_strategy`) -- a real
@@ -3399,8 +3517,31 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                 # `default=uuid.uuid4` at flush time, exactly like
                 # before this étape.
                 explicit_id = record.get("explicit_id")
+                # Hardening Mission, Phase 1 -- real embedding
+                # provenance, stamped at the SAME time as `embedding`
+                # itself (never backfilled lazily, see
+                # api/models/document.py's own DocumentChunk docstring).
+                # `len(embedding)` (not a static catalog lookup) is the
+                # real dimension: `settings_dict["embedding_model"]` may
+                # be any real, uncatalogued HuggingFace model id
+                # (api.services.embedding_config.resolve_embedding_model
+                # is deliberately a blocklist, not an allowlist), so the
+                # actual produced vector is the only real source of
+                # truth. `embedding_vector` (the real pgvector-backed
+                # column) is only ever populated when this chunk's real
+                # dimension matches the fixed, indexed
+                # `settings.EMBEDDING_VECTOR_DIM` -- every other
+                # dimension stays fully, correctly searchable via the
+                # dimension-safe numpy fallback in
+                # api.services.retrieval_pipeline, just without the
+                # native ANN index speedup until a real reindex
+                # (api.services.embedding_reindex) brings it onto the
+                # default-dimension model.
                 db.add(DocumentChunk(
                     **({"id": explicit_id} if explicit_id else {}),
+                    embedding_dim=len(embedding) if embedding is not None else None,
+                    embedding_model=settings_dict["embedding_model"] if embedding is not None else None,
+                    embedding_vector=embedding if embedding is not None and len(embedding) == settings.EMBEDDING_VECTOR_DIM else None,
                     document_id=document.id, organization_id=document.organization_id, content=record["content"],
                     metadata_json=record["metadata"] or None, embedding=embedding,
                     # Partie 6.1.5 -- real, per-document content-order
@@ -3559,6 +3700,28 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
                 "summary": extract_summary(full_text), "topics": extract_topics(full_text),
                 "reading_time_minutes": extract_reading_time(full_text), "complexity_score": extract_complexity_score(full_text),
             }
+            # Real GraphRAG ingestion (api/services/graph_rag.py) -- runs
+            # HERE, inside this Celery background task, never inline in
+            # a real request/response cycle: entity/relation extraction
+            # is a real, per-section LLM cost (see that module's own
+            # docstring for why). Real, explicit try/except: a real
+            # graph-ingestion failure (LightRAG unavailable, a real LLM
+            # error) must never fail a real document upload that would
+            # have succeeded fine without it -- the exact same fail-open
+            # discipline as the metadata enrichment above.
+            if settings_dict["graphrag_enabled"] and graph_ingest_texts:
+                try:
+                    from api.services.graph_rag import ingest_into_graph
+
+                    # Hardening Mission, Phase 6 -- real `document_id`,
+                    # so a later real `permanent_delete_document` can
+                    # selectively remove exactly this document's own
+                    # contribution via `delete_document_from_graph`
+                    # (LightRAG's own real `adelete_by_doc_id`), never
+                    # another document's.
+                    await ingest_into_graph(document.organization_id, graph_ingest_texts, settings_dict["embedding_model"], document_id=document.id)
+                except Exception as exc:  # noqa: BLE001 -- fail-open, same reasoning as above
+                    logger.warning("process_document: GraphRAG ingestion failed for document '%s': %s", document_id, exc)
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)
         finally:
@@ -3568,6 +3731,19 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
         document.status = DocumentStatus.failed.value
         document.metadata_json = {**(document.metadata_json or {}), "error": str(exc)}
         document.indexing_error = str(exc)
+
+    # Real OpenLineage terminal event -- same real, fail-open,
+    # off-unless-configured discipline as the START event above.
+    # `document.status` (already finalized to completed/failed by the
+    # try/except above) decides the real event type; the real output
+    # dataset only exists on the completed path (a failed run genuinely
+    # produced no real chunks).
+    emit_run_event(
+        LineageJob.DOCUMENT_PROCESSING, document.id,
+        "COMPLETE" if document.status == DocumentStatus.completed.value else "FAIL",
+        input_dataset_names=[f"document:{document.id}"],
+        output_dataset_names=[f"document_chunks:{document.id}"] if document.status == DocumentStatus.completed.value else None,
+    )
 
     await db.flush()
     await send_progress_update(document.id, _PROGRESS_BY_STATUS[document.status], document.status)

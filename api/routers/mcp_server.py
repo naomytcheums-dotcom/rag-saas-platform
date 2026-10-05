@@ -30,9 +30,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from api.config import settings
 from api.dependencies import get_db
 from api.models.organization_api_key import OrganizationAPIKey
 from api.security.public_api_auth import require_public_api_scope
+from api.security.rate_limit import enforce_rate_limit
 from api.services.custom_tools import execute_custom_tool, get_available_custom_tools
 from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout
 from api.services.tool_validation import get_validation_errors
@@ -46,6 +48,26 @@ from api.services.tools import get_tool, list_tools, tool_input_schema
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/mcp/v1", tags=["mcp-server"])
+
+
+def _bind_builtin_payload_to_key_org(payload: dict[str, Any], key_organization_id) -> dict[str, Any]:
+    """Hardening Mission (§16/§24, MCP tenant isolation) -- a real,
+    confirmed, severe bug: the 4 builtin tools used to take
+    `organization_id` from the CLIENT-supplied request body, while the
+    authenticated key's own organization (`_key`) was never consulted --
+    so a key for organization A could create agents in, rewrite the
+    retrieval config of, read the failure reports of, and launch
+    benchmarks on organization B just by naming B's id. The organization
+    is now ALWAYS the key's own: an omitted `organization_id` is filled
+    in, a matching one is accepted, and a DIFFERENT one is rejected with
+    a 403 (never silently overridden -- a client that targeted another
+    tenant should be told so, not quietly redirected)."""
+    arguments = dict(payload.get("arguments", payload)) if isinstance(payload, dict) else {}
+    supplied = arguments.get("organization_id")
+    if supplied is not None and str(supplied) != str(key_organization_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="organization_id does not match this API key's organization")
+    arguments["organization_id"] = str(key_organization_id)
+    return {"arguments": arguments}
 
 
 def _tool_to_mcp_shape(tool) -> dict[str, Any]:
@@ -98,6 +120,19 @@ async def call_tool_endpoint(
     # IBM Bob 2.0 -- the 4 named tools take priority over the generic
     # builtin registry: they are the contract exposed by agents.md.
     if get_builtin_tool(tool_name) is not None:
+        payload = _bind_builtin_payload_to_key_org(payload, _key.organization_id)
+        # Hardening Mission (§4/§16) -- these tools reach paid LLM calls
+        # (run_eval_benchmark) and agent provisioning; they used to bypass
+        # every org-level limit the equivalent REST routes enforce.
+        await enforce_rate_limit(
+            f"ratelimit:mcp_builtin:org:{_key.organization_id}", settings.MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS, settings.MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS,
+        )
+        if tool_name == "run_eval_benchmark":
+            # Same key as POST /datasets/{id}/evaluate, so both entry
+            # points draw on ONE evaluation budget per organization.
+            await enforce_rate_limit(
+                f"ratelimit:evaluation_run:org:{_key.organization_id}", settings.EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS, settings.EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS,
+            )
         result = await call_builtin_tool(db, tool_name, payload)
         # IBM Bob 2.0 -- the 4 real tools use db.flush() internally (via
         # `call_builtin_tool`), NOT db.commit(), so an agent/dataset created
@@ -109,6 +144,9 @@ async def call_tool_endpoint(
 
     # Special case: execute_sql_query is a per-run tool bound by closure
     if tool_name == "execute_sql_query":
+        await enforce_rate_limit(
+            f"ratelimit:mcp_builtin:org:{_key.organization_id}", settings.MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS, settings.MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS,
+        )
         arguments = payload.get("arguments", payload) if isinstance(payload, dict) else {}
         sql_tool = build_sql_query_tool(db, _key.organization_id)
         try:

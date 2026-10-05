@@ -31,9 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
-from api.models.billing import PaymentCustomer, PaymentEvent, PaymentProvider
+from api.models.billing import PaymentCustomer, PaymentProvider
 from api.models.organization import Organization
-from api.services.billing_providers.base import ProviderNotConfiguredError
+from api.services.billing_providers.base import ProviderNotConfiguredError, claim_payment_event
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,10 @@ class StripeNotConfiguredError(ProviderNotConfiguredError):
     (api/services/billing_providers/, the router's new `/checkout` etc.
     endpoints) can catch the shared `ProviderNotConfiguredError` base
     instead and work identically for either provider."""
+
+
+class StripePaymentMethodNotFoundError(Exception):
+    """The requested method is not attached to the organization's Stripe customer."""
 
 
 def _client():
@@ -93,6 +97,31 @@ async def create_checkout_session(db: AsyncSession, organization_id: uuid.UUID, 
     return session["url"]
 
 
+async def create_credit_pack_checkout_session(db: AsyncSession, organization_id: uuid.UUID, *, pack: dict, email: str, org_name: str) -> str:
+    """Hardening Mission (§23) -- a ONE-OFF (`mode="payment"`) Stripe Checkout for a fixed credit pack. The pack
+    and organization travel in the session's metadata, set server-side here (a buyer cannot alter them), and the
+    credits are granted ONLY when Stripe's `checkout.session.completed` webhook reports it paid
+    (`handle_stripe_webhook`) -- never on the redirect back, which a user can forge or skip."""
+    stripe = _client()
+    customer = await create_stripe_customer(db, organization_id, email=email, name=org_name)
+    session = stripe.checkout.Session.create(
+        customer=customer.external_customer_id,
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": settings.CREDIT_PACK_CURRENCY,
+                "unit_amount": pack["price_cents"],
+                "product_data": {"name": f"{pack['name']} credit pack ({pack['credits']:,} credits)"},
+            },
+            "quantity": 1,
+        }],
+        success_url=settings.STRIPE_SUCCESS_URL,
+        cancel_url=settings.STRIPE_CANCEL_URL,
+        metadata={"organization_id": str(organization_id), "kind": "credit_pack", "pack_id": pack["id"]},
+    )
+    return session["url"]
+
+
 async def create_portal_session(db: AsyncSession, organization_id: uuid.UUID) -> str:
     stripe = _client()
     customer = await get_stripe_customer(db, organization_id)
@@ -114,8 +143,14 @@ async def list_payment_methods(db: AsyncSession, organization_id: uuid.UUID) -> 
     ]
 
 
-async def detach_payment_method(payment_method_id: str) -> None:
+async def detach_payment_method(db: AsyncSession, organization_id: uuid.UUID, payment_method_id: str) -> None:
     stripe = _client()
+    customer = await get_stripe_customer(db, organization_id)
+    if customer is None:
+        raise StripePaymentMethodNotFoundError("Payment method not found")
+    methods = stripe.PaymentMethod.list(customer=customer.external_customer_id, type="card")
+    if not any(method["id"] == payment_method_id for method in methods["data"]):
+        raise StripePaymentMethodNotFoundError("Payment method not found")
     stripe.PaymentMethod.detach(payment_method_id)
 
 
@@ -149,15 +184,23 @@ def verify_webhook_signature(payload: bytes, signature_header: str):
 async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
     """Real event processing, idempotent via PaymentEvent (Stripe
     guarantees at-least-once delivery, never exactly-once). Returns
-    False if this event id was already applied."""
-    event_id = event["id"]
-    if await db.get(PaymentEvent, (PaymentProvider.stripe, event_id)) is not None:
-        return False
+    False if this event id was already applied.
 
+    Hardening Mission (§5, webhook anti-replay) -- the event id is
+    claimed atomically FIRST (`claim_payment_event`), before any side
+    effect runs, closing a real race window where two concurrent
+    deliveries of the same event could both pass a plain existence
+    check and both apply their side effects."""
+    event_id = event["id"]
     event_type = event["type"]
     data = event["data"]["object"]
 
-    if event_type in ("customer.subscription.created", "customer.subscription.updated"):
+    if not await claim_payment_event(db, PaymentProvider.stripe, event_id, event_type, str(data.get("id", ""))):
+        return False
+
+    if event_type == "checkout.session.completed" and (data.get("metadata") or {}).get("kind") == "credit_pack":
+        await _grant_paid_credit_pack(db, data)
+    elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
         org_id = data.get("metadata", {}).get("organization_id")
         if org_id:
             sub = await db.scalar(select(Subscription).where(Subscription.organization_id == uuid.UUID(org_id)))
@@ -202,9 +245,31 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
 
             await notify_billing_payment_succeeded(db, uuid.UUID(org_id))
 
-    db.add(PaymentEvent(provider=PaymentProvider.stripe, id=event_id, type=event_type, payload_summary=str(data.get("id", ""))))
-    await db.flush()
     return True
+
+
+async def _grant_paid_credit_pack(db: AsyncSession, session: dict) -> None:
+    """Grants the credits of a PAID credit-pack checkout. Defensive on purpose: anything that does not
+    match what `create_credit_pack_checkout_session` created (unpaid, unknown pack, amount not the pack's price,
+    malformed organization id) grants NOTHING and is logged. Idempotency is the event-id claim made by the caller
+    (`claim_payment_event`), so a re-delivered event cannot grant twice."""
+    from api.security.credit_packs import get_credit_pack
+    from api.services.billing_credits import add_credits
+
+    metadata = session.get("metadata") or {}
+    pack = get_credit_pack(metadata.get("pack_id", ""))
+    if session.get("payment_status") != "paid":
+        logger.warning("credit pack checkout %s not paid (%s): nothing granted", session.get("id"), session.get("payment_status"))
+        return
+    if pack is None or session.get("amount_total") != pack["price_cents"]:
+        logger.error("credit pack checkout %s does not match a known pack/price (pack=%s, amount=%s): nothing granted", session.get("id"), metadata.get("pack_id"), session.get("amount_total"))
+        return
+    try:
+        organization_id = uuid.UUID(metadata.get("organization_id", ""))
+    except ValueError:
+        logger.error("credit pack checkout %s has no valid organization id: nothing granted", session.get("id"))
+        return
+    await add_credits(db, organization_id, pack["credits"], source=f"Stripe checkout {session.get('id')} ({pack['name']} pack)")
 
 
 class StripeProvider:
@@ -223,6 +288,9 @@ class StripeProvider:
         if not price_id:
             raise ValueError(f"Plan {plan.key!r} has no stripe_price_id_{billing_period} set -- sync it first (api/services/billing_stripe_sync.py).")
         return await create_checkout_session(db, organization_id, price_id=price_id, email=email, org_name=org_name)
+
+    async def create_credit_pack_checkout(self, db: AsyncSession, organization_id: uuid.UUID, *, pack: dict, email: str, org_name: str) -> str:
+        return await create_credit_pack_checkout_session(db, organization_id, pack=pack, email=email, org_name=org_name)
 
     async def create_portal_session(self, db: AsyncSession, organization_id: uuid.UUID) -> str:
         return await create_portal_session(db, organization_id)

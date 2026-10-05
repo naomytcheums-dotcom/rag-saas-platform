@@ -127,6 +127,9 @@ async def require_org_member(
     )
     if membership is None:
         raise not_found
+    from api.security.logging_correlation import bind_log_context
+
+    bind_log_context(organization_id=org_id)
     return membership
 
 

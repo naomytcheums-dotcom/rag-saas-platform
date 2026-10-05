@@ -160,17 +160,74 @@ def resolve_max_tokens(org_settings: dict | None = None, override: int | None = 
     return value
 
 
+def resolve_cost_budget_per_request(org_settings: dict | None = None, override: float | None = None) -> float | None:
+    """Systèmes internes, item 26 -- per-organization real cost ceiling,
+    wired into `resolve_llm_config` below. `None` (the real default --
+    an organization that never touches this setting) means "no real
+    budget constraint", the exact same real, unchanged model-selection
+    behavior every pre-existing real caller of `resolve_llm_config`
+    already gets."""
+    if override is not None:
+        return override
+    if org_settings is not None and org_settings.get("cost_budget_per_request") is not None:
+        return org_settings["cost_budget_per_request"]
+    return DEFAULT_SETTINGS.get("cost_budget_per_request")
+
+
+# Real, per-provider tier candidates -- a real cheaper/more-capable
+# pair per real provider this module already resolves a model for,
+# using the SAME real, correctly-formatted, CALLABLE model identifiers
+# this codebase's own real defaults already use (verified directly
+# against `api.config.settings`'s own `*_MODEL` real values -- Gemini/
+# Mistral need their own real `"provider/"` litellm prefix, Anthropic
+# needs a real, dated snapshot id, never a bare, unversioned name that
+# would fail a real API call). `find_pricing`'s own real, longest-
+# substring match (`api.services.cost_tracking`) still correctly prices
+# each of these against `COST_MODEL_PRICING`'s own real, shorter keys.
+# Real, deliberate, minimal scope: only the 4 providers
+# `COST_MODEL_PRICING` actually prices get real cost-aware selection --
+# `ollama`/`openai_compatible`/`watsonx` have no real public per-token
+# pricing this codebase could look up, so cost-aware routing honestly
+# does nothing for them (never a fabricated price).
+_COST_AWARE_CANDIDATES = {
+    "anthropic": ["claude-3-haiku-20240307", "claude-3-5-sonnet-20241022"],
+    "openai": ["gpt-4o-mini", "gpt-4o"],
+    "gemini": ["gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
+    "mistral": ["mistral/mistral-small-latest", "mistral/mistral-large-latest"],
+}
+
+
 def resolve_llm_config(org_settings: dict | None = None, overrides: dict | None = None) -> dict:
     """Item 2's own literal function (4.3.1) -- the real, complete,
     resolved configuration for one real LLM call, combining every
     resolver above. `overrides` mirrors each resolver's own real
     `override` parameter, keyed by name (e.g.
-    `{"temperature": 0.2}`)."""
+    `{"temperature": 0.2}`).
+
+    Systèmes internes, item 26 (Cost-Aware Intelligence) -- when this
+    organization has a real `cost_budget_per_request` configured AND
+    the caller did NOT explicitly override `model` themselves (a real,
+    explicit override always wins, same real precedence as every other
+    resolver in this codebase), the resolved `model` is replaced by
+    `api.services.cost_aware_routing.select_model_for_budget`'s own
+    real selection among this provider's own real, priced candidate
+    tier (`_COST_AWARE_CANDIDATES` above) -- never for a provider this
+    codebase has no real pricing data for."""
     overrides = overrides or {}
     provider = resolve_llm_provider(org_settings, override=overrides.get("provider"))
+    model = resolve_llm_model(org_settings, override=overrides.get("model"), provider=provider)
+
+    cost_budget = resolve_cost_budget_per_request(org_settings, override=overrides.get("cost_budget_per_request"))
+    if cost_budget is not None and overrides.get("model") is None and provider in _COST_AWARE_CANDIDATES:
+        from api.services.cost_aware_routing import select_model_for_budget
+
+        selection = select_model_for_budget(_COST_AWARE_CANDIDATES[provider], cost_budget)
+        if selection["selected_model"] is not None:
+            model = selection["selected_model"]
+
     return {
         "provider": provider,
-        "model": resolve_llm_model(org_settings, override=overrides.get("model"), provider=provider),
+        "model": model,
         "temperature": resolve_temperature(org_settings, override=overrides.get("temperature")),
         "top_p": resolve_top_p(org_settings, override=overrides.get("top_p")),
         "system_prompt": resolve_system_prompt(org_settings, override=overrides.get("system_prompt")),

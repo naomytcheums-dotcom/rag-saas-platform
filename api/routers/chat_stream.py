@@ -37,14 +37,30 @@ _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connect
 async def _stream_response(
     agent_id: uuid.UUID, message: str, conversation_id: uuid.UUID | None, current_user: User, db: AsyncSession,
 ) -> StreamingResponse:
-    agent, _membership = await resolve_agent_and_membership(agent_id, current_user, db)
+    agent, membership = await resolve_agent_and_membership(agent_id, current_user, db)
     # Real bug found (2026-09-18) via a live end-to-end test: this route
     # never ran retrieval at all, so a streamed reply was never grounded
     # in this organization's documents and never carried citations --
     # same real search + context-building `handle_public_chat`
     # (api/services/public_api.py) already does for the public API path.
     org_settings = await get_org_settings(db, agent.organization_id)
-    citation_chunks = await search_with_context(db, agent.organization_id, message, top_k=5, org_settings=org_settings)
+    # Hardening Mission, Phase 2 -- the real, confirmed missing half of
+    # OPA/policy-aware retrieval (api.services.policy_aware_retrieval):
+    # `search_with_context` already applies a real, caller-supplied
+    # `user_context` to a real, opt-in OPA policy check (`search()`'s own
+    # `resolve_policy_aware_retrieval_enabled` gate) -- but no real HTTP
+    # caller ever built and passed one, so the feature had zero effect in
+    # production even for an organization that fully configured OPA.
+    # These are the real, standard subject attributes this authenticated
+    # route actually has on hand -- an operator's own Rego policy decides
+    # which of them (if any) it checks; never-populated here means never-
+    # checkable there, not a guess at what any one operator's policy needs.
+    user_context = {
+        "user_id": str(current_user.id), "organization_id": str(agent.organization_id), "role": membership.role.value,
+    }
+    citation_chunks = await search_with_context(
+        db, agent.organization_id, message, top_k=5, org_settings=org_settings, user_context=user_context,
+    )
     context = build_llm_context(citation_chunks, org_settings)
     generator = stream_agent_response(
         db, str(agent.id), message, conversation_id=conversation_id, user_id=current_user.id, organization_id=agent.organization_id,

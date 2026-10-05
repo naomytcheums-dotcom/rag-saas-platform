@@ -34,6 +34,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.audit_log import AuditAction
 from api.models.document import Document, DocumentTag
@@ -57,6 +58,7 @@ from api.schemas.documents import (
     DocumentResponse,
     DocumentStatusResponse,
     DocumentStatusSummaryResponse,
+    EmbeddingStalenessResponse,
     DocumentUploadResponse,
     DocumentUrlImportRequest,
     GitHubIssuesImportRequest,
@@ -120,6 +122,7 @@ from api.security.document_versions import (
 )
 from api.security.organizations import require_org_admin, require_org_member, require_org_member_excluding_viewer
 from api.security.permissions import require_permission
+from api.security.rate_limit import enforce_rate_limit
 from api.services.document_storage import stream_document_file
 from api.services.metadata_normalization import normalize_document_metadata
 
@@ -227,6 +230,12 @@ async def create_document(
 ):
     from api.services.billing_usage import check_plan_resource_limit
 
+    # Hardening Mission (§4, rate limiting) -- a real, confirmed gap:
+    # uploading runs real, costly work (extraction + chunking + one
+    # embedding call per chunk) and had no rate limit at all, unlike
+    # the plan's own document COUNT limit above (which caps total
+    # storage, not upload throughput/burst rate).
+    await enforce_rate_limit(f"ratelimit:document_upload:org:{org_id}", settings.DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS, settings.DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS)
     within_limit, count, limit = await check_plan_resource_limit(db, org_id, "documents")
     if not within_limit:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"This organization's plan allows {limit} documents (currently {count}). Upgrade the plan to upload more.")
@@ -1069,6 +1078,30 @@ async def get_organization_document_status_summary_route(
     )).all()
     by_status = {row[0]: row[1] for row in rows}
     return DocumentStatusSummaryResponse(organization_id=org_id, total=sum(by_status.values()), by_status=by_status)
+
+
+# =========================== Hardening Mission, Phase 1 -- embedding staleness ===========================
+
+@router.get("/organizations/{org_id}/embeddings/status", response_model=EmbeddingStalenessResponse)
+async def get_embedding_staleness_route(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("documents:manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hardening Mission, Phase 1 -- the real, explicit, user-facing
+    answer this mission's own point 5 demands ("exposer l'état du
+    reindex", "fournir une erreur utilisateur explicite" rather than an
+    organization silently losing recall on its own older documents
+    after an `embedding_model` change). Same real Admin+ permission
+    level as the org-wide reindex/status routes above -- see
+    `api.security.documents.get_embedding_staleness_summary`'s own
+    docstring for the real comparison this is built from. When
+    `reindex_recommended` is true, trigger
+    `POST /organizations/{org_id}/documents/reindex` (already real,
+    already wired, already progressive/staggered -- see that route and
+    `api.security.documents.reindex_organization`) to bring every
+    stale/legacy chunk onto the organization's current embedding model."""
+    summary = await documents_security.get_embedding_staleness_summary(db, org_id)
+    return EmbeddingStalenessResponse(**summary)
 
 
 # =========================== Partie 2.2.12 -- duplicate detection ===========================

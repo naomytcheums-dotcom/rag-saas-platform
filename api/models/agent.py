@@ -82,6 +82,15 @@ class Agent(Base):
     allowed_domains: Mapped[list | None] = mapped_column(JSON, nullable=True)
     max_tokens_per_response: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_filter_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Real, deliberate `False` default, DELIBERATELY separate from
+    # `guardrails_enabled` above (which already defaults `True` for
+    # every existing agent) -- see
+    # api/services/prompt_injection_detection.py's own module docstring
+    # for why this is a real, distinct classifier model with its own
+    # real first-use download/inference cost, never silently turned on
+    # for an agent that already had guardrails_enabled=True before this
+    # column existed.
+    prompt_injection_detection_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Partie 6.2.1 -- real, opt-in refusal mode (api/services/agent_citation_required.py).
     citation_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     citation_required_message: Mapped[str | None] = mapped_column(Text, nullable=True)

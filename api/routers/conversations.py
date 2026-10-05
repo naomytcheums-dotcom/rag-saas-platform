@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from api.models.audit_log import AuditAction
-from api.models.conversation import Conversation
+from api.models.conversation import Conversation, ConversationMessage
 from api.models.user import User
 from api.security.audit_log import log_audit_action
 from api.utils import client_ip
@@ -409,7 +409,10 @@ async def get_message_edit_history_endpoint(
     conversation_id: uuid.UUID, message_id: uuid.UUID,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    await _get_owned_conversation(db, conversation_id, current_user)
+    conversation = await _get_owned_conversation(db, conversation_id, current_user)
+    message = await db.get(ConversationMessage, message_id)
+    if message is None or message.conversation_id != conversation.id:
+        raise _NOT_FOUND
     return await get_edit_history(db, message_id)
 
 

@@ -29,6 +29,11 @@ from api.security.organizations import require_org_owner
 
 router = APIRouter(tags=["email-domains"])
 
+# Hardening Mission (§9, RBAC audit) -- this module's docstring has always documented these routes as Owner-only,
+# but they were gated on `require_permission("settings:manage")`, which `_effective_permissions_for` grants in full to
+# Admin too (the `None` bypass sentinel): an Admin could do what the design reserves for the Owner. `require_org_owner`
+# (already imported here, never used) is the real Owner-only gate.
+
 
 async def _get_owned_domain(db: AsyncSession, org_id: uuid.UUID, domain_id: uuid.UUID) -> CustomDomain:
     domain = await db.scalar(select(CustomDomain).where(CustomDomain.id == domain_id, CustomDomain.organization_id == org_id))
@@ -40,7 +45,7 @@ async def _get_owned_domain(db: AsyncSession, org_id: uuid.UUID, domain_id: uuid
 @router.post("/organizations/{org_id}/domains/{domain_id}/email/verify", response_model=EmailDomainStatusResponse)
 async def verify_email_domain_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     updated = await verify_email_domain(db, domain)
@@ -52,7 +57,7 @@ async def verify_email_domain_route(
 @router.get("/organizations/{org_id}/domains/{domain_id}/email/status", response_model=EmailDomainStatusResponse)
 async def get_email_domain_status_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     return EmailDomainStatusResponse(id=domain.id, domain=domain.domain, **get_email_verification_status(domain))
@@ -61,7 +66,7 @@ async def get_email_domain_status_route(
 @router.get("/organizations/{org_id}/domains/{domain_id}/email/dns", response_model=EmailDnsResponse)
 async def get_email_domain_dns_route(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     domain = await _get_owned_domain(db, org_id, domain_id)
     data = await get_email_dns_records(db, domain)

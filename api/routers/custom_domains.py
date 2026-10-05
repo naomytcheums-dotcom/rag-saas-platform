@@ -49,6 +49,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["custom-domains"])
 
+# Hardening Mission (§9, RBAC audit) -- this module's docstring has always documented these routes as Owner-only,
+# but they were gated on `require_permission("settings:manage")`, which `_effective_permissions_for` grants in full to
+# Admin too (the `None` bypass sentinel): an Admin could do what the design reserves for the Owner. `require_org_owner`
+# (already imported here, never used) is the real Owner-only gate.
+
 
 def _to_response(row: CustomDomain) -> CustomDomainResponse:
     return CustomDomainResponse(
@@ -71,7 +76,7 @@ async def _get_owned_domain(db: AsyncSession, org_id: uuid.UUID, domain_id: uuid
 @router.post("/organizations/{org_id}/domains", response_model=CustomDomainResponse, status_code=status.HTTP_201_CREATED)
 async def create_custom_domain(
     org_id: uuid.UUID, payload: CustomDomainCreateRequest,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     try:
         domain = await add_custom_domain(db, org_id, payload.domain)
@@ -85,7 +90,7 @@ async def create_custom_domain(
 
 @router.get("/organizations/{org_id}/domains", response_model=CustomDomainListResponse)
 async def list_custom_domains(
-    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.scalars(
         select(CustomDomain).where(CustomDomain.organization_id == org_id).order_by(CustomDomain.created_at.asc())
@@ -96,7 +101,7 @@ async def list_custom_domains(
 @router.delete("/organizations/{org_id}/domains/{domain_id}")
 async def delete_custom_domain(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     domain = await db.scalar(select(CustomDomain).where(CustomDomain.id == domain_id, CustomDomain.organization_id == org_id))
     if domain is None:
@@ -154,7 +159,7 @@ async def verify_custom_domain(org_id: uuid.UUID, token: str, db: AsyncSession =
 @router.post("/organizations/{org_id}/domains/{domain_id}/verify", response_model=CustomDomainResponse)
 async def verify_custom_domain_manual(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     """
     Partie 1.4.4 -- an Owner-authenticated "verify now" button, distinct
@@ -174,7 +179,7 @@ async def verify_custom_domain_manual(
 @router.get("/organizations/{org_id}/domains/{domain_id}/status", response_model=CustomDomainStatusResponse)
 async def get_custom_domain_status(
     org_id: uuid.UUID, domain_id: uuid.UUID,
-    _caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
+    _caller: OrganizationMember = Depends(require_org_owner), db: AsyncSession = Depends(get_db),
 ):
     """
     Partie 1.4.4 -- a focused progress view for a dashboard polling "is

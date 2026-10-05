@@ -155,13 +155,31 @@ async def validate_output_length(db: AsyncSession, agent_id: uuid.UUID, output: 
     return len(output.split()) <= agent.max_tokens_per_response
 
 
-async def validate_guardrails(db: AsyncSession, agent_id: uuid.UUID, input: str, output: str) -> dict:
+async def validate_guardrails(
+    db: AsyncSession, agent_id: uuid.UUID, input: str, output: str, retrieved_context: str | None = None,
+) -> dict:
     """Item 2's own literal function -- the real, combined check
     `AgentOrchestrator.run_agent` calls after a real LLM response comes
     back. A real, honest no-op (`{"passed": True, "violations": []}`)
     when `agent.guardrails_enabled` is `False` (Partie 5.3.1's own
     existing toggle) or the agent is unknown -- guardrails that were
-    never turned on block nothing."""
+    never turned on block nothing.
+
+    **Hardening Mission, Phase 2 -- `retrieved_context`, a real, new,
+    optional parameter**: an external audit found that this function
+    used to scan only `input` (the user's own message) for a prompt
+    injection attempt, never the RAG chunks actually fed to the LLM
+    (`api.services.agent_orchestrator`'s own `context` string, built by
+    `build_llm_context` from real retrieval results) -- a real document
+    containing "ignore previous instructions..." could reach the model
+    with zero scanning at all, a real, different, and arguably more
+    dangerous attack surface than the user's own message (a user
+    attacking their own agent is a lesser concern than a THIRD PARTY's
+    uploaded document silently hijacking every future user's
+    conversation with it). `None` (every pre-existing real caller,
+    unchanged until the two real orchestrator call sites below pass
+    their own `context`) keeps this function's own behavior
+    byte-identical for anyone not yet passing it."""
     agent = await db.get(Agent, agent_id)
     if agent is None or agent.deleted_at is not None or not agent.guardrails_enabled:
         return {"passed": True, "violations": []}
@@ -174,6 +192,26 @@ async def validate_guardrails(db: AsyncSession, agent_id: uuid.UUID, input: str,
             violations.append(f"unsafe_content:{label}:{category}")
     if not await validate_output_length(db, agent_id, output):
         violations.append("output_too_long")
+    # Real, opt-in prompt-injection/jailbreak detection
+    # (api/services/prompt_injection_detection.py). Checks `input` (a
+    # USER attempting to override this agent's own system instructions)
+    # AND, since the Hardening Mission, `retrieved_context` (a
+    # DOCUMENT's own content attempting the same thing via the RAG
+    # pipeline instead) -- two real, distinct attack surfaces, labeled
+    # separately in `violations` so an operator can tell which one
+    # actually fired. Still never `output` (a real, deliberate,
+    # pre-existing scope boundary -- the model's own response isn't an
+    # instruction source).
+    if agent.prompt_injection_detection_enabled:
+        from api.services.prompt_injection_detection import detect_prompt_injection
+
+        result = detect_prompt_injection(input)
+        if result["is_injection"]:
+            violations.append(f"prompt_injection:input:score={result['score']:.2f}")
+        if retrieved_context:
+            context_result = detect_prompt_injection(retrieved_context)
+            if context_result["is_injection"]:
+                violations.append(f"prompt_injection:retrieved_context:score={context_result['score']:.2f}")
 
     return {"passed": len(violations) == 0, "violations": violations}
 
