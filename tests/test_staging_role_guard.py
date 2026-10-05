@@ -12,6 +12,15 @@ def test_restricted_staging_role_is_accepted():
     validate_tenant_role(dict.fromkeys(FLAGS, False), False, False)
 
 
+def test_role_guard_is_independent_of_target_configuration(monkeypatch):
+    monkeypatch.setenv("STAGING_ALLOWED_DIRECT_HOST", "db.example-ref.supabase.co")
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_HOST", "staging-pooler.example.invalid")
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_USER", "postgres.example-ref")
+    validate_tenant_role(dict.fromkeys(FLAGS, False), False, False)
+    with pytest.raises(StagingTargetError, match="refused"):
+        validate_tenant_role(dict.fromkeys(FLAGS, False), True, False)
+
+
 @pytest.mark.parametrize("flag", FLAGS)
 def test_privileged_or_login_role_is_rejected(flag):
     flags = dict.fromkeys(FLAGS, False)

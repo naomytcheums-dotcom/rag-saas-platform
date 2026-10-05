@@ -11,14 +11,72 @@ from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
 from scripts import staging_validate
+from scripts import staging_target
 from scripts.staging_target import (
-    STAGING_HOST,
-    STAGING_POOLER_HOST,
-    STAGING_POOLER_USER,
+    ALLOWLIST_VARIABLES,
     StagingTargetError,
     isolated_environment,
     validate_staging_url,
 )
+
+STAGING_HOST = "db.example-ref.supabase.co"
+STAGING_POOLER_HOST = "staging-pooler.example.invalid"
+STAGING_POOLER_USER = "postgres.example-ref"
+
+
+@pytest.fixture(autouse=True)
+def fictional_allowlist(monkeypatch, tmp_path):
+    monkeypatch.setattr(staging_target, "STAGING_ENV", tmp_path / ".env.staging")
+    for name, value in zip(
+        ALLOWLIST_VARIABLES, (STAGING_HOST, STAGING_POOLER_HOST, STAGING_POOLER_USER), strict=True,
+    ):
+        monkeypatch.setenv(name, value)
+
+
+@pytest.mark.parametrize("name", ALLOWLIST_VARIABLES)
+def test_missing_allowlist_variable_fails_closed(monkeypatch, name):
+    monkeypatch.delenv(name)
+    with pytest.raises(StagingTargetError, match=name) as captured:
+        validate_staging_url(f"postgresql://postgres:unit-test-only@{STAGING_HOST}:5432/postgres")
+    assert STAGING_HOST not in str(captured.value)
+    assert "unit-test-only" not in str(captured.value)
+
+
+def test_allowlist_is_read_from_staging_dotenv_only(monkeypatch, tmp_path):
+    for name in ALLOWLIST_VARIABLES:
+        monkeypatch.delenv(name)
+    staging_target.STAGING_ENV.write_text(
+        "\n".join(f"{name}={value}" for name, value in zip(
+            ALLOWLIST_VARIABLES, (STAGING_HOST, STAGING_POOLER_HOST, STAGING_POOLER_USER), strict=True,
+        )), encoding="utf-8",
+    )
+    assert validate_staging_url(
+        f"postgresql://{STAGING_POOLER_USER}:unit-test-only@{STAGING_POOLER_HOST}:5432/postgres",
+    ).host == STAGING_POOLER_HOST
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_HOST", "override.example.invalid")
+    with pytest.raises(StagingTargetError, match="Target refused"):
+        validate_staging_url(
+            f"postgresql://{STAGING_POOLER_USER}:unit-test-only@{STAGING_POOLER_HOST}:5432/postgres",
+        )
+
+
+def test_allowlist_never_falls_back_to_generic_dotenv(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        f"STAGING_ALLOWED_DIRECT_HOST={STAGING_HOST}\n", encoding="utf-8",
+    )
+    monkeypatch.delenv("STAGING_ALLOWED_DIRECT_HOST")
+    with pytest.raises(StagingTargetError, match="STAGING_ALLOWED_DIRECT_HOST"):
+        staging_target.staging_allowlist()
+    with pytest.raises(StagingTargetError, match="no fallback"):
+        staging_target.staging_url()
+
+
+@pytest.mark.parametrize("value", ["", " ", "*.supabase.co", "<STAGING_POOLER_HOST>"])
+def test_invalid_allowlist_value_fails_closed(monkeypatch, value):
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_HOST", value)
+    with pytest.raises(StagingTargetError, match="STAGING_ALLOWED_POOLER_HOST"):
+        staging_target.staging_allowlist()
 
 
 def test_exact_staging_target_and_async_driver():

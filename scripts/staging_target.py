@@ -11,17 +11,33 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGING_HOST = "db.<STAGING_PROJECT_REF>.supabase.co"
-STAGING_POOLER_HOST = "<STAGING_POOLER_HOST>"
-STAGING_POOLER_USER = "<STAGING_DB_USER>"
 STAGING_ENV = ROOT / ".env.staging"
+ALLOWLIST_VARIABLES = (
+    "STAGING_ALLOWED_DIRECT_HOST",
+    "STAGING_ALLOWED_POOLER_HOST",
+    "STAGING_ALLOWED_POOLER_USER",
+)
 
 
 class StagingTargetError(ValueError):
     pass
 
 
+def staging_allowlist() -> tuple[str, str, str]:
+    values = dotenv_values(STAGING_ENV) if STAGING_ENV.is_file() else {}
+    allowed = []
+    for name in ALLOWLIST_VARIABLES:
+        value = os.environ.get(name, values.get(name))
+        if not value or not value.strip():
+            raise StagingTargetError(f"Missing staging allowlist variable: {name}; target refused.")
+        if any(character in value for character in ("*", "<", ">", "[", "]")):
+            raise StagingTargetError(f"Invalid staging allowlist variable: {name}; target refused.")
+        allowed.append(value)
+    return allowed[0], allowed[1], allowed[2]
+
+
 def validate_staging_url(value: str) -> URL:
+    direct_host, pooler_host, pooler_user = staging_allowlist()
     try:
         url = make_url(value)
     except (ArgumentError, ValueError):
@@ -29,8 +45,8 @@ def validate_staging_url(value: str) -> URL:
     if (
         url.drivername not in {"postgresql", "postgresql+asyncpg"}
         or (url.host, url.username) not in {
-            (STAGING_HOST, "postgres"),
-            (STAGING_POOLER_HOST, STAGING_POOLER_USER),
+            (direct_host, "postgres"),
+            (pooler_host, pooler_user),
         }
         or url.port != 5432
         or url.database != "postgres"
@@ -85,4 +101,6 @@ def isolated_environment(url: URL) -> dict[str, str]:
         "AWS_CONFIG_FILE": str(ROOT / "staging-artifacts" / "no-aws-config"),
         "PYTHONIOENCODING": "utf-8",
     })
+    for name, value in zip(ALLOWLIST_VARIABLES, staging_allowlist(), strict=True):
+        env[name] = value
     return env

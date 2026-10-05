@@ -6,6 +6,18 @@ connexion au serveur inconnu dans cette session.
 
 ## Profil d'integration staging et controle de policies
 
+Copier `.env.staging.example` vers `.env.staging` (ignore par Git), puis
+configurer localement `ENVIRONMENT=staging`, `DATABASE_URL` et les trois
+variables obligatoires `STAGING_ALLOWED_DIRECT_HOST`,
+`STAGING_ALLOWED_POOLER_HOST`, `STAGING_ALLOWED_POOLER_USER`.
+Les variables du processus ont priorite sur celles du fichier staging.
+Une valeur absente ou vide refuse la cible en nommant uniquement la variable;
+les espaces reserves et jokers sont refuses. La comparaison host/utilisateur
+reste exacte, avec port 5432, base `postgres` et SSL requis.
+Le loader ne consulte jamais `.env` et ne journalise aucune valeur.
+Le processus enfant recoit aussi l'allowlist autorisee du runner.
+Ne pas committer `.env.staging`, ni les valeurs reelles de ces variables.
+
 Le test `test_rls_policies_exist_on_staging` est sélectionné seulement si
 `RAG_EXPECT_STAGING_RLS_POLICIES=1`. Le runner autorisé pour staging,
 `python -m scripts.staging_validate tests --execute`, définit cette variable

@@ -49,6 +49,21 @@ def test_conversion_preserves_escaped_credentials_and_query_mapping():
     assert make_url(result.render_as_string(hide_password=False)) == result
 
 
+def test_allowlisted_staging_url_converts_without_connecting(monkeypatch):
+    from scripts.staging_target import validate_staging_url
+
+    monkeypatch.setenv("STAGING_ALLOWED_DIRECT_HOST", "db.example-ref.supabase.co")
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_HOST", "staging-pooler.example.invalid")
+    monkeypatch.setenv("STAGING_ALLOWED_POOLER_USER", "postgres.example-ref")
+    url = validate_staging_url(
+        "postgresql://postgres.example-ref:unit-test-only@staging-pooler.example.invalid:5432/postgres",
+    )
+    result = synchronous_database_url(url)
+    assert result.host == "staging-pooler.example.invalid"
+    assert result.username == "postgres.example-ref"
+    assert dict(result.query) == {"sslmode": "require"}
+
+
 @pytest.mark.parametrize("driver", ("postgresql", "postgresql+asyncpg", "postgresql+psycopg2"))
 def test_absent_ssl_does_not_invent_or_disable_tls(driver):
     original = make_url(_ASYNC_URL).set(drivername=driver, query={"application_name": "worker"})
