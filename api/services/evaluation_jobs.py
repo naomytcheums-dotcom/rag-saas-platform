@@ -83,6 +83,9 @@ async def run_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJ
     if job.status not in _RESUMABLE_STATUSES:
         raise ValueError(f"'{job_id}' is already {job.status} and cannot be (re)processed")
 
+    from api.security.logging_correlation import bind_log_context
+
+    bind_log_context(evaluation_job_id=job_id)
     questions = await _job_questions(db, job)
     # Real, plain UUIDs captured UPFRONT, not real ORM objects kept
     # alive across the loop below -- a real `db.rollback()` (this same
@@ -115,11 +118,21 @@ async def run_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJ
                 except (ValueError, TypeError):
                     pass
     corpus_document_ids = list(set(corpus_document_ids))
+    # Hardening Mission (§9) -- opt-in only (see the setting's own comment):
+    # restricting retrieval to the ground-truth documents makes the search
+    # trivially easy and inflates every retrieval metric.
+    constrain_corpus = settings.EVALUATION_RESTRICT_RETRIEVAL_TO_GROUND_TRUTH_DOCS and bool(corpus_document_ids)
     logger.info(
-        "run_evaluation_job: job '%s' constrained to %d evaluation-corpus document(s)",
-        job_id, len(corpus_document_ids),
+        "run_evaluation_job: job '%s' retrieval corpus: %s",
+        job_id, f"constrained to {len(corpus_document_ids)} ground-truth document(s)" if constrain_corpus else "the whole organization corpus",
     )
-    retrieval_overrides = {"document_ids": corpus_document_ids} if corpus_document_ids else {}
+    retrieval_overrides = {"document_ids": corpus_document_ids} if constrain_corpus else {}
+    # A job-level retrieval configuration (a candidate under test, e.g. from
+    # the retrieval evolution engine) travels inside `model_config_json`
+    # and is forwarded as `run_evaluation(retrieval_config=...)`; it must
+    # not leak into the LLM-config overrides.
+    job_model_config = dict(job.model_config_json or {})
+    job_retrieval_config = job_model_config.pop("retrieval_config", None)
 
     result_ids: list[uuid.UUID] = []
     try:
@@ -132,8 +145,9 @@ async def run_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJ
             try:
                 result = await run_evaluation(
                     db, question_id, agent_id=job.agent_id,
-                    model_config=job.model_config_json,
+                    model_config=job_model_config,
                     retrieval_overrides=retrieval_overrides,
+                    retrieval_config=job_retrieval_config,
                 )
                 if result is not None:
                     result.evaluation_job_id = job.id
@@ -158,6 +172,7 @@ async def run_evaluation_job(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJ
             job.results = {
                 "result_ids": [str(rid) for rid in result_ids], "total_questions": job.total_questions,
                 "completed_questions": job.completed_questions, "failed_questions": job.total_questions - len(result_ids),
+                "corpus_constrained": constrain_corpus, "retrieval_config": job_retrieval_config,
             }
             await db.commit()
     except Exception as exc:

@@ -74,9 +74,14 @@ class AlertRule(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    # One of: cpu_percent, memory_percent, disk_percent, celery_queue_backlog,
-    # http_5xx_total -- see api/services/alerting.py's REAL_METRIC_SOURCES
-    # for the exact, honest list of what this can actually check.
+    # Either a platform-wide infra metric (cpu_percent, memory_percent,
+    # disk_percent, celery_queue_backlog, http_5xx_total) or -- since the
+    # Hardening Mission's §13 Guardian work -- a real, organization-
+    # scoped RAG-quality metric (recall_at_1/3/5/10, mrr, ndcg_at_{k},
+    # hallucination_rate) averaged from that organization's latest
+    # completed EvaluationJob. See api/services/alerting.py's
+    # `real_metric_value`/`real_rag_quality_metric_value` for the exact,
+    # honest list of what this can actually check.
     metric: Mapped[str] = mapped_column(String(64), nullable=False)
     operator: Mapped[AlertOperator] = mapped_column(nullable=False)
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
