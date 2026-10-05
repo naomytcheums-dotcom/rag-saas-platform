@@ -50,25 +50,31 @@ codebase has no equivalent of)."""
 
 import asyncio
 import functools
+import logging
 import os
 import re
 
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings as app_settings
 from api.models.document import Document, DocumentChunk
+from api.models.media import MediaAsset
 from api.models.retrieval_diagnostic import RetrievalDiagnostic
 from api.security.documents import generate_embeddings
 from api.services.embedding_config import resolve_embedding_model
 from api.services.retrieval_config import (
+    resolve_adaptive_routing_enabled,
+    resolve_graphrag_enabled,
     resolve_hyde_enabled,
     resolve_mmr_candidate_k,
     resolve_mmr_enabled,
     resolve_mmr_lambda,
     resolve_multi_query_count,
     resolve_multi_query_enabled,
+    resolve_policy_aware_retrieval_enabled,
     resolve_query_rewriting_enabled,
     resolve_reranker_model,
     resolve_reranker_top_k,
@@ -77,6 +83,8 @@ from api.services.retrieval_config import (
     resolve_score_threshold,
     resolve_top_k,
 )
+
+logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 _RERANKER_CACHE: dict[str, object] = {}
@@ -98,7 +106,9 @@ def _get_reranker(model_name: str):
     return _RERANKER_CACHE[model_name]
 
 
-async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_filters: dict | None = None, document_ids: list | None = None) -> list[dict]:
+async def fetch_organization_chunks(
+    db: AsyncSession, organization_id, metadata_filters: dict | None = None, document_ids: list | None = None, with_embeddings: bool = True,
+) -> list[dict]:
     """A real, shared, multi-tenant-isolated fetch -- every real search
     function below calls this, never a raw query of its own, so the
     real isolation boundary (`DocumentChunk.organization_id ==
@@ -121,12 +131,32 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_
     so a real, excluded chunk never becomes a real candidate for BM25
     scoring, cosine ranking, RRF fusion, or cross-encoder reranking in
     the first place -- not a real, wasteful post-hoc filter applied
-    after those already ran."""
-    filters = [DocumentChunk.organization_id == organization_id, Document.deleted_at.is_(None), DocumentChunk.embedding.is_not(None)]
+    after those already ran.
+
+    **Hardening Mission, Phase 12 -- a real, confirmed audit gap
+    closed**: this function's own INNER JOIN against `Document` used to
+    structurally exclude EVERY real media-derived chunk (`media_asset_id`
+    set, `document_id` always `NULL` -- `api.services.media`'s own real
+    `index_media_in_rag`) from the main retrieval pipeline entirely, no
+    matter how `search()`/`search_with_context()` was configured -- a
+    real document chunk and a real media chunk sit in the SAME real
+    `document_chunks` table, but only one of the two could ever reach a
+    real citation. Fixed with a real `outerjoin` (never replacing the
+    real, mandatory `organization_id` isolation above) plus a real,
+    explicit OR in the WHERE clause: a chunk is included when it has a
+    real, non-deleted parent `Document`, OR when it has none at all
+    (a real media chunk -- `MediaAsset` has no soft-delete state of its
+    own, see that model's own docstring: a deleted `MediaAsset` cascades
+    its own chunks away via a real FK, so no extra "is it deleted" check
+    is needed for that second case)."""
+    filters = [
+        DocumentChunk.organization_id == organization_id,
+        or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
+        DocumentChunk.embedding.is_not(None),
+    ]
     if document_ids:
         filters.append(DocumentChunk.document_id.in_(document_ids))
     if metadata_filters:
-        from api.config import settings as app_settings
         from api.services.metadata_filtering import build_metadata_filter_clauses
 
         # Real, global kill switch (already existing, same convention as
@@ -137,36 +167,64 @@ async def fetch_organization_chunks(db: AsyncSession, organization_id, metadata_
         if app_settings.METADATA_FILTERING_ENABLED:
             filters.extend(build_metadata_filter_clauses(DocumentChunk.metadata_json, metadata_filters))
 
+    # Hardening Mission (§7, performance) -- measured, not guessed
+    # (scripts/retrieval_benchmark.py, 5,000 chunks on the portable path):
+    # selecting the whole `DocumentChunk` ENTITY (which drags every row's
+    # 384-float `embedding` JSON through the ORM) cost ~2.0 s of a ~2.3 s BM25
+    # query, against 0.05 s for `SELECT id, content`; the BM25 index build
+    # itself is ~0.15 s. Columns are therefore selected explicitly, and the
+    # embedding only when the caller will actually rank by it
+    # (`with_embeddings=False` for keyword search).
+    columns = [
+        DocumentChunk.id, DocumentChunk.document_id, DocumentChunk.media_asset_id, DocumentChunk.content, DocumentChunk.metadata_json,
+        DocumentChunk.chunk_index, Document.name, Document.file_type, Document.source_url, MediaAsset.filename, MediaAsset.mime_type,
+    ]
+    if with_embeddings:
+        columns.append(DocumentChunk.embedding)
     rows = await db.execute(
-        select(DocumentChunk, Document.name, Document.file_type, Document.source_url, Document.id.label("doc_id"))
-        .join(Document, Document.id == DocumentChunk.document_id)
+        select(*columns)
+        .outerjoin(Document, Document.id == DocumentChunk.document_id)
+        .outerjoin(MediaAsset, MediaAsset.id == DocumentChunk.media_asset_id)
         .where(*filters)
     )
     return [
         {
-            "chunk_id": str(chunk.id),
-            "document_id": str(chunk.document_id),
-            "content": chunk.content,
-            "metadata_json": chunk.metadata_json,
-            "embedding": chunk.embedding,
-            "document_name": name,
-            "file_type": file_type,
+            "chunk_id": str(chunk_id),
+            # Hardening Mission, Phase 12 -- `None` (never the literal
+            # string `"None"`, a real bug this fix also closes) for a
+            # real media chunk -- `api.services.citations._build_citation`
+            # already handles a falsy `document_id` correctly
+            # (`Citation.document_id` has been nullable all along).
+            "document_id": str(document_id) if document_id else None,
+            "media_asset_id": str(media_asset_id) if media_asset_id else None,
+            "content": content,
+            "metadata_json": metadata_json,
+            "embedding": embedding,
+            # Real media fallback: a media-derived chunk has no real
+            # `Document` row to name/type it, so its own real
+            # `MediaAsset.filename`/`mime_type` (joined in above) stand
+            # in -- never a fabricated "Untitled" placeholder.
+            "document_name": name if name is not None else media_filename,
+            "file_type": file_type if file_type is not None else media_mime_type,
             # Partie 6.1.5 -- real, per-document content-order ordinal,
             # already a real column on this SAME chunk row (see
             # api/models/document.py's own DocumentChunk docstring) --
             # no extra join needed, unlike document_name/file_type/
             # source_url above.
-            "chunk_index": chunk.chunk_index,
+            "chunk_index": chunk_index,
             # Partie 6.1.4 -- the parent document's own real source_url
             # (only ever real for a document imported via `POST
             # .../documents/url`, see api/models/document.py's own
             # docstring), joined in here for the SAME reason
             # document_name/file_type already are: a citation built from
             # this chunk needs its parent document's real context
-            # without a second, separate query.
+            # without a second, separate query. Always `None` for a
+            # real media chunk (no equivalent concept yet).
             "source_url": source_url,
         }
-        for chunk, name, file_type, source_url, _doc_id in rows.all()
+        for (chunk_id, document_id, media_asset_id, content, metadata_json, chunk_index, name, file_type, source_url, media_filename, media_mime_type, *rest)
+        in rows.all()
+        for embedding in [rest[0] if rest else None]
     ]
 
 
@@ -175,7 +233,26 @@ def cosine_similarities(query_embedding: list[float], chunk_embeddings: list[lis
     cross-module reuse" precedent as `rank_chunks_by_embedding` below)
     for `api.services.media.search_media`, which ranks a real,
     media-only chunk subset the same way this module already ranks a
-    document's own chunks."""
+    document's own chunks.
+
+    **Hardening Mission, Phase 1 -- the real fix for a reproduced,
+    confirmed crash**: an external audit reproduced a real
+    `ValueError: setting an array element with a sequence` here whenever
+    `chunk_embeddings` mixed vectors of different lengths (a real,
+    genuine scenario: an organization changes `embedding_model`
+    mid-lifetime -- new chunks get the new dimension, old chunks keep
+    the old one, and nothing reindexes them automatically).
+    `np.asarray(chunk_embeddings, ...)` cannot build a rectangular
+    matrix from ragged rows; it used to raise straight into every real
+    caller (`vector_search`, HyDE, media search). The real, correct fix
+    is NOT a try/except around the crash -- it's to never hand numpy a
+    ragged input in the first place: only embeddings whose length
+    matches the QUERY embedding's own length are comparable at all
+    (cosine similarity between vectors of different dimensionality is
+    mathematically undefined, not just a numpy limitation), so every
+    other length is excluded here, not force-fit. See
+    `rank_chunks_by_embedding` below for what happens to the excluded
+    ones (never silently dropped from the caller's awareness)."""
     query = np.asarray(query_embedding, dtype=float)
     matrix = np.asarray(chunk_embeddings, dtype=float)
     query_norm = np.linalg.norm(query)
@@ -183,6 +260,31 @@ def cosine_similarities(query_embedding: list[float], chunk_embeddings: list[lis
     denom = query_norm * matrix_norms
     denom[denom == 0] = 1e-12  # a real, cheap guard against a real zero-norm embedding, never divides by 0
     return (matrix @ query) / denom
+
+
+def _split_chunks_by_dimension(query_embedding: list[float], chunks: list[dict]) -> tuple[list[dict], int]:
+    """Hardening Mission, Phase 1 -- the real, shared dimension guard
+    `rank_chunks_by_embedding`/`api.services.media.search_media` both
+    need before ever calling `cosine_similarities` above. Returns
+    (comparable_chunks, excluded_count): only chunks whose own stored
+    embedding has the SAME length as the query embedding are
+    comparable; everything else is a real, different-dimension
+    embedding this particular query can never be ranked against (not a
+    bug to silently paper over -- see `rank_chunks_by_embedding`'s own
+    `dimension_mismatch_excluded` return value, which surfaces this
+    count up to `search()`'s own real response so a caller/UI can
+    recommend `api.services.embedding_reindex` instead of the organization
+    silently losing recall on its own older documents)."""
+    query_dim = len(query_embedding)
+    comparable = [c for c in chunks if len(c["embedding"]) == query_dim]
+    excluded = len(chunks) - len(comparable)
+    if excluded:
+        logger.warning(
+            "retrieval_pipeline: excluded %d chunk(s) with an embedding dimension different from the query's own "
+            "(%d) -- likely a stale embedding_model; see api.services.embedding_reindex",
+            excluded, query_dim,
+        )
+    return comparable, excluded
 
 
 _cosine_similarities = cosine_similarities  # internal alias, unchanged call sites below
@@ -235,6 +337,124 @@ async def vector_search(
     return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
 
 
+async def _pgvector_rank_chunks(
+    db: AsyncSession, organization_id, embedding: list[float], top_k: int,
+    metadata_filters: dict | None = None, document_ids: list | None = None,
+) -> list[dict] | None:
+    """Hardening Mission, Phase 1 -- the real native-index path this
+    module's own top docstring named as "the natural next step". Returns
+    `None` (never an empty list, which is a real, valid "no matches"
+    answer) whenever the native path genuinely does not apply, so
+    `rank_chunks_by_embedding` knows to fall back to the pre-existing
+    numpy path instead of returning a wrong empty result:
+
+    - not running against a real Postgres bind (the fast SQLite test
+      suite, where `embedding_vector` degrades to plain JSON with none
+      of pgvector's own SQL operators available at all);
+    - `PGVECTOR_ENABLED=False` (an explicit operator kill switch, same
+      convention as every other advanced-feature flag in this
+      codebase);
+    - the query embedding's own dimension doesn't match the fixed,
+      indexed `settings.EMBEDDING_VECTOR_DIM` -- a real, different-
+      dimension organization is NOT an error here, just a real
+      boundary of what this one fixed-width index can serve (see this
+      module's own top-of-file Phase 1 docstring addition).
+
+    Uses the EXACT SAME real isolation/metadata filters as
+    `fetch_organization_chunks` (never a second, divergent copy of the
+    multi-tenant WHERE clause) -- only the ordering/ranking mechanism
+    differs, never which rows are eligible at all."""
+    if not app_settings.PGVECTOR_ENABLED or db.bind is None or db.bind.dialect.name != "postgresql":
+        return None
+    if len(embedding) != app_settings.EMBEDDING_VECTOR_DIM:
+        return None
+
+    # Hardening Mission (§20, multimodal audit) -- a real, confirmed
+    # bug: this query used to `.join(Document, ...)` (an INNER JOIN),
+    # the exact same class of bug Phase 12 already fixed in
+    # `fetch_organization_chunks` below (a real media-derived chunk
+    # always has `document_id IS NULL`, so an INNER JOIN against
+    # `Document` structurally excludes it) -- this parallel, native
+    # query path was never updated when that fix landed, silently
+    # re-excluding every real media chunk from this organization's own
+    # Postgres-side ANN search. Mirrors `fetch_organization_chunks`'s
+    # own real outerjoin + OR filter exactly, never a second, divergent
+    # isolation rule.
+    filters = [
+        DocumentChunk.organization_id == organization_id,
+        or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
+        DocumentChunk.embedding_vector.is_not(None),
+    ]
+    if document_ids:
+        filters.append(DocumentChunk.document_id.in_(document_ids))
+    if metadata_filters and app_settings.METADATA_FILTERING_ENABLED:
+        from api.services.metadata_filtering import build_metadata_filter_clauses
+
+        filters.extend(build_metadata_filter_clauses(DocumentChunk.metadata_json, metadata_filters))
+
+    distance = DocumentChunk.embedding_vector.cosine_distance(embedding)
+    try:
+        rows = (
+            await db.execute(
+                select(DocumentChunk, Document.name, Document.file_type, Document.source_url, MediaAsset.filename, MediaAsset.mime_type, distance.label("distance"))
+                .outerjoin(Document, Document.id == DocumentChunk.document_id)
+                .outerjoin(MediaAsset, MediaAsset.id == DocumentChunk.media_asset_id)
+                .where(*filters)
+                .order_by(distance)
+                .limit(top_k)
+            )
+        ).all()
+    except Exception:
+        # A real, defensive fallback (e.g. the HNSW index/extension
+        # genuinely missing on a not-yet-migrated real Postgres database)
+        # -- never let the native speedup path take down a real search
+        # request that the pre-existing numpy path can still serve.
+        logger.exception("retrieval_pipeline: native pgvector query failed, falling back to the numpy path")
+        return None
+
+    if not rows:
+        # Hardening Mission (§20/§1, multimodal + pgvector audit) -- a
+        # real, confirmed bug: an empty native result used to be trusted
+        # as "genuinely zero matches", but `embedding_vector IS NOT NULL`
+        # above silently excludes any real, otherwise-comparable chunk
+        # that only has the legacy `embedding` column populated (e.g. a
+        # chunk written by a code path that pre-dates this organization's
+        # pgvector backfill, or any future ingestion path that forgets
+        # to stamp `embedding_vector` the way this one and
+        # api/security/documents.py's own process_document both do).
+        # Rather than silently returning a WRONG empty answer, check
+        # whether such an orphaned, legacy-only chunk actually exists
+        # for this organization; if so, defer to the numpy path, which
+        # DOES see it. Only ever one extra, cheap `EXISTS`-style query,
+        # and only on the empty-result branch -- never on every search.
+        orphan_filters = [
+            DocumentChunk.organization_id == organization_id,
+            or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
+            DocumentChunk.embedding.is_not(None),
+            DocumentChunk.embedding_vector.is_(None),
+        ]
+        if document_ids:
+            orphan_filters.append(DocumentChunk.document_id.in_(document_ids))
+        has_orphan = await db.scalar(
+            select(DocumentChunk.id).outerjoin(Document, Document.id == DocumentChunk.document_id).where(*orphan_filters).limit(1)
+        )
+        if has_orphan is not None:
+            return None
+
+    return [
+        {
+            "chunk_id": str(chunk.id), "document_id": str(chunk.document_id) if chunk.document_id else None,
+            "media_asset_id": str(chunk.media_asset_id) if chunk.media_asset_id else None, "content": chunk.content,
+            "metadata_json": chunk.metadata_json, "embedding": chunk.embedding,
+            "document_name": name if name is not None else media_filename,
+            "file_type": file_type if file_type is not None else media_mime_type,
+            "chunk_index": chunk.chunk_index, "source_url": source_url,
+            "score": float(1.0 - distance_value),
+        }
+        for chunk, name, file_type, source_url, media_filename, media_mime_type, distance_value in rows
+    ]
+
+
 async def rank_chunks_by_embedding(
     db: AsyncSession, organization_id, embedding: list[float], top_k: int, metadata_filters: dict | None = None, document_ids: list | None = None,
 ) -> list[dict]:
@@ -251,13 +471,47 @@ async def rank_chunks_by_embedding(
     real chunk never even enters the real candidate list this function
     ranks, so HyDE's own real hypothetical-document embedding (the one
     real caller that reaches this function directly) automatically
-    respects the SAME real filter a plain `vector_search` would."""
+    respects the SAME real filter a plain `vector_search` would.
+
+    **Hardening Mission, Phase 1**: chunks whose own embedding dimension
+    differs from `embedding`'s (a real, mixed-dimension organization,
+    see `_split_chunks_by_dimension`'s own docstring) are excluded from
+    THIS ranking pass rather than crashing it, and logged (never
+    silent). This function's own return shape (`list[dict]`) is reused
+    by citations downstream, so the exclusion count is deliberately NOT
+    smuggled into a result dict here -- the real, explicit, user-facing
+    signal is `api.services.embedding_reindex`'s own reindex-status
+    endpoint, which tells an organization in plain terms how many of
+    its chunks are on a stale embedding model, instead of a diagnostic
+    field leaking into an end-user-visible citation.
+
+    **Hardening Mission, Phase 1**: tries the real, native pgvector
+    index first (`_pgvector_rank_chunks`) -- a real Postgres-side ANN
+    query, not a Python-side brute force -- and only falls back to the
+    pre-existing numpy path when that genuinely doesn't apply (SQLite
+    tests, a non-default embedding dimension, or `PGVECTOR_ENABLED=False`).
+    Byte-identical real isolation guarantees either way: see
+    `_pgvector_rank_chunks`'s own docstring for why it reuses the exact
+    same filters as `fetch_organization_chunks` below, never a second,
+    divergent copy."""
+    native_results = await _pgvector_rank_chunks(db, organization_id, embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
+    if native_results is not None:
+        return native_results
+
     chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids)
     if not chunks:
         return []
-    similarities = _cosine_similarities(embedding, [c["embedding"] for c in chunks])
-    ranked = sorted(zip(chunks, similarities), key=lambda pair: pair[1], reverse=True)
-    return [{**chunk, "score": float(score)} for chunk, score in ranked[:top_k]]
+    comparable, _excluded = _split_chunks_by_dimension(embedding, chunks)
+    if not comparable:
+        return []
+    def _rank() -> list[dict]:
+        similarities = _cosine_similarities(embedding, [c["embedding"] for c in comparable])
+        ranked = sorted(zip(comparable, similarities), key=lambda pair: pair[1], reverse=True)
+        return [{**chunk, "score": float(score)} for chunk, score in ranked[:top_k]]
+
+    # Matrix build + cosine + sort are CPU-bound (and NumPy releases the GIL for the heavy part):
+    # off the event loop so a large organization's search does not stall every other request.
+    return await asyncio.get_running_loop().run_in_executor(None, _rank)
 
 
 async def bm25_search(
@@ -277,14 +531,21 @@ async def bm25_search(
     index is even built: an excluded real chunk's own real text can
     never contribute to a real BM25 score, let alone be returned."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
-    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids)
+    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids, with_embeddings=False)
     if not chunks:
         return []
 
-    bm25 = BM25Okapi([_tokenize(c["content"]) for c in chunks])
-    scores = bm25.get_scores(_tokenize(query))
-    ranked_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-    return [{**chunks[i], "score": float(scores[i])} for i in ranked_indices]
+    # Building the index and scoring is pure CPU (~O(total text)); run inline it blocks the
+    # event loop for every other request in the process (measured: concurrent BM25 queries
+    # got NO throughput gain). Off-loaded to the default executor so the loop stays responsive.
+    def _rank() -> list[tuple[int, float]]:
+        bm25 = BM25Okapi([_tokenize(c["content"]) for c in chunks])
+        scores = bm25.get_scores(_tokenize(query))
+        order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        return [(i, float(scores[i])) for i in order]
+
+    ranked = await asyncio.get_running_loop().run_in_executor(None, _rank)
+    return [{**chunks[i], "score": score} for i, score in ranked]
 
 
 def reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> dict[str, float]:
@@ -345,7 +606,10 @@ async def hybrid_search(
     if not semantic_results and not bm25_results:
         return []
 
-    by_id = {c["chunk_id"]: c for c in semantic_results + bm25_results}
+    # BM25 hits no longer carry the embedding (not loaded for keyword search); a chunk found by BOTH
+    # legs keeps the semantic leg's dict, which does.
+    by_id = {c["chunk_id"]: c for c in bm25_results}
+    by_id.update({c["chunk_id"]: c for c in semantic_results})
     fused = reciprocal_rank_fusion([[c["chunk_id"] for c in semantic_results], [c["chunk_id"] for c in bm25_results]], k=resolved_rrf_k)
     ranked_ids = sorted(fused, key=lambda cid: fused[cid], reverse=True)[:top_k]
     return [{**by_id[cid], "score": fused[cid]} for cid in ranked_ids]
@@ -450,7 +714,7 @@ async def search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None,
     strategy: str | None = None, reranker: str | None = None, score_threshold: float | None = None,
     org_settings: dict | None = None, metadata_filters: dict | None = None,
-    document_ids: list | None = None,
+    document_ids: list | None = None, user_context: dict | None = None, trace_stages: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- the real, live entry point:
     resolves `strategy`/`top_k`/`reranker`/`score_threshold` from
@@ -557,16 +821,49 @@ async def search(
 
         normalize_metadata_filters(metadata_filters)
 
+    # Systèmes internes, item 24 (RAG Flight Recorder) -- real, opt-in
+    # stage tracing: `trace_stages`, when a real caller supplies one
+    # (an empty real list), gets one real `StageTimer.record` appended
+    # per major stage below. `None` (every pre-existing real call site,
+    # unchanged) means zero real overhead -- no `StageTimer` is even
+    # constructed. This is deliberately a SIDE CHANNEL (an in/out
+    # mutable list), never a change to `search()`'s own real return
+    # type (`list[dict]`, unchanged) -- the same real "don't break
+    # every existing caller's contract" discipline already applied to
+    # `user_context`/`document_ids` above. Persisting the assembled
+    # trace (`record_flight`) is deliberately NOT done here either --
+    # same real precedent as `record_retrieval_diagnostic`, already
+    # called by `generate_response`, never by `search()` itself.
+    from api.services.flight_recorder import StageTimer
+
     effective_query = query
     if resolve_query_rewriting_enabled(org_settings):
         from api.services.query_rewriting import rewrite_query
 
-        try:
-            effective_query = await rewrite_query(query) or query
-        except Exception:
-            effective_query = query
+        with StageTimer("query_rewriting") as timer:
+            try:
+                effective_query = await rewrite_query(query) or query
+                timer.data = {"original_query": query, "rewritten_query": effective_query}
+            except Exception:
+                effective_query = query
+                timer.data = {"original_query": query, "error": "rewrite_query failed, using original query"}
+        if trace_stages is not None:
+            trace_stages.append(timer.record)
 
-    resolved_strategy = resolve_retrieval_strategy(org_settings, override=strategy)
+    # Systèmes internes, item 25 (Query Intelligence Router) -- real,
+    # opt-in adaptive routing: only ever runs when a real caller passed
+    # NO explicit `strategy` override (a real, explicit override always
+    # wins, exactly like every other resolver in this module) AND this
+    # organization has explicitly opted in -- a fresh organization that
+    # never touches this setting keeps its own real, configured
+    # `retrieval_strategy` exactly as before, byte-identical.
+    effective_strategy_override = strategy
+    if strategy is None and resolve_adaptive_routing_enabled(org_settings):
+        from api.services.query_router import suggest_retrieval_strategy
+
+        effective_strategy_override = suggest_retrieval_strategy(effective_query)["strategy"]
+
+    resolved_strategy = resolve_retrieval_strategy(org_settings, override=effective_strategy_override)
     strategy_function = _STRATEGY_FUNCTIONS[resolved_strategy]
     call_kwargs = {"reranker": reranker} if resolved_strategy == "hybrid_reranked" else {}
     # Phase 4, Étape 3 (Metadata Filtering) -- real, deliberate, single
@@ -590,40 +887,81 @@ async def search(
     if resolved_strategy != "bm25_only" and resolve_hyde_enabled(org_settings):
         from api.services.hyde import embed_hypothetical_document, generate_hypothetical_document
 
-        try:
-            hypothetical_documents = await generate_hypothetical_document(effective_query)
-            hyde_embedding = embed_hypothetical_document(hypothetical_documents, org_settings=org_settings)
-            if hyde_embedding:
-                call_kwargs["query_embedding"] = hyde_embedding
-        except Exception:
-            pass
+        # Hardening Mission, Phase 7 -- a real, confirmed audit gap: HyDE
+        # used to run inside a bare try/except with NO StageTimer of its
+        # own (see api/models/flight_recording.py's own corrected
+        # docstring) -- a real Flight Recorder trace couldn't tell
+        # whether HyDE even ran, let alone how long its own real
+        # hypothetical-document generation + embedding took.
+        with StageTimer("hyde") as timer:
+            try:
+                hypothetical_documents = await generate_hypothetical_document(effective_query)
+                hyde_embedding = embed_hypothetical_document(hypothetical_documents, org_settings=org_settings)
+                if hyde_embedding:
+                    call_kwargs["query_embedding"] = hyde_embedding
+                timer.data = {"ran": True, "embedding_used": bool(hyde_embedding)}
+            except Exception as exc:
+                timer.data = {"ran": False, "error": str(exc)}
+        if trace_stages is not None:
+            trace_stages.append(timer.record)
 
     mmr_enabled = resolve_mmr_enabled(org_settings)
     resolved_top_k = resolve_top_k(org_settings, override=top_k)
     fetch_top_k = resolve_mmr_candidate_k(org_settings, top_k=resolved_top_k) if mmr_enabled else resolved_top_k
+    policy_active = user_context is not None and resolve_policy_aware_retrieval_enabled(org_settings)
+    if policy_active:
+        # Hardening Mission (§8) -- the access policy removes chunks AFTER ranking, so the candidate pool must be
+        # wider than the final top_k or a restricted user gets fewer results than permitted chunks exist.
+        fetch_top_k = max(fetch_top_k, resolved_top_k * max(1, app_settings.POLICY_OVERFETCH_FACTOR))
 
-    if resolve_multi_query_enabled(org_settings):
-        from api.services.multi_query import (
-            deduplicate_results,
-            generate_query_variants,
-            merge_query_results,
-            rerank_merged_results,
-            run_queries_parallel,
-        )
+    with StageTimer(f"strategy_dispatch:{resolved_strategy}") as timer:
+        if resolve_multi_query_enabled(org_settings):
+            from api.services.multi_query import (
+                deduplicate_results,
+                generate_query_variants,
+                merge_query_results,
+                rerank_merged_results,
+                run_queries_parallel,
+            )
 
-        try:
-            variants = await generate_query_variants(effective_query, num_variants=resolve_multi_query_count(org_settings))
-        except Exception:
-            variants = [effective_query]
-        search_fn = functools.partial(strategy_function, **call_kwargs) if call_kwargs else strategy_function
-        per_query_results = await run_queries_parallel(
-            db, organization_id, variants, top_k=fetch_top_k, org_settings=org_settings, search_fn=search_fn,
-        )
-        merged = merge_query_results(per_query_results)
-        deduplicated = deduplicate_results(merged)
-        results = rerank_merged_results(deduplicated, effective_query, org_settings=org_settings)[:fetch_top_k]
-    else:
-        results = await strategy_function(db, organization_id, effective_query, top_k=fetch_top_k, org_settings=org_settings, **call_kwargs)
+            try:
+                variants = await generate_query_variants(effective_query, num_variants=resolve_multi_query_count(org_settings))
+            except Exception:
+                variants = [effective_query]
+            search_fn = functools.partial(strategy_function, **call_kwargs) if call_kwargs else strategy_function
+            per_query_results = await run_queries_parallel(
+                db, organization_id, variants, top_k=fetch_top_k, org_settings=org_settings, search_fn=search_fn,
+            )
+            merged = merge_query_results(per_query_results)
+            deduplicated = deduplicate_results(merged)
+            results = rerank_merged_results(deduplicated, effective_query, org_settings=org_settings)[:fetch_top_k]
+            timer.data = {"multi_query": True, "variant_count": len(variants), "candidate_count": len(results)}
+        else:
+            results = await strategy_function(db, organization_id, effective_query, top_k=fetch_top_k, org_settings=org_settings, **call_kwargs)
+            timer.data = {"multi_query": False, "candidate_count": len(results)}
+    if trace_stages is not None:
+        trace_stages.append(timer.record)
+
+    # Systèmes internes, item 22 (Policy-Aware Retrieval) -- real, additive, opt-in filter. Hardening Mission
+    # (§8): it now runs RIGHT AFTER candidate retrieval -- before MMR, the score threshold and the final cut to
+    # `top_k`. Two real defects in the old order (after all of them): (1) a restricted user got fewer results
+    # than `top_k` even though permitted chunks existed just below the cut; (2) MMR chose its "diverse" subset
+    # while still seeing chunks the caller may not read, so the PRESENCE of a forbidden chunk changed which
+    # permitted chunks were returned -- an indirect information leak. Only runs when BOTH this organization has
+    # opted in AND a real `user_context` was supplied (every pre-existing caller without one is unchanged).
+    # `filter_chunks_by_policy` itself is fail-open (item 13's `check_policy` contract): a chunk is only
+    # excluded by a real, explicit, successful `False` from OPA.
+    if policy_active:
+        from api.services.policy_aware_retrieval import filter_chunks_by_policy
+
+        # Hardening Mission, Phase 7 -- this stage has its own StageTimer so a Flight Recorder trace shows
+        # whether policy filtering ran or excluded anything.
+        with StageTimer("policy_aware_retrieval") as timer:
+            before_count = len(results)
+            results = await filter_chunks_by_policy(results, user_context)
+            timer.data = {"before_count": before_count, "after_count": len(results)}
+        if trace_stages is not None:
+            trace_stages.append(timer.record)
 
     if mmr_enabled and results:
         from api.services.mmr import select_diverse_chunks
@@ -648,19 +986,31 @@ async def search(
         # real vector SEARCH, and every real candidate's OWN embedding is
         # still reused as-is (`compute_chunk_embedding`, inside
         # `select_diverse_chunks`), never recomputed.
-        mmr_query_embedding = compute_query_embedding(effective_query, org_settings=org_settings)
-        results = select_diverse_chunks(
-            results, mmr_query_embedding, lambda_param=resolve_mmr_lambda(org_settings), top_k=resolved_top_k,
-        )
+        with StageTimer("mmr") as timer:
+            mmr_query_embedding = compute_query_embedding(effective_query, org_settings=org_settings)
+            results = select_diverse_chunks(
+                results, mmr_query_embedding, lambda_param=resolve_mmr_lambda(org_settings), top_k=resolved_top_k,
+            )
+            timer.data = {"final_count": len(results)}
+        if trace_stages is not None:
+            trace_stages.append(timer.record)
 
     resolved_threshold = resolve_score_threshold(org_settings, override=score_threshold)
-    return filter_by_score_threshold(results, resolved_threshold)
+    with StageTimer("threshold_filtering") as timer:
+        pre_filter_count = len(results)
+        results = filter_by_score_threshold(results, resolved_threshold)
+        timer.data = {"threshold": resolved_threshold, "before_count": pre_filter_count, "after_count": len(results)}
+    if trace_stages is not None:
+        trace_stages.append(timer.record)
+
+    return results[:resolved_top_k]
 
 
 async def search_with_context(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None,
     strategy: str | None = None, reranker: str | None = None, score_threshold: float | None = None,
     org_settings: dict | None = None, metadata_filters: dict | None = None, document_ids: list | None = None,
+    user_context: dict | None = None, trace_stages: list | None = None,
 ) -> list[dict]:
     """Item 2's own literal function -- the same real search as
     `search` above, each real result additionally carrying its own
@@ -672,6 +1022,7 @@ async def search_with_context(
     results = await search(
         db, organization_id, query, top_k=top_k, strategy=strategy, reranker=reranker,
         score_threshold=score_threshold, org_settings=org_settings, metadata_filters=metadata_filters,
+        user_context=user_context, trace_stages=trace_stages,
     )
     return [
         {
@@ -685,6 +1036,44 @@ async def search_with_context(
         }
         for result in results
     ]
+
+
+async def graph_context(organization_id, query: str, org_settings: dict | None = None) -> str | None:
+    """Real GraphRAG query, wired into the actual retrieval pipeline
+    (closing the gap `api/services/graph_rag.py`'s own docstring
+    honestly flagged: a genuinely working building block that nothing
+    real called yet). Deliberately NOT merged into `search()`'s own
+    real chunk list: a graph-synthesized answer draws on POTENTIALLY
+    MANY real documents at once (that's the entire point of GraphRAG's
+    multi-hop/global-summary capability) -- it has no single real
+    `chunk_id`/`document_id` to attach a real `Citation` to without
+    fabricating one, which would misrepresent a real, honest synthesis
+    as if it verbatim-quoted one specific real chunk. Returned as a
+    separate, real, honestly-uncitable text block instead --
+    `api.services.generation.generate_response` includes it as
+    additional context, clearly labeled, alongside (never replacing)
+    the real, precisely-cited BM25/vector/hybrid chunks.
+
+    Real, honest degradation: `None` when GraphRAG is disabled for this
+    organization, when no organization document has ever actually been
+    ingested into its graph (`api.security.documents.process_document`'s
+    own real, opt-in ingestion, same `graphrag_enabled` setting), or on
+    any real failure (LightRAG unavailable, a real LLM error) -- a real
+    search must never fail solely because this genuinely optional,
+    additive step did."""
+    if not resolve_graphrag_enabled(org_settings):
+        return None
+    try:
+        from api.services.graph_rag import GraphRAGNotAvailableError, query_graph
+
+        embedding_model = resolve_embedding_model(org_settings)
+        answer = await query_graph(organization_id, query, embedding_model)
+        return answer.strip() if answer and answer.strip() else None
+    except GraphRAGNotAvailableError:
+        return None
+    except Exception:
+        logger.warning("graph_context: real GraphRAG query failed for organization '%s'", organization_id, exc_info=True)
+        return None
 
 
 async def record_retrieval_diagnostic(

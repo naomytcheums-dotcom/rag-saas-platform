@@ -80,3 +80,30 @@ class Response(Base):
     # Partie 6.2.11 -- real (api/services/faithfulness.py).
     faithfulness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     faithfulness_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Hardening Mission, Phase 7 -- real, confirmed audit gap closed:
+    # this row used to have NO way to answer "what config/model/prompt
+    # actually produced this answer?" after the fact -- the real
+    # retrieval strategy, embedding model, and LLM provider/model an
+    # organization had configured AT THE TIME could silently drift
+    # (a later `organization_settings` change) with zero way to
+    # reconstruct what was actually used for THIS historical row.
+    # Stamped once, at creation, from the SAME real `org_settings`/
+    # `llm_cfg` dicts `api.services.generation.generate_response`
+    # already resolves for the real LLM call itself -- never a second,
+    # separate lookup that could disagree. Nullable: a `Response` row
+    # from before this column existed has no real, historical value to
+    # honestly backfill (the SAME "nullable for pre-existing rows"
+    # discipline as every other real migration in this codebase).
+    retrieval_strategy: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    llm_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Real, optional link to this SAME real generation's own Flight
+    # Recorder trace (api/models/flight_recording.py) -- `None` unless
+    # `generate_response` was called with `trace_enabled=True` (an
+    # organization-level opt-in, zero overhead otherwise). Lets a real
+    # caller reconstruct not just WHICH config produced this answer
+    # (the 4 columns above), but the full, real, stage-by-stage
+    # retrieval trace that led to it.
+    flight_recording_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flight_recordings.id", ondelete="SET NULL"), nullable=True)

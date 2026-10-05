@@ -48,7 +48,7 @@ from api.models.citation import Citation
 from api.models.document import Document
 from api.models.organization import OrganizationMember
 from api.models.response import Response
-from api.schemas.citations import CitationResponse, ConfidenceFactorsResponse, ConfidenceResponse, ResponseDetailResponse
+from api.schemas.citations import CitationResponse, ConfidenceFactorsResponse, ConfidenceResponse, FlightRecordingDetailResponse, ResponseDetailResponse
 from api.security.citations import require_citation_member, require_document_citations_member, require_response_member
 from api.services.citation_chunk import enrich_citation_with_chunk, enrich_citations_with_chunk
 from api.services.citation_documents import enrich_citation_with_document, enrich_citations_with_documents
@@ -70,6 +70,30 @@ async def get_response_endpoint(
 ):
     response, _caller = response_ctx
     return response
+
+
+@router.get("/responses/{response_id}/flight-recording", response_model=FlightRecordingDetailResponse)
+async def get_response_flight_recording_endpoint(
+    response_ctx: tuple[Response, OrganizationMember] = Depends(require_response_member), db: AsyncSession = Depends(get_db),
+):
+    """Hardening Mission, Phase 7 -- the real, reproducible, stage-by-
+    stage Flight Recorder trace for this SAME response, when one exists
+    (`Response.flight_recording_id`, only ever set when
+    `generate_response` was called with `trace_enabled=True`). Same real
+    `require_response_member` boundary as every other response-scoped
+    read above -- a real 404 for a response with no recording, never a
+    real cross-tenant leak of another organization's own trace (the
+    recording's own `organization_id` always matches the response's,
+    by construction -- both stamped from the SAME real call)."""
+    response, _caller = response_ctx
+    if response.flight_recording_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This response has no flight recording (trace_enabled was not set)")
+    from api.services.flight_recorder import get_flight_recording
+
+    recording = await get_flight_recording(db, response.flight_recording_id)
+    if recording is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flight recording not found")
+    return recording
 
 
 @router.get("/responses/{response_id}/citations", response_model=list[CitationResponse])

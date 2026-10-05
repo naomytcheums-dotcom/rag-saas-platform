@@ -394,6 +394,23 @@ async def index_media_in_rag(db: AsyncSession, asset: MediaAsset) -> int:
         db.add(DocumentChunk(
             document_id=None, media_asset_id=asset.id, organization_id=asset.organization_id, content=record["content"],
             metadata_json={"source": record["source"], "media_type": asset.media_type.value}, embedding=embedding, chunk_index=index,
+            # Hardening Mission (§20, multimodal audit) -- a real,
+            # confirmed gap: unlike api/security/documents.py's own
+            # process_document, this real media-ingestion path never
+            # stamped embedding_dim/embedding_model/embedding_vector,
+            # leaving every real media-derived chunk invisible to
+            # api/services/retrieval_pipeline.py's own real, native
+            # pgvector ANN path on Postgres (`_pgvector_rank_chunks`
+            # filters on `embedding_vector IS NOT NULL`) -- it silently
+            # returns zero rows instead of falling back to the slower
+            # numpy path, so a media chunk could never actually surface
+            # in a real `/search` result on Postgres even after the
+            # Phase 12 outerjoin fix made it reachable in principle.
+            # Same real, dimension-safe stamping convention as that
+            # other real call site.
+            embedding_dim=len(embedding),
+            embedding_model=org_settings["embedding_model"],
+            embedding_vector=embedding if len(embedding) == settings.EMBEDDING_VECTOR_DIM else None,
         ))
     return len(chunk_records)
 
@@ -418,8 +435,18 @@ async def search_media(db: AsyncSession, organization_id: uuid.UUID, query: str,
     if not rows:
         return []
 
-    similarities = cosine_similarities(query_embedding, [chunk.embedding for chunk, _asset in rows])
-    ranked = sorted(zip(rows, similarities), key=lambda pair: pair[1], reverse=True)[:top_k]
+    # Hardening Mission, Phase 1 -- same real dimension guard as
+    # api.services.retrieval_pipeline.rank_chunks_by_embedding: a media
+    # chunk embedded under a since-changed org embedding_model must be
+    # excluded from this cosine comparison, not crash it (see that
+    # function's own docstring for why ragged-length vectors are
+    # mathematically incomparable, not just a numpy limitation).
+    query_dim = len(query_embedding)
+    comparable_rows = [row for row in rows if len(row[0].embedding) == query_dim]
+    if not comparable_rows:
+        return []
+    similarities = cosine_similarities(query_embedding, [chunk.embedding for chunk, _asset in comparable_rows])
+    ranked = sorted(zip(comparable_rows, similarities), key=lambda pair: pair[1], reverse=True)[:top_k]
     return [
         {
             "media_asset_id": asset.id, "media_type": asset.media_type.value, "filename": asset.filename,

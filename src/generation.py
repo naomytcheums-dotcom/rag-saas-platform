@@ -68,9 +68,9 @@ def _strip_inline_comment(value):
 
 def load_dotenv_if_present():
     """Minimal, dependency-free .env loader: sets KEY=VALUE lines from a
-    project-root .env file into os.environ, without overriding variables
-    the shell/environment already set."""
-    env_path = PROJECT_ROOT / ".env"
+    project-root .env file (or RAG_ENV_FILE) into os.environ, without
+    overriding variables the shell/environment already set."""
+    env_path = PROJECT_ROOT / os.environ.get("RAG_ENV_FILE", ".env")
     if not env_path.exists():
         return
 

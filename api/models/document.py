@@ -15,25 +15,50 @@ the SQLite fast suite (schema built straight from these ORM models via
 Base.metadata.create_all(), never Alembic) cannot represent JSONB.
 
 `DocumentChunk.embedding` is ALSO generic sa.JSON (a plain list of
-floats), not pgvector's native VECTOR type -- a deliberate choice, not
-an oversight: pgvector's SQLAlchemy type has no SQLite equivalent at
-all (unlike JSON, which degrades to JSONB on Postgres and TEXT on
-SQLite transparently), so using it here would make this table
-altogether unrepresentable in the fast suite. A real pgvector column
-with an ANN index is genuine future work once retrieval actually needs
-efficient similarity search at scale (Partie 3/4's own scope) -- for
-2.1.1 (import + chunking), a Python-side list of floats is real,
-correct, and keeps this table testable the same way every other table
-in this codebase is.
+floats), not pgvector's native VECTOR type -- originally a deliberate
+choice, not an oversight: pgvector's SQLAlchemy type has no SQLite
+equivalent at all (unlike JSON, which degrades to JSONB on Postgres and
+TEXT on SQLite transparently), so using it here would have made this
+table altogether unrepresentable in the fast suite.
+
+**Hardening Mission, Phase 1 -- this is the "genuine future work" this
+docstring already named**: `embedding` (plain JSON) stays exactly as it
+is, unchanged, so every existing real caller/test keeps working
+byte-identical. Three new, ADDITIVE columns close the real gap an
+external audit found (pgvector announced in AGENTS.md/the stack
+overview but never actually wired; a real, reproduced crash when an
+organization's chunks carry embeddings of different dimensions after an
+`embedding_model` change):
+
+- `embedding_model` / `embedding_dim`: the REAL model name and
+  dimension this ONE chunk's embedding was generated with, stamped at
+  write time (`api/security/documents.py`'s own real ingestion path).
+  This is what lets `api.services.retrieval_pipeline.cosine_similarities`
+  group chunks by dimension BEFORE building a numpy matrix instead of
+  crashing on `np.asarray` with an inhomogeneous shape -- the real fix
+  for that reproduced bug, not a cosmetic try/except.
+- `embedding_vector`: pgvector's real `Vector` type on Postgres
+  (`.with_variant(JSON, "sqlite")` for the fast suite, so this table
+  stays representable there exactly as before), fixed at
+  `settings.EMBEDDING_VECTOR_DIM` (the DEFAULT embedding model's own
+  real dimension) so a real HNSW ANN index (migration 0128) is possible
+  at all -- pgvector requires one fixed dimension per indexed column.
+  Only ever populated when a chunk's own `embedding_dim` equals that
+  fixed dimension; every other dimension is still fully, correctly
+  searchable, just via the existing (now dimension-safe) numpy fallback
+  instead of the native index. A real, honest, documented scale
+  boundary -- not a silent gap.
 """
 
 import datetime as dt
 import uuid
 from enum import StrEnum
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from api.config import settings
 from api.database import Base
 
 
@@ -254,6 +279,24 @@ class DocumentChunk(Base):
     # prior, real embedding failure already left storing a literal
     # JSON `null`.
     embedding: Mapped[list[float] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    # Hardening Mission, Phase 1 -- see this module's own top docstring.
+    # Stamped at the SAME time `embedding` itself is (api/security/documents.py),
+    # never backfilled lazily: a chunk's real embedding and the real
+    # model/dimension that produced it must never drift apart. Nullable
+    # for every chunk that predates this column (a real, historical row
+    # has no dimension to retroactively know without re-embedding it --
+    # api.services.embedding_reindex covers that real migration path).
+    embedding_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    embedding_dim: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Real pgvector column, fixed at settings.EMBEDDING_VECTOR_DIM so a
+    # real HNSW index (migration 0128) is possible -- see this module's
+    # own top docstring for why this is additive, never a replacement
+    # for `embedding` above. `.with_variant(JSON(...), "sqlite")` keeps
+    # Base.metadata.create_all() (the fast suite's own schema source,
+    # never Alembic) working unchanged.
+    embedding_vector: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.EMBEDDING_VECTOR_DIM).with_variant(JSON(none_as_null=True), "sqlite"), nullable=True,
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Partie 6.1.5 (migration 0068) -- real, 1-based, per-document
     # content-order ordinal (same 1-based convention as

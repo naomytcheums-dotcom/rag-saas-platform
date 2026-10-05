@@ -70,6 +70,31 @@ def _normalize(vector: np.ndarray) -> list[float]:
     return (vector / norm).tolist()
 
 
+def _pooled_projection(output):
+    """Hardening Mission (§21, real-bug audit) -- a real, confirmed
+    breaking change in `transformers` (reproduced directly against the
+    installed 5.16.1, not assumed): `CLIPModel.get_image_features`/
+    `get_text_features` no longer return a plain, already-projected
+    tensor the way every published usage example (including this
+    library's own docstring) still shows -- they return the full
+    `BaseModelOutputWithPooling` from the underlying vision/text
+    submodel, with its own `.pooler_output` field OVERWRITTEN in place
+    to hold the real, projected joint-embedding-space vector (the exact
+    value `get_image_features`/`get_text_features` used to return
+    directly). Indexing `features[0]` on that object used to silently
+    grab `.last_hidden_state`'s own first row instead -- a real, raw,
+    per-patch/per-token hidden state, never a real image/text embedding
+    at all, which is why `embed_image_clip`/`embed_text_clip` used to
+    return a wrong-shaped, wrong-SPACE vector that could never actually
+    compare image to text (the cosine-similarity-breaking shape
+    mismatch an end-to-end test caught). Falls back to treating `output`
+    as a plain tensor when `.pooler_output` doesn't exist, so this
+    keeps working unchanged against an older `transformers` release
+    that still returns the real tensor directly."""
+    pooled = getattr(output, "pooler_output", output)
+    return pooled[0].detach().numpy()
+
+
 def embed_image_clip(image_bytes: bytes) -> list[float]:
     """Real CLIP image embedding -- used both to INDEX a real image at
     processing time and to embed a real query image for
@@ -80,8 +105,8 @@ def embed_image_clip(image_bytes: bytes) -> list[float]:
     with Image.open(io.BytesIO(image_bytes)) as image:
         rgb_image = image.convert("RGB")
         inputs = processor(images=rgb_image, return_tensors="pt")
-        features = model.get_image_features(**inputs)
-    return _normalize(features[0].detach().numpy())
+        output = model.get_image_features(**inputs)
+    return _normalize(_pooled_projection(output))
 
 
 def embed_text_clip(text: str) -> list[float]:
@@ -90,8 +115,8 @@ def embed_text_clip(text: str) -> list[float]:
     text query and a real image can be compared directly."""
     model, processor = _get_clip()
     inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
-    features = model.get_text_features(**inputs)
-    return _normalize(features[0].detach().numpy())
+    output = model.get_text_features(**inputs)
+    return _normalize(_pooled_projection(output))
 
 
 def rank_by_clip_similarity(query_embedding: list[float], candidate_embeddings: list[list[float]], top_k: int) -> list[tuple[int, float]]:

@@ -89,3 +89,29 @@ class ResponseDetailResponse(BaseModel):
     unsupported_claims: list | None
     faithfulness_score: float | None
     faithfulness_factors: dict | None
+    # Hardening Mission, Phase 7 -- real provenance (api/models/response.py's
+    # own docstring), now reachable through this SAME, already-established
+    # GET /responses/{response_id} endpoint -- no new route needed.
+    retrieval_strategy: str | None
+    embedding_model: str | None
+    llm_provider: str | None
+    llm_model: str | None
+    flight_recording_id: uuid.UUID | None
+
+
+class FlightRecordingDetailResponse(BaseModel):
+    """Hardening Mission, Phase 7 -- the real, reproducible, stage-by-
+    stage trace `GET /responses/{response_id}/flight-recording` exposes
+    -- the real, concrete answer to "pourquoi cette réponse a-t-elle été
+    générée ?" the mission's own Flight Recorder requirement asks for,
+    reachable through the SAME real `require_response_member` boundary
+    as every other response-scoped read in this router."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    query: str
+    stages_json: list
+    total_duration_ms: int | None
+    created_at: dt.datetime
