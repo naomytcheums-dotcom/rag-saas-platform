@@ -1,0 +1,14 @@
+P2C-7 / Task 07 — MCP IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_mcp_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 2.03s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: INCOMPLETE for GET/POST /mcp/v1/servers aliases absent from the
+registered routes. Tests cover the actual organization MCP routes and tool
+calls only; this does not certify external MCP servers.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Historical summary is in PHASE_2_REPORT.md; original full
+stdout is unavailable.

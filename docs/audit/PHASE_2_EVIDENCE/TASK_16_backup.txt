@@ -1,0 +1,12 @@
+P2C-16 — local backup/restore artifact audit
+Date: 2026-10-03
+Files inspected statically: scripts/backup.sh, scripts/restore.sh,
+docs/install/BACKUP_AND_RESTORE.md, update.sh references.
+Artifact: docs/audit/BACKUP_AUDIT.md.
+Result: local self-hosted pg_dump/gzip and interactive restore scripts exist;
+local retention defaults to 30 days, S3/R2 upload is opt-in, database dump
+does not cover object storage, and the project docs describe cron scheduling.
+Remote configuration, actual schedule, last successful backup, restore proof,
+RTO/RPO and managed SaaS backup status are UNKNOWN.
+No backup, restore, Docker command, database connection or S3 operation was
+executed.

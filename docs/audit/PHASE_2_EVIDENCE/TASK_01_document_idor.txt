@@ -1,0 +1,15 @@
+P2C-1 / Task 01 — document IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_document_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 1.75s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: INCOMPLETE for the requested contract because the specified PUT route
+is absent; the test covers and passes against the registered routes. No false
+404 authorization assertion was counted as a protected route.
+Scope/limits: provider, storage and task effects are mocked by the test.
+Evidence note: this file is a fresh replay. The former uppercase-named raw
+proof file was lost in a case-only rename; its historical result summary is
+preserved in PHASE_2_REPORT.md, but its original full stdout is unavailable.

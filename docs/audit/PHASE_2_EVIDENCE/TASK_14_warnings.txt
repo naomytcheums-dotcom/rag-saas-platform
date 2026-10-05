@@ -1,0 +1,26 @@
+P2C-14 — pytest warning investigation
+Date: 2026-10-03
+Initial system Python command:
+python -m pytest tests/test_a2a_router.py -q -W default
+Result: collection failed because system Python lacks declared dependency
+pgvector. No dependency was installed.
+
+Project virtualenv reproduction before fix:
+.\.venv\Scripts\python.exe -m pytest tests/test_a2a_router.py -q -W default
+11 passed, 2 PytestUnraisableExceptionWarning warnings in 9.63s.
+Cause: a per-request DefaultRequestHandlerV2 created an ActiveTaskRegistry
+and producer/consumer tasks but was not closed after the response.
+
+Correction: api/routers/a2a.py drains the handler on errors and installs an
+after-response cleanup BackgroundTask while preserving an existing callback.
+No warning filter was added.
+
+Replays:
+.\.venv\Scripts\python.exe -m pytest tests/test_a2a_router.py -q -W default
+11 passed in 9.33s; no warnings reported.
+.\.venv\Scripts\python.exe -m pytest tests/test_a2a_router.py tests/test_a2a_integration.py tests/test_a2a_idor.py -q -W default
+15 passed in 10.84s; no warnings reported.
+
+The historical `PytestAssertRewriteWarning: anyio` is explained as an
+import/plugin ordering issue in earlier bootstrap-based IDOR runs. It was not
+suppressed, and no full-suite warning inventory was run.

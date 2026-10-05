@@ -1,240 +1,89 @@
-# IBM BOB 2.0 — RAG EVOLUTION FACTORY
+# RAG SaaS Platform
 
-**An IBM Bob-powered autonomous engineering system that creates, evaluates, diagnoses and improves RAG agents through a closed-loop workflow.**
+**A multi-tenant platform for building, evaluating and operating retrieval-augmented (RAG) assistants on your own documents — with verifiable citations, strict tenant isolation, built-in cost control, and a quality loop that measures every change instead of guessing.**
 
-> **IBM Bob** is the autonomous engineering brain.
-> **RAG Evolution Factory** is the orchestration system.
-> **The RAG platform** is the real environment Bob operates, measures and evolves.
-> **MCP** is the control interface between Bob and the platform.
-
-🌐 **Live demo**: https://rag-saas-platform-rho.vercel.app
+🌐 **Live app**: https://rag-saas-platform-rho.vercel.app
 🔧 **Live API**: https://rag-saas-api-sjsm.onrender.com
-📖 **Submission doc**: [docs/ibm_bob_2/SUBMISSION.md](docs/ibm_bob_2/SUBMISSION.md)
 
 ---
 
-## The closed loop
+## What it is
 
-Bob orchestrates a full engineering loop:
+An organization signs up, uploads documents (or connects its sources), configures one or more assistants, and gets:
 
-**FACTORY → GUARDIAN → AUTOPSY → CHANGELAB → KEEP/ROLLBACK → GUARDIAN**
+- answers grounded in **its own documents**, each with citations to the exact source chunk;
+- a hard **isolation boundary** between customers (every query, cache key, job and trace is organization-scoped);
+- **guard rails on spend** (credit balance, daily/monthly caps, per-organization rate limits, bring-your-own-key);
+- an **evaluation lab** that scores retrieval and answers with real metrics, so a configuration change is accepted only if the numbers improve.
 
----
-
-## The 4 modes (agents.md contract)
-
-| Mode | MCP Tool | What Bob does |
-|------|----------|---------------|
-| **1 - FACTORY** | `create_rag_agent` | Bob provisions a real multi-tenant RAG agent |
-| **2 - GUARDIAN** | `run_eval_benchmark` | Bob monitors real metrics (Recall@K, MRR, NDCG, hallucination) |
-| **3 - AUTOPSY** | `get_failure_report` | Bob investigates and categorizes failures |
-| **4 - CHANGELAB** | `update_retrieval_config` | Bob experiments, re-benchmarks, keeps or rolls back |
-
-**Exposed via MCP**:
-- `GET /mcp/v1/tools` — lists the 4 tools
-- `POST /mcp/v1/tools/{name}/call` — executes a tool
-
-**Source**: [api/services/mcp/builtin_tools.py](api/services/mcp/builtin_tools.py)
-**Tests**: [tests/test_mcp_builtin_tools.py](tests/test_mcp_builtin_tools.py) — 9 cases, all passing.
+It is designed to be self-hosted (Docker) or run as a SaaS.
 
 ---
 
-## What Bob actually does end-to-end
-PROBLEM
-RAG systems degrade over time. Developers currently have to manually
-detect, diagnose and fix those regressions.
-|
-v
-BOB DETECTS
-GUARDIAN -> run_eval_benchmark -> Recall@5 = 0.72 (WARNING)
-|
-v
-BOB DIAGNOSES
-AUTOPSY -> get_failure_report -> RETRIEVAL_FAILURE dominant (18/28)
-|
-v
-BOB EXPERIMENTS
-CHANGELAB -> update_retrieval_config (top_k 5 -> 10)
-|
-v
-BOB VALIDATES
-GUARDIAN -> run_eval_benchmark -> Recall@5 = 0.84 (MERGED)
-|
-v
-RESULT
-+0.12 Recall@5 improvement, automatic rollback if regression
+## Capabilities
 
-text
+### Retrieval
+- Native **pgvector** search with an HNSW index on PostgreSQL (with a dimension-safe in-process fallback for other embedding sizes and for the SQLite test suite)
+- Hybrid retrieval: dense vectors + BM25, fused with Reciprocal Rank Fusion; optional cross-encoder reranking
+- HyDE, multi-query, query rewriting, MMR diversification, context compression, metadata filtering
+- **Policy-aware retrieval** (OPA/Rego, opt-in): permissions are applied at search time, not only at display time
+- **Multimodal**: images (OCR, vision description, YOLOv8 object detection, CLIP text↔image search), audio and video (transcription, frame description)
+- GraphRAG (LightRAG) and long-term agent memory (mem0), with per-document / per-organization deletion for GDPR
 
-**Full example**: [ROADMAP.md](ROADMAP.md) under `[Bob-Auto-Fixes]`.
+### Agents and integrations
+- Configurable agents (prompt, tools, knowledge base, guardrails) and autonomous agents with bounded multi-step loops and human approval
+- **MCP**: the platform is both an MCP client (external tool servers, behind a firewall with policy, SSRF protection and audit) and an MCP server (its own tools, per-organization API keys)
+- **A2A (Agent2Agent)**: each organization can expose its RAG agent to external A2A-compliant agents (agent card + JSON-RPC), authenticated and cost-controlled
+- Workflows (Celery), webhooks, 30+ connectors, embeddable chat widget, public `/v1` API with Python / JavaScript / React / Vue SDKs, SSE streaming
 
----
+### Quality loop
+- **Eval Lab**: datasets, jobs, per-question results, Recall@k, MRR, NDCG, precision, hallucination rate, latency and cost
+- **Evolution engine**: proposes a configuration change, measures it against a baseline, recommends it only on a real measured gain
+- **Guardian**: per-organization alerts when retrieval quality (e.g. Recall@5, MRR, NDCG, hallucination rate) drops below a threshold
+- **Autopsy**: failure reports grouped by cause (retrieval / generation / hallucination), tenant-scoped
+- Flight recorder: every answer carries the strategy, embedding model, provider and model that produced it
 
-## Live evidence — the 4 tools proven working
+### Security and governance
+- Multi-tenant RBAC (owner / admin / manager / member / viewer + custom roles); JWT, TOTP 2FA, WebAuthn, persistent account lockout
+- Prompt-injection detection on the question **and** on retrieved content
+- SSRF-safe outbound HTTP everywhere; secrets encrypted at rest (AES-256-GCM); audit logs
+- Per-organization rate limiting on every costly surface; atomic idempotency for payment webhooks (Stripe, Paystack)
 
-Real, live tests against the Render API. All 4 IBM Bob tools were called end-to-end.
-
-### Test 1: List all 13 MCP tools (4 IBM Bob + 9 builtin)
-
-![List tools](bob/evidence/screenshots/01-list-tools.png)
-
-### Test 2: `create_rag_agent` — validation without org
-
-![Create agent validation](bob/evidence/screenshots/02-create-agent-no-org.png)
-
-### Test 3: `execute_sql_query` — strict security allowlist
-
-![SQL allowlist](bob/evidence/screenshots/03-sql-allowlist.png)
-
-### Test 4: `create_rag_agent` — real PostgreSQL INSERT + multi-tenant FK
-
-![FK violation](bob/evidence/screenshots/04-create-agent-fk-violation.png)
-
-### Test 5: `get_failure_report` — success (`is_error: false`)
-
-![Failure report](bob/evidence/screenshots/05-get-failure-report.png)
-
-### Test 6: `update_retrieval_config` — clean error
-
-![Update config](bob/evidence/screenshots/06-update-retrieval-config.png)
-
-### Test 7: `run_eval_benchmark` — bug found + fixed in live
-
-![Run benchmark](bob/evidence/screenshots/07-run-eval-benchmark.png)
-
-**Full raw JSON evidence**: [bob/evidence/json/](bob/evidence/json/)
-**Evidence details**: [bob/evidence/README.md](bob/evidence/README.md)
+### Business
+- Credits, subscriptions, invoices, quotas, BYOK; Stripe and Paystack
+- White-label (branding, custom domains, SSL), analytics, admin console, plugin marketplace, 6 UI languages (EN, FR, ES, DE, PT, AR)
 
 ---
 
-## Underlying RAG SaaS platform
-
-The RAG SaaS platform below provides the **real, production-oriented environment** on which Bob operates. It is not the hero of this repository — it is the **complex, real system** that makes Bob's autonomous engineering loop meaningful.
-
----
-
-## Key numbers
-
-| Metric | Value |
-|--------|-------|
-| API routers | 89 |
-| Frontend sections | 17 |
-| Backend test files | 314 |
-| i18n languages | 6 (EN, FR, ES, DE, PT, AR) |
-| Translations | ~4,200 keys |
-| RBAC permissions | 52 |
-| CRM connectors | 36 |
-| Alembic migrations | 118 |
-| IBM Bob 2.0 modes | 4 (all implemented) |
-
----
-
-## What the RAG platform does
-
-### Multi-tenant
-
-- Organizations, teams, workspaces, members
-- Granular RBAC (52 permissions), resource-level permissions
-- SSO (SAML/OAuth), 2FA (TOTP), WebAuthn (physical keys), invitations
-
-### Documents
-
-- Upload, ingestion, chunking, embeddings
-- Hybrid search (BM25 + semantic + cross-encoder reranking)
-- Citations with source, page, chunk, relevance
-- External connectors (Slack, Teams, Discord, n8n, Airbyte, Notion, Confluence, Google Drive, OneDrive, GitHub, +34 CRM)
-
-### Chat & conversation
-
-- Streaming chat (SSE) with citations, feedback, sharing
-- Voice messages + text-to-speech
-- Embeddable widget (unified theme, allowed domains)
-
-### Agents
-
-- Configured agents: prompt + tools + guardrails + BYOK
-- Autonomous agents: multi-step planning, tool-calling loop, long-term memory, bounded agent-to-agent collaboration, guardrails, per-step/per-agent USD cost tracking
-
-### Workflows
-
-- Multi-step orchestration on Celery
-- Blocks: LLM, RAG, web search, HTTP, code, condition, human, email, calendar, database
-- Triggers: webhook, schedule, manual
-
-### Evaluation & quality
-
-- Evaluation datasets, jobs, results, comparisons
-- Benchmark versions + rollback
-- Regression detection with configurable thresholds
-- Quality dashboard
-
-### Fine-tuning
-
-- Dataset upload (JSONL), validation
-- Jobs for OpenAI + Mistral (Anthropic has no public fine-tuning API — gap documented, not faked)
-- Deployment of fine-tuned models
-
-### Media & vision
-
-- Media processing, vision-in-documents
-- Object detection (YOLOv8, local inference)
-- CLIP visual search (image-to-image, text-to-image)
-
-### Analytics & observability
-
-- Usage analytics, audit logs, agent traces
-- Observability endpoints (Prometheus + Sentry + Loki)
-- Human-approval workflows
-
-### Billing & sales
-
-- Subscriptions, quotas, usage-based billing
-- Stripe + Paystack
-- Partner/sales program
-
-### White-label & branding
-
-- Custom domains, SSL certificates
-- Org branding (logo, colors, font, custom CSS)
-- Branded emails (7 org-level templates)
-- Widget with unified branding
-
-### Marketplace & plugins
-
-- Plugin system + marketplace
-- Custom tools (webhooks)
-
-### Security & compliance
-
-- Encryption, compliance tooling, security scanning
-- Audit trails, PostgreSQL RLS
-- backend-security CI (12 CVEs fixed)
-
-### Admin dashboard
-
-- Organization/user/subscription management for platform operators
-
-### MCP (Model Context Protocol)
-
-- MCP Server: exposes internal tools + the 4 IBM Bob modes
-- MCP Client: consumes external MCP servers
-
----
-
-## Tech stack
+## Stack
 
 | Layer | Choice |
-|-------|--------|
-| API | FastAPI, SQLAlchemy 2.0 (async), PostgreSQL (Supabase), Alembic |
-| Background jobs | Celery + Redis |
-| LLM access | litellm (Anthropic, OpenAI, Mistral, + BYOK) |
-| Frontend | Next.js 16, React, TypeScript, TailwindCSS |
-| Frontend tests | Vitest |
-| Backend tests | pytest (314 files) |
-| Object storage | S3-compatible (AWS, Cloudflare R2) |
-| Vision / media | YOLOv8 (ultralytics, local), CLIP (openai/clip-vit-base-patch32) + faiss-cpu |
-| Monitoring | Prometheus, Grafana, Sentry, Loki |
-| i18n | 6 languages (EN, FR, ES, DE, PT, AR), English by default |
+|---|---|
+| API | FastAPI (Python 3.11), SQLAlchemy 2.0 async, Alembic |
+| Data | PostgreSQL (Supabase) + pgvector, Redis |
+| Jobs | Celery + Redis |
+| LLM access | LiteLLM — Anthropic, OpenAI, Mistral, Gemini, Ollama, watsonx, any OpenAI-compatible endpoint |
+| Frontend | Next.js 16, React, TypeScript, Tailwind |
+| Observability | Prometheus, Grafana, Sentry |
+
+Snapshot measured on 2026-10-03: 100 router modules, 936 registered API
+operations (781 OpenAPI paths), 132 Alembic migration files and 177 ORM
+tables and 399 Python test files. These are local source/metadata counts, not a deployed database
+inventory. See [autonomous discovery](docs/AUTONOMOUS_AUDIT_01_DISCOVERY.md)
+for the file inventory and [final status](docs/FINAL_STATUS.md) for executed
+tests and unresolved blockers.
+
+Staging verified on 2026-10-04 (Supabase project `<STAGING_PROJECT_REF>`,
+not local Docker): Alembic **0132**, **178 public tables** including
+`alembic_version`, pgvector **0.8.2**, and the chunk HNSW index.
+The revision was also verified visually in Supabase Table Editor.
+The local API connected to this staging reports database/rate-limit Redis/cache
+readiness OK. Two browser-created users and organizations successfully logged in;
+cross-organization reads returned 404 in both directions.
+Nine representative staging IDOR tests passed using these same tenants
+(zero skips). These are bounded authentication/authorization checks, not
+exhaustive tenant-isolation or RLS certification.
+See [staging evidence and reproduction](docs/audit/STAGING_TEST_REPORT.md).
 
 ---
 
@@ -245,73 +94,86 @@ The RAG SaaS platform below provides the **real, production-oriented environment
 ```bash
 git clone https://github.com/naomytcheums-dotcom/rag-saas-platform.git
 cd rag-saas-platform
-cp .env.example .env
+cp .env.example .env        # then fill in the secrets
 ./install.sh
 docker compose -f docker-compose.selfhosted.yml up -d
-SaaS (Vercel + Render)
-Frontend: https://rag-saas-platform-rho.vercel.app
+```
 
-Backend: https://rag-saas-api-sjsm.onrender.com
+### Local development
 
-Documentation
-Full documentation lives under docs/ — start at docs/index.md:
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements-api.txt
+alembic upgrade head
+uvicorn api.main:app --reload
+cd frontend && npm install && npm run dev
+```
 
-docs/user/ — end-user guides
+---
 
-docs/admin/ — org + platform administration
+## Documentation
 
-docs/developer/ — architecture, API, SDKs, webhooks
+Start at [docs/index.md](docs/index.md).
 
-docs/install/ — deployment, environment, upgrades, backups
+| Topic | Where |
+|---|---|
+| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md), [docs/architecture/](docs/architecture/) |
+| API reference | [docs/api/](docs/api/) |
+| Deployment | [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) |
+| Terminology | [GLOSSARY.md](GLOSSARY.md) |
+| Roadmap and the dated log of every fix | [ROADMAP.md](ROADMAP.md) |
+| Product requirements and history | [docs/CAHIER_DES_CHARGES.md](docs/CAHIER_DES_CHARGES.md) |
 
-docs/api/ — REST API, OpenAPI, Swagger, Redoc
+---
 
-docs/advanced/ — RAG pipeline internals
+## Testing
 
-docs/diagrams/ — architecture, database, RAG, auth, deployment
-
-docs/ibm_bob_2/SUBMISSION.md — IBM Bob 2.0 submission document
-
-agents.md — IBM Bob 2.0 contract (10 sections)
-
-bob/ — IBM Bob 2.0 dedicated documentation
-
-bob/evidence/ — Live test evidence (JSON + screenshots)
-
-See also:
-
-ARCHITECTURE.md — system-level overview
-
-ROADMAP.md — what's planned + [Bob-Auto-Fixes]
-
-GLOSSARY.md — platform-specific terminology
-
-Tests
-bash
+```bash
 pytest tests/ -x
-pytest tests/eval/ -x
-ruff check api/
-cd frontend && npm run type-check
-314 backend test files, all green.
+pytest tests/ --cov=api --cov-report=term-missing
+cd frontend && npm run lint && npm run type-check
+```
 
-Internationalization
-6 languages: English (default), French, Spanish, German, Portuguese, Arabic
+The suite is large and loads real embedding / vision models; on a machine with limited RAM run it in sequential batches (one pytest process per group of files) rather than as a single process. Tests that need an external provider (Stripe, Paystack, Google Drive, a real Tesseract binary, …) skip themselves when it is not configured — they are reported as skipped, never as passed.
 
-~4,200 translations in locales/
+Every behavioural fix is recorded in [ROADMAP.md](ROADMAP.md) with its test and what was actually executed, including what was written but not yet run.
 
-i18n system: custom (frontend/lib/i18n.tsx), backend (api/services/i18n.py)
+---
 
-License
-MIT — see LICENSE.
+## Status and known limits
 
-Project history
-Built incrementally across 25 documented development parts, each with its own audit, real (never fabricated) test results, and honest documentation of gaps and limitations.
+This section is deliberately explicit:
 
-The full history is in docs/CAHIER_DES_CHARGES.md.
+- **Staging is connected and migrated:** Supabase session pooler, revision
+  0132, 178 public tables, pgvector 0.8.2 and HNSW. 77 policies target a
+  restricted lab role; live A/B document RLS and representative API IDOR
+  checks pass (11/11). Runtime API/worker still use a bypass role, so this
+  is not application-wide DB isolation certification.
+  See [staging report](docs/audit/STAGING_TEST_REPORT.md).
+- **Latest full backend run (2026-10-04):** 5,408 tests collected,
+  5,354 passed, 54 skipped, 0 failed, 23 deselected; 10,680.761 seconds
+  with `.venv`. Run started at 20:51:26 and ended at 23:49:27 local time.
+  The 54 skipped integration checks and 23 deselected tests are not
+  certified. Frontend: 116/116 passed, type-check passed, lint zero errors
+  and warnings.
+  See [individual failure register](docs/audit/BACKEND_FAILURE_REGISTER.md)
+  and [current final status](docs/FINAL_STATUS.md). Earlier backend counts
+  are retained in dated historical entries, not current results.
+- **Load testing is partial.** `scripts/retrieval_benchmark.py` measured the portable (non-pgvector) retrieval path at 100 and 1,000 documents (see ROADMAP.md for the numbers and the fixes they drove). It does not yet cover 10,000 documents, the PostgreSQL pgvector/HNSW path, or the HTTP layer under concurrent users. Keyword (BM25) search is still computed per query over the organization's chunks, so very large corpora need a persistent full-text index (planned, requires a migration).
+- **Guardian** raises and records quality alerts; the full detect → explain → propose → approve → apply → roll back loop is not automated end to end.
+- **A2A** is non-streaming, without push notifications; task credits are a flat estimate because the underlying agent does not expose token usage.
+- Features that depend on an external provider (voice, fine-tuning, payments, SSO, OPA server, third-party MCP servers) require configuration and deployment-specific validation; their presence in the source is not a proof that a configured provider works in production.
 
-IBM Bob 2.0 integration (Phase 5): see ROADMAP.md.
+---
 
-Contributing
-See CONTRIBUTING.md and CODE_OF_CONDUCT.md. Security issues should be reported per SECURITY.md.
+## Contributing and security
 
-IBM Bob 2.0 Submission — 2026
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+*History: this project was once entered in the IBM Bob 2.0 contest; that material is preserved in [docs/ibm_bob_2/CONTEST_README.md](docs/ibm_bob_2/CONTEST_README.md).*

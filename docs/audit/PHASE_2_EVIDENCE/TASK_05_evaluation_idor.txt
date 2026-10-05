@@ -1,0 +1,14 @@
+P2C-5 / Task 05 — evaluation IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_evaluation_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 2.44s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: INCOMPLETE for onboarding aliases under /api/eval/*; those aliases
+were not found in the route registry. The test covers existing routes only.
+No route-mismatch 404 is represented as an authorization pass.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Historical scope/result summary is in PHASE_2_REPORT.md;
+original full stdout is unavailable.

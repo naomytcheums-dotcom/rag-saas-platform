@@ -7218,6 +7218,222 @@
         }
       }
     },
+    "/organizations/{org_id}/sandbox": {
+      "get": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "List Sandboxes",
+        "operationId": "list_sandboxes_organizations__org_id__sandbox_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Create Sandbox",
+        "operationId": "create_sandbox_organizations__org_id__sandbox_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "data_ttl_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 24,
+              "title": "Data Ttl Hours"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/sandbox/{sandbox_id}": {
+      "delete": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Delete Sandbox",
+        "operationId": "delete_sandbox_organizations__org_id__sandbox__sandbox_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "sandbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sandbox Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/sandbox/{sandbox_id}/reset": {
+      "post": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Reset Sandbox",
+        "operationId": "reset_sandbox_organizations__org_id__sandbox__sandbox_id__reset_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "sandbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sandbox Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations/{org_id}/domains": {
       "post": {
         "tags": [
@@ -7858,6 +8074,2094 @@
         }
       }
     },
+    "/organizations/{org_id}/crm/salesforce/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Salesforce",
+        "operationId": "import_salesforce_organizations__org_id__crm_salesforce_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/hubspot/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Hubspot",
+        "operationId": "import_hubspot_organizations__org_id__crm_hubspot_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/jira/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Jira",
+        "operationId": "import_jira_organizations__org_id__crm_jira_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/zendesk/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Zendesk",
+        "operationId": "import_zendesk_organizations__org_id__crm_zendesk_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/pipedrive/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Pipedrive",
+        "operationId": "import_pipedrive_organizations__org_id__crm_pipedrive_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/linear/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Linear",
+        "operationId": "import_linear_organizations__org_id__crm_linear_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/asana/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Asana",
+        "operationId": "import_asana_organizations__org_id__crm_asana_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/trello/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Trello",
+        "operationId": "import_trello_organizations__org_id__crm_trello_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/airtable/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Airtable",
+        "operationId": "import_airtable_organizations__org_id__crm_airtable_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/dropbox/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Dropbox",
+        "operationId": "import_dropbox_organizations__org_id__crm_dropbox_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/box/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Box",
+        "operationId": "import_box_organizations__org_id__crm_box_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/clickup/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Clickup",
+        "operationId": "import_clickup_organizations__org_id__crm_clickup_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/intercom/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Intercom",
+        "operationId": "import_intercom_organizations__org_id__crm_intercom_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/zoho/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Zoho",
+        "operationId": "import_zoho_organizations__org_id__crm_zoho_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/shopify/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Shopify",
+        "operationId": "import_shopify_organizations__org_id__crm_shopify_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/woocommerce/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Woocommerce",
+        "operationId": "import_woocommerce_organizations__org_id__crm_woocommerce_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/docusign/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Docusign",
+        "operationId": "import_docusign_organizations__org_id__crm_docusign_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/monday/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Monday",
+        "operationId": "import_monday_organizations__org_id__crm_monday_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/gitlab/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Gitlab",
+        "operationId": "import_gitlab_organizations__org_id__crm_gitlab_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/bitbucket/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Bitbucket",
+        "operationId": "import_bitbucket_organizations__org_id__crm_bitbucket_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/azure-devops/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Azure Devops",
+        "operationId": "import_azure_devops_organizations__org_id__crm_azure_devops_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/basecamp/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Basecamp",
+        "operationId": "import_basecamp_organizations__org_id__crm_basecamp_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/wrike/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Wrike",
+        "operationId": "import_wrike_organizations__org_id__crm_wrike_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/smartsheet/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Smartsheet",
+        "operationId": "import_smartsheet_organizations__org_id__crm_smartsheet_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/coda/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Coda",
+        "operationId": "import_coda_organizations__org_id__crm_coda_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/miro/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Miro",
+        "operationId": "import_miro_organizations__org_id__crm_miro_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/podio/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Podio",
+        "operationId": "import_podio_organizations__org_id__crm_podio_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/pipefy/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Pipefy",
+        "operationId": "import_pipefy_organizations__org_id__crm_pipefy_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/hive/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Hive",
+        "operationId": "import_hive_organizations__org_id__crm_hive_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/teamwork/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Teamwork",
+        "operationId": "import_teamwork_organizations__org_id__crm_teamwork_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/nifty/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Nifty",
+        "operationId": "import_nifty_organizations__org_id__crm_nifty_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/smartsuite/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Smartsuite",
+        "operationId": "import_smartsuite_organizations__org_id__crm_smartsuite_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/process-street/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Process Street",
+        "operationId": "import_process_street_organizations__org_id__crm_process_street_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/activecampaign/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Activecampaign",
+        "operationId": "import_activecampaign_organizations__org_id__crm_activecampaign_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/mailchimp/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Mailchimp",
+        "operationId": "import_mailchimp_organizations__org_id__crm_mailchimp_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/crm/klaviyo/import": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "Import Klaviyo",
+        "operationId": "import_klaviyo_organizations__org_id__crm_klaviyo_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CRMImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRMImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations/{org_id}/mcp-servers": {
       "post": {
         "tags": [
@@ -8348,7 +10652,7 @@
           "mcp-server"
         ],
         "summary": "List Tools Endpoint",
-        "description": "Real `tools/list`-shaped response -- `{\"tools\": [...]}`, matching\n`mcp.types.ListToolsResult`'s own real field name.",
+        "description": "Real `tools/list`-shaped response -- `{\"tools\": [...]}`, matching\n`mcp.types.ListToolsResult`'s own real field name.\n\nIncludes both the static builtin registry AND this organization's\nown custom webhook tools (`api/models/custom_tool.py`).",
         "operationId": "list_tools_endpoint_mcp_v1_tools_get",
         "parameters": [
           {
@@ -8439,6 +10743,774 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/a2a/{org_id}/.well-known/agent-card.json": {
+      "get": {
+        "tags": [
+          "A2A"
+        ],
+        "summary": "Get Agent Card",
+        "operationId": "get_agent_card_a2a__org_id___well_known_agent_card_json_get",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/a2a/{org_id}": {
+      "post": {
+        "tags": [
+          "A2A"
+        ],
+        "summary": "A2A Jsonrpc",
+        "operationId": "a2a_jsonrpc_a2a__org_id__post",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/factory/blueprint": {
+      "post": {
+        "tags": [
+          "agent-factory"
+        ],
+        "summary": "Factory Blueprint Endpoint",
+        "operationId": "factory_blueprint_endpoint_organizations__org_id__factory_blueprint_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlueprintRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlueprintResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/factory/deploy": {
+      "post": {
+        "tags": [
+          "agent-factory"
+        ],
+        "summary": "Factory Deploy Endpoint",
+        "operationId": "factory_deploy_endpoint_organizations__org_id__factory_deploy_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/metrics": {
+      "get": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "List Quality Metrics Endpoint",
+        "operationId": "list_quality_metrics_endpoint_organizations__org_id__quality_alerts_metrics_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/rules": {
+      "get": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "List Quality Rules Endpoint",
+        "operationId": "list_quality_rules_endpoint_organizations__org_id__quality_alerts_rules_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlertRuleResponse"
+                  },
+                  "title": "Response List Quality Rules Endpoint Organizations  Org Id  Quality Alerts Rules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Create Quality Rule Endpoint",
+        "operationId": "create_quality_rule_endpoint_organizations__org_id__quality_alerts_rules_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualityRuleCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/rules/{rule_id}": {
+      "patch": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Update Quality Rule Endpoint",
+        "operationId": "update_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualityRuleUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Delete Quality Rule Endpoint",
+        "operationId": "delete_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/rules/{rule_id}/test": {
+      "post": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Test Quality Rule Endpoint",
+        "operationId": "test_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__test_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleTestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/history": {
+      "get": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Quality Alert History Endpoint",
+        "operationId": "quality_alert_history_endpoint_organizations__org_id__quality_alerts_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlertHistoryResponse"
+                  },
+                  "title": "Response Quality Alert History Endpoint Organizations  Org Id  Quality Alerts History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/channels": {
+      "get": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "List Quality Channels Endpoint",
+        "operationId": "list_quality_channels_endpoint_organizations__org_id__quality_alerts_channels_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlertChannelResponse"
+                  },
+                  "title": "Response List Quality Channels Endpoint Organizations  Org Id  Quality Alerts Channels Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Create Quality Channel Endpoint",
+        "operationId": "create_quality_channel_endpoint_organizations__org_id__quality_alerts_channels_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualityChannelCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertChannelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/quality-alerts/channels/{channel_id}": {
+      "delete": {
+        "tags": [
+          "quality-alerts"
+        ],
+        "summary": "Delete Quality Channel Endpoint",
+        "operationId": "delete_quality_channel_endpoint_organizations__org_id__quality_alerts_channels__channel_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Channel Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -11854,6 +14926,55 @@
         }
       }
     },
+    "/organizations/{org_id}/embeddings/status": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Embedding Staleness Route",
+        "description": "Hardening Mission, Phase 1 -- the real, explicit, user-facing\nanswer this mission's own point 5 demands (\"exposer l'\u00e9tat du\nreindex\", \"fournir une erreur utilisateur explicite\" rather than an\norganization silently losing recall on its own older documents\nafter an `embedding_model` change). Same real Admin+ permission\nlevel as the org-wide reindex/status routes above -- see\n`api.security.documents.get_embedding_staleness_summary`'s own\ndocstring for the real comparison this is built from. When\n`reindex_recommended` is true, trigger\n`POST /organizations/{org_id}/documents/reindex` (already real,\nalready wired, already progressive/staggered -- see that route and\n`api.security.documents.reindex_organization`) to bring every\nstale/legacy chunk onto the organization's current embedding model.",
+        "operationId": "get_embedding_staleness_route_organizations__org_id__embeddings_status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingStalenessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/duplicates": {
       "get": {
         "tags": [
@@ -11940,6 +15061,46 @@
                 "schema": {
                   "$ref": "#/components/schemas/DeduplicationResultResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/reindex-sync": {
+      "post": {
+        "tags": [
+          "documents-sync"
+        ],
+        "summary": "Reindex Document Sync",
+        "operationId": "reindex_document_sync_documents__document_id__reindex_sync_post",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -12729,6 +15890,55 @@
         }
       }
     },
+    "/responses/{response_id}/flight-recording": {
+      "get": {
+        "tags": [
+          "citations"
+        ],
+        "summary": "Get Response Flight Recording Endpoint",
+        "description": "Hardening Mission, Phase 7 -- the real, reproducible, stage-by-\nstage Flight Recorder trace for this SAME response, when one exists\n(`Response.flight_recording_id`, only ever set when\n`generate_response` was called with `trace_enabled=True`). Same real\n`require_response_member` boundary as every other response-scoped\nread above -- a real 404 for a response with no recording, never a\nreal cross-tenant leak of another organization's own trace (the\nrecording's own `organization_id` always matches the response's,\nby construction -- both stamped from the SAME real call).",
+        "operationId": "get_response_flight_recording_endpoint_responses__response_id__flight_recording_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "response_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Response Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlightRecordingDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/responses/{response_id}/citations": {
       "get": {
         "tags": [
@@ -13134,6 +16344,370 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/rag-control-plane/health-check": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Run Health Check Endpoint",
+        "description": "Item 27 -- real, consolidated report: every real, currently-\nrunning `ABTest` evaluated, plus this organization's own recent\nRAG Genome experiment history.",
+        "operationId": "run_health_check_endpoint_organizations__org_id__rag_control_plane_health_check_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/evolution/run": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Run Evolution Endpoint",
+        "description": "Item 18 -- real observe->diagnose->propose->experiment->measure->\nrecommend cycle over one real evaluation dataset. Never applies its\nown real recommendation automatically -- see\n`api.services.rag_evolution_engine.run_evolution_cycle`'s own\nmodule docstring.",
+        "operationId": "run_evolution_endpoint_organizations__org_id__evolution_run_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvolutionRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvolutionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/evolution/retrieval/run-multi": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Run Multi Dataset Evolution Endpoint",
+        "description": "Same as `.../retrieval/run`, but over `dataset_id` + `extra_dataset_ids`: a candidate is recommended only if it is\naccepted on EVERY dataset (guards against a setting overfitted to one question set). Costs one full cycle per dataset,\nso the evaluation rate-limit budget is charged once per dataset.",
+        "operationId": "run_multi_dataset_evolution_endpoint_organizations__org_id__evolution_retrieval_run_multi_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrievalEvolutionRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiDatasetEvolutionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/evolution/retrieval/run": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Run Retrieval Evolution Endpoint",
+        "description": "Multi-candidate retrieval-configuration search with a minimum-gain\nthreshold and a no-regression guard (see\n`api.services.rag_evolution_engine.run_retrieval_evolution_cycle`).\nRecommends, never applies.",
+        "operationId": "run_retrieval_evolution_endpoint_organizations__org_id__evolution_retrieval_run_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrievalEvolutionRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrievalEvolutionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/agents/{agent_id}/retrieval-config/apply": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Apply Retrieval Config Endpoint",
+        "description": "The explicit, human-triggered APPLY step for an evolution\nrecommendation. Returns the previous config; rolling back is this same\ncall with `config=previous, replace=true`. Audit-logged.",
+        "operationId": "apply_retrieval_config_endpoint_organizations__org_id__agents__agent_id__retrieval_config_apply_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyRetrievalConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyRetrievalConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/ab-tests/{test_id}/evaluate-canary": {
+      "post": {
+        "tags": [
+          "rag-control-plane"
+        ],
+        "summary": "Evaluate Canary Endpoint",
+        "description": "Item 20 -- real, one-shot canary health check. Rollback\n(pausing the real `ABTest`) is auto-executed on a real, significant\nregression; promotion is only ever recommended -- see\n`api.services.canary_rollout.evaluate_canary`'s own module\ndocstring for the real, deliberately asymmetric reasoning.",
+        "operationId": "evaluate_canary_endpoint_organizations__org_id__ab_tests__test_id__evaluate_canary_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Test Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanaryEvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanaryEvaluationResponse"
                 }
               }
             }
@@ -16339,6 +19913,229 @@
         }
       }
     },
+    "/voice/organizations/{org_id}/chat": {
+      "post": {
+        "tags": [
+          "voice"
+        ],
+        "summary": "Voice Chat Endpoint",
+        "operationId": "voice_chat_endpoint_voice_organizations__org_id__chat_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "stt_provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stt Provider"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "voice_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Voice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_voice_chat_endpoint_voice_organizations__org_id__chat_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice/organizations/{org_id}/agent": {
+      "post": {
+        "tags": [
+          "voice"
+        ],
+        "summary": "Voice Agent Endpoint",
+        "description": "Voice agent turn: audio in -> speech-to-text (open-source `local_whisper` or a hosted provider) -> the organization's RAG\npipeline -> answer + sources (+ synthesized speech when `speak=true`). Same guards as every other paid entry point: rate limit\nper organization, balance + daily/monthly spend caps pre-flight (BYOK exempt), bounded audio and transcript, a flat per-turn\ncredit charge for non-BYOK organizations, injection guardrails (a blocked utterance answers 400).",
+        "operationId": "voice_agent_endpoint_voice_organizations__org_id__agent_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "stt_provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stt Provider"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "speak",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Speak"
+            }
+          },
+          {
+            "name": "voice_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Voice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_voice_agent_endpoint_voice_organizations__org_id__agent_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceAgentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/conversations/{conversation_id}/voice-messages": {
       "get": {
         "tags": [
@@ -17907,13 +21704,14 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "JSON, or Server-Sent Events when `stream` is true",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChatResponse"
                 }
-              }
+              },
+              "text/event-stream": {}
             }
           },
           "422": {
@@ -26456,6 +30254,159 @@
         }
       }
     },
+    "/jobs/{job_id}/failures": {
+      "get": {
+        "tags": [
+          "evaluation-jobs"
+        ],
+        "summary": "Get Evaluation Job Failures Endpoint",
+        "operationId": "get_evaluation_job_failures_endpoint_jobs__job_id__failures_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationFailureListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/failures/categories": {
+      "get": {
+        "tags": [
+          "evaluation-jobs"
+        ],
+        "summary": "Get Evaluation Job Failure Categories Endpoint",
+        "operationId": "get_evaluation_job_failure_categories_endpoint_jobs__job_id__failures_categories_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationFailureCategoriesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/comparison": {
+      "get": {
+        "tags": [
+          "evaluation-jobs"
+        ],
+        "summary": "Compare Evaluation Jobs Endpoint",
+        "description": "Compare this job's own real, averaged metrics against another\nreal job's own. Both jobs must belong to the same organization.",
+        "operationId": "compare_evaluation_jobs_endpoint_jobs__job_id__comparison_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "with",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "With"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/questions/{question_id}/evaluate": {
       "post": {
         "tags": [
@@ -33969,6 +37920,65 @@
         }
       }
     },
+    "/organizations/{org_id}/billing/credits/checkout": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Credit Pack Checkout Endpoint",
+        "description": "Hardening Mission (\u00a723) -- the REAL way to buy a credit pack when a payment provider is configured: returns a\nhosted checkout URL; the credits are granted by the provider's webhook once the payment is confirmed.",
+        "operationId": "credit_pack_checkout_endpoint_organizations__org_id__billing_credits_checkout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseCreditsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations/{org_id}/billing/invoices": {
       "get": {
         "tags": [
@@ -37794,7 +41804,7 @@
           "Notifications"
         ],
         "summary": "Stream Notifications Endpoint",
-        "description": "Real-time delivery via Server-Sent Events -- a real browser\nEventSource reconnects automatically on drop, same real behavior\napi/routers/documents.py's own SSE route already relies on.",
+        "description": "Real-time delivery via Server-Sent Events -- a real browser\nEventSource reconnects automatically on drop, same real behavior\napi/routers/documents.py's own SSE route already relies on.\n\nPhase 5, \u00c9tape 4bis -- sends a real initial snapshot of unread\nnotifications before streaming new ones, so a reconnecting client\nnever misses what happened while offline.",
         "operationId": "stream_notifications_endpoint_notifications_stream_get",
         "responses": {
           "200": {
@@ -37811,6 +41821,428 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/organizations/{org_id}/notifications/templates": {
+      "get": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "List Templates Endpoint",
+        "description": "List this org's own template overrides (does not include globals).",
+        "operationId": "list_templates_endpoint_organizations__org_id__notifications_templates_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationTemplateResponse"
+                  },
+                  "title": "Response List Templates Endpoint Organizations  Org Id  Notifications Templates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Create Template Endpoint",
+        "description": "Create an org-specific override. Fails 409 if this org already\nhas a template for this notification_type.",
+        "operationId": "create_template_endpoint_organizations__org_id__notifications_templates_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTemplateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTemplateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/notifications/templates/{template_id}": {
+      "get": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Get Template Endpoint",
+        "operationId": "get_template_endpoint_organizations__org_id__notifications_templates__template_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTemplateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Update Template Endpoint",
+        "operationId": "update_template_endpoint_organizations__org_id__notifications_templates__template_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTemplateUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTemplateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Delete Template Endpoint",
+        "operationId": "delete_template_endpoint_organizations__org_id__notifications_templates__template_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/notifications/templates/preview": {
+      "post": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Preview Template Endpoint",
+        "description": "Render the effective template for this org+type with the given\ncontext, using the real DB-backed lookup (org-specific -> global ->\ncode default). Never sends anything -- pure preview.",
+        "operationId": "preview_template_endpoint_organizations__org_id__notifications_templates_preview_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTemplatePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTemplatePreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/notifications/templates/test": {
+      "post": {
+        "tags": [
+          "Notification Templates"
+        ],
+        "summary": "Test Notification Endpoint",
+        "description": "Send a real test notification (in-app + email per preferences)\nto the calling user, using the given type + context. Useful to\nverify a customized template end-to-end without waiting for a real\ntrigger.",
+        "operationId": "test_notification_endpoint_organizations__org_id__notifications_templates_test_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/license/generate": {
@@ -48381,6 +52813,45 @@
         ],
         "title": "AnalyticsResponse"
       },
+      "ApplyRetrievalConfigRequest": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "config"
+        ],
+        "title": "ApplyRetrievalConfigRequest"
+      },
+      "ApplyRetrievalConfigResponse": {
+        "properties": {
+          "previous": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Previous"
+          },
+          "current": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "previous",
+          "current"
+        ],
+        "title": "ApplyRetrievalConfigResponse"
+      },
       "AssignPermissionsRequest": {
         "properties": {
           "permission_ids": {
@@ -49419,6 +53890,60 @@
         ],
         "title": "BillingProviderResponse"
       },
+      "BlueprintRequest": {
+        "properties": {
+          "requirement": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 10,
+            "title": "Requirement"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requirement"
+        ],
+        "title": "BlueprintRequest"
+      },
+      "BlueprintResponse": {
+        "properties": {
+          "blueprint": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Blueprint"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "deployable": {
+            "type": "boolean",
+            "title": "Deployable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "blueprint",
+          "problems",
+          "deployable"
+        ],
+        "title": "BlueprintResponse"
+      },
       "Body_create_dataset_endpoint_fine_tuning_datasets_post": {
         "properties": {
           "name": {
@@ -49854,6 +54379,79 @@
         ],
         "title": "Body_upload_widget_logo_endpoint_organizations__org_id__widget_logo_post"
       },
+      "Body_voice_agent_endpoint_voice_organizations__org_id__agent_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_voice_agent_endpoint_voice_organizations__org_id__agent_post"
+      },
+      "Body_voice_chat_endpoint_voice_organizations__org_id__chat_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_voice_chat_endpoint_voice_organizations__org_id__chat_post"
+      },
+      "CRMImportRequest": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 100
+          },
+          "project_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Key"
+          }
+        },
+        "type": "object",
+        "title": "CRMImportRequest"
+      },
+      "CRMImportResponse": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported",
+          "source"
+        ],
+        "title": "CRMImportResponse"
+      },
       "CallRecordResponse": {
         "properties": {
           "id": {
@@ -49968,6 +54566,73 @@
           "ended_at"
         ],
         "title": "CallRecordResponse"
+      },
+      "CanaryEvaluationRequest": {
+        "properties": {
+          "target_metric": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Target Metric"
+          },
+          "regression_threshold": {
+            "type": "number",
+            "title": "Regression Threshold",
+            "default": -0.05
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_metric"
+        ],
+        "title": "CanaryEvaluationRequest"
+      },
+      "CanaryEvaluationResponse": {
+        "properties": {
+          "test_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "metric_result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Result"
+          },
+          "recommended_traffic_split": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Traffic Split"
+          }
+        },
+        "type": "object",
+        "required": [
+          "test_id",
+          "action",
+          "reason"
+        ],
+        "title": "CanaryEvaluationResponse"
       },
       "CancelSubscriptionRequest": {
         "properties": {
@@ -52515,6 +57180,125 @@
         ],
         "title": "DeployAgentResponse"
       },
+      "DeployRequest": {
+        "properties": {
+          "requirement": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 10,
+            "title": "Requirement"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "evaluate_dataset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluate Dataset Id"
+          },
+          "min_target_value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Target Value"
+          },
+          "target_metric": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Target Metric",
+            "default": "recall_at_5"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requirement"
+        ],
+        "title": "DeployRequest"
+      },
+      "DeployResponse": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "target_metric": {
+            "type": "string",
+            "title": "Target Metric"
+          },
+          "min_target_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Target Value"
+          },
+          "blueprint": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Blueprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "status",
+          "decision",
+          "metrics",
+          "target_metric",
+          "min_target_value",
+          "blueprint"
+        ],
+        "title": "DeployResponse"
+      },
       "DeploymentEvaluationCreateRequest": {
         "properties": {
           "dataset_id": {
@@ -54055,6 +58839,59 @@
         ],
         "title": "EmbedResponse"
       },
+      "EmbeddingStalenessResponse": {
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Organization Id"
+          },
+          "current_embedding_model": {
+            "type": "string",
+            "title": "Current Embedding Model"
+          },
+          "total_embedded_chunks": {
+            "type": "integer",
+            "title": "Total Embedded Chunks"
+          },
+          "current_model_chunks": {
+            "type": "integer",
+            "title": "Current Model Chunks"
+          },
+          "stale_chunks": {
+            "type": "integer",
+            "title": "Stale Chunks"
+          },
+          "legacy_chunks": {
+            "type": "integer",
+            "title": "Legacy Chunks"
+          },
+          "stale_models": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Stale Models"
+          },
+          "reindex_recommended": {
+            "type": "boolean",
+            "title": "Reindex Recommended"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "current_embedding_model",
+          "total_embedded_chunks",
+          "current_model_chunks",
+          "stale_chunks",
+          "legacy_chunks",
+          "stale_models",
+          "reindex_recommended"
+        ],
+        "title": "EmbeddingStalenessResponse",
+        "description": "Hardening Mission, Phase 1 -- the real, explicit answer to\n`GET /organizations/{org_id}/embeddings/status` (see\napi.security.documents.get_embedding_staleness_summary's own\ndocstring for the real comparison this is built from)."
+      },
       "EncryptionAlgorithmEntry": {
         "properties": {
           "name": {
@@ -54259,6 +59096,97 @@
           "items"
         ],
         "title": "EnterpriseSSOConnectionListResponse"
+      },
+      "EvaluationFailureCategoriesResponse": {
+        "properties": {
+          "retrieval": {
+            "type": "integer",
+            "title": "Retrieval"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "other": {
+            "type": "integer",
+            "title": "Other"
+          },
+          "hallucination": {
+            "type": "integer",
+            "title": "Hallucination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "retrieval",
+          "generation",
+          "other",
+          "hallucination"
+        ],
+        "title": "EvaluationFailureCategoriesResponse"
+      },
+      "EvaluationFailureListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationFailureResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "EvaluationFailureListResponse"
+      },
+      "EvaluationFailureResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "evaluation_job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Evaluation Job Id"
+          },
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "evaluation_job_id",
+          "question_id",
+          "category",
+          "error",
+          "created_at"
+        ],
+        "title": "EvaluationFailureResponse"
       },
       "EvaluationJobCreateRequest": {
         "properties": {
@@ -54572,6 +59500,119 @@
           "created_at"
         ],
         "title": "EvaluationResultResponse"
+      },
+      "EvolutionRunRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Dataset Id"
+          },
+          "llm_provider": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Llm Provider"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "target_metric": {
+            "type": "string",
+            "title": "Target Metric",
+            "default": "semantic_similarity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "llm_provider"
+        ],
+        "title": "EvolutionRunRequest"
+      },
+      "EvolutionRunResponse": {
+        "properties": {
+          "baseline_job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Baseline Job Id"
+          },
+          "candidate_job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Job Id"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "target_metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Metric"
+          },
+          "target_metric_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Metric Delta"
+          },
+          "candidate_system_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate System Prompt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "baseline_job_id",
+          "candidate_job_id",
+          "decision"
+        ],
+        "title": "EvolutionRunResponse"
       },
       "ExternalSourceCreateRequest": {
         "properties": {
@@ -55526,6 +60567,56 @@
         ],
         "title": "FineTuningJobResponse"
       },
+      "FlightRecordingDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Organization Id"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "stages_json": {
+            "items": {},
+            "type": "array",
+            "title": "Stages Json"
+          },
+          "total_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Duration Ms"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "query",
+          "stages_json",
+          "total_duration_ms",
+          "created_at"
+        ],
+        "title": "FlightRecordingDetailResponse",
+        "description": "Hardening Mission, Phase 7 -- the real, reproducible, stage-by-\nstage trace `GET /responses/{response_id}/flight-recording` exposes\n-- the real, concrete answer to \"pourquoi cette r\u00e9ponse a-t-elle \u00e9t\u00e9\ng\u00e9n\u00e9r\u00e9e ?\" the mission's own Flight Recorder requirement asks for,\nreachable through the SAME real `require_response_member` boundary\nas every other response-scoped read in this router."
+      },
       "FollowUpQuestionGenerateRequest": {
         "properties": {
           "count": {
@@ -55952,6 +61043,43 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HealthCheckResponse": {
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Organization Id"
+          },
+          "running_canaries_evaluated": {
+            "type": "integer",
+            "title": "Running Canaries Evaluated"
+          },
+          "canary_results": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Canary Results"
+          },
+          "recent_experiments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Experiments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "running_canaries_evaluated",
+          "canary_results",
+          "recent_experiments"
+        ],
+        "title": "HealthCheckResponse"
+      },
       "HumanApprovalDecisionRequest": {
         "properties": {
           "comment": {
@@ -56287,7 +61415,11 @@
         "type": "string",
         "enum": [
           "ingest_document",
-          "log_only"
+          "log_only",
+          "create_agent",
+          "create_conversation",
+          "send_notification",
+          "trigger_workflow"
         ],
         "title": "IntegrationAction"
       },
@@ -58498,6 +63630,123 @@
         "title": "MessageResponse",
         "description": "Generic {\"message\": \"...\"} shape for endpoints that don't need to\nreturn any real data, just confirm what happened."
       },
+      "MultiDatasetCandidateResult": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "per_dataset_delta": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Per Dataset Delta"
+          },
+          "mean_target_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Target Delta"
+          },
+          "accepted_on_all": {
+            "type": "boolean",
+            "title": "Accepted On All"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "config",
+          "per_dataset_delta",
+          "mean_target_delta",
+          "accepted_on_all",
+          "reasons"
+        ],
+        "title": "MultiDatasetCandidateResult"
+      },
+      "MultiDatasetEvolutionResponse": {
+        "properties": {
+          "datasets_evaluated": {
+            "type": "integer",
+            "title": "Datasets Evaluated"
+          },
+          "target_metric": {
+            "type": "string",
+            "title": "Target Metric"
+          },
+          "min_improvement": {
+            "type": "number",
+            "title": "Min Improvement"
+          },
+          "max_regression": {
+            "type": "number",
+            "title": "Max Regression"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "recommended_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Config"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/MultiDatasetCandidateResult"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "per_dataset": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Per Dataset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "datasets_evaluated",
+          "target_metric",
+          "min_improvement",
+          "max_regression",
+          "decision",
+          "recommended_config",
+          "candidates",
+          "per_dataset"
+        ],
+        "title": "MultiDatasetEvolutionResponse"
+      },
       "MultiModelComparisonRequest": {
         "properties": {
           "model_configs": {
@@ -58719,6 +63968,252 @@
           "expires_at"
         ],
         "title": "NotificationResponse"
+      },
+      "NotificationTemplateCreate": {
+        "properties": {
+          "notification_type": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notification Type"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Body"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "notification_type",
+          "title",
+          "body"
+        ],
+        "title": "NotificationTemplateCreate"
+      },
+      "NotificationTemplatePreviewRequest": {
+        "properties": {
+          "notification_type": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notification Type"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "notification_type"
+        ],
+        "title": "NotificationTemplatePreviewRequest"
+      },
+      "NotificationTemplatePreviewResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "email_subject": {
+            "type": "string",
+            "title": "Email Subject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "body",
+          "email_subject"
+        ],
+        "title": "NotificationTemplatePreviewResponse"
+      },
+      "NotificationTemplateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "notification_type": {
+            "type": "string",
+            "title": "Notification Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "notification_type",
+          "title",
+          "body",
+          "email_subject",
+          "is_active",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NotificationTemplateResponse"
+      },
+      "NotificationTemplateUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "email_subject": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Subject"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "NotificationTemplateUpdate"
+      },
+      "NotificationTestRequest": {
+        "properties": {
+          "notification_type": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notification Type"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "notification_type"
+        ],
+        "title": "NotificationTestRequest"
       },
       "NotionImportRequest": {
         "properties": {
@@ -59829,6 +65324,41 @@
             "type": "string",
             "title": "Chunking Strategy"
           },
+          "pdf_extraction_engine": {
+            "type": "string",
+            "title": "Pdf Extraction Engine"
+          },
+          "pii_masking_enabled": {
+            "type": "boolean",
+            "title": "Pii Masking Enabled"
+          },
+          "graphrag_enabled": {
+            "type": "boolean",
+            "title": "Graphrag Enabled"
+          },
+          "policy_aware_retrieval_enabled": {
+            "type": "boolean",
+            "title": "Policy Aware Retrieval Enabled"
+          },
+          "prompt_injection_detection_enabled": {
+            "type": "boolean",
+            "title": "Prompt Injection Detection Enabled"
+          },
+          "adaptive_routing_enabled": {
+            "type": "boolean",
+            "title": "Adaptive Routing Enabled"
+          },
+          "cost_budget_per_request": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Per Request"
+          },
           "parent_chunk_size": {
             "type": "integer",
             "title": "Parent Chunk Size"
@@ -59943,6 +65473,28 @@
           "context_compression_enabled": {
             "type": "boolean",
             "title": "Context Compression Enabled"
+          },
+          "daily_credit_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Credit Limit"
+          },
+          "monthly_credit_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Credit Limit"
           }
         },
         "type": "object",
@@ -59951,6 +65503,13 @@
           "chunk_size",
           "chunk_overlap",
           "chunking_strategy",
+          "pdf_extraction_engine",
+          "pii_masking_enabled",
+          "graphrag_enabled",
+          "policy_aware_retrieval_enabled",
+          "prompt_injection_detection_enabled",
+          "adaptive_routing_enabled",
+          "cost_budget_per_request",
           "parent_chunk_size",
           "parent_chunk_overlap",
           "child_chunk_size",
@@ -59977,7 +65536,9 @@
           "hyde_enabled",
           "mmr_enabled",
           "mmr_lambda",
-          "context_compression_enabled"
+          "context_compression_enabled",
+          "daily_credit_limit",
+          "monthly_credit_limit"
         ],
         "title": "OrganizationSettingsResponse"
       },
@@ -60030,6 +65591,88 @@
               }
             ],
             "title": "Chunking Strategy"
+          },
+          "pdf_extraction_engine": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pymupdf",
+                  "docling"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Extraction Engine"
+          },
+          "pii_masking_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pii Masking Enabled"
+          },
+          "graphrag_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graphrag Enabled"
+          },
+          "policy_aware_retrieval_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Aware Retrieval Enabled"
+          },
+          "prompt_injection_detection_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Injection Detection Enabled"
+          },
+          "adaptive_routing_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adaptive Routing Enabled"
+          },
+          "cost_budget_per_request": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Budget Per Request"
           },
           "parent_chunk_size": {
             "anyOf": [
@@ -60108,7 +65751,8 @@
                   "gemini",
                   "mistral",
                   "ollama",
-                  "openai_compatible"
+                  "openai_compatible",
+                  "watsonx"
                 ]
               },
               {
@@ -60383,6 +66027,30 @@
               }
             ],
             "title": "Context Compression Enabled"
+          },
+          "daily_credit_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Credit Limit"
+          },
+          "monthly_credit_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Credit Limit"
           }
         },
         "type": "object",
@@ -61425,6 +67093,31 @@
         ],
         "title": "PurgeResultResponse"
       },
+      "QualityChannelCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertChannelType"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "config"
+        ],
+        "title": "QualityChannelCreateRequest"
+      },
       "QualityDashboardResponse": {
         "properties": {
           "enabled": {
@@ -61693,6 +67386,128 @@
           "offset"
         ],
         "title": "QualityResponseListResponse"
+      },
+      "QualityRuleCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/AlertOperator"
+          },
+          "threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity",
+            "default": "medium"
+          },
+          "channel_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "metric",
+          "operator",
+          "threshold"
+        ],
+        "title": "QualityRuleCreateRequest"
+      },
+      "QualityRuleUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertOperator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Id"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "QualityRuleUpdateRequest"
       },
       "QualityStatusDistribution": {
         "properties": {
@@ -63486,6 +69301,62 @@
               }
             ],
             "title": "Faithfulness Factors"
+          },
+          "retrieval_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Strategy"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Provider"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "flight_recording_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flight Recording Id"
           }
         },
         "type": "object",
@@ -63514,7 +69385,12 @@
           "has_unsupported_claims",
           "unsupported_claims",
           "faithfulness_score",
-          "faithfulness_factors"
+          "faithfulness_factors",
+          "retrieval_strategy",
+          "embedding_model",
+          "llm_provider",
+          "llm_model",
+          "flight_recording_id"
         ],
         "title": "ResponseDetailResponse",
         "description": "Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10 -- the real, whole\n`Response` entity, including the 6 real anti-hallucination metrics\nthis batch adds. Real, STORED creation-time snapshots (unlike the\ncitation-level enrichments, these are NOT recomputed live here --\nrecomputing all 6 real checks on every read would repeat real,\nnon-trivial work `enrich_response_with_quality_metrics` already\ndid once at generation time; a real, deliberate difference from\n`GET /responses/{response_id}/confidence`'s own live recompute,\nwhich only ever re-derives 5 cheap, citation-only factors)."
@@ -63570,6 +69446,171 @@
           "created_at"
         ],
         "title": "RetrievalDiagnosticResponse"
+      },
+      "RetrievalEvolutionCandidateResult": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "target_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Delta"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "config",
+          "job_id",
+          "accepted",
+          "target_delta",
+          "reasons"
+        ],
+        "title": "RetrievalEvolutionCandidateResult"
+      },
+      "RetrievalEvolutionRunRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Dataset Id"
+          },
+          "extra_dataset_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Extra Dataset Ids"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
+          "target_metric": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Target Metric",
+            "default": "recall_at_5"
+          },
+          "min_improvement": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Improvement",
+            "default": 0.02
+          },
+          "max_regression": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Max Regression",
+            "default": 0.05
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id"
+        ],
+        "title": "RetrievalEvolutionRunRequest"
+      },
+      "RetrievalEvolutionRunResponse": {
+        "properties": {
+          "baseline_job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Baseline Job Id"
+          },
+          "target_metric": {
+            "type": "string",
+            "title": "Target Metric"
+          },
+          "min_improvement": {
+            "type": "number",
+            "title": "Min Improvement"
+          },
+          "max_regression": {
+            "type": "number",
+            "title": "Max Regression"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "recommended_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Config"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalEvolutionCandidateResult"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "corpus_constrained": {
+            "type": "boolean",
+            "title": "Corpus Constrained"
+          }
+        },
+        "type": "object",
+        "required": [
+          "baseline_job_id",
+          "target_metric",
+          "min_improvement",
+          "max_regression",
+          "decision",
+          "recommended_config",
+          "candidates",
+          "corpus_constrained"
+        ],
+        "title": "RetrievalEvolutionRunResponse"
       },
       "RetryResponse": {
         "properties": {
@@ -67466,6 +73507,155 @@
           "score"
         ],
         "title": "VisualSearchResult"
+      },
+      "VoiceAgentResponse": {
+        "properties": {
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "answer_text": {
+            "type": "string",
+            "title": "Answer Text"
+          },
+          "answer_audio_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Audio Base64"
+          },
+          "response_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Response Id"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceAgentSource"
+            },
+            "type": "array",
+            "title": "Sources",
+            "default": []
+          },
+          "credits_charged": {
+            "type": "integer",
+            "title": "Credits Charged",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "transcript",
+          "answer_text",
+          "response_id"
+        ],
+        "title": "VoiceAgentResponse",
+        "description": "One voice-agent turn: what was heard, what the RAG answered, and the sources it relied on. `answer_audio_base64`\nis only set when `speak=true` (server-side TTS); otherwise the client may speak `answer_text` itself."
+      },
+      "VoiceAgentSource": {
+        "properties": {
+          "citation_number": {
+            "type": "integer",
+            "title": "Citation Number"
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "source_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Title"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "document_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "citation_number"
+        ],
+        "title": "VoiceAgentSource"
+      },
+      "VoiceChatResponse": {
+        "properties": {
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "answer_text": {
+            "type": "string",
+            "title": "Answer Text"
+          },
+          "answer_audio_base64": {
+            "type": "string",
+            "title": "Answer Audio Base64"
+          },
+          "response_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Response Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transcript",
+          "answer_text",
+          "answer_audio_base64",
+          "response_id"
+        ],
+        "title": "VoiceChatResponse",
+        "description": "Bricks open source, item 17 -- real, end-to-end voice round-trip\nresult. `answer_audio_base64` (not a raw binary response body): a\nreal HTTP header cannot safely carry `transcript`/`answer_text`\n(non-ASCII text -- a real French accent would break a plain header\nvalue), so this real response carries everything as one real JSON\nbody instead."
       },
       "VoiceMessageResponse": {
         "properties": {

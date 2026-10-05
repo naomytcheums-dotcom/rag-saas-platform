@@ -1,0 +1,15 @@
+P2C-9 / Task 09 — billing IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_billing_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 3.04s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: PASS for tested billing routes after checking the payment method
+against the organization's Stripe customer.
+The initial test discovered that a foreign payment method could be detached.
+Stripe/email are mocked; no provider call or customer mutation occurred.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Historical discovery/fix is summarized in PHASE_2_REPORT.md
+and CHANGE_LEDGER.md; original full stdout is unavailable.
