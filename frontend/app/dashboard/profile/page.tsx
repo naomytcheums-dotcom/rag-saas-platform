@@ -52,7 +52,7 @@ export default function ProfilePage() {
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : t("profile.error_load"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.

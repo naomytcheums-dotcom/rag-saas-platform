@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
@@ -13,10 +14,11 @@ const MODELS = [
   { value: "mistral-large", label: "Mistral Large" },
 ];
 
-const AVAILABLE_TOOLS = [
-  "calculator", "word_count", "rag_search", "web_search",
-  "http_request", "calendar_list_events", "email_read",
-];
+// The tool catalog comes from the backend (GET /tools/available -- the exact
+// vocabulary `Agent.tools` is validated against). This page used to hardcode
+// names the backend does not know ("calculator", "word_count", "rag_search"),
+// and sent them as bare strings where the API expects `{name, enabled, config}`
+// objects -- so selecting ANY tool made the creation fail.
 
 export default function NewAgentPage() {
   const router = useRouter();
@@ -27,8 +29,15 @@ export default function NewAgentPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [model, setModel] = useState("claude-3-5-sonnet");
   const [temperature, setTemperature] = useState(0.7);
-  const [maxIterations, setMaxIterations] = useState(8);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [availableTools, setAvailableTools] = useState<string[]>([]);
+
+  useEffect(() => {
+    void api
+      .get<Record<string, unknown>>("/tools/available")
+      .then((catalog) => setAvailableTools(Object.keys(catalog).sort()))
+      .catch(() => setAvailableTools([]));
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,11 +51,16 @@ export default function NewAgentPage() {
     setLoading(true);
     setError(null);
     try {
-      const agent = await api.post<{ id: string }>(`/organizations/${org.id}/agents`, {
-        name, description, system_prompt: systemPrompt, model,
-        temperature, max_iterations: maxIterations, tools: selectedTools,
+      // `model`/`temperature` belong in `model_config` (what the orchestrator reads);
+      // they used to be sent as top-level fields the API silently ignores, and an
+      // agent has no `max_iterations` field at all.
+      await api.post(`/organizations/${org.id}/agents`, {
+        name, description, system_prompt: systemPrompt,
+        model_config: { model, temperature },
+        tools: selectedTools.map((tool) => ({ name: tool, enabled: true, config: {} })),
       });
-      router.push(`/dashboard/agents/${agent.id}`);
+      // There is no /dashboard/agents/{id} page: go back to the list, which exists.
+      router.push("/dashboard/agents");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("agents.new.error_generic"));
     } finally {
@@ -58,7 +72,8 @@ export default function NewAgentPage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-6">{t("agents.new.title")}</h1>
+      <h1 className="text-2xl font-semibold mb-2">{t("agents.new.title")}</h1>
+      <p className="mb-6 text-sm"><Link href="/dashboard/agents/factory" className="underline">{t("agents.factory.link")}</Link></p>
       {error && <p className="text-danger mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label>{t("agents.new.name")}
@@ -78,13 +93,10 @@ export default function NewAgentPage() {
         <label>{t("agents.new.temperature", { value: temperature })}
           <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="mt-1 w-full" />
         </label>
-        <label>{t("agents.new.max_iterations")}
-          <input type="number" min="1" max="20" value={maxIterations} onChange={(e) => setMaxIterations(parseInt(e.target.value))} className="mt-1 w-full border rounded px-3 py-2" />
-        </label>
         <div>
           <p className="mb-2">{t("agents.new.allowed_tools")}</p>
           <div className="grid grid-cols-2 gap-2">
-            {AVAILABLE_TOOLS.map((tool) => (
+            {availableTools.map((tool) => (
               <label key={tool} className="flex items-center gap-2">
                 <input type="checkbox" checked={selectedTools.includes(tool)} onChange={() => toggleTool(tool)} />
                 <span>{tool}</span>

@@ -89,7 +89,7 @@ function MyPluginsTab({ orgId, onError }: { orgId: string; onError: (e: string) 
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("marketplace.error_plugins_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

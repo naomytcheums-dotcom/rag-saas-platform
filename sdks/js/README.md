@@ -31,3 +31,19 @@ npm install
 npm run build
 npm test
 ```
+
+## Streaming and listing
+
+```ts
+for await (const event of client.chat.stream("Summarize our refund policy", "agent-1")) {
+  if (event.event === "token") process.stdout.write(String(event.data.token));
+}
+
+await client.agents.list({ limit: 20 });
+await client.documents.list();
+await client.conversations.list({ agentId: "agent-1" });
+await client.knowledgeBases.list();
+await client.knowledgeBases.create("Support KB", "Public help-center articles");
+```
+
+`chat.send()` returns one complete response; `chat.stream()` is an async generator and rejects with `RagSaasAPIError` before the first event on an HTTP error.

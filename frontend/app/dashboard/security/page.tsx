@@ -143,7 +143,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("security.error_overview_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -207,7 +207,7 @@ function RolesTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("security.error_roles_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -322,7 +322,7 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("security.error_audit_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -362,7 +362,7 @@ function EncryptionTab({ onError }: { onError: (e: string) => void }) {
       if (err instanceof ApiError && err.status === 404) setRestricted(true);
       else onError(err instanceof ApiError ? String(err.detail) : t("security.error_encryption_load"));
     }
-  }, [onError]);
+  }, [onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -427,7 +427,7 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setStatusRestricted(true);
     }
-  }, [onError]);
+  }, [onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -495,7 +495,7 @@ function ScanTab({ orgId, onError }: { orgId: string; onError: (e: string) => vo
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("security.error_scan_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -576,7 +576,7 @@ function PoliciesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("security.error_policies_load"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.

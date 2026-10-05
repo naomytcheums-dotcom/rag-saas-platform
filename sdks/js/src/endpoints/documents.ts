@@ -1,5 +1,5 @@
 import type { RagSaasClient } from "../client.js";
-import type { DocumentUploadResponse } from "../types.js";
+import type { DocumentUploadResponse, ListOptions } from "../types.js";
 
 export class DocumentsEndpoint {
   constructor(private readonly client: RagSaasClient) {}
@@ -16,6 +16,13 @@ export class DocumentsEndpoint {
     return this.client.request<DocumentUploadResponse>("POST", "/v1/documents", {
       body: form,
       params: { workspace_id: workspaceId },
+    });
+  }
+
+  /** `GET /v1/documents` (scope `documents:read`). */
+  list(options: ListOptions = {}): Promise<Record<string, unknown>[]> {
+    return this.client.request<Record<string, unknown>[]>("GET", "/v1/documents", {
+      params: { limit: String(options.limit ?? 20), offset: String(options.offset ?? 0) },
     });
   }
 }

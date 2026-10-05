@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useTranslation } from "@/lib/i18n";
+import SpendLimits from "@/components/SpendLimits";
 
 interface Member {
   user_id: string;
@@ -32,7 +33,7 @@ export default function OrganizationSettingsPage() {
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : t("organization.error_load"));
     }
-  }, [org]);
+  }, [org, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -88,6 +89,8 @@ export default function OrganizationSettingsPage() {
           </button>
         </div>
       </div>
+
+      {org && <SpendLimits orgId={org.id} canEdit={org.my_role === "owner"} />}
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold text-foreground">{t("organization.invite_heading")}</h2>

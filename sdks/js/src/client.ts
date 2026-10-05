@@ -6,6 +6,8 @@ import { AgentsEndpoint } from "./endpoints/agents.js";
 import { UsageEndpoint } from "./endpoints/usage.js";
 import { AnalyticsEndpoint } from "./endpoints/analytics.js";
 import { EmbedEndpoint } from "./endpoints/embed.js";
+import { ConversationsEndpoint } from "./endpoints/conversations.js";
+import { KnowledgeBasesEndpoint } from "./endpoints/knowledge-bases.js";
 
 export interface RagSaasClientOptions {
   apiKey: string;
@@ -30,6 +32,8 @@ export class RagSaasClient {
   readonly usage: UsageEndpoint;
   readonly analytics: AnalyticsEndpoint;
   readonly embed: EmbedEndpoint;
+  readonly conversations: ConversationsEndpoint;
+  readonly knowledgeBases: KnowledgeBasesEndpoint;
 
   constructor(options: RagSaasClientOptions) {
     this.apiKey = options.apiKey;
@@ -44,6 +48,8 @@ export class RagSaasClient {
     this.usage = new UsageEndpoint(this);
     this.analytics = new AnalyticsEndpoint(this);
     this.embed = new EmbedEndpoint(this);
+    this.conversations = new ConversationsEndpoint(this);
+    this.knowledgeBases = new KnowledgeBasesEndpoint(this);
   }
 
   async request<T>(method: string, path: string, options: { json?: unknown; params?: Record<string, string | undefined>; body?: FormData } = {}): Promise<T> {
@@ -80,6 +86,39 @@ export class RagSaasClient {
       }
 
       return (await response.json()) as T;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /** Like `request`, but returns the raw `Response` (status already checked,
+   * body NOT consumed) -- used for Server-Sent-Events streaming, where there
+   * is no single JSON document to parse. The timeout covers connecting and
+   * receiving the headers; it does not cut a stream that is already flowing. */
+  async requestRaw(method: string, path: string, options: { json?: unknown } = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(this.baseUrl + path, {
+        method,
+        headers: {
+          "X-API-Key": this.apiKey,
+          ...(options.json ? { "Content-Type": "application/json" } : {}),
+        },
+        body: options.json ? JSON.stringify(options.json) : undefined,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        let detail: unknown;
+        try {
+          const parsed = await response.clone().json();
+          detail = parsed?.detail ?? parsed;
+        } catch {
+          detail = await response.text();
+        }
+        throw new RagSaasAPIError(response.status, detail);
+      }
+      return response;
     } finally {
       clearTimeout(timeout);
     }

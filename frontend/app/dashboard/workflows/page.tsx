@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import LoadingState from "@/components/LoadingState";
 import { useWorkflows } from "@/lib/hooks/useWorkflows";
@@ -8,6 +9,7 @@ import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import * as workflowService from "@/lib/services/workflows";
 
 export default function Page() {
+  const router = useRouter();
   const { org, loading: orgLoading } = useCurrentOrg();
   const { workflows, loading } = useWorkflows(org?.id ?? "");
   const [creating, setCreating] = useState(false);
@@ -24,7 +26,7 @@ export default function Page() {
         nodes: [{ id: "trigger", type: "trigger", position: { x: 0, y: 0 } }],
         edges: [],
       });
-      window.location.href = `/dashboard/workflows/${workflow.id}`;
+      router.push(`/dashboard/workflows/${workflow.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create workflow");
       setCreating(false);

@@ -214,7 +214,7 @@ function OverviewTab() {
 
   useEffect(() => {
     void api.get<AdminStats>("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, []);
+  }, [t]);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!stats) return <LoadingState fullScreen={false} />;
@@ -244,7 +244,7 @@ function OrganizationsTab() {
 
   const load = useCallback(() => {
     void api.get<{ items: AdminOrg[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -287,7 +287,7 @@ function UsersTab() {
   const load = useCallback(() => {
     const query = search ? `?search=${encodeURIComponent(search)}&limit=50` : "?limit=50";
     void api.get<{ items: AdminUser[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, [search]);
+  }, [search, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -345,7 +345,7 @@ function SubscriptionsTab() {
   const load = useCallback(() => {
     void api.get<AdminPlan[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
     void api.get<AdminSubscription[]>("/admin/subscriptions?limit=50").then(setSubs).catch(() => {});
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -598,7 +598,7 @@ function LogsTab() {
   const load = useCallback(() => {
     const query = level ? `?level=${level}&limit=50` : "?limit=50";
     void api.get<{ items: AdminLogEntry[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, [level]);
+  }, [level, t]);
 
   useEffect(() => { load(); }, [load]);
 

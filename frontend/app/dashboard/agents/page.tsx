@@ -21,7 +21,7 @@ export default function AgentsPage() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState(() => t("agents.default_prompt"));
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -34,17 +34,12 @@ export default function AgentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [org]);
+  }, [org, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!systemPrompt) setSystemPrompt(t("agents.default_prompt"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
-  }, []);
 
   async function createAgent() {
     if (!org || !name.trim()) return;

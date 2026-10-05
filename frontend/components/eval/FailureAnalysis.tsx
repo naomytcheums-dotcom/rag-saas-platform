@@ -53,7 +53,7 @@ export function FailureAnalysis({ jobId }: { jobId: string }) {
       </div>
 
       {totalFailures === 0 ? (
-        <p className="rounded-xl border border-border bg-surface p-5 text-sm text-foreground-muted">No exceptions recorded for this run — questions that answered but scored a high hallucination rate are shown in the "Suspected hallucination" card above, not listed below (they have no exception to display).</p>
+        <p className="rounded-xl border border-border bg-surface p-5 text-sm text-foreground-muted">No exceptions recorded for this run — questions that answered but scored a high hallucination rate are shown in the &quot;Suspected hallucination&quot; card above, not listed below (they have no exception to display).</p>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-foreground-muted">No failures in this category.</p>
       ) : (

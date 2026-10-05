@@ -61,3 +61,28 @@ class EmbedResponse:
     embedding: list[float]
     model: str
     dimensions: int
+
+
+@dataclass
+class ChatStreamEvent:
+    """One Server-Sent Event from `chat.stream` (`event` is e.g. "start",
+    "token", "citation", "done", "error"; `data` is its decoded JSON)."""
+
+    event: str
+    data: dict
+
+
+@dataclass
+class ConversationListResponse:
+    items: list[dict]
+    total: int
+    limit: int
+    offset: int
+
+
+@dataclass
+class KnowledgeBaseCreateResponse:
+    id: str
+    name: str
+    description: str | None
+    created_at: str

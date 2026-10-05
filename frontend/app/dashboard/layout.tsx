@@ -40,6 +40,9 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
         { href: "/dashboard/fine-tuning", label: t("nav.fine_tuning") },
         { href: "/dashboard/analytics", label: t("nav.analytics") },
         { href: "/dashboard/eval", label: t("nav.eval") },
+        { href: "/dashboard/eval/evolution", label: t("nav.evolution") },
+        { href: "/dashboard/quality", label: t("nav.quality") },
+        { href: "/dashboard/voice-agent", label: t("nav.voice_agent") },
       ],
     },
     {

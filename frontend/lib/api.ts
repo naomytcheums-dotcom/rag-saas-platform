@@ -81,6 +81,11 @@ async function request<T>(path: string, init?: RequestInit, _retried = false): P
   if (!headers.has("Content-Type") && init?.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  if (init?.method === "POST" && (path === "/auth/logout" || path === "/auth/refresh")) {
+    const csrfToken = getCookie("csrf_token");
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: "include" });
 
   if (response.status === 401 && !_retried && path !== "/auth/refresh" && path !== "/auth/login") {

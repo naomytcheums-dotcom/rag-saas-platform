@@ -5,3 +5,5 @@ export { AgentsEndpoint } from "./agents.js";
 export { UsageEndpoint } from "./usage.js";
 export { AnalyticsEndpoint } from "./analytics.js";
 export { EmbedEndpoint } from "./embed.js";
+export { ConversationsEndpoint } from "./conversations.js";
+export { KnowledgeBasesEndpoint } from "./knowledge-bases.js";

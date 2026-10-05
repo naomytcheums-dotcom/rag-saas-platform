@@ -146,7 +146,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_overview"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -213,7 +213,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plans"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -317,7 +317,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_usage"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -369,7 +369,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_credits"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -436,7 +436,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_invoices"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
