@@ -4066,3 +4066,17 @@ Les 25 lots ont tourné ; chaque échec a été rejoué isolément avec sa trace
 **Sécurité du processus de test** : les runs de régression du 2 au 5 octobre ont utilisé la base distante du `.env` (distincte du staging). `tests/test_postgres_integration.py` y crée puis supprime des lignes temporaires. Règle appliquée depuis : toute exécution de test surcharge `DATABASE_URL` et `DATABASE_URL_TRANSACTION` par une cible factice injoignable.
 
 **Changements de comportement à connaître** : passerelles Discord (header requis), webhook Teams (jeton Microsoft requis), `partners/register` (`accept_terms`), pages de statut n8n/Airbyte (connexion requise). 9 tests existants mis à jour car ils reposaient sur l'ancien comportement non sécurisé.
+
+### Second balayage, avec de vraies données (2026-10-05, suite)
+
+`tests/test_sweep_with_real_data.py` crée des données par l'API (agents, espaces, webhooks, workflows, équipes, jeux d'évaluation, sandbox, clés d'outils…), puis appelle chaque opération avec ces identifiants réels (lectures, puis écritures, puis suppressions), une session ET une connexion par requête.
+Bugs trouvés puis corrigés (des routes qui plantaient à chaque appel) :
+- `POST /crm/monday/import` : importait `MondayError`, nom inexistant (la classe s'appelle `MondaycomError`) → ImportError systématique. Un balayage de TOUS les `from api… import …` du code (y compris dans les fonctions) n'en a trouvé qu'un autre :
+- mémoire à long terme des agents : le client LLM par défaut était cherché dans `api.services.llm`, module inexistant ; l'erreur était avalée, l'extraction automatique n'a donc jamais fonctionné. Branchée sur `chat_completion` ; **opt-in** (`AGENT_MEMORY_AUTO_EXTRACT=False`) car c'est un appel LLM supplémentaire par exécution, non facturé à part.
+- `POST /notifications/templates/test` : appelait `create_notification(type=, title=, body=, data=)`, paramètres inexistants → TypeError systématique.
+- `POST /agents/{id}/api-keys` avec une portée inconnue : exception non gérée → 400. Aperçu/test de modèle de notification avec une variable manquante : `UndefinedError` → 400.
+- Les scans de sécurité lançaient `pip-audit`/`bandit`/`trivy` avec `subprocess.run` bloquant dans du code asynchrone : toute l'API était figée pendant un scan → `asyncio.to_thread`.
+- Middleware du domaine marque blanche : une panne de base mettait TOUTES les routes (santé comprise) en 500 → panne contenue, routes `/health`, `/health/ready`, `/metrics` sans recherche de domaine.
+
+Isolation entre locataires avec identifiants réels : le locataire B appelle chaque opération adressant une ressource de A avec les vrais identifiants de A (13 types de ressources créées) → aucune réponse 2xx. Couvre ce que les 9 tests IDOR de staging n'atteignent pas ; documents et conversations restent couverts par `tests/test_document_idor.py` / `test_conversation_idor.py`.
+Mis à l'écart des balayages, avec raison dans le test : flux SSE sans fin, recherche texte/image (chargent un modèle d'embedding à froid), scan de sécurité (outils externes).

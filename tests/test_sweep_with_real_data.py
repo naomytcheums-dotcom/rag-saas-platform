@@ -75,14 +75,16 @@ async def client(tmp_path):
     await engine.dispose()
 
 
-async def test_no_operation_fails_with_an_unhandled_error_on_real_data(client, register_payload):
-    spec = app.openapi()
-    token = (await client.post("/auth/register", json={"email": register_payload["email"], "password": register_payload["password"], "accept_terms": True})).json()["access_token"]
+async def _register_with_org(client, email, password, org_name):
+    token = (await client.post("/auth/register", json={"email": email, "password": password, "accept_terms": True})).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    org_id = (await client.post("/organizations", json={"name": "Real Data Sweep"}, headers=headers)).json()["id"]
+    org_id = (await client.post("/organizations", json={"name": org_name}, headers=headers)).json()["id"]
+    return headers, org_id
 
+
+async def _create_world(client, spec, headers, org_id, problems):
+    """Create data through the API as the organization's owner and return the real ids that came back."""
     ids: dict[str, str] = {}
-    problems: list[str] = []
 
     def judge(method, path, response, error):
         if error:
@@ -90,7 +92,7 @@ async def test_no_operation_fails_with_an_unhandled_error_on_real_data(client, r
         elif response.status_code >= 500 and not is_expected_501(method, path, response):
             problems.append(f"{method} {path} -> {response.status_code} {response.text[:200]}")
 
-    # 1. create data through the API: every collection-create route under the organization
+    # 1. every collection-create route under the organization
     creates = [
         (m, p) for m, p in OPERATIONS
         if m == "POST" and re.fullmatch(r"/organizations/\{org_id\}/[a-z0-9\-_]+", p) and (m, p) not in EXCLUDED
@@ -105,28 +107,68 @@ async def test_no_operation_fails_with_an_unhandled_error_on_real_data(client, r
             except ValueError:
                 continue
             if isinstance(created, dict) and created.get("id"):
-                resource = _singular(path.rsplit("/", 1)[1])
-                ids[f"{resource}_id"] = str(created["id"])
+                ids[f"{_singular(path.rsplit('/', 1)[1])}_id"] = str(created["id"])
                 ids.setdefault("id", str(created["id"]))
 
-    # 2. ids that only exist as items of a list (documents, conversations, ...): read them from the GET collections
+    # 2. ids that only exist as items of a list (documents, conversations, ...)
     for method, path in OPERATIONS:
         if method == "GET" and re.fullmatch(r"/organizations/\{org_id\}/[a-z0-9\-_]+", path):
             response, error = await _call(client, method, _fill(path, ids, org_id), {"headers": headers})
             if response is not None and response.status_code == 200:
-                body = response.json()
-                items = body if isinstance(body, list) else next((v for v in body.values() if isinstance(v, list)), []) if isinstance(body, dict) else []
+                payload = response.json()
+                items = payload if isinstance(payload, list) else next((v for v in payload.values() if isinstance(v, list)), []) if isinstance(payload, dict) else []
                 if items and isinstance(items[0], dict) and items[0].get("id"):
                     ids.setdefault(f"{_singular(path.rsplit('/', 1)[1])}_id", str(items[0]["id"]))
+    return ids, judge
+
+
+ORDER = {"GET": 0, "POST": 1, "PUT": 2, "PATCH": 2, "DELETE": 3}
+
+
+def _sweepable():
+    return [op for op in sorted(OPERATIONS, key=lambda op: (ORDER[op[0]], op[1])) if not (SKIP.match(f"{op[0]} {op[1]}") or op in EXCLUDED)]
+
+
+async def test_no_operation_fails_with_an_unhandled_error_on_real_data(client, register_payload):
+    spec = app.openapi()
+    headers, org_id = await _register_with_org(client, register_payload["email"], register_payload["password"], "Real Data Sweep")
+    problems: list[str] = []
+    ids, judge = await _create_world(client, spec, headers, org_id, problems)
 
     # 3. every operation, real ids substituted: reads, then writes, then deletes
-    order = {"GET": 0, "POST": 1, "PUT": 2, "PATCH": 2, "DELETE": 3}
-    for method, path in sorted(OPERATIONS, key=lambda op: (order[op[0]], op[1])):
-        if SKIP.match(f"{method} {path}") or (method, path) in EXCLUDED:
-            continue
+    for method, path in _sweepable():
         kwargs = {"headers": headers, **_request_kwargs(spec["paths"][path][method.lower()], spec)}
         response, error = await _call(client, method, _fill(path, ids, org_id), kwargs)
         judge(method, path, response, error)
 
     assert len(ids) >= 3, f"the sweep created too little real data to be meaningful: {sorted(ids)}"
     assert not problems, f"{len(problems)} operations failed with an unhandled error (ids known: {sorted(ids)}):\n  " + "\n  ".join(problems)
+
+
+async def test_another_tenant_never_succeeds_on_the_real_ids_of_this_one(client, register_payload):
+    """Cross-tenant isolation with REAL ids. Tenant A creates data; tenant B (its own, fully valid account and organization) then calls every
+    operation that takes an identifier, with A's organization id and A's real resource ids in the path. B must never get a 2xx: a success
+    would mean B read, changed or deleted something of A's -- or reached A's handler at all."""
+    from test_no_unhandled_errors_sweep import PUBLIC_BY_DESIGN
+
+    spec = app.openapi()
+    headers_a, org_a = await _register_with_org(client, register_payload["email"], register_payload["password"], "Tenant A")
+    problems: list[str] = []
+    ids, _judge = await _create_world(client, spec, headers_a, org_a, problems)
+    headers_b, _org_b = await _register_with_org(client, "tenant-b@example.com", "correct-horse-battery-staple", "Tenant B")
+
+    leaks = []
+    for method, path in _sweepable():
+        params = re.findall(r"\{(\w+)\}", path)
+        if not params or f"{method} {path}" in PUBLIC_BY_DESIGN:
+            continue
+        # only operations that address something of A's: A's org id, or an id that A's own data produced
+        if not any(name == "org_id" or name in ids for name in params):
+            continue
+        kwargs = {"headers": headers_b, **_request_kwargs(spec["paths"][path][method.lower()], spec)}
+        response, error = await _call(client, method, _fill(path, ids, org_a), kwargs)
+        if response is not None and 200 <= response.status_code < 300:
+            leaks.append(f"{method} {path} -> {response.status_code} {response.text[:120]}")
+
+    assert len(ids) >= 3, f"too little data was created for this test to mean anything: {sorted(ids)}"
+    assert not leaks, f"{len(leaks)} operations let tenant B succeed on tenant A's real ids (ids: {sorted(ids)}):\n  " + "\n  ".join(leaks)
