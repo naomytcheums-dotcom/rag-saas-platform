@@ -7,7 +7,7 @@ spans two organizations -- not one org's own data).
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,11 @@ from api.schemas.sales import (
     LicenseResponse, PartnerCommissionResponse, RegisterPartnerRequest, RegisterPartnerResponse, ResellerResponse,
     RespondTicketRequest, SubClientResponse, TicketMessageResponse, TicketResponseModel, ValidateLicenseRequest,
 )
+from api.security.password_similarity import is_password_too_similar
+from api.security.password_strength import is_password_known_breached
 from api.security.permissions import require_permission
+from api.security.rate_limit import enforce_rate_limit
+from api.utils import client_ip
 from api.security.organizations import require_org_admin, require_org_member
 from api.services import sales
 
@@ -38,9 +42,10 @@ async def generate_license_endpoint(body: GenerateLicenseRequest, _admin: User =
 
 
 @router.post("/license/validate")
-async def validate_license_endpoint(body: ValidateLicenseRequest, db: AsyncSession = Depends(get_db)):
+async def validate_license_endpoint(body: ValidateLicenseRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Public -- a self-hosted deployment with no logged-in user yet
-    (e.g. checking on startup) still needs to validate its own key."""
+    (e.g. checking on startup) still needs to validate its own key. Rate-limited per IP so it cannot be used to guess keys."""
+    await enforce_rate_limit(f"ratelimit:license-validate:ip:{client_ip(request)}", settings.LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS, settings.LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS)
     result = await sales.validate_license(db, body.key)
     await db.commit()
     return result
@@ -131,10 +136,22 @@ async def reseller_commission_endpoint(reseller_id: uuid.UUID, _admin: User = De
 # -- Partner program (Partie 18): self-service signup + real commission ledger
 
 @router.post("/partners/register", response_model=RegisterPartnerResponse, status_code=status.HTTP_201_CREATED)
-async def register_partner_endpoint(body: RegisterPartnerRequest, db: AsyncSession = Depends(get_db)):
+async def register_partner_endpoint(body: RegisterPartnerRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Public -- the real front door create_reseller (superadmin-only)
     never had: a prospective partner creates their own account, own
-    organization, and their own Reseller row, all in this one call."""
+    organization, and their own Reseller row, all in this one call.
+
+    It creates an account, so it gets the same protections as `POST /auth/register`: a per-IP rate limit, the terms must be
+    explicitly accepted (consent is never assumed), and the password goes through the same breach and similarity checks."""
+    await enforce_rate_limit(
+        f"ratelimit:register:ip:{client_ip(request)}", settings.REGISTER_RATE_LIMIT_MAX_ATTEMPTS, settings.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if not body.accept_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the terms of service")
+    if await is_password_known_breached(body.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password has appeared in a known data breach -- please choose a different one.")
+    if is_password_too_similar(body.password, body.email, body.full_name):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password is too similar to your email or name")
     try:
         _user, reseller = await sales.register_partner(
             db, organization_name=body.organization_name, email=body.email, password=body.password, full_name=body.full_name,

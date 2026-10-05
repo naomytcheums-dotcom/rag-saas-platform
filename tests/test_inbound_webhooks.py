@@ -103,13 +103,20 @@ async def test_airbyte_honestly_501s_without_configured_instance(client, registe
     assert response.status_code == 501
 
 
-async def test_n8n_status_honestly_unconfigured_by_default(client):
-    response = await client.get("/integrations/n8n/status")
+async def test_n8n_status_honestly_unconfigured_by_default(client, register_payload):
+    token, _org_id = await _register_and_create_org(client, register_payload)
+    response = await client.get("/integrations/n8n/status", headers=_auth_header(token))
     assert response.status_code == 200
     assert response.json() == {"configured": False, "reachable": False}
 
 
-async def test_airbyte_status_honestly_unconfigured_by_default(client):
-    response = await client.get("/integrations/airbyte/status")
+async def test_airbyte_status_honestly_unconfigured_by_default(client, register_payload):
+    token, _org_id = await _register_and_create_org(client, register_payload)
+    response = await client.get("/integrations/airbyte/status", headers=_auth_header(token))
     assert response.status_code == 200
     assert response.json() == {"configured": False, "reachable": False}
+
+
+async def test_integration_status_endpoints_are_closed_to_anonymous_callers(client):
+    for path in ("/integrations/n8n/status", "/integrations/airbyte/status"):
+        assert (await client.get(path)).status_code in (401, 403)

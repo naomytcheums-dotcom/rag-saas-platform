@@ -7,9 +7,10 @@ same app rather than starting a second one.
 
 import asyncio
 import contextlib
+import hmac
 import logging
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy import text
@@ -417,7 +418,7 @@ app.include_router(fine_tuning.router)
 
 
 @app.get("/metrics", tags=["monitoring"])
-async def metrics():
+async def metrics(authorization: str | None = Header(default=None)):
     """
     Audit finding 22 -- Prometheus text exposition format
     (api/monitoring.py), scrapeable directly by a real Prometheus server.
@@ -430,6 +431,10 @@ async def metrics():
     real access control for this endpoint is expected to be network-level
     (firewalled to the scraper's own network/VPC), not application-level.
     """
+    if settings.METRICS_AUTH_TOKEN:
+        scheme, _, token = (authorization or "").partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode("utf-8"), settings.METRICS_AUTH_TOKEN.encode("utf-8")):
+            return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
     return Response(content=render_prometheus_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 

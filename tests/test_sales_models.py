@@ -154,7 +154,7 @@ async def test_document_upload_blocked_when_plan_limit_reached(client, db_sessio
 
 async def test_register_partner_creates_account_org_and_reseller(client):
     response = await client.post("/partners/register", json={
-        "organization_name": "Acme Resellers", "email": "partner1@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Acme Resellers", "email": "partner1@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     assert response.status_code == 201
     body = response.json()
@@ -164,7 +164,7 @@ async def test_register_partner_creates_account_org_and_reseller(client):
 
 async def test_registered_partner_can_reach_their_own_dashboard(client):
     await client.post("/partners/register", json={
-        "organization_name": "Beta Resellers", "email": "partner2@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Beta Resellers", "email": "partner2@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     login = await client.post("/auth/login", json={"email": "partner2@example.com", "password": "correct horse battery staple 42"})
     token = login.json()["access_token"]
@@ -189,7 +189,7 @@ async def test_non_partner_gets_404_from_partners_me(client, register_payload):
 
 
 async def test_registering_the_same_partner_email_twice_is_rejected(client):
-    payload = {"organization_name": "Gamma Resellers", "email": "partner3@example.com", "password": "correct horse battery staple 42"}
+    payload = {"organization_name": "Gamma Resellers", "email": "partner3@example.com", "password": "correct horse battery staple 42", "accept_terms": True}
     first = await client.post("/partners/register", json=payload)
     assert first.status_code == 201
     second = await client.post("/partners/register", json=payload)
@@ -318,10 +318,10 @@ async def test_expire_overdue_licenses_flips_status_for_real(db_session):
 
 async def test_register_partner_gets_a_real_unique_referral_code(client):
     first = await client.post("/partners/register", json={
-        "organization_name": "Referral Reseller A", "email": "refpartnerA@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Referral Reseller A", "email": "refpartnerA@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     second = await client.post("/partners/register", json={
-        "organization_name": "Referral Reseller B", "email": "refpartnerB@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Referral Reseller B", "email": "refpartnerB@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     code_a = first.json()["reseller"]["referral_code"]
     code_b = second.json()["reseller"]["referral_code"]
@@ -330,7 +330,7 @@ async def test_register_partner_gets_a_real_unique_referral_code(client):
 
 async def test_referral_redirect_sets_cookie_and_redirects(client):
     registered = await client.post("/partners/register", json={
-        "organization_name": "Redirect Reseller", "email": "redirectpartner@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Redirect Reseller", "email": "redirectpartner@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     code = registered.json()["reseller"]["referral_code"]
 
@@ -351,7 +351,7 @@ async def test_registering_with_a_referral_cookie_attributes_the_new_org(client,
     from api.models.sales import Reseller, SubClient
 
     registered = await client.post("/partners/register", json={
-        "organization_name": "Attribution Reseller", "email": "attributionpartner@example.com", "password": "correct horse battery staple 42",
+        "organization_name": "Attribution Reseller", "email": "attributionpartner@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
     })
     code = registered.json()["reseller"]["referral_code"]
     reseller_id = uuid.UUID(registered.json()["reseller"]["id"])
@@ -379,3 +379,41 @@ async def test_registering_with_an_unknown_referral_cookie_does_not_break_regist
     })
     client.cookies.delete("partner_ref")
     assert response.status_code == 201
+
+
+# ---- public sign-up and license endpoints: same protections as the main sign-up ------------------------------------------
+
+async def test_partner_registration_requires_explicit_acceptance_of_the_terms(client):
+    response = await client.post("/partners/register", json={
+        "organization_name": "No Consent Ltd", "email": "noconsent@example.com", "password": "correct horse battery staple 42",
+    })
+    assert response.status_code == 400 and "terms" in response.json()["detail"].lower()
+
+
+async def test_partner_registration_rejects_a_password_too_similar_to_the_email(client):
+    response = await client.post("/partners/register", json={
+        "organization_name": "Similar Ltd", "email": "similarpartner@example.com", "password": "similarpartner@example.com", "accept_terms": True,
+    })
+    assert response.status_code == 400
+
+
+async def test_partner_registration_is_rate_limited_per_ip(client, monkeypatch):
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(settings, "REGISTER_RATE_LIMIT_MAX_ATTEMPTS", 2)
+    codes = []
+    for i in range(4):
+        codes.append((await client.post("/partners/register", json={
+            "organization_name": f"Flood {i}", "email": f"flood{i}@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
+        })).status_code)
+    assert codes[:2] == [201, 201] and codes[2:] == [429, 429]
+
+
+async def test_license_validation_is_rate_limited_per_ip(client, monkeypatch):
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(settings, "LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS", 2)
+    codes = [(await client.post("/license/validate", json={"key": "GUESS-%d" % i})).status_code for i in range(4)]
+    assert codes[:2] == [200, 200] and codes[2:] == [429, 429]
