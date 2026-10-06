@@ -1,5 +1,36 @@
 # Change Ledger
 
+## 2026-10-06 - Security, dependencies and operator handover
+
+- Remote general-dotenv database, read-only observations supplied by the
+  assistant (not rechecked here): 0130; postgres/BYPASSRLS; 178 public tables,
+  12 without RLS (0131's eleven plus alembic_version); zero policies;
+  workspaces.description absent; pgvector 0.8.2.
+- Complete custom pg_dump backup, approximately 25 MB, taken before changes,
+  local and Git-ignored. Restore NOT VERIFIED. Migration execution refused
+  by the assistant tool's production-deployment protection. Operator:
+  `.venv\Scripts\python.exe -m alembic upgrade head` (0131 then 0132),
+  BEFORE code deployment. RLS without policies does not deny the existing
+  bypass role; runtime RLS isolation is still not established.
+- Historical test data: 63/71 users @example.com; 1523/1576 organizations
+  named "test", September 11 to October 2. Cleanup proposed, NOT performed.
+- Discord X-Gateway-Secret required; Microsoft token and TEAMS_BOT_ID for
+  Teams; METRICS_AUTH_TOKEN required for Internet-facing deployments.
+  Partner registration requires accept_terms, rate limits and password
+  checks. n8n/Airbyte status requires login. The three unimplemented
+  ANSWER_RELEVANCE/CONTEXT_RELEVANCE/CLAIM_VERIFICATION_USE_LLM options
+  refuse startup.
+- AGENT_MEMORY_AUTO_EXTRACT defaults false, adds an LLM call when enabled;
+  PGVECTOR_ITERATIVE_SCAN/MAX_SCAN_TUPLES and LICENSE_VALIDATE_RATE_LIMIT_
+  MAX_ATTEMPTS/WINDOW_SECONDS are deployment settings.
+- Removed opa-python-client (aiofiles conflict), replaced by internal HTTP
+  client; pyjwt 2.15.0, Next 16.3.8, supplied npm audit zero. WeasyPrint 65
+  advisories mitigated by escaping/deny-all fetching, not cleared;
+  diskcache from dspy remains without a reported fix.
+- HNSW iterative scan implemented; load measurement at 100/1000/10000
+  documents IN PROGRESS, no measured outcome claimed. BM25 reloads all
+  tenant texts per request (O(N)).
+
 ## 2026-10-05 — Mise en coherence et resultats finaux du run complet
 
 - JUnit `mission-backend-confirmation.xml` : 5,408 collectes,

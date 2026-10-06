@@ -9,6 +9,39 @@
 
 ## What it is
 
+### Operator checkpoint (2026-10-06)
+
+The supplied read-only observation of the remote general-dotenv database
+is revision 0130, postgres/BYPASSRLS, 178 public tables (12 without RLS),
+zero policies, no workspaces.description, pgvector 0.8.2. A complete
+custom pg_dump backup was taken before changes (local, Git-ignored;
+restore unverified). The assistant tool refused production migration
+execution. The operator must run
+`.venv\Scripts\python.exe -m alembic upgrade head` (0131 then 0132)
+BEFORE deploying code. RLS without policies does not block the bypass
+API role and does not prove runtime RLS isolation. Historical test data
+(63/71 users @example.com; 1523/1576 organizations named "test", September
+11 to October 2) has a proposed, NOT executed cleanup.
+
+Deployment settings: DISCORD_GATEWAY_SHARED_SECRET (mandatory
+X-Gateway-Secret for Discord gateway messages); TEAMS_BOT_ID (Microsoft
+token audience, otherwise 401); METRICS_AUTH_TOKEN for Internet-facing
+deployments; AGENT_MEMORY_AUTO_EXTRACT=false (enabling adds an LLM call);
+PGVECTOR_ITERATIVE_SCAN / PGVECTOR_MAX_SCAN_TUPLES; and
+LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS / LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS.
+Partner registration now requires accept_terms, rate limiting and password
+checks. n8n/Airbyte status requires login. The unimplemented
+ANSWER_RELEVANCE_USE_LLM, CONTEXT_RELEVANCE_USE_LLM and
+CLAIM_VERIFICATION_USE_LLM settings refuse startup if enabled.
+
+OPA now uses an internal HTTP client (opa-python-client removed for
+aiofiles incompatibility). pyjwt 2.15.0, Next 16.3.8; supplied npm audit:
+zero advisories. WeasyPrint 65 advisories remain mitigated by escaping
+and deny-all resource fetching; diskcache from dspy has no reported fix.
+Iterative HNSW scanning is implemented; the 100/1000/10000-document
+measurement is IN PROGRESS, not a performance claim. BM25 reloads every
+organization text per request (O(N)).
+
 An organization signs up, uploads documents (or connects its sources), configures one or more assistants, and gets:
 
 - answers grounded in **its own documents**, each with citations to the exact source chunk;

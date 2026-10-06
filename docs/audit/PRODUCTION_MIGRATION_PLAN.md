@@ -1,6 +1,32 @@
 # Plan production — ne pas exécuter
 
-Date : 2026-10-04. **NO-GO actuel. Aucune production connectée.**
+Date : 2026-10-06. **NO-GO actuel. Aucune migration appliquee par cette tache.**
+
+## Observation distante en lecture seule - 2026-10-06
+
+Faits fournis par l'assistant, non reverifies dans cette tache : base du
+dotenv general en revision 0130; connexion API postgres/BYPASSRLS;
+178 tables publiques, 12 sans RLS (onze de 0131 et alembic_version);
+zero politique; workspaces.description absente; pgvector 0.8.2.
+0131 active RLS sans politique mais ne bloque pas ce role bypass.
+Ne pas confondre cela avec une preuve d'isolation RLS runtime.
+
+Sauvegarde complete pg_dump custom (environ 25 Mo) prise avant tout
+changement, fichier local ignore par Git; restauration NON VERIFIEE.
+L'outil de l'assistant a refuse les migrations sous la protection
+"deploiement en production". Seul l'operateur les applique, AVANT le code :
+
+```powershell
+.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+Ordre : 0131, puis 0132, verification de revision/colonne et role effectif,
+puis deploiement. Toute transition vers un role non-BYPASS reste a valider.
+63/71 utilisateurs @example.com et 1523/1576 organisations nommees "test"
+datent du 11 septembre au 2 octobre : nettoyage cible propose, NON effectue.
+Ce plan ne donne aucune autorisation d'operation production a un agent.
+
+## Historique du plan - 2026-10-04
 
 ## États et périmètre
 
@@ -97,9 +123,9 @@ Ce fichier est un **plan**, pas une instruction d'exécuter la production.
 
 | Point | Staging observe | Production |
 |---|---|---|
-| Alembic | 0132 | 0130 declare, non observe |
-| Tables publiques | 178 | Non inventoriees |
-| pgvector / HNSW | 0.8.2 / present | Non observes |
+| Alembic | 0132 | 0130 observe en lecture seule (mise a jour ci-dessus) |
+| Tables publiques | 178 | 178; 12 sans RLS, zero politique |
+| pgvector / HNSW | 0.8.2 / present | pgvector 0.8.2; index non certifies ici |
 | Policies experimentales | 77, uniquement role lab | Ne pas recopier |
 | Backup restaure | Non demontre sur dump Supabase | Prerequis operateur |
 

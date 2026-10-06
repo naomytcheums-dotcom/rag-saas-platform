@@ -1,4 +1,48 @@
-# Final status - evidence available on 2026-10-04
+# Final status - evidence available on 2026-10-06
+
+## 2026-10-06 - Operator handover, bounded evidence
+
+Read-only observations supplied by the assistant for the remote database
+configured in the general dotenv: revision 0130; connection role `postgres`
+with BYPASSRLS; 178 public tables, 12 without RLS (the eleven targeted by
+0131 plus alembic_version); zero policies; no workspaces.description;
+pgvector 0.8.2. These observations were not repeated in this documentation
+task. Enabling RLS without policies in 0131 does not block this bypassing
+API role; it does not prove runtime tenant isolation. The operator must
+apply 0131 then 0132 before deploying the mapped application code:
+`.venv\Scripts\python.exe -m alembic upgrade head`.
+The assistant tool refused migration execution under its production
+deployment protection. No migration was applied by this task.
+
+A complete custom-format pg_dump backup (approximately 25 MB) was taken
+before changes and remains local and Git-ignored. Restore is NOT VERIFIED.
+Historical test data dominates: 63 of 71 users have @example.com addresses;
+1523 of 1576 organizations are named "test", created September 11 through
+October 2. Targeted cleanup is proposed, NOT performed.
+
+Discord gateways now require X-Gateway-Secret / DISCORD_GATEWAY_SHARED_SECRET;
+Teams requires a Microsoft Bot Framework token with TEAMS_BOT_ID audience
+(otherwise 401). Internet-facing deployments must set METRICS_AUTH_TOKEN.
+Partner registration requires accept_terms, rate limiting and password
+checks; n8n/Airbyte status routes require login. ANSWER_RELEVANCE_USE_LLM,
+CONTEXT_RELEVANCE_USE_LLM and CLAIM_VERIFICATION_USE_LLM are rejected at
+startup because they are not implemented.
+
+AGENT_MEMORY_AUTO_EXTRACT defaults false (one extra LLM call per execution
+when enabled). PGVECTOR_ITERATIVE_SCAN / PGVECTOR_MAX_SCAN_TUPLES configure
+iterative HNSW scanning; LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS and
+LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS configure license validation limits.
+OPA uses the internal HTTP client: opa-python-client was removed because
+of its aiofiles conflict with beeai-framework. Pins: pyjwt 2.15.0, Next
+16.3.8; latest supplied npm audit: zero advisories. WeasyPrint 65 advisories
+remain, mitigated by HTML escaping and a deny-all url_fetcher; diskcache,
+pulled in by dspy, has no reported fix. Mitigation is not audit clearance.
+
+Iterative HNSW scanning is implemented. The 100/1000/10000-document load
+measurement is IN PROGRESS; no result is claimed. BM25 still reloads all
+organization texts on every query (O(N)). Production readiness remains NO-GO.
+
+## Historical checkpoint - 2026-10-04
 
 ## Latest parallel backup evidence - 22:30 local time
 
@@ -49,8 +93,9 @@ exceptions were logged at interpreter shutdown after pytest's summary.
 - Every item in this requested follow-up is either verified in its stated
   scope or explicitly blocked/partial below. This is a documented audit
   checkpoint, not a claim that the entire application works at 100%.
-- No production access, deployment, commit or push; historical migrations
-  0001-0132 unchanged. Production revision 0130 is user-declared only.
+- At this historical checkpoint: no production access, deployment, commit
+  or push; historical migrations 0001-0132 unchanged. The later read-only
+  observations above supersede the then user-declared revision status.
 
 ## Test results
 

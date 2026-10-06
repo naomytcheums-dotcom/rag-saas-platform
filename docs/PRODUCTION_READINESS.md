@@ -1,9 +1,55 @@
-# Readiness production — 2026-10-03
+# Readiness production — 2026-10-06
 
 ## Décision : NON / NO-GO
 
 Aucun déploiement ou contrôle production réalisé. Une suite frontend verte
 et du code présent ne prouvent pas l'intégralité des parcours.
+
+## Mise a jour operateur - observations limitees
+
+Lecture seule de la base distante du dotenv general, observations fournies
+par l'assistant, non repetees ici : revision 0130; role postgres avec
+BYPASSRLS; 178 tables publiques, 12 sans RLS (onze de 0131 et
+alembic_version); zero politique; workspaces.description absente;
+pgvector 0.8.2. Le role API contourne RLS : 0131 sans politiques ne le
+bloque pas, mais ne prouve aucune isolation runtime par RLS.
+
+Operateur : `.venv\Scripts\python.exe -m alembic upgrade head`, 0131 puis
+0132 AVANT le deploiement du code. L'outil de l'assistant a refuse
+l'application des migrations au titre de la protection deploiement
+production. Sauvegarde complete pg_dump custom (environ 25 Mo) prise avant
+tout changement, locale et ignoree par Git; restauration NON VERIFIEE.
+Donnees historiques : 63/71 utilisateurs @example.com, 1523/1576
+organisations nommees "test", du 11 septembre au 2 octobre.
+Nettoyage cible propose, NON effectue.
+
+### Configuration et changements de contrat
+
+- DISCORD_GATEWAY_SHARED_SECRET : X-Gateway-Secret obligatoire pour
+  POST /integrations/discord/message; absence = refus de toute requete.
+- TEAMS_BOT_ID : audience du jeton Microsoft Bot Framework; sinon 401.
+- METRICS_AUTH_TOKEN : definir pour tout deploiement joignable par Internet.
+- AGENT_MEMORY_AUTO_EXTRACT=false : activation ajoute un appel LLM par execution.
+- PGVECTOR_ITERATIVE_SCAN=true, PGVECTOR_MAX_SCAN_TUPLES=20000 :
+  balayage iteratif HNSW.
+- LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS=20 et
+  LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS=60 : limite de validation licence.
+- /partners/register exige accept_terms, controles du mot de passe et limite
+  de debit; /integrations/n8n/status et /airbyte/status exigent une connexion.
+- ANSWER_RELEVANCE_USE_LLM, CONTEXT_RELEVANCE_USE_LLM,
+  CLAIM_VERIFICATION_USE_LLM : activation refusee au demarrage, non implementes.
+
+### Dependances et performance
+
+opa-python-client retire pour conflit aiofiles avec beeai-framework :
+client HTTP interne. pyjwt 2.15.0; Next 16.3.8; npm audit fourni = zero.
+WeasyPrint 65 : avis restants attenues par echappement HTML et url_fetcher
+qui refuse tout, sans disparition de l'avis. diskcache via dspy :
+aucun correctif indique. HNSW iteratif ajoute; mesure a 100/1000/10000
+documents EN COURS, aucun chiffre de resultat. BM25 recharge tous les
+textes de l'organisation a chaque requete (O(N)).
+
+## Historique - gates du 2026-10-03
 
 | Gate | État actuel | Condition de sortie |
 |---|---|---|
