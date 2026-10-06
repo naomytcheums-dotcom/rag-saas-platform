@@ -183,28 +183,30 @@ async def generate_invoice_pdf(db: AsyncSession, organization_id: uuid.UUID, inv
             "(Pango/cairo/GObject) are not installed. See requirements-api.txt's own comment."
         ) from exc
 
+    from api.services.pdf_safety import deny_all_url_fetcher, esc
+
     rows_html = "".join(
-        f"<tr><td>{ln.description}</td><td style='text-align:right'>{ln.quantity}</td>"
+        f"<tr><td>{esc(ln.description)}</td><td style='text-align:right'>{ln.quantity}</td>"
         f"<td style='text-align:right'>{ln.unit_price_cents / 100:.2f}</td>"
         f"<td style='text-align:right'>{ln.total_cents / 100:.2f}</td></tr>"
         for ln in lines
     )
     html_document = f"""
-    <html><head><meta charset="utf-8"><title>{invoice.number}</title></head>
+    <html><head><meta charset="utf-8"><title>{esc(invoice.number)}</title></head>
     <body style="font-family: sans-serif;">
-      <h1>Invoice {invoice.number}</h1>
-      <p>{org.name if org else ''}</p>
-      <p>Status: {invoice.status.value} &middot; Due: {invoice.due_date}</p>
+      <h1>Invoice {esc(invoice.number)}</h1>
+      <p>{esc(org.name) if org else ''}</p>
+      <p>Status: {esc(invoice.status.value)} &middot; Due: {esc(invoice.due_date)}</p>
       <table style="width:100%; border-collapse: collapse;" border="1" cellpadding="6">
         <thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead>
         <tbody>{rows_html}</tbody>
       </table>
-      <p style="text-align:right;">Subtotal: {invoice.subtotal_cents / 100:.2f} {invoice.currency}<br/>
-      VAT ({invoice.vat_rate}%): {invoice.vat_cents / 100:.2f} {invoice.currency}<br/>
-      <strong>Total: {invoice.total_cents / 100:.2f} {invoice.currency}</strong></p>
+      <p style="text-align:right;">Subtotal: {invoice.subtotal_cents / 100:.2f} {esc(invoice.currency)}<br/>
+      VAT ({esc(invoice.vat_rate)}%): {invoice.vat_cents / 100:.2f} {esc(invoice.currency)}<br/>
+      <strong>Total: {invoice.total_cents / 100:.2f} {esc(invoice.currency)}</strong></p>
     </body></html>
     """
-    return weasyprint.HTML(string=html_document).write_pdf()
+    return weasyprint.HTML(string=html_document, url_fetcher=deny_all_url_fetcher).write_pdf()
 
 
 async def _owner_email(db: AsyncSession, organization_id: uuid.UUID) -> str | None:
