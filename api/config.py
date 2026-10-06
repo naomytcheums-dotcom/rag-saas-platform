@@ -754,6 +754,11 @@ class Settings(BaseSettings):
     # native index speedup for that organization until it reindexes onto the
     # default-dimension model.
     PGVECTOR_ENABLED: bool = True
+    # An HNSW scan filtered by `organization_id` only looks at its `ef_search` best candidates BEFORE the filter: a small tenant that
+    # shares the table with big ones can then get fewer results than it should, or none. pgvector >= 0.8 keeps scanning until enough rows
+    # pass the filter (`hnsw.iterative_scan`); this switches it on per query, capped by PGVECTOR_MAX_SCAN_TUPLES. Older pgvector: ignored.
+    PGVECTOR_ITERATIVE_SCAN: bool = True
+    PGVECTOR_MAX_SCAN_TUPLES: int = 20000
     EMBEDDING_VECTOR_DIM: int = 384
 
     # -- Query rewriting (Partie 3.4.2) ----------------------------------------

@@ -56,7 +56,7 @@ import re
 
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings as app_settings
@@ -337,6 +337,21 @@ async def vector_search(
     return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
 
 
+async def _enable_iterative_hnsw_scan(db: AsyncSession) -> None:
+    """Make the HNSW scan of THIS transaction keep going until `top_k` rows survive the tenant filter (pgvector >= 0.8).
+
+    `SET LOCAL` only lasts until the end of the current transaction, so nothing leaks to other queries on a pooled connection. On a
+    pgvector without the parameter the statement fails; it runs inside a SAVEPOINT so that failure cannot abort the search itself."""
+    if not app_settings.PGVECTOR_ITERATIVE_SCAN:
+        return
+    try:
+        async with db.begin_nested():
+            await db.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
+            await db.execute(text(f"SET LOCAL hnsw.max_scan_tuples = {int(app_settings.PGVECTOR_MAX_SCAN_TUPLES)}"))
+    except Exception:  # noqa: BLE001 -- an older pgvector: search proceeds without iterative scanning, as before
+        logger.warning("retrieval_pipeline: hnsw.iterative_scan is not available on this database; small tenants may get fewer ANN results")
+
+
 async def _pgvector_rank_chunks(
     db: AsyncSession, organization_id, embedding: list[float], top_k: int,
     metadata_filters: dict | None = None, document_ids: list | None = None,
@@ -393,6 +408,7 @@ async def _pgvector_rank_chunks(
         filters.extend(build_metadata_filter_clauses(DocumentChunk.metadata_json, metadata_filters))
 
     distance = DocumentChunk.embedding_vector.cosine_distance(embedding)
+    await _enable_iterative_hnsw_scan(db)
     try:
         rows = (
             await db.execute(
