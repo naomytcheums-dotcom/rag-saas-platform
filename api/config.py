@@ -2308,8 +2308,7 @@ class Settings(BaseSettings):
     # api/services/opa_policy.py's own module docstring for the real,
     # ADVISORY (fail-open) policy check this gates, additional to (never
     # replacing) the existing real Casbin RBAC (api/security/rbac.py).
-    # host/port (not a single URL) matches opa-python-client's own real
-    # `AsyncOpaClient.__init__` constructor shape.
+    # host/port (not a single URL): OPA's REST endpoint is http://<host>:<port>/v1/data/... (api/services/opa_policy.py).
     OPA_ENABLED: bool = False
     OPA_SERVER_HOST: str = "localhost"
     OPA_SERVER_PORT: int = 8181

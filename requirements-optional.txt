@@ -8,4 +8,3 @@ lightrag-hku==1.5.7
 beeai-framework==0.1.85
 presidio-analyzer==2.2.364
 openlineage-python==1.53.0
-opa-python-client==2.1.0

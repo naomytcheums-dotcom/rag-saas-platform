@@ -38,25 +38,43 @@ logger = logging.getLogger(__name__)
 
 _client_instance = None
 
+# Short on purpose: an unreachable OPA server must never meaningfully stall the request this advisory check belongs to.
+_OPA_TIMEOUT_SECONDS = 1.5
+
+
+class _OpaRestClient:
+    """A minimal client for OPA's documented REST Data API: `POST /v1/data/<package path>/<rule>` with `{"input": ...}` answers
+    `{"result": ...}` (https://www.openpolicyagent.org/docs/latest/rest-api/). It replaces the `opa-python-client` package, whose
+    `aiofiles>=25.1` requirement is incompatible with `beeai-framework`'s `aiofiles<25`, which made `requirements-optional.txt`
+    impossible to install on a clean machine -- for what is a single HTTP call.
+
+    The OPA address is operator configuration (OPA_SERVER_HOST/PORT), never user input, and OPA usually runs on a private network,
+    which the SSRF-safe client would refuse by design; hence a plain `httpx` client here (same reasoning as the n8n/Airbyte probes)."""
+
+    def __init__(self, host: str, port: int):
+        self._base_url = f"http://{host}:{port}"
+
+    async def query_rule(self, input_data: dict[str, Any], package_path: str, rule_name: str | None = None) -> dict[str, Any]:
+        import httpx
+
+        path = package_path.strip().replace(".", "/").strip("/")
+        if rule_name:
+            path = f"{path}/{rule_name.strip('/')}"
+        async with httpx.AsyncClient(timeout=_OPA_TIMEOUT_SECONDS) as client:
+            response = await client.post(f"{self._base_url}/v1/data/{path}", json={"input": input_data})
+            response.raise_for_status()
+            return response.json()
+
 
 def _get_client():
-    """Real, cached `AsyncOpaClient` -- same "load once, cache"
-    reasoning as every other real, expensive-to-construct client in
-    this codebase. `host`/`port` (not a single URL) matches the real,
-    installed package's own `BaseClient.__init__` constructor shape
-    (verified directly, not guessed) -- `timeout` left at the
-    package's own short real default (1.5s) so a real, unreachable OPA
-    server can never meaningfully stall the real request it's an
-    advisory check for."""
+    """The cached OPA client (same "build once" reasoning as every other client in this codebase)."""
     global _client_instance
     if _client_instance is not None:
         return _client_instance
 
-    from opa_client import AsyncOpaClient
-
     from api.config import settings
 
-    _client_instance = AsyncOpaClient(host=settings.OPA_SERVER_HOST, port=settings.OPA_SERVER_PORT)
+    _client_instance = _OpaRestClient(host=settings.OPA_SERVER_HOST, port=settings.OPA_SERVER_PORT)
     return _client_instance
 
 
@@ -65,9 +83,8 @@ async def check_policy(input_data: dict[str, Any], package_path: str, rule_name:
     docstring for why this is fail-open and returns `bool | None`
     rather than raising or defaulting to a real deny.
 
-    `input_data`/`package_path`/`rule_name` map directly onto the real,
-    installed package's own `AsyncOpaClient.query_rule` (verified
-    directly, not guessed) -- `package_path` is OPA's own real,
+    `input_data`/`package_path`/`rule_name` map directly onto OPA's REST
+    Data API (see `_OpaRestClient`) -- `package_path` is OPA's own real,
     dotted Rego package path (e.g. `"documents.retrieval"`), `rule_name`
     the real rule inside it to evaluate (e.g. `"allow"`); when omitted,
     the whole real package's own base document is queried instead.

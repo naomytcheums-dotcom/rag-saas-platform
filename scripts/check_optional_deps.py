@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OPTIONAL_MODULES = frozenset({
     "docling", "deepeval", "dspy", "mem0", "lightrag",
-    "beeai_framework", "presidio_analyzer", "openlineage", "opa_client",
+    "beeai_framework", "presidio_analyzer", "openlineage",
 })
 
 
@@ -69,7 +69,7 @@ def main() -> int:
             if isinstance(exc, ImportError):
                 print(f"  module: {exc.name}", file=sys.stderr)
             return 1
-        print("OK: api.main imported with all 9 optional module roots blocked; no lifespan or network.")
+        print(f"OK: api.main imported with all {len(OPTIONAL_MODULES)} optional module roots blocked; no lifespan or network.")
         return 0
 
 
