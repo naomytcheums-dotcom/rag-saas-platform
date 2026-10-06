@@ -41,6 +41,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 DIM = 384
+MEMORY_DB = ":memory-shared:"
 CHUNKS_PER_DOC = 5
 VOCAB = [f"w{n:04d}" for n in range(3000)]
 
@@ -72,7 +73,14 @@ async def _build_corpus(db_path: str, documents: int, seed: int) -> dict:
 
     rng = np.random.default_rng(seed)
     py_rng = random.Random(seed)
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    anchor = None
+    if db_path == MEMORY_DB:
+        # A shared-cache in-memory database: no disk I/O at all (a slow disk -- an SD card or a USB stick -- turns the corpus build into
+        # hours), still visible to every connection of the process. One "anchor" connection keeps it alive.
+        engine = create_async_engine("sqlite+aiosqlite:///file:ragbench?mode=memory&cache=shared&uri=true")
+        anchor = await engine.connect()
+    else:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -104,7 +112,7 @@ async def _build_corpus(db_path: str, documents: int, seed: int) -> dict:
         for i in range(0, len(chunk_rows), 500):
             await session.execute(insert(DocumentChunk.__table__), chunk_rows[i:i + 500])
         await session.commit()
-    return {"engine": engine, "sessions": sessions, "org_id": org_id, "planted": planted}
+    return {"engine": engine, "sessions": sessions, "org_id": org_id, "planted": planted, "anchor": anchor}
 
 
 async def _run_strategy(corpus: dict, strategy: str, queries: int, concurrency: int, top_k: int, seed: int) -> dict:
@@ -162,7 +170,7 @@ async def main_async(args) -> dict:
             continue
         with tempfile.TemporaryDirectory(prefix="rag-bench-") as workdir:
             started = time.perf_counter()
-            corpus = await _build_corpus(str(Path(workdir) / "bench.db"), documents, args.seed)
+            corpus = await _build_corpus(MEMORY_DB if args.memory else str(Path(workdir) / "bench.db"), documents, args.seed)
             entry["build_seconds"] = round(time.perf_counter() - started, 1)
             entry["rss_mb_after_build"] = round(_rss_mb(), 0)
             entry["runs"] = []
@@ -170,6 +178,8 @@ async def main_async(args) -> dict:
                 for concurrency in [int(c) for c in args.concurrency.split(",")]:
                     entry["runs"].append(await _run_strategy(corpus, strategy, args.queries, concurrency, args.top_k, args.seed))
             entry["rss_mb_peak_after_queries"] = round(_rss_mb(), 0)
+            if corpus["anchor"] is not None:
+                await corpus["anchor"].close()
             await corpus["engine"].dispose()
         report["corpora"].append(entry)
     return report
@@ -198,6 +208,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--max-chunks", type=int, default=10_000, help="refuse corpora larger than this many chunks unless --force-large")
     parser.add_argument("--force-large", action="store_true")
+    parser.add_argument("--memory", action="store_true", help="keep the SQLite corpus in RAM instead of a temp file (needs ~5 KB of RAM per chunk)")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--postgres-note", action="store_true", help="print how to measure the pgvector/HNSW path")
     args = parser.parse_args()
