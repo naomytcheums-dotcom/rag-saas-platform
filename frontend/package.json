@@ -13,7 +13,7 @@
   "dependencies": {
     "@sentry/nextjs": "^11.0.0",
     "country-flag-icons": "^1.6.20",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
@@ -35,7 +35,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.3.8",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",

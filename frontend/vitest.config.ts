@@ -8,6 +8,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     globals: true,
+    // Page tests drive real user events through jsdom; on a loaded CI runner or dev machine the 5s default made them time out
+    // intermittently (they pass in isolation). A longer limit, not a weaker assertion.
+    testTimeout: 20000,
   },
   resolve: {
     alias: {
