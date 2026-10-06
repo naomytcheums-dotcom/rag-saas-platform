@@ -12,7 +12,7 @@ Two measurements:
    only looks at its `ef_search` best candidates BEFORE filtering, so without iterative scanning the tenant can get fewer than top_k results.
    The number of results and the recall against the exact top-k of its own vectors are measured.
 
-SAFETY: the default target is the database named in `.env.staging` (refused if its password is still a placeholder, or if it is the same
+SAFETY: the default target is the database named in the STAGING_DATABASE_URL environment variable, else in `.env.staging` (refused if its password is still a placeholder, or if it is the same
 server/user as `.env`). `--target main --allow-main` uses the database named in `.env`; it then also refuses when the database is already
 too full for the corpus (`--quota-mb`). Everything is written under organizations named exactly "Benchmark (throw-away)" and deleted at the
 end -- also on failure; leftovers of an interrupted run are swept at the start. Vectors are random with planted neighbours and the text is
@@ -57,7 +57,8 @@ def _target_url(target: str, allow_main: bool) -> str:
         if not main:
             raise SystemExit("REFUSED: .env has no DATABASE_URL")
         return main
-    staging = dotenv_values(ROOT / ".env.staging").get("DATABASE_URL")
+    # The real staging URL may live only in the operator's own process environment (never in a file): that wins over .env.staging.
+    staging = os.environ.get("STAGING_DATABASE_URL") or dotenv_values(ROOT / ".env.staging").get("DATABASE_URL")
     if not staging or re.search(r"//[^:]+:\[[^\]]*\]@", staging):
         raise SystemExit("REFUSED: .env.staging has no usable DATABASE_URL (the password is still a placeholder).")
     if main and _server_identity(staging) == _server_identity(main):
