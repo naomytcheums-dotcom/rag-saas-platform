@@ -52,7 +52,7 @@ dnspython==2.8.0
 
 # -- Auth: passwords, JWT, OAuth, 2FA -----------------------------------------
 bcrypt==5.0.0
-pyjwt[crypto]==2.13.0
+pyjwt[crypto]==2.15.0
 authlib==1.8.0
 pyotp==2.10.0
 qrcode[pil]==8.2
