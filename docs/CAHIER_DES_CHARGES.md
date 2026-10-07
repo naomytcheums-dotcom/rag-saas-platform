@@ -2268,7 +2268,7 @@ Tests réels dédiés (24 tests), voir `tests/test_chat_integrations.py`.
 | 10.1.6 | Request validation | ✅ (Pydantic partout) |
 | 10.1.7 | Input sanitization | 🟡 |
 | 10.1.8 | Prompt injection protection | 🟡 (écrit, pas intégré en filtre live) |
-| 10.1.9 | SSRF protection | ⬜ |
+| 10.1.9 | SSRF protection | ✅ Protection des accès HTTP externes vérifiée dans les clients SSRF-safe utilisés par les imports (dont `api/tools/url_reader.py`). |
 | 10.1.10 | File validation | ✅ |
 | 10.1.11 | MIME validation | ✅ (vérification magic-bytes) |
 | 10.1.12 | Malware scanning (ClamAV) | ⬜ |
@@ -2287,9 +2287,9 @@ filtre actif (au-delà de 10.1.8's code non branché).
 |---|---|---|
 | 10.3.1 | Audit log (actions admin) | ✅ (log inviolable HMAC, Catégorie 2 ; étendu avec organization_id/resource_type/resource_id + nouveaux types d'action réels -- voir le sous-lot ci-dessous) |
 | 10.3.2 | Structured logging | 🟡 |
-| 10.3.3-5 | Request IDs, trace IDs, distributed tracing | ⬜ |
+| 10.3.3-5 | Request IDs, trace IDs, distributed tracing | 🟡 `X-Request-ID` est propagé aux journaux applicatifs et aux réponses normales ; OpenTelemetry existe et est désactivé par défaut. La propagation aux erreurs non gérées et aux tâches Celery reste à compléter/vérifier. |
 | 10.3.6-8 | LLM/retrieval/tool traces | 🟡 (existent côté RAG, hérité) |
-| 10.3.9 | Error tracking (Sentry) | ⬜ |
+| 10.3.9 | Error tracking (Sentry) | ✅ `sentry_sdk` est initialisé quand `SENTRY_DSN` est configuré, avec intégrations FastAPI/Starlette/Celery et PII désactivée. |
 | 10.3.10-12 | Performance/cost/token monitoring | 🟡 |
 
 ### 10.4 Enterprise Features
@@ -2386,9 +2386,9 @@ Voir [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md) pour le
 
 | Section | Statut |
 |---|---|
-| 13.1 Qualité du code (9 items) | ⬜ (pas de ruff/mypy/pre-commit/dependabot/bandit configurés) |
-| 13.2 Tests (11 items) | 🟡 (383 tests auth réels en CI + 105 tests RAG hérités — substantiel, mais pas de tests E2E Playwright faute de frontend) |
-| 13.3 CI/CD (8 items) | 🟡 (GitHub Actions réel : tests + Snyk + ZAP + build Docker ; pas de lint/type-check en CI, pas de déploiement automatique) |
+| 13.1 Qualité du code (9 items) | 🟡 Ruff est configuré dans `pyproject.toml` (règles de détection d'erreurs d'exécution) ; pre-commit, Dependabot et Bandit restent à ajouter. |
+| 13.2 Tests (11 items) | 🟡 (tests backend et frontend existent ; aucun parcours E2E Playwright n'a été vérifié dans ce recomptage) |
+| 13.3 CI/CD (8 items) | 🟡 (GitHub Actions : tests, Ruff API, lint/tests frontend, Snyk, ZAP et builds Docker ; pas de type-check dédié ni de déploiement automatique vérifié) |
 | 13.4 Déploiement (12 items) | ⬜ (Docker existe et testé en CI ; Terraform/K8s/Helm/multi-cloud : rien) |
 | 13.5 Observabilité (12 items) | Couvert par 10.3 |
 
@@ -2402,10 +2402,10 @@ Voir [`docs/billing/PARTIE_12_BILLING.md`](billing/PARTIE_12_BILLING.md) pour le
 
 | Section | Statut |
 |---|---|
-| 14.1 Documentation technique (12 items) | README ✅, architecture avec diagrammes Mermaid ✅ (Catégorie 5), guide de déploiement ✅ (Catégorie 5), doc API (Swagger + exemples curl) ✅ — guide admin/utilisateur/white-label/FAQ : ⬜ |
+| 14.1 Documentation technique (12 items) | 🟡 README ✅, architecture avec diagrammes Mermaid ✅ (Catégorie 5), guide de déploiement ✅ (Catégorie 5), doc API (Swagger + exemples curl) ✅ — guides admin/utilisateur/white-label/FAQ non encore rédigés. |
 | 14.2 Documentation commerciale (8 items) | ⬜ |
-| 14.3 Landing page (9 items) | ⬜ |
-| 14.4 Branding (4 items) | ⬜ (nom/logo/palette jamais tranchés) |
+| 14.3 Landing page (9 items) | 🟡 Une page d'accueil marketing existe dans `frontend/app/page.tsx` ; les éléments de conversion et les parcours utilisateurs restent à réévaluer séparément. |
+| 14.4 Branding (4 items) | 🟡 Les réglages et surfaces white-label existent ; le nom commercial, le logo et la palette de marque restent à choisir. |
 
 ---
 
@@ -3048,23 +3048,26 @@ Aucune collision de nom de fichier avec `tests/test_*.py` existants
 
 ---
 
-## Total recompté (mis à jour après Étape 1.2.8, 2026-09-02)
+## Total recompté (2026-10-07)
 
-Compté précisément item par item sur les Parties 1.1 à 14 (500 items
-identifiés) ; la Partie 15 (~15 items pour atteindre les 515 annoncés)
-reste de taille inconnue, son texte original n'ayant jamais été retrouvé
-au-delà de "15.1.1 Ticke...".
+Recomptage des lignes d'inventaire numérotées ayant un statut explicite
+dans les tableaux de ce document : **110 identifiants distincts** (aucun
+identifiant répété dans ces lignes). Ce décompte est reproductible depuis
+les statuts des tableaux ; il ne prétend pas réévaluer les quelque 500
+sous-actions décrites dans le texte narratif, dont le document ne fournit
+pas un marqueur par action. La Partie 15 reste incomplète dans la source.
 
-| | Items (/500 connus) | % |
-|---|---|---|
-| ✅ Fait | 131 | 26.2% |
-| 🟡 Partiel | 66 | 13.2% |
-| ⬜ Non commencé | 303 | 60.6% |
+| Statut des lignes d'inventaire explicites | Nombre |
+|---|---:|
+| ✅ Fait | 90 |
+| 🟡 Partiel | 17 |
+| ⬜ Non commencé | 3 |
+| **Total** | **110** |
 
-**Complétion globale (/515, Partie 15 incluse en approximation)** :
-- Strictement ✅ : **138/515 (~26.8%)**
-- ✅ + 🟡 touchés d'une manière ou d'une autre : **210/515 (~40.8%)**
-- Pondéré (✅=1, 🟡=0.5) : **~171/515 (~33.2%)** -- le chiffre le plus représentatif de l'avancement réel. Note : 3.4.8/3.4.9 (déjà comptés via les Parties 3.3.5/3.3.6) et leurs doublons littéraux (3.4.13-3.4.16, tous identiques à 3.4.7/8/9/12) sont marqués ✅ dans le tableau de la Partie 3.4 ci-dessus par référence croisée (le vrai travail existe) mais délibérément EXCLUS de ce comptage numérique tant que leur statut de véritables items séparés dans les 500 items connus n'est pas confirmé contre le texte original du cahier des charges maître.
+Ce bilan remplace les nombres datés du 2026-09-02, qui ne correspondaient
+plus à l'état courant du dépôt. Les statuts ont été confrontés aux
+implémentations identifiables dans le code ; les limites non vérifiées
+en conditions réelles restent explicitement signalées comme partielles.
 
 Mis à jour après Partie 3.1.3 (Extraction du texte, amélioration, 2026-09-04) :
 Partie 3 : ~10/41 → ~11/41 (3.1.3 seul item touché -- ✅, un seul vrai
@@ -3865,3 +3868,29 @@ detail complet, y compris un vrai selecteur de langue cree au passage
 (`frontend/components/LanguageSelector.tsx`) -- le seul point d'entree
 qui appelait reellement `setLanguage()` avant ce correctif n'existait
 pas.
+
+## Reste à faire
+
+Éléments encore non commencés dans l'inventaire au 2026-10-07 :
+
+- **10.1.12 — Scan antivirus ClamAV** : aucun scanner n'est encore câblé
+  au parcours d'enregistrement d'un document.
+- **10.4.2 et 10.4.3-12** : les sous-éléments marqués ⬜ dans le
+  tableau de sécurité/gouvernance restent à vérifier et implémenter.
+- **14.1 — Guides** : guides administrateur, utilisateur, white-label et
+  FAQ.
+- **14.2 — Documentation commerciale** : pitch, tarifs/comparatif et
+  options de marque à proposer sans en choisir une.
+- **Partie 15** : le texte source demeure tronqué ; son périmètre et son
+  nombre d'items ne peuvent pas être recomptés honnêtement.
+
+Correction d'audit : le commentaire de 2.2.2 disant que le dépôt
+n'avait aucun frontend React est périmé (le frontend Next.js existe).
+Le glisser-déposer observé dans `MediaUploadZone` concerne les médias ;
+aucune preuve n'a été trouvée d'un composant de dépôt de documents
+connecté aux routes de la base de connaissances, donc 2.2.2 reste 🟡.
+
+Les lignes 🟡 sont des travaux partiels, non des éléments « non
+commencés » ; elles restent visibles dans les tableaux de leurs Parties
+et ne sont pas requalifiées comme terminées par le seul fait qu'un
+module existe.
