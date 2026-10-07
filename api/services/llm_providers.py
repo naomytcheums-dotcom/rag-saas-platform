@@ -196,6 +196,9 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
 
     kwargs["max_tokens"] = getattr(settings, config["max_tokens"])
     kwargs["temperature"] = getattr(settings, config["temperature"])
+    # Some current models refuse sampling params (claude-sonnet-5-5 accepts only temperature=1): LiteLLM drops them
+    # for those models only, instead of failing every chat answer with UnsupportedParamsError.
+    kwargs["drop_params"] = True
     return kwargs
 
 
