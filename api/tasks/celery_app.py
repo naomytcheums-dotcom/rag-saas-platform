@@ -20,7 +20,7 @@ from datetime import timedelta
 
 from celery import Celery, Task
 from celery.schedules import crontab
-from celery.signals import task_failure, task_success
+from celery.signals import task_failure, task_success, worker_process_init, worker_ready
 
 from api.config import settings
 
@@ -130,6 +130,24 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+
+def _warm_embedder() -> None:
+    from api.security.documents import start_embedder_warmup
+
+    start_embedder_warmup()
+
+
+@worker_process_init.connect
+def _warm_embedder_in_pool_process(**_kwargs) -> None:
+    _warm_embedder()
+
+
+@worker_ready.connect
+def _warm_embedder_in_inline_worker(sender=None, **_kwargs) -> None:
+    pool = getattr(sender, "pool", None)
+    if "prefork" not in type(pool).__module__:
+        _warm_embedder()
 
 # Real crash fixed here (2026-09-18, found via a real GitHub Actions test
 # run): a rediss:// URL (TLS, used by Upstash's free tier) makes Celery's

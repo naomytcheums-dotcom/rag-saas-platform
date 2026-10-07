@@ -806,6 +806,7 @@ class Settings(BaseSettings):
     SENTENCE_TRANSFORMERS_DIMENSIONS: int = 384
     SENTENCE_TRANSFORMERS_DEVICE: str = "cpu"
     SENTENCE_TRANSFORMERS_BATCH_SIZE: int = 32
+    EMBEDDER_WARMUP_ON_STARTUP: bool = True
 
     HF_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     HF_EMBEDDING_DIMENSIONS: int = 384

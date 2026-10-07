@@ -147,6 +147,7 @@ import json
 import logging
 import os
 import tempfile
+import threading
 import uuid
 import zipfile
 from pathlib import Path
@@ -335,6 +336,7 @@ def _get_progress_redis() -> redis_asyncio.Redis:
 # given model downloads its weights from HuggingFace Hub if not
 # already cached), far too slow to repeat per document.
 _EMBEDDER_CACHE: dict[str, object] = {}
+_EMBEDDER_LOCK = threading.Lock()
 
 
 def get_embedder(model_name: str):
@@ -347,12 +349,37 @@ def get_embedder(model_name: str):
     `api.services.embedding_providers`'s own real
     `get_sentence_transformer_model`/`get_hf_model` rather than a
     second, duplicate model cache."""
-    if model_name not in _EMBEDDER_CACHE:
-        os.environ.setdefault("USE_TF", "0")
-        from sentence_transformers import SentenceTransformer
+    embedder = _EMBEDDER_CACHE.get(model_name)
+    if embedder is not None:
+        return embedder
+    # A request racing the startup warm-up waits for that load instead of starting a second one.
+    with _EMBEDDER_LOCK:
+        if model_name not in _EMBEDDER_CACHE:
+            os.environ.setdefault("USE_TF", "0")
+            from sentence_transformers import SentenceTransformer
 
-        _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name)
+            _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name)
     return _EMBEDDER_CACHE[model_name]
+
+
+def start_embedder_warmup(model_name: str | None = None) -> threading.Thread | None:
+    """Load the default local embedder in the background so the first upload/search does not pay its cold start."""
+    if not settings.EMBEDDER_WARMUP_ON_STARTUP:
+        return None
+    from api.services.embedding_config import resolve_embedding_model
+
+    selected_model = model_name or resolve_embedding_model()
+
+    def _warm() -> None:
+        try:
+            get_embedder(selected_model)
+            logger.info("embedding model warmed up: %s", selected_model)
+        except Exception:  # noqa: BLE001 -- the first real request will load it and report its own error
+            logger.warning("embedding model warm-up failed for %s", selected_model, exc_info=True)
+
+    thread = threading.Thread(target=_warm, name="embedder-warmup", daemon=True)
+    thread.start()
+    return thread
 
 
 def chunk_text(tokenizer, text: str, chunk_size: int, overlap: int) -> list[str]:

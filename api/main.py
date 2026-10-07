@@ -47,6 +47,7 @@ from api.routers import (
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
 )
+from api.security.documents import start_embedder_warmup
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.services.cache_service import is_redis_reachable as is_cache_redis_reachable
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
     # unless OTEL_ENABLED is set (see api/security/tracing.py's own
     # docstring for why that's the honest default in this environment).
     setup_tracing(app)
+    start_embedder_warmup()
 
     async def _poll_jwt_key_cache() -> None:
         while True:
