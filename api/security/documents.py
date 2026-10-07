@@ -672,6 +672,9 @@ async def soft_delete_document(db: AsyncSession, document_id: uuid.UUID, deleted
     document.deleted_at = dt.datetime.now(dt.timezone.utc)
     document.deleted_by = deleted_by
     await db.flush()
+    from api.services.retrieval_pipeline import invalidate_bm25_index_cache
+
+    invalidate_bm25_index_cache(document.organization_id, db)
     await log_document_action(db, document.id, deleted_by, ACTION_DELETED)
     return document
 
@@ -720,6 +723,9 @@ async def permanent_delete_document(db: AsyncSession, document_id: uuid.UUID) ->
 
     await db.execute(delete(Document).where(Document.id == document_id))
     await db.flush()
+    from api.services.retrieval_pipeline import invalidate_bm25_index_cache
+
+    invalidate_bm25_index_cache(organization_id, db)
     delete_document_file(file_key)  # best-effort, same as the existing soft DELETE route's own real S3 cleanup
 
 
@@ -3746,5 +3752,8 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
     )
 
     await db.flush()
+    from api.services.retrieval_pipeline import invalidate_bm25_index_cache
+
+    invalidate_bm25_index_cache(document.organization_id, db)
     await send_progress_update(document.id, _PROGRESS_BY_STATUS[document.status], document.status)
     return document

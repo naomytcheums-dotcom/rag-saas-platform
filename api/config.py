@@ -994,6 +994,7 @@ class Settings(BaseSettings):
     # RATE_LIMIT_ENABLED: the fast SQLite test suite doesn't need Redis
     # and isn't accidentally coupled to cache state between tests.
     APP_CACHE_ENABLED: bool = True
+    BM25_INDEX_CACHE_ENABLED: bool = True
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
 

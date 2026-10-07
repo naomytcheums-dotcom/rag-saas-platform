@@ -31,6 +31,48 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-07 — Cache d'index BM25 par organisation
+
+- Probleme : reconstruction et rechargement du corpus a chaque recherche BM25.
+  Reprise des modifications non committes existantes avec accord utilisateur.
+- Changement : LRU en memoire du processus, limite a 16 index filtres;
+  `BM25_INDEX_CACHE_ENABLED=True` par defaut. Cle par organisation, moteur DB,
+  revision transactionnelle, filtres metadata/document_ids et kill switch
+  metadata. Un index filtre conserve les memes IDF/scores que sans cache.
+- Invalidation : ajouts, suppressions, remplacement/reindexation, contenus,
+  metadata, presence d'embedding, suppression douce/restauration et champs de
+  citation des documents/medias. Migration nouvelle `0133`, autorisee par
+  l'utilisateur : revision sur organizations et triggers PostgreSQL par
+  statement, donc ingestion Celery/autre processus prise en compte. Equivalents
+  SQLite installes par create_all. Aucune migration existante modifiee.
+- Transactions : pas de publication/reutilisation partagee apres ecriture dans
+  la session; rollback/savepoints couverts. Revision relue avant publication pour
+  refuser un corpus construit pendant un commit concurrent. Copies des metadata
+  retournees pour proteger l'index des mutations par les appelants.
+- Benchmark : `.venv\Scripts\python.exe scripts\retrieval_benchmark.py --docs 1000
+  --queries 20 --concurrency 1 --force-large --memory --json`, cache false puis
+  true, meme seed; SQLite en RAM, 5 000 chunks, pas PostgreSQL ni 50 000 chunks.
+  BM25 p50 133.0 -> 10.0 ms (13.3x), p95 323.2 -> 15.6 ms,
+  p99 345.4 -> 365.2 ms (construction froide incluse), moyenne 162.2 -> 28.1 ms,
+  debit 6.16 -> 35.54 req/s. Hybrid p50 1012.0 -> 891.7 ms,
+  p95 1230.4 -> 1035.2 ms, debit 0.92 -> 1.11 req/s.
+  Recall source@10 = 1.0 et zero erreur pour chaque strategie des deux runs.
+  RSS apres corpus : 245 MB dans les deux cas; apres requetes : 354 -> 399 MB
+  (mesure finale du processus, pas une certification du pic memoire).
+- Tests : 133 passes en 416.70 s : `test_bm25_index_cache`,
+  `test_retrieval_performance_paths`, `test_retrieval_pipeline`,
+  `test_metadata_filtering`, `test_reindex`,
+  `test_permanent_delete_document_graphrag_cleanup`. Rejeu final cache/performance
+  avec les cas supplementaires commit concurrent/savepoint/kill switch/isolation :
+  27 passes en 16.36 s. Ruff cible OK; generation SQL Alembic upgrade
+  `0132:0133 --sql` et downgrade `0133:0132 --sql` OK.
+- Limite : round-trip PostgreSQL reel non valide (Docker local non repondant);
+  migration non appliquee. Appliquer/verifier 0133 avant de deployer ce code.
+  Aucun acces a la base du dotenv; URLs DB/Redis volontairement injoignables,
+  credentials modele/Resend explicitement vides, TEMP/TMP sur D:.
+- Decision : commit local uniquement sur `bob/auto-fix-20261003-191324`, sans
+  push ni force. `scripts/pending/` conserve intact et exclu du commit.
+
 ### [Bob-Auto-Fixes] — 2026-10-04 — Staging navigateur et IDOR A/B
 
 - Backend local connecte au pooler Supabase staging confirme, readiness OK.

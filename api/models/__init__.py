@@ -45,6 +45,7 @@ from api.models.conversation_share import ConversationShare
 from api.models.custom_domain import CustomDomain
 from api.models.custom_tool import CustomTool
 from api.models.document import Document, DocumentAuditLog, DocumentChunk, DocumentTag, DocumentTagAssignment, DocumentVersion
+import api.models.bm25_revision  # noqa: F401 -- registers SQLite corpus revision triggers
 from api.models.document_image import DocumentImage
 from api.models.encryption_audit import EncryptionAudit, EncryptionKeyRecord
 from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection

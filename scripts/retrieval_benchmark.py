@@ -34,6 +34,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
@@ -168,7 +169,7 @@ async def main_async(args) -> dict:
             entry["skipped"] = f"{chunks} chunks exceeds --max-chunks={args.max_chunks} (the portable path loads every chunk per query); rerun with --force-large on a machine with enough RAM"
             report["corpora"].append(entry)
             continue
-        with tempfile.TemporaryDirectory(prefix="rag-bench-") as workdir:
+        with (nullcontext(None) if args.memory else tempfile.TemporaryDirectory(prefix="rag-bench-")) as workdir:
             started = time.perf_counter()
             corpus = await _build_corpus(MEMORY_DB if args.memory else str(Path(workdir) / "bench.db"), documents, args.seed)
             entry["build_seconds"] = round(time.perf_counter() - started, 1)

@@ -49,19 +49,26 @@ dependency this module deliberately does not need, and its own
 codebase has no equivalent of)."""
 
 import asyncio
+import copy
 import functools
+import json
 import logging
 import os
 import re
+import threading
+from collections import OrderedDict
 
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sqlalchemy import or_, select, text
+from sqlalchemy import event, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect as sqlalchemy_inspect
+from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings as app_settings
 from api.models.document import Document, DocumentChunk
 from api.models.media import MediaAsset
+from api.models.organization import Organization
 from api.models.retrieval_diagnostic import RetrievalDiagnostic
 from api.security.documents import generate_embeddings
 from api.services.embedding_config import resolve_embedding_model
@@ -88,6 +95,94 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 _RERANKER_CACHE: dict[str, object] = {}
+_BM25_INDEX_CACHE_MAX_ENTRIES = 16
+_BM25_INDEX_CACHE: OrderedDict[tuple, tuple[tuple[dict, ...], BM25Okapi | None]] = OrderedDict()
+_BM25_INDEX_CACHE_GENERATION = 0
+_BM25_INDEX_CACHE_LOCK = threading.RLock()
+
+
+def _evict_bm25_organization(organization_key: str) -> None:
+    global _BM25_INDEX_CACHE_GENERATION
+    with _BM25_INDEX_CACHE_LOCK:
+        _BM25_INDEX_CACHE_GENERATION += 1
+        for key in [key for key in _BM25_INDEX_CACHE if key[0] == organization_key]:
+            del _BM25_INDEX_CACHE[key]
+
+
+def invalidate_bm25_index_cache(organization_id, db: AsyncSession | SyncSession | None = None) -> None:
+    """Evict an organization's indexes now and again after its transaction commits."""
+    organization_key = str(organization_id)
+    _evict_bm25_organization(organization_key)
+    if db is not None:
+        sync_session = db.sync_session if isinstance(db, AsyncSession) else db
+        sync_session.info.setdefault("bm25_cache_orgs_after_commit", set()).add(organization_key)
+
+
+@event.listens_for(SyncSession, "after_commit")
+def _invalidate_bm25_after_commit(session: SyncSession) -> None:
+    if session.in_nested_transaction():
+        return
+    session.info.pop("bm25_cache_writes", None)
+    for organization_key in session.info.pop("bm25_cache_orgs_after_commit", set()):
+        _evict_bm25_organization(organization_key)
+
+
+@event.listens_for(SyncSession, "after_rollback")
+def _clear_bm25_pending_invalidations(session: SyncSession) -> None:
+    if session.in_nested_transaction():
+        return
+    session.info.pop("bm25_cache_writes", None)
+    for organization_key in session.info.pop("bm25_cache_orgs_after_commit", set()):
+        _evict_bm25_organization(organization_key)
+
+
+@event.listens_for(SyncSession, "do_orm_execute")
+def _track_bm25_bulk_writes(state) -> None:
+    if state.is_insert or state.is_update or state.is_delete:
+        state.session.info["bm25_cache_writes"] = True
+
+
+@event.listens_for(SyncSession, "before_flush")
+def _invalidate_bm25_for_orm_changes(session: SyncSession, flush_context, instances) -> None:
+    if session.new or session.dirty or session.deleted:
+        session.info["bm25_cache_writes"] = True
+    changed_organizations: set[str] = set()
+    for item in (*session.new, *session.deleted, *session.dirty):
+        if isinstance(item, (DocumentChunk, Document, MediaAsset)):
+            changed_organizations.add(str(item.organization_id))
+            changed_organizations.update(
+                str(value) for value in sqlalchemy_inspect(item).attrs.organization_id.history.deleted
+            )
+    for organization_key in changed_organizations:
+        invalidate_bm25_index_cache(organization_key, session)
+
+
+def _bm25_cache_key(db: AsyncSession, organization_id, revision: int, metadata_filters: dict | None, document_ids: list | None) -> tuple:
+    metadata_enabled = app_settings.METADATA_FILTERING_ENABLED
+    metadata_key = json.dumps(metadata_filters or {}, sort_keys=True, separators=(",", ":")) if metadata_enabled else ""
+    document_key = tuple(sorted({str(document_id) for document_id in document_ids or []}))
+    return str(organization_id), db.get_bind(), revision, metadata_key, document_key, metadata_enabled
+
+
+def _get_bm25_cache_entry(key: tuple) -> tuple[tuple[tuple[dict, ...], BM25Okapi | None] | None, int]:
+    with _BM25_INDEX_CACHE_LOCK:
+        generation = _BM25_INDEX_CACHE_GENERATION
+        for stale in [old for old in _BM25_INDEX_CACHE if old[:2] == key[:2] and old[2] != key[2]]:
+            del _BM25_INDEX_CACHE[stale]
+        entry = _BM25_INDEX_CACHE.get(key)
+        if entry is not None:
+            _BM25_INDEX_CACHE.move_to_end(key)
+        return entry, generation
+
+
+def _store_bm25_cache_entry(key: tuple, generation: int, chunks: tuple[dict, ...], bm25: BM25Okapi | None) -> None:
+    with _BM25_INDEX_CACHE_LOCK:
+        if _BM25_INDEX_CACHE_GENERATION != generation:
+            return
+        _BM25_INDEX_CACHE[key] = (chunks, bm25)
+        _BM25_INDEX_CACHE.move_to_end(key)
+        while len(_BM25_INDEX_CACHE) > _BM25_INDEX_CACHE_MAX_ENTRIES:
+            _BM25_INDEX_CACHE.popitem(last=False)
 
 
 def _tokenize(text: str) -> list[str]:
@@ -534,34 +629,69 @@ async def bm25_search(
     db: AsyncSession, organization_id, query: str, top_k: int | None = None, org_settings: dict | None = None,
     metadata_filters: dict | None = None, document_ids: list | None = None,
 ) -> list[dict]:
-    """Item 2's own literal function -- real, sparse keyword search
-    over this organization's own real chunk text, via a real, freshly
-    built `BM25Okapi` index (no persistent BM25 index exists yet -- a
-    real, honest, documented scope limit; see this module's own top
-    docstring for why an ANN/persistent index is real, deferred future
-    work, not silently skipped). Same real "explicit top_k bypasses
-    the bound" fix as `vector_search` above.
+    """Keyword search with a process-local, bounded LRU of filtered indexes.
 
-    Phase 4, Étape 3 -- `metadata_filters`, when given, is applied by
-    `fetch_organization_chunks` itself, BEFORE the real `BM25Okapi`
-    index is even built: an excluded real chunk's own real text can
-    never contribute to a real BM25 score, let alone be returned."""
+    Database triggers advance each tenant's corpus revision transactionally,
+    including ingestion in other workers. Each filter gets its own index:
+    excluded chunks must not affect BM25's IDF or average document length.
+    """
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
-    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids, with_embeddings=False)
+    cache_enabled = app_settings.BM25_INDEX_CACHE_ENABLED
+    cache_key = None
+    if cache_enabled:
+        await db.flush()
+        # Never publish or reuse uncommitted corpora in another session.
+        if not db.sync_session.info.get("bm25_cache_writes"):
+            revision = await db.scalar(
+                select(Organization.bm25_corpus_revision).where(Organization.id == organization_id)
+            )
+            if revision is not None:
+                cache_key = _bm25_cache_key(db, organization_id, revision, metadata_filters, document_ids)
+    cached_entry, generation = _get_bm25_cache_entry(cache_key) if cache_key is not None else (None, 0)
+
+    async def publish_index(index: BM25Okapi | None) -> None:
+        if cache_key is None or db.sync_session.info.get("bm25_cache_writes"):
+            return
+        # READ COMMITTED may see a writer commit between revision and corpus
+        # reads. Do not publish that corpus under an older revision.
+        current_revision = await db.scalar(
+            select(Organization.bm25_corpus_revision).where(Organization.id == organization_id)
+        )
+        if current_revision == cache_key[2]:
+            _store_bm25_cache_entry(cache_key, generation, chunks, index)
+
+    if cached_entry is None:
+        fetched = await fetch_organization_chunks(
+            db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids, with_embeddings=False,
+        )
+        chunks = tuple(fetched)
+        bm25 = None
+    else:
+        chunks, bm25 = cached_entry
     if not chunks:
+        if cache_key is not None and cached_entry is None:
+            await publish_index(None)
         return []
 
-    # Building the index and scoring is pure CPU (~O(total text)); run inline it blocks the
-    # event loop for every other request in the process (measured: concurrent BM25 queries
-    # got NO throughput gain). Off-loaded to the default executor so the loop stays responsive.
-    def _rank() -> list[tuple[int, float]]:
-        bm25 = BM25Okapi([_tokenize(c["content"]) for c in chunks])
-        scores = bm25.get_scores(_tokenize(query))
+    query_tokens = _tokenize(query)
+
+    def _score(index: BM25Okapi) -> list[tuple[int, float]]:
+        scores = index.get_scores(query_tokens)
         order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
         return [(i, float(scores[i])) for i in order]
 
-    ranked = await asyncio.get_running_loop().run_in_executor(None, _rank)
-    return [{**chunks[i], "score": score} for i, score in ranked]
+    loop = asyncio.get_running_loop()
+    if bm25 is None:
+        def _build_and_score() -> tuple[BM25Okapi, list[tuple[int, float]]]:
+            index = BM25Okapi([_tokenize(chunk["content"]) for chunk in chunks])
+            return index, _score(index)
+
+        bm25, ranked = await loop.run_in_executor(None, _build_and_score)
+        if cache_key is not None:
+            await publish_index(bm25)
+    else:
+        ranked = await loop.run_in_executor(None, _score, bm25)
+    return [{**copy.deepcopy(chunks[i]), "score": score} for i, score in ranked]
 
 
 def reciprocal_rank_fusion(ranked_id_lists: list[list[str]], k: int = 60) -> dict[str, float]:

@@ -130,6 +130,9 @@ async def delete_media(db: AsyncSession, media_asset_id: uuid.UUID) -> None:
         delete_document_file(frame.file_key)
     delete_document_file(asset.file_key)
     await db.delete(asset)  # cascades transcripts/frames/chunks (FK ondelete=CASCADE)
+    from api.services.retrieval_pipeline import invalidate_bm25_index_cache
+
+    invalidate_bm25_index_cache(asset.organization_id, db)
 
 
 async def get_transcript(db: AsyncSession, media_asset_id: uuid.UUID) -> MediaTranscript | None:
@@ -372,6 +375,9 @@ async def index_media_in_rag(db: AsyncSession, asset: MediaAsset) -> int:
             texts_and_sources.append((frame.description, "media_frame_description"))
 
     await db.execute(delete(DocumentChunk).where(DocumentChunk.media_asset_id == asset.id))
+    from api.services.retrieval_pipeline import invalidate_bm25_index_cache
+
+    invalidate_bm25_index_cache(asset.organization_id, db)
     if not texts_and_sources:
         return 0
 
