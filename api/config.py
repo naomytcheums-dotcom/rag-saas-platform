@@ -995,6 +995,13 @@ class Settings(BaseSettings):
     # and isn't accidentally coupled to cache state between tests.
     APP_CACHE_ENABLED: bool = True
     BM25_INDEX_CACHE_ENABLED: bool = True
+
+    CLAMAV_ENABLED: bool = False
+    CLAMAV_SOCKET_PATH: str | None = None
+    CLAMAV_HOST: str | None = None
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: int = 30
+    CLAMAV_REQUIRED: bool = False
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
 

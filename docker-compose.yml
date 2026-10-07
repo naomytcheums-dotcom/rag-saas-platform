@@ -18,5 +18,14 @@ services:
       # from scratch instead of reusing what's already built.
       - chroma-data:/app/data/chroma
 
+  # Optional antivirus for document uploads: `docker compose --profile antivirus up`, then CLAMAV_ENABLED=true, CLAMAV_HOST=clamav.
+  # Not started by default and reachable only from the compose network (no port published on the host).
+  clamav:
+    image: clamav/clamav:latest
+    profiles: ["antivirus"]
+    volumes:
+      - clamav-data:/var/lib/clamav
+
 volumes:
   chroma-data:
+  clamav-data:

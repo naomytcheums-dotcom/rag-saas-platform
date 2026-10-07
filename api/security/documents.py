@@ -272,6 +272,7 @@ from api.services.document_storage import (
     upload_document_file,
     validate_document_upload,
 )
+from api.services.clamav import ascan_document_for_malware
 from api.config import settings
 
 _TEMP_FILE_SUFFIXES = {
@@ -604,6 +605,8 @@ async def upload_document(
     as api/security/custom_domains.py's schedule_domain_verification).
     """
     content_type = validate_document_upload(content, filename)
+    if settings.CLAMAV_ENABLED:
+        await ascan_document_for_malware(filename, content)
     content_hash = compute_content_hash(content)
 
     if workspace_id is not None:
