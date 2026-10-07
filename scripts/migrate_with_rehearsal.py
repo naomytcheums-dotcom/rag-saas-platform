@@ -38,7 +38,11 @@ def _offline_sql(current: str) -> str:
     )
     if result.returncode != 0:
         raise SystemExit(f"Could not generate the migration SQL offline:\n{result.stderr[-1500:]}")
-    return "\n".join(line for line in result.stdout.splitlines() if line.strip() not in TRANSACTION_MARKERS)
+    # Alembic's own log lines ("INFO  [alembic.runtime.migration] ...") may share stdout with the SQL: they are not SQL.
+    return "\n".join(
+        line for line in result.stdout.splitlines()
+        if line.strip() not in TRANSACTION_MARKERS and not re.match(r"^(INFO|WARNING|DEBUG|ERROR)\s+\[|^\[[A-Z_]+\]", line)
+    )
 
 
 async def _revision_of(conn, organization_id) -> int:
@@ -87,6 +91,12 @@ async def _rehearse(url: str) -> tuple[bool, str]:
                     failures.append(f"each write must bump the revision by exactly 1, got {steps}")
         except Exception as exc:  # noqa: BLE001 -- any error means the rehearsal failed
             failures.append(f"{type(exc).__name__}: {str(exc)[:300]}")
+            position = getattr(exc, "position", None)
+            if position and str(position).isdigit():
+                at = int(position) - 1
+                failures.append(f"near this SQL: ...{sql[max(0, at - 160):at]}<<HERE>>{sql[at:at + 80]}...")
+            elif getattr(exc, "query", None):
+                failures.append(f"statement: {str(exc.query)[:300]}")
         finally:
             await tr.rollback()
         still = await conn.fetchval("select count(*) from information_schema.columns where table_name='organizations' and column_name='bm25_corpus_revision'")
