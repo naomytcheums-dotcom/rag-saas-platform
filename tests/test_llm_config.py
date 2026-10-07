@@ -242,7 +242,7 @@ def test_resolve_llm_config_applies_a_real_tight_budget():
     """Validation criterion: a real, tight budget selects the real,
     cheaper candidate for this organization's own configured provider."""
     config = resolve_llm_config({"llm_provider": "anthropic", "cost_budget_per_request": 0.005})
-    assert config["model"] == "claude-3-haiku-20240307"
+    assert config["model"] == "claude-haiku-4-5-20251001"
 
 
 def test_resolve_llm_config_respects_an_explicit_model_override_over_the_budget():

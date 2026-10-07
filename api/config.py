@@ -655,12 +655,12 @@ class Settings(BaseSettings):
     # missing key surfaces as a real LLMAuthenticationError at CALL
     # time, not a crash at startup.
     LLM_DEFAULT_PROVIDER: str = "anthropic"
-    LLM_DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
+    LLM_DEFAULT_MODEL: str = "claude-sonnet-5-5"
     LLM_TIMEOUT: int = 60
     LLM_MAX_RETRIES: int = 3
 
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MODEL: str = "claude-sonnet-5-5"
     ANTHROPIC_MAX_TOKENS: int = 4096
     ANTHROPIC_TEMPERATURE: float = 0.7
 
@@ -1587,6 +1587,10 @@ class Settings(BaseSettings):
         # real, historical public price list as 3.5 Sonnet).
         "claude-3-sonnet": {"input": 3.0, "output": 15.0},
         "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        # Current default models. $/M tokens as published in the LiteLLM price map of the installed version (2026-10-07), not guessed:
+        # a model with no entry here makes cost-aware routing do nothing for it.
+        "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
+        "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
         "gpt-4o": {"input": 5.0, "output": 15.0},
         "gemini-1.5-pro": {"input": 3.50, "output": 10.50},

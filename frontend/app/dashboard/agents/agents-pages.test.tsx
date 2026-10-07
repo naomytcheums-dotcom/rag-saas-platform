@@ -109,7 +109,7 @@ describe("New agent page contract", () => {
     const [url, payload] = post.mock.calls[0] as [string, Record<string, unknown>];
     expect(url).toBe("/organizations/org-1/agents");
     expect(payload.tools).toEqual([{ name: "search_knowledge_base", enabled: true, config: {} }]);
-    expect(payload.model_config).toEqual({ model: "claude-3-5-sonnet", temperature: 0.7 });
+    expect(payload.model_config).toEqual({ model: "claude-sonnet-5-5", temperature: 0.7 });
     expect(payload).not.toHaveProperty("max_iterations");
     expect(payload).not.toHaveProperty("model");
     expect(get).toHaveBeenCalledWith("/tools/available");

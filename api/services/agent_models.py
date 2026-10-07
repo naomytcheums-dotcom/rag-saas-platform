@@ -20,7 +20,7 @@ from api.services.llm_providers import PROVIDER_SETTINGS
 # Item 3's own literal 9 models, grouped by the SAME real provider keys
 # `llm_providers.PROVIDER_SETTINGS` already uses ("google" -> "gemini").
 MODEL_CATALOG: dict[str, list[str]] = {
-    "anthropic": ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
+    "anthropic": ["claude-sonnet-5-5", "claude-haiku-4-5-20251001"],
     "openai": ["gpt-4o", "gpt-4o-mini"],
     "gemini": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],

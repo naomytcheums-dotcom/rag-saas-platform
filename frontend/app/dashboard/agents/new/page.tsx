@@ -8,7 +8,7 @@ import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useTranslation } from "@/lib/i18n";
 
 const MODELS = [
-  { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
+  { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
   { value: "gpt-4o", label: "GPT-4o" },
   { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
   { value: "mistral-large", label: "Mistral Large" },
@@ -27,7 +27,7 @@ export default function NewAgentPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [model, setModel] = useState("claude-3-5-sonnet");
+  const [model, setModel] = useState("claude-sonnet-5-5");
   const [temperature, setTemperature] = useState(0.7);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [availableTools, setAvailableTools] = useState<string[]>([]);

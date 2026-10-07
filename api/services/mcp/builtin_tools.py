@@ -71,7 +71,7 @@ async def create_rag_agent(
     agent = Agent(
         organization_id=organization_id,
         name=name.strip(),
-        model_config_json={"model": model or "claude-3-5-sonnet"},
+        model_config_json={"model": model or "claude-sonnet-5-5"},
         system_prompt=system_prompt or "You are a helpful assistant.",
         knowledge_base_config=validated_config,
         created_by=created_by,
