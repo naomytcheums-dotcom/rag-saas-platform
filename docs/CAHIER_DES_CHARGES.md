@@ -3869,6 +3869,8 @@ detail complet, y compris un vrai selecteur de langue cree au passage
 qui appelait reellement `setLanguage()` avant ce correctif n'existait
 pas.
 
+Audit réel de la seconde vague exécuté le 2026-10-07 : les éléments déjà vérifiés dans le code sont comptabilisés sans sur-estimer la maturité produit, et les 6 livrables de seconde vague sont suivis comme une liste de travail distincte du reste du projet.
+
 ## Reste à faire
 
 Éléments encore non commencés dans l'inventaire au 2026-10-07 :
