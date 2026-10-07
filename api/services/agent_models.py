@@ -22,7 +22,7 @@ from api.services.llm_providers import PROVIDER_SETTINGS
 MODEL_CATALOG: dict[str, list[str]] = {
     "anthropic": ["claude-sonnet-5-5", "claude-haiku-4-5-20251001"],
     "openai": ["gpt-4o", "gpt-4o-mini"],
-    "gemini": ["gemini-1.5-pro", "gemini-1.5-flash"],
+    "gemini": ["gemini-2.5-pro", "gemini-2.5-flash"],
     "mistral": ["mistral-large-latest", "mistral-small-latest"],
     "ollama": ["llama3.1"],
 }

@@ -153,12 +153,24 @@ def get_default_provider(org_settings: dict | None = None) -> str:
     return settings.LLM_DEFAULT_PROVIDER
 
 
+# LiteLLM only infers the provider from bare names for OpenAI/Anthropic; the catalog offers bare names for these providers too.
+LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama/"}
+
+
+def to_litellm_model(provider: str, model: str) -> str:
+    """The model string actually sent to LiteLLM: `gemini-2.5-pro` becomes `gemini/gemini-2.5-pro`; already-prefixed names are kept."""
+    prefix = LITELLM_PROVIDER_PREFIXES.get(provider)
+    if prefix and not model.startswith(prefix):
+        return f"{prefix}{model}"
+    return model
+
+
 def _provider_kwargs(provider: str, model: str | None) -> dict:
     if provider not in PROVIDER_SETTINGS:
         raise LLMProviderError(f"Unknown LLM provider: {provider!r} (expected one of {sorted(PROVIDER_SETTINGS)})")
 
     config = PROVIDER_SETTINGS[provider]
-    resolved_model = model or getattr(settings, config["model"])
+    resolved_model = to_litellm_model(provider, model or getattr(settings, config["model"]))
     api_key = getattr(settings, config["api_key"]) if config["api_key"] else None
 
     if provider not in _NO_KEY_REQUIRED and not api_key:

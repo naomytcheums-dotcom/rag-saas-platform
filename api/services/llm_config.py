@@ -192,7 +192,7 @@ def resolve_cost_budget_per_request(org_settings: dict | None = None, override: 
 _COST_AWARE_CANDIDATES = {
     "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-5-5"],
     "openai": ["gpt-4o-mini", "gpt-4o"],
-    "gemini": ["gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
+    "gemini": ["gemini/gemini-2.5-flash", "gemini/gemini-2.5-pro"],
     "mistral": ["mistral/mistral-small-latest", "mistral/mistral-large-latest"],
 }
 

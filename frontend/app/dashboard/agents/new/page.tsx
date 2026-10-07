@@ -10,8 +10,8 @@ import { useTranslation } from "@/lib/i18n";
 const MODELS = [
   { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
   { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-  { value: "mistral-large", label: "Mistral Large" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "mistral-large-latest", label: "Mistral Large" },
 ];
 
 // The tool catalog comes from the backend (GET /tools/available -- the exact

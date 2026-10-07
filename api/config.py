@@ -674,7 +674,7 @@ class Settings(BaseSettings):
     # "gemini/" -- baked into the real default itself rather than a
     # separate real prefixing function.
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini/gemini-1.5-pro"
+    GEMINI_MODEL: str = "gemini/gemini-2.5-pro"
     GEMINI_MAX_TOKENS: int = 4096
     GEMINI_TEMPERATURE: float = 0.7
 
@@ -1593,11 +1593,14 @@ class Settings(BaseSettings):
         "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
         "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-        "gpt-4o": {"input": 5.0, "output": 15.0},
+        "gpt-4o": {"input": 2.50, "output": 10.0},
+        "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
+        "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+        # Retired models: values kept from the previous table (absent from the LiteLLM map) so already-recorded results stay priced.
         "gemini-1.5-pro": {"input": 3.50, "output": 10.50},
         "gemini-1.5-flash": {"input": 0.35, "output": 1.05},
-        "mistral-large": {"input": 2.0, "output": 6.0},
-        "mistral-small": {"input": 0.20, "output": 0.60},
+        "mistral-large": {"input": 0.50, "output": 1.50},
+        "mistral-small": {"input": 0.15, "output": 0.60},
     })
     COST_DEFAULT_CURRENCY: str = "USD"
 
