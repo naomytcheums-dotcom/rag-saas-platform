@@ -90,8 +90,16 @@ def main() -> int:
         events, text, error, citations = [], "", None, 0
         with http.stream("POST", "/chat/stream", headers=headers, json={"agent_id": agent_id, "message": QUESTION}) as stream:
             status_code = stream.status_code
+            # Standard SSE as the server, the frontend (lib/useRealChat.ts) and the JS SDK speak it: the event type is on the
+            # `event:` line, the payload on `data:` (`token` events carry {"token": ...}; `citation` events carry the passage).
+            sse_event = None
             for line in stream.iter_lines():
+                if line.startswith("event:"):
+                    sse_event = line[6:].strip()
+                    continue
                 if not line.startswith("data:"):
+                    if not line:
+                        sse_event = None
                     continue
                 payload = line[5:].strip()
                 if payload in ("", "[DONE]"):
@@ -100,9 +108,10 @@ def main() -> int:
                     event = json.loads(payload)
                 except ValueError:
                     continue
-                kind = event.get("type") or event.get("event") or "chunk"
+                kind = sse_event or event.get("type") or event.get("event") or "chunk"
                 events.append(kind)
-                text += str(event.get("content") or event.get("text") or event.get("delta") or "")
+                if kind in ("token", "chunk"):
+                    text += str(event.get("token") or event.get("content") or event.get("text") or event.get("delta") or "")
                 if kind == "error" or event.get("error"):
                     error = str(event.get("error") or event.get("message") or event)[:300]
                 citations += len(event.get("citations") or []) if isinstance(event.get("citations"), list) else (1 if kind == "citation" else 0)
