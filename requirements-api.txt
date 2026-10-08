@@ -437,7 +437,7 @@ pygments==2.21.0
 # above). `anthropic` (already a real dependency of requirements.txt,
 # the RAG pipeline's own src/generation.py) is likewise not needed here
 # for the same real reason.
-litellm==1.99.0
+litellm==1.104.0
 
 # -- Tests (tests/test_auth_*.py) ---------------------------------------------
 aiosqlite==0.22.1
