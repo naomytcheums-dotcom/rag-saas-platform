@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Citation, ConversationMessage } from "@/lib/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 export interface ChatMessage extends Pick<ConversationMessage, "id" | "role" | "content" | "created_at"> {
   citations?: Citation[];
 }
@@ -19,16 +17,10 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("access_token");
-}
-
 /** Real backend-backed chat, replacing the local-only mock
- * (lib/mockChat.ts) now that login is actually wired up. Uses
- * POST /chat/stream directly (not the native EventSource, which can't
- * send the Authorization header this API requires) and parses the SSE
- * wire format by hand: `event: <type>\ndata: <json>\n\n`. */
+ * (lib/mockChat.ts) now that login is actually wired up. Uses the
+ * authenticated fetch helper because native EventSource cannot send the
+ * Authorization header, then parses the SSE wire format by hand. */
 export function useRealChat(orgId: string) {
   const [agentId, setAgentId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -85,11 +77,9 @@ export function useRealChat(orgId: string) {
       abortControllerRef.current = controller;
 
       try {
-        const token = getAccessToken();
-        const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+        const response = await api.fetchRaw("/chat/stream", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ agent_id: agentId, message: text, conversation_id: conversationId }),
           signal: controller.signal,
         });

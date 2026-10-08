@@ -136,7 +136,20 @@ async function requestMultipart<T>(path: string, method: string, fields: Record<
   return (await response.json()) as T;
 }
 
+async function fetchRaw(path: string, init?: RequestInit, _retried = false): Promise<Response> {
+  const token = getAccessToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: "include" });
+  if (response.status === 401 && !_retried && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (await refreshAccessToken()) return fetchRaw(path, init, true);
+  }
+  return response;
+}
+
 export const api = {
+  fetchRaw,
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: body !== undefined ? JSON.stringify(body) : undefined }),
