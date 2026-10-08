@@ -179,7 +179,7 @@ export function PricingSection() {
   return (
     <section id="pricing" className="relative px-6 py-24">
       <ArtWindow y={2640} height={1100}><SwooshLayer /></ArtWindow>
-      <div className="relative mx-auto flex max-w-[1200px] flex-col items-center gap-[45px]">
+      <div className="relative mx-auto flex max-w-[1280px] flex-col items-center gap-[45px]">
         <div className="flex max-w-[780px] flex-col items-center gap-5 text-center">
           <Heading>{t("lp.pricing.title1")}<br />{t("lp.pricing.title2")}</Heading>
           <p className="text-[20px] leading-6 text-[#d9d9d9]">{t("lp.pricing.subtitle")}</p>
@@ -209,13 +209,11 @@ export function PricingSection() {
         ) : !plans ? (
           <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="h-80 animate-pulse rounded-[20px] bg-[#1b1b1c]" />)}</div>
         ) : (
-          <div className="flex w-full flex-col items-stretch gap-5 lg:flex-row lg:items-center lg:gap-0">
+          <div className="grid w-full grid-cols-1 items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
             {plans.map((plan, index) => {
               const highlighted = plan.key === "pro";
               const showYearly = yearly && plan.yearly_price_cents > 0;
               const saving = yearlySavingPercent(plan);
-              const first = index === 0;
-              const last = index === plans.length - 1;
               const lines = [
                 t("lp.pricing.documents", { n: plan.max_documents ?? t("lp.pricing.unlimited") }),
                 t("lp.pricing.agents", { n: plan.max_agents ?? t("lp.pricing.unlimited") }),
@@ -226,18 +224,15 @@ export function PricingSection() {
               ];
               const cents = showYearly ? plan.yearly_price_cents : plan.monthly_price_cents;
               return (
-                <Reveal key={plan.id} className="flex w-full flex-1 lg:items-center" delay={index * 120}>
+                <Reveal key={plan.id} className="flex" delay={index * 120}>
                 <div
-                  className={`flex w-full flex-1 flex-col items-center gap-[35px] bg-[#1b1b1c] px-[30px] py-[20px] transition-transform duration-300 hover:-translate-y-1.5 ${
-                    highlighted
-                      ? "relative z-10 rounded-[20px] border-[3px] border-[#ff7044] lg:-my-8 lg:py-[44px]"
-                      : `border border-white/10 rounded-[20px] ${first ? "lg:rounded-r-none" : last ? "lg:rounded-l-none" : "lg:rounded-none"}`
-                  }`}
-                >
-                  <div className="flex w-full flex-col items-start gap-6 px-8">
+                  className={`flex w-full flex-col items-center gap-[30px] rounded-[20px] bg-[#1b1b1c] px-6 py-8 transition-transform duration-300 hover:-translate-y-1.5 ${
+                    highlighted ? "relative z-10 border-[3px] border-[#ff7044]" : "border border-white/10"
+                  }`}>
+                  <div className="flex w-full flex-col items-start gap-5">
                     <p className={highlighted ? "text-[30px] text-[#ff541f]" : "text-[18px] text-white"}>{plan.name}</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[40px] font-bold tracking-[-1.6px] text-white">
+                      <span className="whitespace-nowrap text-[32px] font-bold tracking-[-1px] text-white">
                         {cents === 0 ? t("lp.pricing.free") : formatEuroCents(cents, currency, language)}
                       </span>
                       {plan.monthly_price_cents > 0 && <span className="text-[16px] text-white/75">{showYearly ? t("lp.pricing.per_year") : t("lp.pricing.per_month")}</span>}
@@ -245,7 +240,7 @@ export function PricingSection() {
                     </div>
                   </div>
                   <div className="h-px w-full bg-gradient-to-r from-white/0 via-white/20 to-white/0" />
-                  <div className="flex w-full flex-1 flex-col items-start gap-[15px] px-8">
+                  <div className="flex w-full flex-1 flex-col items-start gap-[15px]">
                     <p className="text-[16px] text-white/75">{t("lp.pricing.included")}</p>
                     <ul className="flex w-full flex-col gap-[14px]">
                       {lines.map((line) => (

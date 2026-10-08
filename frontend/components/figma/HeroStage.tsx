@@ -6,6 +6,17 @@ import LanguageMenu from "@/components/LanguageMenu";
 import { useTranslation } from "@/lib/i18n";
 import Stage from "./Stage";
 
+const img2B9Gp2GJnBjBx44Yovd3HRxqiXmPng = "/landing/figma/img2B9Gp2GJnBjBx44Yovd3HRxqiXmPng.png";
+const img38I07RfLj4Dxjrqz7YxCanY6KoPng = "/landing/figma/img38I07RfLj4Dxjrqz7YxCanY6KoPng.png";
+const imgB9Rol6BhEmArgbWauFiEj7UzzjyPng = "/landing/figma/imgB9Rol6BhEmArgbWauFiEj7UzzjyPng.png";
+const imgImage1 = "/landing/figma/imgImage1.svg";
+const imgImage2 = "/landing/figma/imgImage2.svg";
+const imgImage3 = "/landing/figma/imgImage3.svg";
+const imgLFzmQ3NzC3Lg6Q2C7LvBf8KwPng = "/landing/figma/imgLFzmQ3NzC3Lg6Q2C7LvBf8KwPng.png";
+const imgMEibgBqwotHj35YaPhM5LjuLc2UPng = "/landing/figma/imgMEibgBqwotHj35YaPhM5LjuLc2UPng.png";
+const imgSvg = "/landing/figma/imgSvg.svg";
+const imgSvg1 = "/landing/figma/imgSvg1.svg";
+const imgSvg2 = "/landing/figma/imgSvg2.svg";
 const imgImage = "/landing/figma/imgImage.png";
 const imgImage85 = "/landing/figma/imgImage85.png";
 const imgLine64 = "/landing/figma/imgLine64.svg";
@@ -88,7 +99,107 @@ export default function HeroStage() {
           </div>
         </div>
         <div className="absolute content-stretch flex flex-col gap-[27px] items-center left-[217px] top-[210.26px] w-[1005px]" data-node-id="1:51" data-name="HeroSection-Content">
-          <p style={{ "--reveal-delay": "0ms" } as React.CSSProperties} className="hero-rise text-center text-[17px] font-normal leading-[22px] tracking-[-0.36px] text-[rgba(255,255,255,0.65)]" data-node-id="1:106">{t("landing.hero.badge")}</p>
+          <div className="content-stretch flex gap-[13.196px] items-center px-[23.564px] py-[15.081px] relative shrink-0" data-node-id="1:52">
+            <div className="h-[45.326px] relative shrink-0 w-[151.841px]" data-node-id="1:53" data-name="Container">
+              <div className="absolute inset-[2.27px_111.05px_2.27px_0] overflow-clip rounded-[1132.008px]" data-node-id="1:54" data-name="Container">
+                <div className="absolute inset-0 rounded-[1132.008px]" data-node-id="1:55" data-name="mEIBGBqwotHJ35YaPhM5ljuLc2U.png">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[1132.008px]">
+                    <img alt="" className="absolute left-0 max-w-none size-full top-0" src={imgMEibgBqwotHj35YaPhM5LjuLc2UPng} />
+                  </div>
+                </div>
+                <div className="absolute border-[1.133px] border-[rgba(255,255,255,0.1)] border-solid inset-0 rounded-[1132.008px]" data-node-id="1:56" data-name="Border" />
+              </div>
+              <div className="absolute inset-[2.27px_83.85px_2.27px_27.2px] overflow-clip rounded-[1132.008px]" data-node-id="1:57" data-name="Container">
+                <div className="absolute inset-0 rounded-[1132.008px]" data-node-id="1:58" data-name="2B9gp2gJnBjBX44Yovd3HRxqiXM.png">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[1132.008px]">
+                    <img alt="" className="absolute left-0 max-w-none size-full top-0" src={img2B9Gp2GJnBjBx44Yovd3HRxqiXmPng} />
+                  </div>
+                </div>
+                <div className="absolute border-[1.133px] border-[rgba(255,255,255,0.1)] border-solid inset-0 rounded-[1132.008px]" data-node-id="1:59" data-name="Border" />
+              </div>
+              <div className="absolute inset-[2.27px_56.65px_2.27px_54.39px] overflow-clip rounded-[1132.008px]" data-node-id="1:60" data-name="Container">
+                <div className="absolute inset-0 rounded-[1132.008px]" data-node-id="1:61" data-name="B9ROL6BhEMArgbWauFiEj7UZZJY.png">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[1132.008px]">
+                    <img alt="" className="absolute left-0 max-w-none size-full top-0" src={imgB9Rol6BhEmArgbWauFiEj7UzzjyPng} />
+                  </div>
+                </div>
+                <div className="absolute border-[1.133px] border-[rgba(255,255,255,0.1)] border-solid inset-0 rounded-[1132.008px]" data-node-id="1:62" data-name="Border" />
+              </div>
+              <div className="absolute inset-[2.27px_27.2px_2.27px_83.85px] overflow-clip rounded-[1132.008px]" data-node-id="1:63" data-name="Container">
+                <div className="absolute inset-0 rounded-[1132.008px]" data-node-id="1:64" data-name="lFzmQ3NzC3LG6q2c7lvBf8kw.png">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[1132.008px]">
+                    <img alt="" className="absolute left-0 max-w-none size-full top-0" src={imgLFzmQ3NzC3Lg6Q2C7LvBf8KwPng} />
+                  </div>
+                </div>
+                <div className="absolute border-[1.133px] border-[rgba(255,255,255,0.1)] border-solid inset-0 rounded-[1132.008px]" data-node-id="1:65" data-name="Border" />
+              </div>
+              <div className="absolute inset-[2.27px_0_2.27px_111.05px] overflow-clip rounded-[1132.008px]" data-node-id="1:66" data-name="Container">
+                <div className="absolute inset-0 rounded-[1132.008px]" data-node-id="1:67" data-name="38I07rfLJ4DXJRQZ7YXCanY6ko.png">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[1132.008px]">
+                    <img alt="" className="absolute left-0 max-w-none size-full top-0" src={img38I07RfLj4Dxjrqz7YxCanY6KoPng} />
+                  </div>
+                </div>
+                <div className="absolute border-[1.133px] border-[rgba(255,255,255,0.1)] border-solid inset-0 rounded-[1132.008px]" data-node-id="1:68" data-name="Border" />
+              </div>
+            </div>
+            <div className="h-[42.142px] overflow-clip relative shrink-0 w-[440px]" data-node-id="1:69" data-name="Container">
+              <div className="hidden absolute h-[15.864px] left-0 overflow-clip top-0 w-[83.852px]" data-node-id="1:70" data-name="Container">
+                <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:71" data-name="Image">
+                  <div className="absolute left-0 overflow-clip size-[15.864px] top-0" data-node-id="1:72" data-name="image fill">
+                    <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:73" data-name="image">
+                      <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgImage1} />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute inset-[0_67.99px_0_0]" data-node-id="1:75" data-name="SVG">
+                  <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgSvg} />
+                </div>
+                <div className="absolute left-[17px] size-[15.864px] top-0" data-node-id="1:78" data-name="Image">
+                  <div className="absolute left-0 overflow-clip size-[15.864px] top-0" data-node-id="1:79" data-name="image fill">
+                    <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:80" data-name="image">
+                      <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgImage2} />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute inset-[0_50.99px_0_17px]" data-node-id="1:82" data-name="SVG">
+                  <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgSvg1} />
+                </div>
+                <div className="absolute left-[33.99px] size-[15.864px] top-0" data-node-id="1:85" data-name="Image">
+                  <div className="absolute left-0 overflow-clip size-[15.864px] top-0" data-node-id="1:86" data-name="image fill">
+                    <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:87" data-name="image">
+                      <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgImage1} />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute inset-[0_34px_0_33.99px]" data-node-id="1:89" data-name="SVG">
+                  <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgSvg} />
+                </div>
+                <div className="absolute left-[50.99px] size-[15.864px] top-0" data-node-id="1:92" data-name="Image">
+                  <div className="absolute left-0 overflow-clip size-[15.864px] top-0" data-node-id="1:93" data-name="image fill">
+                    <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:94" data-name="image">
+                      <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgImage1} />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute inset-[0_17px_0_50.99px]" data-node-id="1:96" data-name="SVG">
+                  <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgSvg} />
+                </div>
+                <div className="absolute left-[67.99px] size-[15.864px] top-0" data-node-id="1:99" data-name="Image">
+                  <div className="absolute left-0 overflow-clip size-[15.864px] top-0" data-node-id="1:100" data-name="image fill">
+                    <div className="absolute left-0 size-[15.864px] top-0" data-node-id="1:101" data-name="image">
+                      <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgImage3} />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute inset-[0_0_0_67.99px]" data-node-id="1:103" data-name="SVG">
+                  <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgSvg2} />
+                </div>
+              </div>
+              <p className="[word-break:break-word] absolute font-normal h-auto leading-[21.756px] left-0 not-italic text-[16.855px] text-[rgba(255,255,255,0.65)] top-[11px] tracking-[-0.3626px] w-auto whitespace-nowrap" data-node-id="1:106">
+{t("landing.hero.badge")}
+</p>
+            </div>
+          </div>
           <p style={{ "--reveal-delay": "120ms" } as React.CSSProperties} className="hero-rise [word-break:break-word] font-bold leading-[0] min-w-full not-italic relative shrink-0 text-[72px] text-center text-white w-[min-content]" data-node-id="1:107">
 <span className="leading-[80px]">{headline.first}{" "}</span>
 <span className="leading-[80px] text-[#ff541f]">{headline.accent}</span>
