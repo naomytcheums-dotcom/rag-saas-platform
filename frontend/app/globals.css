@@ -91,3 +91,37 @@ body {
 /* Google Translate widget removed (product decision: use the real,
    first-party LanguageSelector instead, no external translation
    script, no Google banner). */
+
+/*
+ * The Figma artwork is drawn on a 1440px-wide stage. On wider screens its left and right edges used to stop abruptly against the flat page
+ * colour; they now fade into it, so there is no visible seam at the borders of the page.
+ */
+@media (min-width: 1441px) {
+  .stage-fade {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  }
+}
+
+/* Entrance and hover animations (disabled for visitors who ask for reduced motion). */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.5; }
+}
+.reveal { opacity: 0; }
+.reveal.is-visible { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--reveal-delay, 0ms); }
+.hero-rise { animation: rise-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--reveal-delay, 0ms); }
+.float-soft { animation: float-soft 6s ease-in-out infinite; }
+.glow-pulse { animation: glow-pulse 3.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; }
+  .reveal.is-visible, .hero-rise, .float-soft, .glow-pulse { animation: none; }
+}

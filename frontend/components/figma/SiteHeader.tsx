@@ -23,7 +23,7 @@ export default function SiteHeader() {
         ))}
       </nav>
       <div className="flex items-center gap-3">
-        <LanguageMenu tone="dark" />
+        <LanguageMenu />
         <Link href="/login" className="rounded-[10px] bg-[#ff541f] px-[26px] py-[12px] text-[18px] font-bold leading-[19.2px] text-white transition-opacity hover:opacity-90">{t("landing.login")}</Link>
       </div>
     </header>

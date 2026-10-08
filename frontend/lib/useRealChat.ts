@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { Citation, ConversationMessage } from "@/lib/types";
 
 export interface ChatMessage extends Pick<ConversationMessage, "id" | "role" | "content" | "created_at"> {
@@ -22,6 +23,7 @@ function nowIso(): string {
  * authenticated fetch helper because native EventSource cannot send the
  * Authorization header, then parses the SSE wire format by hand. */
 export function useRealChat(orgId: string) {
+  const { t } = useTranslation();
   const [agentId, setAgentId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,7 +40,7 @@ export function useRealChat(orgId: string) {
         const agents = await api.get<AgentSummary[]>(`/organizations/${orgId}/agents`);
         const agent = agents[0];
         if (!agent) {
-          setError("Aucun agent n'existe encore pour cette organisation. Créez-en un dans Agents.");
+          setError(t("chat.err_no_agent"));
           return;
         }
         setAgentId(agent.id);
@@ -58,10 +60,10 @@ export function useRealChat(orgId: string) {
       } catch (err) {
          
         console.error("useRealChat init failed:", err);
-        setError("Impossible de charger la conversation.");
+        setError(t("chat.err_load"));
       }
     })();
-  }, [orgId]);
+  }, [orgId, t]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -116,20 +118,20 @@ export function useRealChat(orgId: string) {
               });
               setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, citations: [...citations] } : m)));
             } else if (type === "error") {
-              setError(data.error || "Une erreur est survenue.");
+              setError(data.error || t("chat.err_generic"));
             }
           }
         }
       } catch (err) {
         if (!(err instanceof DOMException && err.name === "AbortError")) {
-          setError("La connexion au serveur de chat a échoué.");
+          setError(t("chat.err_connection"));
         }
       } finally {
         setPending(false);
         abortControllerRef.current = null;
       }
     },
-    [agentId, conversationId, pending],
+    [agentId, conversationId, pending, t],
   );
 
   const stopGeneration = useCallback(() => {

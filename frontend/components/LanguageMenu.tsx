@@ -1,6 +1,5 @@
 "use client";
 
-import { ChevronDown, Globe } from "lucide-react";
 import { DE, ES, FR, GB, PT, SA } from "country-flag-icons/react/3x2";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useTranslation } from "@/lib/i18n";
@@ -14,8 +13,8 @@ const LANGUAGES: { code: string; name: string; Flag: ComponentType<{ className?:
   { code: "ar", name: "العربية", Flag: SA },
 ];
 
-/** Language switcher: a globe, the current flag, and a list of the six interface languages, each with its country flag. */
-export default function LanguageMenu({ tone = "light" }: { tone?: "light" | "dark" }) {
+/** Language switcher: just the current flag; a click on it opens the list of the six interface languages, each with its country flag. */
+export default function LanguageMenu() {
   const { language, setLanguage } = useTranslation();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -32,7 +31,6 @@ export default function LanguageMenu({ tone = "light" }: { tone?: "light" | "dar
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
   }, [open]);
 
-  const dark = tone === "dark";
   return (
     <div ref={root} className="relative">
       <button
@@ -41,13 +39,10 @@ export default function LanguageMenu({ tone = "light" }: { tone?: "light" | "dar
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={current.name}
-        className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${
-          dark ? "border-white/25 text-white hover:bg-white/10" : "border-border text-foreground hover:bg-surface-muted"
-        }`}
+        title={current.name}
+        className="block rounded-[3px] outline-offset-4 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ff541f]"
       >
-        <Globe className="h-4 w-4" aria-hidden />
-        <current.Flag className="h-3.5 w-5 rounded-[2px]" aria-hidden />
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+        <current.Flag className="h-4 w-6 rounded-[3px] shadow-[0_0_0_1px_rgba(128,128,128,0.35)]" aria-hidden />
       </button>
       {open && (
         <ul role="listbox" className="absolute right-0 top-full z-[60] mt-2 w-48 overflow-hidden rounded-lg border border-border bg-surface p-1 text-foreground shadow-md">

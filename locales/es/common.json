@@ -910,5 +910,9 @@
   "lp.faq.4.a": "Un agente responde a tus preguntas a partir de tus documentos. Un agente autónomo planifica y ejecuta tareas por sí solo, con herramientas, memoria y límites. Un flujo encadena llamadas LLM, herramientas, condiciones y aprobaciones humanas. El laboratorio de evaluación mide después la calidad de las respuestas.",
   "lp.faq.5.q": "¿El producto gestiona varias organizaciones y roles?",
   "lp.faq.5.a": "Sí: organizaciones multiinquilino, roles Propietario/Admin/Manager/Miembro/Lector, roles personalizados con permisos precisos y marca blanca para ofrecer la plataforma con tu propia marca.",
-  "lp.footer.rates": "Tipos de cambio:"
+  "lp.footer.rates": "Tipos de cambio:",
+  "chat.err_no_agent": "Todavía no hay ningún agente en esta organización. Crea uno en Agentes.",
+  "chat.err_load": "No se pudo cargar la conversación.",
+  "chat.err_generic": "Se ha producido un error.",
+  "chat.err_connection": "Falló la conexión con el servidor de chat."
 }

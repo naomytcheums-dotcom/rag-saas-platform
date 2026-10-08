@@ -910,5 +910,9 @@
   "lp.faq.4.a": "Ein Agent beantwortet Fragen aus Ihren Dokumenten. Ein autonomer Agent plant und führt Aufgaben selbstständig aus, mit Werkzeugen, Gedächtnis und Leitplanken. Ein Workflow verkettet LLM-Aufrufe, Werkzeuge, Bedingungen und menschliche Freigaben. Das Evaluierungslabor misst anschließend die Antwortqualität.",
   "lp.faq.5.q": "Verwaltet das Produkt mehrere Organisationen und Rollen?",
   "lp.faq.5.a": "Ja: mandantenfähige Organisationen, Rollen Eigentümer/Admin/Manager/Mitglied/Leser, eigene Rollen mit präzisen Berechtigungen und White-Label, um die Plattform unter Ihrer Marke anzubieten.",
-  "lp.footer.rates": "Wechselkurse:"
+  "lp.footer.rates": "Wechselkurse:",
+  "chat.err_no_agent": "Für diese Organisation gibt es noch keinen Agenten. Erstellen Sie einen unter Agenten.",
+  "chat.err_load": "Die Unterhaltung konnte nicht geladen werden.",
+  "chat.err_generic": "Es ist ein Fehler aufgetreten.",
+  "chat.err_connection": "Die Verbindung zum Chat-Server ist fehlgeschlagen."
 }

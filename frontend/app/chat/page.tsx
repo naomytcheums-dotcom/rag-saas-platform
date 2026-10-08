@@ -92,27 +92,10 @@ export default function Home() {
               </div>
             )}
 
-            {messages.length <= 2 && (
-              <div>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">{t("chat.suggested_questions")}</h2>
-                <div className="flex flex-wrap gap-2">
-                  {STARTER_QUESTIONS.map((question) => (
-                    <button
-                      key={question}
-                      type="button"
-                      onClick={() => sendMessage(question)}
-                      className="rounded-full border border-border-strong bg-surface px-3 py-1.5 text-sm text-foreground hover:border-accent hover:bg-accent-soft"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </main>
 
-        <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} />
+        <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} suggestions={messages.length <= 2 ? STARTER_QUESTIONS : []} />
       </div>
     </div>
   );

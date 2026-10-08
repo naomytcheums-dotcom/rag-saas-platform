@@ -5,8 +5,10 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { EURO, formatEuroCents, useDisplayCurrency } from "@/lib/currency";
+import { formatEuroCents, useDisplayCurrency } from "@/lib/currency";
 import { useTranslation } from "@/lib/i18n";
+import Reveal from "./Reveal";
+import SocialLinks from "./SocialLinks";
 import { FaqShapesLayer, ParticlesLayer, SwooshLayer } from "./artwork";
 
 const ORANGE = "#ff541f";
@@ -17,13 +19,13 @@ const TICK_FILLED = "/landing/figma/imgVuesaxLinearTickCircle1.svg";
 export function ArtWindow({ y, height, children }: { y: number; height: number; children: ReactNode }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 overflow-hidden" style={{ height }} aria-hidden>
-      <div className="absolute left-1/2 w-[1440px] -translate-x-1/2" style={{ top: -y, height: 5610 }}>{children}</div>
+      <div className="stage-fade absolute left-1/2 w-[1440px] -translate-x-1/2" style={{ top: -y, height: 5610 }}>{children}</div>
     </div>
   );
 }
 
 function Heading({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <h2 className={`text-4xl font-bold leading-[1.1] text-white md:text-[56px] ${className}`}>{children}</h2>;
+  return <Reveal><h2 className={`text-4xl font-bold leading-[1.1] text-white md:text-[56px] ${className}`}>{children}</h2></Reveal>;
 }
 
 function Accent({ text }: { text: string }) {
@@ -58,11 +60,11 @@ export function FeaturesSection() {
         <Heading className="max-w-[860px]"><Accent text={t("landing.features.title")} /></Heading>
         <p className="mt-5 max-w-[661px] text-[18px] leading-[21.6px] text-white/85">{t("landing.features.subtitle")}</p>
         <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-12">
-          {BENTO.map(({ key, href, span, glow }) => (
+          {BENTO.map(({ key, href, span, glow }, index) => (
+            <Reveal key={key} className={span} delay={(index % 2) * 120}>
             <Link
-              key={key}
               href={href}
-              className={`group relative block h-[199px] overflow-hidden rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] ${span}`}
+              className="group relative block h-[199px] overflow-hidden rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[rgba(255,84,31,0.6)] hover:shadow-[0_18px_40px_rgba(255,84,31,0.18)]"
             >
               {glow && <span aria-hidden className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-[rgba(255,84,31,0.38)]" />}
               <p className="absolute left-5 top-[19px] w-[min(380px,72%)] text-[18px] leading-[19.2px] text-[rgba(217,217,217,0.85)]">{t(`landing.features.${key}.desc`)}</p>
@@ -71,6 +73,7 @@ export function FeaturesSection() {
               </span>
               <p className="absolute bottom-[26px] left-5 whitespace-nowrap text-[28px] leading-[40.8px] text-white md:text-[34px]">{t(`landing.features.${key}.title`)}</p>
             </Link>
+            </Reveal>
           ))}
         </div>
         <ul className="mt-10 flex flex-wrap gap-3">
@@ -96,14 +99,16 @@ function InfoCards({ id, title, subtitle, items, columns }: { id?: string; title
         <Heading className="text-center">{title}</Heading>
         <p className="mx-auto mt-5 max-w-[780px] text-center text-[20px] leading-[28px] text-[#d9d9d9]">{subtitle}</p>
         <div className={`mt-14 grid grid-cols-1 gap-5 ${columns}`}>
-          {items.map((item) => (
-            <div key={item.title} className="flex items-start gap-4 rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] p-6">
+          {items.map((item, index) => (
+            <Reveal key={item.title} delay={(index % 3) * 100}>
+            <div className="flex h-full items-start gap-4 rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[rgba(255,84,31,0.5)]">
               <img src={TICK_FILLED} alt="" className="mt-0.5 h-6 w-6 shrink-0" />
               <div>
                 <p className="text-[20px] text-white">{item.title}</p>
                 <p className="mt-2 text-[16px] leading-6 text-white/75">{item.description}</p>
               </div>
             </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -147,7 +152,7 @@ function yearlySavingPercent(plan: Plan): number {
 function GlowButton({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link href={href} className="relative inline-block rounded-[10px]">
-      <span aria-hidden className="absolute -inset-[10px] rounded-[10px] bg-[#ff541f] opacity-20 mix-blend-screen blur-[10px]" />
+      <span aria-hidden className="glow-pulse absolute -inset-[10px] rounded-[10px] bg-[#ff541f] opacity-20 mix-blend-screen blur-[10px]" />
       <span className="relative flex items-center gap-3 rounded-[10px] border border-white bg-black/50 px-5 py-2.5 text-[18px] text-white backdrop-blur-[10px]">
         {children}
         <img src="/landing/figma/imgChevronRight.svg" alt="" className="h-6 w-6" />
@@ -220,11 +225,10 @@ export function PricingSection() {
                 ...(plan.sla ? [t("lp.pricing.sla")] : []),
               ];
               const cents = showYearly ? plan.yearly_price_cents : plan.monthly_price_cents;
-              const local = currency.code !== "EUR" && cents > 0;
               return (
+                <Reveal key={plan.id} className="flex w-full flex-1 lg:items-center" delay={index * 120}>
                 <div
-                  key={plan.id}
-                  className={`flex w-full flex-1 flex-col items-center gap-[35px] bg-[#1b1b1c] px-[30px] py-[20px] ${
+                  className={`flex w-full flex-1 flex-col items-center gap-[35px] bg-[#1b1b1c] px-[30px] py-[20px] transition-transform duration-300 hover:-translate-y-1.5 ${
                     highlighted
                       ? "relative z-10 rounded-[20px] border-[3px] border-[#ff7044] lg:-my-8 lg:py-[44px]"
                       : `border border-white/10 rounded-[20px] ${first ? "lg:rounded-r-none" : last ? "lg:rounded-l-none" : "lg:rounded-none"}`
@@ -239,7 +243,6 @@ export function PricingSection() {
                       {plan.monthly_price_cents > 0 && <span className="text-[16px] text-white/75">{showYearly ? t("lp.pricing.per_year") : t("lp.pricing.per_month")}</span>}
                       {showYearly && saving > 0 && <span className="rounded-[24px] bg-[#ff541f] px-2 py-[5px] text-[12px] leading-[14px] text-white">-{saving}%</span>}
                     </div>
-                    {local && <p className="-mt-3 text-[14px] text-white/60">{t("lp.pricing.billed_in", { price: formatEuroCents(cents, EURO, language) })}</p>}
                   </div>
                   <div className="h-px w-full bg-gradient-to-r from-white/0 via-white/20 to-white/0" />
                   <div className="flex w-full flex-1 flex-col items-start gap-[15px] px-8">
@@ -255,6 +258,7 @@ export function PricingSection() {
                   </div>
                   <GlowButton href="/register">{t("lp.pricing.choose", { plan: plan.name })}</GlowButton>
                 </div>
+                </Reveal>
               );
             })}
           </div>
@@ -282,13 +286,15 @@ export function FaqSection() {
           {items.map((item, index) => {
             const isOpen = open === index;
             return (
-              <div key={item.question} className="w-full border-b-[1.2px] border-white/10 p-6">
+              <Reveal key={item.question} delay={index * 70}>
+              <div className="w-full border-b-[1.2px] border-white/10 p-6">
                 <button type="button" onClick={() => setOpen(isOpen ? null : index)} aria-expanded={isOpen} className="flex w-full items-start justify-between gap-6 text-left">
                   <span className="text-[20px] leading-[28.6px] text-white">{item.question}</span>
                   <img src="/landing/figma/imgArrowDown.svg" alt="" className={`h-7 w-7 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </button>
-                {isOpen && <p className="mt-6 text-[18px] leading-6 tracking-[-0.06px] text-[#919191]">{item.answer}</p>}
+                {isOpen && <p className="hero-rise mt-6 text-[18px] leading-6 tracking-[-0.06px] text-[#919191]">{item.answer}</p>}
               </div>
+              </Reveal>
             );
           })}
         </div>
@@ -303,14 +309,14 @@ export function CtaSection() {
   const { t } = useTranslation();
   return (
     <section className="relative px-6 pb-24 pt-8 text-center">
-      <div className="relative mx-auto max-w-[900px] rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] px-8 py-16">
+      <Reveal className="relative mx-auto max-w-[900px] rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.2)] bg-[rgba(39,40,41,0.7)] px-8 py-16">
         <span aria-hidden className="absolute inset-0 rounded-[20px] bg-gradient-to-br from-transparent via-transparent to-[rgba(255,84,31,0.38)]" />
         <div className="relative">
           <h2 className="text-4xl font-bold leading-[1.1] text-white md:text-[48px]">{t("landing.cta_bottom.title")}</h2>
           <p className="mx-auto mt-4 max-w-[560px] text-[20px] leading-7 text-[#d9d9d9]">{t("landing.cta_bottom.subtitle")}</p>
           <Link href="/register" className="mt-9 inline-block rounded-[10px] bg-[#ff541f] px-[35px] py-[15px] text-[20px] font-bold leading-[19.2px] text-white transition-opacity hover:opacity-90">{t("landing.cta.start")}</Link>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -342,6 +348,7 @@ export function FooterSection() {
         <div className="col-span-2 sm:col-span-1">
           <span className="text-[22px] font-bold text-white">RAG SaaS Platform</span>
           <p className="mt-4 max-w-xs text-[16px] leading-6 text-white/75">{t("landing.footer.tagline")}</p>
+          <div className="mt-12"><SocialLinks /></div>
         </div>
         {columns.map((column) => (
           <div key={column.title}>

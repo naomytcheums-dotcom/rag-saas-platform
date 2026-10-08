@@ -21,7 +21,7 @@ export default function Stage({ width, height, children }: { width: number; heig
   }, [width]);
 
   return (
-    <div ref={outer} className="relative mx-auto w-full overflow-hidden" style={{ maxWidth: width, height: height * scale }}>
+    <div ref={outer} className="stage-fade relative mx-auto w-full overflow-hidden" style={{ maxWidth: width, height: height * scale }}>
       <div className="absolute left-0 top-0 origin-top-left" style={{ width, height, transform: `scale(${scale})` }}>
         {children}
       </div>
