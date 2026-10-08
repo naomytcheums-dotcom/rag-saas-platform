@@ -11,6 +11,7 @@ import { useCurrentOrg } from "@/lib/useCurrentOrg";
 
 interface DocumentRow { id: string; name: string; file_size: number | null; file_type: string | null; status: string; created_at: string }
 interface AgentRow { id: string; name: string; description: string | null; tools?: unknown[] | null; created_at?: string }
+interface OrgScopedValue<T> { orgId: string; value: T | null }
 
 const DONE_STATUSES = new Set(["completed", "ready", "indexed"]);
 
@@ -92,21 +93,49 @@ function Gauge({ percent }: { percent: number }) {
 function monthKey(date: Date): string { return `${date.getFullYear()}-${date.getMonth()}`; }
 
 export default function DashboardHome() {
+  const { org } = useCurrentOrg();
+  return <DashboardContent key={org?.id ?? ""} />;
+}
+
+function DashboardContent() {
   const { t, language } = useTranslation();
   const { user } = useAuth();
   const { org } = useCurrentOrg();
-  const [documents, setDocuments] = useState<DocumentRow[] | null>(null);
-  const [agents, setAgents] = useState<AgentRow[] | null>(null);
-  const [keysCount, setKeysCount] = useState<number | null>(null);
-  const [hooksCount, setHooksCount] = useState<number | null>(null);
+  const orgId = org?.id;
+  const [documentsState, setDocumentsState] = useState<OrgScopedValue<DocumentRow[]>>({ orgId: "", value: null });
+  const [agentsState, setAgentsState] = useState<OrgScopedValue<AgentRow[]>>({ orgId: "", value: null });
+  const [keysCountState, setKeysCountState] = useState<OrgScopedValue<number>>({ orgId: "", value: null });
+  const [hooksCountState, setHooksCountState] = useState<OrgScopedValue<number>>({ orgId: "", value: null });
+  const [errorsState, setErrorsState] = useState<OrgScopedValue<string[]>>({ orgId: "", value: [] });
+  const documents = documentsState.orgId === orgId ? documentsState.value : null;
+  const agents = agentsState.orgId === orgId ? agentsState.value : null;
+  const keysCount = keysCountState.orgId === orgId ? keysCountState.value : null;
+  const hooksCount = hooksCountState.orgId === orgId ? hooksCountState.value : null;
+  const errors = errorsState.orgId === orgId ? errorsState.value ?? [] : [];
 
   useEffect(() => {
-    if (!org) return;
-    void api.get<unknown>(`/organizations/${org.id}/documents`).then((data) => setDocuments(asList<DocumentRow>(data))).catch(() => setDocuments([]));
-    void api.get<unknown>(`/organizations/${org.id}/agents`).then((data) => setAgents(asList<AgentRow>(data))).catch(() => setAgents([]));
-    void api.get<unknown>(`/organizations/${org.id}/api-keys`).then((data) => setKeysCount(asList(data).length)).catch(() => setKeysCount(0));
-    void api.get<unknown>(`/organizations/${org.id}/webhooks`).then((data) => setHooksCount(asList(data).length)).catch(() => setHooksCount(0));
-  }, [org]);
+    if (!orgId) return;
+    let cancelled = false;
+    const reportError = (key: string) => {
+      if (!cancelled) setErrorsState((previous) => ({
+        orgId,
+        value: [...(previous.orgId === orgId ? previous.value ?? [] : []), key],
+      }));
+    };
+    void api.get<unknown>(`/organizations/${orgId}/documents`).then((data) => {
+      if (!cancelled) setDocumentsState({ orgId, value: asList<DocumentRow>(data) });
+    }).catch(() => reportError("documents.error_load"));
+    void api.get<unknown>(`/organizations/${orgId}/agents`).then((data) => {
+      if (!cancelled) setAgentsState({ orgId, value: asList<AgentRow>(data) });
+    }).catch(() => reportError("agents.error_load"));
+    void api.get<unknown>(`/organizations/${orgId}/api-keys`).then((data) => {
+      if (!cancelled) setKeysCountState({ orgId, value: asList(data).length });
+    }).catch(() => reportError("apikeys.error_load"));
+    void api.get<unknown>(`/organizations/${orgId}/webhooks`).then((data) => {
+      if (!cancelled) setHooksCountState({ orgId, value: asList(data).length });
+    }).catch(() => reportError("webhooks.error_load"));
+    return () => { cancelled = true; };
+  }, [orgId]);
 
   const displayName = (user?.email ?? "").split("@")[0];
   const docs = useMemo(() => documents ?? [], [documents]);
@@ -129,10 +158,10 @@ export default function DashboardHome() {
 
   const todo = [
     { href: "/dashboard/settings/organization", label: t("dash.todo.org"), done: Boolean(org) },
-    { href: "/dashboard/documents", label: t("dash.todo.docs"), done: docs.length > 0 },
-    { href: "/dashboard/agents/new", label: t("dash.todo.agent"), done: (agents ?? []).length > 0 },
-    { href: "/dashboard/settings/api-keys", label: t("dash.todo.key"), done: (keysCount ?? 0) > 0 },
-    { href: "/dashboard/settings/webhooks", label: t("dash.todo.hook"), done: (hooksCount ?? 0) > 0 },
+    { href: "/dashboard/documents", label: t("dash.todo.docs"), done: documents === null ? null : docs.length > 0 },
+    { href: "/dashboard/agents/new", label: t("dash.todo.agent"), done: agents === null ? null : agents.length > 0 },
+    { href: "/dashboard/settings/api-keys", label: t("dash.todo.key"), done: keysCount === null ? null : keysCount > 0 },
+    { href: "/dashboard/settings/webhooks", label: t("dash.todo.hook"), done: hooksCount === null ? null : hooksCount > 0 },
   ];
 
   const quick = [
@@ -152,6 +181,11 @@ export default function DashboardHome() {
     <div className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold tracking-tight text-[#211c37]">{t("dashboard.hello")} {displayName} <span aria-hidden>👋🏻</span></h1>
       <p className="mt-1 text-lg text-foreground-muted">{org?.name ? `${org.name} — ` : ""}{t("dash.subtitle")}</p>
+      {errors.length > 0 && (
+        <ul role="alert" className="mt-4 rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger">
+          {errors.map((key) => <li key={key}>{t(key)}</li>)}
+        </ul>
+      )}
 
       <div className="mt-7 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.7fr_0.8fr]">
         <Card title={t("dash.kb.title")}>
@@ -159,15 +193,21 @@ export default function DashboardHome() {
             <span className="grid h-9 w-9 place-items-center rounded-md bg-surface-muted text-foreground"><FileText className="h-5 w-5" aria-hidden /></span>
             <p className="mt-3 text-sm font-semibold text-foreground">{org?.name ?? "…"}</p>
             <div className="mt-3 flex items-center gap-3">
-              <div className="h-2 flex-1 rounded-full bg-foreground/5"><div className="h-2 rounded-full bg-accent" style={{ width: `${percent}%` }} /></div>
-              <span className="text-xs font-medium text-accent">{indexed}/{docs.length}</span>
+              {documents !== null && docs.length > 0 ? (
+                <>
+                  <div className="h-2 flex-1 rounded-full bg-foreground/5"><div className="h-2 rounded-full bg-accent" style={{ width: `${percent}%` }} /></div>
+                  <span className="text-xs font-medium text-accent">{indexed}/{docs.length}</span>
+                </>
+              ) : <span className="text-xs font-medium text-foreground-muted">—</span>}
             </div>
-            <p className="mt-2 text-xs text-foreground-muted">{docs.length ? t("dash.kb.indexed", { done: indexed, total: docs.length }) : t("dash.kb.empty")}</p>
+            <p className="mt-2 text-xs text-foreground-muted">
+              {documents === null ? "—" : docs.length ? t("dash.kb.indexed", { done: indexed, total: docs.length }) : t("dash.kb.empty")}
+            </p>
           </div>
         </Card>
 
         <Card title={t("dash.resources.title")} action={seeMore("/dashboard/documents")}>
-          {recentDocs.length === 0 ? (
+          {documents === null ? <p className="text-sm text-foreground-muted">—</p> : recentDocs.length === 0 ? (
             <Link href="/dashboard/documents" className="flex items-center gap-3 rounded-md bg-accent-soft px-4 py-3 text-sm font-medium text-accent">{t("dash.resources.upload")} →</Link>
           ) : (
             <ul className="flex flex-col gap-3">
@@ -197,20 +237,22 @@ export default function DashboardHome() {
         <Card title={t("dash.activity.title")}>
           <div className="mb-3 flex items-center gap-2 text-xs text-foreground-muted"><span className="h-2.5 w-2.5 rounded-sm bg-accent" aria-hidden />{t("dash.activity.legend")}</div>
           <div className="flex h-44 items-end justify-between gap-3 rounded-md border border-border px-5 pb-6 pt-4">
-            {activity.map((bar) => (
-              <div key={bar.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                <span className="text-[10px] text-foreground-muted">{bar.value}</span>
-                <div className="w-full max-w-[34px] rounded-t-md rounded-b-md bg-accent" style={{ height: `${Math.max(4, (bar.value / bar.max) * 100)}%` }} />
-                <span className="text-[10px] capitalize text-foreground-muted">{bar.label}</span>
-              </div>
-            ))}
+            {documents === null ? <span className="m-auto text-sm text-foreground-muted">—</span> : activity.map((bar) => (
+                <div key={bar.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                  <span className="text-[10px] text-foreground-muted">{bar.value}</span>
+                  <div className="w-full max-w-[34px] rounded-t-md rounded-b-md bg-accent" style={{ height: `${Math.max(4, (bar.value / bar.max) * 100)}%` }} />
+                  <span className="text-[10px] capitalize text-foreground-muted">{bar.label}</span>
+                </div>
+              ))}
           </div>
         </Card>
 
         <Card title={t("dash.health.title")}>
           <div className="rounded-md border border-border px-3 py-4">
-            <Gauge percent={percent} />
-            <p className="mt-1 text-center text-sm text-foreground-muted">{t("dash.health.label")} <strong className="text-foreground">{indexed}/{docs.length}</strong></p>
+            {documents !== null && docs.length > 0 ? <Gauge percent={percent} /> : <p className="py-10 text-center text-sm text-foreground-muted">—</p>}
+            <p className="mt-1 text-center text-sm text-foreground-muted">
+              {t("dash.health.label")} <strong className="text-foreground">{documents !== null && docs.length > 0 ? `${indexed}/${docs.length}` : "—"}</strong>
+            </p>
           </div>
         </Card>
 
@@ -219,8 +261,10 @@ export default function DashboardHome() {
             {todo.map((item) => (
               <li key={item.label}>
                 <Link href={item.href} className="flex items-center gap-3 py-3">
-                  <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-sm border ${item.done ? "border-accent bg-accent text-white" : "border-accent bg-accent-soft"}`}>{item.done && <Check className="h-3 w-3" aria-hidden />}</span>
-                  <span className={`text-sm text-foreground ${item.done ? "line-through opacity-60" : ""}`}>{item.label}</span>
+                  {item.done === null ? <span className="grid h-4 w-4 shrink-0 place-items-center text-xs text-foreground-muted">—</span> : (
+                    <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-sm border ${item.done ? "border-accent bg-accent text-white" : "border-accent bg-accent-soft"}`}>{item.done && <Check className="h-3 w-3" aria-hidden />}</span>
+                  )}
+                  <span className={`text-sm text-foreground ${item.done === true ? "line-through opacity-60" : ""}`}>{item.label}</span>
                 </Link>
               </li>
             ))}
@@ -230,7 +274,7 @@ export default function DashboardHome() {
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card title={t("dash.agents.title")} action={<Link href="/dashboard/agents" className="flex items-center gap-2 text-sm font-medium text-foreground-muted hover:text-accent">{t("dash.agents.all")} <Search className="h-4 w-4" aria-hidden /></Link>}>
-          {recentAgents.length === 0 ? (
+          {agents === null ? <p className="text-sm text-foreground-muted">—</p> : recentAgents.length === 0 ? (
             <Link href="/dashboard/agents/new" className="flex items-center gap-3 rounded-md bg-accent-soft px-4 py-3 text-sm font-medium text-accent">{t("dash.agents.empty")} — {t("dash.agents.create")} →</Link>
           ) : (
             <ul className="flex flex-col gap-3">

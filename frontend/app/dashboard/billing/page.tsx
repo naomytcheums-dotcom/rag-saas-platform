@@ -334,15 +334,18 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           <p className="text-sm text-foreground-muted">{t("billing.usage_empty")}</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {metrics.map(([metric, total]) => (
-              <div key={metric} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs font-medium uppercase text-foreground-muted">{metric.replace(/_/g, " ")}</p>
-                <p className="mt-1 text-xl font-semibold text-foreground">{total}</p>
-                {forecast?.projected_next_period[metric] !== undefined && (
-                  <p className="mt-1 text-xs text-foreground-muted">{t("billing.usage_projected", { value: forecast.projected_next_period[metric] ?? 0 })}</p>
-                )}
-              </div>
-            ))}
+            {metrics.map(([metric, total]) => {
+              const projected = forecast?.projected_next_period[metric];
+              return (
+                <div key={metric} className="rounded-xl border border-border bg-surface p-4">
+                  <p className="text-xs font-medium uppercase text-foreground-muted">{metric.replace(/_/g, " ")}</p>
+                  <p className="mt-1 text-xl font-semibold text-foreground">{total}</p>
+                  {projected !== undefined && (
+                    <p className="mt-1 text-xs text-foreground-muted">{t("billing.usage_projected", { value: projected })}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

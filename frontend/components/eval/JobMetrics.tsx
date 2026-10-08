@@ -12,15 +12,16 @@ function MetricCard({ label, value }: { label: string; value: string | number })
 }
 
 export function JobMetrics({ job }: { job: EvalJob }) {
-  const failed = job.results?.failed_questions ?? 0;
-  const succeeded = job.total_questions - failed;
+  const failed = job.results?.failed_questions;
+  const completed = job.results?.completed_questions;
+  const succeeded = failed === undefined || completed === undefined ? undefined : completed - failed;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <MetricCard label="Status" value={job.status} />
       <MetricCard label="Progress" value={`${job.progress}%`} />
-      <MetricCard label="Succeeded" value={succeeded} />
-      <MetricCard label="Failed" value={failed} />
+      <MetricCard label="Succeeded" value={succeeded ?? "—"} />
+      <MetricCard label="Failed" value={failed ?? "—"} />
     </div>
   );
 }

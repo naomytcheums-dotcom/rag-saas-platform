@@ -342,7 +342,7 @@ function TwoFactorSection({ enabled, onChanged, onError }: { enabled: boolean; o
           <h2 className="text-sm font-semibold text-foreground">{t("profile.2fa_heading")}</h2>
           <p className="mt-1 text-xs text-foreground-muted">
             {enabled
-              ? t("profile.2fa_enabled_desc", { remaining: status?.remaining ?? 0, total: status?.total ?? 0 })
+              ? t("profile.2fa_enabled_desc", { remaining: status?.remaining ?? "—", total: status?.total ?? "—" })
               : t("profile.2fa_disabled_desc")}
           </p>
         </div>

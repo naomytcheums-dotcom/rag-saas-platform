@@ -67,7 +67,7 @@ export function BusinessMetrics({ dateRange }: BusinessMetricsProps) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard label="Customer lifetime value" value={data.ltv?.ltv_cents !== null ? formatCents(data.ltv?.ltv_cents) : "Not enough data yet"} />
-        <MetricCard label="Active customers" value={data.customers?.active_customers ?? "—"} hint={`${data.customers?.total_customers ?? 0} total`} />
+        <MetricCard label="Active customers" value={data.customers?.active_customers ?? "—"} hint={`${data.customers?.total_customers ?? "—"} total`} />
       </div>
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-xs font-medium uppercase text-foreground-muted">Revenue trend</h2>
