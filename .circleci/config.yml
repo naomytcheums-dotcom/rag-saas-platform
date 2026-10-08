@@ -49,12 +49,15 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rag_saas_test
       - image: cimg/redis:7.4
-      # Docker Hub's minio/minio:latest now returns "access denied" for
-      # anonymous pulls (MinIO gated most of its Docker Hub tags in 2024).
-      # quay.io/minio/minio is MinIO's own mirror and stays publicly
-      # pullable -- same image, same server binary and CLI.
-      - image: quay.io/minio/minio:latest
-        command: ["server", "/data"]
+      # MinIO no longer publishes a pullable community image: Docker Hub's minio/minio and
+      # quay.io/minio/minio both answer "unauthorized" to anonymous pulls (that is what made this job
+      # fail at "Spin up environment" before any test ran). bitnamilegacy/minio is still public and
+      # speaks the same S3 API on port 9000; the root user/password below match S3_ACCESS_KEY_ID /
+      # S3_SECRET_ACCESS_KEY, throwaway CI-only values.
+      - image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+        environment:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
     environment:
       # CI-only values -- never real secrets, this is a throwaway
       # Postgres/Redis/MinIO stack that only exists for this job's
