@@ -1,27 +1,41 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 /*
  * Design constraint (explicit, standing, repeated by the user):
- * light-only, elegant theme. NEVER dark mode -- no dark palette,
- * no prefers-color-scheme override, no theme toggle anywhere in this
- * app. Every color below is chosen to stay legible and elegant on a
- * warm, light, orange-and-white gradient background.
+ * light-only theme. NEVER dark mode -- no dark palette, no
+ * prefers-color-scheme override, no theme toggle anywhere in this app.
+ * (The landing hero and the authentication card are deliberately dark/blue
+ * "feature surfaces" requested by the product owner, not a theme.)
  */
 
 :root {
-  --background: #fffaf5;
-  --background-gradient: linear-gradient(180deg, #fff7ef 0%, #ffffff 45%, #fff3e8 100%);
+  /* Palette taken from the Figma references: "Designo" LMS dashboard (app) and "AI SaaS Website" landing page. */
+  --background: #ffffff;
+  --background-gradient: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
   --surface: #ffffff;
-  --surface-muted: #fff6ed;
-  --foreground: #241c14;
-  --foreground-muted: #6b5d4f;
-  --border: #f0ddc8;
-  --border-strong: #e8c9a3;
+  --surface-muted: #f9f9f9;
+  --foreground: #1c1d1d;
+  --foreground-muted: #727272;
+  --border: #e4e4e4;
+  --border-strong: #d9d9d9;
 
-  --accent: #f5842a;
-  --accent-hover: #e3701a;
-  --accent-soft: #ffe9d3;
-  --accent-soft-hover: #ffdcb5;
+  --accent: #ff4b00;
+  --accent-hover: #e04300;
+  --accent-soft: #fff0ea;
+  --accent-soft-hover: #ffe2d6;
+
+  /* Landing page: orange gradient and deep ink for the dark hero. */
+  --brand-from: #ff541f;
+  --brand-via: #ff7044;
+  --brand-to: #ff9777;
+  --ink: #1b1b1c;
+  --ink-deep: #010101;
+
+  /* Authentication card (login, register, ...): blue gradient requested by the product owner. */
+  --auth-from: rgb(2, 0, 36);
+  --auth-via: rgb(9, 9, 121);
+  --auth-to: rgb(0, 91, 255);
 
   --success: #2f9e5e;
   --success-soft: #e3f6ea;
@@ -30,11 +44,13 @@
   --warning: #b8791a;
   --warning-soft: #fdf1de;
 
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --shadow-sm: 0 1px 2px rgba(94, 58, 20, 0.06);
-  --shadow-md: 0 4px 16px rgba(94, 58, 20, 0.08);
+  --app-font: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.09);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 @theme inline {
@@ -48,20 +64,27 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-brand-from: var(--brand-from);
+  --color-brand-via: var(--brand-via);
+  --color-brand-to: var(--brand-to);
+  --color-ink: var(--ink);
+  --color-ink-deep: var(--ink-deep);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
-  --font-sans: Arial, Helvetica, sans-serif;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --font-sans: var(--app-font);
   --font-mono: "Cascadia Code", Consolas, monospace;
 }
 
 body {
   background: var(--background-gradient);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--app-font);
   min-height: 100vh;
 }
 

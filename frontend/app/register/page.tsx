@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import AuthShell, { AuthButton, AuthField, AuthLink } from "@/components/auth/AuthShell";
 import { ApiError, useAuth } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
 
@@ -31,56 +31,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-50 to-white px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-foreground">{t("auth.register.title")}</h1>
-        <p className="mb-6 text-sm text-foreground-muted">{t("auth.register.subtitle")}</p>
-
-        {error && <p className="mb-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <label className="text-sm text-foreground-muted">
-            {t("auth.register.full_name")}
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder={t("auth.register.full_name_placeholder")}
-            />
-          </label>
-          <label className="text-sm text-foreground-muted">
-            {t("auth.login.email")}
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder={t("auth.login.email_placeholder")}
-            />
-          </label>
-          <label className="text-sm text-foreground-muted">
-            {t("auth.login.password")}
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder={t("auth.register.password_placeholder")}
-            />
-          </label>
-          <button type="submit" disabled={loading} className="mt-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-            {loading ? t("auth.register.submitting") : t("auth.register.submit")}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-foreground-muted">
-          {t("auth.register.have_account")} <Link href="/login" className="font-medium text-accent hover:underline">{t("auth.register.login_link")}</Link>
+    <AuthShell
+      title={t("auth.register.title")}
+      subtitle={t("auth.register.subtitle")}
+      error={error}
+      footer={
+        <p>
+          {t("auth.register.have_account")} <AuthLink href="/login" strong>{t("auth.register.login_link")}</AuthLink>
         </p>
-      </div>
-    </div>
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        <AuthField label={t("auth.register.full_name")} type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
+        <AuthField label={t("auth.login.email")} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <AuthField label={t("auth.login.password")} type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        <AuthButton disabled={loading}>{loading ? t("auth.register.submitting") : t("auth.register.submit")}</AuthButton>
+      </form>
+    </AuthShell>
   );
 }
