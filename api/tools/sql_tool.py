@@ -71,6 +71,64 @@ def sanitize_sql_query(query: str) -> str:
     return stripped
 
 
+# Hardening Mission (§29, red team) -- the validator forbade write statements but let ANY
+# function call through: `SELECT pg_sleep(60) FROM documents` passes every other check and
+# pins a pooled DB connection for a minute (a handful of calls exhaust the pool); the same
+# door leads to `set_config`, `pg_*`, `lo_*`, `dblink` and similar. Only a short list of
+# harmless scalar/aggregate functions is allowed; anything else followed by "(" is refused.
+_ALLOWED_FUNCTIONS = frozenset({
+    "count", "sum", "avg", "min", "max", "lower", "upper", "length", "char_length", "coalesce", "nullif", "abs", "round",
+    "floor", "ceil", "ceiling", "date_trunc", "extract", "cast", "substr", "substring", "trim", "ltrim", "rtrim", "concat", "date",
+})
+# SQL keywords that are legitimately followed by "(" (`IN (1, 2)`, `a AND (b OR c)`, `NOT (x)`...).
+_KEYWORDS_BEFORE_PAREN = frozenset({
+    "in", "and", "or", "not", "any", "all", "as", "on", "by", "when", "then", "else", "case", "end", "is", "like", "ilike",
+    "between", "asc", "desc", "where", "from", "select", "distinct", "limit", "offset", "using", "over", "filter", "interval", "values",
+})
+_FUNCTION_CALL = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+_STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
+
+
+def _disallowed_functions(fragment: str) -> list[str]:
+    """Names called like functions in `fragment` (string literals ignored)
+    that are neither allow-listed nor plain SQL keywords."""
+    stripped = _STRING_LITERAL.sub("''", fragment)
+    names = {m.group(1).lower() for m in _FUNCTION_CALL.finditer(stripped)}
+    return sorted(n for n in names if n not in _ALLOWED_FUNCTIONS and n not in _KEYWORDS_BEFORE_PAREN)
+
+
+def _parentheses_stay_enclosed(fragment: str) -> bool:
+    """Hardening Mission (§29, red team) -- True only when `fragment`'s
+    parentheses never close more than they opened (at ANY prefix) and end
+    fully balanced, ignoring anything inside single-quoted string
+    literals.
+
+    Why this is a security boundary, not a style check:
+    `execute_sql_query` builds `WHERE (<user where>) AND organization_id
+    = :organization_id`. A user `WHERE` such as `1=1) OR (1=1` is a
+    perfectly "valid" fragment to every other check in
+    `validate_sql_query` (no `;`, no comment, one SELECT, no forbidden
+    keyword) yet renders as `WHERE (1=1) OR (1=1) AND organization_id =
+    :organization_id` -- and since AND binds tighter than OR, the
+    tenant filter only guards the second branch: every organization's
+    rows come back. Requiring each user-controlled fragment to keep its
+    parentheses enclosed makes it impossible for the user text to close
+    the wrapping parenthesis early."""
+    depth = 0
+    in_string = False
+    for char in fragment:
+        if char == "'":
+            in_string = not in_string
+        elif not in_string:
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth < 0:
+                    return False
+    return depth == 0 and not in_string
+
+
 def validate_sql_query(query: str) -> re.Match:
     """Item 2's own literal function -- real, strict validation (see
     this module's own top docstring). Returns the real regex match on
@@ -100,6 +158,13 @@ def validate_sql_query(query: str) -> re.Match:
     match = _QUERY_PATTERN.match(sanitized)
     if match is None:
         raise SqlToolError("Query does not match the real, supported shape: SELECT <columns> FROM <table> [WHERE ...] [ORDER BY ...] [LIMIT n]")
+
+    for part_name in ("columns", "where", "order"):
+        part = match.group(part_name)
+        if part and (bad := _disallowed_functions(part)):
+            raise SqlToolError(f"Function(s) not allowed in this read-only tool: {bad} (allowed: {sorted(_ALLOWED_FUNCTIONS)})")
+        if part and not _parentheses_stay_enclosed(part):
+            raise SqlToolError(f"Unbalanced parentheses or quotes in the {part_name.upper()} part -- rejected (the tenant filter must not be escapable)")
 
     table = match.group("table").lower()
     if table not in settings.SQL_TOOL_ALLOWED_TABLES:
@@ -159,5 +224,8 @@ async def execute_sql_query(db: AsyncSession, query: str, organization_id: uuid.
     # format for whichever backend is active (dash-less hex for SQLite,
     # native uuid for real Postgres).
     stmt = text(final_query).bindparams(bindparam("organization_id", type_=Uuid()))
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        # `SET LOCAL` lasts for this transaction only (the value is a validated int, never user input).
+        await db.execute(text(f"SET LOCAL statement_timeout = {int(settings.SQL_TOOL_STATEMENT_TIMEOUT_MS)}"))
     result = await db.execute(stmt, {"organization_id": organization_id, "real_limit": real_limit})
     return [dict(row._mapping) for row in result.fetchall()]

@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import LoadingState from "@/components/LoadingState";
-import { BusinessMetrics } from "@/components/analytics/BusinessMetrics";
 import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import { ExportButton } from "@/components/analytics/ExportButton";
 import { ProductMetrics } from "@/components/analytics/ProductMetrics";
@@ -11,7 +10,7 @@ import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useTranslation } from "@/lib/i18n";
 
 // Both pull in recharts (~390KB) -- deferred so visiting the default
-// Overview/Business/Product tabs never downloads it, only actually
+// Overview/Product tabs never downloads it, only actually
 // opening Technical or Dashboards does.
 const TechnicalMetrics = dynamic(() => import("@/components/analytics/TechnicalMetrics").then((m) => m.TechnicalMetrics), {
   loading: () => <LoadingState fullScreen={false} />,
@@ -20,11 +19,11 @@ const DashboardBuilder = dynamic(() => import("@/components/analytics/DashboardB
   loading: () => <LoadingState fullScreen={false} />,
 });
 
-const TABS = ["Overview", "Business", "Product", "Technical", "Dashboards"] as const;
+// Platform-wide business metrics (revenue, churn, LTV across every customer) are superadmin-only on the server: they live in the super-admin area, not here.
+const TABS = ["Overview", "Product", "Technical", "Dashboards"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   Overview: "analytics.tab_overview",
-  Business: "analytics.tab_business",
   Product: "analytics.tab_product",
   Technical: "analytics.tab_technical",
   Dashboards: "analytics.tab_dashboards",
@@ -67,11 +66,9 @@ export function AnalyticsDashboard() {
       <div className="mt-5">
         {tab === "Overview" && (
           <div className="flex flex-col gap-6">
-            <BusinessMetrics dateRange={dateRange} />
             <ProductMetrics orgId={org.id} dateRange={dateRange} />
           </div>
         )}
-        {tab === "Business" && <BusinessMetrics dateRange={dateRange} />}
         {tab === "Product" && <ProductMetrics orgId={org.id} dateRange={dateRange} />}
         {tab === "Technical" && <TechnicalMetrics orgId={org.id} dateRange={dateRange} />}
         {tab === "Dashboards" && <DashboardBuilder orgId={org.id} />}

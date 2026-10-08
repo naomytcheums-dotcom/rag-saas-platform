@@ -39,6 +39,29 @@ async def test_create_evaluation_job_endpoint_works(client, db_session, register
     assert response.json()["status"] == "pending"
 
 
+async def test_create_evaluation_job_endpoint_is_rate_limited_per_organization(client, db_session, register_payload):
+    """Hardening Mission (§4/§9, rate limiting) -- REGRESSION for a
+    real, confirmed gap: running a job means one real LLM generation
+    call PER question in the dataset, with no limit on launch
+    frequency."""
+    from fastapi import HTTPException, status
+
+    owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job Rate Limit Org")
+    expected_key = f"ratelimit:evaluation_run:org:{dataset['organization_id']}"
+
+    calls = []
+
+    async def _fake_enforce(key, max_attempts, window_seconds):
+        calls.append(key)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts", headers={"Retry-After": "60"})
+
+    with patch("api.routers.evaluation_jobs.enforce_rate_limit", _fake_enforce):
+        response = await client.post(f"/datasets/{dataset['id']}/evaluate", json={}, headers=_auth_header(owner_token))
+
+    assert response.status_code == 429
+    assert expected_key in calls
+
+
 async def test_list_evaluation_jobs_endpoint_works(client, db_session, register_payload):
     owner_token, dataset = await _make_org_and_dataset(client, db_session, register_payload, "Eval Job List Endpoint Org")
     with patch("api.routers.evaluation_jobs.schedule_evaluation_job_processing"):

@@ -55,7 +55,19 @@ real secret and a real, billed API call this environment cannot make).
 import asyncio
 import logging
 
+from opentelemetry import trace
+
 from api.config import settings
+
+# Étape "OpenTelemetry GenAI" -- `opentelemetry.trace`'s own API package
+# (not the SDK/exporters) is a cheap, always-safe import: `get_tracer()`
+# returns a real, functioning no-op tracer whenever no TracerProvider has
+# been configured (api/security/tracing.py's own setup_tracing, gated by
+# OTEL_ENABLED) -- span creation below costs nothing and sends nothing
+# anywhere unless tracing is actually turned on, same "real code, inert
+# unless configured" discipline as every other observability integration
+# in this codebase.
+_tracer = trace.get_tracer("api.services.llm_providers")
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +109,7 @@ PROVIDER_SETTINGS = {
     "mistral": {"api_key": "MISTRAL_API_KEY", "model": "MISTRAL_MODEL", "max_tokens": "MISTRAL_MAX_TOKENS", "temperature": "MISTRAL_TEMPERATURE"},
     "ollama": {"api_key": None, "model": "OLLAMA_MODEL", "max_tokens": "OLLAMA_MAX_TOKENS", "temperature": "OLLAMA_TEMPERATURE"},
     "openai_compatible": {"api_key": "OPENAI_COMPATIBLE_API_KEY", "model": "OPENAI_COMPATIBLE_MODEL", "max_tokens": "OPENAI_COMPATIBLE_MAX_TOKENS", "temperature": "OPENAI_COMPATIBLE_TEMPERATURE"},
+    "watsonx": {"api_key": "WATSONX_API_KEY", "model": "WATSONX_MODEL", "max_tokens": "WATSONX_MAX_TOKENS", "temperature": "WATSONX_TEMPERATURE"},
 }
 
 # Real providers that genuinely need no real API key at all (a real,
@@ -110,7 +123,7 @@ _NO_KEY_REQUIRED = {"ollama", "openai_compatible"}
 def get_available_providers() -> list[str]:
     """Item 4's own literal function (4.1.7) -- real providers with a
     real API key/base URL actually configured, not just the full real
-    list of 6 this module knows how to call."""
+    list of 7 this module knows how to call."""
     available = []
     for provider in PROVIDER_SETTINGS:
         if provider == "ollama":
@@ -118,6 +131,12 @@ def get_available_providers() -> list[str]:
                 available.append(provider)
         elif provider == "openai_compatible":
             if settings.OPENAI_COMPATIBLE_BASE_URL:
+                available.append(provider)
+        elif provider == "watsonx":
+            # All three real credentials, not just the API key -- a
+            # watsonx call is meaningless without a project_id/url,
+            # same reasoning as _provider_kwargs below.
+            if settings.WATSONX_API_KEY and settings.WATSONX_URL and settings.WATSONX_PROJECT_ID:
                 available.append(provider)
         elif getattr(settings, PROVIDER_SETTINGS[provider]["api_key"]):
             available.append(provider)
@@ -134,16 +153,34 @@ def get_default_provider(org_settings: dict | None = None) -> str:
     return settings.LLM_DEFAULT_PROVIDER
 
 
+# LiteLLM only infers the provider from bare names for OpenAI/Anthropic; the catalog offers bare names for these providers too.
+LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama/"}
+
+
+def to_litellm_model(provider: str, model: str) -> str:
+    """The model string actually sent to LiteLLM: `gemini-2.5-pro` becomes `gemini/gemini-2.5-pro`; already-prefixed names are kept."""
+    prefix = LITELLM_PROVIDER_PREFIXES.get(provider)
+    if prefix and not model.startswith(prefix):
+        return f"{prefix}{model}"
+    return model
+
+
 def _provider_kwargs(provider: str, model: str | None) -> dict:
     if provider not in PROVIDER_SETTINGS:
         raise LLMProviderError(f"Unknown LLM provider: {provider!r} (expected one of {sorted(PROVIDER_SETTINGS)})")
 
     config = PROVIDER_SETTINGS[provider]
-    resolved_model = model or getattr(settings, config["model"])
+    resolved_model = to_litellm_model(provider, model or getattr(settings, config["model"]))
     api_key = getattr(settings, config["api_key"]) if config["api_key"] else None
 
     if provider not in _NO_KEY_REQUIRED and not api_key:
         raise LLMAuthenticationError(f"No API key configured for provider {provider!r} (set {config['api_key']})")
+
+    if provider == "watsonx" and not (settings.WATSONX_URL and settings.WATSONX_PROJECT_ID):
+        raise LLMAuthenticationError(
+            "watsonx requires WATSONX_URL and WATSONX_PROJECT_ID in addition to WATSONX_API_KEY -- a real "
+            "watsonx.ai call has no meaning without a project to run it in"
+        )
 
     kwargs: dict = {"model": resolved_model}
     if api_key:
@@ -153,9 +190,15 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
     elif provider == "openai_compatible":
         kwargs["api_base"] = settings.OPENAI_COMPATIBLE_BASE_URL
         kwargs["model"] = f"openai/{resolved_model}" if not resolved_model.startswith("openai/") else resolved_model
+    elif provider == "watsonx":
+        kwargs["api_base"] = settings.WATSONX_URL
+        kwargs["project_id"] = settings.WATSONX_PROJECT_ID
 
     kwargs["max_tokens"] = getattr(settings, config["max_tokens"])
     kwargs["temperature"] = getattr(settings, config["temperature"])
+    # Some current models refuse sampling params (claude-sonnet-5-5 accepts only temperature=1): LiteLLM drops them
+    # for those models only, instead of failing every chat answer with UnsupportedParamsError.
+    kwargs["drop_params"] = True
     return kwargs
 
 
@@ -181,32 +224,54 @@ async def _chat_completion_raw(
     resolved_model = call_kwargs["model"]
     max_retries = max_retries if max_retries is not None else settings.LLM_MAX_RETRIES
 
-    last_error: LLMError | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            response = await asyncio.wait_for(
-                litellm.acompletion(messages=messages, **call_kwargs), timeout=settings.LLM_TIMEOUT,
-            )
-            return response, resolved_model
-        except asyncio.TimeoutError as exc:
-            last_error = LLMTimeoutError(f"{provider} timed out after {settings.LLM_TIMEOUT}s")
-            last_error.__cause__ = exc
-        except litellm.exceptions.AuthenticationError as exc:
-            raise LLMAuthenticationError(str(exc)) from exc
-        except litellm.exceptions.RateLimitError as exc:
-            last_error = LLMRateLimitError(str(exc))
-            last_error.__cause__ = exc
-        except litellm.exceptions.Timeout as exc:
-            last_error = LLMTimeoutError(str(exc))
-            last_error.__cause__ = exc
-        except litellm.exceptions.APIError as exc:
-            raise LLMProviderError(str(exc)) from exc
+    # Span name/attributes follow the real OpenTelemetry GenAI semantic
+    # conventions (`gen_ai.*`, span named "{operation} {model}") -- see
+    # https://github.com/open-telemetry/semantic-conventions-genai --
+    # so this codebase's own traces are interoperable with any real
+    # GenAI-aware backend/dashboard, not a bespoke, one-off shape only
+    # this app's own code understands.
+    with _tracer.start_as_current_span(f"chat {resolved_model}") as span:
+        span.set_attribute("gen_ai.operation.name", "chat")
+        span.set_attribute("gen_ai.system", provider)
+        span.set_attribute("gen_ai.request.model", resolved_model)
 
-        if attempt < max_retries:
-            logger.info("chat_completion: %s failed (attempt %d/%d), retrying: %s", provider, attempt + 1, max_retries, last_error)
-            await asyncio.sleep(2 ** attempt)
+        last_error: LLMError | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = await asyncio.wait_for(
+                    litellm.acompletion(messages=messages, **call_kwargs), timeout=settings.LLM_TIMEOUT,
+                )
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    span.set_attribute("gen_ai.usage.input_tokens", usage.prompt_tokens)
+                    span.set_attribute("gen_ai.usage.output_tokens", usage.completion_tokens)
+                response_model = getattr(response, "model", None)
+                if response_model:
+                    span.set_attribute("gen_ai.response.model", response_model)
+                return response, resolved_model
+            except asyncio.TimeoutError as exc:
+                last_error = LLMTimeoutError(f"{provider} timed out after {settings.LLM_TIMEOUT}s")
+                last_error.__cause__ = exc
+            except litellm.exceptions.AuthenticationError as exc:
+                span.record_exception(exc)
+                raise LLMAuthenticationError(str(exc)) from exc
+            except litellm.exceptions.RateLimitError as exc:
+                last_error = LLMRateLimitError(str(exc))
+                last_error.__cause__ = exc
+            except litellm.exceptions.Timeout as exc:
+                last_error = LLMTimeoutError(str(exc))
+                last_error.__cause__ = exc
+            except litellm.exceptions.APIError as exc:
+                span.record_exception(exc)
+                raise LLMProviderError(str(exc)) from exc
 
-    raise last_error
+            if attempt < max_retries:
+                logger.info("chat_completion: %s failed (attempt %d/%d), retrying: %s", provider, attempt + 1, max_retries, last_error)
+                await asyncio.sleep(2 ** attempt)
+
+        if last_error is not None:
+            span.record_exception(last_error)
+        raise last_error
 
 
 async def chat_completion(messages: list[dict], provider: str | None = None, model: str | None = None, max_retries: int | None = None, **kwargs) -> str:
@@ -501,3 +566,11 @@ async def get_openai_compatible_completion(prompt: str, **kwargs) -> str:
 
 async def get_openai_compatible_chat_completion(messages: list[dict], **kwargs) -> str:
     return await chat_completion(messages, provider="openai_compatible", **kwargs)
+
+
+async def get_watsonx_completion(prompt: str, **kwargs) -> str:
+    return await completion(prompt, provider="watsonx", **kwargs)
+
+
+async def get_watsonx_chat_completion(messages: list[dict], **kwargs) -> str:
+    return await chat_completion(messages, provider="watsonx", **kwargs)

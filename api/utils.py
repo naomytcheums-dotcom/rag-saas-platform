@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 
 # Coherence fix (audit finding, 2026-09-16): the same `200` pagination
 # ceiling used to be redefined independently as a private
@@ -50,3 +50,17 @@ def as_aware_utc(value: dt.datetime) -> dt.datetime:
     directly at each call site), so treating a naive value as UTC on
     read is a correct normalization, not a guess."""
     return value if value.tzinfo is not None else value.replace(tzinfo=dt.timezone.utc)
+
+
+async def read_json_object(request: Request) -> dict:
+    """The request body as a JSON object. A body that is empty, not valid JSON, or not a JSON object is the CLIENT's mistake: it
+    answers 400, instead of the JSONDecodeError/AttributeError (an unhandled 500) that `await request.json()` followed by
+    `.get(...)` would raise on it."""
+    try:
+        payload = await request.json()
+    except ValueError as exc:  # json.JSONDecodeError and UnicodeDecodeError both derive from ValueError
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request body must be a JSON object")
+    return payload
+

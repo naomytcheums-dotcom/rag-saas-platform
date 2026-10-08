@@ -1,20 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { BusinessMetrics } from "@/components/analytics/BusinessMetrics";
-import { DateRangePicker } from "@/components/analytics/DateRangePicker";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import LoadingState from "@/components/LoadingState";
 
+// Platform business metrics belong to the super-admin area (the API answers 403 to anyone else).
 export default function Page() {
-  const [dateRange, setDateRange] = useState("30d");
-  return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Business metrics</h1>
-        <DateRangePicker value={dateRange} onChange={setDateRange} />
-      </div>
-      <div className="mt-5">
-        <BusinessMetrics dateRange={dateRange} />
-      </div>
-    </div>
-  );
+  const router = useRouter();
+  useEffect(() => { router.replace("/admin?tab=Business"); }, [router]);
+  return <LoadingState fullScreen={false} />;
 }

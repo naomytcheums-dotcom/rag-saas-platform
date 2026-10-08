@@ -43,7 +43,7 @@ from api.services.organization_api_keys import (
     set_rate_limit, update_api_key,
 )
 from api.services.public_api import (
-    PublicAPIError, handle_public_agent_run, handle_public_agents_list, handle_public_analytics, handle_public_chat,
+    PublicAPIError, handle_public_agent_run, handle_public_chat_stream, handle_public_agents_list, handle_public_analytics, handle_public_chat,
     handle_public_conversations_list, handle_public_document_upload, handle_public_documents_list,
     handle_public_embed, handle_public_kb_creation, handle_public_kb_list, handle_public_search, handle_public_usage,
     require_owner,
@@ -276,8 +276,18 @@ async def update_key_scopes_endpoint(
 # ------------------------------------------------------------------------- 9.1.1 Chat
 
 
-@router.post("/v1/chat", response_model=ChatResponse)
+@router.post("/v1/chat", response_model=ChatResponse, responses={200: {"content": {"text/event-stream": {}}, "description": "JSON, or Server-Sent Events when `stream` is true"}})
 async def public_chat_endpoint(payload: ChatRequest, key_row: OrganizationAPIKey = Depends(require_public_api_scope("chat:write")), db: AsyncSession = Depends(get_db)):
+    if payload.stream:
+        from starlette.responses import StreamingResponse
+
+        try:
+            generator = await handle_public_chat_stream(db, key_row.organization_id, require_owner(key_row), payload.message, payload.agent_id, payload.conversation_id)
+        except PublicAPIError as exc:
+            await db.rollback()
+            raise _to_http_error(exc) from exc
+        await db.commit()
+        return StreamingResponse(generator, media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
     try:
         result = await handle_public_chat(db, key_row.organization_id, require_owner(key_row), payload.message, payload.agent_id, payload.conversation_id)
     except PublicAPIError as exc:
@@ -315,7 +325,9 @@ async def public_kb_creation_endpoint(
 ):
     workspace = await handle_public_kb_creation(db, key_row, payload.name, payload.description, payload.config)
     await db.commit()
-    return KnowledgeBaseCreateResponse(id=workspace.id, name=workspace.name, description=payload.description, created_at=workspace.created_at)
+    return KnowledgeBaseCreateResponse(
+        id=workspace.id, name=workspace.name, description=workspace.description, created_at=workspace.created_at,
+    )
 
 
 # -------------------------------------------------------------------- 9.1.4 Conversations

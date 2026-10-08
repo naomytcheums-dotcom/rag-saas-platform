@@ -54,7 +54,10 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements-api.txt
+        run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
+
+      - name: Lint (runtime-error rules)
+        run: pip install --no-cache-dir ruff && ruff check api/
 
       - name: Run test suite
         env:
@@ -126,10 +129,10 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements-api.txt
+        run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
 
       - name: pip-audit
-        run: pip-audit -r requirements-api.txt --desc off
+        run: pip-audit -r requirements-api.txt -r requirements-optional.txt --desc off
 
   build-backend:
     # Phase 5, Étape 10 -- real Docker build verification (P0, carried

@@ -11,7 +11,7 @@ adds (e.g. `"claude-3-5-sonnet-20241022"`, `"gemini/gemini-1.5-pro"`,
 keys are short, UNVERSIONED real names (`"claude-3-5-sonnet"`,
 `"gemini-1.5-pro"`, `"mistral-small"`). An exact real dict lookup would
 therefore honestly find NOTHING for this codebase's own real,
-default-configured models -- `_find_pricing` instead matches by real
+default-configured models -- `find_pricing` instead matches by real
 SUBSTRING, picking the LONGEST matching real key when more than one
 real key matches (a real, necessary tie-break: `"gpt-4o-mini"` itself
 contains `"gpt-4o"` as a real substring, so the shorter, wrong real key
@@ -32,9 +32,14 @@ from api.services.retrieval_metrics import summarize_metric
 _MILLION = 1_000_000.0
 
 
-def _find_pricing(model: str | None) -> dict | None:
+def find_pricing(model: str | None) -> dict | None:
     """Real, longest-substring-match pricing lookup -- see this
-    module's own top docstring."""
+    module's own top docstring. Made public (Systèmes internes, item
+    26, same "private helper -> public for real cross-module reuse"
+    precedent as `api.services.retrieval_pipeline.cosine_similarities`)
+    for `api.services.cost_aware_routing`'s own real model-budget
+    selection, which needs this SAME real pricing lookup, never a
+    second, duplicate one."""
     if not model:
         return None
     matches = [key for key in settings.COST_MODEL_PRICING if key in model]
@@ -59,7 +64,7 @@ def calculate_cost_per_request(token_usage: dict | None, model_config: dict | No
         }
 
     model = (model_config or {}).get("model") or token_usage.get("model")
-    pricing = _find_pricing(model)
+    pricing = find_pricing(model)
     if pricing is None:
         return {
             "cost_per_request": None, "cost_per_token_input": None, "cost_per_token_output": None,

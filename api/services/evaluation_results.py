@@ -102,7 +102,7 @@ def _deduplicate_documents(chunks: list[dict]) -> list[dict]:
 
 async def run_evaluation(
     db: AsyncSession, question_id: uuid.UUID, agent_id: uuid.UUID | None = None, model_config: dict | None = None,
-    retrieval_overrides: dict | None = None,
+    retrieval_overrides: dict | None = None, retrieval_config: dict | None = None,
 ) -> EvaluationResult | None:
     """Item 2's own literal function -- real retrieval, real
     generation, real timing, then real metric computation via
@@ -125,6 +125,31 @@ async def run_evaluation(
         return None
 
     org_settings = await get_org_settings(db, dataset.organization_id)
+
+    # Hardening Mission (§11, ChangeLab) -- a real, confirmed gap: an
+    # agent's own `knowledge_base_config` (written by the MCP
+    # `update_retrieval_config` / `create_rag_agent` tools) was never
+    # consulted here, so a ChangeLab change could never move a benchmark
+    # metric -- a decorative knob. Applied for real now, for an agent of
+    # THIS dataset's organization only; an explicit `retrieval_overrides`
+    # (comparison_jobs' candidate configs) still always wins.
+    from api.services.agent_knowledge_base import retrieval_overrides_from_kb_config
+
+    agent_search_kwargs: dict = {}
+    agent_setting_overrides: dict = {}
+    if agent_id is not None:
+        from api.models.agent import Agent
+
+        agent = await db.get(Agent, agent_id)
+        if agent is not None and agent.deleted_at is None and agent.organization_id == dataset.organization_id:
+            agent_search_kwargs, agent_setting_overrides = retrieval_overrides_from_kb_config(agent.knowledge_base_config)
+    # `retrieval_config` (a candidate retrieval configuration under test, in the
+    # same vocabulary as an agent's `knowledge_base_config`) sits between the
+    # agent's stored config and the explicit low-level `retrieval_overrides`.
+    job_search_kwargs, job_setting_overrides = retrieval_overrides_from_kb_config(retrieval_config)
+    search_settings = {**org_settings, **agent_setting_overrides, **job_setting_overrides}
+    search_kwargs = {**agent_search_kwargs, **job_search_kwargs, **(retrieval_overrides or {})}
+
     started = time.perf_counter()
     chunks: list[dict] = []
     answer = ""
@@ -132,7 +157,7 @@ async def run_evaluation(
     try:
         try:
             chunks = await asyncio.wait_for(
-                search_with_context(db, dataset.organization_id, question.question, org_settings=org_settings, **(retrieval_overrides or {})),
+                search_with_context(db, dataset.organization_id, question.question, org_settings=search_settings, **search_kwargs),
                 timeout=settings.EVALUATION_TIMEOUT,
             )
         except asyncio.TimeoutError:
@@ -250,6 +275,26 @@ async def extend_evaluation_metrics(db: AsyncSession, question_id: uuid.UUID, k:
             f"precision_at_{settings.PRECISION_DEFAULT_K}": calculate_precision(retrieved_ids, expected_documents),
             "faithfulness": faithfulness["score"], "faithfulness_factors": faithfulness["factors"],
             "answer_relevance": relevance["score"], "answer_relevance_factors": relevance["factors"],
+            # Hardening Mission, Phase 9 -- a real, confirmed bug fix:
+            # `api.services.rag_evolution_engine.run_evolution_cycle`'s
+            # own real, live default `target_metric` (and
+            # `api.schemas.rag_control_plane.EvolutionRunRequest`'s own
+            # same real default, used by the actual
+            # `POST /organizations/{org_id}/evolution/run` endpoint) is
+            # the literal string `"semantic_similarity"` -- but that key
+            # never existed at this top level before this fix, only
+            # nested inside `answer_relevance_factors`
+            # (`compare_evaluation_jobs` only ever diffs TOP-LEVEL
+            # numeric keys). A real caller who never overrides
+            # `target_metric` -- the common, documented-as-optional case
+            # -- got a `target_diff` of `None` every single time,
+            # meaning `candidate_wins` could NEVER be `True` by default,
+            # no matter how good a real DSPy-optimized candidate
+            # actually was. Flattening this real, already-computed
+            # factor here (not inventing a new computation) is the real,
+            # correct fix -- the engine's own default now measures
+            # exactly what its own name promises.
+            "semantic_similarity": relevance["factors"].get("semantic_similarity"),
             "context_relevance": context_relevance["score"], "context_relevance_factors": context_relevance["factors"],
             "citation_correctness": citation_correctness["score"], "citation_correctness_factors": citation_correctness["factors"],
             "hallucination_rate": hallucination["score"], "hallucination_rate_factors": hallucination["factors"],

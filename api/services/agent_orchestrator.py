@@ -235,6 +235,9 @@ class AgentOrchestrator:
         trace = [self._trace_event("created", {"input": input})]
         async with self._db_lock:
             run = await create_run(db, agent_id=agent_id, input=input, context=context, organization_id=organization_id, created_by=created_by)
+            from api.security.logging_correlation import bind_log_context
+
+            bind_log_context(run_id=run.id, organization_id=organization_id)
             await update_run_status(db, run.id, AgentRunStatus.pending.value, trace=list(trace))
             await db.commit()
 
@@ -286,6 +289,55 @@ class AgentOrchestrator:
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
+
+        # Hardening Mission, Phase 13 -- a real, confirmed cost-control
+        # gap: `_deduct_for_usage` below (and its own docstring) already
+        # documents, by design, that it deducts credits AFTER a real,
+        # already-incurred LLM call -- correct for THAT call (money
+        # already spent with the provider, so failing the ledger must
+        # never also fail the user's answer), but it means NOTHING ever
+        # stopped a NEW run from starting when an organization's real
+        # balance was already at or below zero. This is the real,
+        # additive pre-flight guard: a cheap, real balance check BEFORE
+        # any real LLM call, skipped entirely for a BYOK organization
+        # (billed to their own provider account, never this platform's
+        # credits -- same real exemption `_deduct_for_usage` already
+        # applies).
+        if organization_id is not None:
+            async with self._db_lock:
+                preflight_byok_key = await resolve_org_api_key(db, organization_id, llm_cfg["provider"])
+                if not preflight_byok_key:
+                    from api.services.billing_credits import SpendCapExceededError, enforce_spend_caps, get_or_create_credit
+
+                    credit = await get_or_create_credit(db, organization_id)
+                    if credit.balance <= 0:
+                        trace.append(self._trace_event("insufficient_credits", {"balance": credit.balance}))
+                        await update_run_status(
+                            db, run.id, AgentRunStatus.failed.value,
+                            error=f"Insufficient AI credits (balance: {credit.balance}) -- add a credit pack or configure your own provider key (BYOK)",
+                            trace=list(trace),
+                        )
+                        await db.commit()
+                        await db.refresh(run)
+                        return run
+
+                    # Hardening Mission (§6, cost control) -- same
+                    # pre-flight timing as the balance check above, for
+                    # the organization's own, separately-configured
+                    # daily/monthly spend cap (see billing_credits.py's
+                    # own enforce_spend_caps docstring for why this is
+                    # distinct from insolvency).
+                    try:
+                        await enforce_spend_caps(db, organization_id, org_settings or {})
+                    except SpendCapExceededError as exc:
+                        trace.append(self._trace_event("spend_cap_exceeded", {"detail": str(exc)}))
+                        await update_run_status(
+                            db, run.id, AgentRunStatus.failed.value, error=f"Spend cap exceeded: {exc}", trace=list(trace),
+                        )
+                        await db.commit()
+                        await db.refresh(run)
+                        return run
+
         if plan_first and settings.TASK_PLANNING_ENABLED:
             # Partie 5.1.13 -- real, OPT-IN planning (default `False`,
             # unchanged behavior for every existing caller -- the same
@@ -562,7 +614,13 @@ class AgentOrchestrator:
                         # real, honest `failed` run (never raises,
                         # same doctrine as the permission check above),
                         # with the real, specific violations listed.
-                        guardrail_result = await validate_guardrails(db, real_agent_id, input, result)
+                        # Hardening Mission, Phase 2 -- `context` (built
+                        # by `build_llm_context` from this run's own real
+                        # retrieval results) is now also scanned for a
+                        # prompt injection attempt hiding in a RETRIEVED
+                        # DOCUMENT, not just this run's own user `input`
+                        # -- see validate_guardrails's own docstring.
+                        guardrail_result = await validate_guardrails(db, real_agent_id, input, result, retrieved_context=context)
                     if not guardrail_result["passed"]:
                         trace.append(self._trace_event("guardrail_blocked", {"violations": guardrail_result["violations"]}))
                         await update_run_status(
@@ -579,7 +637,7 @@ class AgentOrchestrator:
                     # Phase 5, Étape 6 (suite) -- real, automatic
                     # long-term memory write-back. Best-effort: never
                     # raises, never blocks the run's own result.
-                    if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED:
+                    if real_agent_id is not None and settings.AGENT_MEMORY_ENABLED and settings.AGENT_MEMORY_AUTO_EXTRACT:
                         try:
                             from api.services.agent_long_term_memory import (
                                 extract_and_store_long_term_memory,
@@ -717,6 +775,9 @@ class AgentOrchestrator:
 
         async with self._db_lock:
             run = await create_run(db, agent_id=agent_id, input=input, context=context, organization_id=organization_id, created_by=created_by)
+            from api.security.logging_correlation import bind_log_context
+
+            bind_log_context(run_id=run.id, organization_id=organization_id)
             await update_run_status(db, run.id, AgentRunStatus.running.value)
             await db.commit()
 
@@ -742,6 +803,36 @@ class AgentOrchestrator:
 
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
+
+        # Hardening Mission, Phase 13 -- same real, pre-flight credit
+        # guard as `run_agent` above (see that one's own comment for the
+        # full real reasoning): a cheap, real balance check BEFORE any
+        # real LLM call, skipped for a BYOK organization.
+        if organization_id is not None:
+            async with self._db_lock:
+                preflight_byok_key = await resolve_org_api_key(db, organization_id, llm_cfg["provider"])
+                if not preflight_byok_key:
+                    from api.services.billing_credits import SpendCapExceededError, enforce_spend_caps, get_or_create_credit
+
+                    credit = await get_or_create_credit(db, organization_id)
+                    if credit.balance <= 0:
+                        await update_run_status(
+                            db, run.id, AgentRunStatus.failed.value,
+                            error=f"Insufficient AI credits (balance: {credit.balance}) -- add a credit pack or configure your own provider key (BYOK)",
+                        )
+                        await db.commit()
+                        yield {"type": "error", "error": f"Insufficient AI credits (balance: {credit.balance})"}
+                        return
+
+                    # Hardening Mission (§6, cost control) -- same
+                    # pre-flight spend-cap check as run_agent above.
+                    try:
+                        await enforce_spend_caps(db, organization_id, org_settings or {})
+                    except SpendCapExceededError as exc:
+                        await update_run_status(db, run.id, AgentRunStatus.failed.value, error=f"Spend cap exceeded: {exc}")
+                        await db.commit()
+                        yield {"type": "error", "error": f"Spend cap exceeded: {exc}"}
+                        return
 
         selected_tools: list[ToolSpec] = []
         if tools:
@@ -922,7 +1013,9 @@ class AgentOrchestrator:
         guardrail_result = {"passed": True, "violations": []}
         async with self._db_lock:
             if real_agent_id is not None:
-                guardrail_result = await validate_guardrails(db, real_agent_id, input, result)
+                # Hardening Mission, Phase 2 -- same real retrieved-context
+                # scan as run_agent above.
+                guardrail_result = await validate_guardrails(db, real_agent_id, input, result, retrieved_context=context)
             if not guardrail_result["passed"]:
                 await update_run_status(
                     db, run.id, AgentRunStatus.failed.value, error=f"Guardrail violation: {', '.join(guardrail_result['violations'])}",

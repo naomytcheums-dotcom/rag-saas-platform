@@ -182,3 +182,34 @@ async def test_call_mcp_tool_returns_a_real_result(client, db_session, register_
     )
     assert response.status_code == 200
     assert response.json() == {"result": "5"}
+
+
+async def test_call_mcp_tool_is_rate_limited_per_organization(client, db_session, register_payload, monkeypatch):
+    """Hardening Mission (§4/§16, rate limiting) -- REGRESSION for a
+    real, confirmed gap: a tool call reaches a real external subprocess
+    or HTTP endpoint and had no rate limit of its own."""
+    from fastapi import HTTPException, status
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Acme Rate Limit")
+    created = await client.post(
+        f"/organizations/{org['id']}/mcp-servers", json={"name": "X", "transport": "streamable_http", "url": "https://x.example.com"},
+        headers=_auth_header(owner_token),
+    )
+    server_id = created.json()["id"]
+    expected_key = f"ratelimit:mcp_tool_call:org:{org['id']}"
+
+    calls = []
+
+    async def _fake_enforce(key, max_attempts, window_seconds):
+        calls.append(key)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts", headers={"Retry-After": "60"})
+
+    monkeypatch.setattr("api.routers.mcp_servers.enforce_rate_limit", _fake_enforce)
+
+    response = await client.post(
+        f"/organizations/{org['id']}/mcp-servers/{server_id}/tools/add/call", json={"arguments": {"a": 2, "b": 3}},
+        headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 429
+    assert expected_key in calls

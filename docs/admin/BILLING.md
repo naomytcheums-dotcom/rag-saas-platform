@@ -25,3 +25,8 @@ If you're self-hosted, billing may not apply at all, or may be handled
 outside the platform depending on your agreement — see
 [Self-hosted install](../install/SELF_HOSTED.md) and
 [`docs/sales/SELF_HOSTED.md`](../sales/SELF_HOSTED.md).
+
+Direct credit top-ups without a payment provider are disabled by default.
+For a private self-hosted or development deployment only, explicitly set
+`CREDITS_ALLOW_UNPAID_TOPUP=true`; public deployments should keep it disabled
+and use the provider checkout and verified webhook flow.

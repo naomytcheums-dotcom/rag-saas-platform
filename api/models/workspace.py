@@ -11,7 +11,7 @@ rename/delete to mean something.
 import datetime as dt
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -25,6 +25,7 @@ class Workspace(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # Nullable, SET NULL on delete: a workspace outlives whoever created
     # it (same reasoning as api/models/enterprise_sso.py's
     # created_by_admin_id) -- it's organization property, not personal

@@ -11,6 +11,11 @@ Runs a real `pg_dump` via
 pg_dump ...`, gzipped, written to a backup file. `./update.sh` runs
 this automatically before every upgrade — see [Upgrading](UPGRADING.md).
 
+The dump is written to a temporary file and checked as gzip before
+publishing its final name. Failed dumps are removed; an existing backup
+with the same timestamp is never overwritten. The backup filesystem
+must support hard links.
+
 ## Restoring
 
 ```bash
@@ -20,10 +25,13 @@ this automatically before every upgrade — see [Upgrading](UPGRADING.md).
 This **overwrites the current database** with the contents of the
 backup file — it prompts for confirmation (Ctrl+C to cancel, Enter to
 continue) before proceeding, since it's destructive.
+Gzip integrity is checked before confirmation or database access.
+SQL errors stop `psql` and fail the script; a partial restore can still
+have changed the target, so always rehearse on a disposable database.
 
 ```bash
 gunzip -c "$FILE" | docker compose -f docker-compose.selfhosted.yml \
-  exec -T postgres psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+  exec -T postgres psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"
 ```
 
 ## Backup retention

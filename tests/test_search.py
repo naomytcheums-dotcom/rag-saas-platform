@@ -142,6 +142,34 @@ async def test_search_rejects_an_empty_query(client, db_session, register_payloa
     assert response.status_code == 422
 
 
+async def test_search_is_rate_limited_per_organization(monkeypatch, client, db_session, register_payload):
+    """Hardening Mission (§4, rate limiting) -- REGRESSION for a real,
+    confirmed gap: this endpoint runs a real embedding + retrieval call
+    per request and had no rate limit of its own. Mocked at the
+    `enforce_rate_limit` name imported into this router module (same
+    pattern as tests/test_public_api.py's own rate-limit regression) --
+    no real Redis needed."""
+    from fastapi import HTTPException, status
+
+    owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
+    org = await _create_org(client, owner_token, "Search Rate Limit Org")
+    expected_key = f"ratelimit:search:org:{org['id']}"
+
+    calls = []
+
+    async def _fake_enforce(key, max_attempts, window_seconds):
+        calls.append(key)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts", headers={"Retry-After": "60"})
+
+    monkeypatch.setattr("api.routers.search.enforce_rate_limit", _fake_enforce)
+
+    response = await client.post(
+        f"/organizations/{org['id']}/search", json={"query": "anything"}, headers=_auth_header(owner_token),
+    )
+    assert response.status_code == 429
+    assert expected_key in calls
+
+
 async def test_search_uses_the_real_organization_configured_strategy_by_default(client, db_session, register_payload):
     """Validation criterion: les paramètres de config sont appliqués --
     no strategy given in the request, so the organization's own

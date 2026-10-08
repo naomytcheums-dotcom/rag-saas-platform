@@ -15,9 +15,10 @@ what's available without needing Admin).
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_db
 from api.models.mcp_server import MCPServerConfig
 from api.models.organization import OrganizationMember
@@ -28,6 +29,8 @@ from api.schemas.mcp_servers import (
 from api.security.permissions import require_permission
 from api.security.encryption import encrypt_field
 from api.security.organizations import require_org_admin, require_org_member
+from api.security.rate_limit import enforce_rate_limit
+from api.utils import client_ip
 from api.services.mcp.client import MCPClientError, test_connection
 from api.services.mcp.discovery import (
     call_cached_tool, create_mcp_server, delete_mcp_server, list_cached_tools, list_mcp_servers, sync_tools,
@@ -140,12 +143,27 @@ async def sync_mcp_tools_endpoint(
 
 @router.post("/organizations/{org_id}/mcp-servers/{server_id}/tools/{tool_name}/call", response_model=MCPToolCallResponse)
 async def call_mcp_tool_endpoint(
-    org_id: uuid.UUID, server_id: uuid.UUID, tool_name: str, payload: MCPToolCallRequest,
+    org_id: uuid.UUID, server_id: uuid.UUID, tool_name: str, payload: MCPToolCallRequest, request: Request,
     _caller: OrganizationMember = Depends(require_permission("integrations:write")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
+    # Hardening Mission (§4/§16, rate limiting) -- a real, confirmed
+    # gap: a tool call reaches an external subprocess or HTTP endpoint
+    # (api/services/mcp/client.py), outside this platform's own cost
+    # controls -- nothing stopped an org from firing an unbounded burst
+    # of real outbound calls through a registered MCP server.
+    await enforce_rate_limit(f"ratelimit:mcp_tool_call:org:{org_id}", settings.MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS, settings.MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS)
     try:
-        result = await call_cached_tool(db, server, tool_name, payload.arguments)
+        # Systèmes internes, item 23 (MCP Firewall) -- `call_cached_tool`
+        # itself now routes through the real policy check + audit log
+        # (api/services/mcp/discovery.py's own docstring); this real,
+        # live, user-facing endpoint is the one real call site that
+        # actually has a real `user_id`/`ip`/`user_agent` to attribute
+        # the resulting real audit row to.
+        result = await call_cached_tool(
+            db, server, tool_name, payload.arguments, user_id=_caller.user_id,
+            ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except MCPClientError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     return MCPToolCallResponse(result=result)

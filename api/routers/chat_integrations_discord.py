@@ -13,9 +13,9 @@ from api.models.organization import OrganizationMember
 from api.schemas.chat_integrations import DiscordConfigResponse, DiscordConfigureRequest, DiscordSendMessageRequest
 from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
-from api.security.chat_integrations_signature import verify_discord_signature
+from api.security.chat_integrations_signature import verify_discord_gateway_secret, verify_discord_signature
 from api.security.organizations import require_org_admin
-from api.utils import client_ip
+from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.discord import (
     DiscordIntegrationError, handle_command, process_discord_message, save_discord_integration,
     send_discord_response,
@@ -81,7 +81,7 @@ async def discord_interactions_endpoint(
     if not verify_discord_signature(x_signature_timestamp, body, x_signature_ed25519):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid request signature")
 
-    payload = await request.json()
+    payload = await read_json_object(request)
     if payload.get("type") == 1:  # PING
         return {"type": 1}  # PONG
 
@@ -105,15 +105,22 @@ async def discord_interactions_endpoint(
 
 
 @router.post("/integrations/discord/message")
-async def discord_message_webhook_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
+async def discord_message_webhook_endpoint(
+    request: Request, db: AsyncSession = Depends(get_db), x_gateway_secret: str | None = Header(default=None),
+):
     """A REAL bot connected via the Discord Gateway (outside this
     HTTP API's own process, same real "the actual socket connection is
     external infrastructure" boundary Partie 8.2's own telephony
     integration draws for Twilio's media stream) posts inbound
     messages here. Real, honest scope: this endpoint trusts its own
     caller (the gateway bot process) rather than re-verifying a
-    signature Discord itself never sends for gateway-sourced events."""
-    event = await request.json()
+    signature Discord itself never sends for gateway-sourced events.
+
+    Because it triggers a paid RAG answer, it is NOT open: the gateway bot must send the shared secret in `X-Gateway-Secret`
+    (`DISCORD_GATEWAY_SHARED_SECRET`); an unset secret or a wrong one answers 401."""
+    if not verify_discord_gateway_secret(x_gateway_secret):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing gateway secret")
+    event = await read_json_object(request)
     integration = await db.scalar(select(DiscordIntegration).where(DiscordIntegration.guild_id == event.get("guild_id", "")))
     if integration is None or not integration.is_active:
         raise _NOT_FOUND

@@ -1,6 +1,9 @@
 "use client";
 
+import { BusinessMetrics } from "@/components/analytics/BusinessMetrics";
+import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import LoadingState from "@/components/LoadingState";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -116,24 +119,15 @@ interface AdminLogEntry {
 
 type AccessState = "checking" | "granted" | "denied";
 
-const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
+const TABS = ["Overview", "Business", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL_KEYS: Record<Tab, string> = {
-  Overview: "admin.tab_overview",
-  Organizations: "admin.tab_orgs",
-  Users: "admin.tab_users",
-  Subscriptions: "admin.tab_subscriptions",
-  Monitoring: "admin.tab_monitoring",
-  Logs: "admin.tab_logs",
-  Alerting: "admin.tab_alerting",
-};
-
 export default function AdminPage() {
   const { user, loading } = useRequireAuth();
   const { t } = useTranslation();
   const [access, setAccess] = useState<AccessState>("checking");
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Overview");
+  const tabParam = useSearchParams().get("tab") ?? "";
+  const tab: Tab = (TABS as readonly string[]).includes(tabParam) ? (tabParam as Tab) : "Overview";
 
   useEffect(() => {
     if (loading || !user) return;
@@ -155,10 +149,10 @@ export default function AdminPage() {
 
   if (access === "denied") {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
         <h1 className="text-lg font-semibold text-foreground">{t("admin.access_denied_title")}</h1>
         <p className="max-w-sm text-sm text-foreground-muted">
-          Cette section est réservée aux administrateurs de la plateforme. Votre compte n&apos;a pas ce rôle.
+          {t("admin.access_denied_desc")}
         </p>
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
@@ -166,27 +160,13 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <h1 className="text-xl font-semibold text-foreground">{t("admin.title")}</h1>
-      <p className="mt-1 text-sm text-foreground-muted">{t("admin.subtitle")}</p>
+    <div className="mx-auto max-w-6xl">
+      <h1 className="text-3xl font-bold tracking-tight text-[#211c37]">{t("admin.title")}</h1>
+      <p className="mt-1 text-lg text-foreground-muted">{t("admin.subtitle")}</p>
 
-      <div className="mt-5 flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((tabKey) => (
-          <button
-            key={tabKey}
-            type="button"
-            onClick={() => setTab(tabKey)}
-            className={`px-3 py-2 text-sm font-medium transition-colors ${
-              tab === tabKey ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
-            }`}
-          >
-            {t(TAB_LABEL_KEYS[tabKey])}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-5">
+      <div className="mt-7">
         {tab === "Overview" && <OverviewTab />}
+        {tab === "Business" && <BusinessTab />}
         {tab === "Organizations" && <OrganizationsTab />}
         {tab === "Users" && <UsersTab />}
         {tab === "Subscriptions" && <SubscriptionsTab />}
@@ -200,9 +180,9 @@ export default function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <p className="text-xs font-semibold uppercase text-foreground-muted">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+    <div className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }
@@ -214,7 +194,7 @@ function OverviewTab() {
 
   useEffect(() => {
     void api.get<AdminStats>("/admin/stats").then(setStats).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, []);
+  }, [t]);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!stats) return <LoadingState fullScreen={false} />;
@@ -237,25 +217,40 @@ function OverviewTab() {
   );
 }
 
+function BusinessTab() {
+  const [dateRange, setDateRange] = useState("30d");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end"><DateRangePicker value={dateRange} onChange={setDateRange} /></div>
+      <BusinessMetrics dateRange={dateRange} />
+    </div>
+  );
+}
+
 function OrganizationsTab() {
   const { t } = useTranslation();
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<{ items: AdminOrg[] }>("/admin/organizations?limit=50").then((r) => setOrgs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, []);
+    void api.get<{ items: AdminOrg[] }>("/admin/organizations?limit=50").then((r) => { setOrgs(r.items); setError(null); }).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
   async function toggleSuspend(org: AdminOrg) {
-    if (org.is_suspended) {
-      await api.post(`/admin/organizations/${org.id}/activate`);
-    } else {
-      const reason = window.prompt(t("admin.suspend_reason")) ?? undefined;
-      await api.post(`/admin/organizations/${org.id}/suspend`, { reason });
+    try {
+      if (org.is_suspended) {
+        await api.post(`/admin/organizations/${org.id}/activate`);
+      } else {
+        const reason = window.prompt(t("admin.suspend_reason")) ?? undefined;
+        await api.post(`/admin/organizations/${org.id}/suspend`, { reason });
+      }
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
     }
-    load();
   }
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
@@ -286,24 +281,34 @@ function UsersTab() {
 
   const load = useCallback(() => {
     const query = search ? `?search=${encodeURIComponent(search)}&limit=50` : "?limit=50";
-    void api.get<{ items: AdminUser[] }>(`/admin/users${query}`).then((r) => setUsers(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, [search]);
+    void api.get<{ items: AdminUser[] }>(`/admin/users${query}`).then((r) => { setUsers(r.items); setError(null); }).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
+  }, [search, t]);
 
   useEffect(() => { load(); }, [load]);
 
   async function toggleSuspend(u: AdminUser) {
-    if (u.is_active) {
-      const reason = window.prompt(t("admin.suspend_reason")) ?? undefined;
-      await api.post(`/admin/users/${u.id}/suspend`, { reason });
-    } else {
-      await api.post(`/admin/users/${u.id}/activate`);
+    try {
+      if (u.is_active) {
+        const reason = window.prompt(t("admin.suspend_reason")) ?? undefined;
+        await api.post(`/admin/users/${u.id}/suspend`, { reason });
+      } else {
+        await api.post(`/admin/users/${u.id}/activate`);
+      }
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
     }
-    load();
   }
 
   async function resetPassword(u: AdminUser) {
-    await api.post(`/admin/users/${u.id}/reset-password`);
-    window.alert(t("admin.reset_email_sent", { email: u.email }));
+    try {
+      await api.post(`/admin/users/${u.id}/reset-password`);
+      setError(null);
+      window.alert(t("admin.reset_email_sent", { email: u.email }));
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
@@ -337,24 +342,31 @@ function UsersTab() {
 function SubscriptionsTab() {
   const { t } = useTranslation();
   const [plans, setPlans] = useState<AdminPlan[]>([]);
-  const [subs, setSubs] = useState<AdminSubscription[]>([]);
+  const [subs, setSubs] = useState<AdminSubscription[] | null>(null);
+  const [subsUnavailable, setSubsUnavailable] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.get<AdminPlan[]>("/admin/plans").then(setPlans).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-    void api.get<AdminSubscription[]>("/admin/subscriptions?limit=50").then(setSubs).catch(() => {});
-  }, []);
+    void api.get<AdminPlan[]>("/admin/plans").then((items) => { setPlans(items); setError(null); }).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
+    void api.get<AdminSubscription[]>("/admin/subscriptions?limit=50")
+      .then((items) => { setSubs(items); setSubsUnavailable(false); })
+      .catch(() => { setSubs(null); setSubsUnavailable(true); });
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
   async function createPlan() {
     if (!newPlanName.trim()) return;
-    await api.post("/admin/plans", { key: newPlanName.toLowerCase().replace(/\s+/g, "-"), name: newPlanName, monthly_price_cents: Math.round(Number(newPlanPrice || "0") * 100) });
-    setNewPlanName("");
-    setNewPlanPrice("");
-    load();
+    try {
+      await api.post("/admin/plans", { key: newPlanName.toLowerCase().replace(/\s+/g, "-"), name: newPlanName, monthly_price_cents: Math.round(Number(newPlanPrice || "0") * 100) });
+      setNewPlanName("");
+      setNewPlanPrice("");
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
@@ -381,13 +393,14 @@ function SubscriptionsTab() {
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">{t("admin.subscriptions_heading")}</h2>
         <div className="flex flex-col gap-1">
-          {subs.map((s) => (
+          {subs?.map((s) => (
             <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs">
               <span className="text-foreground-muted">org {s.organization_id.slice(0, 8)}…</span>
               <span className="font-medium text-foreground">{s.status}</span>
             </div>
           ))}
-          {subs.length === 0 && <p className="text-sm text-foreground-muted">{t("admin.subs_empty")}</p>}
+          {subs === null && (subsUnavailable ? <p className="text-sm text-danger">{t("admin.error_load")}</p> : <LoadingState fullScreen={false} />)}
+          {subs?.length === 0 && <p className="text-sm text-foreground-muted">{t("admin.subs_empty")}</p>}
         </div>
       </div>
     </div>
@@ -465,18 +478,20 @@ function MonitoringTab() {
 
 function AlertingTab() {
   const { t } = useTranslation();
-  const [rules, setRules] = useState<AlertRule[]>([]);
-  const [channels, setChannels] = useState<AlertChannel[]>([]);
-  const [history, setHistory] = useState<AlertHistoryEntry[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [rules, setRules] = useState<AlertRule[] | null>(null);
+  const [channels, setChannels] = useState<AlertChannel[] | null>(null);
+  const [history, setHistory] = useState<AlertHistoryEntry[] | null>(null);
+  const [incidents, setIncidents] = useState<Incident[] | null>(null);
+  const [unavailable, setUnavailable] = useState({ rules: false, channels: false, history: false, incidents: false });
+  const [error, setError] = useState<string | null>(null);
   const [newRule, setNewRule] = useState({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
   const [newChannel, setNewChannel] = useState({ name: "", type: "email", value: "" });
 
   const load = useCallback(() => {
-    void api.get<AlertRule[]>("/alerting/rules").then(setRules).catch(() => {});
-    void api.get<AlertChannel[]>("/alerting/channels").then(setChannels).catch(() => {});
-    void api.get<AlertHistoryEntry[]>("/alerting/history").then(setHistory).catch(() => {});
-    void api.get<Incident[]>("/alerting/incidents").then(setIncidents).catch(() => {});
+    void api.get<AlertRule[]>("/alerting/rules").then((items) => { setRules(items); setUnavailable((state) => ({ ...state, rules: false })); }).catch(() => { setRules(null); setUnavailable((state) => ({ ...state, rules: true })); });
+    void api.get<AlertChannel[]>("/alerting/channels").then((items) => { setChannels(items); setUnavailable((state) => ({ ...state, channels: false })); }).catch(() => { setChannels(null); setUnavailable((state) => ({ ...state, channels: true })); });
+    void api.get<AlertHistoryEntry[]>("/alerting/history").then((items) => { setHistory(items); setUnavailable((state) => ({ ...state, history: false })); }).catch(() => { setHistory(null); setUnavailable((state) => ({ ...state, history: true })); });
+    void api.get<Incident[]>("/alerting/incidents").then((items) => { setIncidents(items); setUnavailable((state) => ({ ...state, incidents: false })); }).catch(() => { setIncidents(null); setUnavailable((state) => ({ ...state, incidents: true })); });
   }, []);
 
   useEffect(() => {
@@ -486,39 +501,61 @@ function AlertingTab() {
   async function createChannel() {
     if (!newChannel.name.trim() || !newChannel.value.trim()) return;
     const config = newChannel.type === "email" ? { email: newChannel.value } : { webhook_url: newChannel.value };
-    await api.post("/alerting/channels", { name: newChannel.name, type: newChannel.type, config });
-    setNewChannel({ name: "", type: "email", value: "" });
-    load();
+    try {
+      await api.post("/alerting/channels", { name: newChannel.name, type: newChannel.type, config });
+      setNewChannel({ name: "", type: "email", value: "" });
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   async function createRule() {
     if (!newRule.name.trim()) return;
-    await api.post("/alerting/rules", { name: newRule.name, metric: newRule.metric, operator: newRule.operator, threshold: Number(newRule.threshold) });
-    setNewRule({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
-    load();
+    try {
+      await api.post("/alerting/rules", { name: newRule.name, metric: newRule.metric, operator: newRule.operator, threshold: Number(newRule.threshold) });
+      setNewRule({ name: "", metric: "cpu_percent", operator: "gt", threshold: "80" });
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   async function deleteRule(id: string) {
-    await api.delete(`/alerting/rules/${id}`);
-    load();
+    try {
+      await api.delete(`/alerting/rules/${id}`);
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   async function resolveIncident(id: string) {
-    await api.post(`/alerting/incidents/${id}/resolve`);
-    load();
+    try {
+      await api.post(`/alerting/incidents/${id}/resolve`);
+      setError(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">{t("admin.alert_channels")}</p>
         <div className="flex flex-col gap-2">
-          {channels.map((c) => (
+          {channels?.map((c) => (
             <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
               <span>{c.name} ({c.type})</span>
               <span className="text-xs text-foreground-muted">{c.enabled ? t("admin.channel_enabled") : t("admin.channel_disabled")}</span>
             </div>
           ))}
+          {channels === null && (unavailable.channels ? <p className="text-sm text-foreground-muted">{t("admin.error_load")}</p> : <LoadingState fullScreen={false} />)}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <input value={newChannel.name} onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })} placeholder={t("admin.alert_channel_name_placeholder")} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
@@ -534,12 +571,13 @@ function AlertingTab() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">{t("admin.alert_rules")}</p>
         <div className="flex flex-col gap-2">
-          {rules.map((r) => (
+          {rules?.map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
               <span>{r.name}: {r.metric} {r.operator} {r.threshold}</span>
               <button type="button" onClick={() => void deleteRule(r.id)} className="text-xs font-medium text-danger hover:underline">{t("admin.delete") || "Supprimer"}</button>
             </div>
           ))}
+          {rules === null && (unavailable.rules ? <p className="text-sm text-foreground-muted">{t("admin.error_load")}</p> : <LoadingState fullScreen={false} />)}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <input value={newRule.name} onChange={(e) => setNewRule({ ...newRule, name: e.target.value })} placeholder={t("admin.alert_rule_name_placeholder")} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-accent" />
@@ -563,7 +601,7 @@ function AlertingTab() {
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">{t("admin.alert_history")}</p>
-        {history.length === 0 ? <p className="text-sm text-foreground-muted">{t("admin.alert_history_empty")}</p> : (
+        {history === null ? (unavailable.history ? <p className="text-sm text-foreground-muted">{t("admin.error_load")}</p> : <LoadingState fullScreen={false} />) : history.length === 0 ? <p className="text-sm text-foreground-muted">{t("admin.alert_history_empty")}</p> : (
           <div className="flex flex-col gap-2">
             {history.map((h) => (
               <div key={h.id} className="rounded-lg border border-border bg-surface p-3 text-sm">{h.message}</div>
@@ -574,7 +612,7 @@ function AlertingTab() {
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-foreground-muted">{t("admin.incidents")}</p>
-        {incidents.length === 0 ? <p className="text-sm text-foreground-muted">{t("admin.incidents_empty")}</p> : (
+        {incidents === null ? (unavailable.incidents ? <p className="text-sm text-foreground-muted">{t("admin.error_load")}</p> : <LoadingState fullScreen={false} />) : incidents.length === 0 ? <p className="text-sm text-foreground-muted">{t("admin.incidents_empty")}</p> : (
           <div className="flex flex-col gap-2">
             {incidents.map((i) => (
               <div key={i.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-sm">
@@ -598,7 +636,7 @@ function LogsTab() {
   const load = useCallback(() => {
     const query = level ? `?level=${level}&limit=50` : "?limit=50";
     void api.get<{ items: AdminLogEntry[] }>(`/admin/logs${query}`).then((r) => setLogs(r.items)).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
-  }, [level]);
+  }, [level, t]);
 
   useEffect(() => { load(); }, [load]);
 

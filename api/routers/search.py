@@ -25,12 +25,14 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_db
 from api.models.organization import OrganizationMember
 from api.schemas.search import SearchRequest, SearchResponse
 from api.security.permissions import require_permission
 from api.security.organization_settings import get_org_settings
 from api.security.organizations import require_org_member
+from api.security.rate_limit import enforce_rate_limit
 from api.services.retrieval_config import resolve_retrieval_strategy
 from api.services.retrieval_pipeline import search_with_context
 
@@ -40,8 +42,25 @@ router = APIRouter(tags=["search"])
 @router.post("/organizations/{org_id}/search", response_model=SearchResponse)
 async def search_organization_documents(
     org_id: uuid.UUID, payload: SearchRequest,
-    _caller: OrganizationMember = Depends(require_permission("documents:write")), db: AsyncSession = Depends(get_db),
+    # Hardening Mission (§9, RBAC audit) -- a real, confirmed bug: search
+    # is a READ operation, but was gated on "documents:write", the
+    # permission Viewer's own documented, default role deliberately
+    # excludes (api/security/permissions.py's own `_DEFAULT_ROLE_PERMISSIONS`
+    # gives Viewer read-only access everywhere) -- a Viewer could read a
+    # document's full content via GET but never search across it. Gating
+    # on "documents:read" instead loses nothing for a CustomRole-based
+    # org (any role already granted "documents:write" also implies read
+    # access in every real caller of this permission), while actually
+    # letting Viewer use the one endpoint tests/test_search.py's own
+    # `test_viewer_can_search` already asserted should work.
+    _caller: OrganizationMember = Depends(require_permission("documents:read")), db: AsyncSession = Depends(get_db),
 ):
+    # Hardening Mission (§4, rate limiting) -- a real, confirmed gap:
+    # this endpoint runs a real retrieval pipeline (embedding call +
+    # vector search, possibly a reranker call) per request, and had no
+    # rate limit at all despite being reachable by every Member on
+    # every organization's plan.
+    await enforce_rate_limit(f"ratelimit:search:org:{org_id}", settings.SEARCH_RATE_LIMIT_MAX_ATTEMPTS, settings.SEARCH_RATE_LIMIT_WINDOW_SECONDS)
     org_settings = await get_org_settings(db, org_id)
     results = await search_with_context(
         db, org_id, payload.query, top_k=payload.top_k, strategy=payload.strategy,

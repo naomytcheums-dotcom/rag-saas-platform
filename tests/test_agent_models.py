@@ -39,7 +39,7 @@ async def _add_member(db_session, org_id, user_id, role: OrganizationRole, invit
 
 def test_validate_agent_model_accepts_a_real_known_model():
     """Validation criterion: la validation fonctionne."""
-    validate_agent_model("anthropic", "claude-3-5-sonnet-20241022")  # does not raise
+    validate_agent_model("anthropic", "claude-sonnet-5-5")  # does not raise
 
 
 def test_validate_agent_model_rejects_an_unknown_provider():

@@ -113,13 +113,26 @@ EPUB_CONTENT_TYPE = "application/epub+zip"
 logger = logging.getLogger(__name__)
 
 
-def extract_document_content(file_path: str, file_type: str) -> dict:
+def extract_document_content(file_path: str, file_type: str, pdf_engine: str = "pymupdf") -> dict:
     """Item 3's literal function. Raises ValueError for a file_type
     none of this codebase's extraction modules handle -- a caller bug
     (this should never happen in practice, since api/services/
     document_storage.py's validate_document_upload only ever accepts
     these same nine types at upload time), not a recoverable
-    per-document failure."""
+    per-document failure.
+
+    `pdf_engine` -- real, additive, per-organization choice (see
+    api/services/docling_extraction.py's own module docstring): every
+    EXISTING caller that never passes this keyword gets byte-identical
+    PyMuPDF behavior, unchanged. `"docling"` routes PDF extraction
+    through Docling's own structure-aware parser instead -- OCR/scanned-
+    PDF handling below stays PyMuPDF-only either way (Docling has its
+    own, separate, real OCR pipeline this étape deliberately does not
+    also wire in -- one clear OCR path, not two competing ones)."""
+    if file_type == PDF_CONTENT_TYPE and pdf_engine == "docling":
+        from api.services.docling_extraction import extract_pdf_with_docling
+
+        return extract_pdf_with_docling(file_path)
     if file_type == PDF_CONTENT_TYPE:
         pages_text = extract_pdf_pages_text(file_path)
         # Partie 3.1.6, item 4 -- for a real scanned PDF (no real,

@@ -62,16 +62,21 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
   });
   const nodes = history.state.nodes;
   const edges = history.state.edges;
+  const setHistory = history.set;
 
   const setNodes = useCallback((updater: Node[] | ((prev: Node[]) => Node[])) => {
-    const next = typeof updater === "function" ? updater(history.state.nodes) : updater;
-    history.set({ nodes: next, edges: history.state.edges });
-  }, [history]);
+    setHistory((previous) => ({
+      nodes: typeof updater === "function" ? updater(previous.nodes) : updater,
+      edges: previous.edges,
+    }));
+  }, [setHistory]);
 
   const setEdges = useCallback((updater: Edge[] | ((prev: Edge[]) => Edge[])) => {
-    const next = typeof updater === "function" ? updater(history.state.edges) : updater;
-    history.set({ nodes: history.state.nodes, edges: next });
-  }, [history]);
+    setHistory((previous) => ({
+      nodes: previous.nodes,
+      edges: typeof updater === "function" ? updater(previous.edges) : updater,
+    }));
+  }, [setHistory]);
   const [variables, setVariables] = useState<WorkflowVariable[]>(() => (workflow.variables as unknown as WorkflowVariable[]) ?? []);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
@@ -122,23 +127,23 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
     if (connection.sourceHandle === "true" || connection.sourceHandle === "false") {
       setNodes((nds) => nds.map((n) => (n.id === connection.source ? { ...n, data: { ...n.data, [`${connection.sourceHandle}_branch`]: connection.target } } : n)));
     }
-  }, []);
+  }, [setEdges, setNodes]);
 
   const addNode = useCallback((type: WorkflowNodeType) => {
     nodeCounter += 1;
     const id = `${type}_${nodeCounter}`;
     setNodes((nds) => [...nds, { id, type, position: { x: 100 + nds.length * 40, y: 100 + nds.length * 30 }, data: {} }]);
-  }, []);
+  }, [setNodes]);
 
   const updateSelectedNodeData = useCallback((data: Record<string, unknown>) => {
     setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? { ...n, data } : n)));
-  }, [selectedNodeId]);
+  }, [selectedNodeId, setNodes]);
 
   const deleteSelectedNode = useCallback(() => {
     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
     setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
     setSelectedNodeId(null);
-  }, [selectedNodeId]);
+  }, [selectedNodeId, setEdges, setNodes]);
 
   const workflowNodes = useMemo(() => nodes.map(fromRFNode), [nodes]);
   const workflowEdges = useMemo(() => edges.map(fromRFEdge), [edges]);
@@ -182,14 +187,14 @@ export function WorkflowBuilder({ workflow, onSaved }: { workflow: Workflow; onS
     } catch {
       setSaveError(t("workflow_builder.error_invalid_json"));
     }
-  }, []);
+  }, [setEdges, setNodes, t]);
 
   const useTemplate = useCallback((templateId: string) => {
     const template = WORKFLOW_TEMPLATES_MAP[templateId];
     if (!template) return;
     setNodes(template.nodes.map(toRFNode));
     setEdges(template.edges.map(toRFEdge));
-  }, []);
+  }, [setEdges, setNodes]);
 
   const selectedNode = workflowNodes.find((n) => n.id === selectedNodeId) ?? null;
 

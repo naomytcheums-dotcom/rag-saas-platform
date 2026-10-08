@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import type { Citation, ConversationMessage } from "@/lib/types";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export interface ChatMessage extends Pick<ConversationMessage, "id" | "role" | "content" | "created_at"> {
   citations?: Citation[];
@@ -19,17 +18,12 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("access_token");
-}
-
 /** Real backend-backed chat, replacing the local-only mock
- * (lib/mockChat.ts) now that login is actually wired up. Uses
- * POST /chat/stream directly (not the native EventSource, which can't
- * send the Authorization header this API requires) and parses the SSE
- * wire format by hand: `event: <type>\ndata: <json>\n\n`. */
+ * (lib/mockChat.ts) now that login is actually wired up. Uses the
+ * authenticated fetch helper because native EventSource cannot send the
+ * Authorization header, then parses the SSE wire format by hand. */
 export function useRealChat(orgId: string) {
+  const { t } = useTranslation();
   const [agentId, setAgentId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,7 +40,7 @@ export function useRealChat(orgId: string) {
         const agents = await api.get<AgentSummary[]>(`/organizations/${orgId}/agents`);
         const agent = agents[0];
         if (!agent) {
-          setError("Aucun agent n'existe encore pour cette organisation. Créez-en un dans Agents.");
+          setError(t("chat.err_no_agent"));
           return;
         }
         setAgentId(agent.id);
@@ -66,10 +60,10 @@ export function useRealChat(orgId: string) {
       } catch (err) {
          
         console.error("useRealChat init failed:", err);
-        setError("Impossible de charger la conversation.");
+        setError(t("chat.err_load"));
       }
     })();
-  }, [orgId]);
+  }, [orgId, t]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -85,11 +79,9 @@ export function useRealChat(orgId: string) {
       abortControllerRef.current = controller;
 
       try {
-        const token = getAccessToken();
-        const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+        const response = await api.fetchRaw("/chat/stream", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ agent_id: agentId, message: text, conversation_id: conversationId }),
           signal: controller.signal,
         });
@@ -126,20 +118,20 @@ export function useRealChat(orgId: string) {
               });
               setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, citations: [...citations] } : m)));
             } else if (type === "error") {
-              setError(data.error || "Une erreur est survenue.");
+              setError(data.error || t("chat.err_generic"));
             }
           }
         }
       } catch (err) {
         if (!(err instanceof DOMException && err.name === "AbortError")) {
-          setError("La connexion au serveur de chat a échoué.");
+          setError(t("chat.err_connection"));
         }
       } finally {
         setPending(false);
         abortControllerRef.current = null;
       }
     },
-    [agentId, conversationId, pending],
+    [agentId, conversationId, pending, t],
   );
 
   const stopGeneration = useCallback(() => {

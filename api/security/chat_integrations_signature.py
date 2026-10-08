@@ -56,3 +56,11 @@ def verify_discord_signature(timestamp: str | None, body: bytes, signature: str 
         return True
     except (InvalidSignature, ValueError):
         return False
+
+
+def verify_discord_gateway_secret(provided: str | None) -> bool:
+    """Constant-time check of the shared secret the external Gateway bot sends. Unset secret or missing header -> False (fail closed)."""
+    if not settings.DISCORD_GATEWAY_SHARED_SECRET or not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), settings.DISCORD_GATEWAY_SHARED_SECRET.encode("utf-8"))
+

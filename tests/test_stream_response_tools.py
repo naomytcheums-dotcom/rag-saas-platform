@@ -18,6 +18,14 @@ import pytest
 from api.services import agent_orchestrator as ao
 
 
+@pytest.fixture(autouse=True)
+def _funded_organization(monkeypatch):
+    """stream_response now runs a credit/spend-cap pre-flight (non-BYOK) against the database before any LLM call; these tests
+    use a mocked database, so give the pre-flight a funded balance and no spend cap."""
+    monkeypatch.setattr("api.services.billing_credits.get_or_create_credit", AsyncMock(return_value=MagicMock(balance=1000)))
+    monkeypatch.setattr("api.services.billing_credits.enforce_spend_caps", AsyncMock(return_value=None))
+
+
 def _make_orchestrator():
     orch = ao.AgentOrchestrator()
     # Disable the shared db-lock semantics for the test -- we only want

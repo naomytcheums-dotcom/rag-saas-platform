@@ -13,6 +13,7 @@ failing later with a confusing AttributeError the first time a route uses
 one, so a misconfigured deployment is caught at process startup.
 """
 
+import os
 from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
@@ -23,7 +24,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", env_prefix="", case_sensitive=True, extra="ignore"
+        env_file=PROJECT_ROOT / os.environ.get("RAG_ENV_FILE", ".env"),
+        env_file_encoding="utf-8", env_prefix="", case_sensitive=True, extra="ignore"
     )
 
     # -- Database -----------------------------------------------------
@@ -653,12 +655,12 @@ class Settings(BaseSettings):
     # missing key surfaces as a real LLMAuthenticationError at CALL
     # time, not a crash at startup.
     LLM_DEFAULT_PROVIDER: str = "anthropic"
-    LLM_DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
+    LLM_DEFAULT_MODEL: str = "claude-sonnet-5-5"
     LLM_TIMEOUT: int = 60
     LLM_MAX_RETRIES: int = 3
 
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MODEL: str = "claude-sonnet-5-5"
     ANTHROPIC_MAX_TOKENS: int = 4096
     ANTHROPIC_TEMPERATURE: float = 0.7
 
@@ -672,7 +674,7 @@ class Settings(BaseSettings):
     # "gemini/" -- baked into the real default itself rather than a
     # separate real prefixing function.
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini/gemini-1.5-pro"
+    GEMINI_MODEL: str = "gemini/gemini-2.5-pro"
     GEMINI_MAX_TOKENS: int = 4096
     GEMINI_TEMPERATURE: float = 0.7
 
@@ -698,6 +700,23 @@ class Settings(BaseSettings):
     OPENAI_COMPATIBLE_MAX_TOKENS: int = 4096
     OPENAI_COMPATIBLE_TEMPERATURE: float = 0.7
 
+    # IBM watsonx.ai -- hosts IBM's own real, open-weight Granite models
+    # (also reachable via Ollama/HuggingFace, but watsonx.ai is IBM's
+    # own real, managed inference endpoint). litellm supports this
+    # provider natively (`litellm.llms.watsonx`, already vendored --
+    # verified against the installed package, no new SDK dependency),
+    # the same "no extra heavy SDK" restraint as every other provider
+    # above. Needs THREE real credentials, not just an API key --
+    # `project_id` scopes the call to a real watsonx.ai project, the
+    # same way `organization_id` scopes everything else in this
+    # codebase; there is no real watsonx call without one.
+    WATSONX_API_KEY: str = ""
+    WATSONX_URL: str = ""
+    WATSONX_PROJECT_ID: str = ""
+    WATSONX_MODEL: str = "watsonx/ibm/granite-3-8b-instruct"
+    WATSONX_MAX_TOKENS: int = 4096
+    WATSONX_TEMPERATURE: float = 0.7
+
     # -- Metadata filtering (Partie 3.4.5) -----------------------------------
     METADATA_FILTERING_ENABLED: bool = True
     METADATA_FILTER_MAX_OPERATORS: int = 5
@@ -716,6 +735,31 @@ class Settings(BaseSettings):
     MMR_ENABLED: bool = True
     MMR_LAMBDA: float = 0.7
     MMR_TOP_K: int = 5
+
+    # -- pgvector (Hardening Mission, Phase 1) ---------------------------------
+    # Real native Postgres vector search, additive to (never a replacement
+    # for) the existing numpy cosine fallback in api/services/retrieval_pipeline.py.
+    # DocumentChunk.embedding_vector uses pgvector's Vector type on Postgres,
+    # degrading to a plain JSON column on SQLite (api/models/document.py's own
+    # docstring already documented pgvector's SQLite gap as the reason the
+    # ORIGINAL `embedding` column stayed plain JSON -- this flag/column pair
+    # is the real follow-up work that module docstring explicitly deferred,
+    # not a contradiction of it). A single fixed dimension is required for a
+    # real ANN index (HNSW): EMBEDDING_VECTOR_DIM matches the DEFAULT embedding
+    # model's own real dimension (all-MiniLM-L6-v2, 384) -- an org on a
+    # different-dimension model still gets fully correct results via the
+    # dimension-safe numpy fallback (api.services.retrieval_pipeline.cosine_similarities
+    # now groups chunks by embedding_dim before ranking, the real fix for the
+    # audit's confirmed embedding-dimension-mismatch crash), just without the
+    # native index speedup for that organization until it reindexes onto the
+    # default-dimension model.
+    PGVECTOR_ENABLED: bool = True
+    # An HNSW scan filtered by `organization_id` only looks at its `ef_search` best candidates BEFORE the filter: a small tenant that
+    # shares the table with big ones can then get fewer results than it should, or none. pgvector >= 0.8 keeps scanning until enough rows
+    # pass the filter (`hnsw.iterative_scan`); this switches it on per query, capped by PGVECTOR_MAX_SCAN_TUPLES. Older pgvector: ignored.
+    PGVECTOR_ITERATIVE_SCAN: bool = True
+    PGVECTOR_MAX_SCAN_TUPLES: int = 20000
+    EMBEDDING_VECTOR_DIM: int = 384
 
     # -- Query rewriting (Partie 3.4.2) ----------------------------------------
     QUERY_REWRITING_ENABLED: bool = True
@@ -762,6 +806,7 @@ class Settings(BaseSettings):
     SENTENCE_TRANSFORMERS_DIMENSIONS: int = 384
     SENTENCE_TRANSFORMERS_DEVICE: str = "cpu"
     SENTENCE_TRANSFORMERS_BATCH_SIZE: int = 32
+    EMBEDDER_WARMUP_ON_STARTUP: bool = True
 
     HF_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     HF_EMBEDDING_DIMENSIONS: int = 384
@@ -834,6 +879,9 @@ class Settings(BaseSettings):
     AGENT_MEMORY_SIZE: int = 100
     AGENT_MEMORY_TTL: int = 3600
     AGENT_MEMORY_ENABLED: bool = True
+    # After a completed agent run, ask the LLM which facts are worth remembering (api/services/agent_long_term_memory.py). It is ONE extra
+    # LLM call per run that is not billed to the organization separately, so it is opt-in.
+    AGENT_MEMORY_AUTO_EXTRACT: bool = False
 
     # -- Conversation memory, cross-session (Partie 5.1.12) ----------------------
     # Not one of this étape's own literal settings -- a real, necessary
@@ -875,6 +923,10 @@ class Settings(BaseSettings):
     SQL_TOOL_ENABLED: bool = True
     SQL_TOOL_MAX_ROWS: int = 100
     SQL_TOOL_MAX_QUERY_LENGTH: int = 5000
+    # Hardening Mission (§29) -- hard server-side time bound for every SQL-tool query
+    # (Postgres only; SQLite has no such setting). A single `SELECT pg_sleep(60)` used
+    # to hold one of the few pooled connections for a minute per call.
+    SQL_TOOL_STATEMENT_TIMEOUT_MS: int = 5000
     # "conversation_messages" deliberately excluded from the real
     # default -- see api/tools/sql_tool.py's own top docstring: it has
     # no real organization_id column of its own (only reachable via a
@@ -943,8 +995,52 @@ class Settings(BaseSettings):
     # RATE_LIMIT_ENABLED: the fast SQLite test suite doesn't need Redis
     # and isn't accidentally coupled to cache state between tests.
     APP_CACHE_ENABLED: bool = True
+    BM25_INDEX_CACHE_ENABLED: bool = True
+
+    CLAMAV_ENABLED: bool = False
+    CLAMAV_SOCKET_PATH: str | None = None
+    CLAMAV_HOST: str | None = None
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: int = 30
+    CLAMAV_REQUIRED: bool = False
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
+    # -- Account lockout (Hardening Mission, Phase 2) --------------------------
+    # Real, DB-persistent lockout -- deliberately INDEPENDENT of Redis
+    # (unlike LOGIN_RATE_LIMIT_* above, api/security/rate_limit.py's own
+    # real, documented fail-open behavior means Redis being down today
+    # means zero brute-force protection at all). `User.failed_login_attempts`/
+    # `locked_until` (api/models/user.py) are real columns on the SAME row
+    # already being read for every login attempt -- no new dependency, no
+    # new failure mode: a real outage of Postgres itself already fails the
+    # whole login endpoint regardless of this feature.
+    ACCOUNT_LOCKOUT_ENABLED: bool = True
+    ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 10
+    ACCOUNT_LOCKOUT_DURATION_SECONDS: int = 900
+
+    # -- Rate limiting expansion (Hardening Mission, Phase 2) -------------------
+    # A real, confirmed audit gap: RATE_LIMIT_ENABLED's own
+    # enforce_rate_limit (api/security/rate_limit.py) was only ever
+    # actually called by the 5 auth endpoints -- search/chat/ingestion/
+    # eval/MCP/public-API/webhooks had zero rate limiting at all. This is
+    # the real, FIRST extension: per-organization, applied at
+    # `api.services.public_api.handle_public_chat`'s own single real
+    # choke point (shared by the public /v1/chat API, the embeddable
+    # widget, and any future caller) -- the most exposed real surface,
+    # since a widget's public key is shared by every visitor of whatever
+    # site embeds it, not gated by an individual user session at all.
+    # Same real fail-open-on-Redis-down behavior as every other
+    # enforce_rate_limit call in this codebase (unlike account lockout
+    # above, this one is explicitly allowed to degrade, per
+    # api/security/rate_limit.py's own documented, deliberate choice).
+    PUBLIC_CHAT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    PUBLIC_CHAT_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS: int = 20
+    LICENSE_VALIDATE_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # When set, GET /metrics requires `Authorization: Bearer <token>` (Prometheus `authorization` / `bearer_token` scrape option).
+    # Unset keeps it open for a scraper inside a private network; set it on any deployment reachable from the Internet.
+    METRICS_AUTH_TOKEN: str | None = None
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3
@@ -960,6 +1056,24 @@ class Settings(BaseSettings):
     # against -- same shape as REGISTER's own IP-based limit.
     INVITATION_ACCEPT_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     INVITATION_ACCEPT_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+
+    # Hardening Mission (§4, rate limiting) -- real, confirmed gaps: the
+    # public chat widget already had an org-scoped rate limit
+    # (PUBLIC_CHAT_RATE_LIMIT_* above), but the authenticated-dashboard
+    # surfaces that trigger genuinely costly backend work (an embedding
+    # call per chunk on ingestion, a real retrieval call on search, an
+    # external subprocess/HTTP round-trip per MCP tool call, a full
+    # LLM-generation pass per question on evaluation) had none at all --
+    # scoped per organization, same fail-open-on-Redis-down behavior as
+    # every other enforce_rate_limit call in this codebase.
+    DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
+    DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    SEARCH_RATE_LIMIT_MAX_ATTEMPTS: int = 120
+    SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60
+    MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     # -- 2FA lockout recovery (lost device AND all recovery codes) --------
     # How long a requested 2FA removal must wait before it can be
@@ -1045,6 +1159,14 @@ class Settings(BaseSettings):
     GEO_IP_API_URL: str = "https://ipapi.co/{ip}/country/"
     GEO_IP_LOOKUP_TIMEOUT_SECONDS: float = 2.0
     GEO_IP_CACHE_TTL_SECONDS: int = 3600
+
+    # Display currency of the public price list (api/services/display_currency.py): plans are billed in EUR, this only changes how they are shown.
+    # The rates come from a free public service (no key), cached; CFA/CFP/Comorian francs use their fixed official parity with the euro.
+    DISPLAY_CURRENCY_ENABLED: bool = True
+    DISPLAY_CURRENCY_RATES_URL: str = "https://open.er-api.com/v6/latest/EUR"
+    DISPLAY_CURRENCY_RATES_TTL_SECONDS: int = 12 * 3600
+    DISPLAY_CURRENCY_TIMEOUT_SECONDS: float = 3.0
+    DISPLAY_CURRENCY_ATTRIBUTION_URL: str = "https://www.exchangerate-api.com"
     TRUSTED_COUNTRIES: str = ""
     SUSPICIOUS_COUNTRIES: str = ""
     GEO_RATE_LIMIT_TRUSTED_MULTIPLIER: float = 2.0
@@ -1474,12 +1596,19 @@ class Settings(BaseSettings):
         # real, historical public price list as 3.5 Sonnet).
         "claude-3-sonnet": {"input": 3.0, "output": 15.0},
         "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        # Current default models. $/M tokens as published in the LiteLLM price map of the installed version (2026-10-07), not guessed:
+        # a model with no entry here makes cost-aware routing do nothing for it.
+        "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
+        "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-        "gpt-4o": {"input": 5.0, "output": 15.0},
+        "gpt-4o": {"input": 2.50, "output": 10.0},
+        "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
+        "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+        # Retired models: values kept from the previous table (absent from the LiteLLM map) so already-recorded results stay priced.
         "gemini-1.5-pro": {"input": 3.50, "output": 10.50},
         "gemini-1.5-flash": {"input": 0.35, "output": 1.05},
-        "mistral-large": {"input": 2.0, "output": 6.0},
-        "mistral-small": {"input": 0.20, "output": 0.60},
+        "mistral-large": {"input": 0.50, "output": 1.50},
+        "mistral-small": {"input": 0.15, "output": 0.60},
     })
     COST_DEFAULT_CURRENCY: str = "USD"
 
@@ -1586,7 +1715,7 @@ class Settings(BaseSettings):
     # reintroduced later, but no longer offered through the UI. See
     # docs/developer/I18N.md.
     UI_DEFAULT_LANGUAGE: str = "en"
-    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en"])
+    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en", "es", "de", "pt", "ar"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
 
     # -- Speech-to-text (Partie 8.2.1) -----------------------------------------------
@@ -1779,12 +1908,19 @@ class Settings(BaseSettings):
     SLACK_MAX_MESSAGE_LENGTH: int = 4000
     SLACK_RESPONSE_TIMEOUT: int = 30
 
+    # Teams (Bot Framework): the inbound webhook is authenticated with the JWT Microsoft signs for the bot. The expected audience is
+    # the bot's Microsoft App ID (TEAMS_BOT_ID or the integration's own bot_id); the signing keys come from this OpenID metadata.
+    TEAMS_OPENID_METADATA_URL: str = "https://login.botframework.com/v1/.well-known/openidconfiguration"
+    TEAMS_JWKS_CACHE_SECONDS: int = 6 * 3600
     TEAMS_BOT_ID: str | None = None
     TEAMS_BOT_TOKEN: str | None = None
     TEAMS_APP_PASSWORD: str | None = None
     TEAMS_MAX_MESSAGE_LENGTH: int = 4000
     TEAMS_RESPONSE_TIMEOUT: int = 30
 
+    # Shared secret the external Discord Gateway bot sends in `X-Gateway-Secret` to POST /integrations/discord/message. Unset = that
+    # endpoint refuses every request (fail closed): it triggers a paid RAG answer, so it must never be open.
+    DISCORD_GATEWAY_SHARED_SECRET: str | None = None
     DISCORD_BOT_TOKEN: str | None = None
     DISCORD_CLIENT_ID: str | None = None
     DISCORD_CLIENT_SECRET: str | None = None
@@ -1888,6 +2024,21 @@ class Settings(BaseSettings):
         total = sum(self.GROUNDEDNESS_FACTORS_WEIGHTS.values())
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"GROUNDEDNESS_FACTORS_WEIGHTS weights must sum to 1.0, got {total}")
+        return self
+
+    @model_validator(mode="after")
+    def _llm_judged_quality_paths_are_not_available_yet(self) -> "Settings":
+        """The LLM-judged variants of answer relevance, context relevance and claim verification are not implemented (their
+        embedding / heuristic paths are the real ones). Enabling one used to start fine and then fail with an unhandled
+        NotImplementedError (HTTP 500) on the first request that reached it; refuse the configuration at startup instead."""
+        enabled = [
+            name for name in ("ANSWER_RELEVANCE_USE_LLM", "CONTEXT_RELEVANCE_USE_LLM", "CLAIM_VERIFICATION_USE_LLM") if getattr(self, name)
+        ]
+        if enabled:
+            raise ValueError(
+                f"{', '.join(enabled)} cannot be enabled: the LLM-judged path is not implemented. Leave it False to use the "
+                "embedding-based / heuristic path."
+            )
         return self
 
     @model_validator(mode="after")
@@ -2097,6 +2248,49 @@ class Settings(BaseSettings):
     # -- Partie 12.3: Credits / usage ----------------------------------------
     CREDITS_ENABLED: bool = True
     CREDITS_DEFAULT_AMOUNT: int = 1000
+    # Hardening Mission (§15/§6, A2A + cost control) -- flat credit cost
+    # per A2A task. An ESTIMATE, not a measured value: BeeAI's
+    # `RequirementAgent.run` (api/services/beeai_orchestrator.py) does not
+    # expose token usage to this codebase, so a per-token debit like
+    # agent_orchestrator's is impossible here. ~25 credits is roughly a
+    # 2,500-input-token run at CREDIT_CONVERSION's rate.
+    A2A_TASK_CREDIT_COST: int = 25
+    # Hardening Mission (§23, billing integrity) -- `POST .../billing/credits/purchase` grants credits WITHOUT
+    # charging anything (it exists so a self-hosted / dev instance with no payment processor can still top up).
+    # It is refused outright whenever a payment provider is configured for the organization (credits must then
+    # come from a real checkout), and -- on a deployment with NO provider -- only while this flag is True.
+    # Explicitly opt in on a self-hosted / development deployment with no
+    # payment processor; public deployments fail closed by default.
+    CREDITS_ALLOW_UNPAID_TOPUP: bool = False
+    # Currency the fixed credit packs (api/security/credit_packs.py `price_cents`) are charged in at checkout.
+    CREDIT_PACK_CURRENCY: str = "usd"
+    # Hardening Mission (§8, retrieval) -- when policy-aware retrieval is active, the strategy fetches
+    # `top_k x this` candidates BEFORE the access-policy filter so a restricted user still gets up to `top_k`
+    # permitted results (it used to filter an already-cut top_k list and silently return fewer).
+    POLICY_OVERFETCH_FACTOR: int = 3
+    # Hardening Mission (§9, Eval Lab) -- when True, an evaluation job's
+    # retrieval is restricted to the documents named in the dataset's own
+    # ground truth (`expected_documents`). That was the unconditional
+    # behavior, added so a free-tier demo stayed under an HTTP timeout, and
+    # it silently INFLATES Recall/MRR/NDCG: the search can only ever pick
+    # among the answer documents, never a distractor. Default False = the
+    # job searches the organization's WHOLE corpus, exactly like production.
+    # Every job records which mode measured it (`results.corpus_constrained`).
+    EVALUATION_RESTRICT_RETRIEVAL_TO_GROUND_TRUTH_DOCS: bool = False
+    A2A_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    A2A_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # -- Voice agent (open-source STT, voice -> RAG -> answer) ------------------------------
+    # `local_whisper` STT provider = faster-whisper (MIT, CTranslate2) running IN-PROCESS; optional dependency
+    # (`pip install faster-whisper`), the model is downloaded on first use. Tiny/base fit a 16 GB machine; larger ones don't.
+    LOCAL_WHISPER_MODEL: str = "base"
+    LOCAL_WHISPER_COMPUTE_TYPE: str = "int8"
+    LOCAL_WHISPER_DEVICE: str = "cpu"
+    VOICE_AGENT_MAX_AUDIO_BYTES: int = 10 * 1024 * 1024
+    VOICE_AGENT_MAX_TRANSCRIPT_CHARS: int = 2000
+    VOICE_AGENT_TURN_CREDIT_COST: int = 10
+    VOICE_AGENT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    VOICE_AGENT_RATE_LIMIT_WINDOW_SECONDS: int = 60
     CREDITS_CURRENCY: str = "EUR"
     CREDITS_ALERT_THRESHOLDS: str = "50,80,95"
     CREDITS_AUTO_REFILL: bool = False
@@ -2129,6 +2323,24 @@ class Settings(BaseSettings):
     OTEL_SERVICE_NAME: str = "rag-saas-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_TRACES_SAMPLER_ARG: float = 0.1
+
+    # -- Bricks open source, item 12: OpenLineage data lineage --------------
+    # Same real "off by default, no real backend in this environment"
+    # reasoning as OTEL_ENABLED above -- api/services/lineage_tracking.py's
+    # own module docstring for the real Job/Run/Dataset wiring this gates.
+    LINEAGE_ENABLED: bool = False
+    LINEAGE_BACKEND_URL: str | None = None
+
+    # -- Bricks open source, item 13: Open Policy Agent (OPA) ----------------
+    # Same real "off by default, no real backend in this environment"
+    # reasoning as OTEL_ENABLED/LINEAGE_ENABLED above --
+    # api/services/opa_policy.py's own module docstring for the real,
+    # ADVISORY (fail-open) policy check this gates, additional to (never
+    # replacing) the existing real Casbin RBAC (api/security/rbac.py).
+    # host/port (not a single URL): OPA's REST endpoint is http://<host>:<port>/v1/data/... (api/services/opa_policy.py).
+    OPA_ENABLED: bool = False
+    OPA_SERVER_HOST: str = "localhost"
+    OPA_SERVER_PORT: int = 8181
 
     # -- Phase 5, Étape 7: Sentry error tracking ---------------------------------
     SENTRY_DSN: str | None = None
@@ -2207,6 +2419,16 @@ class Settings(BaseSettings):
     TEMPO_HOST: str | None = None
     TEMPO_USERNAME: str | None = None
     TEMPO_PASSWORD: str | None = None
+
+    # -- Langfuse (self-hosted or cloud, MIT) -- real GenAI-focused trace
+    # backend, receiving the SAME real OTel GenAI spans
+    # api/services/llm_providers.py already emits (Étape "OpenTelemetry
+    # GenAI") -- no second, parallel `langfuse` SDK/decorator layer, see
+    # api/security/tracing.py's own docstring for why. Real Basic Auth
+    # (base64 public_key:secret_key), same shape as TEMPO_* above.
+    LANGFUSE_HOST: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
 
     # -- Datadog LLM Observability --
     DD_API_KEY: str | None = None

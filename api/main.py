@@ -7,9 +7,10 @@ same app rather than starting a second one.
 
 import asyncio
 import contextlib
+import hmac
 import logging
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy import text
@@ -27,6 +28,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal, engine
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
+    a2a, agent_factory, quality_alerts,
     ab_tests, account, admin_users, agent_api_keys, agent_traces, agents, api_versioning, audit, auth, autonomous_agents, batch_jobs,
     benchmark_versions, billing,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
@@ -40,14 +42,16 @@ from api.routers import (
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
     evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
-    question_sets, questions, quotas, rbac, reindex_schedules, regression_detection, regression_thresholds,
+    question_sets, questions, quotas, rag_control_plane, rbac, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, retrieval_diagnostics, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
     usage, user_limits, verify, voice, voice_messages, voice_settings, webauthn, webhooks, white_label, widget, workflows,
     workspaces,
 )
+from api.security.documents import start_embedder_warmup
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.services.cache_service import is_redis_reachable as is_cache_redis_reachable
+from api.services.mem0_service import close_all_memories
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
 from api.services.plugin_hooks import plugin_error_hook_middleware
@@ -105,6 +109,7 @@ async def lifespan(app: FastAPI):
     # unless OTEL_ENABLED is set (see api/security/tracing.py's own
     # docstring for why that's the honest default in this environment).
     setup_tracing(app)
+    start_embedder_warmup()
 
     async def _poll_jwt_key_cache() -> None:
         while True:
@@ -120,8 +125,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         poll_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await poll_task
+        try:
+            with contextlib.suppress(asyncio.CancelledError):
+                await poll_task
+        finally:
+            close_all_memories()
 
 
 # Partie 9.2.9 -- real OpenAPI/Swagger metadata (title/description/
@@ -333,6 +341,9 @@ app.include_router(custom_tools.router)
 app.include_router(crm.router)
 app.include_router(mcp_servers.router)
 app.include_router(mcp_server.router)
+app.include_router(a2a.router)
+app.include_router(agent_factory.router)
+app.include_router(quality_alerts.router)
 app.include_router(ssl_certificates.router)
 app.include_router(email_domains.router)
 app.include_router(white_label.router)
@@ -344,6 +355,7 @@ app.include_router(batch_jobs.router)
 app.include_router(citations.router)
 app.include_router(chat_stream.router)
 app.include_router(search.router)
+app.include_router(rag_control_plane.router)
 app.include_router(tool_permissions.router)
 app.include_router(tool_config.router)
 app.include_router(human_approval.router)
@@ -408,7 +420,7 @@ app.include_router(fine_tuning.router)
 
 
 @app.get("/metrics", tags=["monitoring"])
-async def metrics():
+async def metrics(authorization: str | None = Header(default=None)):
     """
     Audit finding 22 -- Prometheus text exposition format
     (api/monitoring.py), scrapeable directly by a real Prometheus server.
@@ -421,6 +433,10 @@ async def metrics():
     real access control for this endpoint is expected to be network-level
     (firewalled to the scraper's own network/VPC), not application-level.
     """
+    if settings.METRICS_AUTH_TOKEN:
+        scheme, _, token = (authorization or "").partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode("utf-8"), settings.METRICS_AUTH_TOKEN.encode("utf-8")):
+            return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
     return Response(content=render_prometheus_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 

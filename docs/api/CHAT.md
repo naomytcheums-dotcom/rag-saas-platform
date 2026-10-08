@@ -26,6 +26,19 @@ Response is a streamed sequence of chunks (server-sent events), ending
 with the final message including citations. Client SDKs handle the
 stream for you — see [SDKs](../developer/OVERVIEW.md).
 
+## Streaming from the public API (`/v1/chat`)
+
+```
+POST /v1/chat        header: X-API-Key (scope chat:write)
+{ "message": "...", "agent_id": "...", "conversation_id": null, "stream": true }
+```
+
+With `"stream": false` (the default) the response is one JSON document. With `"stream": true` it is
+a `text/event-stream` of `start`, `token`, `citation`, `done` (or `error`) events — the same events as
+the dashboard's streaming chat. Errors that can be known before generation starts (401/403, 404 for an
+unknown agent or conversation, 429 rate limit, 402 insufficient credits) are returned as ordinary HTTP
+errors, not as stream events. The Python and JavaScript SDKs expose this as `chat.stream(...)`.
+
 ## Editing, retrying, regenerating
 
 ```

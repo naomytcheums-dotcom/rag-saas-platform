@@ -52,7 +52,7 @@ export default function ProfilePage() {
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : t("profile.error_load"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -342,7 +342,7 @@ function TwoFactorSection({ enabled, onChanged, onError }: { enabled: boolean; o
           <h2 className="text-sm font-semibold text-foreground">{t("profile.2fa_heading")}</h2>
           <p className="mt-1 text-xs text-foreground-muted">
             {enabled
-              ? t("profile.2fa_enabled_desc", { remaining: status?.remaining ?? 0, total: status?.total ?? 0 })
+              ? t("profile.2fa_enabled_desc", { remaining: status?.remaining ?? "—", total: status?.total ?? "—" })
               : t("profile.2fa_disabled_desc")}
           </p>
         </div>

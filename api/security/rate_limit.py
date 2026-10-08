@@ -17,13 +17,18 @@ over a truly rolling `window_seconds` -- unlike a fixed-window counter
 through by timing requests around a window reset.
 
 Design choice, stated plainly: if Redis is unreachable, enforce_rate_limit
-logs a warning and lets the request through (fails OPEN, not closed).
-The alternative -- fail closed, blocking all login/register/etc. -- would
-turn a Redis outage into a total auth outage, which is a worse failure
-mode than temporarily losing brute-force protection. This matches every
-other optional-infra dependency in this codebase (Resend, S3): a backing
-service being down degrades one specific protection, it doesn't take the
-whole app down.
+does NOT fail closed (blocking all login/register/etc. would turn a Redis
+outage into a total auth outage -- a worse failure mode than temporarily
+weaker brute-force protection), but it no longer fails fully OPEN either
+(Hardening Mission, §4/§25 -- "a security dependency going down must not
+make the application more permissive"): it degrades to an in-process
+sliding window with the SAME limits. That is looser than the shared Redis
+limit (each worker process counts on its own, so N workers admit up to N x
+the limit, and a restart resets the counters), but a burst can never run
+unbounded just because Redis is down. This matches every other
+optional-infra dependency in this codebase (Resend, S3): a backing service
+being down degrades one specific protection, it doesn't take the whole app
+down -- and it doesn't silently remove that protection either.
 
 That trade-off only stays a *deliberate* one, not a silent one, if
 someone operating this app can actually see it happening -- a warning
@@ -33,7 +38,9 @@ shows up as a readiness signal, not just a line in a log file.
 """
 
 import asyncio
+import collections
 import logging
+import threading
 import time
 import uuid
 
@@ -92,6 +99,32 @@ def _get_redis() -> redis_asyncio.Redis:
     return _redis
 
 
+# In-process fallback used ONLY while Redis is unreachable (see the module
+# docstring). `key -> timestamps of attempts inside the window`, guarded by
+# a lock (the limiter is called from many coroutines/threads). Bounded so a
+# long outage under a key-flood (e.g. one key per IP) cannot grow memory
+# without limit: past `_LOCAL_MAX_KEYS`, fully-expired keys are pruned.
+_local_windows: dict[str, collections.deque] = {}
+_local_lock = threading.Lock()
+_LOCAL_MAX_KEYS = 10_000
+
+
+def _local_record_attempt(key: str, window_seconds: int, now: float) -> tuple[int, int]:
+    """Records this attempt and returns `(attempts_in_window, retry_after_seconds)`
+    -- a true sliding window, same semantics as the Redis sorted-set path."""
+    with _local_lock:
+        attempts = _local_windows.setdefault(key, collections.deque())
+        cutoff = now - window_seconds
+        while attempts and attempts[0] <= cutoff:
+            attempts.popleft()
+        attempts.append(now)
+        retry_after = max(int(window_seconds - (now - attempts[0])), 1)
+        if len(_local_windows) > _LOCAL_MAX_KEYS:
+            for stale_key in [k for k, v in _local_windows.items() if not v or v[-1] <= cutoff]:
+                del _local_windows[stale_key]
+        return len(attempts), retry_after
+
+
 async def enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -> None:
     """
     Raises HTTP 429 (with a Retry-After header) once `key` has been hit
@@ -121,8 +154,16 @@ async def enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -
         pipe.zcard(key)  # how many attempts remain within the window, including this one
         pipe.expire(key, window_seconds)  # let Redis reclaim the key on its own if it's never hit again
         _, _, current_count, _ = await pipe.execute()
-    except Exception as exc:  # noqa: BLE001 -- deliberately broad: any Redis failure must fail open, see module docstring
-        logger.warning("rate limit check failed for key=%s, allowing the request through: %s", key, exc)
+    except Exception as exc:  # noqa: BLE001 -- deliberately broad: any Redis failure must degrade (never 500), see module docstring
+        logger.warning("rate limit check failed for key=%s, degrading to the in-process limiter: %s", key, exc)
+        local_count, local_retry_after = _local_record_attempt(key, window_seconds, now)
+        if local_count > max_attempts:
+            logger.warning("rate limit exceeded (in-process fallback): key=%s max_attempts=%d window_seconds=%d", key, max_attempts, window_seconds)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts, try again in {local_retry_after} seconds",
+                headers={"Retry-After": str(local_retry_after)},
+            )
         return
 
     if current_count > max_attempts:

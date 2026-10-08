@@ -40,7 +40,7 @@ export default function WidgetSettingsPage() {
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : t("widget.error_load"));
     }
-  }, [org]);
+  }, [org, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.

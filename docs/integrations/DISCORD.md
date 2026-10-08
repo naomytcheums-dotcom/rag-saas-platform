@@ -21,6 +21,8 @@ POST /organizations/{org_id}/integrations/discord/configure
 
 A bot connected via the Discord Gateway (a separate, long-running process outside this HTTP API, same boundary as the Twilio media-stream integration) can post inbound messages to `POST /integrations/discord/message` for full message-in/message-out handling, including real thread creation (`create_discord_thread`).
 
+**Authentication (required).** This endpoint triggers a paid RAG answer, so it is not open: the gateway bot must send the shared secret in an `X-Gateway-Secret` header, and the API must have the same value in `DISCORD_GATEWAY_SHARED_SECRET`. Without the setting every request is refused (401) -- the endpoint fails closed. A body that is not a JSON object answers 400.
+
 ## Security
 
 - **Interactions webhook**: Discord's real Ed25519 signature scheme (`X-Signature-Ed25519`/`X-Signature-Timestamp`), verified in `api/security/chat_integrations_signature.py` -- NOT HMAC, unlike Slack.

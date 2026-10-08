@@ -103,3 +103,87 @@ async def get_available_knowledge_bases(db: AsyncSession, organization_id: uuid.
         select(Workspace).where(Workspace.organization_id == organization_id).order_by(Workspace.created_at)
     )
     return list(result)
+
+
+# -- Hardening Mission (§11/§14, ChangeLab + Factory) ---------------------------
+#
+# A real, confirmed gap: `Agent.knowledge_base_config` was written by the
+# MCP tools `create_rag_agent`/`update_retrieval_config` (and by
+# `set_agent_knowledge_base` above) but READ BY NOTHING that ever ran a
+# query -- neither `agent_orchestrator` nor the Eval Lab consulted it, so a
+# ChangeLab change (e.g. top_k 5 -> 10) could never move a benchmark
+# metric: a decorative knob. `run_evaluation` now applies it for real
+# (see api/services/evaluation_results.py), via the two pure helpers below.
+
+RETRIEVAL_STRATEGY_ALIASES = {"vector": "vector_only", "bm25": "bm25_only"}
+KNOWN_RETRIEVAL_STRATEGIES = ("hybrid", "vector_only", "bm25_only", "hybrid_reranked", "semantic")
+# Keys that map onto a real `search_with_context` keyword argument ...
+_SEARCH_KWARG_KEYS = ("top_k", "score_threshold", "strategy", "reranker")
+# ... and keys that map onto a real organization-settings flag read inside search().
+_SETTINGS_FLAG_KEYS = {"hyde": "hyde_enabled", "mmr": "mmr_enabled", "multi_query": "multi_query_enabled"}
+_RECOGNIZED_KB_CONFIG_KEYS = set(_SEARCH_KWARG_KEYS) | set(_SETTINGS_FLAG_KEYS) | {"retrieval_strategy"}
+
+
+def validate_retrieval_config(config: dict) -> dict:
+    """Real, strict validation + normalization of a retrieval config
+    coming from an external caller (the MCP tools): unknown keys are
+    REJECTED rather than silently stored (a typo like `topk` must fail
+    loudly, never produce an inert, "successful" change), values are
+    bounds-checked, and `AGENTS.md`'s own documented short strategy names
+    (`vector`/`bm25`) are mapped onto the real ones."""
+    from api.config import settings
+
+    if not isinstance(config, dict):
+        raise AgentKnowledgeBaseError("retrieval_config must be an object")
+    unknown = sorted(set(config) - _RECOGNIZED_KB_CONFIG_KEYS)
+    if unknown:
+        raise AgentKnowledgeBaseError(f"Unknown retrieval_config key(s): {unknown} (expected a subset of {sorted(_RECOGNIZED_KB_CONFIG_KEYS)})")
+
+    out = dict(config)
+    if "retrieval_strategy" in out:
+        out.setdefault("strategy", out.pop("retrieval_strategy"))
+    if "strategy" in out:
+        strategy = RETRIEVAL_STRATEGY_ALIASES.get(out["strategy"], out["strategy"])
+        if strategy not in KNOWN_RETRIEVAL_STRATEGIES:
+            raise AgentKnowledgeBaseError(f"Unknown strategy {out['strategy']!r} (expected one of {KNOWN_RETRIEVAL_STRATEGIES})")
+        out["strategy"] = strategy
+    if "top_k" in out:
+        top_k = out["top_k"]
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= settings.TOP_K_MAX:
+            raise AgentKnowledgeBaseError(f"top_k must be an integer between 1 and {settings.TOP_K_MAX}")
+    if "score_threshold" in out:
+        threshold = out["score_threshold"]
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
+            raise AgentKnowledgeBaseError("score_threshold must be a number between 0 and 1")
+    if "reranker" in out:
+        if out["reranker"] in (None, "none"):
+            out.pop("reranker")
+        elif not isinstance(out["reranker"], str) or not out["reranker"].strip():
+            raise AgentKnowledgeBaseError("reranker must be a non-empty model name, or 'none'")
+    for flag in _SETTINGS_FLAG_KEYS:
+        if flag in out and not isinstance(out[flag], bool):
+            raise AgentKnowledgeBaseError(f"{flag} must be a boolean")
+    return out
+
+
+def retrieval_overrides_from_kb_config(config: dict | None) -> tuple[dict, dict]:
+    """Pure: split a stored agent `knowledge_base_config` into
+    `(search_kwargs, org_settings_overrides)`. Only keys physically
+    present AND well-formed are applied -- a malformed legacy value is
+    skipped, never allowed to break a real query."""
+    config = config or {}
+    kwargs: dict = {}
+    top_k = config.get("top_k")
+    if isinstance(top_k, int) and not isinstance(top_k, bool) and top_k >= 1:
+        kwargs["top_k"] = top_k
+    threshold = config.get("score_threshold")
+    if isinstance(threshold, (int, float)) and not isinstance(threshold, bool) and 0.0 <= threshold <= 1.0:
+        kwargs["score_threshold"] = float(threshold)
+    strategy = RETRIEVAL_STRATEGY_ALIASES.get(config.get("strategy", config.get("retrieval_strategy")), config.get("strategy", config.get("retrieval_strategy")))
+    if strategy in KNOWN_RETRIEVAL_STRATEGIES:
+        kwargs["strategy"] = strategy
+    reranker = config.get("reranker")
+    if isinstance(reranker, str) and reranker.strip() and reranker != "none":
+        kwargs["reranker"] = reranker
+    overrides = {setting: config[flag] for flag, setting in _SETTINGS_FLAG_KEYS.items() if isinstance(config.get(flag), bool)}
+    return kwargs, overrides

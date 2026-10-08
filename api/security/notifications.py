@@ -117,13 +117,13 @@ async def send_test_notification(
     real trigger would produce."""
     from api.services.notifications import create_notification
 
-    rendered = await preview_notification_template(db, organization_id, notification_type, context)
+    # Fails early if the (possibly customized) template cannot be rendered with this context; create_notification then renders it
+    # itself from `notification_type` + `context`, exactly as a real trigger would.
+    await preview_notification_template(db, organization_id, notification_type, context)
     await create_notification(
         db,
-        user_id=user_id,
         organization_id=organization_id,
-        type=notification_type,
-        title=rendered["title"],
-        body=rendered["body"],
-        data=context,
+        user_id=user_id,
+        notification_type=notification_type,
+        context=context,
     )

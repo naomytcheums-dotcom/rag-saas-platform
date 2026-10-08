@@ -5,6 +5,12 @@
 # backup file to restore from -- never leaves them guessing.
 set -euo pipefail
 
+POSTGRES_HEALTHCHECK_MAX_ATTEMPTS="${POSTGRES_HEALTHCHECK_MAX_ATTEMPTS:-60}"
+if ! [[ "$POSTGRES_HEALTHCHECK_MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "POSTGRES_HEALTHCHECK_MAX_ATTEMPTS must be a positive integer." >&2
+  exit 1
+fi
+
 COMPOSE_FILE="docker-compose.selfhosted.yml"
 
 if [ ! -f .env ]; then
@@ -26,7 +32,18 @@ if ! docker compose -f "$COMPOSE_FILE" up -d --build; then
 fi
 
 echo "Waiting for Postgres to become healthy..."
-until docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U "${POSTGRES_USER:-rag_saas}" &> /dev/null; do sleep 2; done
+POSTGRES_HEALTHY=false
+for ((attempt = 1; attempt <= POSTGRES_HEALTHCHECK_MAX_ATTEMPTS; attempt++)); do
+  if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U "${POSTGRES_USER:-rag_saas}" &> /dev/null; then
+    POSTGRES_HEALTHY=true
+    break
+  fi
+  if [ "$attempt" -lt "$POSTGRES_HEALTHCHECK_MAX_ATTEMPTS" ]; then sleep 2; fi
+done
+if [ "$POSTGRES_HEALTHY" != true ]; then
+  echo "Postgres did not become healthy after $POSTGRES_HEALTHCHECK_MAX_ATTEMPTS checks; inspect the Docker logs and retry." >&2
+  exit 1
+fi
 
 echo "Running database migrations..."
 if ! docker compose -f "$COMPOSE_FILE" exec -T api python -m alembic upgrade head; then

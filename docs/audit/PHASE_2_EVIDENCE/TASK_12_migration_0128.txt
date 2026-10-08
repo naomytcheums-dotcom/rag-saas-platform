@@ -1,0 +1,11 @@
+P2C-12 — migration 0128 analysis
+Date: 2026-10-03
+Source: api/alembic/versions/0128_pgvector_embeddings.py (100 lines).
+Artifact: docs/audit/MIGRATION_0128_ANALYSIS.md.
+Command: static source read and comparison with local ORM/config; no Alembic
+upgrade/downgrade and no database connection.
+Result: full local source reproduced; analyzed new columns, vector dimension,
+HNSW/cosine operator, backfill, malformed-input/lock/performance risks,
+rollback and staged rollout proposal.
+Applied revision and target database state: UNKNOWN.
+Status: PASS for static analysis only; no runtime claim.

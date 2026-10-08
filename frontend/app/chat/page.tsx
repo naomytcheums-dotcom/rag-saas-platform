@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import ChatComposer from "@/components/ChatComposer";
 import ChatSidebar from "@/components/ChatSidebar";
-import LanguageSelector from "@/components/LanguageSelector";
 import LoadingState from "@/components/LoadingState";
 import MessageBubble from "@/components/MessageBubble";
 import { useTranslation } from "@/lib/i18n";
@@ -41,7 +40,7 @@ export default function Home() {
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <ChatSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -57,7 +56,6 @@ export default function Home() {
             </button>
             <h1 className="text-base font-semibold text-foreground sm:text-lg">RAG SaaS Platform</h1>
           </div>
-          <LanguageSelector />
         </header>
 
         <main ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
@@ -94,27 +92,10 @@ export default function Home() {
               </div>
             )}
 
-            {messages.length <= 2 && (
-              <div>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">{t("chat.suggested_questions")}</h2>
-                <div className="flex flex-wrap gap-2">
-                  {STARTER_QUESTIONS.map((question) => (
-                    <button
-                      key={question}
-                      type="button"
-                      onClick={() => sendMessage(question)}
-                      className="rounded-full border border-border-strong bg-surface px-3 py-1.5 text-sm text-foreground hover:border-accent hover:bg-accent-soft"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </main>
 
-        <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} />
+        <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} suggestions={messages.length <= 2 ? STARTER_QUESTIONS : []} />
       </div>
     </div>
   );

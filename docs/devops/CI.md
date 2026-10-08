@@ -18,9 +18,13 @@ vers `main`, 3 jobs paralleles :
    base Postgres necessaire). Les memes secrets deja configures pour
    `.github/workflows/celery-worker.yml` sont reutilises (requis pour
    que `api.config.settings` s'importe du tout).
-2. **backend-security** -- `pip-audit -r requirements-api.txt`.
+2. **backend-security** -- `pip-audit -r requirements-api.txt -r requirements-optional.txt`.
 3. **frontend-checks** -- dans `frontend/` : `tsc --noEmit`, `npm run
    lint`, `npm test` (vitest), `npm audit --production`.
+
+Les jobs backend installent les deux fichiers de dependances. Les integrations
+optionnelles restent installees par defaut, comme dans `Dockerfile.api`;
+seul un build explicite avec `INSTALL_OPTIONAL_RAG_DEPS=0` les omet.
 
 ## Verification
 

@@ -169,7 +169,6 @@ async def accept_invitation(payload: InvitationAcceptRequest, request: Request, 
     )
 
     invitation = await resolve_valid_invitation(db, payload.token)
-    organization = await db.get(Organization, invitation.organization_id)
 
     if await is_already_a_member(db, organization_id=invitation.organization_id, email=invitation.email):
         # Defensive: added some other way between invite and accept.

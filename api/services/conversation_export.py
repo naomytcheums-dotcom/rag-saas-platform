@@ -101,8 +101,10 @@ async def export_to_pdf(db: AsyncSession, conversation_id: uuid.UUID, user_id: u
             "(Pango/cairo/GObject) are not installed. See requirements-api.txt's own comment."
         ) from exc
 
-    html_document = f'<html><head><meta charset="utf-8"><title>{conversation.title}</title></head><body>{html_body}</body></html>'
-    return weasyprint.HTML(string=html_document).write_pdf()
+    from api.services.pdf_safety import deny_all_url_fetcher, esc
+
+    html_document = f'<html><head><meta charset="utf-8"><title>{esc(conversation.title)}</title></head><body>{html_body}</body></html>'
+    return weasyprint.HTML(string=html_document, url_fetcher=deny_all_url_fetcher).write_pdf()
 
 
 async def export_to_docx(db: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID) -> bytes:

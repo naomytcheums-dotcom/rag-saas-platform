@@ -10,6 +10,7 @@ export function useMetrics(orgId: string, metricName?: string, period = "day", d
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     setLoading(true);
     try {
       setPoints(await getMetrics(orgId, { metric_name: metricName, period, date_range: dateRange }));

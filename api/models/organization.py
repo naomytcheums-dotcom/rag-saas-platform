@@ -16,7 +16,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -62,6 +62,7 @@ class Organization(Base):
     # never to an error -- an org that never sets this keeps working
     # exactly as billing did before this étape.
     billing_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    bm25_corpus_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
 
     members: Mapped[list["OrganizationMember"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"

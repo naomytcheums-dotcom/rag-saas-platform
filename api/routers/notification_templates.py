@@ -17,6 +17,8 @@ org-scoped API.
 
 import uuid
 
+import jinja2
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -144,8 +146,12 @@ async def preview_template_endpoint(
 ):
     """Render the effective template for this org+type with the given
     context, using the real DB-backed lookup (org-specific -> global ->
-    code default). Never sends anything -- pure preview."""
-    return await preview_notification_template(db, org_id, body.notification_type, body.context)
+    code default). Never sends anything -- pure preview. A context that lacks a variable the template uses is the caller's mistake:
+    400 with the reason, not an unhandled Jinja error."""
+    try:
+        return await preview_notification_template(db, org_id, body.notification_type, body.context)
+    except jinja2.TemplateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The template cannot be rendered with this context: {exc}") from exc
 
 
 @router.post("/test", status_code=status.HTTP_202_ACCEPTED)
@@ -159,6 +165,9 @@ async def test_notification_endpoint(
     to the calling user, using the given type + context. Useful to
     verify a customized template end-to-end without waiting for a real
     trigger."""
-    await send_test_notification(db, org_id, caller.user_id, body.notification_type, body.context)
+    try:
+        await send_test_notification(db, org_id, caller.user_id, body.notification_type, body.context)
+    except jinja2.TemplateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The template cannot be rendered with this context: {exc}") from exc
     await db.commit()
     return {"status": "sent"}

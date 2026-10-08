@@ -44,6 +44,9 @@ async def require_organization_api_key(
 
     await check_rate_limit(key_row)
     await check_quota_with_notification(db, key_row)
+    from api.security.logging_correlation import bind_log_context
+
+    bind_log_context(organization_id=key_row.organization_id)
     return key_row
 
 

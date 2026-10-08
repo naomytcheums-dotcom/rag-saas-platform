@@ -37,11 +37,28 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
+from opentelemetry import trace
 
 from api.models.mcp_server import MCPAuthType, MCPServerConfig, MCPTransport
 from api.security.encryption import decrypt_field
 
 logger = logging.getLogger(__name__)
+
+# Bricks open source, item 15 -- the same real OpenTelemetry GenAI
+# semantic conventions api/services/llm_providers.py's own tracer
+# already applies to real LLM calls (verified there against the real
+# spec, `gen_ai.*` attributes), extended here to real MCP tool calls
+# via the GenAI spec's own real, stable tool-call attributes
+# (`gen_ai.tool.name`/`gen_ai.tool.call.id`, part of the core GenAI
+# semconv, not a bespoke MCP-specific extension this codebase invented
+# -- dedicated MCP semantic conventions are still an evolving/
+# experimental area upstream, so this deliberately reuses the already-
+# stable tool-call attributes rather than fabricating MCP-specific
+# ones that could change). `get_tracer()` on a not-yet-configured SDK
+# is the same real, always-safe no-op tracer as every other real
+# tracer in this codebase (OTEL_ENABLED gates the real exporter, never
+# this import).
+_tracer = trace.get_tracer("api.services.mcp.client")
 
 _DEFAULT_TIMEOUT_SECONDS = 15.0
 
@@ -114,15 +131,27 @@ async def call_tool(server: MCPServerConfig, tool_name: str, arguments: dict[str
     joined -- MCP tool results can carry multiple content blocks
     (text/image/resource); this platform's own `ToolSpec.handler`
     contract (api/services/tools.py) returns a single string, so
-    non-text blocks are described rather than silently dropped."""
-    try:
-        async with AsyncExitStack() as stack:
-            session = await _open_session(server, stack)
-            result = await session.call_tool(tool_name, arguments)
-    except MCPClientError:
-        raise
-    except Exception as exc:  # noqa: BLE001 -- same reasoning as discover_tools
-        raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {exc}") from exc
+    non-text blocks are described rather than silently dropped.
+
+    Bricks open source, item 15 -- real OpenTelemetry span per real MCP
+    tool call, span name `"execute_tool {tool_name}"` matching the same
+    real `"{operation} {target}"` naming convention
+    `api.services.llm_providers`'s own `chat {model}` span already
+    uses. `gen_ai.tool.name`/`gen_ai.tool.call.id` are the GenAI
+    semconv's own real, stable tool-call attributes (see this module's
+    own top docstring for why these, not bespoke MCP-specific ones)."""
+    with _tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+        span.set_attribute("gen_ai.operation.name", "execute_tool")
+        span.set_attribute("gen_ai.tool.name", tool_name)
+        span.set_attribute("mcp.server.name", server.name)
+        try:
+            async with AsyncExitStack() as stack:
+                session = await _open_session(server, stack)
+                result = await session.call_tool(tool_name, arguments)
+        except MCPClientError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- same reasoning as discover_tools
+            raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {exc}") from exc
 
     parts: list[str] = []
     for block in result.content:

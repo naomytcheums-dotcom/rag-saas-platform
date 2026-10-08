@@ -18,6 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
+from api.database_url import synchronous_database_url
 from api.models.admin import SystemLog
 from api.security.logging_correlation import get_request_id, mask_sensitive
 
@@ -44,7 +45,7 @@ _recent_records: dict[tuple, float] = {}
 def _get_sync_engine():
     global _sync_engine
     if _sync_engine is None:
-        _sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""), pool_pre_ping=True, pool_size=2)
+        _sync_engine = create_engine(synchronous_database_url(settings.DATABASE_URL), pool_pre_ping=True, pool_size=2)
     return _sync_engine
 
 

@@ -1,5 +1,5 @@
 """
-IBM Bob 2.0 — 4 real MCP tools backing the `agents.md` contract.
+4 real MCP tools backing the `agents.md` contract (Factory / Autopsy / ChangeLab / benchmark).
 
 These are the 4 named tools in `agents.md`'s own section 3 (MCP
 Interface):
@@ -12,7 +12,7 @@ Each one wraps a REAL, existing service function — no duplicated logic,
 no new engine.
 
 Exposed by `api/routers/mcp_server.py`, so an external MCP client
-(IBM Bob 2.0) can list them via `GET /mcp/v1/tools` and call them via
+can list them via `GET /mcp/v1/tools` and call them via
 `POST /mcp/v1/tools/{name}/call`.
 """
 
@@ -49,21 +49,31 @@ async def create_rag_agent(
 ) -> dict[str, Any]:
     """Mode 1 (FACTORY) — provision a real RAG agent.
 
-    Delegates to the real `Agent` model. `retrieval_config` is stored on
-    the agent's own real `knowledge_base_config` JSON column (the real
-    field api/services/agent_orchestrator.py reads at run time).
+    Delegates to the real `Agent` model. `retrieval_config` is VALIDATED
+    (`validate_retrieval_config`: unknown keys, bad strategy, out-of-range
+    top_k/score_threshold are rejected -- Hardening Mission §14, never a
+    decorative JSON blob) and stored on the agent's own real
+    `knowledge_base_config` column, which the Eval Lab now genuinely
+    applies when benchmarking this agent
+    (`api/services/evaluation_results.py::run_evaluation`).
 
     Returns `{"agent_id": ..., "status": "created"}`.
     """
+    from api.services.agent_knowledge_base import AgentKnowledgeBaseError, validate_retrieval_config
+
     if not name or not name.strip():
         raise MCPBuiltinToolError("create_rag_agent: name is required")
+    try:
+        validated_config = validate_retrieval_config(retrieval_config or {})
+    except AgentKnowledgeBaseError as exc:
+        raise MCPBuiltinToolError(f"create_rag_agent: {exc}") from exc
 
     agent = Agent(
         organization_id=organization_id,
         name=name.strip(),
-        model_config_json={"model": model or "claude-3-5-sonnet"},
+        model_config_json={"model": model or "claude-sonnet-5-5"},
         system_prompt=system_prompt or "You are a helpful assistant.",
-        knowledge_base_config=retrieval_config or {},
+        knowledge_base_config=validated_config,
         created_by=created_by,
     )
     db.add(agent)
@@ -84,37 +94,46 @@ async def get_failure_report(
 ) -> dict[str, Any]:
     """Mode 3 (AUTOPSY) — categorize a real evaluation run's failures.
 
-    Delegates to the real `EvaluationFailure` rows produced by
-    `evaluation_jobs`. Groups by the real `category` column already
-    populated during evaluation.
+    Hardening Mission (§10/§24) -- two real bugs fixed here: (1) the run
+    was never checked against `organization_id`, so any caller could read
+    ANOTHER organization's failure report by guessing a job id (IDOR);
+    an unknown run and another tenant's run now both raise the same
+    "not found". (2) `question`/`expected`/`actual` were read via
+    `getattr(f, "question", "")` from attributes `EvaluationFailure`
+    never had, so every report returned empty strings -- they now come
+    from the real joined `EvaluationQuestion` (`question`,
+    `expected_answer`) and the real recorded `EvaluationFailure.error`.
+    `categories` reuses `categorize_job_failures` (retrieval / generation
+    / other from real failure rows, plus hallucination from the real,
+    already-computed `hallucination_rate` metric) instead of a second,
+    divergent tally.
 
     Returns `{"failures": [...], "categories": {...}}`.
     """
-    from api.models.evaluation import EvaluationFailure
+    from api.models.evaluation import EvaluationDataset, EvaluationFailure, EvaluationJob, EvaluationQuestion
+    from api.services.evaluation_jobs import categorize_job_failures
 
-    failures = (
-        await db.scalars(
-            select(EvaluationFailure).where(
-                EvaluationFailure.evaluation_job_id == run_id,
-            )
+    owned = await db.scalar(
+        select(EvaluationJob.id)
+        .join(EvaluationDataset, EvaluationDataset.id == EvaluationJob.dataset_id)
+        .where(EvaluationJob.id == run_id, EvaluationDataset.organization_id == organization_id)
+    )
+    if owned is None:
+        raise MCPBuiltinToolError(f"Run not found: {run_id}")
+
+    rows = (
+        await db.execute(
+            select(EvaluationFailure, EvaluationQuestion)
+            .join(EvaluationQuestion, EvaluationQuestion.id == EvaluationFailure.question_id)
+            .where(EvaluationFailure.evaluation_job_id == run_id)
+            .order_by(EvaluationFailure.created_at)
         )
     ).all()
-
-    categories: dict[str, int] = {}
-    items: list[dict[str, Any]] = []
-    for f in failures:
-        cat = getattr(f, "category", None) or "OTHER"
-        categories[cat] = categories.get(cat, 0) + 1
-        items.append(
-            {
-                "question": getattr(f, "question", "") or "",
-                "category": cat,
-                "expected": getattr(f, "expected", "") or "",
-                "actual": getattr(f, "actual", "") or "",
-            }
-        )
-
-    return {"failures": items, "categories": categories}
+    items = [
+        {"question": q.question, "category": f.category, "expected": q.expected_answer or "", "actual": f.error}
+        for f, q in rows
+    ]
+    return {"failures": items, "categories": await categorize_job_failures(db, run_id)}
 
 
 # ---------------------------------------------------------------------------
@@ -133,13 +152,22 @@ async def update_retrieval_config(
 
     Only updates the given keys (real partial merge, never a full
     replacement) so a targeted fix (e.g. bumping `top_k` from 5 to 10)
-    does not silently wipe every other key. Merges into the agent's real
-    `knowledge_base_config` JSON column.
+    does not silently wipe every other key. The change is VALIDATED
+    (unknown keys / out-of-range values are rejected, §11) and is
+    genuinely measurable: the Eval Lab applies the agent's stored config
+    when benchmarking it, so a following `run_eval_benchmark` really
+    exercises the new value.
 
     Returns `{"status": "updated", "updated_keys": [...]}`.
     """
+    from api.services.agent_knowledge_base import AgentKnowledgeBaseError, validate_retrieval_config
+
     if not isinstance(config, dict) or not config:
         raise MCPBuiltinToolError("update_retrieval_config: config must be a non-empty object")
+    try:
+        validated = validate_retrieval_config(config)
+    except AgentKnowledgeBaseError as exc:
+        raise MCPBuiltinToolError(f"update_retrieval_config: {exc}") from exc
 
     agent = await db.scalar(
         select(Agent).where(
@@ -151,10 +179,10 @@ async def update_retrieval_config(
         raise MCPBuiltinToolError(f"Agent not found: {agent_id}")
 
     merged = dict(agent.knowledge_base_config or {})
-    merged.update(config)
+    merged.update(validated)
     agent.knowledge_base_config = merged
     await db.flush()
-    return {"status": "updated", "updated_keys": sorted(config.keys())}
+    return {"status": "updated", "updated_keys": sorted(validated.keys())}
 
 
 # ---------------------------------------------------------------------------
@@ -173,21 +201,26 @@ async def run_eval_benchmark(
     """Mode 2 (GUARDIAN) + Mode 4 (CHANGELAB) — launch a real benchmark.
 
     Delegates to the real `evaluation_jobs` service (same code path the
-    REST `/datasets/{id}/evaluate` endpoint uses). Returns immediately
-    with a `run_id` (the job is queued asynchronously, like the REST
-    endpoint).
+    REST `/datasets/{id}/evaluate` endpoint uses). Executes the job
+    synchronously so the caller gets real results in the same call (a
+    queued Celery worker is not available on every deployment).
 
-    Returns `{"run_id": ..., "status": "completed"}`.
-
-    IBM Bob 2.0 -- this tool executes the job synchronously so the
-    caller (Bob, or any MCP client) gets real results in the same
-    call. The alternative (queue + Celery worker) requires a
-    dedicated worker process which Render Free does not provide.
+    Hardening Mission (§16/§24) -- the dataset (and agent, when given)
+    must belong to `organization_id`: before this, any caller could run
+    a benchmark on another tenant's dataset. Returns the job's real
+    per-metric AVERAGES (`metrics`) computed from its persisted
+    `EvaluationResult` rows, not just the bare result-id list.
     """
-    from api.services.evaluation_jobs import (
-        create_evaluation_job,
-        run_evaluation_job,
-    )
+    from api.models.evaluation import EvaluationDataset
+    from api.services.evaluation_jobs import create_evaluation_job, run_evaluation_job
+
+    dataset = await db.get(EvaluationDataset, dataset_id)
+    if dataset is None or dataset.organization_id != organization_id:
+        raise MCPBuiltinToolError(f"Dataset not found: {dataset_id}")
+    if agent_id is not None:
+        owned_agent = await db.scalar(select(Agent.id).where(Agent.id == agent_id, Agent.organization_id == organization_id))
+        if owned_agent is None:
+            raise MCPBuiltinToolError(f"Agent not found: {agent_id}")
 
     job = await create_evaluation_job(
         db,
@@ -197,7 +230,6 @@ async def run_eval_benchmark(
     )
     await db.flush()
 
-    # Execute the job synchronously so the caller gets real results.
     await run_evaluation_job(db, job.id)
     await db.refresh(job)
 
@@ -207,8 +239,23 @@ async def run_eval_benchmark(
         "progress": job.progress,
         "total_questions": job.total_questions,
         "completed_questions": job.completed_questions,
-        "metrics": job.results if job.results else None,
+        "metrics": await _job_metric_averages(db, job.id),
+        "summary": job.results if job.results else None,
     }
+
+
+async def _job_metric_averages(db: AsyncSession, job_id: uuid.UUID) -> dict[str, float]:
+    """Real per-metric mean over every numeric top-level value in the
+    job's persisted `EvaluationResult.metrics` rows (never fabricated:
+    a metric no result computed is simply absent)."""
+    from api.models.evaluation import EvaluationResult
+
+    totals: dict[str, list[float]] = {}
+    for metrics in (await db.scalars(select(EvaluationResult.metrics).where(EvaluationResult.evaluation_job_id == job_id))).all():
+        for key, value in (metrics or {}).items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals.setdefault(key, []).append(float(value))
+    return {key: sum(values) / len(values) for key, values in sorted(totals.items())}
 
 
 # ---------------------------------------------------------------------------

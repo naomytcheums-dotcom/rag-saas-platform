@@ -151,7 +151,6 @@ async def invite_organization_member(
     db.add(membership)
     await db.flush()
 
-    organization = await db.get(Organization, org_id)
     await log_audit_action(
         db, user_id=caller.user_id, action=AuditAction.ORGANIZATION_MEMBER_ADDED, ip=client_ip(request),
         user_agent=request.headers.get("user-agent"), success=True,
@@ -199,7 +198,6 @@ async def update_organization_member_role(
     )
     await db.commit()
 
-    organization = await db.get(Organization, org_id)
     try:
         await send_branded_organization_member_role_changed_email(
             db, org_id, target_email, payload.role.value,
@@ -222,7 +220,6 @@ async def remove_organization_member(
     reject_if_target_is_owner(target_membership, action="remove")
 
     target_email = await db.scalar(select(User.email).where(User.id == user_id))
-    organization = await db.get(Organization, org_id)
 
     await log_audit_action(
         db, user_id=caller.user_id, action=AuditAction.ORGANIZATION_MEMBER_REMOVED, ip=client_ip(request),

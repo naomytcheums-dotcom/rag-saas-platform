@@ -1,4 +1,6 @@
 .env
+.env.staging
+staging-artifacts/
 __pycache__/
 *.pyc
 .venv/
@@ -28,3 +30,5 @@ snyk.exe
 # reasoning as .tools/ above.
 storage/ml_models/
 SESSION_CONTEXT.md
+/storage/
+/requirements-api.txt;C

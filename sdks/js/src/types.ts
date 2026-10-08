@@ -48,3 +48,28 @@ export interface EmbedResponse {
   model: string;
   dimensions: number;
 }
+
+/** One Server-Sent Event from `chat.stream` ("start" | "token" | "citation" | "done" | "error"). */
+export interface ChatStreamEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+export interface ConversationListResponse {
+  items: Record<string, unknown>[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface KnowledgeBaseCreateResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ListOptions {
+  limit?: number;
+  offset?: number;
+}

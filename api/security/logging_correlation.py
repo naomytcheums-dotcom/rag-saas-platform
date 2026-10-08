@@ -21,6 +21,28 @@ from fastapi import Request
 
 _request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
+# Hardening Mission (§38, observability) -- the other identifiers an operator needs to follow one tenant's
+# request through the logs. Only these keys are accepted and their values are stored as plain strings (UUIDs):
+# never a token, secret or personal data. The dict is replaced per request by the middleware, so one request's
+# context can never leak into the next.
+LOG_CONTEXT_KEYS = ("organization_id", "user_id", "run_id", "job_id", "evaluation_job_id")
+_log_context_var: ContextVar[dict | None] = ContextVar("log_context", default=None)
+
+
+def bind_log_context(**fields) -> None:
+    """Adds identifiers to the current request/task's log context (unknown keys are ignored, None values skipped)."""
+    current = _log_context_var.get()
+    if current is None:  # outside a request (a Celery task, a script): start a context for this task
+        current = {}
+        _log_context_var.set(current)
+    for key, value in fields.items():
+        if key in LOG_CONTEXT_KEYS and value is not None:
+            current[key] = str(value)
+
+
+def get_log_context() -> dict:
+    return dict(_log_context_var.get() or {})
+
 _SENSITIVE_PATTERN = re.compile(
     r'("?(?:password|token|secret|api[_-]?key|authorization)"?\s*[:=]\s*")[^"]*(")', re.IGNORECASE
 )
@@ -30,6 +52,32 @@ def get_request_id() -> str | None:
     return _request_id_var.get()
 
 
+_record_factory_installed = False
+
+
+def _install_record_factory() -> None:
+    """Hardening Mission (§38) -- the REAL fix for request correlation. `RequestIdFilter` was attached to the ROOT
+    logger, but a logger's filters only apply to records created BY THAT logger: a record emitted by `api.services.x`
+    never passes through the root logger's filters (verified empirically), so `request_id` was `None` on virtually
+    every application log line. A `LogRecord` factory runs for EVERY record whatever logger or handler it goes
+    through, so the identifiers are attached at creation, once."""
+    global _record_factory_installed
+    if _record_factory_installed:
+        return
+    previous = logging.getLogRecordFactory()
+
+    def factory(*args, **kwargs):
+        record = previous(*args, **kwargs)
+        record.request_id = get_request_id()
+        context = _log_context_var.get() or {}
+        for key in LOG_CONTEXT_KEYS:
+            setattr(record, key, context.get(key))
+        return record
+
+    logging.setLogRecordFactory(factory)
+    _record_factory_installed = True
+
+
 def configure_structured_logging(log_format: str) -> None:
     """Partie 13.2 -- called once at startup. `log_format == "json"`
     switches every handler already on the root logger (uvicorn's own
@@ -37,6 +85,7 @@ def configure_structured_logging(log_format: str) -> None:
     leaves them exactly as they were. Either way, RequestIdFilter is
     attached so request_id is available to system_log_handler.py
     regardless of console format."""
+    _install_record_factory()
     root = logging.getLogger()
     if not any(isinstance(f, RequestIdFilter) for f in root.filters):
         root.addFilter(RequestIdFilter())
@@ -49,10 +98,12 @@ def configure_structured_logging(log_format: str) -> None:
 async def request_correlation_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     token = _request_id_var.set(request_id)
+    context_token = _log_context_var.set({})
     try:
         response = await call_next(request)
     finally:
         _request_id_var.reset(token)
+        _log_context_var.reset(context_token)
     response.headers["X-Request-ID"] = request_id
     return response
 
@@ -93,6 +144,10 @@ class JSONLogFormatter(logging.Formatter):
             "line": record.lineno,
             "request_id": getattr(record, "request_id", None),
         }
+        for key in LOG_CONTEXT_KEYS:
+            value = getattr(record, key, None)
+            if value is not None:
+                payload[key] = value
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload)

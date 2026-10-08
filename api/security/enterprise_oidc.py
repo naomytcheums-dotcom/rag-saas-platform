@@ -18,6 +18,7 @@ to build or get wrong.
 """
 
 import asyncio
+import hmac
 
 import httpx
 import jwt as pyjwt
@@ -73,7 +74,7 @@ def build_client(client_id: str, redirect_uri: str, client_secret: str | None = 
     )
 
 
-async def verify_id_token(id_token: str, metadata: dict, client_id: str, issuer: str) -> dict:
+async def verify_id_token(id_token: str, metadata: dict, client_id: str, issuer: str, expected_nonce: str | None = None) -> dict:
     """
     Real signature verification against the IdP's own published JWKS --
     NOT a bare `jwt.decode(..., options={"verify_signature": False})`,
@@ -87,6 +88,14 @@ async def verify_id_token(id_token: str, metadata: dict, client_id: str, issuer:
     def _verify() -> dict:
         jwks_client = pyjwt.PyJWKClient(metadata["jwks_uri"])
         signing_key = jwks_client.get_signing_key_from_jwt(id_token)
-        return pyjwt.decode(id_token, signing_key.key, algorithms=["RS256"], audience=client_id, issuer=issuer)
+        claims = pyjwt.decode(id_token, signing_key.key, algorithms=["RS256"], audience=client_id, issuer=issuer)
+        # Hardening Mission (§29, red team) -- OIDC nonce binding: the id_token must carry
+        # the exact nonce this browser session sent in the authorization request. Without
+        # it, an id_token minted for a DIFFERENT login attempt (leaked, replayed, or
+        # injected into a victim's callback) is accepted as long as its signature,
+        # audience and issuer are valid. Compared in constant time.
+        if expected_nonce is not None and not hmac.compare_digest(str(claims.get("nonce", "")), expected_nonce):
+            raise pyjwt.InvalidTokenError("id_token nonce does not match this login attempt")
+        return claims
 
     return await asyncio.to_thread(_verify)

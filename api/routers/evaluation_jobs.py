@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.evaluation import EvaluationDataset, EvaluationJob
 from api.models.organization import OrganizationMember
@@ -17,6 +18,7 @@ from api.schemas.evaluation import (
     EvaluationJobListResponse, EvaluationJobResponse, EvaluationResultListResponse,
 )
 from api.security.evaluation import require_dataset_admin, require_evaluation_job_admin
+from api.security.rate_limit import enforce_rate_limit
 from api.services.evaluation_jobs import (
     cancel_evaluation_job, categorize_job_failures, create_evaluation_job, get_evaluation_job_results,
     get_job_failures, list_evaluation_jobs, schedule_evaluation_job_processing, compare_evaluation_jobs,
@@ -32,6 +34,12 @@ async def create_evaluation_job_endpoint(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     dataset, _caller = dataset_ctx
+    # Hardening Mission (§4/§9, rate limiting) -- a real, confirmed gap:
+    # running a job means one real LLM generation call PER question in
+    # the dataset, with no limit on how often a job can be launched.
+    await enforce_rate_limit(
+        f"ratelimit:evaluation_run:org:{dataset.organization_id}", settings.EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS, settings.EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS,
+    )
     job = await create_evaluation_job(
         db, dataset.id, question_set_id=payload.question_set_id, agent_id=payload.agent_id,
         model_config=payload.model_config_override, created_by=current_user.id,

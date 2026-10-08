@@ -98,6 +98,7 @@ async def create_agent(db: AsyncSession, organization_id: uuid.UUID, data: dict,
         is_public=data.get("is_public", False), allowed_roles=data.get("allowed_roles"),
         blocked_topics=data.get("blocked_topics"), allowed_domains=data.get("allowed_domains"),
         max_tokens_per_response=data.get("max_tokens_per_response"), content_filter_level=data.get("content_filter_level"),
+        prompt_injection_detection_enabled=data.get("prompt_injection_detection_enabled", False),
         citation_required=data.get("citation_required", False), citation_required_message=data.get("citation_required_message"),
         answer_only_from_context=data.get("answer_only_from_context", False), context_only_message=data.get("context_only_message"),
         idk_threshold=data.get("idk_threshold"), idk_message=data.get("idk_message"),
@@ -147,7 +148,7 @@ async def update_agent(db: AsyncSession, agent_id: uuid.UUID, data: dict) -> Age
         "guardrails_enabled", "human_approval_required", "knowledge_base_id", "is_public", "allowed_roles",
         "blocked_topics", "allowed_domains", "max_tokens_per_response", "content_filter_level",
         "citation_required", "citation_required_message", "answer_only_from_context", "context_only_message",
-        "idk_threshold", "idk_message",
+        "idk_threshold", "idk_message", "prompt_injection_detection_enabled",
     ):
         if field in data:
             setattr(agent, field, data[field])

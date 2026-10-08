@@ -1,0 +1,14 @@
+P2C-15 — PostgreSQL catalog audit preparation
+Date: 2026-10-03
+Artifacts: docs/audit/POSTGRES_TEST_PLAN.md,
+scripts/postgres_readonly_audit.py, scripts/postgres_readonly_audit.sql.
+Commands executed without database URL/connection:
+.\.venv\Scripts\python.exe -m py_compile scripts\postgres_readonly_audit.py
+.\.venv\Scripts\python.exe scripts\postgres_readonly_audit.py
+Output: DRY RUN: no database connection; fixed catalog SELECTs are prepared.
+The Python script also requires `--execute`, explicit DEV/TEST/STAGING, and
+RAG_POSTGRES_READONLY_AUDIT_APPROVED=YES; connection enforces asyncpg
+read-only transaction and timeouts. SQL file contains only fixed catalog
+SELECTs inside BEGIN READ ONLY / ROLLBACK.
+External target classification remains UNKNOWN. No SQL file/script was
+executed against any database. Status: BLOCKED_EXTERNAL for live tests.

@@ -29,7 +29,7 @@ import uvicorn
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from oidc_test_idp import create_app, register_authorization_code  # noqa: E402
+from oidc_test_idp import bind_nonce, create_app, register_authorization_code  # noqa: E402
 
 from api.config import settings  # noqa: E402
 from api.models.user import User, UserRole  # noqa: E402
@@ -116,6 +116,11 @@ def _extract_state(authorize_response) -> str:
     return location.split("state=")[1].split("&")[0]
 
 
+def _extract_nonce(authorize_response) -> str:
+    location = authorize_response.headers["location"]
+    return location.split("nonce=")[1].split("&")[0]
+
+
 async def test_non_admin_cannot_create_sso_connections(client, register_payload, oidc_idp):
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     response = await client.post(
@@ -190,6 +195,7 @@ async def test_full_sso_login_creates_a_new_user_and_issues_a_real_session(clien
     authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
     assert authorize.status_code == 302
     state = _extract_state(authorize)
+    bind_nonce(oidc_idp, code, _extract_nonce(authorize))
 
     callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": state})
     assert callback.status_code == 302, callback.text
@@ -221,6 +227,7 @@ async def test_sso_login_links_to_an_existing_verified_password_account(client, 
 
     authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
     state = _extract_state(authorize)
+    bind_nonce(oidc_idp, code, _extract_nonce(authorize))
     callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": state})
     assert callback.status_code == 302
     assert "access_token=" in callback.headers["location"]
@@ -243,6 +250,7 @@ async def test_sso_login_is_rejected_when_the_email_domain_does_not_match_the_co
 
     authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
     state = _extract_state(authorize)
+    bind_nonce(oidc_idp, code, _extract_nonce(authorize))
     callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": state})
     assert callback.status_code == 400
 
@@ -265,6 +273,7 @@ async def test_sso_login_rejects_a_token_with_the_wrong_audience(client, db_sess
 
     authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
     state = _extract_state(authorize)
+    bind_nonce(oidc_idp, code, _extract_nonce(authorize))
     callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": state})
     assert callback.status_code == 400
 
@@ -308,9 +317,53 @@ async def test_sso_login_reports_mfa_required_for_an_account_with_totp_enabled(c
 
     authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
     state = _extract_state(authorize)
+    bind_nonce(oidc_idp, code, _extract_nonce(authorize))
     callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": state})
     assert callback.status_code == 302
     location = callback.headers["location"]
     assert "mfa_required=true" in location
     assert "access_token=" not in location
     assert "methods=totp" in location
+
+
+# --------------------------------- Hardening Mission, §29 (red team): OIDC nonce binding
+
+
+async def test_the_authorization_request_carries_a_fresh_unguessable_nonce(client, db_session, register_payload, oidc_idp):
+    admin_token = await _make_admin(client, db_session, register_payload)
+    connection = await _create_connection(client, admin_token, oidc_idp, email_domain="nonce-a.com", client_id="nonce-client")
+
+    first = _extract_nonce(await client.get(f"/auth/sso/{connection['id']}/authorize"))
+    second = _extract_nonce(await client.get(f"/auth/sso/{connection['id']}/authorize"))
+
+    assert len(first) >= 32 and first != second
+
+
+async def test_sso_login_rejects_an_id_token_minted_for_a_different_login_attempt(client, db_session, register_payload, oidc_idp):
+    """A validly signed id_token (right audience, right issuer) whose nonce is
+    NOT the one this browser session sent is a replayed / injected token."""
+    admin_token = await _make_admin(client, db_session, register_payload)
+    connection = await _create_connection(client, admin_token, oidc_idp, email_domain="nonce-b.com", client_id="nonce-client-b")
+    code = f"code-{uuid.uuid4().hex}"
+    register_authorization_code(oidc_idp, code, sub="sub-replay", email="victim@nonce-b.com", audience="nonce-client-b")
+
+    authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")
+    bind_nonce(oidc_idp, code, "a-nonce-from-another-login-attempt")
+    callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": _extract_state(authorize)})
+
+    assert callback.status_code in (400, 401)
+    assert "access_token=" not in callback.headers.get("location", "")
+    assert await db_session.scalar(select(User).where(User.email == "victim@nonce-b.com")) is None
+
+
+async def test_sso_login_rejects_an_id_token_with_no_nonce_at_all(client, db_session, register_payload, oidc_idp):
+    admin_token = await _make_admin(client, db_session, register_payload)
+    connection = await _create_connection(client, admin_token, oidc_idp, email_domain="nonce-c.com", client_id="nonce-client-c")
+    code = f"code-{uuid.uuid4().hex}"
+    register_authorization_code(oidc_idp, code, sub="sub-nonce-less", email="user@nonce-c.com", audience="nonce-client-c")
+
+    authorize = await client.get(f"/auth/sso/{connection['id']}/authorize")  # the IdP "forgets" to echo the nonce
+    callback = await client.get(f"/auth/sso/{connection['id']}/callback", params={"code": code, "state": _extract_state(authorize)})
+
+    assert callback.status_code in (400, 401)
+    assert await db_session.scalar(select(User).where(User.email == "user@nonce-c.com")) is None

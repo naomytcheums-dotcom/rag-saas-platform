@@ -41,7 +41,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements-api.txt
+        run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
 
       - name: Run Celery worker for a bounded window
         env:
@@ -69,7 +69,13 @@ jobs:
         # too, a GitHub-hosted runner has no reason to run more than
         # one task at a time for this queue's real volume.
         # `timeout 420` (7 min) leaves ~5 min of the 12-min job timeout
-        # for checkout/install, and lets celery exit(0) itself rather
-        # than being killed mid-task by the runner's own hard timeout.
+        # for checkout/install. TERM requests warm shutdown; allow
+        # another 60 seconds before forced termination, which fails CI.
         run: |
-          timeout 420 celery -A api.tasks.celery_app worker --loglevel=info --pool=solo --concurrency=1 || true
+          status=0
+          timeout --signal=TERM --kill-after=60 420 celery -A api.tasks.celery_app worker --loglevel=info --pool=solo --concurrency=1 || status=$?
+          case "$status" in
+            0) echo "Celery worker exited successfully." ;;
+            124) echo "Celery worker reached the scheduled burst limit and shut down." ;;
+            *) echo "::error::Celery worker failed with exit code $status"; exit "$status" ;;
+          esac

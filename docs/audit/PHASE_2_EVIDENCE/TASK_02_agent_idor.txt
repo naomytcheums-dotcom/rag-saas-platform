@@ -1,0 +1,15 @@
+P2C-2 / Task 02 — agent IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_agent_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 46.27s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: INCOMPLETE for the specified GET/PUT/DELETE and org-scoped run
+contract; the implementation exposes different paths, which the test does
+not pretend to cover.
+Scope/limits: external agent/provider work is stubbed at the test boundary.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Historical result summary remains in PHASE_2_REPORT.md;
+original full stdout is unavailable.

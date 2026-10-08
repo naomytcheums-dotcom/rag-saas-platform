@@ -1,0 +1,14 @@
+P2C-3 / Task 03 — workflow IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_workflow_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 1.64s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: INCOMPLETE for the requested PUT and org-scoped run/runs paths, which
+are not registered; actual routes tested and passed.
+Scope/limits: external worker/provider effects are not validated live.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Historical summary remains in PHASE_2_REPORT.md; original
+full stdout is unavailable.

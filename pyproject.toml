@@ -55,3 +55,17 @@ addopts = "-m \"not network_flaky\""
 # this setting. coverage.py has supported this via the `greenlet`
 # tracer since 7.x specifically for SQLAlchemy async's use case.
 concurrency = ["greenlet"]
+
+[tool.ruff.lint]
+# The gate this project enforces (`ruff check api/`): the rule families that flag code that would FAIL AT RUNTIME -- syntax errors,
+# undefined names, invalid comparisons/format strings, redefined functions, unused local variables. Style rules are deliberately not
+# part of the gate (the FastAPI `Depends(...)` default idiom alone trips B008 about 2,000 times).
+select = ["E9", "F63", "F7", "F82", "F811", "F841"]
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy relationship annotations are string forward references to classes defined in sibling modules.
+"api/models/*.py" = ["F821"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "frontend", ".git"]
+skips = ["B101"]

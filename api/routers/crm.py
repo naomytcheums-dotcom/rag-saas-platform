@@ -414,7 +414,7 @@ async def import_monday(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from api.services.monday_extraction import MondayError, fetch_monday_records
+    from api.services.monday_extraction import MondaycomError as MondayError, fetch_monday_records
     if not settings.MONDAY_ENABLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Monday integration is disabled")
     try:

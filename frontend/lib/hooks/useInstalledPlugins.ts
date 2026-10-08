@@ -14,6 +14,7 @@ export function useInstalledPlugins(orgId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     if (!orgId) return;
     setLoading(true);
     setError(null);

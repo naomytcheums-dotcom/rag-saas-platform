@@ -119,6 +119,17 @@ assistant: {assistant_message}
 """
 
 
+class _DefaultLLMClient:
+    """The project's own provider layer (`api.services.llm_providers.chat_completion`) behind the `complete(...)` interface this
+    module's callers and tests inject. (It used to import a `get_default_llm_client` from a module that does not exist, so the
+    automatic extraction silently never ran.)"""
+
+    async def complete(self, messages: list[dict], temperature: float = 0.0, max_tokens: int = 500) -> str:
+        from api.services.llm_providers import chat_completion
+
+        return await chat_completion(messages, temperature=temperature, max_tokens=max_tokens)
+
+
 async def extract_and_store_long_term_memory(
     db: AsyncSession,
     agent_id: uuid.UUID,
@@ -165,9 +176,7 @@ async def extract_and_store_long_term_memory(
     try:
         client = llm_client
         if client is None:
-            from api.services.llm import get_default_llm_client
-
-            client = get_default_llm_client()
+            client = _DefaultLLMClient()
 
         raw = await client.complete(
             messages=[{"role": "user", "content": prompt}],

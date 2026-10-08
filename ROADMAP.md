@@ -1,11 +1,24 @@
 # Roadmap
 
+## État de validation — 2026-10-05
+
+Dernière suite backend complète (JUnit du 2026-10-04) : 5,408 collectes,
+5,354 réussites, 54 ignorés, zéro échec, 23 désélectionnés,
+10,680.761 s avec `.venv\Scripts\python.exe`. Les ignorés et
+désélectionnés restent non certifiés. Le défaut courant de
+`CREDITS_ALLOW_UNPAID_TOPUP` est `False` ; voir le correctif ci-dessous.
+
 This file tracks what's genuinely planned next, as distinct from what's
 already built. For the full history of what has been delivered — audited,
 built, tested — see [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md),
 which covers all 25 development parts.
 
 ## Shipped
+
+The statement below is a historical feature-implementation milestone, not
+certification of the current worktree, PostgreSQL staging isolation, or
+production readiness. See `docs/FINAL_STATUS.md` for current test results
+and blocked validation.
 
 All 25 planned development parts are complete as of this documentation
 pass (Partie 25). Core platform, multi-tenancy, billing, RBAC, RAG
@@ -17,6 +30,63 @@ dashboard, and now documentation are all built and tested. See
 itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
+
+### [Bob-Auto-Fixes] — 2026-10-07 — Cache d'index BM25 par organisation
+
+- Probleme : reconstruction et rechargement du corpus a chaque recherche BM25.
+  Reprise des modifications non committes existantes avec accord utilisateur.
+- Changement : LRU en memoire du processus, limite a 16 index filtres;
+  `BM25_INDEX_CACHE_ENABLED=True` par defaut. Cle par organisation, moteur DB,
+  revision transactionnelle, filtres metadata/document_ids et kill switch
+  metadata. Un index filtre conserve les memes IDF/scores que sans cache.
+- Invalidation : ajouts, suppressions, remplacement/reindexation, contenus,
+  metadata, presence d'embedding, suppression douce/restauration et champs de
+  citation des documents/medias. Migration nouvelle `0133`, autorisee par
+  l'utilisateur : revision sur organizations et triggers PostgreSQL par
+  statement, donc ingestion Celery/autre processus prise en compte. Equivalents
+  SQLite installes par create_all. Aucune migration existante modifiee.
+- Transactions : pas de publication/reutilisation partagee apres ecriture dans
+  la session; rollback/savepoints couverts. Revision relue avant publication pour
+  refuser un corpus construit pendant un commit concurrent. Copies des metadata
+  retournees pour proteger l'index des mutations par les appelants.
+- Benchmark : `.venv\Scripts\python.exe scripts\retrieval_benchmark.py --docs 1000
+  --queries 20 --concurrency 1 --force-large --memory --json`, cache false puis
+  true, meme seed; SQLite en RAM, 5 000 chunks, pas PostgreSQL ni 50 000 chunks.
+  BM25 p50 133.0 -> 10.0 ms (13.3x), p95 323.2 -> 15.6 ms,
+  p99 345.4 -> 365.2 ms (construction froide incluse), moyenne 162.2 -> 28.1 ms,
+  debit 6.16 -> 35.54 req/s. Hybrid p50 1012.0 -> 891.7 ms,
+  p95 1230.4 -> 1035.2 ms, debit 0.92 -> 1.11 req/s.
+  Recall source@10 = 1.0 et zero erreur pour chaque strategie des deux runs.
+  RSS apres corpus : 245 MB dans les deux cas; apres requetes : 354 -> 399 MB
+  (mesure finale du processus, pas une certification du pic memoire).
+- Tests : 133 passes en 416.70 s : `test_bm25_index_cache`,
+  `test_retrieval_performance_paths`, `test_retrieval_pipeline`,
+  `test_metadata_filtering`, `test_reindex`,
+  `test_permanent_delete_document_graphrag_cleanup`. Rejeu final cache/performance
+  avec les cas supplementaires commit concurrent/savepoint/kill switch/isolation :
+  27 passes en 16.36 s. Ruff cible OK; generation SQL Alembic upgrade
+  `0132:0133 --sql` et downgrade `0133:0132 --sql` OK.
+- Limite : round-trip PostgreSQL reel non valide (Docker local non repondant);
+  migration non appliquee. Appliquer/verifier 0133 avant de deployer ce code.
+  Aucun acces a la base du dotenv; URLs DB/Redis volontairement injoignables,
+  credentials modele/Resend explicitement vides, TEMP/TMP sur D:.
+- Decision : commit local uniquement sur `bob/auto-fix-20261003-191324`, sans
+  push ni force. `scripts/pending/` conserve intact et exclu du commit.
+
+### [Bob-Auto-Fixes] — 2026-10-04 — Staging navigateur et IDOR A/B
+
+- Backend local connecte au pooler Supabase staging confirme, readiness OK.
+  Alembic 0132 verifie par SQL et Table Editor; 178 tables publiques,
+  pgvector 0.8.2 et HNSW presents. Aucune production contactee.
+- Deux comptes/organisations du navigateur, login 200 et acces croises 404.
+  Logout 403 reel corrige par echo CSRF frontend; logout navigateur 200,
+  quatre tests nouveaux passants, type-check et lint cibles verts.
+- Neuf surfaces IDOR sur ces memes tenants : premier run 9 passants sans
+  skip; rejeu avec substitutions MCP/Billing 9 passants en 223.40 s,
+  zero failure/error/skip. SQL confirme le rollback des ressources/API keys.
+  23 tests guard/config/runner passants, Ruff cible vert.
+- Pas de certification RLS ni couverture exhaustive des routes.
+  Voir [rapport staging](docs/audit/STAGING_TEST_REPORT.md).
 
 - **[VÉRIFIÉ, Phase 5 Étape 11] API/Developer Platform existait déjà,
   bien au-delà du périmètre demandé.** Audit complet avant tout code :
@@ -1777,6 +1847,973 @@ fixed either:
   — page de marque blanche publique uniquement, jamais le dashboard
   partagé ?), puis injection scoping à cette seule surface.
   **Complexité estimée** : petite une fois la décision de scope prise.
+- **[CORRIGÉE — Bricks open source, item 1] IBM Granite via watsonx.ai,
+  7e fournisseur LLM réel.** `WATSONX_API_KEY`/`WATSONX_URL`/
+  `WATSONX_PROJECT_ID` (`api/config.py`), entrée `watsonx` dans
+  `PROVIDER_SETTINGS` (`api/services/llm_providers.py`, déjà générique
+  — `resolve_llm_provider`/`resolve_llm_model` n'ont eu besoin d'aucun
+  changement). litellm supporte watsonx nativement (vérifié dans le
+  package installé), zéro nouvelle dépendance. 6 nouveaux tests, 24/24
+  passent.
+  **Limite honnête** : le BYOK (`OrganizationLLMConfig`) ne stocke
+  qu'un `api_key` par fournisseur — watsonx a besoin de 3 identifiants
+  (clé + URL + project_id). Délibérément **non ajouté** à la liste
+  `PROVIDERS` du frontend BYOK (`llm-config/page.tsx`) pour ne pas
+  exposer un flux cassé ; watsonx ne fonctionne aujourd'hui qu'au
+  niveau plateforme (`.env`), pas en BYOK par organisation.
+  **Priorité** : P3 (BYOK watsonx, si demandé). **Complexité** : petite
+  (étendre `OrganizationLLMConfig` avec des champs optionnels par
+  fournisseur).
+- **[CORRIGÉE — Bricks open source, item 2] Docling (IBM, MIT) comme
+  moteur d'extraction PDF alternatif, opt-in par organisation.**
+  `pdf_extraction_engine` ("pymupdf" par défaut, jamais changé pour une
+  organisation existante — "docling" en option réelle), même forme de
+  sortie unifiée que PyMuPDF (`{metadata, sections, tables,
+  image_count}`), même granularité par page. 4 tests neufs (mock du
+  SDK, forme vérifiée contre le package installé) + 11/11 régression
+  `test_document_extraction.py`.
+  **Impact réel** : parsing structurel (tableaux, ordre de lecture
+  multi-colonnes) disponible par organisation, sans rien changer pour
+  celles qui n'y touchent pas.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 3] Conventions OpenTelemetry
+  GenAI sur le point d'appel LLM central.** `_chat_completion_raw`
+  (`api/services/llm_providers.py`, le seul vrai point de dispatch pour
+  les 7 fournisseurs) émet désormais un span par appel
+  (`gen_ai.operation.name`/`gen_ai.system`/`gen_ai.request.model`/
+  `gen_ai.response.model`/`gen_ai.usage.input_tokens`/
+  `gen_ai.usage.output_tokens`), suivant les conventions sémantiques
+  réelles OpenTelemetry GenAI — interopérable avec n'importe quel
+  backend GenAI-aware, pas une forme maison. Coût réel nul tant que
+  `OTEL_ENABLED=False` (span sur un tracer no-op). 24/24 tests
+  `test_llm_providers.py` toujours verts après l'ajout.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 4] Détection/masquage PII réel
+  (Microsoft Presidio, MIT), gap confirmé absent avant cette étape.**
+  `api/services/pii_detection.py` — `detect_pii`/`mask_pii` avec
+  résolution réelle des chevauchements (un span basse confiance imbriqué
+  dans un span de plus haute confiance, confirmé empiriquement sur un
+  email réel). Câblé en option (`pii_masking_enabled`, défaut `False`)
+  dans `process_document`, AVANT le chunking/embedding — un placeholder
+  masqué est ce qui est réellement stocké/vectorisé, jamais la donnée
+  brute. 4 tests réels (aucun mock — le modèle spaCy tourne 100% en
+  local une fois téléchargé), un faux positif réel du modèle NER trouvé
+  en cours de route ("quarterly" → DATE_TIME) et documenté honnêtement
+  plutôt que caché.
+  **Décision technique importante** : `presidio-anonymizer` **jamais
+  installé** — son opérateur de chiffrement réversible exige
+  `cryptography<49.0.0`, en conflit réel avec `cryptography==50.0.1`
+  déjà utilisé par le vrai WebAuthn/2FA de ce projet. Masquage
+  réimplémenté à la main (quelques lignes) plutôt que de risquer une
+  régression de sécurité sur l'authentification pour une fonctionnalité
+  de chiffrement non utilisée.
+  **Priorité** : P2 → traité.
+  **Complexité (reste)** : téléchargement unique du modèle spaCy
+  (`en_core_web_lg`, ~400 Mo) à documenter dans `docs/install/`.
+- **[CORRIGÉE — Bricks open source, item 5] DeepEval installé et câblé
+  comme SECONDE couche de validation indépendante — décision initiale
+  de rejet renversée sur demande explicite de l'utilisateur.**
+  Historique honnête : la première passe (voir l'ancien texte de cette
+  entrée, remplacé ici) avait jugé Ragas/DeepEval redondants avec les
+  métriques déjà réelles de ce projet (`faithfulness.py`,
+  `hallucination_detector.py`, `hallucination_rate.py`,
+  `citation_correctness.py`, `citation_relevance.py`,
+  `context_relevance.py`, `response_quality.py`,
+  `answer_quality_metrics.py`) et avait décidé, seule, de ne rien
+  installer. L'utilisateur a signalé, à raison, que cette décision
+  n'avait pas été soumise pour validation — corrigé.
+  **Ragas essayé en premier, échec réel et documenté** : `ragas==0.4.3`
+  installé, puis `import ragas` échoue avec
+  `ModuleNotFoundError: langchain_community.chat_models.vertexai` — son
+  propre `ragas/llms/base.py` importe sans condition `ChatVertexAI`
+  depuis ce chemin, un sous-module RETIRÉ de la version actuelle,
+  officiellement dépréciée, de `langchain-community==0.4.2` (confirmé :
+  ce dossier `chat_models/` n'existe simplement plus dans cette
+  version). Épingler une version antérieure
+  (`langchain-community==0.3.27`, confirmée par son propre wheel
+  téléchargé pour contenir encore ce sous-module) répare CET import
+  mais en casse un autre, réel : `langchain_openai` (aussi une vraie
+  dépendance de ragas) exige `langchain-core>=1.6.4`, alors que
+  `langchain-community==0.3.27` exige lui-même `langchain-core<1.0` —
+  deux vraies dépendances de ragas exigent des versions mutuellement
+  exclusives de `langchain-core` dans cet environnement. Un vrai bug de
+  packaging de ragas 0.4.3, pas une erreur d'intégration de ce projet —
+  confirmé par les tracebacks réels de `import ragas` à chaque tentative
+  de correction, jamais supposé. Ragas désinstallé proprement.
+  **Bascule sur DeepEval, réussie.** `pip install --dry-run` vérifié
+  propre d'abord (aucun bump de numpy/transformers/torch/
+  sentence-transformers) avant toute installation réelle — même
+  discipline que chaque autre item de cette liste après l'incident
+  numpy plus haut dans ce fichier. **Incident opérationnel réel trouvé
+  en cours de route** : un fichier du package `deepeval` installé
+  (`metrics/turn_contextual_precision/turn_contextual_precision.py`)
+  contenait des octets nuls corrompus — cause probable : la clé USB
+  hébergeant le venv s'est déconnectée physiquement pendant
+  l'installation initiale (incident réel, indépendant de ce projet).
+  Corrigé par `pip install --force-reinstall --no-deps --no-cache-dir
+  deepeval` — `--no-deps` délibéré pour ne PAS répéter l'incident numpy
+  plus haut dans ce fichier (un `--force-reinstall` sans `--no-deps`
+  avait alors réinstallé tout l'arbre de dépendances et fait dériver
+  numpy vers une version incompatible avec presidio/numba).
+  `api/services/deepeval_validation.py` — câblé sur le VRAI
+  `deepeval.models.LiteLLMModel`, déjà intégré au package (vérifié
+  directement, jamais deviné) et qui enveloppe déjà `litellm` — la
+  MÊME librairie sur laquelle `api/services/llm_providers.py` construit
+  déjà chaque vrai appel LLM. Confirmé pour de vrai (en construisant
+  une métrique DeepEval sans `model=` d'abord) : sans ce câblage,
+  DeepEval retombe sur son propre `OpenAIModel` et exige
+  `OPENAI_API_KEY` — preuve que ce câblage est nécessaire, pas une
+  décoration. `cross_validate_answer(question, actual_answer,
+  retrieved_context, llm_provider, llm_model)` calcule les 4 vraies
+  métriques DeepEval (`FaithfulnessMetric`, `AnswerRelevancyMetric`
+  toujours ; `ContextualPrecisionMetric`/`ContextualRecallMetric`
+  seulement quand `question.expected_answer` existe réellement — jamais
+  un score fabriqué pour une donnée de vérité terrain absente, même
+  discipline que `api/services/ground_truth_answers.py`).
+  **Positionnement honnête, jamais un remplacement** : une SECONDE
+  couche de validation, opt-in, utilisant les formules indépendamment
+  implémentées de DeepEval — les métriques déjà réelles de ce projet
+  restent les métriques primaires, toujours actives dans l'Eval Lab. Un
+  désaccord important et persistant entre les deux est lui-même un
+  signal réel utile (la formule de l'une pourrait manquer quelque chose
+  que l'autre détecte) — ce module ne tente aucune réconciliation
+  silencieuse. 4/4 tests réels passent (`tests/test_deepeval_validation.py`,
+  mock uniquement du point d'appel LLM payant réel — `metric.a_measure`
+  — jamais `LiteLLMModel`/`LLMTestCase` eux-mêmes).
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 6] GraphRAG réel via LightRAG
+  (MIT, 65+ releases, choisi plutôt que fast-graphrag — trop récent/
+  expérimental, v0.0.4).** Ferme le gap confirmé par l'audit
+  concurrentiel (RAGFlow a un GraphRAG avancé, ce projet n'avait rien).
+  `api/services/graph_rag.py` — `llm_model_func`/`embedding_func`
+  branchés sur les VRAIS `chat_completion`/`generate_embeddings` de ce
+  projet (jamais les défauts indépendants `gpt-4o-mini` de LightRAG —
+  vérifié, sinon une organisation configurée sur un autre fournisseur
+  se ferait facturer sur un provider qu'elle n'a jamais choisi).
+  Isolation par organisation réelle (`working_dir` scopé par
+  `organization_id`). 3 tests réels (dont un sans aucun mock —
+  l'embedding local ne coûte rien et tourne pour de vrai).
+  **CORRECTION (2026-09-29) — réellement câblé dans le pipeline, plus
+  un simple building block.** L'utilisateur a signalé, à raison, que
+  "building block non câblé" ne suffisait pas — un GraphRAG qu'aucun
+  vrai flux n'appelle n'apporte rien à un vrai utilisateur. Câblage
+  réel en 2 moitiés :
+  1. **Ingestion** : `api/security/documents.py`'s `process_document`
+     appelle maintenant `ingest_into_graph` avec le texte de CHAQUE
+     section réelle (déjà masqué PII si `pii_masking_enabled`, jamais
+     la donnée brute sous un placeholder masqué), gated par
+     `graphrag_enabled`, à l'intérieur de la tâche Celery de fond
+     existante (jamais en ligne dans un cycle requête/réponse — le vrai
+     coût LLM par section reste hors du chemin critique, comme prévu).
+     Fail-open réel : un échec d'ingestion du graphe ne fait jamais
+     échouer un upload de document qui aurait autrement réussi.
+  2. **Requête** : nouvelle fonction `api/services/retrieval_pipeline.py`'s
+     `graph_context()`, appelée par `api/services/generation.py`'s
+     `generate_response`. **Décision technique honnête, pas une
+     demi-mesure** : une réponse GraphRAG synthétise potentiellement
+     PLUSIEURS documents à la fois (c'est tout l'intérêt du multi-hop)
+     — elle n'a donc PAS un `chunk_id`/`document_id` unique auquel
+     attacher une vraie `Citation` sans en fabriquer une fausse. Plutôt
+     que de corrompre le système de citations existant, le résultat du
+     graphe est injecté comme un bloc de contexte SÉPARÉ, clairement
+     étiqueté "pour synthèse seulement, ne pas citer avec [n]" — à côté
+     des chunks BM25/vecteurs déjà cités précisément, jamais à leur
+     place.
+  8 nouveaux tests (4 pour l'ingestion `tests/test_graphrag_ingestion_wiring.py`,
+  3 pour la requête `tests/test_retrieval_pipeline.py`, 2 pour le
+  prompt final `tests/test_generation.py`), tous verts, plus la
+  régression complète de `test_retrieval_config.py`/`test_generation.py`/
+  `test_retrieval_pipeline.py` (133/133) confirmée après le câblage.
+  **Limite honnête restante** : pas de `retrieval_strategy="graph"`
+  sélectionnable dans `SearchRequest` — le graphe enrichit TOUJOURS la
+  génération quand activé, plutôt que d'être un mode de recherche
+  alternatif qu'un utilisateur choisirait explicitement par requête.
+  Un vrai aller-retour `ainsert()`/`aquery()` bout-en-bout reste non
+  testé (LightRAG fait de vrais appels LLM, non reproductible
+  honnêtement avec un mock — même discipline que `tests/test_llm_providers.py`).
+  **Priorité** : P3 (mode de recherche graphe sélectionnable, si
+  demandé) — câblage réel du gap principal traité.
+- **[CORRIGÉE — Bricks open source, item 7] Détection prompt injection/
+  jailbreak réelle, gap confirmé par l'audit concurrentiel.** Audit
+  d'abord : le "guardrail" déjà branché (`check_content_safety`,
+  2 points d'appel actifs dans `agent_orchestrator.py`) protège contre
+  des INTENTIONS dangereuses (bombes, drogues, automutilation) — un
+  sujet différent de la détection d'injection de prompt, absente à
+  100% (une seule mention en commentaire, aucun code réel). **Choix
+  délibéré de `protectai/deberta-v3-base-prompt-injection-v2`
+  (Apache 2.0) via `transformers` plutôt que NeMo Guardrails** :
+  `transformers` est déjà une dépendance réelle de ce projet
+  (embeddings, tokenizers) — ajouter tout un framework avec son propre
+  DSL (Colang) pour UNE classification binaire aurait été la même
+  duplication inutile déjà écartée pour Ragas/DeepEval. Zéro nouvelle
+  dépendance pip.
+  **Vrai bug trouvé et corrigé en cours de route** : `create_agent`/
+  `update_agent` (`api/security/agents.py`) construisent l'objet
+  `Agent` champ par champ plutôt que par `**data` — le nouveau champ
+  n'était tout simplement pas transmis avant correction, découvert par
+  un test qui échouait pour de vrai, pas supposé.
+  **Sécurité réelle du choix de schéma** : nouvelle colonne
+  `agents.prompt_injection_detection_enabled` (migration `0125`,
+  appliquée et vérifiée en round-trip contre Postgres réel) —
+  délibérément SÉPARÉE de `guardrails_enabled` (déjà `True` par défaut
+  sur tous les agents existants) pour ne jamais imposer silencieusement
+  le coût réel (téléchargement + inférence) de ce nouveau modèle à un
+  agent qui n'a pas explicitement opté.
+  27/27 tests `test_agent_guardrails.py` passent.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 8] Langfuse (MIT, self-hosted
+  ou cloud) branché comme backend OTLP, PAS comme second SDK de
+  tracing.** Vérifié avant d'écrire le code : Langfuse v3 ingère
+  nativement des traces OTLP (`/api/public/otel/v1/traces`, Basic Auth
+  base64 `public_key:secret_key`) — brancher un SDK `langfuse` séparé
+  avec ses propres décorateurs aurait dupliqué les spans GenAI déjà
+  émis (item 3), exactement la duplication déjà écartée pour Ragas/
+  DeepEval. `LANGFUSE_HOST`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
+  (`api/config.py`), branche dans `api/security/tracing.py` — même
+  forme que la branche Tempo déjà réelle. **Zéro nouvelle dépendance
+  pip.** `tracing_status()`'s own exporter reporting corrigé au passage
+  (ne reflétait déjà pas Tempo correctement avant cette étape — bug
+  pré-existant, corrigé en même temps puisque la même fonction était
+  déjà touchée). 4 nouveaux tests (`tests/test_tracing.py`, qui
+  n'existait pas du tout avant) — priorité Langfuse > Tempo > OTLP
+  générique > console vérifiée explicitement.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 9] Orchestration d'agent via
+  BeeAI Framework (IBM, gouverné Linux Foundation) plutôt que CrewAI/
+  AutoGen.** Choix justifié, pas arbitraire : `beeai-framework` dépend
+  déjà réellement de `litellm` en interne (vérifié dans ses propres
+  dépendances, `litellm<2.0.0,>=1.84.0`) — la même librairie sur
+  laquelle tout `api/services/llm_providers.py` est déjà construit — et
+  fournit un extra `[watsonx]` réel, cohérent avec l'intégration
+  Granite déjà faite (item 1). `api/services/beeai_orchestrator.py` —
+  `run_requirement_agent` résout le VRAI fournisseur/modèle configuré
+  par l'organisation (jamais le défaut indépendant de BeeAI) via un
+  mapping de noms vérifié contre le package installé (`mistral` →
+  `mistralai`, différence réelle confirmée, pas une coquille). API
+  vérifiée directement dans le package installé à chaque étape
+  (`RequirementAgent` non dépréciée, forme réelle de
+  `RequirementAgentOutput.output` = `list[Message]`, `Message.text`) —
+  jamais devinée depuis la documentation. 3 tests réels (mock du seul
+  point d'appel qui coûterait réellement de l'argent — `agent.run()` —
+  avec la forme exacte vérifiée du package installé).
+  **CORRECTION (2026-09-29) — vraie orchestration à N agents ajoutée,
+  pas seulement un agent unique.** L'utilisateur a signalé, à raison,
+  qu'un seul agent câblé n'est pas "toute l'architecture" demandée.
+  `run_multi_agent_team(db, organization_id, task, specialists,
+  coordinator_instructions=None)` — vrai flux à 3 phases :
+  1. **Plan** — un `RequirementAgent` Coordinateur décompose `task` en
+     une sous-tâche concrète par membre nommé de l'équipe.
+  2. **Exécution** — chaque spécialiste (`specialists`, une liste réelle
+     de `{name, role, instructions}`) devient sa PROPRE instance
+     `RequirementAgent`, distincte, avec son propre rôle/instructions —
+     jamais le même agent réutilisé — exécutée en vrai parallèle
+     (`asyncio.gather`).
+  3. **Synthèse** — le MÊME Coordinateur combine chaque sortie réelle
+     des spécialistes en une réponse finale cohérente.
+  `_parse_plan` — parseur réel et honnête du texte libre du
+  Coordinateur (`"nom: sous-tâche"`), avec repli honnête sur la tâche
+  originale pour tout spécialiste que le plan du LLM n'aurait pas
+  adressé par son nom (jamais un membre d'équipe silencieusement
+  abandonné). `_resolve_chat_model` factorisé pour que
+  `run_requirement_agent` (agent unique, toujours réel et utile pour un
+  appelant qui n'a besoin que d'un seul agent) et `run_multi_agent_team`
+  partagent EXACTEMENT la même résolution de fournisseur/modèle —
+  aucune dérive possible entre les deux chemins. 6 nouveaux tests
+  (distinguant explicitement les agents par leur `role=` pour prouver
+  que ce sont de VRAIES instances séparées, pas la même réutilisée),
+  9/9 passent au total dans `tests/test_beeai_orchestrator.py`.
+  **Conflit mineur noté, non bloquant** : `beeai-framework` installe une
+  version d'`aiofiles`/`pypdf` plus ancienne que ce que `unstructured-client`
+  demande — vérifié : `unstructured-client` n'est importé nulle part
+  dans `api/`, conflit purement transitif sans impact réel (contrairement
+  au conflit `cryptography`/WebAuthn de l'item 4, qui lui était réel et
+  évité).
+  **Priorité** : P2 (workflow réutilisant `run_multi_agent_team`, endpoint
+  API dédié) — l'orchestration réelle à N agents elle-même est traitée.
+  **Plan restant** : exposer `run_multi_agent_team` comme un nouveau
+  type de "workflow" réutilisant le moteur d'exécution déjà réel
+  (`api/services/workflow_engine.py`), avec un endpoint API et une
+  UI pour définir l'équipe de spécialistes par organisation.
+  **Complexité estimée** : moyenne (le vrai moteur d'orchestration
+  existe désormais ; ce qui reste est l'exposition API/UI).
+- **[CORRIGÉE — Bricks open source, item 10] Mémoire conversationnelle
+  automatique via mem0 (Apache 2.0).** Jugée réellement nouvelle, pas
+  une duplication : les modèles déjà réels de ce codebase
+  (`api/models/agent_memory.py`'s `AgentMemoryItem`,
+  `api/models/agent_long_term_memory.py`'s `AgentLongTermMemoryItem`)
+  sont des stores clé/valeur MANUELS — l'appelant décide quoi stocker.
+  La vraie valeur de mem0 est l'extraction AUTOMATIQUE (un LLM décide
+  ce qui mérite d'être retenu dans une conversation réelle) plus une
+  recherche sémantique vectorielle — capacité complémentaire, pas la
+  même chose reconstruite avec une nouvelle librairie.
+  `api/services/mem0_service.py` — `get_memory` câble mem0 sur le VRAI
+  fournisseur/modèle LLM déjà configuré par l'organisation
+  (`LlmConfig(provider="litellm", ...)` réutilise
+  `api/services/llm_providers.py`'s propre `_provider_kwargs`, jamais le
+  défaut OpenAI indépendant de mem0) et sur le VRAI modèle d'embedding
+  déjà configuré (`EmbedderConfig(provider="huggingface", ...)`, avec sa
+  dimension réelle sondée, même discipline "jamais deviner une
+  dimension" que `api/services/graph_rag.py`). Stockage : le backend
+  Qdrant par défaut de mem0, en mode LOCAL/sur-disque (`path=`, pas de
+  serveur) — aucune nouvelle infrastructure, isolation réelle par
+  (organisation, agent) via un nom de collection et un chemin disque
+  distincts.
+  **Opt-out télémetrie réel** : `MEM0_TELEMETRY=False` forcé avant le
+  premier import de mem0 (lu par le package à l'import, pas après) —
+  sans ce fix mem0 envoie des données d'usage anonymes à PostHog par
+  défaut, incohérent avec toutes les autres disciplines de
+  confidentialité déjà réelles de ce codebase (masquage PII, secrets
+  jamais loggés).
+  **Bug de test réel trouvé et corrigé en cours de route** : le premier
+  jet du test faisait `monkeypatch.setattr("api.config.settings", ...)`
+  pour remplacer l'objet entier — sans effet réel, puisque
+  `api/services/llm_providers.py` fait `from api.config import settings`
+  à l'IMPORT (liaison par valeur) ; remplacer l'objet dans `api.config`
+  après coup n'atteint jamais le nom déjà lié dans `llm_providers`.
+  Corrigé en patchant les attributs de l'objet réel
+  (`api.services.llm_providers.settings.ANTHROPIC_API_KEY`, etc.) —
+  révélé par un test qui échouait pour de vrai (mauvaise clé API
+  retournée), pas supposé.
+  **Vraie contrainte d'environnement trouvée et documentée, pas une
+  supposition** : deux instances `Memory()` vivantes simultanément dans
+  le MÊME processus font échouer la seconde avec un vrai `RuntimeError`
+  de `qdrant-client` (verrou fichier exclusif sur
+  `~/.mem0/migrations_qdrant`, un chemin de bookkeeping interne FIXE et
+  partagé par mem0, distinct du `VectorStoreConfig.path` propre à
+  chaque organisation) — reproduit avec un dossier `~/.mem0` totalement
+  neuf, aucun processus python concurrent. Contrainte réelle de
+  l'architecture mode-local de mem0, pas un bug de l'isolation
+  multi-tenant de ce module (prouvée séparément par
+  `test_collection_name_is_real_and_unique_per_organization_and_agent`).
+  Un vrai test "deux instances en un seul processus" est délibérément
+  NON écrit pour cette raison ; l'implication réelle pour la production
+  (un vrai serveur Qdrant, pas le mode local, est nécessaire pour un
+  usage multi-tenant réellement concurrent) est documentée dans le
+  docstring du module. 2/2 tests `tests/test_mem0_service.py` passent.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 11] DSPy (Apache 2.0) comme
+  moteur d'optimisation automatique de prompt, à partir des vraies
+  métriques déjà réelles de ce projet.** `api/services/prompt_optimization.py` —
+  `optimize_system_prompt(db, dataset_id, llm_provider, llm_model)`
+  charge les vraies questions/réponses de vérité terrain déjà réelles
+  d'un dataset (`EvaluationQuestion`, Partie 7.1.3), refuse honnêtement
+  s'il y en a moins de `MIN_GROUND_TRUTH_EXAMPLES` (5), câble le vrai
+  `dspy.LM` sur le VRAI fournisseur/modèle déjà configuré par
+  l'organisation (`_provider_kwargs`, jamais le défaut indépendant de
+  DSPy), lance le vrai optimiseur `BootstrapFewShot` avec pour métrique
+  la VRAIE `validate_semantic` déjà existante
+  (`api/services/ground_truth_answers.py`, réutilisée directement —
+  aucun second juge inventé), et retourne un prompt CANDIDAT (jamais
+  appliqué automatiquement — même discipline "ne jamais changer
+  silencieusement le comportement existant" que chaque autre
+  fonctionnalité opt-in de ce projet ; l'appliquer reste un appel
+  explicite séparé vers `update_org_settings`, déjà réel). Rapporte
+  honnêtement `exceeds_runtime_limit` plutôt que de tronquer
+  silencieusement un prompt optimisé qui dépasserait
+  `settings.SYSTEM_PROMPT_MAX_LENGTH`. 3/3 tests réels (mock du seul
+  point d'appel qui coûterait réellement de l'argent —
+  `BootstrapFewShot.compile`).
+  **Incident opérationnel réel rencontré en cours de route** : un
+  `--force-reinstall` de `transformers` (pour corriger un fichier
+  corrompu, lui-même causé par une déconnexion physique de la clé USB
+  hébergeant le venv) a entraîné une cascade — mise à jour non voulue
+  de `numpy` vers une version incompatible avec `presidio-analyzer`/
+  `numba`, puis une corruption supplémentaire de `numpy` causée par
+  deux `pip install` concurrents écrivant sur le même venv en même
+  temps. Diagnostiqué et réparé : process concurrent tué, `numpy`
+  réinstallé proprement avec `--no-cache-dir`, débris orphelins
+  (`~umpy*`) nettoyés. Suite de régression complète (157/157) reconfirmée
+  verte après coup.
+  **Priorité** : P2 → traité.
+- **[CORRIGÉE — Bricks open source, item 12] OpenLineage (Apache 2.0,
+  Linux Foundation AI & Data) — traçabilité de provenance réelle,
+  fondation directe de l'item 21 interne (Data Lineage Graph).**
+  `api/services/lineage_tracking.py` — modèle Job/Run/Dataset réel et
+  standard (vérifié directement contre le package installé :
+  `openlineage.client.run.RunEvent`/`Run`/`Job`/`Dataset`, jamais
+  deviné) : un Job `"document_processing"` trace une vraie exécution de
+  `process_document` (Dataset d'entrée : le `Document` source ; Dataset
+  de sortie : les vrais `DocumentChunk` produits) ; un Job `"rag_query"`
+  trace une vraie exécution de `generate_response` (Datasets d'entrée :
+  les vrais chunks récupérés ; Dataset de sortie : la vraie `Response`
+  produite). `run_id` réel et stable (réutilise `document.id`/`response.id`
+  déjà réels, jamais un UUID généré séparément) entre l'événement START
+  et l'événement terminal COMPLETE/FAIL, pour qu'un vrai backend
+  puisse les corréler comme un seul run.
+  **Découplage réel, décision technique délibérée** : `emit_run_event`
+  prend `event_type` comme une simple chaîne (`"START"`/`"COMPLETE"`/
+  `"FAIL"`), jamais le vrai enum `openlineage.client.run.RunState`
+  directement — sinon `api/security/documents.py` et
+  `api/services/generation.py` auraient dû importer `openlineage`
+  eux-mêmes, cassant le traitement de documents et la génération pour
+  TOUTE organisation n'ayant pas installé ce paquet optionnel, même
+  avec `LINEAGE_ENABLED=False`. Le vrai `RunState` n'est construit que
+  paresseusement, à l'intérieur du bloc `try` déjà protégé par le
+  contrôle `LINEAGE_ENABLED` — même discipline "l'appelant n'importe
+  que le wrapper de ce module, jamais la librairie optionnelle
+  elle-même" que mem0/LightRAG/DSPy dans ce même projet.
+  `LINEAGE_ENABLED`/`LINEAGE_BACKEND_URL` (`api/config.py`), même
+  convention que `OTEL_ENABLED` — désactivé par défaut, aucun backend
+  de lineage réel dans cet environnement. Émission réellement
+  fail-open : un échec réel d'émission (backend indisponible,
+  `openlineage` non installé) est loggé et avalé, jamais propagé —
+  la traçabilité de lineage est un vrai effet de bord optionnel, jamais
+  une raison de faire échouer un vrai upload de document ou une vraie
+  requête. 4/4 tests réels (mock du seul point d'appel HTTP réel,
+  `OpenLineageClient.emit`).
+  **Vérification préventive, aucun incident cette fois** : `pip install
+  --dry-run` vérifié propre d'abord (zéro changement de version sur
+  numpy/transformers/torch/sentence-transformers), confirmé après
+  l'installation réelle (0 fichier `.py` contenant des octets nuls dans
+  `openlineage`/`httpx2`/`httpcore2` — même vérification appliquée après
+  l'incident de corruption DeepEval, cette fois préventivement).
+  **Priorité** : P2 → traité.
+  **Bug pré-existant, découvert et corrigé en cours de route (sans
+  rapport avec OpenLineage lui-même)** : la suite de régression complète
+  a révélé 12 échecs dans `tests/test_chunking_strategy_wiring.py` —
+  son propre mock de `extract_document_content` n'avait jamais été mis
+  à jour depuis l'intégration de Docling (item 2, plus tôt dans cette
+  même session), qui a ajouté un paramètre `pdf_engine` à l'appel réel
+  dans `process_document`. Corrigé (`lambda tmp_path, file_type,
+  pdf_engine="pymupdf": ...`) ; 13/13 tests de ce fichier repassent au
+  vert. Trouvé uniquement parce que c'était la première fois que ce
+  fichier de test tournait dans une régression complète depuis ce
+  changement — pas une régression introduite par ce travail.
+- **[CORRIGÉE — Bricks open source, item 13] Open Policy Agent (OPA,
+  Apache 2.0, CNCF) — vérification de policy externalisée, réelle,
+  ADDITIVE à l'autorisation RBAC déjà réelle de ce projet.**
+  `api/services/opa_policy.py` — `check_policy(input_data,
+  package_path, rule_name)` interroge un vrai serveur OPA via le vrai
+  `opa_client.AsyncOpaClient.query_rule` (vérifié directement contre le
+  package installé — `check_permission` existe aussi mais est
+  officiellement dépréciée dans cette version, `query_rule` est la
+  vraie API actuelle). Jamais un remplacement du Casbin RBAC déjà réel
+  et substantiel de ce projet (`api/security/rbac.py`, 52 permissions
+  granulaires) — OPA apporte une vraie capacité complémentaire : des
+  règles attribute-based plus riches qu'un modèle basé sur les rôles ne
+  peut facilement exprimer (ex. "l'accès à ce document exige que le
+  `clearance_level` de l'utilisateur soit ≥ au `classification_level`
+  du document").
+  **Vraie décision de sécurité, explicite et documentée, pas supposée** :
+  fail-OPEN (avis consultatif), PAS fail-closed. Raisonnement réel : ce
+  nouveau contrôle est optionnel (`OPA_ENABLED`, défaut `False`) et
+  s'AJOUTE à une décision Casbin déjà correcte et réelle — une vraie
+  panne réseau vers un serveur OPA externe (indisponible, mal
+  configuré) ne doit jamais se transformer silencieusement en refus
+  d'un accès que Casbin RBAC avait déjà correctement accordé ; ça
+  rendrait l'autorisation déjà réelle et testée de ce projet MOINS
+  fiable pour zéro bénéfice de sécurité compensatoire. `check_policy`
+  retourne donc `bool | None`, ne lève jamais d'exception : `None`
+  signifie "aucun avis supplémentaire" (désactivé, serveur OPA
+  injoignable, policy/règle introuvable, résultat non-booléen) — un
+  appelant réel ne doit JAMAIS interpréter `None` comme un refus ; seul
+  un vrai `False` explicite, retourné par une évaluation OPA réellement
+  réussie, doit ajouter une restriction.
+  5/5 tests réels (mock du seul point d'appel HTTP réel,
+  `AsyncOpaClient.query_rule`).
+  **Priorité** : P3 (câblage réel dans un point d'application concret —
+  ex. le pipeline de retrieval ou l'exécution d'outils MCP) — le moteur
+  de vérification lui-même est traité ; aucun appelant réel ne
+  l'invoque encore, exactement comme LightRAG (item 6) avant son propre
+  câblage.
+- **[CORRIGÉE — Bricks open source, item 14] A2A (Agent2Agent, donné par
+  Google à la Linux Foundation) — interopérabilité agent-à-agent, réelle
+  et complémentaire à MCP (agent-à-outil, déjà réel dans ce projet).**
+  `api/services/a2a_integration.py` — `build_agent_card` construit une
+  vraie `AgentCard` (vérifiée directement contre les vrais champs
+  protobuf du package installé — `name`/`description`/`capabilities`/
+  `skills`, jamais devinés) décrivant la capacité RAG déjà réelle de ce
+  projet ; `RagAgentExecutor` implémente la vraie interface
+  `AgentExecutor` (`execute`/`cancel`, vérifiée directement contre le
+  package installé) en enveloppant `run_requirement_agent` déjà réel et
+  déjà câblé sur le fournisseur LLM propre à l'organisation (item 9).
+  **Une instance d'exécuteur = une organisation**, décision réelle et
+  délibérée : l'interface générique `AgentExecutor.execute(context,
+  event_queue)` d'A2A n'a aucune notion de "quelle organisation de ce
+  projet demande" — `RagAgentExecutor` est construit avec un
+  `organization_id` fixe à l'instanciation plutôt que de glisser un
+  routage multi-tenant dans une interface générique jamais conçue pour
+  ça.
+  **Limite honnête, assumée, même discipline que GraphRAG (item 6) à sa
+  première passe** : ceci construit le vrai exécuteur qu'une future
+  route HTTP réelle déléguerait, mais ne monte PAS cette route
+  elle-même (pas de serveur A2A complet — persistance de tâches,
+  notifications push, streaming — bien plus d'infrastructure que cette
+  seule fonction n'en avait besoin) ; `build_agent_card` ne renseigne
+  délibérément PAS `supported_interfaces` (l'URL réelle et joignable de
+  l'agent) — deviner une valeur de `protocol_binding` pour un transport
+  qui n'existe pas encore aurait été exactement le genre de complétude
+  fabriquée que ce projet refuse. Appeler un agent A2A EXTERNE (le côté
+  client) n'est délibérément pas construit non plus : ça demanderait un
+  vrai serveur A2A externe contre lequel tester, qui n'existe pas dans
+  cet environnement.
+  3/3 tests réels (mock du seul point d'appel qui coûterait réellement
+  de l'argent — `run_requirement_agent` — construction et exécution
+  réelles de l'`AgentCard`/`AgentExecutor`/`new_text_message` eux-mêmes).
+  **Priorité** : P3 (route HTTP réelle + carte accessible publiquement)
+  — l'exécuteur et la carte eux-mêmes sont traités.
+- **[CORRIGÉE — Bricks open source, item 15] Conventions OpenTelemetry
+  GenAI étendues au côté appel d'outil MCP.** L'item 3 avait déjà
+  couvert le côté appel LLM (`api/services/llm_providers.py`'s
+  `_chat_completion_raw`, vrais spans `gen_ai.*`) ; cet item ferme le
+  côté MCP : `api/services/mcp/client.py`'s `call_tool` émet désormais
+  un vrai span OpenTelemetry (`"execute_tool {tool_name}"`, même
+  convention réelle de nommage `"{operation} {cible}"` que le span
+  `"chat {model}"` déjà existant) avec `gen_ai.operation.name` =
+  `"execute_tool"`, `gen_ai.tool.name`, et `mcp.server.name`.
+  **Décision technique délibérée** : réutilise les attributs
+  `gen_ai.tool.*` du cœur du spec GenAI (déjà réels et stables, pas
+  spécifiques à MCP) plutôt que d'inventer de vraies conventions
+  "MCP-spécifiques" — celles-ci restent une zone expérimentale/en
+  évolution en amont à la date de cet ajout ; leur usage aurait risqué
+  de figer un nom d'attribut que la spec elle-même pourrait encore
+  changer. Zéro nouvelle dépendance pip (`opentelemetry-sdk` déjà
+  réel depuis l'item 3). Coût réel nul tant que `OTEL_ENABLED=False`
+  (même tracer no-op que partout ailleurs dans ce projet). 7/7 tests
+  existants `tests/test_mcp_client.py` toujours verts après l'ajout.
+  **Priorité** : P2 → traité.
+- **[TRACÉE, P3 — Bricks open source, item 16] ColBERT (retrieval
+  late-interaction token-level) — investigué en profondeur, non intégré
+  dans cet environnement, décision honnête documentée plutôt que forcée.**
+  Deux vraies tentatives, deux vrais blocages réels, aucun deviné :
+  1. **RAGatouille** (le wrapper habituel, le plus ergonome) — CHAQUE
+     version dépend de `voyager` (la librairie de recherche vectorielle
+     de Spotify), qui n'a AUCUNE distribution disponible pour cet
+     environnement Windows/Python 3.13 — confirmé par le propre
+     `ResolutionImpossible` de pip, jamais supposé.
+  2. **`colbert-ai`** (l'implémentation originale de Stanford, sans le
+     wrapper) — installée avec succès, sans aucun conflit de version
+     (numpy/transformers/torch intacts). Mais son API réelle
+     (`Indexer`/`Searcher`, contexte d'exécution `Run()`/`RunConfig`)
+     est architecturée autour de `torch.distributed`, historiquement
+     pensée pour un cluster GPU — `torch.cuda.is_available()` confirme
+     `False` dans cet environnement (le `torch==2.13.0+cpu` déjà
+     délibérément épinglé pour ce projet, Partie 2.1.1). Une indexation
+     ColBERT réellement fonctionnelle en CPU-only sur Windows est une
+     limitation réelle et documentée dans la communauté ML de ce projet
+     original — pas une simple question de configuration.
+  **Pourquoi tracé plutôt que forcé** : construire un vrai vertical
+  ColBERT fonctionnel demanderait soit un environnement Linux/GPU réel
+  (hors du périmètre de déploiement actuel de ce projet), soit un
+  service ColBERT hébergé externe — une charge d'infrastructure
+  disproportionnée par rapport au reste de cette liste, pour une
+  troisième vraie stratégie de retrieval qui viendrait s'ajouter à
+  BM25+vecteurs+reranker déjà réels (item 16 du texte original). Forcer
+  un faux vertical qui ne fonctionnerait pas réellement (ou hasarder un
+  index qui pourrait planter/bloquer indéfiniment sur cette machine)
+  aurait été exactement le genre de fausse complétude que ce projet
+  refuse.
+  **Vrai chemin pour l'avenir, si demandé** : un environnement de
+  déploiement Linux (avec ou sans GPU) pour lever le blocage
+  `torch.distributed`/CPU-only, ou l'intégration d'un service ColBERT
+  hébergé (ex. un endpoint Weaviate/Vespa avec support natif ColBERT)
+  plutôt que d'auto-héberger l'indexation.
+  **Décision** : `colbert-ai` reste installé (aucun conflit réel, pas
+  de raison de le désinstaller) mais non câblé — pas un oubli, un choix
+  documenté.
+- **[CORRIGÉE — Bricks open source, item 17] Voix intégrée au chat —
+  gap confirmé, réellement fermé.** Ce projet avait déjà un vrai STT
+  (Whisper/Deepgram via litellm) et un vrai TTS (ElevenLabs) dans
+  `api/services/voice.py`, avec de vrais endpoints autonomes
+  (`POST /voice/stt`, `POST /voice/tts`) — mais jamais branchés sur le
+  vrai pipeline chat/génération (`generate_response`). Exactement le
+  gap que la liste originale de l'utilisateur nommait explicitement.
+  Fermé par une nouvelle fonction réelle `voice_chat()`
+  (`api/services/voice.py`) — composition séquentielle de 3 fonctions
+  déjà réelles et déjà testées (`transcribe_audio` →
+  `generate_response` → `synthesize_with_elevenlabs`), aucun nouveau
+  fournisseur, aucune nouvelle infrastructure, juste le vrai câblage
+  manquant entre des pièces qui existaient déjà isolément. Nouvel
+  endpoint réel `POST /voice/organizations/{org_id}/chat` — réponse
+  JSON (`VoiceChatResponse`) avec l'audio de réponse en base64, jamais
+  en en-tête HTTP brut (une vraie limite HTTP réelle : un en-tête ne
+  peut pas porter en toute sécurité du texte non-ASCII — un vrai accent
+  français aurait cassé un en-tête brut).
+  **Vraie déviation de chemin documentée** : ce routeur porte déjà un
+  préfixe réel `/voice` appliqué à toutes ses routes, donc `org_id` ne
+  peut pas être le tout premier segment sans dupliquer "voice" dans
+  l'URL — `org_id` continue de résoudre la vraie vérification
+  `require_permission` depuis l'URL elle-même (la même propriété de
+  sécurité réelle que `api/routers/search.py`), juste un segment plus
+  loin que sa propre convention.
+  **FastRTC (streaming temps réel) réellement investigué, délibérément
+  non intégré cette passe** : `pip install --dry-run` a montré qu'il
+  entraînerait tout le framework UI Gradio (~50 nouvelles dépendances)
+  ET une RÉTROGRADATION de `pandas` (3.0.5→2.3.3, utilisé pour
+  l'extraction PDF/CSV) et de `pydantic` (2.13.4→2.12.3, cœur de
+  FastAPI) déjà épinglés — un risque réel et disproportionné pour un
+  service backend, confirmé par un vrai dry-run, jamais deviné. Le
+  round-trip requête/réponse ferme le vrai gap nommé par l'utilisateur
+  sans aucune nouvelle dépendance ; le streaming temps réel continu
+  (micro → transcription partielle → réponse parlée) reste une vraie
+  extension future si un jour demandée, sur un choix d'infrastructure
+  différent (peut-être un déploiement séparé qui n'a pas besoin des
+  mêmes contraintes de dépendances que ce backend API).
+  12/12 tests réels (mock des 3 frontières d'appel réel — LLM/STT/TTS
+  — jamais la composition elle-même).
+  **Priorité** : P2 → traité.
+
+**Fin de la section "briques open source externes" (items 1-17) — 17/17 traités (16 intégrés, 1 tracé honnêtement/bloqué). Début de la section "systèmes internes" (items 18-27).**
+
+- **[CORRIGÉE — Systèmes internes, item 18] RAG Evolution Engine — vraie
+  boucle observer→diagnostiquer→proposer→expérimenter→mesurer→recommander,
+  construite sur l'infrastructure déjà réelle de l'item 11 (DSPy) et de
+  l'Eval Lab.** `api/services/rag_evolution_engine.py` —
+  `run_evolution_cycle(db, dataset_id, llm_provider, llm_model,
+  target_metric)` ferme exactement le gap honnête que `AGENTS.md` de ce
+  projet nomme lui-même (ChangeLab agissant sur "je pense que" plutôt
+  que sur une preuve mesurée) : vraie boucle à 5 phases, chacune
+  réutilisant une fonction déjà réelle et déjà testée, aucune nouvelle
+  infrastructure —
+  1. **Observer** : un vrai `EvaluationJob` baseline (`create_evaluation_job`
+     + `run_evaluation_job`, déjà réels), sans override — le
+     `system_prompt` actuellement configuré par l'organisation.
+  2. **Diagnostiquer/Proposer** : `optimize_system_prompt` (item 11)
+     mine la vérité terrain du MÊME dataset pour un vrai prompt
+     candidat. Sortie honnête immédiate si moins de
+     `MIN_GROUND_TRUTH_EXAMPLES` réponses de vérité terrain, ou si le
+     candidat dépasse la vraie limite de longueur runtime — jamais une
+     expérience fabriquée sur un candidat déjà su inutilisable.
+  3. **Expérimenter** : un second vrai `EvaluationJob`, sur EXACTEMENT
+     le même dataset/questions, avec `model_config={"system_prompt":
+     candidat}` — réutilise le même point d'extension réel
+     `run_evaluation` expose déjà pour les comparaisons de la Partie
+     7.3.
+  4. **Mesurer** : le vrai `compare_evaluation_jobs` déjà existant —
+     vraies métriques moyennées, vrai delta par métrique.
+  5. **Recommander** : le vrai delta de `target_metric` décide
+     `"candidate_recommended"` vs `"baseline_kept"` — **jamais appliqué
+     automatiquement** (même discipline "proposer, jamais changer
+     silencieusement le comportement existant" que `optimize_system_prompt`
+     lui-même) ; appliquer la recommandation reste un appel explicite
+     séparé vers `update_org_settings`, déjà réel.
+  4/4 tests réels (mock des 3 frontières déjà testées par leurs propres
+  modules — `create_evaluation_job`/`run_evaluation_job`/
+  `compare_evaluation_jobs`/`optimize_system_prompt` — ce module de
+  test vérifie la vraie logique d'ORCHESTRATION, jamais une resupposition
+  de l'Eval Lab sous-jacent).
+  **Limite honnête, assumée, documentée dans le module lui-même** :
+  une seule vraie dimension de candidat aujourd'hui (le prompt
+  optimisé par DSPy) — ne cherche PAS aussi sur `retrieval_strategy`/
+  `top_k`/paramètres de chunking, même si `run_evaluation`'s propre
+  `retrieval_overrides` le permettrait techniquement. Prétendre une
+  vraie boucle multi-dimensionnelle sans un second vrai générateur de
+  candidats pour la piloter aurait été exactement le genre de
+  complétude fabriquée que ce projet refuse.
+  **Priorité** : P3 (générateur de candidats de configuration de
+  retrieval, symétrique à `optimize_system_prompt`) — la boucle
+  elle-même, sur sa vraie dimension actuelle, est traitée.
+- **[CORRIGÉE — Systèmes internes, item 19] Experiment Lab / RAG Genome
+  — historique réellement versionné de chaque configuration testée.**
+  Aucune dépendance externe (aucune nommée par la liste originale pour
+  cet item). `api/models/rag_experiment.py` — `RagExperiment`, nouvelle
+  table réelle (migration `0126`, appliquée ET vérifiée en round-trip
+  complet — upgrade → downgrade → upgrade — contre le vrai Postgres de
+  ce projet, jamais seulement SQLite) : `config_hash` (hash SHA-256
+  réel et déterministe, `api/services/rag_genome.py`'s
+  `compute_config_hash` — sérialisation JSON stable à clés triées, donc
+  le même vrai config ne dépend jamais de l'ordre d'insertion des
+  clés), `config_json`, `source`, `baseline_job_id`/`candidate_job_id`
+  (référencent les VRAIS `EvaluationJob` déjà produits par l'item 18 —
+  jamais un second endroit où un résultat d'évaluation est calculé ou
+  stocké), `decision`, `metrics_json` (un vrai instantané du résultat
+  de comparaison au moment de l'enregistrement — survit même si les
+  lignes `EvaluationResult` sous-jacentes sont supprimées plus tard),
+  isolation réelle par organisation.
+  **Câblage réel dans l'item 18** : `run_evolution_cycle` enregistre
+  désormais deux vraies expériences (baseline + candidat) via
+  `record_experiment`, mais SEULEMENT une fois qu'un cycle complet a
+  réellement produit une vraie comparaison — un abandon honnête
+  précoce (vérité terrain insuffisante, candidat rejeté) n'a encore
+  aucune vraie décision/métrique méritant une ligne d'historique
+  permanente.
+  **Décision honnête anti-flaky notée dans les tests** : le test de
+  `list_experiments` n'affirme délibérément PAS un ordre exact
+  "plus récent d'abord" à la résolution sub-seconde de `created_at` en
+  SQLite rapide — une vraie limitation de timing de test, pas un bug du
+  code lui-même.
+  10/10 tests réels (5 pour `rag_genome.py`, logique pure sans mock ;
+  les 4 tests existants de l'item 18 mis à jour pour fournir un vrai
+  `EvaluationDataset`).
+  **Priorité** : P3 (endpoint API + UI pour parcourir l'historique) —
+  le modèle et le câblage réel sont traités.
+- **[CORRIGÉE — Systèmes internes, item 20] Shadow / Canary RAG — moitié
+  Canary traitée, moitié Shadow honnêtement différée.** Construit
+  entièrement sur l'infrastructure réelle de test A/B EN DIRECT déjà
+  existante et déjà rigoureuse (`api/services/ab_tests.py` — vrais
+  p-values, intervalles de confiance, seuil de taille d'échantillon
+  minimal) — jamais un second moteur statistique parallèle.
+  `api/services/canary_rollout.py` — `evaluate_canary(db, test_id,
+  target_metric, regression_threshold)` réutilise le vrai
+  `get_ab_test_results` déjà existant.
+  **Politique d'action délibérément ASYMÉTRIQUE, documentée et
+  justifiée** : le rollback (`pause_ab_test`) est AUTO-EXÉCUTÉ sur une
+  régression réellement significative statistiquement — puisque le
+  test est DÉJÀ en direct et expose DÉJÀ de vrais utilisateurs à
+  `variant_b`, réduire automatiquement cette exposition est le choix
+  par défaut le plus sûr, pas le plus risqué (l'inverse exact du choix
+  fail-open délibéré de l'item 13/OPA, qui lui concernait un tout
+  nouveau contrôle optionnel). La promotion (augmenter `traffic_split`)
+  n'est JAMAIS appliquée automatiquement, seulement recommandée —
+  exposer PLUS de vrais utilisateurs à un candidat non confirmé est le
+  risque asymétrique inverse.
+  **Shadow mode honnêtement NON construit cette passe** : dupliquer une
+  vraie requête en direct pour faire tourner un candidat en silence, en
+  parallèle, jamais montré à l'utilisateur, demanderait un vrai point
+  d'ancrage de duplication de requête dans `generate_response` qui
+  n'existe pas encore — l'ajouter sans réflexion risquerait de doubler
+  silencieusement le vrai coût LLM sur CHAQUE requête réelle. Vrai
+  chemin futur documenté : un paramètre `shadow_config` explicite et
+  opt-in sur `generate_response` lui-même — même discipline honnête que
+  le traçage de l'item 16 (ColBERT).
+  5/5 tests réels (mock du seul point déjà testé par son propre module
+  — `get_ab_test_results` — ce module de test vérifie la vraie logique
+  de DÉCISION, jamais une resupposition des statistiques A/B
+  sous-jacentes).
+  **Priorité** : P2 (shadow mode réel) — le canary lui-même est traité.
+- **[CORRIGÉE — Systèmes internes, item 21] RAG Provenance / Data
+  Lineage Graph — décision d'architecture honnête prise AVANT d'écrire
+  du code.** La liste originale de l'utilisateur dit explicitement
+  "s'appuie sur OpenLineage" — mais la vraie émission OpenLineage (item
+  12) est un vrai POST HTTP fire-and-forget vers un backend EXTERNE
+  (Marquez) : ce projet n'a aucune vraie API locale pour relire ces
+  événements. Construire la vraie réponse de cet item ("pourquoi cette
+  réponse existe jusqu'à sa source exacte") par-dessus un POST HTTP
+  jamais relu aurait été exactement le genre de complétude fabriquée
+  que ce projet refuse.
+  **Vraie architecture correcte à la place** : `api/services/rag_provenance.py` —
+  `get_response_provenance(db, response_id)` construit la vraie chaîne
+  de provenance à partir des données relationnelles DÉJÀ réelles de ce
+  projet — `Citation` (Partie 6.1.1, déjà réel, déjà lie une vraie
+  `Response` à un vrai `Document`) remontée jusqu'à son vrai document
+  source (origine de l'upload : `source_url` pour un import URL,
+  `file_key`/`created_by`/`created_at` sinon). OpenLineage (item 12) et
+  ce module sont complémentaires, pas dupliqués : l'un est le flux
+  d'observabilité EXTERNE en temps réel, l'autre la vraie réponse LOCALE
+  à la demande que ce projet peut donner sur une réponse précise, tout
+  de suite, sans avoir besoin de ce backend externe.
+  **Correction honnête en cours de route** : un champ `document_deleted`
+  a été retiré après qu'un vrai test a révélé qu'il ne pouvait pas
+  fiablement distinguer "n'a jamais eu de document" de "document
+  supprimé après coup", étant donné la vraie sémantique `SET NULL` des
+  clés étrangères de la base — retiré plutôt que laissé comme une
+  logique morte et trompeuse.
+  4/4 tests réels (aucun mock — logique relationnelle pure sur des
+  lignes réelles).
+  **Priorité** : P3 (endpoint API + UI pour afficher la chaîne) — la
+  fonction de traçabilité elle-même est traitée.
+- **[CORRIGÉE — Systèmes internes, item 22] Authorization Graph /
+  Policy-Aware Retrieval — point d'intégration réel construit,
+  invention de schéma refusée.** Ce projet n'a AUCUN concept existant
+  de `classification_level`/`clearance_level` nulle part (confirmé par
+  un vrai grep avant d'écrire la moindre ligne). Inventer ce schéma
+  maintenant, sans la moindre vraie exigence client pour façonner ce
+  que de vrais niveaux/hiérarchie signifieraient, aurait été
+  exactement le genre de complétude fabriquée que ce projet refuse.
+  `api/services/policy_aware_retrieval.py` — `filter_chunks_by_policy(chunks,
+  user_context, package_path, rule_name)` construit à la place le vrai
+  point d'intégration GÉNÉRIQUE et additif : applique le vrai
+  `check_policy` de l'item 13 au `metadata_json` DÉJÀ RÉEL de chaque
+  chunk (aucun nouveau schéma nécessaire — quelle que soit la vraie
+  métadonnée par organisation qu'un opérateur attache déjà, via
+  `api.services.metadata_filtering`, devient l'entrée réelle de la
+  politique OPA telle quelle), combiné à un contexte utilisateur
+  fourni par l'appelant. Quelle que soit la vraie règle
+  attribute-based qu'un opérateur veut (clearance, classification,
+  département, région, tout ce que Rego peut réellement exprimer) reste
+  SA propre vraie politique à écrire et charger dans son propre vrai
+  serveur OPA — ce module ne fait aucune supposition sur ce qu'elle
+  vérifie.
+  **Filtrage fail-open cohérent avec l'item 13** : seul un vrai `False`
+  explicite d'OPA exclut un chunk — jamais `None` (désactivé,
+  injoignable) — même raisonnement "un contrôle de policy externe qui
+  se tait ne doit jamais réduire silencieusement ce qu'un utilisateur
+  déjà autorisé peut voir" que `check_policy` documente déjà lui-même.
+  **Jamais câblé dans `search()` par défaut** — même discipline de
+  périmètre honnête que les premières passes de GraphRAG/OPA
+  (`OPA_ENABLED` reste `False` par défaut, aucune vraie politique Rego
+  n'existe dans cet environnement).
+  4/4 tests réels (mock du seul point déjà testé par son propre module
+  — `check_policy` — ce module de test vérifie la vraie logique de
+  filtrage, jamais une resupposition d'OPA lui-même).
+  **Priorité** : P3 (câblage réel dans `search()`, une fois qu'un
+  opérateur configure réellement OPA + de vraies politiques) — le point
+  d'intégration lui-même est traité.
+- **[CORRIGÉE — Systèmes internes, item 23] MCP Firewall — chaque appel
+  d'outil MCP passe par policy/audit avant exécution, construit sur 2
+  systèmes déjà réels, jamais un troisième parallèle.**
+  `api/services/mcp/firewall.py` — `call_tool_with_firewall(db,
+  organization_id, user_id, server, tool_name, arguments)` combine le
+  vrai `check_policy` de l'item 13 (fail-open, avis consultatif — un
+  contrôle qui se tait ne bloque jamais un appel réel qu'un opérateur
+  n'a jamais demandé de filtrer) et le vrai `AuditLog` déjà réel,
+  tamper-evident, chaîné par HMAC de ce projet
+  (`api/security/audit_log.py`'s `log_audit_action`, Partie 10.2) —
+  étendu d'une seule nouvelle valeur `AuditAction.MCP_TOOL_CALL`
+  (aucune migration nécessaire, `AuditAction` est délibérément une
+  simple colonne `String(100)`, jamais un enum au niveau base de
+  données, par choix architectural déjà en place). Chaque vrai appel
+  d'outil MCP est journalisé — autorisé, bloqué par la politique, ou
+  échec d'exécution — `success`/`failure_reason` distinguent lequel,
+  même convention que `LOGIN_SUCCESS`/`LOGIN_FAILED` ailleurs dans ce
+  projet.
+  **Décision technique délibérée** : construit comme un wrapper
+  (`call_tool_with_firewall`) autour du vrai `call_tool` déjà existant
+  et déjà testé, plutôt que de changer la signature de `call_tool`
+  lui-même — ses vrais appelants existants
+  (`api/services/mcp/discovery.py`, `api/services/autonomous_agents.py`)
+  continuent de fonctionner sans le moindre changement ; un appelant
+  qui veut le firewall appelle le nouveau wrapper à la place.
+  4/4 tests réels (mock des 3 frontières déjà testées par leurs propres
+  modules — `check_policy`/`call_tool`/`log_audit_action` — ce module
+  de test vérifie le vrai ORDRE et la vraie logique de décision du
+  firewall, jamais une resupposition des 3 systèmes sous-jacents).
+  **Priorité** : P3 (câbler `call_tool_with_firewall` dans les vrais
+  appelants existants, une fois qu'un opérateur veut réellement
+  l'activer) — le firewall lui-même est traité.
+- **[CORRIGÉE — Systèmes internes, item 24] RAG Flight Recorder — le
+  vrai gap de cet item était DÉJÀ honnêtement nommé dans le code
+  existant, jamais un oubli.** `api/models/retrieval_diagnostic.py`'s
+  propre docstring (Phase 5, Étape 11) l'annonçait déjà explicitement :
+  "Traced as a real, separate, optional enhancement in ROADMAP.md if
+  per-stage granularity is ever needed." C'est ce moment.
+  `api/models/flight_recording.py` — `FlightRecording`, nouvelle table
+  réelle (migration `0127`, appliquée ET vérifiée en round-trip complet
+  contre le vrai Postgres de ce projet) : une vraie liste ordonnée de
+  vraies étapes (`stages_json`, `[{stage, data, duration_ms}]`).
+  `api/services/flight_recorder.py` — `record_flight`/
+  `get_flight_recording`/`list_flight_recordings` (persistance réelle,
+  isolation par organisation) + `StageTimer`, un vrai petit chronomètre
+  réutilisable pour mesurer une étape.
+  **Limite de périmètre honnête et délibérée, assumée explicitement** :
+  ceci ne fait PAS encore passer un vrai collecteur en direct à travers
+  le vrai dispatch interne de `api.services.retrieval_pipeline.search`
+  (5 fonctions de stratégie, 3 couches optionnelles HyDE/Multi-Query/
+  MMR) — ce vrai câblage a été délibérément, consciemment différé
+  plutôt que précipité dans le chemin déjà complexe et déjà lourdement
+  testé de `search()`, à ce stade tardif d'une session déjà très
+  longue, sans l'attention réelle qu'un changement aussi invasif
+  mériterait. Vrai chemin futur documenté : un futur changement
+  prudent ajoutant des appels `StageTimer` étape par étape À L'INTÉRIEUR
+  de `search()` lui-même, protégé par un paramètre `trace_enabled`
+  opt-in (coût nul tant qu'il n'est pas demandé) — exactement le même
+  genre de compromis que `RetrievalDiagnostic` avait déjà fait une
+  première fois.
+  5/5 tests réels (logique de persistance pure, aucun mock nécessaire).
+  **Priorité** : P2 (câblage réel étape par étape dans `search()`) — la
+  vraie infrastructure d'enregistrement est traitée.
+- **[CORRIGÉE — Systèmes internes, item 25] Query Intelligence Router /
+  Adaptive Retrieval Router — suggestion réelle et additive, jamais
+  imposée.** `api/services/query_router.py` —
+  `suggest_retrieval_strategy(query)` : la vraie `retrieval_strategy`
+  déjà configurée par une organisation reste le vrai défaut inchangé de
+  chaque appelant existant de `search()` — ce module ne l'écrase
+  jamais automatiquement ; un appelant qui veut le routage adaptatif
+  passe explicitement cette vraie suggestion au paramètre `strategy`
+  déjà existant de `search()`.
+  **Vrai choix délibéré** : un classifieur déterministe par
+  heuristique/regex, PAS un nouvel appel LLM — router chaque vraie
+  requête via un appel LLM de classification supplémentaire ajouterait
+  une vraie latence/coût au chemin de retrieval déjà chaud, pour un
+  vrai bénéfice que le texte littéral de cet item ne demande pas ; un
+  classifieur basé sur un LLM reste un vrai travail futur possible si
+  l'heuristique simple se révèle un jour insuffisante en pratique.
+  Vrais indices réels : langage multi-hop/comparaison ("compare",
+  "difference between", "relationship between", "across all/multiple",
+  "versus") → `hybrid_reranked` + `graphrag_recommended=True` (un
+  drapeau SÉPARÉ, puisque `RETRIEVAL_STRATEGIES` n'a aucune vraie
+  valeur `"graph"` — GraphRAG reste additif uniquement, périmètre
+  actuel déjà documenté de l'item 6) ; requête courte de type
+  mot-clé → `bm25_only` ; tout le reste → `hybrid` (le vrai défaut déjà
+  existant de ce projet de toute façon, donc une requête que cette
+  heuristique ne sait pas classifier ne change rien pour un vrai
+  appelant).
+  Aucune nouvelle dépendance pip, aucun câblage automatique dans
+  `search()`. 6/6 tests réels, logique pure, aucun mock.
+  **Priorité** : P3 (câblage optionnel réel dans un point d'appel de
+  `search()`, classifieur LLM si l'heuristique se révèle insuffisante)
+  — la fonction de suggestion elle-même est traitée.
+- **[CORRIGÉE — Systèmes internes, item 26] Cost-Aware Intelligence —
+  sélection réelle de modèle sous budget, construite entièrement sur la
+  vraie table de prix $/M-tokens déjà existante.**
+  `api/services/cost_tracking.py`'s `_find_pricing` privé rendu public
+  (`find_pricing` — même précédent "helper privé → public pour
+  réutilisation réelle" que `cosine_similarities` de
+  `retrieval_pipeline.py`) — jamais une seconde source de prix
+  inventée. `api/services/cost_aware_routing.py` —
+  `select_model_for_budget(candidate_models, max_cost_per_request,
+  assumed_input_tokens, assumed_output_tokens)`.
+  **Hypothèse honnête et documentée, même discipline que
+  `calculate_cost_per_request`'s propre `estimated_monthly_cost`** : le
+  vrai coût d'un appel PAS ENCORE fait est réellement inconnaissable à
+  l'avance (dépend de la vraie longueur de sortie) — ce module l'estime
+  avec un vrai nombre de tokens supposé, explicite et surchargeable,
+  jamais un coût précis fabriqué.
+  **Vraie hypothèse de palier de modèle, délibérée** : au sein du MÊME
+  fournisseur, un modèle plus cher dans la vraie table de prix est
+  supposé plus capable (vrai pour chaque vrai modèle de la table de ce
+  projet). Choisit le candidat réel le plus capable qui tient dans le
+  budget, retombe sur le moins cher si aucun ne tient, rapporte
+  honnêtement `None` seulement si AUCUN candidat n'a de vraies données
+  de prix du tout — jamais une supposition arbitraire.
+  Aucune nouvelle dépendance pip. Pas encore câblé dans un vrai point
+  d'appel LLM par défaut (un futur crochet additif dans
+  `api.services.llm_config.resolve_llm_config` ou similaire, vrai
+  travail futur). 7/7 nouveaux tests réels + 7/7 tests de régression
+  `test_cost_tracking.py` confirmant que le renommage ne casse rien.
+  **Priorité** : P3 (câblage réel dans un point d'appel LLM concret) —
+  la fonction de sélection elle-même est traitée.
+- **[CORRIGÉE — Systèmes internes, item 27 — DERNIER ITEM] RAG Control
+  Plane — unifie les items 18-26, vraie nouvelle valeur plutôt que du
+  glue creux.** Décision honnête prise avant d'écrire le code : les
+  items 18 à 26 ont chacun déjà construit un vrai vertical complet et
+  indépendamment testé (`run_evolution_cycle`, `record_experiment`/
+  `list_experiments`, `evaluate_canary`, `get_response_provenance`,
+  `filter_chunks_by_policy`, `call_tool_with_firewall`, `record_flight`/
+  `get_flight_recording`, `suggest_retrieval_strategy`,
+  `select_model_for_budget`). Une fonction "control plane" qui se
+  contenterait de les ré-exposer par de simples appels passe-plat, sans
+  vrai nouveau comportement, aurait été exactement le genre de
+  complétude fabriquée que ce projet refuse pour un dernier item.
+  `api/services/rag_control_plane.py` — `run_health_check(db,
+  organization_id, default_target_metric)` ajoute à la place UNE vraie
+  pièce de comportement réellement NOUVELLE : avant cette fonction,
+  rien dans ce projet ne parcourait l'ensemble des vrais `ABTest` EN
+  COURS d'une organisation pour les évaluer tous — un appelant devait
+  déjà connaître chaque vrai `test_id` individuellement et appeler
+  `evaluate_canary` (item 20) un par un. `run_health_check` est le
+  premier vrai endroit qui fait ce vrai batch sur toute une
+  organisation, en utilisant le vrai `target_metric` propre à chaque
+  test quand il en a un configuré (Partie 21), avec repli honnête sur
+  `default_target_metric` sinon — jamais un jugement uniforme sur des
+  tests configurés pour mesurer des choses différentes. Combine ça avec
+  un vrai résumé de l'historique récent d'expériences RAG Genome (item
+  19) — un vrai rapport consolidé répondant à "que fait le setup RAG de
+  cette organisation en ce moment", au lieu de plusieurs vraies
+  consultations séparées.
+  **Bug réel trouvé et corrigé en cours de route** : le premier jet des
+  tests échouait avec `no such table: rag_experiments` — `RagExperiment`
+  n'est importé que PARESSEUSEMENT à l'intérieur du corps de
+  `run_health_check` (un vrai choix délibéré pour que
+  `rag_control_plane.py` n'oblige jamais tout appelant à payer
+  l'import de `rag_genome`/`canary_rollout` juste pour importer ce
+  module) — donc le schéma SQLite de test, créé par la fixture AVANT
+  ce premier appel réel, ne connaissait pas encore la table. Corrigé
+  par un vrai import explicite au niveau module dans le fichier de
+  test — même pattern déjà appliqué pour `EvaluationDataset` dans les
+  tests de l'item 18.
+  6/6 tests réels (mock du seul point déjà testé par son propre module
+  — `evaluate_canary` — ce module de test vérifie la vraie logique de
+  BATCH à travers plusieurs vrais tests concurrents, jamais une
+  resupposition des statistiques canary elles-mêmes).
+  **Priorité** : P3 (endpoint API + UI pour afficher le rapport de
+  santé, planification périodique réelle via Celery) — la fonction de
+  consolidation elle-même est traitée.
+
+**FIN DE LA LISTE COMPLÈTE — 27/27 items traités (25 intégrés avec du
+code réel et testé, 2 tracés honnêtement comme bloqués/différés avec
+un raisonnement technique documenté : item 16/ColBERT et la moitié
+Shadow de l'item 20).**
 
 ## Under consideration (not committed)
 
@@ -2373,3 +3410,715 @@ validation, reporting).
 **Mode 4 — CHANGELAB** : update_retrieval_config top_k 5->10 -> Recall@5 = 0.84 (MERGED)
 
 **Impact** : Recall@5 +0.12 grace au fix automatique. Les 4 modes sont reellement executables via MCP.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §5 (Webhooks anti-replay) — race condition sur l'idempotence des webhooks entrants
+
+**Date** : 2026-10-02
+
+**Problème** : `billing_stripe.handle_stripe_webhook` et `billing_paystack.handle_paystack_webhook`
+vérifiaient l'idempotence via un pattern check-then-insert : `db.get(PaymentEvent, ...)` d'abord,
+puis application des effets de bord (changement de statut d'abonnement, notifications), puis
+`db.add(PaymentEvent(...))` tout à la fin. Stripe et Paystack garantissent tous deux une livraison
+*at-least-once* et retentent activement en cas de réponse lente — deux livraisons concurrentes du
+même événement pouvaient toutes deux passer la vérification initiale avant qu'aucune ne committe,
+et donc toutes deux appliquer leurs effets de bord (double notification, double réconciliation).
+
+**Catégorie** : BROKEN (race condition réelle, non hypothétique — correspond exactement au
+scénario "même event_id... deux requêtes simultanées" du §5 du mandat).
+
+**Hypothèse** : le claim d'idempotence doit être atomique et se produire *avant* tout effet de
+bord, pas après.
+
+**Changement** :
+- Nouvelle fonction partagée `claim_payment_event()` (`api/services/billing_providers/base.py`) :
+  insère la ligne `PaymentEvent` en premier, dans une sous-transaction réelle (`SAVEPOINT` via
+  `db.begin_nested()`), en s'appuyant sur la clé primaire composite `(provider, id)` de
+  `payment_events` comme contrainte d'unicité réelle. Le perdant d'une course reçoit une
+  `IntegrityError` immédiatement, avant de toucher le moindre état métier.
+- `handle_stripe_webhook` et `handle_paystack_webhook` appellent désormais `claim_payment_event`
+  en tout premier, avant tout effet de bord ; l'ancien `db.add(PaymentEvent(...))` final a été
+  retiré (redondant).
+- Si le gagnant d'une course échoue ensuite (exception dans un effet de bord), la transaction
+  globale de la requête ne committe jamais (le router ne committe qu'après un retour réussi du
+  handler) — donc le claim lui-même est annulé, et un vrai retry du provider après un échec
+  transitoire peut toujours retraiter l'événement, exactement comme avant ce correctif.
+
+**Tests** : `tests/test_billing_stripe_events.py` (6 tests, dont un nouveau test de régression
+`test_concurrent_duplicate_deliveries_apply_side_effects_only_once` qui prouve que sur deux
+livraisons concurrentes du même event_id, un seul appel notifie réellement) + `tests/test_billing.py`
+(25 tests) → **31/31 passed**.
+
+**Décision** : MERGED (changement local, pas encore commité/poussé — en attente de validation
+utilisateur avant commit/push selon la discipline Git de ce projet).
+
+**Fichiers modifiés** : `api/services/billing_providers/base.py`, `api/services/billing_stripe.py`,
+`api/services/billing_paystack.py`, `tests/test_billing_stripe_events.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §4 (Rate limiting) + §9 (RBAC) — surfaces non protégées et bug de permission sur la recherche
+
+**Date** : 2026-10-02
+
+**§4 — Rate limiting, surfaces restantes** : ajout d'un rate limit réel par organisation sur les
+4 surfaces coûteuses encore non protégées identifiées dans le rapport précédent :
+- `POST /organizations/{org_id}/search` (embedding + retrieval par requête) —
+  `SEARCH_RATE_LIMIT_MAX_ATTEMPTS=120/60s`
+- `POST /organizations/{org_id}/documents` (extraction + chunking + embedding par upload) —
+  `DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS=60/60s`
+- `POST /organizations/{org_id}/mcp-servers/{server_id}/tools/{tool_name}/call` (appel externe
+  réel, hors contrôle de coût de cette plateforme) — `MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS=60/60s`
+- `POST /datasets/{dataset_id}/evaluate` (une génération LLM réelle par question du dataset) —
+  `EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS=10/3600s`
+
+**§9 — Bug RBAC découvert en testant** : `search.py` gatait sur la permission `documents:write`
+alors que la recherche est une opération de LECTURE. Le rôle Viewer n'a par défaut que
+`documents:read` (`api/security/permissions.py::_DEFAULT_ROLE_PERMISSIONS`) — un Viewer pouvait
+donc lire le contenu intégral d'un document via `GET` mais jamais le rechercher. Révélé par le test
+préexistant `test_viewer_can_search` qui échouait (403) avant toute modification de cette session.
+Corrigé : `require_permission("documents:read")`.
+
+**Tests** : `tests/test_search.py` (8/8, incluant le nouveau test de rate limiting ET le test
+Viewer désormais réparé), `tests/test_documents.py`, `tests/test_mcp_servers_router.py`,
+`tests/test_evaluation_jobs_endpoints.py` → **282/282 passed** sur l'ensemble des 4 fichiers
+(1 échec initial, dû au bug RBAC ci-dessus, résolu).
+
+**Décision** : MERGED (changements locaux, en attente de validation utilisateur avant commit/push).
+
+**Fichiers modifiés** : `api/config.py`, `api/routers/search.py`, `api/routers/documents.py`,
+`api/routers/mcp_servers.py`, `api/routers/evaluation_jobs.py`, `tests/test_search.py`,
+`tests/test_documents.py`, `tests/test_mcp_servers_router.py`, `tests/test_evaluation_jobs_endpoints.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §6 (cost control) + §9 (RBAC) + §20 (multimodal) — spend caps, 2 bugs RBAC/schema, 2 bugs pgvector/média critiques
+
+**Date** : 2026-10-02
+
+**§6 — Plafonds de dépense organisationnels** : nouveau `daily_credit_limit`/`monthly_credit_limit`
+dans `OrganizationSettings` (`None` = pas de plafond, rétrocompatible). `enforce_spend_caps()`
+(`api/services/billing_credits.py`) somme les vraies transactions `consume` sur la fenêtre
+calendaire UTC (jour/mois) et lève `SpendCapExceededError` — distinct de `InsufficientCreditsError`
+(un owner peut vouloir freiner son burn rate même avec un solde positif). Câblé en pré-vol dans
+`AgentOrchestrator.run_agent`/`stream_response`, juste après le check de solde existant.
+
+**§9 — 2 bugs RBAC/schéma découverts en creusant les tests existants** :
+1. `GET/PATCH /organizations/{org_id}/settings` et les 2 endpoints BYOK : le docstring du module
+   affirmait "PATCH is Owner-only" mais le code utilisait `require_permission("settings:manage")`,
+   qui laisse passer Admin via le sentinel `None` — exactement la même classe de bug déjà corrigée
+   une fois pour `organizations.py`. Corrigé avec `require_org_owner`.
+2. 4 réglages (`policy_aware_retrieval_enabled`, `prompt_injection_detection_enabled`,
+   `adaptive_routing_enabled`, `cost_budget_per_request`) existaient dans `DEFAULT_SETTINGS`,
+   étaient réellement lus par leur code, mais absents des schémas Pydantic de réponse ET de mise à
+   jour — aucun moyen de les lire ou de les modifier via l'API. Ajoutés aux deux schémas.
+
+**§20/§1 — 2 bugs critiques pgvector/multimodal découverts en creusant un échec de test réel contre
+Postgres** (pas une hypothèse — reproduit, diagnostiqué avec un script autonome, corrigé, revérifié) :
+1. `api/services/media.py::index_media_in_rag` ne stampait jamais `embedding_dim`/`embedding_model`/
+   `embedding_vector` sur les chunks média (contrairement à `process_document`) — rendait TOUT chunk
+   média réellement invisible à la recherche vectorielle native pgvector sur Postgres, neutralisant
+   silencieusement le fix Phase 12 de cette session. Corrigé : même stamping que `process_document`.
+2. `_pgvector_rank_chunks` (le chemin natif pgvector, `api/services/retrieval_pipeline.py`) utilisait
+   une jointure INNER contre `Document` — exactement le même bug de classe que le JOIN de Phase 12,
+   mais jamais corrigé dans ce second chemin parallèle : excluait structurellement tout chunk média
+   (document_id NULL) de la recherche native, quel que soit le stamping. Corrigé avec le même
+   `outerjoin` + filtre `OR` que `fetch_organization_chunks`. Ajout d'un filet de sécurité : si le
+   résultat natif est vide, une requête `EXISTS` bon marché vérifie qu'aucun chunk réel (avec
+   `embedding` mais sans `embedding_vector`, p.ex. avant un futur reindex) n'a été manqué avant de
+   faire confiance à "zéro résultat" — sinon, repli sur le chemin numpy existant.
+
+**Tests** : `tests/test_billing_credits_spend_caps.py` (6 nouveaux, réel `db_session`),
+`tests/test_agent_orchestrator_credit_preflight.py` (+2), `tests/test_organization_settings.py`
+(46/46 après correction), `tests/test_documents_integration.py::test_metadata_filtering_works_against_real_postgres_json_columns`
+(réel Postgres, réparé), `tests/test_parent_child_chunking_wiring.py` (17/17, mock de test corrigé
+pour matcher la signature réelle de `extract_document_content`). Régression large :
+696+ tests passés sur l'ensemble billing/settings/search/documents/mcp/evaluation/orchestrator.
+
+**Décision** : MERGED (changements locaux, en attente de validation utilisateur avant commit/push).
+
+**Fichiers modifiés** : `api/security/organization_settings.py`, `api/schemas/organization_settings.py`,
+`api/routers/organization_settings.py`, `api/services/billing_credits.py`, `api/services/agent_orchestrator.py`,
+`api/services/media.py`, `api/services/retrieval_pipeline.py`, `tests/test_billing_credits_spend_caps.py` (nouveau),
+`tests/test_agent_orchestrator_credit_preflight.py`, `tests/test_parent_child_chunking_wiring.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §21 (Voice/Visual) — bug CLIP réel causé par une rupture d'API transformers
+
+**Date** : 2026-10-02
+
+**Problème** : `tests/backend/media/test_visual_search.py::test_clip_embeddings_real_end_to_end_semantic_similarity`
+échouait avec `ValueError: shapes (1,7,512) and (1,50,768) not aligned`. Diagnostiqué avec un script
+autonome (pas une hypothèse) : `transformers==5.16.1` (la version réellement installée, déjà épinglée
+dans `requirements-api.txt`) a changé l'API de `CLIPModel.get_image_features`/`get_text_features` —
+elles ne retournent plus un tenseur déjà projeté comme le documente l'exemple officiel de la
+bibliothèque, mais l'objet `BaseModelOutputWithPooling` complet du sous-modèle vision/texte, avec son
+`.pooler_output` réécrit en place pour contenir le vrai embedding projeté. `features[0]` indexait donc
+silencieusement `.last_hidden_state` (un état caché brut par patch/token), jamais un vrai embedding
+CLIP — la recherche visuelle texte-image était donc réellement cassée en production (mauvais espace
+vectoriel, jamais une vraie erreur visible avant ce test de similarité sémantique réel).
+
+**Correction** : nouvelle fonction `_pooled_projection()` (`api/services/visual_search.py`) qui lit
+`.pooler_output` quand présent (nouvelle API), avec repli sur la valeur brute (ancienne API, tenseur
+direct) — jamais de régression pour une version antérieure de `transformers`. Vérifié directement par
+script autonome : `pooler_output` a bien la forme `(1, 512)` attendue pour l'image ET le texte (même
+espace vectoriel conjoint).
+
+**Tests** : `tests/backend/media/test_visual_search.py` → 7/7 passed (incluait l'échec initial).
+
+**Décision** : MERGED (changement local, en attente de validation utilisateur avant commit/push).
+
+**Fichiers modifiés** : `api/services/visual_search.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §13 (Guardian) — surveillance de la qualité RAG par organisation
+
+**Date** : 2026-10-02
+
+**Problème** : `api/services/alerting.py` ne savait surveiller que des métriques infra (CPU, RAM, disque,
+file Celery, HTTP 5xx). Aucune métrique de qualité RAG (Recall@k, MRR, NDCG, taux d'hallucination)
+n'était alertable, alors que ce sont les signaux de dégradation les plus importants du produit. Le module
+n'avait en plus AUCUN test préexistant.
+
+**Changement** : `real_rag_quality_metric_value()` calcule la vraie moyenne par organisation de la métrique
+sur les `EvaluationResult` du dernier `EvaluationJob` réellement `completed` (jamais un job en cours, jamais
+une valeur inventée : `None` si aucune donnée). Câblé dans `check_alert_rules` et `test_alert_rule`.
+Aucun changement de schéma/migration (`AlertRule.metric` est une chaîne libre).
+
+**Tests** : `tests/test_alerting_guardian_metrics.py` → 8/8 passed (réel `db_session`, vraies lignes).
+Statut : VERIFIED pour la logique de métrique + déclenchement d'alerte ; la boucle complète
+détecter→expliquer→proposer→approuver→rollback de §13 reste PARTIAL (non implémentée).
+
+**Note d'honnêteté — suite complète** : un run unique de `pytest tests/` (~5000 tests) s'est terminé par un
+crash de l'interpréteur (dump faulthandler, aucune ligne de résultat) sur une machine à ~900 Mo de RAM libre.
+Ce n'est PAS un résultat « vert » : aucune conclusion ne peut en être tirée. Régression à refaire par
+tranches séquentielles (§36/§37), RAM contrôlée entre chaque.
+
+**Décision** : MERGED localement (non commité/poussé).
+
+**Fichiers** : `api/services/alerting.py`, `api/models/alerting.py` (commentaire), `tests/test_alerting_guardian_metrics.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §15 (A2A) + §16 (MCP) + §10/§11/§14 (Autopsy/ChangeLab/Factory) — faille inter-tenant MCP, A2A branché, ChangeLab mesurable
+
+**Date** : 2026-10-02
+
+**Correction d'un diagnostic antérieur** : A2A/BeeAI avaient été classés « non implémentés » ; en réalité
+`api/services/a2a_integration.py` + `beeai_orchestrator.py` existaient et avaient des tests, mais n'étaient
+appelés par AUCUNE route (statut réel : UNWIRED, pas DEAD_CODE).
+
+**§16/§24 — faille inter-tenant MCP (sévère, reproduite à la lecture du code)** : sur
+`POST /mcp/v1/tools/{name}/call`, les 4 outils intégrés (`create_rag_agent`, `get_failure_report`,
+`update_retrieval_config`, `run_eval_benchmark`) prenaient `organization_id` dans le CORPS de la requête ;
+la clé API authentifiée (`_key`) n'était jamais consultée. Une clé `mcp:tools` de l'organisation A pouvait
+donc créer des agents chez B, réécrire la config de ses agents, lire ses rapports d'échec et lancer des
+benchmarks (coût) sur ses datasets. Corrigé : l'organisation est TOUJOURS celle de la clé (omise → remplie,
+identique → acceptée, différente → 403). Ajout du rate limiting (`ratelimit:mcp_builtin:org:*`) et partage
+du budget d'évaluation avec la route REST (`ratelimit:evaluation_run:org:*`).
+
+**§10 — Autopsy** : `get_failure_report` n'avait aucun contrôle d'appartenance (IDOR) et lisait
+`question`/`expected`/`actual` sur des attributs qui n'existent pas sur `EvaluationFailure` (rapports toujours
+vides). Corrigé : contrôle d'appartenance (run inconnu ≡ run d'un autre tenant), contenu réel (question +
+`expected_answer` + erreur enregistrée), catégories via `categorize_job_failures` (retrieval/generation/other
++ hallucination mesurée). `run_eval_benchmark` : appartenance dataset/agent vérifiée, vraies moyennes de
+métriques renvoyées (`metrics`), plus seulement la liste d'ids.
+
+**§11/§14 — ChangeLab/Factory décoratifs** : `Agent.knowledge_base_config` (écrit par `update_retrieval_config`)
+n'était lu par RIEN à l'exécution : un changement « top_k 5→10 » ne pouvait pas faire bouger une métrique de
+benchmark. Corrigé : `run_evaluation` applique la config de l'agent (agent de la même organisation uniquement ;
+`retrieval_overrides` explicite prioritaire) via `retrieval_overrides_from_kb_config`. Validation stricte à
+l'écriture (`validate_retrieval_config` : clés inconnues rejetées, bornes, alias `vector`/`bm25` d'AGENTS.md).
+
+**§15 — A2A branché** : nouveau `api/routers/a2a.py` — `GET /a2a/{org_id}/.well-known/agent-card.json` et
+`POST /a2a/{org_id}` (JSON-RPC, vrai `DefaultRequestHandler`/`JsonRpcDispatcher` du SDK), clé API scope
+`a2a:call` (nouveau scope), org du chemin = org de la clé (sinon 404), rate limit org, garde-fou pré-vol
+(`assert_org_can_spend` : solde + plafonds, BYOK exempté), débit forfaitaire estimé `A2A_TASK_CREDIT_COST`
+(BeeAI n'expose pas l'usage de tokens — estimation documentée, non mesurée). Sans streaming ni push (annoncé
+tel quel dans la carte). Statut : PARTIAL tant que non exécuté (voir tests).
+
+**Tests ajoutés (écrits, EXÉCUTION EN ATTENTE — RAM insuffisante pour les lancer en parallèle du lot de
+régression en cours)** : `tests/test_mcp_builtin_tools_security.py` (16), `tests/test_a2a_router.py` (8),
+`tests/test_api_key_management.py` (compte de scopes 13→14). Statut honnête : CODE écrit + compilé, NON VÉRIFIÉ.
+
+**Fichiers** : `api/routers/a2a.py` (nouveau), `api/routers/mcp_server.py`, `api/services/mcp/builtin_tools.py`,
+`api/services/agent_knowledge_base.py`, `api/services/evaluation_results.py`, `api/services/billing_credits.py`,
+`api/services/organization_api_keys.py`, `api/config.py`, `api/main.py`.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §29 (Red team) — contournement du filtre tenant de l'outil SQL
+
+**Date** : 2026-10-02
+
+**Problème (faille inter-tenant, mécanisme PROUVÉ)** : `api/tools/sql_tool.py::execute_sql_query` rend
+`WHERE (<where utilisateur>) AND organization_id = :organization_id`. Aucune vérification n'équilibrait les
+parenthèses : un `WHERE` tel que `1=1) OR (1=1` rend `WHERE (1=1) OR (1=1) AND organization_id = :org` ; AND liant
+plus fort que OR, le filtre du tenant ne protège que la 2e branche. Vérifié avec le SQL exact rendu sur sqlite3 :
+l'organisation A voit la ligne `b-secret.pdf` de l'organisation B. Exposé via l'outil MCP `execute_sql_query`
+(scope `mcp:tools`) et l'outil SQL des agents (donc aussi atteignable par injection de prompt).
+
+**Correction** : `_parentheses_stay_enclosed()` — chaque fragment contrôlé par l'utilisateur (colonnes, WHERE,
+ORDER BY) doit garder ses parenthèses « enclosées » (jamais de fermeture excédentaire à aucun préfixe, équilibre
+final, guillemets simples ignorés). Rejet avec `SqlToolError`. Les parenthèses légitimes (`IN (1,2)`,
+`(a OR b) AND c`, `')('` dans une chaîne) restent acceptées.
+
+**Tests** : `tests/test_sql_tool.py` (+3 : 5 payloads d'évasion paramétrés, test d'exécution cross-tenant, test de
+non-régression des parenthèses légitimes) — écrits ; EXÉCUTION EN ATTENTE (RAM). Statut : mécanisme VERIFIED
+(sqlite3), correctif CODE écrit + compilé, NON VÉRIFIÉ par pytest à cet instant.
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §4/§25 (rate limit fail-open) + §21/§24/§31/§7 (API publique) + §39 (docs)
+
+**Date** : 2026-10-02
+
+**§4/§25 — le rate limiter ne doit pas devenir permissif quand Redis tombe** : `enforce_rate_limit` laissait passer
+TOUT sans limite dès que Redis était injoignable (rafales non bornées sur toutes les surfaces coûteuses). Il
+dégrade maintenant vers une fenêtre glissante en processus (mêmes limites ; plus lâche que Redis car comptée par
+worker et remise à zéro au redémarrage — documenté dans le docstring du module), mémoire bornée
+(`_LOCAL_MAX_KEYS`), jamais de fail-closed (pas de panne d'auth totale). Audit Redis : seuls 2 appelants du cache
+(`org_settings`, `org_branding`), tous deux clés par `organization_id`, JSON (jamais pickle), fail-open correct
+pour un cache. Tests : `tests/test_rate_limit_degradation.py` (4, sans Redis). EXÉCUTION EN ATTENTE.
+
+**§21/§31 — streaming annoncé mais ignoré** : `ChatRequest.stream` et l'argument `stream` des SDK existaient mais
+`POST /v1/chat` renvoyait toujours un JSON complet. `stream=true` renvoie maintenant de vrais Server-Sent Events
+(même générateur que `/chat/stream` : garde-fous crédits + plafonds inclus) ; le prélude (429, agent/conversation
+inconnus) s'exécute AVANT le début du flux, donc une vraie erreur HTTP. Prélude factorisé (`_prepare_public_chat`).
+
+**§24 — agent d'une autre organisation** : `agent_id` est une chaîne libre du corps ; une clé de l'organisation A
+pouvait piloter un agent réel de B. `_require_agent_in_org` (chat + agents/run) : 400 « Agent not found ».
+
+**§7 — liste de conversations** : chargeait TOUTES les conversations pour `len()` puis jusqu'à 1 000 messages par
+conversation listée pour lire un aperçu. Remplacé par un vrai COUNT et UNE requête pour le dernier message.
+
+**§39 — documentation** : `README.md` entièrement recentré sur le produit (l'ancien était centré sur le concours,
+affirmait « 314 fichiers de tests, all green » alors qu'aucune suite complète n'avait abouti, « 118 migrations »
+au lieu de 130, et son formatage était cassé) ; chiffres mesurés (98 routeurs, 130 migrations, 376 fichiers de
+tests, 48 pages). Ancien README conservé tel quel (liens rebasés) dans `docs/ibm_bob_2/CONTEST_README.md`.
+Corrige `tests/docs/test_links.py::test_relative_links_resolve[README.md]` (lien `bob/evidence/README.md` inexistant).
+
+**Contrat API (§30/§31)** : audit statique de 301 appels frontend + 14 appels SDK contre 919 routes backend : 0
+écart réel (4 appels signalés = segments dynamiques, vérifiés). SDK couvrant 7 routes `/v1` sur 12 ; méthodes
+manquantes : agents.list, conversations.list, documents.list, knowledge_bases.list/create.
+
+**À décider (action sur la base de production)** : `POST /v1/knowledge-bases` accepte `description`/`config` mais ne
+les persiste pas (la réponse renvoie `description` par écho). Corriger exige une colonne `workspaces.description`
+→ migration 0131 sur la base réelle : NON appliquée sans accord explicite.
+
+**Tests écrits, exécution en attente** : `tests/test_public_api.py` (+4), `tests/test_rate_limit_degradation.py` (4).
+
+**SDK (§31)** : Python et JavaScript — vrai streaming SSE (`chat.stream`, rejette/lève avant le 1er événement sur erreur
+HTTP) ; `chat.send(stream=True)` refusé explicitement en Python (le serveur répond désormais en SSE à ce flag, qui
+était auparavant ignoré) ; nouvelles méthodes `agents.list`, `documents.list`, `conversations.list`,
+`knowledge_bases.list/create` → les 12 routes `/v1` ont maintenant un équivalent SDK. Tests écrits :
+`sdks/python/tests/test_client.py` (+5), `sdks/js/tests/endpoints.test.ts` (+3). EXÉCUTION EN ATTENTE.
+
+**Correction — migration 0131 (décision)** : la tentative d'appliquer `0131` (`workspaces.description`, nullable, réversible)
+à la base de PRODUCTION a été bloquée par le classificateur de sécurité (« Production Deploy ») ; elle n'a PAS été
+contournée. Pour ne pas laisser le code incohérent avec le vrai schéma, les changements dépendants de la colonne ont été
+retirés et la migration est garée dans `scripts/pending/` avec `scripts/pending/enable_kb_description.py` (idempotent :
+déplace la migration, applique les 3 retouches de code). Pour activer : exécuter ce script puis `alembic upgrade head`.
+Tant que ce n'est pas fait, `description` est acceptée et renvoyée en écho mais non stockée (connu, documenté).
+
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §9/§12/§13 — validité des métriques Eval Lab, Evolution Engine multi-candidats, Guardian explique/propose
+
+**Date** : 2026-10-02
+
+**§9 — métriques gonflées (validité de mesure)** : `run_evaluation_job` restreignait SYSTÉMATIQUEMENT la recherche aux
+documents attendus de la vérité terrain (ajouté pour tenir sous un timeout HTTP de démo). La recherche ne pouvait donc
+jamais choisir un distracteur : Recall/MRR/NDCG artificiellement hauts — le type de métrique « de démonstration » que le mandat
+interdit. Désormais opt-in (`EVALUATION_RESTRICT_RETRIEVAL_TO_GROUND_TRUTH_DOCS`, défaut False = corpus entier, comme en
+production) et chaque job enregistre le mode (`results.corpus_constrained`, `results.retrieval_config`). Les chiffres cités
+dans le matériel du concours (ex. Recall@5 0.92) ont été mesurés AVEC la restriction : avertissement ajouté à
+`docs/ibm_bob_2/CONTEST_README.md`. Attention : les valeurs de Recall de vos datasets existants vont baisser, c'est la vraie mesure.
+
+**§12 — Evolution Engine** : le docstring du module nommait lui-même le manque (« retrieval-config candidate generator »).
+Ajouts : `run_retrieval_evolution_cycle` (baseline + N candidats sur les MÊMES questions, chacun réellement appliqué via
+`run_evaluation(retrieval_config=...)`), `judge_candidate` (règle de décision pure : amélioration minimale ET garde-fou de
+non-régression sur recall/MRR/NDCG/similarité/hallucination, sens-dépendant), `default_retrieval_candidates` (top_k élargi,
+reranking, les deux, MMR — dérivés des réglages réels), `apply_retrieval_recommendation` (étape explicite d'application qui
+renvoie la config précédente ; rollback = même appel `replace=true`). Jamais d'application automatique. Routes :
+`POST /organizations/{org_id}/evolution/retrieval/run`, `POST /organizations/{org_id}/agents/{agent_id}/retrieval-config/apply`
+(audit-loggée). Chaque candidat testé est rapporté avec son delta et les raisons du rejet.
+**Faille corrigée au passage (§24)** : la route existante `POST /organizations/{org_id}/evolution/run` ne vérifiait pas que
+`dataset_id` (corps) appartenait à `org_id` (chemin) — un Admin de A pouvait lancer des cycles payants sur le dataset de B.
+Les deux routes vérifient maintenant l'appartenance (404), partagent le budget `ratelimit:evaluation_run`, et passent le
+pré-vol crédits/plafonds (402/429).
+
+**§13 — Guardian** : une alerte de qualité RAG porte maintenant l'Autopsy du dernier job (retrieval/generation/hallucination/
+autre) et nomme l'étape suivante selon la cause dominante mesurée (`explain_rag_quality_alert`). Détecter → expliquer →
+alerter → proposer : FAIT. Appliquer = action humaine explicite et auditée (route ci-dessus), rollback inclus.
+**Non implémenté (honnête)** : l'approbation persistée de type « file d'attente » exige une nouvelle table (migration sur la base
+de production, bloquée par le classificateur de sécurité) ; `HumanApproval` existant est lié à un `agent_run_id` obligatoire et
+ne convient pas. L'approbation est donc l'appel explicite de la route `apply` (permission `evaluation:manage`).
+
+**Tests écrits, exécution en attente** : `tests/test_rag_evolution_engine_retrieval.py` (22), `tests/test_alerting_guardian_metrics.py` (+3).
+Correctif : `tests/test_api_key_management.py::test_list_available_scopes_endpoint` (13→14, scope `a2a:call`) — échec réel du lot 5.
+
+**§14 — Factory (besoin → agent réel)** : `api/services/agent_factory.py` + `api/routers/agent_factory.py`. Pipeline :
+exigence en langage naturel → blueprint (profil par règles explicites EN/FR : compliance, support, technique, recherche,
+général ; chaque décision porte sa `rationale`) → validation par les VRAIS validateurs de la plateforme (retrieval,
+outils du vrai catalogue `AGENT_TOOL_CATALOG`, mémoire, guardrails, IDK) avec TOUS les problèmes listés → création via le
+vrai `create_agent` → évaluation optionnelle de l'agent sur un dataset (la config de retrieval est appliquée pour de vrai par
+l'Eval Lab) → décision mesurée : `deployed` / `deployed_and_evaluated` / `held_back` (agent créé mais PAUSED si la métrique cible
+est sous `min_target_value` ou non mesurable — jamais un déploiement silencieux d'un agent qui rate sa propre barre). Routes :
+`POST /organizations/{org_id}/factory/blueprint` (dry-run, n'écrit rien), `.../factory/deploy` (permission `agents:write`,
+rate limit + pré-vol crédits/plafonds quand une évaluation est demandée, dataset de la même organisation uniquement).
+Choix assumé : règles déterministes plutôt qu'un appel LLM (gratuit, hors-ligne, auditable) — le blueprint est un point de départ
+à mesurer, pas une prétention d'optimalité ; l'Evolution Engine rétrieval est l'étape suivante. Tests écrits (21),
+exécution en attente : `tests/test_agent_factory.py`.
+
+**§26 — Frontend : bugs de contrat que l'audit par chemins ne voyait pas** : la page « Nouvel agent »
+(`frontend/app/dashboard/agents/new/page.tsx`) était cassée de 4 façons réelles : (1) elle proposait des outils codés en dur
+que le backend ne connaît pas (`calculator`, `word_count`, `rag_search`) ; (2) elle les envoyait comme chaînes alors que l'API
+attend des objets `{name, enabled, config}` → toute sélection d'outil faisait échouer la création (422) ; (3) `model`/`temperature`
+partaient en champs de premier niveau ignorés silencieusement au lieu de `model_config` ; (4) après création elle redirigeait vers
+`/dashboard/agents/{id}`, une page qui N'EXISTE PAS (404). Corrigé : catalogue lu sur `GET /tools/available`, objets d'outils,
+`model_config`, retour à la liste ; champ `max_iterations` (inexistant sur un agent) retiré. Nouvelle page
+`dashboard/agents/factory` (aperçu du blueprint → création) + 16 clés i18n dans les 6 langues ; script `npm run type-check`
+ajouté (AGENTS.md/README le citaient alors qu'il n'existait pas). Tests vitest écrits : `frontend/app/dashboard/agents/agents-pages.test.tsx` (7).
+**Lacune restante (honnête)** : aucune UI pour Guardian (alertes qualité), Autopsy, Evolution Engine (lancer un cycle, voir les
+candidats, appliquer/annuler), ni pour les plafonds de dépense (`daily_credit_limit`) ; elles restent atteignables par l'API/MCP uniquement.
+
+**§13/§12/§6/§26 — Guardian branché sur l'API + interfaces manquantes** :
+**Défaut majeur trouvé** : TOUTES les routes `/alerting/*` étaient réservées à l'admin PLATEFORME et créaient des règles
+sans organisation (`organization_id=None`) ; or les métriques de qualité RAG sont mesurées PAR organisation. Aucun client ne
+pouvait donc configurer Guardian — la logique existait mais était INJOIGNABLE par l'API (UNWIRED). Nouveau routeur
+`api/routers/quality_alerts.py` (`/organizations/{org_id}/quality-alerts/{metrics,rules,history,channels}`) : seules les
+métriques RAG sont acceptées (les métriques d'infra restent plateforme), seuil borné [0,1], règles/canaux strictement
+scopés à l'organisation (404 sinon), un canal ne peut être utilisé que par sa propre organisation, validation des canaux
+(email valide ; webhook https sans identifiants), permission `evaluation:manage`. Test de bout en bout : règle créée par l'API →
+`check_alert_rules` déclenche → l'historique lu par l'API contient l'Autopsy et l'étape suivante.
+**UI** (6 langues, +64 clés) : `dashboard/quality` (règles, test « maintenant », historique expliqué),
+`dashboard/eval/evolution` (lancer le cycle, candidats avec delta et motifs de rejet, appliquer sur un agent, annuler en un clic),
+formulaire « Plafonds de dépense » dans les réglages d'organisation (lecture seule hors Owner ; un champ vidé envoie un `null`
+explicite qui EFFACE le plafond, 0 gèle la dépense — contrat vérifié par `tests/test_organization_settings.py`).
+Tests écrits, exécution en attente : `tests/test_quality_alerts_router.py` (6), `tests/test_organization_settings.py` (+1),
+`frontend/app/dashboard/quality-evolution-spend.test.tsx` (10). Il reste hors UI : liens de navigation vers ces pages
+(sidebar) — voir la liste « Restant ».
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §29 (Red team) — balayage actif : SSO, SQL, IDOR, primitives dangereuses
+
+**Date** : 2026-10-02
+
+**Balayage IDOR statique (AST sur 98 routeurs)** : 7 handlers charge-par-id sans signe d'organisation visible ; relecture manuelle :
+5 filtrent sur `user_id` de l'appelant (404 anti-énumération), 2 sont les endpoints SSO publics par conception. Aucune IDOR
+supplémentaire trouvée par cette méthode (limites : heuristique, ne voit pas une vérification faite dans un service appelé).
+**Primitives dangereuses** (grep `api/`) : aucun `eval/exec/pickle/yaml.load/shell=True/verify=False` hors commentaires/garde-fous ;
+les seuls SQL en f-string sont des migrations à noms de tables constants.
+
+**SSO OIDC — nonce absent (corrigé)** : le callback validait signature/audience/émetteur/`state` mais pas de `nonce` : un id_token
+valide émis pour une AUTRE tentative de connexion (fuité, rejoué ou injecté) était accepté. `nonce` aléatoire (32 octets) lié à la
+session dans `/authorize`, renvoyé par l'IdP, comparé en temps constant dans `verify_id_token(expected_nonce=...)`. (La création de
+connexions SSO reste réservée à l'admin plateforme : pas de prise de contrôle de domaine par un locataire.) Tests : 3 nouveaux
+dans `tests/test_enterprise_sso_integration.py` (nonce frais, id_token d'une autre tentative rejeté, id_token sans nonce rejeté) ;
+les 6 tests de connexion existants lient maintenant le nonce comme le ferait un vrai IdP (`bind_nonce`). EXÉCUTION EN ATTENTE.
+
+**Outil SQL — appel de fonctions arbitraires (corrigé)** : en plus du contournement de parenthèses déjà corrigé, le validateur
+laissait passer N'IMPORTE QUELLE fonction : `SELECT pg_sleep(60) FROM documents` valide toutes les vérifications et immobilise une
+connexion du pool (taille 5) pendant une minute par appel ; même porte vers `set_config`, `pg_*`, `lo_*`, `dblink`. Liste blanche de
+fonctions inoffensives (count/sum/avg/min/max/lower/upper/length/coalesce/date_trunc/…), mots-clés SQL suivis de `(` tolérés,
+littéraux de chaîne ignorés ; `SET LOCAL statement_timeout` (5 s, `SQL_TOOL_STATEMENT_TIMEOUT_MS`) sur Postgres ; l'appel
+`execute_sql_query` via `/mcp/v1/tools` n'avait AUCUN rate limit (cas spécial hors du chemin protégé) : ajouté. Tests : +8 dans
+`tests/test_sql_tool.py`. EXÉCUTION EN ATTENTE. **Décision de conception signalée (non modifiée)** : l'outil SQL lit `conversations`
+de toute l'organisation — un membre/agent peut donc lire les conversations des autres membres de son organisation.
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §7 (Performance / charge) — benchmark réel, 2 goulots mesurés et corrigés
+
+**Date** : 2026-10-02
+
+**Outil** : `scripts/retrieval_benchmark.py` (nouveau) — exécute le VRAI code de retrieval (`vector_search`, `bm25_search`, `hybrid_search`)
+sur un corpus synthétique dans un SQLite temporaire (jamais la base réelle) et rapporte p50/p95/p99, débit sous concurrence, rappel du chunk
+source planté, erreurs, mémoire. Périmètre honnête : chemin PORTABLE (numpy + BM25 en processus) ; il ne mesure PAS pgvector/HNSW (nécessite
+Postgres+pgvector ; voir `--postgres-note`), ni la qualité sémantique (vecteurs aléatoires).
+
+**Mesures AVANT (5 000 chunks = 1 000 documents, machine 16 Go partagée avec la régression)** : vector p50 1,06 s ; BM25 p50 2,30 s ; hybride p50
+4,68 s (0,21 req/s) ; **aucun gain de débit avec 4 clients** (latence ×4 à débit constant : la boucle d'événements est bloquée par le calcul CPU).
+**Profil** : `fetch_organization_chunks` = 2,04 s sur 2,3 s de la requête BM25 ; `SELECT id, content` seul = 0,05 s ; construction de l'index BM25 =
+0,15 s ; scoring = 0,01 s. Le coût était l'hydratation ORM de l'entité `DocumentChunk` avec le JSON `embedding` (384 flottants) de chaque ligne —
+pour une recherche par mots-clés qui n'en a pas besoin. **Cela concerne aussi la production Postgres** : la branche BM25 de la stratégie par
+défaut (`hybrid`) rapatriait tous les embeddings de l'organisation à chaque requête.
+**Corrections** : (1) `fetch_organization_chunks(with_embeddings=False)` pour BM25 (colonnes explicites, pas d'entité) ; (2) classement BM25 et
+numpy exécutés hors boucle d'événements (`run_in_executor`) ; (3) hybride : le dict de la branche sémantique (qui porte l'embedding) l'emporte.
+**A/B propre (même processus, 5 passes alternées, 5 000 chunks)** : fetch avec embeddings 2,039 s → 1,879 s (−8 %, dominé par le décodage JSON) ;
+**fetch sans embeddings (BM25) 2,039 s → 0,192 s (×10,6)**. Une 1re re-mesure de bout en bout montrait vector « plus lent » : c'était du BRUIT (un
+lot pytest tournait en parallèle) — le A/B interleavé a tranché ; ne pas citer les chiffres de bout en bout pris sous charge.
+**Limites restantes (mesurées, non corrigées)** : le chemin portable reste O(N) par requête (décodage JSON des embeddings ≈ 1,9 s à 5 000 chunks) ;
+BM25 reste recalculé par requête (≈ 0,19 s de fetch + index à 5 000 chunks, linéaire) — la vraie réponse en production est un index plein texte
+persistant (Postgres `tsvector`+GIN) : migration → NON appliquée (blocage production). 10 000 documents NON mesurés (garde-fou mémoire
+`--max-chunks`, 50 000 chunks sur cette machine = risque de crash déjà vécu).
+Tests écrits, exécution en attente : `tests/test_retrieval_performance_paths.py` (6).
+
+**Vérifié (exécuté)** : `npx tsc --noEmit` (frontend) → code 0, aucun diagnostic, y compris les nouvelles pages/composants/tests ;
+`npx vitest run` des 2 nouveaux fichiers de tests frontend → **17/17 passés** (pages Factory/Nouvel agent, Qualité, Évolution, Plafonds).
+**Docs alignées sur le code** : `docs/api/CHAT.md` (streaming `/v1/chat`), `sdks/python/README.md` et `sdks/js/README.md` (stream + listings), nouveaux
+`docs/api/A2A.md`, `docs/api/FACTORY.md`, `docs/api/QUALITY_ALERTS.md`. Nouveau `scripts/export_openapi.py` (régénère `docs/api/openapi.json`,
+`--check` pour détecter un export périmé) — à exécuter après figement des routes.
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §9 (RBAC) — 5 routeurs « Owner-only » en réalité ouverts aux Admin (échec réel du lot 9)
+
+**Date** : 2026-10-02
+
+**Problème (3 échecs réels de `tests/test_custom_domains.py`, fichier non modifié par moi)** : `custom_domains`, `email_domains`,
+`ssl_certificates`, `organization_branding` (mutations) et les 2 routes d'origine de `white_label` documentent TOUTES « Owner-only » et importaient
+`require_org_owner`… sans jamais l'utiliser : elles étaient gardées par `require_permission("settings:manage")`, que `_effective_permissions_for` accorde
+intégralement à l'Admin (sentinelle `None`). Un Admin pouvait donc enregistrer/supprimer un domaine personnalisé, générer/révoquer un certificat SSL,
+configurer le domaine d'envoi d'e-mails (DKIM/Resend), modifier le branding et la marque blanche — des décisions que la conception réserve au Owner. C'est la
+3e occurrence du même motif après `organizations.py` et `organization_settings.py` : un balayage statique sur tous les routeurs l'a confirmé et borné
+(`organization_members` : faux positif, Admin voulu ; routes `whitelabel/*` de la Partie 19 : volontairement plus laxistes, commentaire d'origine conservé).
+**Correction** : `Depends(require_org_owner)` sur 19 routes (5 + 3 + 4 + 5 + 2). Les rôles personnalisés qui délégueraient `settings:manage` pour ces routes ne
+fonctionnent plus (alignement sur le design documenté et sur les tests). Aucun test modifié.
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §23 (Billing) — robinet de crédits gratuits
+
+**Date** : 2026-10-02
+
+**Problème (contournement de revenu, lu dans le code)** : `POST /organizations/{org_id}/billing/credits/purchase` ajoute les crédits du pack
+SANS RIEN FACTURER. Le commentaire disait « sans compte Stripe configuré », mais aucune vérification n'existait : avec Stripe ou Paystack configuré,
+tout détenteur de `billing:manage` (Admin/Owner) pouvait créer des crédits à l'infini — contournement du modèle économique ET de tous les contrôles de
+coût fondés sur le solde (les plafonds de dépense deviennent sans objet si on peut se re-créditer à volonté).
+**Correction** : refus `409` dès qu'un fournisseur de paiement est configuré pour l'organisation (les crédits viennent d'un vrai checkout) ; sans
+fournisseur, seulement si `CREDITS_ALLOW_UNPAID_TOPUP` est explicitement vrai. Le défaut courant dans `api/config.py` est maintenant `False` ; les
+déploiements auto-hébergés qui veulent conserver le top-up sans paiement doivent activer ce réglage explicitement. Tests : +3 dans
+`tests/test_billing.py` (fournisseur configuré → 409 et solde inchangé ; drapeau coupé → 403 ; auto-hébergé sans fournisseur → fonctionne).
+Autres appels à `add_credits`/`refund_credits` dans `api/` hors billing : voir ci-dessous.
+
+**Suite — vrai achat de crédits (sinon fermer le robinet = cul-de-sac)** : un grep a montré qu'`add_credits` n'avait QU'UN appelant — le robinet gratuit :
+aucun chemin d'achat réel n'existait. Implémenté : `POST /organizations/{org_id}/billing/credits/checkout` → Stripe Checkout `mode="payment"`
+(pack/organisation posés CÔTÉ SERVEUR dans `metadata`), crédits accordés UNIQUEMENT par le webhook `checkout.session.completed` quand
+`payment_status == "paid"` ET `amount_total == prix du pack` ET pack/organisation valides (sinon rien + log) ; idempotence = claim atomique de l'événement
+(§5), donc une ré-livraison n'accorde pas deux fois. Jamais sur la redirection de retour (falsifiable). Paystack : `NotImplementedError` → 501 explicite
+(« does not support credit pack purchases yet ») plutôt qu'une conversion de devise inventée — LACUNE CONNUE. Nouveau réglage `CREDIT_PACK_CURRENCY` (défaut usd).
+Tests écrits (11), exécution en attente : `tests/test_billing_credit_packs.py`.
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §8 (Retrieval) — ordre du pipeline vs politique d'accès
+
+**Date** : 2026-10-02
+
+**Audit de l'ordre réel de `search()`** (documenté dans `docs/advanced/RETRIEVAL.md`, tableau des 9 étapes). Deux défauts RÉELS dans l'ordre d'origine
+du filtre de politique d'accès (OPA), qui s'exécutait en DERNIER (après MMR, seuil de score et coupe à `top_k`) :
+(1) un utilisateur restreint recevait MOINS de résultats que `top_k` alors que des chunks autorisés existaient juste sous la coupe ;
+(2) MMR choisissait son sous-ensemble « diversifié » alors qu'il voyait encore des chunks que l'appelant n'a pas le droit de lire — la simple PRÉSENCE d'un chunk
+interdit changeait quels chunks autorisés étaient renvoyés : fuite d'information indirecte.
+**Correction** : filtre de politique juste après la récupération des candidats (avant MMR/seuil/coupe), sur-échantillonnage `top_k x POLICY_OVERFETCH_FACTOR` (3) quand
+la politique s'applique, coupe finale à `top_k`. Aucun changement sans `user_context` ni sans l'option organisationnelle. Les 3 tests de politique au niveau `search()` existants
+restent valides. Tests écrits, exécution en attente : `tests/test_retrieval_policy_order.py` (5).
+
+---
+
+## [Bob-Auto-Fixes] — Hardening Mission, §38 (Observabilité) — la corrélation de requêtes ne corrélait pas
+
+**Date** : 2026-10-02
+
+**Bug prouvé empiriquement** : `RequestIdFilter` était ajouté au logger RACINE, or les filtres d'un logger ne s'appliquent qu'aux enregistrements créés PAR CE logger :
+un enregistrement émis par `api.services.x` ne traverse jamais les filtres de la racine (test reproduit en 8 lignes de Python pur : le logger enfant affiche
+`rid=None`, la racine seule `rid=REQ-123`). Donc `request_id` valait `None` sur pratiquement toutes les lignes de log applicatives (JSON, `system_logs`, Loki) : la
+« corrélation de requêtes » de la Partie 13.2 ne servait pas à ce qu'elle annonçait. Et aucun identifiant de tenant/utilisateur/exécution n'était journalisé.
+**Correction** : fabrique de `LogRecord` (s'exécute pour TOUT enregistrement, quel que soit le logger/handler) qui attache `request_id` + un contexte par requête
+(`organization_id`, `user_id`, `run_id`, `job_id`, `evaluation_job_id` ; clés fermées, valeurs = identifiants uniquement, jamais de secret/token/donnée personnelle ;
+dict remplacé à chaque requête par le middleware donc aucune fuite d'une requête à l'autre). Liaison aux points d'authentification uniques : `get_current_user` (user),
+`require_org_member` (organisation), clé API publique (organisation), création de run d'agent (2 sites), job d'évaluation. Le formateur JSON n'émet que les
+identifiants présents. Tests écrits, exécution en attente : `tests/test_log_correlation.py` (6, dont un bout-en-bout sur une vraie route org-scopée).
+
+**§12 — Evolution multi-datasets** : `run_multi_dataset_retrieval_evolution` + `POST /organizations/{org_id}/evolution/retrieval/run-multi` (`dataset_id` + `extra_dataset_ids`, max 3
+au total, tous de la même organisation, appartenance vérifiée AVANT tout job). Un candidat n'est recommandé que s'il est accepté sur CHAQUE dataset (gain minimal ET aucune régression
+des métriques de garde sur chacun) ; classement par gain moyen ; les raisons de rejet sont rapportées par dataset. Évite de recommander un réglage sur-ajusté à un seul jeu de questions.
+Budget d'évaluation débité une fois par dataset. Tests écrits (4), exécution en attente.
+
+---
+
+## [Bob-Auto-Fixes] — Brique agent vocal open source (voix → RAG → réponse)
+
+**Date** : 2026-10-02
+
+**Demande** : pouvoir parler à l'IA, qui va chercher dans les documents et répond, à partir de la voix.
+**Existant** : STT hébergés (Whisper/Deepgram via litellm), TTS ElevenLabs, `voice_chat` (aller-retour sans citations, sans limites de débit ni contrôle de dépense, permission `documents:write`).
+**Ajouté** :
+- STT open source auto-hébergé `local_whisper` (faster-whisper, MIT) dans `transcribe_audio`, dépendance **optionnelle** (non ajoutée à `requirements-api.txt` : modèle à télécharger, installation non testée sur cette machine 16 Go) ; sans le paquet : `VoiceError` avec la commande d'installation, jamais de faux résultat. Inférence dans un thread (n'immobilise pas la boucle d'événements), modèle mis en cache par processus.
+- `voice_agent_turn` + `POST /voice/organizations/{org_id}/agent` : audio → STT → pipeline RAG de l'organisation (guardrails anti-injection conservés) → réponse + sources ; TTS serveur optionnel (`speak=true`), sinon lecture côté navigateur (Web Speech, gratuit).
+- Garde-fous alignés sur les autres points d'entrée payants : permission `documents:read` + appartenance à l'organisation, limite de débit par organisation, pré-vérification solde + plafonds (402/429, BYOK exempté), audio et transcription bornés, débit forfaitaire par tour.
+- Page `/dashboard/voice-agent` (MediaRecorder → upload → transcription, réponse, sources, lecture vocale), 15 clés i18n × 6 langues, doc `docs/api/VOICE_AGENT.md`.
+**Limites assumées** : tour par tour (pas de streaming temps réel WebRTC — LiveKit/Pipecat écartés pour l'empreinte de dépendances) ; l'inférence Whisper réelle n'est PAS testée sur un vrai audio. Tests écrits (14 dans `tests/test_voice_agent.py`), exécution en attente.
+
+### Régression complète (25 lots) — résultats et causes réelles
+
+Les 25 lots ont tourné ; chaque échec a été rejoué isolément avec sa trace. Aucun test n'a été supprimé ni affaibli.
+
+- **Tests périmés, cible de neutralisation disparue (13 tests)** : `test_invitations`, `test_organization_members`, `test_quotas`, `test_usage`, `test_user_limits` neutralisaient `send_organization_member_*_email`, nom que les routes n'utilisent plus (elles appellent la version « branded »). Cibles redirigées vers les noms réels (remplaçants asynchrones), mêmes assertions. 79/79 réussis. `test_domain_verification` (2 échecs au lot 10) : 18/18 au rejeu.
+- **Tests devenus faux à cause d'un durcissement voulu (3)** : `get_failure_report` exige désormais que le run appartienne à l'organisation (faille IDOR corrigée) ; `evolution/run` vérifie que le dataset appartient à l'organisation ; `stream_response` fait une pré-vérification de crédits. Les tests ont reçu un run/dataset/solde réels, plus un test « run d'une autre organisation = erreur ».
+- **Erreur de test de ma part** : `test_public_api` lisait `agent.id` après `commit()` (rechargement paresseux interdit en async). Identifiant lu avant le commit.
+- **Intermittents, verts au rejeu isolé** : `test_webauthn_integration` (4, connexion Redis sous charge) et `test_rbac_integration` (26 erreurs d'initialisation) — non comptés comme « corrigés », seulement reproduits verts.
+- **Faille réelle trouvée par `test_postgres_integration` (lecture seule de la vraie base)** : 11 tables des migrations 0116-0127 n'ont jamais eu la RLS (`agent_long_term_memory_items`, `evaluation_failures`, `flight_recordings`, `mcp_server_configs`, `mcp_tool_cache`, `notification_preferences`, `notifications`, `rag_experiments`, `retrieval_diagnostics`, `sandbox_environments`, `workflow_node_executions`). Sur Supabase, une table sans RLS est joignable par l'API REST publique. **Nouvelle migration 0131** (`ALTER TABLE IF EXISTS ... ENABLE ROW LEVEL SECURITY`, réversible, sans toucher aux migrations existantes). NON appliquée à la base réelle (action propriétaire : `alembic upgrade head`) ; le test restera rouge sur la base réelle tant qu'elle n'est pas appliquée. La migration parquée `workspaces.description` devient **0132** (chaînée après 0131 ; `scripts/pending/enable_kb_description.py` mis à jour).
+- **Balayage inter-organisations (`test_cross_tenant_sweep`)** : il ne voyait que 3 routes (FastAPI range les routeurs inclus dans des `_IncludedRouter`) ; il lit maintenant le schéma OpenAPI. Résultat réel : aucune route `/organizations/{org_id}/…` ne renvoie 2xx à un utilisateur d'une autre organisation ni à un anonyme.
+
+**Delta de session (exécuté, venv `D:/rag-venv`)** : agent vocal + balayage inter-organisations 18/18 ; groupe 1 147/147 ; groupe 2 113/113 ; groupe 3 141/141 ; `test_documents` 255/255 ; lot 2 refait 98/98. `docs/api/openapi.json` régénéré (781 routes, `--check` vert). Frontend : `tsc` 0 erreur, vitest 25/25 sur les fichiers de la session (dont 4 nouveaux pour la page vocale).
+
+---
+
+## [Bob-Auto-Fixes] — Phase 2 : persistance Workspace.description et revue tenant/RLS
+
+**Date** : 2026-10-03
+**Branche** : `bob/auto-fix-20261003-1518`
+
+- **Problème** : l'API publique Knowledge Base acceptait et renvoyait `description`, mais le modèle Workspace et la lecture persistée ne conservaient pas la valeur.
+- **Changement** : colonne nullable sur le modèle, transmission/lecture dans le service public, réponse fondée sur l'entité persistée, migration additive `0132` ajoutée au chemin Alembic local; le fichier pending préexistant n'a pas été modifié.
+- **Tests** : balayage cross-tenant, workspaces, refus d'agent d'une autre organisation, et create→GET Knowledge Base : 24/24 réussis sur SQLite en mémoire. Email OTP désactivé uniquement dans le processus de test; pas de provider appelé.
+- **RLS** : matrice 177 tables et design cible documentés; aucune policy ou migration appliquée, aucune connexion DB. Environnement toujours inconnu, validation live bloquée.
+- **Décision** : correctif local sur branche dédiée; aucune mise en production, aucun commit ni push. Le graphe local a une tête `0132`; `0131` reste non suivi, provenance à résoudre avant partage.
+
+## [Bob-Auto-Fixes] — Phase 2 corrective : IDOR, lifecycle A2A et audits
+
+**Date** : 2026-10-03
+**Branche connue par le journal antérieur** : `bob/auto-fix-20261003-1518`; l'état Git courant n'a pas pu être vérifié car la commande `git` n'est pas disponible dans l'environnement courant.
+
+- **Défaut confirmé — historique de message** : un utilisateur possédant sa conversation pouvait combiner son ID avec le `message_id` d'un autre utilisateur et lire son historique d'édition. Le routeur lie maintenant le message à la conversation autorisée et renvoie 404 en cas de mismatch. Test dédié rejoué avec succès sur SQLite.
+- **Défaut confirmé — Stripe PaymentMethod** : le service détachait un moyen de paiement sur la seule base de son identifiant, sans preuve qu'il appartenait au customer Stripe de l'organisation. Le service liste maintenant les moyens du customer enregistré pour cette organisation et refuse l'ID absent. Test Stripe mocké réussi; aucun appel Stripe réel.
+- **Warning A2A** : les handlers JSON-RPC créés par requête n'étaient pas fermés, laissant des tâches `ActiveTask` producer/consumer au teardown. Le handler est maintenant drainé en erreur et après transmission de la réponse via `BackgroundTask`, en conservant une éventuelle tâche de fond déjà attachée. A2A router/integration/IDOR : 15 passed sans warning rapporté.
+- **Tests IDOR** : rejoués un par un, 9 passed sur SQLite. P2C-1/2/3/5/7 restent INCOMPLETE pour des chemins contractuels absents/différents; ces résultats ne certifient pas les aliases non implémentés.
+- **Audits livrés** : inventaire 63 tables indirectes; audit SQL statique (815 sources, 1,195 call sites), avec écart de 660 entrées au registre vs 656 au replay indépendant à réconcilier; analyses 0128/0131; warnings; préparation d'un audit PostgreSQL read-only; revue backup/restore self-hosted.
+- **Limites externes** : aucune connexion DB, migration, requête SQL, sauvegarde, restauration ou appel fournisseur live. L'environnement DB reste inconnu. Les scripts de backup/restore existent, mais leur exécution/restauration réelle est non vérifiée.
+- **Preuves** : `docs/audit/PHASE_2_REPORT.md`, `docs/audit/CHANGE_LEDGER.md` et `docs/audit/PHASE_2_EVIDENCE/TASK_01` à `TASK_16`.
+- **Conservation des preuves** : les stdout historiques originaux P2C-1 à P2C-9 ont été perdus lors d'un renommage case-only sous Windows; les fichiers canoniques contiennent les replays frais et signalent explicitement cette perte. Les résumés d'incident/correction restent dans le rapport et le ledger.
+- **Décision** : corrections locales et analyses terminées; aucune migration, aucun déploiement, commit ou push. Pas de benchmark RAG exécuté; ne pas déclarer la qualité ou l'application entière validée.
+
+## [Bob-Auto-Fixes] — Mission autonome staging et voix, 2026-10-03
+
+- Branche vérifiée : `bob/auto-fix-20261003-191324`, HEAD de départ
+  `2e7bfaa3c3fbca3b1a66ad26f9c9ce5ad19d15a2`; Git retrouvé via chemin
+  absolu Windows. Aucun commit/push, worktree préexistant préservé.
+- Profil staging template Git ignoré, allowlist exacte et commandes
+  transactionnelles gardées; secret du chat non reproduit. Pas de fallback
+  vers configuration ou pooler production.
+- Réseau : DNS OS 11001, IPv6 via resolver alternatif, TCP 10051.
+  Aucune authentification/SQL, migration, extension ou policy exécutée.
+- RLS : décision laboratoire à rôle NOLOGIN/NOBYPASSRLS, pas de grants
+  PUBLIC; tests HTTP et RLS distincts, 11 cas live non exécutés.
+- Config/guard/loader : 18 tests passés. RAG_ENV_FILE sélectionne le
+  dotenv de l'API et du loader historique, défaut antérieur conservé.
+- Frontend : 112 tests passés, type-check vert, lint 0 erreur /
+  32 warnings après suppression du setState d'initialisation et
+  échappement de deux guillemets JSX.
+- Backend : premier run complet bloqué par six imports manquants;
+  restauration de quatre packages déjà déclarés, pip check vert;
+  suite complète rejouée avec settings isolés, résultats détaillés dans
+  `docs/AUTONOMOUS_AUDIT_06_TESTS.md`.
+- Run complet finalisé : 4 993 pass, 125 fail, 208 skips, 23 deselected.
+  Rejeux : 104 échecs initiaux devenus passants; aucun run complet vert.
+  Clés de chiffrement de test éphémères et dotenv tiers désactivé.
+  SDK média/observabilité/BeeAI/LightRAG restaurés aux pins déclarés;
+  conflits NumPy/Click/Typer documentés, pas de downgrade aveugle.
+- Inventaires : 936 opérations enregistrées, 177 tables ORM et tableau
+  source/ligne; revue exhaustive sémantique non revendiquée.
+- Voix : comparaison publique LiveKit/Pipecat/Vocode, clone LiveKit
+  d'évaluation hors projet; plan seulement, aucune intégration RTC.
+- Décision : staging BLOCKED_EXTERNAL; aucune readiness production
+  certifiée. Rapports canoniques : `docs/audit/STAGING_TEST_REPORT.md`,
+  `docs/FINAL_STATUS.md`, `docs/VOICE_AGENT_EVALUATION.md`.
+
+## [Bob-Auto-Fixes] — Runner staging et résolution SDK, 2026-10-04
+
+- Défaut reproduit : entrypoint module du runner levait
+  ModuleNotFoundError. Import module/script corrigé, deux tests de
+  régression ajoutés : groupe guard/config/loader 22/22, Ruff PASS.
+- DSPy importé par prompt optimization mais absent du manifest :
+  déclaration du pin 3.4.0. Résolution conjointe des SDK manquants
+  validée en dry-run avec pins embeddings/Torch CPU conservés.
+- Installation SDK réussie, pip check PASS; groupe SDK/extraction/guard
+  63/63 sans skip. Huit échecs initiaux supplémentaires passent au
+  rejeu; PII en cours, aucune suite complète verte inventée.
+- DNS staging retesté : 11001. Aucun accès DB/production.
+- PII réelle finalisée : 4/4 sans skip avec en_core_web_lg 3.8.0;
+  pip check PASS. 117/125 échecs initiaux passants au rejeu, huit
+  encore non résolus; aucun nouveau run complet vert.
+
+## [Bob-Auto-Fixes] — CI worker pendant validation backend, 2026-10-04
+
+- Défaut : `|| true` masquait toutes les erreurs du worker programmé.
+- Correction : timeout TERM/grace 60 s, codes 0/124 attendus,
+  autres codes propagés avec message d'erreur CI.
+- Validation : 9 tests shell du workflow passés en 1.43 s, Ruff PASS;
+  pas de workflow distant lancé ni worker/broker/DB contactés.
+- Limite : exit worker ne prouve pas le succès des tâches individuelles.
+  Tests nouveaux non inclus dans la collection du run complet déjà actif.
+
+## [Bob-Auto-Fixes] — Backup/restore self-hosted, 2026-10-04
+
+- Défauts : backup partiel gardait le nom final; psql pouvait continuer
+  sur erreur SQL et afficher « Restore complete ».
+- Correction : temporaire/nettoyage, gzip vérifié, publication sans
+  écrasement; restore gzip avant accès DB et ON_ERROR_STOP=1.
+- Validation : six tests shell, groupe avec CI 15/15 en 3.90 s,
+  Ruff PASS; aucun backup/restore réel, production non contactée.
+- Limites : filesystem avec hard links requis; pas de rollback SQL
+  automatique, copie distante et rétention non validées.
+# [Bob-Auto-Fixes] - 2026-10-04 audit follow-up
+
+- Frontend: 32 warnings corrected, lint zero, type-check PASS, 116 tests PASS.
+- Backend full baseline: 5262 pass / 44 fail; targeted replay resolves 42,
+  two sandbox Resend integrations BLOCKED_EXTERNAL. Individual ledger:
+  docs/audit/BACKEND_FAILURE_REGISTER.md.
+- Staging: 77 restricted lab-role policies applied; 11 live A/B RLS/IDOR
+  tests PASS. Runtime bypass/indirect tenancy not certified.
+- No production access, no historical migration edits, no commit or push.
+
+---
+
+## [Bob-Auto-Fixes] — Balayage de toutes les routes : erreurs non gérées et accès anonymes (2026-10-05)
+
+**Méthode** : `tests/test_no_unhandled_errors_sweep.py` appelle CHAQUE opération du schéma OpenAPI (plus de 700) avec un propriétaire d'organisation (corps vides, puis corps valides générés depuis le schéma de la route) et SANS authentification. Une réponse 5xx, une exception qui s'échappe de l'application, ou une route anonyme absente de la liste `PUBLIC_BY_DESIGN` fait échouer le test. Tous les runs ci-dessous : base injoignable factice (`DATABASE_URL` surchargée), jamais la base du `.env`.
+
+**Trouvé et corrigé**
+- `POST /integrations/teams/webhook` : AUCUNE authentification (quiconque connaissait un identifiant de locataire Microsoft déclenchait une réponse RAG payante) + `JSONDecodeError` sur un corps non JSON. Vérification du jeton Bot Framework (RS256, émetteur, audience = App ID du bot, expiration, clés via le client SSRF-safe, cache + rafraîchissement sur `kid` inconnu) ; échec = 401, sans configuration = 401.
+- `POST /integrations/discord/message` : AUCUNE authentification + même plantage JSON. Secret partagé `X-Gateway-Secret` (`DISCORD_GATEWAY_SHARED_SECRET`), comparaison à temps constant, refus si non configuré.
+- `POST /documents/{id}/reindex-sync` : anonyme, réindexation en tâche de fond de n'importe quel document. Authentification + droits identiques à `/reindex` + limite de débit ; références de tâches conservées.
+- `POST /partners/register` : création de comptes sans limite, consentement présumé, aucun contrôle de mot de passe. Limite par IP, `accept_terms` obligatoire, contrôles fuite/similarité du mot de passe.
+- `GET /integrations/{n8n,airbyte}/status` exposaient l'URL interne des services à un anonyme : authentification requise. `POST /license/validate` : limite par IP.
+- `GET /metrics` : reste ouvert par défaut (choix documenté) ; `METRICS_AUTH_TOKEN` active un jeton Bearer. **Action propriétaire : le définir sur tout déploiement joignable depuis Internet.**
+- Lecture JSON sûre partagée (`api.utils.read_json_object`) appliquée à Slack, Discord, Teams : corps invalide = 400.
+- `/evolution/run` : l'absence de `dspy` renvoyait HTTP 500 ; la décision devient `optimizer_unavailable` (baseline mesurée, raison explicite).
+- A2A : l'absence de `beeai-framework` ou une erreur interne renvoyait une erreur de protocole opaque dans un HTTP 200 ; réponse en clair, sans fuite de détail interne.
+- Activer `ANSWER_RELEVANCE_USE_LLM` / `CONTEXT_RELEVANCE_USE_LLM` / `CLAIM_VERIFICATION_USE_LLM` (chemins non implémentés) démarrait puis levait `NotImplementedError` (500) ; refus au démarrage avec message explicite.
+- Lint : `[tool.ruff]` ajouté (règles qui détectent du code qui planterait : E9, F63, F7, F82, F811, F841), `ruff check api/` = 0 erreur, étape ajoutée à la CI ; 4 variables locales inutiles supprimées.
+
+**Sécurité du processus de test** : les runs de régression du 2 au 5 octobre ont utilisé la base distante du `.env` (distincte du staging). `tests/test_postgres_integration.py` y crée puis supprime des lignes temporaires. Règle appliquée depuis : toute exécution de test surcharge `DATABASE_URL` et `DATABASE_URL_TRANSACTION` par une cible factice injoignable.
+
+**Changements de comportement à connaître** : passerelles Discord (header requis), webhook Teams (jeton Microsoft requis), `partners/register` (`accept_terms`), pages de statut n8n/Airbyte (connexion requise). 9 tests existants mis à jour car ils reposaient sur l'ancien comportement non sécurisé.
+
+### Second balayage, avec de vraies données (2026-10-05, suite)
+
+`tests/test_sweep_with_real_data.py` crée des données par l'API (agents, espaces, webhooks, workflows, équipes, jeux d'évaluation, sandbox, clés d'outils…), puis appelle chaque opération avec ces identifiants réels (lectures, puis écritures, puis suppressions), une session ET une connexion par requête.
+Bugs trouvés puis corrigés (des routes qui plantaient à chaque appel) :
+- `POST /crm/monday/import` : importait `MondayError`, nom inexistant (la classe s'appelle `MondaycomError`) → ImportError systématique. Un balayage de TOUS les `from api… import …` du code (y compris dans les fonctions) n'en a trouvé qu'un autre :
+- mémoire à long terme des agents : le client LLM par défaut était cherché dans `api.services.llm`, module inexistant ; l'erreur était avalée, l'extraction automatique n'a donc jamais fonctionné. Branchée sur `chat_completion` ; **opt-in** (`AGENT_MEMORY_AUTO_EXTRACT=False`) car c'est un appel LLM supplémentaire par exécution, non facturé à part.
+- `POST /notifications/templates/test` : appelait `create_notification(type=, title=, body=, data=)`, paramètres inexistants → TypeError systématique.
+- `POST /agents/{id}/api-keys` avec une portée inconnue : exception non gérée → 400. Aperçu/test de modèle de notification avec une variable manquante : `UndefinedError` → 400.
+- Les scans de sécurité lançaient `pip-audit`/`bandit`/`trivy` avec `subprocess.run` bloquant dans du code asynchrone : toute l'API était figée pendant un scan → `asyncio.to_thread`.
+- Middleware du domaine marque blanche : une panne de base mettait TOUTES les routes (santé comprise) en 500 → panne contenue, routes `/health`, `/health/ready`, `/metrics` sans recherche de domaine.
+
+Isolation entre locataires avec identifiants réels : le locataire B appelle chaque opération adressant une ressource de A avec les vrais identifiants de A (13 types de ressources créées) → aucune réponse 2xx. Couvre ce que les 9 tests IDOR de staging n'atteignent pas ; documents et conversations restent couverts par `tests/test_document_idor.py` / `test_conversation_idor.py`.
+Mis à l'écart des balayages, avec raison dans le test : flux SSE sans fin, recherche texte/image (chargent un modèle d'embedding à froid), scan de sécurité (outils externes).

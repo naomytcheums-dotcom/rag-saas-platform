@@ -1,0 +1,15 @@
+P2C-4 / Task 04 — conversation/message IDOR
+Replay date: 2026-10-03
+Command: .\.venv\Scripts\python.exe -m pytest tests/test_conversation_idor.py -q -W default
+Result:
+.                                                                        [100%]
+1 passed in 2.09s
+Exit code: 0
+Environment: in-memory SQLite; no PostgreSQL connection or migration.
+Status: PASS for tested routes after the conversation/message binding fix.
+The original test exposed cross-resource edit-history disclosure; the test
+uses real persisted rows and asserts the owner control and attacker denial.
+External generation/retry providers are mocked.
+Evidence note: fresh replay; former uppercase raw proof was lost in a
+case-only rename. Original discovery/fix is summarized in
+PHASE_2_REPORT.md and CHANGE_LEDGER.md; original full stdout is unavailable.

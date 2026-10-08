@@ -33,6 +33,7 @@ from api.services.llm_providers import (
     get_ollama_completion,
     get_openai_compatible_completion,
     get_openai_completion,
+    get_watsonx_completion,
 )
 
 
@@ -81,6 +82,7 @@ def test_get_available_providers_reflects_real_configured_keys():
     assert "ollama" in available  # no key needed, real base url configured
     assert "gemini" not in available  # no real key configured
     assert "openai_compatible" not in available  # no real base url configured
+    assert "watsonx" not in available  # api_key set nowhere in this fixture, let alone url+project_id
 
 
 def test_get_default_provider_falls_back_to_the_real_setting():
@@ -157,6 +159,48 @@ async def test_openai_compatible_prefixes_the_model_and_uses_the_real_base_url(m
     call_kwargs = mock_acompletion.call_args.kwargs
     assert call_kwargs["model"] == f"openai/{settings.OPENAI_COMPATIBLE_MODEL}"
     assert call_kwargs["api_base"] == "https://compatible.example.com/v1"
+
+
+async def test_watsonx_passes_project_id_and_base_url_for_ibm_granite(monkeypatch):
+    """Validation criterion: watsonx (IBM Granite) dispatches like every
+    other provider, but carries its own real, additional required
+    credential (project_id) rather than silently omitting it."""
+    monkeypatch.setattr(settings, "WATSONX_API_KEY", "wx-test-key")
+    monkeypatch.setattr(settings, "WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+    monkeypatch.setattr(settings, "WATSONX_PROJECT_ID", "wx-project-123")
+    mock_acompletion = AsyncMock(return_value=_real_response("granite response"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    result = await get_watsonx_completion("hi")
+
+    assert result == "granite response"
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert call_kwargs["model"] == settings.WATSONX_MODEL
+    assert call_kwargs["api_key"] == "wx-test-key"
+    assert call_kwargs["api_base"] == "https://us-south.ml.cloud.ibm.com"
+    assert call_kwargs["project_id"] == "wx-project-123"
+
+
+async def test_watsonx_requires_project_id_and_url_not_just_an_api_key(monkeypatch):
+    """A watsonx API key alone is not a real, callable configuration --
+    same "fail upfront, don't wait for the remote API to reject it"
+    discipline as the plain missing-API-key case below."""
+    monkeypatch.setattr(settings, "WATSONX_API_KEY", "wx-test-key")
+    monkeypatch.setattr(settings, "WATSONX_URL", "")
+    monkeypatch.setattr(settings, "WATSONX_PROJECT_ID", "")
+    mock_acompletion = AsyncMock(return_value=_real_response("should not be called"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    with pytest.raises(LLMAuthenticationError):
+        await get_watsonx_completion("hi")
+    mock_acompletion.assert_not_called()
+
+
+def test_watsonx_available_only_with_all_three_real_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "WATSONX_API_KEY", "wx-test-key")
+    monkeypatch.setattr(settings, "WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+    monkeypatch.setattr(settings, "WATSONX_PROJECT_ID", "wx-project-123")
+    assert "watsonx" in get_available_providers()
 
 
 @pytest.mark.parametrize("provider_fn,provider_name", [

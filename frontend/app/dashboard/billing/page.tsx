@@ -146,7 +146,7 @@ function OverviewTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_overview"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -213,7 +213,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plans"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -317,7 +317,7 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_usage"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -334,15 +334,18 @@ function UsageTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
           <p className="text-sm text-foreground-muted">{t("billing.usage_empty")}</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {metrics.map(([metric, total]) => (
-              <div key={metric} className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs font-medium uppercase text-foreground-muted">{metric.replace(/_/g, " ")}</p>
-                <p className="mt-1 text-xl font-semibold text-foreground">{total}</p>
-                {forecast?.projected_next_period[metric] !== undefined && (
-                  <p className="mt-1 text-xs text-foreground-muted">{t("billing.usage_projected", { value: forecast.projected_next_period[metric] ?? 0 })}</p>
-                )}
-              </div>
-            ))}
+            {metrics.map(([metric, total]) => {
+              const projected = forecast?.projected_next_period[metric];
+              return (
+                <div key={metric} className="rounded-xl border border-border bg-surface p-4">
+                  <p className="text-xs font-medium uppercase text-foreground-muted">{metric.replace(/_/g, " ")}</p>
+                  <p className="mt-1 text-xl font-semibold text-foreground">{total}</p>
+                  {projected !== undefined && (
+                    <p className="mt-1 text-xs text-foreground-muted">{t("billing.usage_projected", { value: projected })}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -369,7 +372,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_credits"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.
@@ -436,7 +439,7 @@ function InvoicesTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("billing.error_invoices"));
     }
-  }, [orgId, onError]);
+  }, [orgId, onError, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- justified: syncing with a real external system (the backend API) after mount/param change, not a value derivable from props/state.

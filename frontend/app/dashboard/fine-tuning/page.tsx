@@ -7,20 +7,20 @@ import { useFineTuningJobs } from "@/lib/hooks/useFineTuningJobs";
 import { useFineTunedModels } from "@/lib/hooks/useFineTunedModels";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 
-function SummaryCard({ href, title, total, loading }: { href: string; title: string; total: number; loading: boolean }) {
+function SummaryCard({ href, title, total, loading, error }: { href: string; title: string; total: number; loading: boolean; error: string | null }) {
   return (
     <Link href={href} className="block rounded-xl border border-border bg-surface p-5 hover:border-accent">
       <p className="text-sm text-foreground-muted">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">{loading ? "…" : total}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground">{loading ? "…" : error ? "—" : total}</p>
     </Link>
   );
 }
 
 export default function Page() {
   const { org, loading: orgLoading } = useCurrentOrg();
-  const { total: datasetTotal, loading: datasetsLoading } = useFineTuningDatasets(org?.id ?? "");
-  const { total: jobTotal, loading: jobsLoading } = useFineTuningJobs(org?.id ?? "");
-  const { total: modelTotal, loading: modelsLoading } = useFineTunedModels(org?.id ?? "");
+  const { total: datasetTotal, loading: datasetsLoading, error: datasetsError } = useFineTuningDatasets(org?.id ?? "");
+  const { total: jobTotal, loading: jobsLoading, error: jobsError } = useFineTuningJobs(org?.id ?? "");
+  const { total: modelTotal, loading: modelsLoading, error: modelsError } = useFineTunedModels(org?.id ?? "");
 
   if (orgLoading || !org) return <LoadingState fullScreen={false} />;
 
@@ -30,9 +30,9 @@ export default function Page() {
       <p className="mt-1 text-sm text-foreground-muted">Entraînez des modèles personnalisés sur vos propres données, évaluez-les et déployez ceux qui fonctionnent.</p>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SummaryCard href="/dashboard/fine-tuning/datasets" title="Jeux de données" total={datasetTotal} loading={datasetsLoading} />
-        <SummaryCard href="/dashboard/fine-tuning/jobs" title="Tâches" total={jobTotal} loading={jobsLoading} />
-        <SummaryCard href="/dashboard/fine-tuning/models" title="Modèles" total={modelTotal} loading={modelsLoading} />
+        <SummaryCard href="/dashboard/fine-tuning/datasets" title="Jeux de données" total={datasetTotal} loading={datasetsLoading} error={datasetsError} />
+        <SummaryCard href="/dashboard/fine-tuning/jobs" title="Tâches" total={jobTotal} loading={jobsLoading} error={jobsError} />
+        <SummaryCard href="/dashboard/fine-tuning/models" title="Modèles" total={modelTotal} loading={modelsLoading} error={modelsError} />
       </div>
     </div>
   );

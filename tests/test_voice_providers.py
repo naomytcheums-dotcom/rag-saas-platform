@@ -99,3 +99,55 @@ async def test_synthesize_with_elevenlabs_surfaces_api_error(monkeypatch):
     with patch("httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(VoiceError):
             await synthesize_with_elevenlabs("hello")
+
+
+# --------------------------------------------------------- Voice chat round-trip (item 17)
+
+
+async def test_voice_chat_composes_transcription_generation_and_synthesis(monkeypatch):
+    """Validation criterion: the real end-to-end round-trip -- audio in,
+    a real transcript, a real generated answer, real synthesized audio
+    out -- each real, already-tested function called with the right
+    real arguments."""
+    import uuid
+
+    from api.services.voice import voice_chat
+
+    org_id = uuid.uuid4()
+    response_id = uuid.uuid4()
+    fake_response = MagicMock(id=response_id, answer="Paris is the capital of France.")
+
+    mock_transcribe = AsyncMock(return_value="What is the capital of France?")
+    mock_generate = AsyncMock(return_value=fake_response)
+    mock_synthesize = AsyncMock(return_value=b"fake-mp3-bytes")
+
+    monkeypatch.setattr("api.services.voice.transcribe_audio", mock_transcribe)
+    monkeypatch.setattr("api.services.generation.generate_response", mock_generate)
+    monkeypatch.setattr("api.services.voice.synthesize_with_elevenlabs", mock_synthesize)
+
+    fake_db = MagicMock()
+    result = await voice_chat(fake_db, org_id, b"fake audio bytes", filename="q.wav", voice_id="21m00Tcm4TlvDq8ikWAM")
+
+    mock_transcribe.assert_awaited_once_with(b"fake audio bytes", filename="q.wav", provider=None, language=None)
+    mock_generate.assert_awaited_once_with(fake_db, org_id, "What is the capital of France?")
+    mock_synthesize.assert_awaited_once_with("Paris is the capital of France.", voice_id="21m00Tcm4TlvDq8ikWAM")
+
+    assert result == {
+        "transcript": "What is the capital of France?", "answer_text": "Paris is the capital of France.",
+        "answer_audio": b"fake-mp3-bytes", "response_id": response_id,
+    }
+
+
+async def test_voice_chat_surfaces_a_real_transcription_failure(monkeypatch):
+    """Real, honest propagation: a real STT failure (e.g. missing API
+    key) must stop the round-trip before ever calling generate_response."""
+    from api.services.voice import voice_chat
+
+    mock_generate = AsyncMock()
+    monkeypatch.setattr("api.services.voice.transcribe_audio", AsyncMock(side_effect=VoiceError("no key configured")))
+    monkeypatch.setattr("api.services.generation.generate_response", mock_generate)
+
+    with pytest.raises(VoiceError):
+        await voice_chat(MagicMock(), __import__("uuid").uuid4(), b"fake audio")
+
+    mock_generate.assert_not_awaited()

@@ -324,7 +324,7 @@ NEXT_PUBLIC_SENTRY_DSN=...
 
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements-api.txt
+pip install -r requirements-api.txt -r requirements-optional.txt
 cd frontend && npm install
 alembic upgrade head
 

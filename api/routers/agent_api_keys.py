@@ -10,7 +10,7 @@ other real caller.
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
@@ -23,7 +23,7 @@ from api.schemas.agent_api_keys import (
 )
 from api.security.agent_api_keys import require_api_key_scope
 from api.security.agents import require_agent_manager
-from api.services.agent_api_keys import generate_api_key, list_api_keys, revoke_api_key
+from api.services.agent_api_keys import AgentAPIKeyError, generate_api_key, list_api_keys, revoke_api_key
 from api.services.agent_orchestrator import AgentOrchestrator
 
 router = APIRouter(tags=["agent-api-keys"])
@@ -35,9 +35,12 @@ async def create_agent_api_key_endpoint(
     agent_ctx: tuple[Agent, OrganizationMember] = Depends(require_agent_manager), db: AsyncSession = Depends(get_db),
 ):
     agent, caller = agent_ctx
-    row, plaintext_key = await generate_api_key(
-        db, agent.id, payload.name, payload.scopes, expires_at=payload.expires_at, created_by=caller.user_id,
-    )
+    try:
+        row, plaintext_key = await generate_api_key(
+            db, agent.id, payload.name, payload.scopes, expires_at=payload.expires_at, created_by=caller.user_id,
+        )
+    except AgentAPIKeyError as exc:  # e.g. an unknown scope: the caller's mistake
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
     return AgentAPIKeyCreateResponse(
         id=row.id, name=row.name, key=plaintext_key, key_prefix=row.key_prefix, scopes=row.scopes,

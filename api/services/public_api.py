@@ -22,11 +22,12 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.models.citation import Citation
 from api.models.conversation import Conversation, ConversationMessage
 from api.models.organization_api_key import OrganizationAPIKey
 from api.models.workspace import Workspace
-from api.security.conversations import add_message, create_conversation, get_conversation, get_conversation_messages
+from api.security.conversations import add_message, create_conversation, get_conversation
 from api.security.documents import upload_document
 from api.security.organization_settings import get_org_settings
 from api.security.usage import get_usage_summary
@@ -45,15 +46,41 @@ def require_owner(key_row: OrganizationAPIKey) -> uuid.UUID:
 # --------------------------------------------------------------------- 9.1.1 Chat
 
 
-async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, message: str, agent_id: str, conversation_id: uuid.UUID | None) -> dict:
-    """Takes `organization_id`/`created_by` directly (not a whole
-    `OrganizationAPIKey` row) so both the secret-key-authenticated
-    public API (9.1) AND the public-key-authenticated embeddable
-    widget (9.3, no `OrganizationAPIKey` involved at all -- see
-    `api/widget/service.py`'s own docstring) can reuse this same real
-    engine instead of each having its own copy."""
-    from api.services.agent_orchestrator import AgentOrchestrator
+async def _require_agent_in_org(db: AsyncSession, organization_id: uuid.UUID, agent_id: str) -> None:
+    """Hardening Mission (§24, multi-tenancy) -- a public API key is
+    organization-scoped, but `agent_id` is a free string from the request
+    body: nothing stopped it from naming ANOTHER organization's real
+    agent (its system prompt, tools and knowledge base). An id that parses
+    as a UUID and resolves to an agent of a different organization is
+    refused with the same "not found" as a nonexistent one; a non-UUID id
+    (the legacy ad-hoc agent ids this API has always accepted) is left
+    alone."""
+    try:
+        real_id = uuid.UUID(str(agent_id))
+    except ValueError:
+        return
+    from api.models.agent import Agent
+
+    agent = await db.get(Agent, real_id)
+    if agent is not None and agent.organization_id != organization_id:
+        raise PublicAPIError("Agent not found")
+
+
+async def _prepare_public_chat(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, message: str, agent_id: str, conversation_id: uuid.UUID | None):
+    """Everything BOTH `handle_public_chat` and
+    `handle_public_chat_stream` do before any LLM call: org rate limit,
+    agent/conversation ownership, retrieval and context building. Returns
+    `(conversation, context, citation_chunks)`. Errors raised here (429,
+    unknown agent/conversation) surface BEFORE a streaming response has
+    started, so a streaming caller still gets a proper HTTP error."""
+    from api.security.rate_limit import enforce_rate_limit
     from api.services.retrieval_pipeline import build_llm_context, search_with_context
+
+    await enforce_rate_limit(
+        f"ratelimit:public_chat:org:{organization_id}",
+        settings.PUBLIC_CHAT_RATE_LIMIT_MAX_ATTEMPTS, settings.PUBLIC_CHAT_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    await _require_agent_in_org(db, organization_id, agent_id)
 
     if conversation_id is not None:
         conversation = await get_conversation(db, conversation_id)
@@ -64,16 +91,44 @@ async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, creat
         await db.flush()
 
     org_settings = await get_org_settings(db, organization_id)
-    citation_chunks = await search_with_context(db, organization_id, message, top_k=5, org_settings=org_settings)
-    # Real bug found (2026-09-18) via a live, undirected end-to-end test:
-    # citation_chunks was only ever used for citation bookkeeping and
-    # post-hoc quality metrics -- the retrieved chunk text was never
-    # actually given to the LLM, so a "grounded" answer with citations
-    # attached could still be pure model knowledge, unrelated to what
-    # was retrieved. `context` is what run_agent actually injects into
-    # the prompt (see its own docstring). build_llm_context also bounds
-    # the real, previously-unbounded context length (audit, 2026-09-19).
+    user_context = {"organization_id": str(organization_id), "created_by": str(created_by), "auth": "api_key"}
+    citation_chunks = await search_with_context(
+        db, organization_id, message, top_k=5, org_settings=org_settings, user_context=user_context,
+    )
     context = build_llm_context(citation_chunks, org_settings)
+    return conversation, context, citation_chunks
+
+
+async def handle_public_chat_stream(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, message: str, agent_id: str, conversation_id: uuid.UUID | None):
+    """Hardening Mission (§21/§31, streaming) -- real Server-Sent Events
+    for `POST /v1/chat` with `stream=true`. `ChatRequest.stream` and the
+    SDKs' `stream` argument existed for a long time but the flag was
+    silently IGNORED (a full, non-streamed JSON body always came back):
+    streaming was advertised and never delivered. Same SSE contract as the
+    dashboard's `/chat/stream` (`api.services.streaming.stream_agent_response`:
+    start/token/citation/done/error events), with the same pre-flight cost
+    guards (`AgentOrchestrator.stream_response`: credits + spend caps).
+    The prelude runs EAGERLY, so a 429/404 is a normal HTTP error rather
+    than an in-stream event; the returned object is the async generator."""
+    from api.services.streaming import stream_agent_response
+
+    conversation, context, citation_chunks = await _prepare_public_chat(db, organization_id, created_by, message, agent_id, conversation_id)
+    return stream_agent_response(
+        db, agent_id, message, conversation_id=conversation.id, user_id=created_by, organization_id=organization_id,
+        context=context, citation_chunks=citation_chunks,
+    )
+
+
+async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, created_by: uuid.UUID, message: str, agent_id: str, conversation_id: uuid.UUID | None) -> dict:
+    """Takes `organization_id`/`created_by` directly (not a whole
+    `OrganizationAPIKey` row) so both the secret-key-authenticated
+    public API (9.1) AND the public-key-authenticated embeddable
+    widget (9.3, no `OrganizationAPIKey` involved at all -- see
+    `api/widget/service.py`'s own docstring) can reuse this same real
+    engine instead of each having its own copy."""
+    from api.services.agent_orchestrator import AgentOrchestrator
+
+    conversation, context, citation_chunks = await _prepare_public_chat(db, organization_id, created_by, message, agent_id, conversation_id)
 
     orchestrator = AgentOrchestrator()
     run = await orchestrator.run_agent(
@@ -118,7 +173,9 @@ async def handle_public_document_upload(db: AsyncSession, key_row: OrganizationA
 
 
 async def handle_public_kb_creation(db: AsyncSession, key_row: OrganizationAPIKey, name: str, description: str | None, config: dict | None) -> Workspace:
-    workspace = Workspace(organization_id=key_row.organization_id, name=name, created_by=key_row.created_by)
+    workspace = Workspace(
+        organization_id=key_row.organization_id, name=name, description=description, created_by=key_row.created_by,
+    )
     db.add(workspace)
     await db.flush()
     return workspace
@@ -131,21 +188,41 @@ async def handle_public_conversations_list(db: AsyncSession, organization_id: uu
     """Real, org-wide listing -- NOT `api.security.conversations.get_conversations`
     (that one filters by a single real `user_id`, the wrong real scope
     for an organization-wide API key that doesn't represent one user)."""
-    query = select(Conversation).where(Conversation.organization_id == organization_id, Conversation.deleted_at.is_(None))
-    if agent_id is not None:
-        query = query.where(Conversation.agent_id == agent_id)
-    total = len((await db.scalars(query)).all())
-    query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
-    conversations = list((await db.scalars(query)).all())
+    from sqlalchemy import func
 
-    items = []
-    for conversation in conversations:
-        messages = await get_conversation_messages(db, conversation.id, limit=1000)
-        preview = messages[-1].content[:140] if messages else None
-        items.append({
-            "id": conversation.id, "title": conversation.title, "created_at": conversation.created_at,
-            "updated_at": conversation.updated_at, "last_message_preview": preview,
-        })
+    base = select(Conversation).where(Conversation.organization_id == organization_id, Conversation.deleted_at.is_(None))
+    if agent_id is not None:
+        base = base.where(Conversation.agent_id == agent_id)
+    # Hardening Mission (§7, performance) -- this used to load EVERY
+    # conversation row just to `len()` them for `total`, then, per listed
+    # conversation, load up to 1,000 full messages just to read the last
+    # one's first 140 characters: O(all conversations) + up to 1,000 x
+    # `limit` rows per page. A real COUNT and ONE query for the last
+    # message of every listed conversation replace both.
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    conversations = list((await db.scalars(base.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset))).all())
+
+    previews: dict[uuid.UUID, str] = {}
+    if conversations:
+        ids = [c.id for c in conversations]
+        latest = (
+            select(ConversationMessage.conversation_id, func.max(ConversationMessage.created_at).label("latest_at"))
+            .where(ConversationMessage.conversation_id.in_(ids)).group_by(ConversationMessage.conversation_id).subquery()
+        )
+        rows = await db.execute(
+            select(ConversationMessage.conversation_id, ConversationMessage.content)
+            .join(latest, (ConversationMessage.conversation_id == latest.c.conversation_id) & (ConversationMessage.created_at == latest.c.latest_at))
+        )
+        for conversation_id, content in rows.all():
+            previews[conversation_id] = (content or "")[:140]
+
+    items = [
+        {
+            "id": c.id, "title": c.title, "created_at": c.created_at, "updated_at": c.updated_at,
+            "last_message_preview": previews.get(c.id),
+        }
+        for c in conversations
+    ]
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
@@ -166,6 +243,7 @@ async def handle_public_search(db: AsyncSession, organization_id: uuid.UUID, que
 async def handle_public_agent_run(db: AsyncSession, key_row: OrganizationAPIKey, agent_id: str, input: str, conversation_id: uuid.UUID | None) -> dict:
     from api.services.agent_orchestrator import AgentOrchestrator
 
+    await _require_agent_in_org(db, key_row.organization_id, agent_id)
     if conversation_id is not None:
         conversation = await get_conversation(db, conversation_id)
         if conversation is None or conversation.organization_id != key_row.organization_id:
@@ -258,7 +336,7 @@ async def handle_public_kb_list(db: AsyncSession, organization_id: uuid.UUID, li
     same real reasoning as `handle_public_documents_list` above)."""
     query = select(Workspace).where(Workspace.organization_id == organization_id).order_by(Workspace.created_at.desc()).limit(limit).offset(offset)
     workspaces = list((await db.scalars(query)).all())
-    return [{"id": w.id, "name": w.name, "created_at": w.created_at} for w in workspaces]
+    return [{"id": w.id, "name": w.name, "description": w.description, "created_at": w.created_at} for w in workspaces]
 
 
 async def handle_public_embed(text: str, model: str | None) -> dict:

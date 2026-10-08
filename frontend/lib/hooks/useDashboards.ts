@@ -10,6 +10,7 @@ export function useDashboards(orgId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     setLoading(true);
     try {
       setDashboards(await dashboardService.listDashboards(orgId));

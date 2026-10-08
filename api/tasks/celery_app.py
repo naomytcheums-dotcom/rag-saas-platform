@@ -9,17 +9,98 @@ default -- see api/config.py); a Postgres-backed broker also works if
 Redis isn't part of the deployment, just change the URL scheme.
 """
 
+import asyncio
+import logging
 import ssl
+import threading
+import time
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 
-from celery import Celery
+from celery import Celery, Task
 from celery.schedules import crontab
-from celery.signals import task_failure, task_success
+from celery.signals import task_failure, task_success, worker_process_init, worker_ready
 
 from api.config import settings
 
+logger = logging.getLogger(__name__)
+
+# Publisher-side fail-fast, scoped to dispatches made from inside a running
+# asyncio event loop (i.e. the API's async request handlers). Measured on
+# 2026-10-06 with the broker/result backend unreachable: a plain
+# `task.delay()` blocked the loop for 64.3 s (the redis result backend
+# retries 20x with 1 s steps), freezing every request of the process.
+# The worker shares this celery_app and is NOT affected: outside a running
+# loop apply_async is untouched, and no worker-side retry setting is changed.
+PUBLISH_TIMEOUT_SECONDS = 1.0  # max time a dispatch may hold the event loop
+BROKER_DOWN_COOLDOWN_SECONDS = 30.0  # after a timeout, fail instantly for this long
+_MAX_INFLIGHT_PUBLISHES = 4
+
+_publish_slots = threading.BoundedSemaphore(_MAX_INFLIGHT_PUBLISHES)
+_broker_down_until = 0.0
+
+
+def _run_in_daemon_thread(fn, *args, **kwargs) -> Future:
+    """Daemon thread (not a ThreadPoolExecutor): a publish stuck on a dead
+    broker for ~60 s must not delay interpreter/server shutdown."""
+    future: Future = Future()
+
+    def _target():
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except BaseException as exc:  # noqa: BLE001 -- relayed to the waiting caller
+            future.set_exception(exc)
+
+    threading.Thread(target=_target, name="celery-publish", daemon=True).start()
+    return future
+
+
+class BrokerUnavailableError(RuntimeError):
+    """Raised instead of blocking the event loop when the broker is unreachable."""
+
+
+def _in_running_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+class BoundedPublishTask(Task):
+    """Task base whose apply_async never holds a running event loop for more
+    than PUBLISH_TIMEOUT_SECONDS. The publish itself runs in a daemon thread;
+    on timeout we raise BrokerUnavailableError (callers already catch and log
+    broker errors as best-effort) and short-circuit further dispatches for a
+    cooldown, so a dead broker costs ~1 s once, not 1 s per call."""
+
+    def apply_async(self, args=None, kwargs=None, **options):
+        global _broker_down_until
+        if not _in_running_loop() or self.app.conf.task_always_eager:
+            return super().apply_async(args, kwargs, **options)
+        if time.monotonic() < _broker_down_until:
+            raise BrokerUnavailableError(f"celery broker marked unavailable; not dispatching {self.name}")
+        if not _publish_slots.acquire(blocking=False):  # every publisher thread is stuck on a dead broker
+            raise BrokerUnavailableError(f"celery too many publishes stuck on the broker; not dispatching {self.name}")
+        try:
+            future = _run_in_daemon_thread(super().apply_async, args, kwargs, **options)
+        except BaseException:
+            _publish_slots.release()
+            raise
+        future.add_done_callback(lambda _f: _publish_slots.release())
+        try:
+            return future.result(timeout=PUBLISH_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            _broker_down_until = time.monotonic() + BROKER_DOWN_COOLDOWN_SECONDS
+            logger.warning("celery dispatch of %s exceeded %.1fs; broker treated as down for %.0fs",
+                           self.name, PUBLISH_TIMEOUT_SECONDS, BROKER_DOWN_COOLDOWN_SECONDS)
+            raise BrokerUnavailableError(f"celery dispatch of {self.name} timed out") from None
+
+
 celery_app = Celery(
     "rag_saas_platform",
+    task_cls=BoundedPublishTask,
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     # Explicit, not autodiscover_tasks(): autodiscover_tasks(["api.tasks"])
@@ -49,6 +130,24 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+
+def _warm_embedder() -> None:
+    from api.security.documents import start_embedder_warmup
+
+    start_embedder_warmup()
+
+
+@worker_process_init.connect
+def _warm_embedder_in_pool_process(**_kwargs) -> None:
+    _warm_embedder()
+
+
+@worker_ready.connect
+def _warm_embedder_in_inline_worker(sender=None, **_kwargs) -> None:
+    pool = getattr(sender, "pool", None)
+    if "prefork" not in type(pool).__module__:
+        _warm_embedder()
 
 # Real crash fixed here (2026-09-18, found via a real GitHub Actions test
 # run): a rediss:// URL (TLS, used by Upstash's free tier) makes Celery's

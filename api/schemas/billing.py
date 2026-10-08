@@ -247,3 +247,14 @@ class InvoiceStatsResponse(BaseModel):
     total_paid_cents: int
     total_outstanding_cents: int
     overdue_count: int
+
+
+class DisplayCurrencyResponse(BaseModel):
+    """How a visitor should see prices: plans are billed in EUR, `per_euro` units of `currency` equal one euro."""
+
+    country: str | None
+    currency: str
+    per_euro: float
+    source: str  # "euro" (no conversion), "peg" (fixed official parity) or "market" (daily rate)
+    attribution_url: str | None = None
+    language: str | None = None  # suggested interface language for that country, when the product ships it

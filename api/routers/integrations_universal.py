@@ -19,9 +19,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db
+from api.dependencies import get_current_user, get_db
 from api.models.integrations import AirbyteConnection
 from api.models.organization import OrganizationMember
+from api.models.user import User
 from api.schemas.integrations_universal import (
     AirbyteConnectionResponse, AirbyteCreateConnectionRequest, AirbyteCreateSourceRequest, AirbyteSourceDefinitionResponse,
     ConnectionCreateRequest, ConnectionCreateResponse, ConnectionResponse, ConnectionTestResponse, ConnectionUpdateRequest,
@@ -36,12 +37,12 @@ org_router = APIRouter(prefix="/organizations/{org_id}/integrations", tags=["Int
 
 
 @router.get("/integrations/n8n/status")
-async def n8n_status_endpoint():
+async def n8n_status_endpoint(_user: User = Depends(get_current_user)):
     """Real reachability check against a real n8n instance -- honest
     'reachable: false' rather than a fabricated 'ok' when N8N_URL is
     unset or the instance isn't actually up (e.g. the local Docker
     Compose n8n service, docker-compose.observability.yml, not
-    started)."""
+    started). Authenticated: the response carries the internal service URL, which an anonymous caller must not learn."""
     from api.config import settings
 
     if not settings.N8N_URL:
@@ -57,7 +58,7 @@ async def n8n_status_endpoint():
 
 
 @router.get("/integrations/airbyte/status")
-async def airbyte_status_endpoint():
+async def airbyte_status_endpoint(_user: User = Depends(get_current_user)):
     from api.config import settings
 
     if not settings.AIRBYTE_API_URL:

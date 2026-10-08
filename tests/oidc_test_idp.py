@@ -89,3 +89,11 @@ def register_authorization_code(app: FastAPI, code: str, *, sub: str, email: str
     consent screen, so the test picks the code and pre-registers the
     claims it should resolve to)."""
     app.state.idp["codes"][code] = {"sub": sub, "email": email, "aud": audience}
+
+
+def bind_nonce(app: FastAPI, code: str, nonce: str) -> None:
+    """A real IdP echoes the `nonce` it received in the authorization request
+    into the id_token it later issues for the code. This test IdP never sees
+    the authorization request (the test drives /authorize on the API and reads
+    the redirect), so the test hands the nonce over explicitly."""
+    app.state.idp["codes"][code]["nonce"] = nonce

@@ -39,6 +39,11 @@ PUBLIC_API_SCOPES = (
     # with the exact same org-scoped `X-API-Key` mechanism as every
     # other public API route, scoped to just this one capability.
     "mcp:tools",
+    # Hardening Mission (§15, A2A) -- gates the real A2A (Agent2Agent)
+    # endpoints (api/routers/a2a.py): an external, A2A-compliant agent
+    # authenticates with the same org-scoped `X-API-Key` mechanism as
+    # every other public route, scoped to just this one capability.
+    "a2a:call",
 )
 
 _RATE_LIMIT_PERIODS = ("minute", "hour", "day", "month")

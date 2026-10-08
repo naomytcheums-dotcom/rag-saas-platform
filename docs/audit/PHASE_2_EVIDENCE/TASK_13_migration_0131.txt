@@ -1,0 +1,11 @@
+P2C-13 — migration 0131 RLS analysis
+Date: 2026-10-03
+Source: api/alembic/versions/0131_enable_rls_on_remaining_tables.py (53 lines).
+Artifact: docs/audit/MIGRATION_0131_ANALYSIS.md.
+Command: static source read plus local test/design references; no live catalog
+query, migration, policy creation, or database connection.
+Result: full migration source reproduced; analyzed eleven tables, zero-policy
+default-deny behavior, BYPASSRLS role implications, workers/admin/migrations,
+local test limits and required follow-up.
+Applied revision, policies, owners and runtime role: UNKNOWN.
+Status: PASS for static analysis only.

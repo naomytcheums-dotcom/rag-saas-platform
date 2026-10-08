@@ -81,6 +81,11 @@ async function request<T>(path: string, init?: RequestInit, _retried = false): P
   if (!headers.has("Content-Type") && init?.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  if (init?.method === "POST" && (path === "/auth/logout" || path === "/auth/refresh")) {
+    const csrfToken = getCookie("csrf_token");
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: "include" });
 
   if (response.status === 401 && !_retried && path !== "/auth/refresh" && path !== "/auth/login") {
@@ -131,7 +136,20 @@ async function requestMultipart<T>(path: string, method: string, fields: Record<
   return (await response.json()) as T;
 }
 
+async function fetchRaw(path: string, init?: RequestInit, _retried = false): Promise<Response> {
+  const token = getAccessToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: "include" });
+  if (response.status === 401 && !_retried && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (await refreshAccessToken()) return fetchRaw(path, init, true);
+  }
+  return response;
+}
+
 export const api = {
+  fetchRaw,
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: body !== undefined ? JSON.stringify(body) : undefined }),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 interface HistoryState<T> {
   past: T[];
@@ -17,10 +17,10 @@ export function useHistory<T>(initial: T) {
     future: [],
   });
 
-  const set = useCallback((next: T) => {
+  const set = useCallback((next: T | ((previous: T) => T)) => {
     setState((s) => ({
       past: [...s.past.slice(-MAX_HISTORY + 1), s.present],
-      present: next,
+      present: typeof next === "function" ? (next as (previous: T) => T)(s.present) : next,
       future: [],
     }));
   }, []);

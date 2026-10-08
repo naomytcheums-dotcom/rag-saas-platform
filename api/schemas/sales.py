@@ -102,6 +102,7 @@ class RegisterPartnerRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str | None = None
+    accept_terms: bool = False
 
 
 class RegisterPartnerResponse(BaseModel):

@@ -1,0 +1,14 @@
+P2C-11 — static SQLAlchemy query audit
+Date: 2026-10-03
+Artifact: docs/security/SQL_QUERY_AUDIT.md
+Static AST replay output:
+{'python_files': 815, 'query_files': 234, 'select': 682, 'get': 392, 'execute': 121, 'candidate': 656, 'combined': 1195}
+Generated audit register row count: 660.
+One-line `.where(...organization_id...)` source-line grep count: 196.
+Reconciliation: the original generated candidate register has 660 rows,
+while an independent AST walk under the stated nearest-function/call-text
+heuristic has 656. The four-call difference is unresolved because the
+original generator was not persisted. Both counts are review heuristics,
+not findings or proofs of absent authorization.
+No database connection/query was performed.
+Exit code: 0 for the count commands.

@@ -9,6 +9,7 @@ from api.security.organization_settings import DEFAULT_SETTINGS
 from api.services.retrieval_config import (
     RETRIEVAL_STRATEGIES,
     resolve_context_compression_enabled,
+    resolve_graphrag_enabled,
     resolve_hyde_enabled,
     resolve_mmr_candidate_k,
     resolve_mmr_enabled,
@@ -220,6 +221,7 @@ def test_resolve_rrf_k_accepts_the_real_boundary_values():
     (resolve_hyde_enabled, "hyde_enabled"),
     (resolve_mmr_enabled, "mmr_enabled"),
     (resolve_context_compression_enabled, "context_compression_enabled"),
+    (resolve_graphrag_enabled, "graphrag_enabled"),
 ])
 def test_advanced_retrieval_enabled_flags_default_to_false(resolver, key):
     assert DEFAULT_SETTINGS[key] is False
@@ -229,7 +231,7 @@ def test_advanced_retrieval_enabled_flags_default_to_false(resolver, key):
 
 @pytest.mark.parametrize("resolver", [
     resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
-    resolve_mmr_enabled, resolve_context_compression_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled, resolve_graphrag_enabled,
 ])
 def test_advanced_retrieval_enabled_flags_read_from_real_organization_settings(resolver):
     key = {
@@ -238,13 +240,14 @@ def test_advanced_retrieval_enabled_flags_read_from_real_organization_settings(r
         resolve_hyde_enabled: "hyde_enabled",
         resolve_mmr_enabled: "mmr_enabled",
         resolve_context_compression_enabled: "context_compression_enabled",
+        resolve_graphrag_enabled: "graphrag_enabled",
     }[resolver]
     assert resolver({key: True}) is True
 
 
 @pytest.mark.parametrize("resolver", [
     resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
-    resolve_mmr_enabled, resolve_context_compression_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled, resolve_graphrag_enabled,
 ])
 def test_advanced_retrieval_enabled_flags_override_wins(resolver):
     assert resolver({}, override=True) is True
@@ -253,7 +256,7 @@ def test_advanced_retrieval_enabled_flags_override_wins(resolver):
 
 @pytest.mark.parametrize("resolver", [
     resolve_query_rewriting_enabled, resolve_multi_query_enabled, resolve_hyde_enabled,
-    resolve_mmr_enabled, resolve_context_compression_enabled,
+    resolve_mmr_enabled, resolve_context_compression_enabled, resolve_graphrag_enabled,
 ])
 def test_advanced_retrieval_enabled_flags_reject_non_boolean(resolver):
     with pytest.raises(ValueError):

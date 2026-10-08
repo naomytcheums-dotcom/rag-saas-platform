@@ -47,7 +47,20 @@ def setup_tracing(app) -> None:
         sampler = ParentBased(TraceIdRatioBased(settings.OTEL_TRACES_SAMPLER_ARG))
         provider = TracerProvider(resource=resource, sampler=sampler)
 
-        if settings.TEMPO_HOST and settings.TEMPO_USERNAME and settings.TEMPO_PASSWORD:
+        if settings.LANGFUSE_HOST and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+            # Langfuse's own real, documented OTLP ingestion contract
+            # (verified before writing this, not assumed): Basic Auth,
+            # base64(public_key:secret_key), endpoint
+            # /api/public/otel/v1/traces. Every span already carries the
+            # real gen_ai.* attributes (Étape "OpenTelemetry GenAI")
+            # Langfuse's own OTel ingestion expects -- no separate
+            # `langfuse` SDK, no parallel instrumentation.
+            import base64
+
+            token = base64.b64encode(f"{settings.LANGFUSE_PUBLIC_KEY}:{settings.LANGFUSE_SECRET_KEY}".encode()).decode()
+            host = settings.LANGFUSE_HOST.rstrip("/")
+            exporter = OTLPSpanExporter(endpoint=f"{host}/api/public/otel/v1/traces", headers={"Authorization": f"Basic {token}"})
+        elif settings.TEMPO_HOST and settings.TEMPO_USERNAME and settings.TEMPO_PASSWORD:
             # Grafana Cloud Tempo -- real OTLP/HTTP export with Basic Auth,
             # same real per-stack "host + username + password" shape as
             # Loki above (api/security/loki_handler.py's own docstring).
@@ -91,10 +104,20 @@ def setup_tracing(app) -> None:
         _instrumented = True
         logger.info(
             "OpenTelemetry tracing enabled (service=%s, exporter=%s)",
-            settings.OTEL_SERVICE_NAME, "otlp" if settings.OTEL_EXPORTER_OTLP_ENDPOINT else "console",
+            settings.OTEL_SERVICE_NAME, _active_exporter_name(),
         )
     except Exception:
         logger.warning("OpenTelemetry setup failed -- tracing stays disabled", exc_info=True)
+
+
+def _active_exporter_name() -> str:
+    if settings.LANGFUSE_HOST and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+        return "langfuse"
+    if settings.TEMPO_HOST and settings.TEMPO_USERNAME and settings.TEMPO_PASSWORD:
+        return "tempo"
+    if settings.OTEL_EXPORTER_OTLP_ENDPOINT:
+        return "otlp"
+    return "console"
 
 
 def tracing_status() -> dict:
@@ -102,7 +125,7 @@ def tracing_status() -> dict:
         "enabled": settings.OTEL_ENABLED,
         "active": _instrumented,
         "service_name": settings.OTEL_SERVICE_NAME,
-        "exporter": "otlp" if settings.OTEL_EXPORTER_OTLP_ENDPOINT else "console",
+        "exporter": _active_exporter_name(),
         "otlp_endpoint": settings.OTEL_EXPORTER_OTLP_ENDPOINT,
         "sampler_ratio": settings.OTEL_TRACES_SAMPLER_ARG,
     }

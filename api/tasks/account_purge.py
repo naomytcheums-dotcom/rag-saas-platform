@@ -72,6 +72,31 @@ def purge_deleted_accounts() -> int:
                     .limit(1)
                 )
                 if other_members is None:
+                    # Hardening Mission, Phase 6 -- same real GDPR purge
+                    # as api/routers/organizations.py's own direct
+                    # delete_organization route (this task is the OTHER
+                    # real path an organization can disappear through --
+                    # its last member being hard-deleted). asyncio.run,
+                    # not await: this task's own module docstring already
+                    # explains why it stays on a plain sync SQLAlchemy
+                    # engine (Celery's sync-by-default worker model), and
+                    # both purge functions are pure async def (filesystem/
+                    # Qdrant I/O, no shared DB session needed).
+                    import asyncio
+
+                    try:
+                        from api.services.mem0_service import purge_organization_memory
+
+                        asyncio.run(purge_organization_memory(org_id))
+                    except Exception:  # noqa: BLE001
+                        logger.warning("purge_deleted_accounts: mem0 purge failed for organization %s, continuing", org_id)
+                    try:
+                        from api.services.graph_rag import purge_organization_graph
+
+                        asyncio.run(purge_organization_graph(org_id))
+                    except Exception:  # noqa: BLE001
+                        logger.warning("purge_deleted_accounts: GraphRAG purge failed for organization %s, continuing", org_id)
+
                     db.execute(delete(Organization).where(Organization.id == org_id))
 
             db.execute(delete(User).where(User.id == user.id))

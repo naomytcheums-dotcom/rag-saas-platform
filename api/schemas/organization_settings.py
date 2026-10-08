@@ -16,6 +16,20 @@ class OrganizationSettingsResponse(BaseModel):
     chunk_size: int
     chunk_overlap: int
     chunking_strategy: str
+    pdf_extraction_engine: str
+    pii_masking_enabled: bool
+    graphrag_enabled: bool
+    # Hardening Mission (§39, docs-must-match-code) -- a real, confirmed
+    # gap: these 4 keys were already genuinely stored, read, and applied
+    # by their own real call sites (api/security/organization_settings.py's
+    # own DEFAULT_SETTINGS docstring), but were never added to this
+    # response schema -- `GET /organizations/{org_id}/settings` silently
+    # omitted them from every response, with no way for a caller to even
+    # discover they existed.
+    policy_aware_retrieval_enabled: bool
+    prompt_injection_detection_enabled: bool
+    adaptive_routing_enabled: bool
+    cost_budget_per_request: float | None
     # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
     # when chunking_strategy="parent_child" (api/security/documents.py);
     # the other 7 strategies keep using chunk_size/chunk_overlap above,
@@ -57,6 +71,12 @@ class OrganizationSettingsResponse(BaseModel):
     mmr_enabled: bool
     mmr_lambda: float
     context_compression_enabled: bool
+    # Hardening Mission (§6, cost control) -- real, organization-level
+    # spend caps; `None` means "no cap" (see
+    # api/security/organization_settings.py's own DEFAULT_SETTINGS
+    # docstring for how this differs from Credit.balance).
+    daily_credit_limit: int | None
+    monthly_credit_limit: int | None
 
 
 class OrganizationSettingsUpdateRequest(BaseModel):
@@ -77,6 +97,17 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # `CHUNKING_STRATEGIES` tuple `chunk_content`'s own dispatch uses,
     # not a second, independently-typed literal that could drift.
     chunking_strategy: Literal[*CHUNKING_STRATEGIES] | None = None
+    pdf_extraction_engine: Literal["pymupdf", "docling"] | None = None
+    pii_masking_enabled: bool | None = None
+    graphrag_enabled: bool | None = None
+    # Hardening Mission (§39, docs-must-match-code) -- same real gap as
+    # OrganizationSettingsResponse above: these 4 were never writable
+    # through this endpoint at all, forcing anyone who wanted to turn
+    # them on to edit the DB row directly.
+    policy_aware_retrieval_enabled: bool | None = None
+    prompt_injection_detection_enabled: bool | None = None
+    adaptive_routing_enabled: bool | None = None
+    cost_budget_per_request: float | None = Field(default=None, ge=0.0)
     # Phase 4, Étape 1 (correctif config parent_child) -- same real
     # upper bound as chunk_size (a "tokens per chunk" ceiling is the
     # same real concept regardless of which strategy uses it, no second,
@@ -87,10 +118,10 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     child_chunk_overlap: int | None = Field(default=None, ge=0, description="Token overlap between consecutive child chunks (parent_child strategy only)")
     embedding_model: str | None = Field(default=None, min_length=1, max_length=200)
     # Widened for Partie 4.1.1-4.1.6's own real, now-supported providers
-    # (was 3 -- anthropic/openai/gemini only). See
-    # api/services/llm_providers.py's own top docstring for the real
-    # dispatch behind each of these 6.
-    llm_provider: Literal["anthropic", "openai", "gemini", "mistral", "ollama", "openai_compatible"] | None = None
+    # (was 3 -- anthropic/openai/gemini only), then again for `watsonx`
+    # (IBM Granite). See api/services/llm_providers.py's own top
+    # docstring for the real dispatch behind each of these 7.
+    llm_provider: Literal["anthropic", "openai", "gemini", "mistral", "ollama", "openai_compatible", "watsonx"] | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=200)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     # Partie 4.3.3 -- real, standard nucleus-sampling bounds.
@@ -136,6 +167,13 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     mmr_enabled: bool | None = None
     mmr_lambda: float | None = Field(default=None, ge=0.0, le=1.0, description="MMR relevance/diversity trade-off: 0 = max diversity, 1 = max relevance")
     context_compression_enabled: bool | None = None
+    # Hardening Mission (§6, cost control) -- 0 is a real, deliberate
+    # valid value (an Owner can genuinely freeze all real spend without
+    # deleting the cap entirely); `None` (the default) leaves the
+    # existing cap, or "no cap", untouched -- same partial-update
+    # convention as every other field in this schema.
+    daily_credit_limit: int | None = Field(default=None, ge=0)
+    monthly_credit_limit: int | None = Field(default=None, ge=0)
 
     @field_validator("timezone")
     @classmethod

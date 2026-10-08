@@ -1,0 +1,9 @@
+P2C-10 — static inventory of indirect tenant paths
+Date: 2026-10-03
+Command: (Get-Content docs\security\INDIRECT_TENANT_AUDIT.md | Select-String -CaseSensitive -Pattern '^\| [a-z_]+ \|').Count
+Result: 63 table rows.
+Artifact: docs/security/INDIRECT_TENANT_AUDIT.md
+Scope: static ORM/FK path candidates and conservative source references.
+UNKNOWN entries remain UNKNOWN; no runtime authorization, SQL execution,
+PostgreSQL catalog or database connection was performed.
+Exit code: 0.

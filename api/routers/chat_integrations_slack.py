@@ -15,7 +15,7 @@ from api.security.permissions import require_permission
 from api.security.audit_log import log_audit_action
 from api.security.chat_integrations_signature import verify_slack_signature
 from api.security.organizations import require_org_admin
-from api.utils import client_ip
+from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.slack import (
     SlackIntegrationError, get_oauth_url, handle_oauth_callback, process_slack_message, save_integration,
     send_slack_response, validate_slack_config,
@@ -105,7 +105,7 @@ async def slack_events_endpoint(
     if not verify_slack_signature(x_slack_request_timestamp, body, x_slack_signature):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Slack signature")
 
-    payload = await request.json()
+    payload = await read_json_object(request)
     if payload.get("type") == "url_verification":
         return {"challenge": payload.get("challenge")}
 

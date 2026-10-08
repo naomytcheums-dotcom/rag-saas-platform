@@ -335,6 +335,73 @@ def resolve_mmr_candidate_k(org_settings: dict | None = None, override: int | No
     return effective_top_k * 3
 
 
+def resolve_graphrag_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """New resolver -- per-organization gate for `api.services.graph_rag`'s
+    real GraphRAG query path, wired into `search()` below (see that
+    function's own docstring for the real integration: a graph query
+    result becomes one additional, real pseudo-chunk merged alongside
+    the existing BM25/vector candidates, never a replacement for them).
+    Default `False` (same rétrocompatibilité discipline as every other
+    resolver in this section) -- an organization that never touches this
+    setting, or one that has `graphrag_enabled` on but never ingested
+    any document into its graph (`api.security.documents.process_document`'s
+    own real ingestion gate, same setting), gets EXACTLY the pre-existing
+    retrieval behavior."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("graphrag_enabled") is not None:
+        value = org_settings["graphrag_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["graphrag_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid graphrag_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_policy_aware_retrieval_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """Systèmes internes, item 22 -- per-organization gate for
+    `api.services.policy_aware_retrieval.filter_chunks_by_policy`,
+    wired into `search()` below. Default `False` (same rétrocompatibilité
+    discipline as every other resolver in this section) -- an
+    organization that never touches this setting, or one that enables
+    it without a real, reachable OPA server + real Rego policies
+    actually configured, gets EXACTLY the pre-existing retrieval
+    behavior (item 13's own real `check_policy` already fails open in
+    that case)."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("policy_aware_retrieval_enabled") is not None:
+        value = org_settings["policy_aware_retrieval_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["policy_aware_retrieval_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid policy_aware_retrieval_enabled: {value!r} (must be a boolean)")
+    return value
+
+
+def resolve_adaptive_routing_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
+    """Systèmes internes, item 25 -- per-organization gate for
+    `api.services.query_router.suggest_retrieval_strategy`, wired into
+    `search()` below. Only ever consulted when a real caller passed NO
+    explicit `strategy` override -- an explicit override always wins,
+    same real precedence as every other resolver in this module.
+    Default `False` -- an organization that never touches this setting
+    keeps its own real, configured `retrieval_strategy` exactly as
+    before."""
+    if override is not None:
+        value = override
+    elif org_settings is not None and org_settings.get("adaptive_routing_enabled") is not None:
+        value = org_settings["adaptive_routing_enabled"]
+    else:
+        value = DEFAULT_SETTINGS["adaptive_routing_enabled"]
+
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid adaptive_routing_enabled: {value!r} (must be a boolean)")
+    return value
+
+
 def resolve_context_compression_enabled(org_settings: dict | None = None, override: bool | None = None) -> bool:
     """New Étape 2 resolver -- per-organization gate for
     `api.services.context_compression`'s real pre-generation compression

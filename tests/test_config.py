@@ -80,6 +80,10 @@ def test_support_email_is_required():
     assert Settings.model_fields["SUPPORT_EMAIL"].is_required()
 
 
+def test_unpaid_credit_topups_are_disabled_by_default():
+    assert Settings.model_fields["CREDITS_ALLOW_UNPAID_TOPUP"].default is False
+
+
 def test_database_url_rejects_the_plain_postgresql_driver():
     """Not new this session -- just previously untested directly (only
     ever exercised implicitly by every other test using the real,
@@ -89,3 +93,16 @@ def test_database_url_rejects_the_plain_postgresql_driver():
     touches the database."""
     with pytest.raises(ValidationError):
         _settings(DATABASE_URL="postgresql://user:password@localhost:5432/db")
+
+
+def test_enabling_an_unimplemented_llm_judged_quality_path_is_refused_at_startup(monkeypatch):
+    import pytest
+    from pydantic import ValidationError
+
+    from api.config import Settings
+
+    for name in ("ANSWER_RELEVANCE_USE_LLM", "CONTEXT_RELEVANCE_USE_LLM", "CLAIM_VERIFICATION_USE_LLM"):
+        monkeypatch.setenv(name, "true")
+        with pytest.raises(ValidationError, match=name):
+            Settings()
+        monkeypatch.delenv(name)

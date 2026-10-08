@@ -47,8 +47,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
-from api.models.billing import PaymentCustomer, PaymentEvent, PaymentProvider
-from api.services.billing_providers.base import ProviderNotConfiguredError
+from api.models.billing import PaymentCustomer, PaymentProvider
+from api.services.billing_providers.base import ProviderNotConfiguredError, claim_payment_event
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,11 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
     object_id = str(data.get("id", data.get("subscription_code", "")))
     event_id = f"{event_type}:{object_id}"
 
-    if await db.get(PaymentEvent, (PaymentProvider.paystack, event_id)) is not None:
+    # Hardening Mission (§5, webhook anti-replay) -- same atomic claim
+    # as billing_stripe.handle_stripe_webhook; see claim_payment_event's
+    # own docstring for the real concurrent-duplicate-delivery race it
+    # closes.
+    if not await claim_payment_event(db, PaymentProvider.paystack, event_id, event_type, object_id):
         return False
 
     org_id = (data.get("metadata") or {}).get("organization_id")
@@ -232,8 +236,6 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
 
                 await notify_billing_payment_failed(db, uuid.UUID(org_id))
 
-    db.add(PaymentEvent(provider=PaymentProvider.paystack, id=event_id, type=event_type, payload_summary=object_id))
-    await db.flush()
     return True
 
 
