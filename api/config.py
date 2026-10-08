@@ -1159,6 +1159,14 @@ class Settings(BaseSettings):
     GEO_IP_API_URL: str = "https://ipapi.co/{ip}/country/"
     GEO_IP_LOOKUP_TIMEOUT_SECONDS: float = 2.0
     GEO_IP_CACHE_TTL_SECONDS: int = 3600
+
+    # Display currency of the public price list (api/services/display_currency.py): plans are billed in EUR, this only changes how they are shown.
+    # The rates come from a free public service (no key), cached; CFA/CFP/Comorian francs use their fixed official parity with the euro.
+    DISPLAY_CURRENCY_ENABLED: bool = True
+    DISPLAY_CURRENCY_RATES_URL: str = "https://open.er-api.com/v6/latest/EUR"
+    DISPLAY_CURRENCY_RATES_TTL_SECONDS: int = 12 * 3600
+    DISPLAY_CURRENCY_TIMEOUT_SECONDS: float = 3.0
+    DISPLAY_CURRENCY_ATTRIBUTION_URL: str = "https://www.exchangerate-api.com"
     TRUSTED_COUNTRIES: str = ""
     SUSPICIOUS_COUNTRIES: str = ""
     GEO_RATE_LIMIT_TRUSTED_MULTIPLIER: float = 2.0

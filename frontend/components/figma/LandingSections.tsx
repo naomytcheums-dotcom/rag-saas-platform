@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { EURO, formatEuroCents, useDisplayCurrency } from "@/lib/currency";
 import { useTranslation } from "@/lib/i18n";
 import { FaqShapesLayer, ParticlesLayer, SwooshLayer } from "./artwork";
 
@@ -110,44 +111,16 @@ function InfoCards({ id, title, subtitle, items, columns }: { id?: string; title
   );
 }
 
-// Each item names a real, already-shipped feature (api/models/admin.py credits, api/services/llm_byok.py) -- not aspirational copy.
-const AI_ITEMS = [
-  { title: "Crédits IA inclus", description: "Chaque forfait payant inclut un pack de crédits IA renouvelé chaque mois, sans configuration." },
-  { title: "Facturation transparente", description: "1 crédit = 1 requête, 100 tokens en entrée ou 50 en sortie — visible en temps réel dans votre tableau de bord." },
-  { title: "Crédits supplémentaires à la demande", description: "Besoin de plus ? Achetez un pack de crédits supplémentaire à tout moment, sans changer de forfait." },
-  { title: "BYOK — utilisez votre propre clé", description: "Connectez votre propre clé API (Anthropic, OpenAI, Gemini, Mistral...) : vos appels sont alors facturés directement par votre fournisseur, jamais sur vos crédits." },
-];
-
-// Each item names a real, already-shipped feature (api/security/, api/models/) -- not aspirational marketing copy.
-const SECURITY_ITEMS = [
-  { title: "Chiffrement des données sensibles", description: "Champs sensibles chiffrés au repos, avec rotation des clés." },
-  { title: "Authentification à deux facteurs", description: "TOTP et clés de sécurité WebAuthn/FIDO2, en plus du mot de passe." },
-  { title: "Journal d'audit complet", description: "Chaque action sensible est tracée : qui, quand, depuis quelle adresse IP." },
-  { title: "RGPD / CCPA", description: "Export et suppression de vos données à la demande, gestion du consentement intégrée." },
-  { title: "Rôles et permissions granulaires", description: "Rôles personnalisés, permissions précises par ressource et par action." },
-  { title: "Détection de vulnérabilités", description: "Analyses de sécurité réelles (dépendances, code, secrets, conteneurs) intégrées au produit." },
-];
-
 export function AiCreditsSection() {
-  return (
-    <InfoCards
-      title="IA incluse"
-      subtitle="Un pack de crédits IA est inclus dans chaque forfait — ou utilisez votre propre clé API si vous préférez garder le contrôle total de votre facturation IA."
-      items={AI_ITEMS}
-      columns="md:grid-cols-2"
-    />
-  );
+  const { t } = useTranslation();
+  const items = [1, 2, 3, 4].map((n) => ({ title: t(`lp.credits.${n}.title`), description: t(`lp.credits.${n}.desc`) }));
+  return <InfoCards title={t("lp.credits.title")} subtitle={t("lp.credits.subtitle")} items={items} columns="md:grid-cols-2" />;
 }
 
 export function SecuritySection() {
-  return (
-    <InfoCards
-      title="Sécurité et conformité"
-      subtitle="Conçu pour des équipes qui manipulent des données sensibles, pas seulement des cas d'usage de démonstration."
-      items={SECURITY_ITEMS}
-      columns="md:grid-cols-2 lg:grid-cols-3"
-    />
-  );
+  const { t } = useTranslation();
+  const items = [1, 2, 3, 4, 5, 6].map((n) => ({ title: t(`lp.security.${n}.title`), description: t(`lp.security.${n}.desc`) }));
+  return <InfoCards title={t("lp.security.title")} subtitle={t("lp.security.subtitle")} items={items} columns="md:grid-cols-2 lg:grid-cols-3" />;
 }
 
 /* ------------------------------------------------------------------ pricing */
@@ -164,11 +137,6 @@ interface Plan {
   priority_support: boolean;
   advanced_features: boolean;
   sla: boolean;
-}
-
-function money(cents: number): string {
-  if (cents === 0) return "Gratuit";
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(cents / 100);
 }
 
 function yearlySavingPercent(plan: Plan): number {
@@ -190,6 +158,8 @@ function GlowButton({ href, children }: { href: string; children: ReactNode }) {
 
 // Real /billing/plans data (the same public endpoint the billing page reads): nothing invented, what a visitor sees is what they are charged.
 export function PricingSection() {
+  const { t, language } = useTranslation();
+  const currency = useDisplayCurrency();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [error, setError] = useState(false);
   const [yearly, setYearly] = useState(false);
@@ -206,13 +176,13 @@ export function PricingSection() {
       <ArtWindow y={2640} height={1100}><SwooshLayer /></ArtWindow>
       <div className="relative mx-auto flex max-w-[1200px] flex-col items-center gap-[45px]">
         <div className="flex max-w-[780px] flex-col items-center gap-5 text-center">
-          <Heading>Choisissez le forfait<br />qui vous convient</Heading>
-          <p className="text-[20px] leading-6 text-[#d9d9d9]">Commencez gratuitement, passez à l&apos;échelle quand vous en avez besoin. Aucune carte bancaire requise pour démarrer.</p>
+          <Heading>{t("lp.pricing.title1")}<br />{t("lp.pricing.title2")}</Heading>
+          <p className="text-[20px] leading-6 text-[#d9d9d9]">{t("lp.pricing.subtitle")}</p>
         </div>
 
         {hasYearly && (
-          <div className="flex rounded-[333px] bg-white/10 p-[10px]" role="group" aria-label="Période de facturation">
-            {[{ label: "Mensuel", value: false }, { label: "Annuel", value: true }].map((option) => (
+          <div className="flex rounded-[333px] bg-white/10 p-[10px]" role="group" aria-label={t("lp.pricing.period")}>
+            {[{ label: t("lp.pricing.monthly"), value: false }, { label: t("lp.pricing.yearly"), value: true }].map((option) => (
               <button
                 key={option.label}
                 type="button"
@@ -226,10 +196,17 @@ export function PricingSection() {
           </div>
         )}
 
+        {currency.source === "market" && (
+          <p className="max-w-[640px] text-center text-[13px] leading-5 text-white/55">
+            {t("lp.pricing.rates_note")}{" "}
+            <a href={currency.attributionUrl ?? "https://www.exchangerate-api.com"} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">ExchangeRate-API</a>.
+          </p>
+        )}
+
         {error && !plans ? (
           <div className="rounded-[20px] border border-white/10 bg-[#1b1b1c] p-8 text-center">
-            <p className="text-[16px] text-white/75">Les tarifs sont momentanément indisponibles.</p>
-            <button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-4 rounded-[10px] bg-[#ff541f] px-[35px] py-[12px] text-[18px] font-bold text-white">Réessayer</button>
+            <p className="text-[16px] text-white/75">{t("lp.pricing.unavailable")}</p>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-4 rounded-[10px] bg-[#ff541f] px-[35px] py-[12px] text-[18px] font-bold text-white">{t("lp.pricing.retry")}</button>
           </div>
         ) : !plans ? (
           <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="h-80 animate-pulse rounded-[20px] bg-[#1b1b1c]" />)}</div>
@@ -242,13 +219,15 @@ export function PricingSection() {
               const first = index === 0;
               const last = index === plans.length - 1;
               const lines = [
-                `${plan.max_documents ?? "Illimité"} documents`,
-                `${plan.max_agents ?? "Illimité"} agents`,
-                `${plan.max_members ?? "Illimité"} membres`,
-                ...(plan.priority_support ? ["Support prioritaire"] : []),
-                ...(plan.advanced_features ? ["Fonctionnalités avancées"] : []),
-                ...(plan.sla ? ["SLA"] : []),
+                t("lp.pricing.documents", { n: plan.max_documents ?? t("lp.pricing.unlimited") }),
+                t("lp.pricing.agents", { n: plan.max_agents ?? t("lp.pricing.unlimited") }),
+                t("lp.pricing.members", { n: plan.max_members ?? t("lp.pricing.unlimited") }),
+                ...(plan.priority_support ? [t("lp.pricing.priority")] : []),
+                ...(plan.advanced_features ? [t("lp.pricing.advanced")] : []),
+                ...(plan.sla ? [t("lp.pricing.sla")] : []),
               ];
+              const cents = showYearly ? plan.yearly_price_cents : plan.monthly_price_cents;
+              const local = currency.code !== "EUR" && cents > 0;
               return (
                 <div
                   key={plan.id}
@@ -260,15 +239,18 @@ export function PricingSection() {
                 >
                   <div className="flex w-full flex-col items-start gap-6 px-8">
                     <p className={highlighted ? "text-[30px] text-[#ff541f]" : "text-[18px] text-white"}>{plan.name}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[40px] font-bold tracking-[-1.6px] text-white">{money(showYearly ? plan.yearly_price_cents : plan.monthly_price_cents)}</span>
-                      {plan.monthly_price_cents > 0 && <span className="text-[16px] text-white/75">{showYearly ? "/ an" : "/ mois"}</span>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[40px] font-bold tracking-[-1.6px] text-white">
+                        {cents === 0 ? t("lp.pricing.free") : `${local ? "\u2248 " : ""}${formatEuroCents(cents, currency, language)}`}
+                      </span>
+                      {plan.monthly_price_cents > 0 && <span className="text-[16px] text-white/75">{showYearly ? t("lp.pricing.per_year") : t("lp.pricing.per_month")}</span>}
                       {showYearly && saving > 0 && <span className="rounded-[24px] bg-[#ff541f] px-2 py-[5px] text-[12px] leading-[14px] text-white">-{saving}%</span>}
                     </div>
+                    {local && <p className="-mt-3 text-[14px] text-white/60">{t("lp.pricing.billed_in", { price: formatEuroCents(cents, EURO, language) })}</p>}
                   </div>
                   <div className="h-px w-full bg-gradient-to-r from-white/0 via-white/20 to-white/0" />
                   <div className="flex w-full flex-1 flex-col items-start gap-[15px] px-8">
-                    <p className="text-[16px] text-white/75">Inclus dans ce forfait</p>
+                    <p className="text-[16px] text-white/75">{t("lp.pricing.included")}</p>
                     <ul className="flex w-full flex-col gap-[14px]">
                       {lines.map((line) => (
                         <li key={line} className="flex items-start gap-3">
@@ -278,7 +260,7 @@ export function PricingSection() {
                       ))}
                     </ul>
                   </div>
-                  <GlowButton href="/register">Choisir {plan.name}</GlowButton>
+                  <GlowButton href="/register">{t("lp.pricing.choose", { plan: plan.name })}</GlowButton>
                 </div>
               );
             })}
@@ -291,27 +273,20 @@ export function PricingSection() {
 
 /* ------------------------------------------------------------------ FAQ (five questions, like the mock-up) */
 
-// Answers describe real, already-shipped behavior of this app, not marketing claims about features that don't exist yet.
-const FAQ_ITEMS = [
-  { question: "Quels formats de documents puis-je envoyer ?", answer: "PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML et EPUB. Chaque document est automatiquement découpé, vectorisé et indexé pour la recherche sémantique." },
-  { question: "Mes données sont-elles utilisées pour entraîner un modèle tiers ?", answer: "Non. Vos documents servent uniquement à ancrer les réponses de vos propres agents (retrieval-augmented generation), pas à entraîner un modèle partagé avec d'autres clients." },
-  { question: "Puis-je déployer un agent sur mon propre site web ?", answer: "Oui, via un widget de chat embarquable (une seule balise script) personnalisable en couleurs, position et message d'accueil, ou via l'API publique pour une intégration sur mesure." },
-  { question: "Quelle différence entre un agent, un agent autonome et un workflow ?", answer: "Un agent répond à vos questions à partir de vos documents. Un agent autonome planifie et exécute des tâches seul, avec des outils, une mémoire et des garde-fous. Un workflow enchaîne appels LLM, outils, conditions et validations humaines. Le laboratoire d'évaluation mesure ensuite la qualité des réponses." },
-  { question: "Le produit gère-t-il plusieurs organisations et rôles ?", answer: "Oui : organisations multi-tenant, rôles Propriétaire/Admin/Manager/Membre/Lecteur, rôles personnalisés avec permissions précises, et marque blanche pour proposer la plateforme sous votre propre marque." },
-];
-
 export function FaqSection() {
+  const { t } = useTranslation();
+  const items = [1, 2, 3, 4, 5].map((n) => ({ question: t(`lp.faq.${n}.q`), answer: t(`lp.faq.${n}.a`) }));
   const [open, setOpen] = useState<number | null>(0);
   return (
     <section id="faq" className="relative px-6 py-24">
       <ArtWindow y={3640} height={1200}><FaqShapesLayer /></ArtWindow>
       <div className="relative mx-auto flex max-w-[892px] flex-col items-center gap-[76px]">
         <div className="flex max-w-[830px] flex-col items-center gap-[29px] text-center">
-          <Heading>Questions<br />fréquentes</Heading>
-          <p className="text-[20px] leading-[28px] text-[#d9d9d9]">Une question ? Voici les réponses essentielles sur la plateforme, les forfaits et les fonctionnalités.</p>
+          <Heading>{t("lp.faq.title1")}<br />{t("lp.faq.title2")}</Heading>
+          <p className="text-[20px] leading-[28px] text-[#d9d9d9]">{t("lp.faq.subtitle")}</p>
         </div>
         <div className="flex w-full flex-col gap-[22px]">
-          {FAQ_ITEMS.map((item, index) => {
+          {items.map((item, index) => {
             const isOpen = open === index;
             return (
               <div key={item.question} className="w-full border-b-[1.2px] border-white/10 p-6">

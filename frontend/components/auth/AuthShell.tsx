@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import type { InputHTMLAttributes, ReactNode } from "react";
-import { ArtWindow } from "@/components/figma/LandingSections";
 import { HeroArtLayer } from "@/components/figma/artwork";
+import Stage from "@/components/figma/Stage";
 
 /**
  * Card used by every authentication page (login, register, forgot / reset password, two-factor code).
@@ -12,7 +12,9 @@ import { HeroArtLayer } from "@/components/figma/artwork";
 export default function AuthShell({ title, subtitle, error, children, footer }: { title: string; subtitle?: string; error?: string | null; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#010101] px-4 py-10">
-      <ArtWindow y={0} height={972}><HeroArtLayer /></ArtWindow>
+      <div className="pointer-events-none absolute inset-x-0 top-0" aria-hidden>
+        <Stage width={1440} height={972}><div className="relative h-[972px] w-[1440px] overflow-hidden"><HeroArtLayer /></div></Stage>
+      </div>
       <Link href="/" className="relative mb-8 text-[26px] font-bold tracking-wide text-white" aria-label="RAG SaaS Platform">RAG SaaS Platform</Link>
       <div
         className="relative w-full max-w-[420px] rounded-xl px-10 py-[30px] text-white shadow-md backdrop-blur-[9px]"

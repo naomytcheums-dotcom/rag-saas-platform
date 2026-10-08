@@ -38,7 +38,7 @@ from api.models.user import User
 from api.schemas.billing import (
     BillingCountryResponse, BillingCountryUpdateRequest, BillingProviderResponse, CancelSubscriptionRequest,
     CheckoutSessionRequest, CheckoutSessionResponse, CreateUsageAlertRequest, CreditResponse,
-    CreditTransactionResponse, InvoiceDetailResponse, InvoiceResponse, InvoiceStatsResponse, PaymentMethodResponse,
+    CreditTransactionResponse, DisplayCurrencyResponse, InvoiceDetailResponse, InvoiceResponse, InvoiceStatsResponse, PaymentMethodResponse,
     PlanResponse, PortalSessionResponse, ProviderInvoiceResponse, PurchaseCreditsRequest, StripeInvoiceResponse,
     SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest,
 )
@@ -46,16 +46,23 @@ from api.security.permissions import require_permission
 from api.security.credit_packs import CREDIT_PACKS, get_credit_pack
 from api.security.organizations import require_org_admin, require_org_member, require_org_owner
 from api.services import admin_subscriptions, billing_credits, billing_invoices, billing_stripe, billing_usage
+from api.services.display_currency import resolve_display_currency
 from api.services.admin_subscriptions import PlanNotFoundError, SubscriptionNotFoundError
 from api.services.billing_providers.base import ProviderNotConfiguredError
 from api.services.billing_providers.registry import resolve_provider_for_organization
-from api.utils import MAX_PAGE_SIZE
+from api.utils import MAX_PAGE_SIZE, client_ip
 
 router = APIRouter(tags=["Billing"])
 org_router = APIRouter(prefix="/organizations/{org_id}/billing", tags=["Billing"])
 
 
 # -- 12.1 plans (public catalog) ---------------------------------------------
+
+@router.get("/billing/display-currency", response_model=DisplayCurrencyResponse)
+async def display_currency_endpoint(request: Request, country: str | None = Query(None, min_length=2, max_length=2)):
+    """Public. The currency (and a language suggestion) for the visitor, from an explicit `country` hint, else their IP, else their browser language."""
+    return await resolve_display_currency(accept_language=request.headers.get("accept-language"), ip=client_ip(request), country_hint=country)
+
 
 @router.get("/billing/plans", response_model=list[PlanResponse])
 async def list_plans_endpoint(db: AsyncSession = Depends(get_db)):

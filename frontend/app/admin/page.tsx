@@ -1,6 +1,7 @@
 "use client";
 
 import LoadingState from "@/components/LoadingState";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -118,22 +119,13 @@ type AccessState = "checking" | "granted" | "denied";
 
 const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL_KEYS: Record<Tab, string> = {
-  Overview: "admin.tab_overview",
-  Organizations: "admin.tab_orgs",
-  Users: "admin.tab_users",
-  Subscriptions: "admin.tab_subscriptions",
-  Monitoring: "admin.tab_monitoring",
-  Logs: "admin.tab_logs",
-  Alerting: "admin.tab_alerting",
-};
-
 export default function AdminPage() {
   const { user, loading } = useRequireAuth();
   const { t } = useTranslation();
   const [access, setAccess] = useState<AccessState>("checking");
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Overview");
+  const tabParam = useSearchParams().get("tab") ?? "";
+  const tab: Tab = (TABS as readonly string[]).includes(tabParam) ? (tabParam as Tab) : "Overview";
 
   useEffect(() => {
     if (loading || !user) return;
@@ -155,7 +147,7 @@ export default function AdminPage() {
 
   if (access === "denied") {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
         <h1 className="text-lg font-semibold text-foreground">{t("admin.access_denied_title")}</h1>
         <p className="max-w-sm text-sm text-foreground-muted">
           Cette section est réservée aux administrateurs de la plateforme. Votre compte n&apos;a pas ce rôle.
@@ -166,26 +158,11 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <h1 className="text-xl font-semibold text-foreground">{t("admin.title")}</h1>
-      <p className="mt-1 text-sm text-foreground-muted">{t("admin.subtitle")}</p>
+    <div className="mx-auto max-w-6xl">
+      <h1 className="text-3xl font-bold tracking-tight text-[#211c37]">{t("admin.title")}</h1>
+      <p className="mt-1 text-lg text-foreground-muted">{t("admin.subtitle")}</p>
 
-      <div className="mt-5 flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((tabKey) => (
-          <button
-            key={tabKey}
-            type="button"
-            onClick={() => setTab(tabKey)}
-            className={`px-3 py-2 text-sm font-medium transition-colors ${
-              tab === tabKey ? "border-b-2 border-accent text-accent-hover" : "text-foreground-muted hover:text-foreground"
-            }`}
-          >
-            {t(TAB_LABEL_KEYS[tabKey])}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-5">
+      <div className="mt-7">
         {tab === "Overview" && <OverviewTab />}
         {tab === "Organizations" && <OrganizationsTab />}
         {tab === "Users" && <UsersTab />}
@@ -200,9 +177,9 @@ export default function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <p className="text-xs font-semibold uppercase text-foreground-muted">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+    <div className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

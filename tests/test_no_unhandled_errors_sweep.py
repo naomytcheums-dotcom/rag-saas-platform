@@ -235,6 +235,7 @@ PUBLIC_BY_DESIGN = {
     "GET /api/versions",
     "GET /api/versions/{version}",
     "GET /billing/plans",
+    "GET /billing/display-currency",
     "GET /billing/plans/{plan_id}",
     "GET /i18n/detect",
     "GET /i18n/languages",
