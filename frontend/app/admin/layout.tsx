@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeft, Bell, Building2, CreditCard, LayoutDashboard, ScrollText, Users } from "lucide-react";
+import { Activity, ArrowLeft, Bell, Building2, ChartColumn, CreditCard, LayoutDashboard, ScrollText, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import AppShell, { type NavSection } from "@/components/dashboard/AppShell";
 import { useTranslation } from "@/lib/i18n";
@@ -13,6 +13,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       label: t("admin.title"),
       items: [
         { href: "/admin?tab=Overview", label: t("admin.tab_overview"), icon: LayoutDashboard },
+        { href: "/admin?tab=Business", label: t("analytics.tab_business"), icon: ChartColumn },
         { href: "/admin?tab=Organizations", label: t("admin.tab_orgs"), icon: Building2 },
         { href: "/admin?tab=Users", label: t("admin.tab_users"), icon: Users },
         { href: "/admin?tab=Subscriptions", label: t("admin.tab_subscriptions"), icon: CreditCard },

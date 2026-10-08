@@ -1,5 +1,7 @@
 "use client";
 
+import { BusinessMetrics } from "@/components/analytics/BusinessMetrics";
+import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import LoadingState from "@/components/LoadingState";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -117,7 +119,7 @@ interface AdminLogEntry {
 
 type AccessState = "checking" | "granted" | "denied";
 
-const TABS = ["Overview", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
+const TABS = ["Overview", "Business", "Organizations", "Users", "Subscriptions", "Monitoring", "Logs", "Alerting"] as const;
 type Tab = (typeof TABS)[number];
 export default function AdminPage() {
   const { user, loading } = useRequireAuth();
@@ -164,6 +166,7 @@ export default function AdminPage() {
 
       <div className="mt-7">
         {tab === "Overview" && <OverviewTab />}
+        {tab === "Business" && <BusinessTab />}
         {tab === "Organizations" && <OrganizationsTab />}
         {tab === "Users" && <UsersTab />}
         {tab === "Subscriptions" && <SubscriptionsTab />}
@@ -210,6 +213,16 @@ function OverviewTab() {
       <StatCard label={t("admin.arr")} value={`$${(stats.revenue.arr_cents / 100).toFixed(2)}`} />
       <StatCard label={t("admin.active_subscriptions")} value={stats.revenue.active_subscriptions} />
       <StatCard label={t("admin.churn_30d")} value={stats.revenue.churn_last_30d} />
+    </div>
+  );
+}
+
+function BusinessTab() {
+  const [dateRange, setDateRange] = useState("30d");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end"><DateRangePicker value={dateRange} onChange={setDateRange} /></div>
+      <BusinessMetrics dateRange={dateRange} />
     </div>
   );
 }

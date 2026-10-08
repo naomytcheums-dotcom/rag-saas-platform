@@ -20,9 +20,9 @@ describe("price display currency", () => {
     expect(currencyForCountry(null).code).toBe("EUR");
   });
 
-  it("converts with the official fixed peg, 655.957 CFA francs per euro (49 EUR = 32 142 XAF)", () => {
+  it("converts with the official fixed peg, 655.957 CFA francs per euro (49 EUR = 32 142 XAF, shown as the clean price point 32 000)", () => {
     const text = formatEuroCents(4900, currencyForCountry("CM"), "fr");
-    expect(digits(text)).toBe("32142");
+    expect(digits(text)).toBe("32000");
     expect(text).toMatch(/FCFA|XAF/);
   });
 
@@ -38,9 +38,9 @@ describe("currency answered by the server", () => {
     const usd = fromAnswer({ country: "US", currency: "USD", per_euro: 1.08, source: "market", attribution_url: null, language: null });
     expect(digits(formatEuroCents(4900, usd, "en"))).toBe("53");
     const jpy = fromAnswer({ country: "JP", currency: "JPY", per_euro: 165.4, source: "market", attribution_url: null, language: null });
-    expect(digits(formatEuroCents(4900, jpy, "en"))).toBe("8105");
+    expect(digits(formatEuroCents(4900, jpy, "en"))).toBe("8100");
     const mru = fromAnswer({ country: "MR", currency: "MRU", per_euro: 43.2, source: "market", attribution_url: null, language: "ar" });
-    expect(digits(formatEuroCents(4900, mru, "fr"))).toBe("2117");
+    expect(digits(formatEuroCents(4900, mru, "fr"))).toBe("2100");
   });
 
   it("falls back to euros when the answer is unusable", () => {

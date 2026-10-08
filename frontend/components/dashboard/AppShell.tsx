@@ -4,7 +4,7 @@ import { LogOut, Menu, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
-import LanguageSelector from "@/components/LanguageSelector";
+import LanguageMenu from "@/components/LanguageMenu";
 import LoadingState from "@/components/LoadingState";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
@@ -81,7 +81,6 @@ function Shell({ sections, brand, homeHref, children }: { sections: NavSection[]
         </nav>
 
         <div className="border-t border-border px-4 py-3">
-          <div className="mb-2"><LanguageSelector /></div>
           <p className="truncate text-xs text-foreground-muted">{user.email}</p>
           <button type="button" onClick={() => void logout()} className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
             <LogOut className="h-3.5 w-3.5" aria-hidden />
@@ -100,13 +99,14 @@ function Shell({ sections, brand, homeHref, children }: { sections: NavSection[]
             <div className="hidden min-w-0 flex-1 md:block">
               <QuickNav items={quickItems} placeholder={t("nav.search")} />
             </div>
-            <div className="flex shrink-0 items-center gap-2.5">
+            <div className="flex shrink-0 items-center gap-3">
+              <LanguageMenu />
               <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-accent-soft text-xs font-semibold uppercase text-accent" aria-hidden>{displayName.slice(0, 1)}</span>
               <span className="hidden max-w-[140px] truncate text-[13px] font-medium text-foreground sm:block">{displayName}</span>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto bg-surface p-5 md:p-8">{children}</main>
+        <main className={`flex-1 bg-surface ${pathname === "/chat" ? "overflow-hidden" : "overflow-y-auto p-5 md:p-8"}`}>{children}</main>
       </div>
     </div>
   );

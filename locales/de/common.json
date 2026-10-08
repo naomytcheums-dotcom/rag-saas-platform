@@ -910,5 +910,5 @@
   "lp.faq.4.a": "Ein Agent beantwortet Fragen aus Ihren Dokumenten. Ein autonomer Agent plant und führt Aufgaben selbstständig aus, mit Werkzeugen, Gedächtnis und Leitplanken. Ein Workflow verkettet LLM-Aufrufe, Werkzeuge, Bedingungen und menschliche Freigaben. Das Evaluierungslabor misst anschließend die Antwortqualität.",
   "lp.faq.5.q": "Verwaltet das Produkt mehrere Organisationen und Rollen?",
   "lp.faq.5.a": "Ja: mandantenfähige Organisationen, Rollen Eigentümer/Admin/Manager/Mitglied/Leser, eigene Rollen mit präzisen Berechtigungen und White-Label, um die Plattform unter Ihrer Marke anzubieten.",
-  "lp.pricing.rates_note": "Die Preise sind zum heutigen Wechselkurs nur zur Information umgerechnet; abgerechnet wird in Euro. Wechselkurse von"
+  "lp.footer.rates": "Wechselkurse:"
 }

@@ -11,6 +11,7 @@ export function useFineTuningDatasets(orgId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     setLoading(true);
     try {
       const response = await fineTuningService.listDatasets(orgId);

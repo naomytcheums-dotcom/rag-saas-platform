@@ -196,13 +196,6 @@ export function PricingSection() {
           </div>
         )}
 
-        {currency.source === "market" && (
-          <p className="max-w-[640px] text-center text-[13px] leading-5 text-white/55">
-            {t("lp.pricing.rates_note")}{" "}
-            <a href={currency.attributionUrl ?? "https://www.exchangerate-api.com"} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">ExchangeRate-API</a>.
-          </p>
-        )}
-
         {error && !plans ? (
           <div className="rounded-[20px] border border-white/10 bg-[#1b1b1c] p-8 text-center">
             <p className="text-[16px] text-white/75">{t("lp.pricing.unavailable")}</p>
@@ -241,7 +234,7 @@ export function PricingSection() {
                     <p className={highlighted ? "text-[30px] text-[#ff541f]" : "text-[18px] text-white"}>{plan.name}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[40px] font-bold tracking-[-1.6px] text-white">
-                        {cents === 0 ? t("lp.pricing.free") : `${local ? "\u2248 " : ""}${formatEuroCents(cents, currency, language)}`}
+                        {cents === 0 ? t("lp.pricing.free") : formatEuroCents(cents, currency, language)}
                       </span>
                       {plan.monthly_price_cents > 0 && <span className="text-[16px] text-white/75">{showYearly ? t("lp.pricing.per_year") : t("lp.pricing.per_month")}</span>}
                       {showYearly && saving > 0 && <span className="rounded-[24px] bg-[#ff541f] px-2 py-[5px] text-[12px] leading-[14px] text-white">-{saving}%</span>}
@@ -326,6 +319,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export function FooterSection() {
   const { t } = useTranslation();
+  const currency = useDisplayCurrency();
   const columns = [
     { title: t("landing.footer.product"), links: [
       { label: t("landing.footer.chat_demo"), href: "/chat" },
@@ -362,6 +356,12 @@ export function FooterSection() {
       </div>
       <p className="mx-auto mt-12 max-w-[1200px] border-t border-white/10 pt-6 text-[14px] text-white/60">
         © {new Date().getFullYear()} RAG SaaS Platform. {t("landing.footer.copyright")}
+        {currency.source === "market" && (
+          <>
+            {" "}{t("lp.footer.rates")}{" "}
+            <a href={currency.attributionUrl ?? "https://www.exchangerate-api.com"} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">ExchangeRate-API</a>
+          </>
+        )}
       </p>
     </footer>
   );

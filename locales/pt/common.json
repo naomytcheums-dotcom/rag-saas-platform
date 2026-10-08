@@ -910,5 +910,5 @@
   "lp.faq.4.a": "Um agente responde às suas perguntas a partir dos seus documentos. Um agente autónomo planeia e executa tarefas sozinho, com ferramentas, memória e limites. Um fluxo encadeia chamadas LLM, ferramentas, condições e aprovações humanas. O laboratório de avaliação mede depois a qualidade das respostas.",
   "lp.faq.5.q": "O produto gere várias organizações e funções?",
   "lp.faq.5.a": "Sim: organizações multi-inquilino, funções Proprietário/Admin/Gestor/Membro/Leitor, funções personalizadas com permissões precisas e marca branca para oferecer a plataforma sob a sua marca.",
-  "lp.pricing.rates_note": "Os preços são convertidos à taxa de câmbio de hoje a título informativo; a faturação é em euros. Taxas de"
+  "lp.footer.rates": "Taxas de câmbio:"
 }

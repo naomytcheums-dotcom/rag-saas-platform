@@ -62,11 +62,22 @@ export function fromAnswer(answer: DisplayCurrencyAnswer): DisplayCurrency {
   return { code: answer.currency, perEuro: answer.per_euro, source: answer.source, attributionUrl: answer.attribution_url };
 }
 
-/** Formats an amount given in euro cents in the display currency (whole units: no cents on a converted estimate). */
+/** Converted prices are shown as clean price points (32 142 -> 32 000, 52.92 -> 53), the way a price list is written, not as raw conversions. */
+function cleanPricePoint(amount: number): number {
+  if (amount >= 1000) {
+    const step = 10 ** (Math.floor(Math.log10(amount)) - 1);
+    return Math.round(amount / step) * step;
+  }
+  if (amount >= 100) return Math.round(amount / 5) * 5;
+  return Math.round(amount);
+}
+
+/** Formats an amount given in euro cents in the display currency. Euro amounts stay exact; converted ones are rounded to a clean price point. */
 export function formatEuroCents(cents: number, currency: DisplayCurrency, locale: string): string {
-  const amount = (cents / 100) * currency.perEuro;
+  const exact = (cents / 100) * currency.perEuro;
+  const amount = currency.code === "EUR" ? exact : cleanPricePoint(exact);
   try {
-    return new Intl.NumberFormat(locale, { style: "currency", currency: currency.code, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(amount));
+    return new Intl.NumberFormat(locale, { style: "currency", currency: currency.code, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   } catch {
     // a currency code this browser does not know: show the euro amount rather than a wrong one
     return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cents / 100);

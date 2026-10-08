@@ -14,6 +14,7 @@ export function useFineTuningJobs(orgId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     try {
       const response = await fineTuningService.listJobs(orgId);
       setJobs(response.items);

@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import LanguageMenu from "@/components/LanguageMenu";
 import { useTranslation } from "@/lib/i18n";
 import Stage from "./Stage";
 
@@ -238,11 +239,11 @@ export default function HeroStage() {
 <a href="#faq">{t("landing.nav.faq")}</a>
 </p>
         </div>
-        <Link href="/login" className="contents"><div className="bg-[#ff541f] content-stretch flex items-center justify-center overflow-clip px-[35px] py-[15px] relative rounded-[10px] shrink-0" data-node-id="1:178" data-name="Link">
+        <div className="flex items-center gap-6"><LanguageMenu tone="dark" /><Link href="/login" className="contents"><div className="bg-[#ff541f] content-stretch flex items-center justify-center overflow-clip px-[35px] py-[15px] relative rounded-[10px] shrink-0" data-node-id="1:178" data-name="Link">
           <div className="[word-break:break-word] flex flex-col font-bold justify-center leading-[0] not-italic relative shrink-0 text-[20px] text-white whitespace-nowrap" data-node-id="1:179">
             <p className="leading-[19.2px]">{t("landing.login")}</p>
           </div>
-        </div></Link>
+        </div></Link></div>
       </div>
 <div className="-translate-x-1/2 absolute bg-gradient-to-b from-[5.582%] from-[rgba(0,0,0,0)] h-[372px] left-1/2 to-1/2 to-black top-[692px] w-[1440px]" data-node-id="1:180" />
 <div className="-translate-x-1/2 absolute border border-[rgba(255,255,255,0.1)] border-solid h-[214px] left-1/2 overflow-clip top-[758px] w-[1440px]" data-node-id="1:181" data-name="Stats">

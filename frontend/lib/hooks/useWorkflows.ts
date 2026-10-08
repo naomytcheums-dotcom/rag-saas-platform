@@ -10,6 +10,7 @@ export function useWorkflows(orgId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!orgId) return; // the organization is not known yet: no request with an empty id
     if (!orgId) return;
     try {
       const items = await workflowService.listWorkflows(orgId);

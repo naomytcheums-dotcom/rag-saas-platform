@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { InputHTMLAttributes, ReactNode } from "react";
 import { HeroArtLayer } from "@/components/figma/artwork";
+import SiteHeader from "@/components/figma/SiteHeader";
 import Stage from "@/components/figma/Stage";
 
 /**
@@ -11,11 +12,12 @@ import Stage from "@/components/figma/Stage";
  */
 export default function AuthShell({ title, subtitle, error, children, footer }: { title: string; subtitle?: string; error?: string | null; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#010101] px-4 py-10">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#010101]">
       <div className="pointer-events-none absolute inset-x-0 top-0" aria-hidden>
         <Stage width={1440} height={972}><div className="relative h-[972px] w-[1440px] overflow-hidden"><HeroArtLayer /></div></Stage>
       </div>
-      <Link href="/" className="relative mb-8 text-[26px] font-bold tracking-wide text-white" aria-label="RAG SaaS Platform">RAG SaaS Platform</Link>
+      <SiteHeader />
+      <div className="relative flex flex-1 items-center justify-center px-4 pb-16 pt-4">
       <div
         className="relative w-full max-w-[420px] rounded-xl px-10 py-[30px] text-white shadow-md backdrop-blur-[9px]"
         style={{ background: "linear-gradient(90deg, var(--auth-from) 9%, var(--auth-via) 68%, var(--auth-to) 97%)" }}
@@ -25,6 +27,7 @@ export default function AuthShell({ title, subtitle, error, children, footer }: 
         {error && <p role="alert" className="mt-5 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
         {children}
         {footer && <div className="mb-[15px] mt-5 text-center text-[14.5px]">{footer}</div>}
+      </div>
       </div>
     </div>
   );

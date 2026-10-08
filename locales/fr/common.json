@@ -910,5 +910,5 @@
   "lp.faq.4.a": "Un agent répond à vos questions à partir de vos documents. Un agent autonome planifie et exécute des tâches seul, avec des outils, une mémoire et des garde-fous. Un workflow enchaîne appels LLM, outils, conditions et validations humaines. Le laboratoire d'évaluation mesure ensuite la qualité des réponses.",
   "lp.faq.5.q": "Le produit gère-t-il plusieurs organisations et rôles ?",
   "lp.faq.5.a": "Oui : organisations multi-tenant, rôles Propriétaire/Admin/Manager/Membre/Lecteur, rôles personnalisés avec permissions précises, et marque blanche pour proposer la plateforme sous votre propre marque.",
-  "lp.pricing.rates_note": "Les prix sont convertis au taux de change du jour à titre indicatif ; vous êtes facturé en euros. Taux fournis par"
+  "lp.footer.rates": "Taux de change :"
 }

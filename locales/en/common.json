@@ -910,5 +910,5 @@
   "lp.faq.4.a": "An agent answers your questions from your documents. An autonomous agent plans and runs tasks on its own, with tools, memory and guardrails. A workflow chains LLM calls, tools, conditions and human approvals. The evaluation lab then measures answer quality.",
   "lp.faq.5.q": "Does the product handle several organisations and roles?",
   "lp.faq.5.a": "Yes: multi-tenant organisations, Owner/Admin/Manager/Member/Viewer roles, custom roles with precise permissions, and white-label to offer the platform under your own brand.",
-  "lp.pricing.rates_note": "Prices are converted at today's exchange rate for information; you are billed in euros. Rates by"
+  "lp.footer.rates": "Exchange rates:"
 }
