@@ -142,3 +142,31 @@ constitue pas une sauvegarde utilisable.
 Le dump PostgreSQL n'inclut pas automatiquement les fichiers S3/R2.
 Sauvegarde storage et stratégie de récupération doivent être indépendantes.
 RTO et RPO : **UNKNOWN**, à mesurer sur restore réussi.
+
+## Rehearsal on disposable PostgreSQL — 2026-10-08
+
+Docker responded (server 29.7.2). The custom-format dump
+`staging-artifacts/env_db_pre_migration_20261006_133248.dump` was readable
+with `pg_restore` 17.11 and restored into a disposable `pgvector/pgvector:pg17`
+container running PostgreSQL 17.6. The generic image did not provide
+Supabase-managed `supabase_vault`; the restore therefore excluded unavailable
+Supabase-managed objects and restored the public application schema and
+available extensions. This validates that scoped restore only, not a complete
+Supabase-platform recovery.
+
+The archive TOC contained 178 public tables and 178 `TABLE DATA` entries.
+`pg_restore` completed with exit code 0. Source and restored row counts were:
+
+| Table | Source | Restored |
+| --- | ---: | ---: |
+| `users` | 72 | 71 |
+| `organizations` | 1,577 | 1,576 |
+| `documents` | 345 | 344 |
+| `document_chunks` | 3,210 | 3,210 |
+| `agents` | 10 | 9 |
+
+The one-row differences in users, organizations, documents, and agents are
+consistent with the disposable browser-journey records created after the
+dump snapshot; chunk counts match. Counts were compared only, without
+printing row contents or identifiers. This does not validate S3 objects,
+Supabase-managed schemas/extensions, application access, or RTO/RPO.
