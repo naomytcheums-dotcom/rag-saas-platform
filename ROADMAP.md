@@ -74,6 +74,25 @@ itemized breakdown of each part.
   sur l'ancien code 9, 5 et 6 d'entre eux échouent (worktree jetable). Régression : 455 passés, 17 ignorés sur 38 fichiers billing/audit/p0/p1.
 - Reste : aucun webhook ne marque une facture locale payée (la réconciliation reste manuelle) ; V2, V3, V4, V5, V6, V7, V10 en attente de décision.
 
+### [Bob-Auto-Fixes] — 2026-10-09 — Lots factures / annulation / validation SADM-005
+
+- Factures : verrou de ligne (`SELECT … FOR UPDATE`) sur les transitions `paid`/`void` ; le balayage « en retard » (service et tâche Celery) devient un
+  seul UPDATE conditionnel qui ne peut plus écraser un paiement (cause racine confirmée : lecture puis écriture sans garde) ; `mark-paid` plateforme
+  exige une référence de paiement (conservée dans l'audit). Tests : 4 des 5 tests de concurrence PostgreSQL échouent sans le verrou (preuve sur base jetable).
+- Audit : tentatives refusées (`admin_financial_action_denied`), remboursement et synchro Stripe tentés, événements fournisseur appliqués
+  (`billing_webhook_applied`, acteur système, identifiant d'événement) ; `request_id` dans les métadonnées ; écriture dans la transaction métier.
+- Validation : plans (clé, prix ≤ 1 M, quotas), `billing_period` limité à monthly/yearly, seuils d'alerte 1–100, longueurs de motifs.
+- Webhooks : un événement tardif ne rouvre plus un abonnement terminé (Stripe `updated` après `deleted`, `payment_failed` tardif ; Paystack
+  `create` tardif, `charge.success`, `payment_failed`) ; la suppression d'un ancien abonnement n'annule plus l'actuel ; Paystack applique enfin le
+  plan payé (code de plan → plan, cause confirmée : jamais assigné) ; identifiant d'organisation mal formé ignoré (plus de 500).
+- Annulation : routes `/stripe/cancel` et `/cancel-active-subscription` enregistrent une annulation en attente (statut inchangé jusqu'à l'événement
+  fournisseur) ; l'annulation back-office d'un abonnement Paystack reste programmée (Paystack ne désactive qu'en fin de période).
+- SADM-005 : 10 écritures abonnement/plan/synchro + 2 routes facture, toutes superadmin (introspection des routeurs, 0 route alternative) ; l'annonce
+  précédente de « 11 écritures » était un mauvais comptage ; clé API et webhooks non signés n'atteignent aucune de ces routes. Frontend : une erreur de
+  création de forfait s'affiche à côté du formulaire (403 expliqué, 422 lisible, prix négatif refusé) au lieu de remplacer l'onglet.
+- Preuves : 565 passés, 22 ignorés, 1 échec préexistant (`test_i18n`, identique sur HEAD propre) ; PostgreSQL jetable : 5 passés ; vitest 172 passés ; tsc, eslint, ruff propres.
+- Non vérifié : Stripe/Paystack réels (mockés), Redis/worker réels, CI.
+
 ### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
 
 - Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;
