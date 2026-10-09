@@ -7,6 +7,7 @@ import datetime as dt
 import logging
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
@@ -21,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="api.tasks.billing.generate_monthly_invoices")
 def generate_monthly_invoices() -> int:
-    """One real invoice per active, genuinely-paid (monthly_price_cents
-    > 0) subscription, for the month just elapsed. A $0 (free) plan
-    never gets an invoice -- there is nothing real to bill."""
+    """One real invoice per active, genuinely-paid subscription: a *monthly* subscription is billed for the month just elapsed (never
+    for a month before it started); a *yearly* one is billed once per subscription year, for the year starting on its anniversary
+    (BILL-010 -- it used to be invoiced the full yearly price every month). A $0 (free) plan never gets an invoice."""
     today = dt.date.today()
     period_end = today.replace(day=1) - dt.timedelta(days=1)
     period_start = period_end.replace(day=1)
@@ -39,30 +40,67 @@ def generate_monthly_invoices() -> int:
             if not plan or price_cents <= 0:
                 continue
 
+            started = sub.created_at.date() if sub.created_at else today
+            if sub.billing_period == "yearly":
+                invoice_start = _latest_anniversary(started, today)
+                invoice_end = _add_years(invoice_start, 1) - dt.timedelta(days=1)
+            else:
+                if started > period_end:
+                    continue  # the subscription began after the month being billed
+                invoice_start, invoice_end = period_start, period_end
+
             already_invoiced = db.scalar(
-                select(Invoice.id).where(Invoice.organization_id == sub.organization_id, Invoice.period_start == period_start)
+                select(Invoice.id).where(Invoice.organization_id == sub.organization_id, Invoice.period_start == invoice_start)
             )
             if already_invoiced is not None:
                 continue
 
-            existing_count = db.scalar(select(func.count()).select_from(Invoice)) or 0
-            number = f"{settings.INVOICE_PREFIX}-{today.year}-{existing_count + 1:06d}"
-
             vat_cents = round(price_cents * (settings.INVOICE_VAT_RATE / 100))
-            invoice = Invoice(
-                organization_id=sub.organization_id, number=number, status=InvoiceStatus.pending,
+            invoice = _add_numbered_invoice(
+                db, today, organization_id=sub.organization_id, status=InvoiceStatus.pending,
                 currency=settings.INVOICE_CURRENCY, subtotal_cents=price_cents, vat_rate=settings.INVOICE_VAT_RATE,
-                vat_cents=vat_cents, total_cents=price_cents + vat_cents, period_start=period_start,
-                period_end=period_end, due_date=today + dt.timedelta(days=settings.INVOICE_DUE_DAYS),
+                vat_cents=vat_cents, total_cents=price_cents + vat_cents, period_start=invoice_start,
+                period_end=invoice_end, due_date=today + dt.timedelta(days=settings.INVOICE_DUE_DAYS),
             )
-            db.add(invoice)
-            db.flush()
             db.add(InvoiceLine(invoice_id=invoice.id, description=f"{plan.name} plan -- {sub.billing_period}", quantity=1, unit_price_cents=price_cents, total_cents=price_cents))
             created += 1
         db.commit()
 
     logger.info("generate_monthly_invoices: created %d real invoice(s) for period %s..%s", created, period_start, period_end)
     return created
+
+
+def _add_years(day: dt.date, years: int) -> dt.date:
+    try:
+        return day.replace(year=day.year + years)
+    except ValueError:  # 29 February
+        return day.replace(year=day.year + years, day=28)
+
+
+def _latest_anniversary(start: dt.date, today: dt.date) -> dt.date:
+    """The most recent yearly anniversary of `start` that is not after `today` (`start` itself during the first year)."""
+    anniversary = start
+    while _add_years(anniversary, 1) <= today:
+        anniversary = _add_years(anniversary, 1)
+    return anniversary
+
+
+def _add_numbered_invoice(db, today: dt.date, **fields) -> Invoice:
+    """Inserts the invoice under the next free number of the year. The number is derived from the highest existing one (not a
+    row count) and the insert runs in a savepoint, so two workers racing on the same number retry instead of failing the batch."""
+    prefix = f"{settings.INVOICE_PREFIX}-{today.year}-"
+    for _attempt in range(5):
+        numbers = db.scalars(select(Invoice.number).where(Invoice.number.like(f"{prefix}%"))).all()
+        highest = max((int(number[len(prefix):]) for number in numbers if number[len(prefix):].isdigit()), default=0)
+        invoice = Invoice(number=f"{prefix}{highest + 1:06d}", **fields)
+        try:
+            with db.begin_nested():
+                db.add(invoice)
+                db.flush()
+            return invoice
+        except IntegrityError:
+            continue
+    raise RuntimeError("could not allocate an invoice number")
 
 
 @celery_app.task(name="api.tasks.billing.mark_overdue_invoices")
