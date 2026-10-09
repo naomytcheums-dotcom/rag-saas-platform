@@ -8,6 +8,7 @@ still afford it.
 """
 
 import datetime as dt
+import logging
 import uuid
 
 from sqlalchemy import func, select
@@ -15,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.billing import Credit, CreditTransaction, CreditTransactionType
+
+logger = logging.getLogger(__name__)
 
 
 class InsufficientCreditsError(Exception):
@@ -128,6 +131,38 @@ async def deduct_credits(db: AsyncSession, organization_id: uuid.UUID, amount: i
     ))
     await db.flush()
     return credit
+
+
+async def deduct_credits_up_to(
+    db: AsyncSession, organization_id: uuid.UUID, amount: int, *, resource_type: str, user_id: uuid.UUID | None = None,
+) -> tuple[Credit, int, int]:
+    """BILL-008 -- for a cost that is only known AFTER the (already incurred) provider call: debit `min(balance, amount)`
+    so the balance never goes negative and the call is never served for free just because `0 < balance < amount`.
+    The uncollected part is written to the ledger row's reason (and logged) -- never silently dropped. Returns
+    `(credit, charged, shortfall)`. `deduct_credits` stays the strict, all-or-nothing variant for pre-priced charges."""
+    credit = await get_or_create_credit(db, organization_id)
+    if amount <= 0:
+        return credit, 0, 0
+    credit = await db.scalar(
+        select(Credit)
+        .where(Credit.organization_id == organization_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if credit is None:
+        raise InsufficientCreditsError(f"organization {organization_id} has no credit account")
+    charged = min(max(credit.balance, 0), amount)
+    shortfall = amount - charged
+    credit.balance -= charged
+    reason = resource_type if shortfall == 0 else f"{resource_type} (partial debit, {shortfall} credits uncollected)"
+    db.add(CreditTransaction(
+        organization_id=organization_id, type=CreditTransactionType.consume, amount=-charged,
+        balance_after=credit.balance, reason=reason[:200], user_id=user_id,
+    ))
+    await db.flush()
+    if shortfall:
+        logger.error("organization %s: %s cost %s credits but only %s were available (shortfall %s)", organization_id, resource_type, amount, charged, shortfall)
+    return credit, charged, shortfall
 
 
 async def refund_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, reason: str, user_id: uuid.UUID | None = None) -> Credit:
