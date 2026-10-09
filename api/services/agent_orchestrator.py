@@ -88,7 +88,7 @@ from api.services.agent_tools import resolve_agent_tools
 from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
 from api.security.credit_packs import credits_for_usage
-from api.services.billing_credits import InsufficientCreditsError, deduct_credits
+from api.services.billing_credits import deduct_credits_up_to
 from api.services.llm_byok import resolve_org_api_key
 from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_stream_with_tools, chat_completion_with_usage
@@ -477,24 +477,30 @@ class AgentOrchestrator:
                 # successful LLM call (now possibly several per run,
                 # Phase 5 Étape 6's own tool-calling loop), using the
                 # real, provider-reported token counts rather than an
-                # estimate -- never blocks the response itself on an
-                # insufficient balance: the real LLM cost was already
-                # incurred with the provider by this point, so failing
-                # the deduction bookkeeping must never also fail the
-                # user's answer.
+                # estimate. BILL-008: the call's cost was already incurred
+                # with the provider, so min(balance, cost) is debited (the
+                # balance never goes negative, the shortfall is recorded
+                # in the ledger and logged, nothing is swallowed) and the
+                # exhausted flag stops any further LLM call of this run.
+                nonlocal credits_exhausted
                 if organization_id is None or byok_key or not usage:
                     return
                 cost = credits_for_usage("tokens_input", usage.get("prompt_tokens") or 0) + credits_for_usage(
                     "tokens_output", usage.get("completion_tokens") or 0
                 )
                 if cost > 0:
-                    try:
-                        async with self._db_lock:
-                            await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']}")
-                            await db.commit()
-                    except InsufficientCreditsError:
+                    async with self._db_lock:
+                        credit_after, _charged, shortfall = await deduct_credits_up_to(
+                            db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']}",
+                        )
+                        balance_after = credit_after.balance
+                        await db.commit()
+                    if shortfall or balance_after <= 0:
+                        credits_exhausted = True
+                    if shortfall:
                         logger.warning("agent run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
 
+            credits_exhausted = False
             tools_by_name = {t.name: t for t in selected_tools}
             function_schemas = [tool_to_function_schema(t) for t in selected_tools] if selected_tools else None
 
@@ -539,7 +545,8 @@ class AgentOrchestrator:
                     if not tool_calls:
                         result = completion["content"]
                         break
-
+                    if credits_exhausted:
+                        raise LLMError("Insufficient AI credits -- the run was stopped before another LLM call (add a credit pack or configure your own provider key (BYOK))")
                     trace.append(self._trace_event("tool_calls_requested", {"tools": [tc["name"] for tc in tool_calls], "iteration": iteration}))
                     messages.append({
                         "role": "assistant", "content": completion["content"],
@@ -989,11 +996,13 @@ class AgentOrchestrator:
                     "tokens_output", stream_usage.get("completion_tokens") or 0
                 )
                 if cost > 0:
-                    try:
-                        async with self._db_lock:
-                            await deduct_credits(db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']} (stream)")
-                            await db.commit()
-                    except InsufficientCreditsError:
+                    # BILL-008 -- min(balance, cost): never negative, never silently unbilled (shortfall in the ledger + log).
+                    async with self._db_lock:
+                        _credit, _charged, shortfall = await deduct_credits_up_to(
+                            db, organization_id, cost, resource_type=f"llm_call:{llm_cfg['provider']}/{llm_cfg['model']} (stream)",
+                        )
+                        await db.commit()
+                    if shortfall:
                         logger.warning("stream_response run %s: organization %s ran out of AI credits mid-run", run.id, organization_id)
         except asyncio.TimeoutError:
             async with self._db_lock:

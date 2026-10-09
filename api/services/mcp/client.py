@@ -6,19 +6,17 @@ installed dependency -- `pip index versions mcp` confirms `mcp==2.0.0`
 importable, `ClientSession`/`stdio_client`/`sse_client`/
 `streamable_http_client` all real, not hand-rolled JSON-RPC).
 
-**Real, deliberate security boundary for `stdio` transport**: `command`
-is only ever a value an ORG ADMIN explicitly configured (see
-`api/routers/mcp_servers.py`'s own `require_org_admin` gate on
-create/update) -- never derived from a workflow variable, an LLM's own
-tool-call arguments, or any other end-user-controlled input. This is
-the same trust boundary this codebase already draws around
-`api/services/custom_tools.py`'s own webhook URLs (operator-configured,
-not LLM-configured), just for a local subprocess instead of a remote
-HTTP call. Running an operator-configured local binary is real,
-inherent stdio-MCP risk (the whole point of stdio transport); it is not
-mitigated further here, and not appropriate for a multi-tenant SaaS
-deployment where tenants themselves configure servers -- see this
-module's own ROADMAP entry.
+**Real, deliberate security boundary for `stdio` transport**: spawning
+a subprocess from the API/worker host is arbitrary command execution,
+so it is OFF by default (`MCP_STDIO_ENABLED=false`): `_open_session`
+refuses to spawn anything, even for a row already in the database. When
+enabled, `command` is only ever a value a PLATFORM SUPERADMIN configured
+(see `api/routers/mcp_servers.py`'s own stdio gate on create/update) --
+never derived from a workflow variable, an LLM's own
+tool-call arguments, or any other end-user-controlled input. Running a
+local binary is real, inherent stdio-MCP risk (the whole point of stdio
+transport); it is not mitigated further here, and not appropriate for a
+multi-tenant SaaS deployment where tenants themselves configure servers.
 
 **One real client session per call, not a persistent pool**: an MCP
 `ClientSession` is cheap to establish and each of `discover_tools`/
@@ -39,8 +37,10 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from opentelemetry import trace
 
+from api.config import settings
 from api.models.mcp_server import MCPAuthType, MCPServerConfig, MCPTransport
 from api.security.encryption import decrypt_field
+from api.services.outbound_http import describe_outbound_error, mcp_http_client, validate_outbound_url
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +79,23 @@ def _auth_headers(server: MCPServerConfig) -> dict[str, str]:
     return {}
 
 
+def _require_public_url(server: MCPServerConfig) -> None:
+    """Offline pre-check of a stored URL (rows created before SEC-005 may hold anything); the connection itself is guarded as well."""
+    try:
+        validate_outbound_url(server.url)
+    except ValueError as exc:
+        raise MCPClientError(f"MCP server {server.name!r} has a URL that is not allowed: {exc}") from exc
+
+
 async def _open_session(server: MCPServerConfig, stack: AsyncExitStack) -> ClientSession:
     """Real transport dispatch -- opens the real read/write streams for
     `server.transport`, then a real, initialized `ClientSession` on top,
     all cleaned up via the caller's own `AsyncExitStack`."""
     if server.transport == MCPTransport.stdio.value:
+        if not settings.MCP_STDIO_ENABLED:
+            raise MCPClientError(
+                f"MCP server {server.name!r} uses the stdio transport, which is disabled on this platform (MCP_STDIO_ENABLED=false)"
+            )
         if not server.command:
             raise MCPClientError(f"MCP server {server.name!r} is configured for stdio but has no command")
         params = StdioServerParameters(command=server.command, args=list(server.args or []), env=dict(server.env or {}) or None)
@@ -91,13 +103,18 @@ async def _open_session(server: MCPServerConfig, stack: AsyncExitStack) -> Clien
     elif server.transport == MCPTransport.sse.value:
         if not server.url:
             raise MCPClientError(f"MCP server {server.name!r} is configured for sse but has no url")
+        _require_public_url(server)
         read_stream, write_stream = await stack.enter_async_context(
-            sse_client(server.url, headers=_auth_headers(server), timeout=_DEFAULT_TIMEOUT_SECONDS)
+            sse_client(
+                server.url, headers=_auth_headers(server), timeout=_DEFAULT_TIMEOUT_SECONDS, httpx_client_factory=mcp_http_client,
+            )
         )
     elif server.transport == MCPTransport.streamable_http.value:
         if not server.url:
             raise MCPClientError(f"MCP server {server.name!r} is configured for streamable_http but has no url")
-        read_stream, write_stream = await stack.enter_async_context(streamable_http_client(server.url))
+        _require_public_url(server)
+        http_client = await stack.enter_async_context(mcp_http_client())
+        read_stream, write_stream = await stack.enter_async_context(streamable_http_client(server.url, http_client=http_client))
     else:
         raise MCPClientError(f"MCP server {server.name!r} has an unknown transport {server.transport!r}")
 
@@ -123,7 +140,7 @@ async def discover_tools(server: MCPServerConfig) -> list[dict[str, Any]]:
     except MCPClientError:
         raise
     except Exception as exc:  # noqa: BLE001 -- any real transport/protocol failure must surface as one honest, typed error
-        raise MCPClientError(f"failed to discover tools from MCP server {server.name!r}: {exc}") from exc
+        raise MCPClientError(f"failed to discover tools from MCP server {server.name!r}: {describe_outbound_error(exc)}") from exc
 
 
 async def call_tool(server: MCPServerConfig, tool_name: str, arguments: dict[str, Any]) -> str:
@@ -151,7 +168,7 @@ async def call_tool(server: MCPServerConfig, tool_name: str, arguments: dict[str
         except MCPClientError:
             raise
         except Exception as exc:  # noqa: BLE001 -- same reasoning as discover_tools
-            raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {exc}") from exc
+            raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {describe_outbound_error(exc)}") from exc
 
     parts: list[str] = []
     for block in result.content:

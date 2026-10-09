@@ -32,9 +32,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
+from api.models.admin import Plan
 from api.models.billing import InvoiceStatus
 from api.models.organization import Organization, OrganizationMember
-from api.models.user import User
+from api.models.user import User, UserRole
 from api.schemas.billing import (
     BillingCountryResponse, BillingCountryUpdateRequest, BillingProviderResponse, CancelSubscriptionRequest,
     CheckoutSessionRequest, CheckoutSessionResponse, CreateUsageAlertRequest, CreditResponse,
@@ -88,9 +89,39 @@ async def get_subscription_endpoint(org_id: uuid.UUID, _caller: OrganizationMemb
     return sub
 
 
+def _monthly_equivalent_cents(plan) -> int:
+    return max(plan.monthly_price_cents or 0, -(-(plan.yearly_price_cents or 0) // 12))
+
+
+async def _enforce_no_free_paid_plan(db: AsyncSession, sub, body: SubscribeRequest) -> None:
+    """BILL-001 -- subscribe/upgrade/downgrade only write `Subscription.plan_id`; they never charge anything. A paid
+    plan must therefore come from a confirmed payment (the provider's verified webhook after a checkout), never from
+    these routes. They stay usable for a free plan, a strictly cheaper plan (a downgrade) and a no-op re-selection of
+    the current plan. `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS` is the explicit opt-out for self-hosted/dev instances."""
+    if settings.BILLING_ALLOW_SELF_SERVICE_PAID_PLANS:
+        return
+    try:
+        target = await admin_subscriptions.get_plan(db, body.plan_id)
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    target_cost = _monthly_equivalent_cents(target)
+    if target_cost <= 0:
+        return
+    if sub.plan_id == target.id and sub.billing_period == body.billing_period:
+        return
+    current = await db.get(Plan, sub.plan_id) if sub.plan_id else None
+    if current is not None and target_cost < _monthly_equivalent_cents(current):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail="A paid plan can only be activated through a confirmed payment: start a checkout (POST .../billing/checkout) instead of changing the plan directly",
+    )
+
+
 @org_router.post("/subscribe", response_model=SubscriptionResponse)
 async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
     except SubscriptionNotFoundError:
@@ -103,6 +134,7 @@ async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller:
 @org_router.post("/downgrade", response_model=SubscriptionResponse)
 async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    await _enforce_no_free_paid_plan(db, sub, body)
     result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
     await db.commit()
     return result
@@ -281,7 +313,14 @@ async def remind_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _cal
 
 
 @org_router.post("/invoices/{invoice_id}/pay", response_model=InvoiceResponse)
-async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # BILL-002 -- an organization must not be able to declare its own invoice paid: only the provider's webhook or a
+    # platform admin (back-office reconciliation) may. Same opt-out as plans for self-hosted/dev instances.
+    if current_user.role not in (UserRole.admin, UserRole.superadmin) and not settings.BILLING_ALLOW_SELF_SERVICE_PAID_PLANS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invoices are marked paid by the payment provider once the payment is confirmed; organizations cannot mark them paid",
+        )
     try:
         invoice = await billing_invoices.mark_invoice_paid(db, org_id, invoice_id)
     except billing_invoices.InvoiceNotFoundError:

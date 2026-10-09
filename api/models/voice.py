@@ -62,6 +62,8 @@ class CallRecord(Base):
     call_sid: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
     agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    # SEC-004: tenant of the call. Nullable only for rows recorded before this column existed.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
     from_number: Mapped[str] = mapped_column(String(32), nullable=False)
     to_number: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="initiated")
@@ -72,4 +74,7 @@ class CallRecord(Base):
     ended_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
 
-    __table_args__ = (Index("ix_call_records_call_sid", "call_sid", unique=True),)
+    __table_args__ = (
+        Index("ix_call_records_call_sid", "call_sid", unique=True),
+        Index("ix_call_records_organization_id", "organization_id"),
+    )

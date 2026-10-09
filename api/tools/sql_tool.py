@@ -14,8 +14,10 @@ regex-ANCHORED SELECT subset (`SELECT <cols> FROM <table> [WHERE ...]
 comments, no semicolons beyond one optional trailing one, no
 JOIN/UNION/subquery, every dangerous keyword rejected outright) -- and
 a real, mandatory `organization_id` filter this module injects itself,
-via a real SQLAlchemy BOUND parameter, never string interpolation. A
-query this validator can't parse into that exact shape is rejected,
+via a real SQLAlchemy BOUND parameter, never string interpolation --
+placed in a derived table (`FROM (SELECT * FROM <table> WHERE
+organization_id = :organization_id) AS <table>`) so the user's own
+WHERE/ORDER BY can never widen it, whatever it parses as. A query this validator can't parse into that exact shape is rejected,
 not "best-effort" executed.
 
 **Security (vision critique)**: real defense in depth --
@@ -104,7 +106,7 @@ def _parentheses_stay_enclosed(fragment: str) -> bool:
     literals.
 
     Why this is a security boundary, not a style check:
-    `execute_sql_query` builds `WHERE (<user where>) AND organization_id
+    `execute_sql_query` used to build `WHERE (<user where>) AND organization_id
     = :organization_id`. A user `WHERE` such as `1=1) OR (1=1` is a
     perfectly "valid" fragment to every other check in
     `validate_sql_query` (no `;`, no comment, one SELECT, no forbidden
@@ -127,6 +129,41 @@ def _parentheses_stay_enclosed(fragment: str) -> bool:
                 if depth < 0:
                     return False
     return depth == 0 and not in_string
+
+
+_IDENTIFIER_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$")
+
+
+def _reject_ambiguous_literals(sql: str) -> None:
+    """SEC-001 -- the checks above and below this one decide where
+    string literals start and end with the plain `'...'` / `''` rules,
+    whereas PostgreSQL also honors backslash escapes (`E'\\''`),
+    unicode escapes (`U&'...'`), dollar-quoting and double-quoted
+    identifiers. Any of those makes the validator and the database
+    disagree about what is code and what is a string, so they are all
+    refused outright: with them gone, the single-quote scan below is the
+    exact PostgreSQL lexing of what remains."""
+    if "\\" in sql or "$" in sql or '"' in sql:
+        raise SqlToolError("Backslashes, dollar-quoting and double-quoted identifiers are not allowed")
+    in_string = False
+    index = 0
+    while index < len(sql):
+        char = sql[index]
+        if in_string:
+            if char == "'":
+                if sql[index + 1:index + 2] == "'":
+                    index += 1
+                else:
+                    in_string = False
+        elif char == "'":
+            if index > 0 and sql[index - 1] in "eE" and (index == 1 or sql[index - 2] not in _IDENTIFIER_CHARS):
+                raise SqlToolError("Escape string literals (E'...') are not allowed")
+            in_string = True
+        elif char in "uU" and sql[index + 1:index + 2] == "&" and (index == 0 or sql[index - 1] not in _IDENTIFIER_CHARS):
+            raise SqlToolError("Unicode escape strings/identifiers (U&) are not allowed")
+        index += 1
+    if in_string:
+        raise SqlToolError("Unterminated string literal")
 
 
 def validate_sql_query(query: str) -> re.Match:
@@ -154,6 +191,7 @@ def validate_sql_query(query: str) -> re.Match:
             raise SqlToolError(f"Statement type {keyword!r} is not allowed -- this tool is read-only")
     if re.search(r"\bJOIN\b|\bUNION\b", sanitized, re.IGNORECASE):
         raise SqlToolError("JOIN and UNION are not allowed -- this tool only supports single-table queries")
+    _reject_ambiguous_literals(sanitized)
 
     match = _QUERY_PATTERN.match(sanitized)
     if match is None:
@@ -206,12 +244,17 @@ async def execute_sql_query(db: AsyncSession, query: str, organization_id: uuid.
     max_rows = min(max_rows or settings.SQL_TOOL_MAX_ROWS, settings.SQL_TOOL_MAX_ROWS)
 
     columns, table, where, order, limit = match.group("columns", "table", "where", "order", "limit")
-    org_condition = "organization_id = :organization_id"
-    where_clause = f"WHERE ({where}) AND {org_condition}" if where else f"WHERE {org_condition}"
+    # SEC-001 -- the tenant predicate lives in a derived table the user text can never reach:
+    # whatever the user's WHERE/ORDER BY/columns do, they only see rows already restricted to
+    # this organization. The alias keeps `documents.col` style references working.
+    where_clause = f"WHERE {where}" if where else ""
     order_clause = f"ORDER BY {order}" if order else ""
     real_limit = min(int(limit), max_rows) if limit else max_rows
 
-    final_query = f"SELECT {columns} FROM {table} {where_clause} {order_clause} LIMIT :real_limit"
+    final_query = (
+        f"SELECT {columns} FROM (SELECT * FROM {table} WHERE organization_id = :organization_id) AS {table} "
+        f"{where_clause} {order_clause} LIMIT :real_limit"
+    )
     # Real, necessary, portable fix -- found by actually running this
     # against the real SQLite test backend, not assumed: SQLite has no
     # native UUID type, so SQLAlchemy's own `Uuid` column type stores a

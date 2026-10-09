@@ -87,9 +87,22 @@ def oidc_idp():
 
 
 async def _promote_to_admin(db_session, email: str) -> None:
+    # SADM-001: creating an SSO connection / verifying its domain is now
+    # superadmin-only (a platform admin could otherwise claim any email
+    # domain for their own IdP), so the "admin" of these tests is a superadmin.
     user = await db_session.scalar(select(User).where(User.email == email))
-    user.role = UserRole.admin
+    user.role = UserRole.superadmin
     await db_session.commit()
+
+
+@pytest.fixture(autouse=True)
+def _simulated_dns_ownership_proof(monkeypatch):
+    # SADM-001: a connection only routes logins once its domain's DNS TXT
+    # challenge is verified; the DNS lookup is simulated as "published".
+    async def _published(_domain, _token):
+        return True
+
+    monkeypatch.setattr("api.routers.enterprise_sso.check_email_verification_txt_record", _published)
 
 
 async def _make_admin(client, db_session, register_payload) -> str:
@@ -108,7 +121,14 @@ async def _create_connection(client, admin_token, oidc_idp, *, email_domain="acm
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 201, response.text
-    return response.json()
+    # SADM-001: a new connection starts unverified; prove domain ownership
+    # (simulated DNS TXT) so the tests can exercise routing/login.
+    verified = await client.post(
+        f"/admin/sso/connections/{response.json()['id']}/verify-domain", headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["domain_verified"] is True
+    return verified.json()
 
 
 def _extract_state(authorize_response) -> str:
@@ -122,6 +142,8 @@ def _extract_nonce(authorize_response) -> str:
 
 
 async def test_non_admin_cannot_create_sso_connections(client, register_payload, oidc_idp):
+    # SADM-001: behavior changed for security -- connection management now
+    # requires require_superadmin, which answers 403 (previously 404 from require_admin).
     access_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     response = await client.post(
         "/admin/sso/connections",
@@ -129,7 +151,7 @@ async def test_non_admin_cannot_create_sso_connections(client, register_payload,
               "client_id": "x", "client_secret": "y"},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 async def test_admin_can_create_and_list_connections(monkeypatch, client, db_session, register_payload, oidc_idp):

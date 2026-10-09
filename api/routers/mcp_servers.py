@@ -7,7 +7,10 @@ platform's own MCP SERVER role, api/routers/mcp_server.py).
 Create/update/delete/test-connection/sync are Admin+-gated (same tier
 as `custom_domains.py`'s own POST/DELETE -- registering a subprocess
 command or an external URL an agent will call tools from is an
-organization-level trust decision, not a per-member one). Listing
+organization-level trust decision, not a per-member one). The `stdio`
+transport is the exception: it is off by default (`MCP_STDIO_ENABLED`) and,
+when enabled, only a platform superadmin may create or modify such a server.
+Listing
 servers/tools is Member+-readable, same reasoning as most other
 org-scoped config surfaces (a member composing an agent needs to see
 what's available without needing Admin).
@@ -19,9 +22,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
-from api.dependencies import get_db
+from api.dependencies import get_current_user, get_db
 from api.models.mcp_server import MCPServerConfig
 from api.models.organization import OrganizationMember
+from api.models.user import User, UserRole
 from api.schemas.mcp_servers import (
     MCPServerCreateRequest, MCPServerResponse, MCPServerUpdateRequest, MCPTestConnectionResponse, MCPToolCallRequest,
     MCPToolCallResponse, MCPToolResponse,
@@ -32,6 +36,7 @@ from api.security.organizations import require_org_admin, require_org_member
 from api.security.rate_limit import enforce_rate_limit
 from api.utils import client_ip
 from api.services.mcp.client import MCPClientError, test_connection
+from api.services.outbound_http import validate_outbound_url
 from api.services.mcp.discovery import (
     call_cached_tool, create_mcp_server, delete_mcp_server, list_cached_tools, list_mcp_servers, sync_tools,
 )
@@ -42,6 +47,13 @@ _VALID_TRANSPORTS = ("stdio", "sse", "streamable_http")
 _VALID_AUTH_TYPES = ("none", "bearer", "api_key")
 
 
+def _validate_public_url(url: str | None) -> None:
+    try:
+        validate_outbound_url(url or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 async def _get_owned_server(db: AsyncSession, org_id: uuid.UUID, server_id: uuid.UUID) -> MCPServerConfig:
     server = await db.get(MCPServerConfig, server_id)
     if server is None or server.organization_id != org_id:
@@ -49,19 +61,32 @@ async def _get_owned_server(db: AsyncSession, org_id: uuid.UUID, server_id: uuid
     return server
 
 
+def _require_stdio_allowed(user: User) -> None:
+    """SEC-002 -- stdio runs a command on the API host: off by default, and
+    even when enabled reserved to platform superadmins (never org owners)."""
+    if not settings.MCP_STDIO_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="The stdio MCP transport is disabled on this platform")
+    if user.role != UserRole.superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only a platform superadmin can configure a stdio MCP server")
+
+
 @router.post("/organizations/{org_id}/mcp-servers", response_model=MCPServerResponse, status_code=status.HTTP_201_CREATED)
 async def create_mcp_server_endpoint(
-    org_id: uuid.UUID, payload: MCPServerCreateRequest,
+    org_id: uuid.UUID, payload: MCPServerCreateRequest, current_user: User = Depends(get_current_user),
     caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     if payload.transport not in _VALID_TRANSPORTS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"transport must be one of {_VALID_TRANSPORTS}")
+    if payload.transport == "stdio":
+        _require_stdio_allowed(current_user)
     if payload.auth_type not in _VALID_AUTH_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"auth_type must be one of {_VALID_AUTH_TYPES}")
     if payload.transport == "stdio" and not payload.command:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="command is required for the stdio transport")
     if payload.transport in ("sse", "streamable_http") and not payload.url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"url is required for the {payload.transport} transport")
+    if payload.transport in ("sse", "streamable_http"):
+        _validate_public_url(payload.url)
 
     server = await create_mcp_server(
         db, org_id, name=payload.name, description=payload.description, transport=payload.transport, url=payload.url,
@@ -81,10 +106,14 @@ async def list_mcp_servers_endpoint(
 
 @router.patch("/organizations/{org_id}/mcp-servers/{server_id}", response_model=MCPServerResponse)
 async def update_mcp_server_endpoint(
-    org_id: uuid.UUID, server_id: uuid.UUID, payload: MCPServerUpdateRequest,
+    org_id: uuid.UUID, server_id: uuid.UUID, payload: MCPServerUpdateRequest, current_user: User = Depends(get_current_user),
     _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
+    if server.transport == "stdio":
+        _require_stdio_allowed(current_user)
+    if payload.url is not None and server.transport in ("sse", "streamable_http"):
+        _validate_public_url(payload.url)
     for field in ("name", "description", "url", "command", "args", "env", "auth_type", "is_active"):
         value = getattr(payload, field)
         if value is not None:

@@ -61,7 +61,9 @@ async def test_non_owner_member_cannot_subscribe(client, db_session, register_pa
     assert response.status_code == 403
 
 
-async def test_owner_can_subscribe_upgrade_cancel_reactivate(client, db_session, register_payload):
+async def test_owner_can_subscribe_upgrade_cancel_reactivate(client, db_session, register_payload, monkeypatch):
+    from api.config import settings
+
     token, org_id = await _register_and_create_org(client, register_payload)
 
     # /admin/plans requires platform-admin, which this test's user is not --
@@ -72,6 +74,13 @@ async def test_owner_can_subscribe_upgrade_cancel_reactivate(client, db_session,
     db_session.add(plan)
     await db_session.commit()
     await db_session.refresh(plan)
+
+    # BILL-001 (security): a paid plan can no longer be self-assigned through /subscribe -- without a confirmed payment
+    # (checkout + provider webhook) it is refused with 402. This lifecycle test therefore opts in explicitly to the
+    # dev/self-hosted setting for the rest of the flow.
+    refused = await client.post(f"/organizations/{org_id}/billing/subscribe", json={"plan_id": str(plan.id), "billing_period": "monthly"}, headers=_auth_header(token))
+    assert refused.status_code == 402
+    monkeypatch.setattr(settings, "BILLING_ALLOW_SELF_SERVICE_PAID_PLANS", True)
 
     subscribe = await client.post(f"/organizations/{org_id}/billing/subscribe", json={"plan_id": str(plan.id), "billing_period": "monthly"}, headers=_auth_header(token))
     assert subscribe.status_code == 200

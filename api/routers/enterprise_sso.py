@@ -7,7 +7,11 @@ this uses a fresh per-connection client rather than
 api/routers/oauth.py's static, app-wide registry.
 
 Two audiences, two sets of endpoints:
-- Admins configure connections: POST/GET/DELETE /admin/sso/connections.
+- Superadmins create connections and verify domain ownership
+  (POST /admin/sso/connections, POST .../{id}/verify-domain); admins may
+  list/delete them. A connection routes logins only once its domain is
+  verified (DNS TXT), since it decides which IdP may sign in every
+  account under that domain.
 - Any (unauthenticated) visitor discovers and completes SSO login:
   POST /auth/sso/discover, GET /auth/sso/{connection_id}/authorize,
   GET /auth/sso/{connection_id}/callback.
@@ -26,7 +30,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
-from api.dependencies import get_db, require_admin
+from api.dependencies import get_db, require_admin, require_superadmin
 from api.models.audit_log import AuditAction
 from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection
 from api.models.user import User
@@ -38,6 +42,7 @@ from api.schemas.enterprise_sso import (
     SSODiscoverResponse,
 )
 from api.security.audit_log import log_audit_action
+from api.security.email_domains import check_email_verification_txt_record
 from api.security.enterprise_oidc import build_client, fetch_oidc_metadata, verify_id_token
 from api.security.jwt import create_mfa_pending_token
 from api.security.secret_encryption import decrypt_secret, encrypt_secret
@@ -111,7 +116,7 @@ async def _find_or_create_user(
 
 @router.post("/admin/sso/connections", response_model=EnterpriseSSOConnectionEntry, status_code=status.HTTP_201_CREATED)
 async def create_sso_connection(
-    payload: EnterpriseSSOConnectionCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+    payload: EnterpriseSSOConnectionCreateRequest, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
 ):
     existing = await db.scalar(select(EnterpriseSSOConnection).where(EnterpriseSSOConnection.email_domain == payload.email_domain.lower()))
     if existing is not None:
@@ -124,6 +129,8 @@ async def create_sso_connection(
         client_id=payload.client_id,
         client_secret_encrypted=encrypt_secret(payload.client_secret),
         created_by_admin_id=admin.id,
+        domain_verified=False,
+        domain_verification_token=secrets.token_urlsafe(32),
     )
     db.add(connection)
     await log_audit_action(
@@ -137,6 +144,32 @@ async def create_sso_connection(
     except (EnvironmentError, RuntimeError) as exc:
         logger.warning("failed to send SSO-connection-created notification to %s: %s", admin.email, exc)
 
+    return EnterpriseSSOConnectionEntry.model_validate(connection)
+
+
+@router.post("/admin/sso/connections/{connection_id}/verify-domain", response_model=EnterpriseSSOConnectionEntry)
+async def verify_sso_connection_domain(
+    connection_id: uuid.UUID, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    """Marks the connection's domain verified only if the `_rag-verify.<domain>` TXT record carries its token."""
+    connection = await db.get(EnterpriseSSOConnection, connection_id)
+    if connection is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not connection.domain_verified:
+        if not connection.domain_verification_token or not await check_email_verification_txt_record(
+            connection.email_domain, connection.domain_verification_token
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Domain ownership not proven: publish the TXT record _rag-verify.{connection.email_domain} with the connection's verification token",
+            )
+        connection.domain_verified = True
+        connection.domain_verified_at = dt.datetime.now(dt.timezone.utc)
+        await log_audit_action(
+            db, user_id=admin.id, action=AuditAction.ENTERPRISE_SSO_DOMAIN_VERIFIED, ip=None, user_agent=None,
+            success=True, metadata={"email_domain": connection.email_domain, "connection_id": str(connection.id)},
+        )
+        await db.commit()
     return EnterpriseSSOConnectionEntry.model_validate(connection)
 
 
@@ -174,6 +207,7 @@ async def discover_sso(payload: SSODiscoverRequest, db: AsyncSession = Depends(g
     connection = await db.scalar(
         select(EnterpriseSSOConnection).where(
             EnterpriseSSOConnection.email_domain == _email_domain(payload.email), EnterpriseSSOConnection.is_enabled.is_(True),
+            EnterpriseSSOConnection.domain_verified.is_(True),
         )
     )
     if connection is None:
@@ -184,7 +218,7 @@ async def discover_sso(payload: SSODiscoverRequest, db: AsyncSession = Depends(g
 @router.get("/auth/sso/{connection_id}/authorize")
 async def sso_authorize(connection_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
     connection = await db.get(EnterpriseSSOConnection, connection_id)
-    if connection is None or not connection.is_enabled:
+    if connection is None or not connection.is_enabled or not connection.domain_verified:
         raise _INVALID_CONNECTION
 
     try:
@@ -223,7 +257,7 @@ async def sso_callback(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired SSO login attempt, please try again")
 
     connection = await db.get(EnterpriseSSOConnection, connection_id)
-    if connection is None or not connection.is_enabled:
+    if connection is None or not connection.is_enabled or not connection.domain_verified:
         raise _INVALID_CONNECTION
 
     try:

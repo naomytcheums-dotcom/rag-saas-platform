@@ -30,6 +30,7 @@ never an empty result mistaken for "nothing detected"."""
 import copy
 import json
 import logging
+import re
 import tempfile
 import uuid
 from pathlib import Path
@@ -67,6 +68,38 @@ class MediaNotFoundError(Exception):
     pass
 
 
+_MAX_FILENAME_LENGTH = 255
+_FILENAME_UNSAFE = re.compile(r"[^\w.\- ]")
+# Extensions the server may put on its own temporary files; the client's name never reaches the disk.
+_TEMP_EXTENSIONS_BY_MIME = {
+    "video/mp4": ".mp4", "video/quicktime": ".mov", "video/webm": ".webm", "video/x-matroska": ".mkv",
+    "video/x-msvideo": ".avi", "video/mpeg": ".mpeg", "video/ogg": ".ogv", "video/3gpp": ".3gp",
+}
+_ALLOWED_TEMP_EXTENSIONS = frozenset(_TEMP_EXTENSIONS_BY_MIME.values()) | {".m4v"}
+
+
+def sanitize_media_filename(raw: str | None) -> str:
+    """Display name for an uploaded file: no directory part (either separator), no control characters, a restricted
+    character set, never hidden/relative (".", ".."), at most 255 characters with the extension kept."""
+    name = re.split(r"[\\/]", raw or "")[-1]
+    name = _FILENAME_UNSAFE.sub("_", name).strip(" .")
+    if not name:
+        return "media"
+    if len(name) > _MAX_FILENAME_LENGTH:
+        _stem, dot, extension = name.rpartition(".")
+        extension = ("." + extension) if dot and len(extension) <= 10 else ""
+        name = name[: _MAX_FILENAME_LENGTH - len(extension)] + extension
+    return name
+
+
+def media_temp_filename(asset: MediaAsset) -> str:
+    """Server-generated temporary file name (asset id + allow-listed extension): the stored client name is never used as a path."""
+    extension = Path(sanitize_media_filename(asset.filename)).suffix.lower()
+    if extension not in _ALLOWED_TEMP_EXTENSIONS:
+        extension = _TEMP_EXTENSIONS_BY_MIME.get((asset.mime_type or "").lower(), ".bin")
+    return f"{asset.id}{extension}"
+
+
 def detect_media_type(mime_type: str) -> MediaType | None:
     if mime_type.startswith(_IMAGE_MIME_PREFIXES):
         return MediaType.image
@@ -94,6 +127,7 @@ async def upload_media(
     if len(content) > max_size:
         raise ValueError(f"file exceeds the {max_size // (1024 * 1024)}MB limit for {media_type.value}")
 
+    filename = sanitize_media_filename(filename)
     asset = MediaAsset(
         organization_id=organization_id, uploaded_by=user_id, media_type=media_type, status=MediaStatus.pending,
         filename=filename, file_key="", file_size=len(content), mime_type=mime_type,
@@ -322,7 +356,7 @@ async def process_media_asset(db: AsyncSession, media_asset_id: uuid.UUID) -> Me
         elif asset.media_type == MediaType.video:
             content = download_document_file(asset.file_key)
             with tempfile.TemporaryDirectory() as tmp_dir:
-                video_path = str(Path(tmp_dir) / asset.filename)
+                video_path = str(Path(tmp_dir) / media_temp_filename(asset))
                 Path(video_path).write_bytes(content)
                 try:
                     asset.duration_ms = get_video_duration_ms(video_path)
