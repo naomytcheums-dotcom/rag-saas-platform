@@ -1800,6 +1800,9 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str | None = None
     TWILIO_WEBHOOK_URL: str | None = None
     TWILIO_VOICE_TIMEOUT: int = 30
+    # SEC-004: per-organization cap on outbound calls (each one is billed to the platform's Twilio account).
+    TWILIO_OUTBOUND_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    TWILIO_OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     # -- Public API (Partie 9.1) -----------------------------------------------------
     # Real, per-API-key rate limit -- see api/security/public_api_auth.py's

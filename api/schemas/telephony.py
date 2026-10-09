@@ -3,7 +3,13 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class OutboundCallRequest(BaseModel):
+    # E.164 only: Twilio would also dial sip:/client: addresses, which a tenant has no business reaching.
+    to: str = Field(pattern=r"^\+[1-9]\d{6,14}$")
+    agent_id: uuid.UUID
 
 
 class CallRecordResponse(BaseModel):

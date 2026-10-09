@@ -15,23 +15,26 @@ interface CallRecord {
 }
 
 interface TelephonyProps {
+  orgId: string;
   agentId: string;
 }
 
-// Partie 8.2.13 -- real call history (GET /twilio/calls) plus placing
-// (POST /twilio/outbound) and ending (POST /twilio/{sid}/end) real
-// calls -- both need real TWILIO_* credentials configured server-side
+// Partie 8.2.13 -- real call history (GET /organizations/{org}/twilio/calls) plus placing
+// (POST .../twilio/outbound) and ending (POST .../twilio/calls/{sid}/end) real
+// calls, always scoped to the caller's own organization -- both need real
+// TWILIO_* credentials configured server-side
 // (see api/services/telephony.py's own `_require_credentials`); a
 // real, honest error surfaces here otherwise, never a fake success.
-export default function Telephony({ agentId }: TelephonyProps) {
+export default function Telephony({ orgId, agentId }: TelephonyProps) {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [toNumber, setToNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const base = `/organizations/${orgId}/twilio`;
 
   async function refresh() {
     try {
-      setCalls(await api.get<CallRecord[]>("/twilio/calls"));
+      setCalls(await api.get<CallRecord[]>(`${base}/calls`));
     } catch {
       setCalls([]);
     }
@@ -42,13 +45,14 @@ export default function Telephony({ agentId }: TelephonyProps) {
     // ConversationList.tsx's own identical pattern, Partie 8.1).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
 
   async function placeCall() {
     setPlacing(true);
     setError(null);
     try {
-      await api.post(`/twilio/outbound?to=${encodeURIComponent(toNumber)}&agent_id=${agentId}`);
+      await api.post(`${base}/outbound`, { to: toNumber, agent_id: agentId });
       setToNumber("");
       await refresh();
     } catch (err) {
@@ -59,7 +63,7 @@ export default function Telephony({ agentId }: TelephonyProps) {
   }
 
   async function endCall(callSid: string) {
-    await api.post(`/twilio/${callSid}/end`);
+    await api.post(`${base}/calls/${encodeURIComponent(callSid)}/end`);
     await refresh();
   }
 

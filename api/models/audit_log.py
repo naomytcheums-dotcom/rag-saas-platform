@@ -76,6 +76,8 @@ class AuditAction(StrEnum):
     API_KEY_DELETED = "api_key_deleted"
     WEBHOOK_CREATED = "webhook_created"
     WEBHOOK_DELETED = "webhook_deleted"
+    TELEPHONY_CALL_PLACED = "telephony_call_placed"
+    TELEPHONY_CALL_ENDED = "telephony_call_ended"
     DOCUMENT_UPLOADED = "document_uploaded"
     DOCUMENT_DELETED = "document_deleted"
     AGENT_CREATED = "agent_created"

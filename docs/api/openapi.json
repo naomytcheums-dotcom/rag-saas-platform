@@ -15084,6 +15084,11 @@
         ],
         "summary": "Reindex Document Sync",
         "operationId": "reindex_document_sync_documents__document_id__reindex_sync_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "document_id",
@@ -15091,6 +15096,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Document Id"
             }
           }
@@ -20601,6 +20607,7 @@
           "telephony"
         ],
         "summary": "Twilio Outbound Endpoint",
+        "description": "Platform-superadmin only. Tenants place calls through `POST /organizations/{org_id}/twilio/outbound`.",
         "operationId": "twilio_outbound_endpoint_twilio_outbound_post",
         "security": [
           {
@@ -20671,6 +20678,7 @@
           "telephony"
         ],
         "summary": "List Calls Endpoint",
+        "description": "Platform-superadmin only: the history of every tenant. Tenants use `GET /organizations/{org_id}/twilio/calls`.",
         "operationId": "list_calls_endpoint_twilio_calls_get",
         "responses": {
           "200": {
@@ -20701,6 +20709,7 @@
           "telephony"
         ],
         "summary": "Twilio End Call Endpoint",
+        "description": "Platform-superadmin only. Tenants end their own calls through `POST /organizations/{org_id}/twilio/calls/{call_sid}/end`.",
         "operationId": "twilio_end_call_endpoint_twilio__call_sid__end_post",
         "security": [
           {
@@ -20708,6 +20717,189 @@
           }
         ],
         "parameters": [
+          {
+            "name": "call_sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Call Sid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/twilio/calls": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "List Organization Calls Endpoint",
+        "operationId": "list_organization_calls_endpoint_organizations__org_id__twilio_calls_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CallRecordResponse"
+                  },
+                  "title": "Response List Organization Calls Endpoint Organizations  Org Id  Twilio Calls Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/twilio/outbound": {
+      "post": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Place Organization Call Endpoint",
+        "operationId": "place_organization_call_endpoint_organizations__org_id__twilio_outbound_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutboundCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/twilio/calls/{call_sid}/end": {
+      "post": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "End Organization Call Endpoint",
+        "operationId": "end_organization_call_endpoint_organizations__org_id__twilio_calls__call_sid__end_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
           {
             "name": "call_sid",
             "in": "path",
@@ -25171,14 +25363,42 @@
           "Teams Integration"
         ],
         "summary": "Teams Webhook Endpoint",
-        "description": "Real Bot Framework Activity webhook. \u26a0\ufe0f Honest limitation: no\nreal, live JWKS-backed bearer-token verification here yet -- see\napi/services/chat_integrations/teams.py's own top docstring.",
+        "description": "Bot Framework Activity webhook. Authenticated with the JWT Microsoft signs for the bot\n(api/security/teams_bot_auth.py): the audience must be the bot App ID of the integration for the activity's tenant\n(or the global TEAMS_BOT_ID). A missing, wrong or expired token answers 401 and nothing is processed.",
         "operationId": "teams_webhook_endpoint_integrations_teams_webhook_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -25463,14 +25683,42 @@
           "Discord Integration"
         ],
         "summary": "Discord Message Webhook Endpoint",
-        "description": "A REAL bot connected via the Discord Gateway (outside this\nHTTP API's own process, same real \"the actual socket connection is\nexternal infrastructure\" boundary Partie 8.2's own telephony\nintegration draws for Twilio's media stream) posts inbound\nmessages here. Real, honest scope: this endpoint trusts its own\ncaller (the gateway bot process) rather than re-verifying a\nsignature Discord itself never sends for gateway-sourced events.",
+        "description": "A REAL bot connected via the Discord Gateway (outside this\nHTTP API's own process, same real \"the actual socket connection is\nexternal infrastructure\" boundary Partie 8.2's own telephony\nintegration draws for Twilio's media stream) posts inbound\nmessages here. Real, honest scope: this endpoint trusts its own\ncaller (the gateway bot process) rather than re-verifying a\nsignature Discord itself never sends for gateway-sourced events.\n\nBecause it triggers a paid RAG answer, it is NOT open: the gateway bot must send the shared secret in `X-Gateway-Secret`\n(`DISCORD_GATEWAY_SHARED_SECRET`); an unset secret or a wrong one answers 401.",
         "operationId": "discord_message_webhook_endpoint_integrations_discord_message_post",
+        "parameters": [
+          {
+            "name": "x-gateway-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Gateway-Secret"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -36932,6 +37180,58 @@
         ]
       }
     },
+    "/billing/display-currency": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Display Currency Endpoint",
+        "description": "Public. The currency (and a language suggestion) for the visitor, from an explicit `country` hint, else their IP, else their browser language.",
+        "operationId": "display_currency_endpoint_billing_display_currency_get",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisplayCurrencyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/billing/plans": {
       "get": {
         "tags": [
@@ -39950,7 +40250,7 @@
           "Integrations"
         ],
         "summary": "N8N Status Endpoint",
-        "description": "Real reachability check against a real n8n instance -- honest\n'reachable: false' rather than a fabricated 'ok' when N8N_URL is\nunset or the instance isn't actually up (e.g. the local Docker\nCompose n8n service, docker-compose.observability.yml, not\nstarted).",
+        "description": "Real reachability check against a real n8n instance -- honest\n'reachable: false' rather than a fabricated 'ok' when N8N_URL is\nunset or the instance isn't actually up (e.g. the local Docker\nCompose n8n service, docker-compose.observability.yml, not\nstarted). Authenticated: the response carries the internal service URL, which an anonymous caller must not learn.",
         "operationId": "n8n_status_endpoint_integrations_n8n_status_get",
         "responses": {
           "200": {
@@ -39961,7 +40261,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/integrations/airbyte/status": {
@@ -39980,7 +40285,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/integrations/providers": {
@@ -42135,7 +42445,7 @@
           "Notification Templates"
         ],
         "summary": "Preview Template Endpoint",
-        "description": "Render the effective template for this org+type with the given\ncontext, using the real DB-backed lookup (org-specific -> global ->\ncode default). Never sends anything -- pure preview.",
+        "description": "Render the effective template for this org+type with the given\ncontext, using the real DB-backed lookup (org-specific -> global ->\ncode default). Never sends anything -- pure preview. A context that lacks a variable the template uses is the caller's mistake:\n400 with the reason, not an unhandled Jinja error.",
         "operationId": "preview_template_endpoint_organizations__org_id__notifications_templates_preview_post",
         "security": [
           {
@@ -42297,7 +42607,7 @@
           "Sales"
         ],
         "summary": "Validate License Endpoint",
-        "description": "Public -- a self-hosted deployment with no logged-in user yet\n(e.g. checking on startup) still needs to validate its own key.",
+        "description": "Public -- a self-hosted deployment with no logged-in user yet\n(e.g. checking on startup) still needs to validate its own key. Rate-limited per IP so it cannot be used to guess keys.",
         "operationId": "validate_license_endpoint_license_validate_post",
         "requestBody": {
           "content": {
@@ -42537,7 +42847,7 @@
           "Sales"
         ],
         "summary": "Register Partner Endpoint",
-        "description": "Public -- the real front door create_reseller (superadmin-only)\nnever had: a prospective partner creates their own account, own\norganization, and their own Reseller row, all in this one call.",
+        "description": "Public -- the real front door create_reseller (superadmin-only)\nnever had: a prospective partner creates their own account, own\norganization, and their own Reseller row, all in this one call.\n\nIt creates an account, so it gets the same protections as `POST /auth/register`: a per-IP rate limit, the terms must be\nexplicitly accepted (consent is never assumed), and the password goes through the same breach and similarity checks.",
         "operationId": "register_partner_endpoint_partners_register_post",
         "requestBody": {
           "content": {
@@ -49223,12 +49533,40 @@
         "summary": "Metrics",
         "description": "Audit finding 22 -- Prometheus text exposition format\n(api/monitoring.py), scrapeable directly by a real Prometheus server.\nCorrectly aggregates across multiple worker processes when\nPROMETHEUS_MULTIPROC_DIR is set (see gunicorn.conf.py) -- a single\nprocess reads its own in-memory metrics either way, so nothing about\nrunning this with one worker (e.g. local dev) needs that variable\nset at all. Deliberately public/unauthenticated, same as /health and\n/health/ready: a metrics scraper generally can't do OAuth, and the\nreal access control for this endpoint is expected to be network-level\n(firewalled to the scraper's own network/VPC), not application-level.",
         "operationId": "metrics_metrics_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -57609,6 +57947,64 @@
           "text"
         ],
         "title": "DiscordSendMessageRequest"
+      },
+      "DisplayCurrencyResponse": {
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "per_euro": {
+            "type": "number",
+            "title": "Per Euro"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "attribution_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution Url"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "country",
+          "currency",
+          "per_euro",
+          "source"
+        ],
+        "title": "DisplayCurrencyResponse",
+        "description": "How a visitor should see prices: plans are billed in EUR, `per_euro` units of `currency` equal one euro."
       },
       "DnsRecordEntry": {
         "properties": {
@@ -66107,6 +66503,26 @@
         "title": "OrganizationUpdateRequest",
         "description": "Body of PATCH /organizations/{id} -- Owner only."
       },
+      "OutboundCallRequest": {
+        "properties": {
+          "to": {
+            "type": "string",
+            "pattern": "^\\+[1-9]\\d{6,14}$",
+            "title": "To"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to",
+          "agent_id"
+        ],
+        "title": "OutboundCallRequest"
+      },
       "PairedComparisonABTestResponse": {
         "properties": {
           "question_set_id": {
@@ -68281,6 +68697,11 @@
               }
             ],
             "title": "Full Name"
+          },
+          "accept_terms": {
+            "type": "boolean",
+            "title": "Accept Terms",
+            "default": false
           }
         },
         "type": "object",
