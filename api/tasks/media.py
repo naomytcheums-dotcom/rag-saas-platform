@@ -100,7 +100,7 @@ async def _extract_frames_async() -> int:
 
     from api.models.media import MediaFrame
     from api.services.document_storage import download_document_file
-    from api.services.media import extract_video_frames
+    from api.services.media import extract_video_frames, media_temp_filename
 
     engine, session_factory = _session_factory()
     processed = 0
@@ -116,7 +116,7 @@ async def _extract_frames_async() -> int:
                 try:
                     content = download_document_file(asset.file_key)
                     with tempfile.TemporaryDirectory() as tmp_dir:
-                        video_path = str(Path(tmp_dir) / asset.filename)
+                        video_path = str(Path(tmp_dir) / media_temp_filename(asset))
                         Path(video_path).write_bytes(content)
                         await extract_video_frames(db, asset, video_path)
                     processed += 1

@@ -141,7 +141,7 @@ async def get_media_file_endpoint(asset_ctx: tuple[MediaAsset, OrganizationMembe
         chunks = stream_document_file(asset.file_key)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return StreamingResponse(chunks, media_type=asset.mime_type, headers={"Content-Disposition": f'inline; filename="{asset.filename}"'})
+    return StreamingResponse(chunks, media_type=asset.mime_type, headers={"Content-Disposition": f'inline; filename="{media_service.sanitize_media_filename(asset.filename)}"'})
 
 
 @router.get("/media/{media_asset_id}/frames", response_model=list[MediaFrameResponse])
