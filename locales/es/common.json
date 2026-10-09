@@ -550,6 +550,8 @@
   "admin.user_verified": "verified",
   "admin.user_unverified": "not verified",
   "admin.users_empty": "No user found.",
+  "admin.plan_price_invalid": "The monthly price must be a number that is zero or more.",
+  "admin.plan_write_forbidden": "Only a superadmin can create or change plans and prices.",
   "admin.plans": "Plans",
   "admin.plan_monthly": "/month",
   "admin.plan_name_placeholder": "Plan name",
