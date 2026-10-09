@@ -66,12 +66,55 @@ async def _process_document_async(document_id: str) -> str:
         await engine.dispose()
 
 
-@celery_app.task(name="api.tasks.document_processing.process_document_task")
-def process_document_task(document_id: str) -> str:
+@celery_app.task(name="api.tasks.document_processing.process_document_task", bind=True, max_retries=5)
+def process_document_task(self, document_id: str) -> str:
     """
     Item 4's literal task -- dispatched once per upload
     (api/security/documents.py's schedule_document_processing).
     Returns the document's final status string, mainly so a manual
     invocation or test can assert on it.
+
+    RAG-003: the task can be published before the upload's own transaction commits, in which case the document does not exist yet
+    for this worker. "not_found" is therefore retried with a short back-off (a genuinely deleted document costs a few cheap retries)
+    instead of being reported as a success; documents whose task is lost altogether are picked up by the periodic sweep below.
     """
-    return asyncio.run(_process_document_async(document_id))
+    status = asyncio.run(_process_document_async(document_id))
+    if status == "not_found":
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=min(2 ** (self.request.retries + 1), 30))
+        logger.warning("process_document_task: document '%s' still not found after %d retries; giving up", document_id, self.max_retries)
+    return status
+
+
+async def _requeue_stale_pending_async() -> int:
+    import datetime as dt
+
+    from sqlalchemy import select
+
+    from api.models.document import Document, DocumentStatus
+    from api.security.documents import ZIP_CONTENT_TYPE
+
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=settings.DOCUMENT_PENDING_REQUEUE_AFTER_MINUTES)
+    engine = make_async_engine()
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    try:
+        async with session_factory() as db:
+            ids = (await db.scalars(
+                select(Document.id).where(
+                    Document.status == DocumentStatus.pending.value, Document.deleted_at.is_(None), Document.file_key != "",
+                    Document.file_type != ZIP_CONTENT_TYPE, Document.created_at < cutoff,
+                ).order_by(Document.created_at).limit(settings.DOCUMENT_PENDING_REQUEUE_BATCH_SIZE)
+            )).all()
+    finally:
+        await engine.dispose()
+    for document_id in ids:
+        process_document_task.delay(str(document_id))
+    if ids:
+        logger.warning("requeue_stale_pending_documents: re-dispatched %d document(s) stuck in 'pending'", len(ids))
+    return len(ids)
+
+
+@celery_app.task(name="api.tasks.document_processing.requeue_stale_pending_documents_task")
+def requeue_stale_pending_documents_task() -> int:
+    """RAG-003 -- periodic sweep (see celery_app's beat schedule): re-dispatches documents stuck `pending` past the configured age."""
+    return asyncio.run(_requeue_stale_pending_async())

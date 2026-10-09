@@ -1068,6 +1068,9 @@ class Settings(BaseSettings):
     # every other enforce_rate_limit call in this codebase.
     DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # RAG-003 -- a document still `pending` after this long has lost its processing task and is re-dispatched by the periodic sweep.
+    DOCUMENT_PENDING_REQUEUE_AFTER_MINUTES: int = 10
+    DOCUMENT_PENDING_REQUEUE_BATCH_SIZE: int = 100
     SEARCH_RATE_LIMIT_MAX_ATTEMPTS: int = 120
     SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60

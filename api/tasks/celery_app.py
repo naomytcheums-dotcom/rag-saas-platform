@@ -120,6 +120,12 @@ celery_app = Celery(
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
         "api.tasks.media", "api.tasks.autonomous_agents", "api.tasks.fine_tuning", "api.tasks.workflows",
         "api.tasks.notifications",
+        # RAG-002: these modules define tasks that the API dispatches (reindex, ZIP/URL/sitemap/connector imports, batch uploads) but
+        # were missing here, so the worker rejected them as "unregistered task". tests/test_p1_celery_registration.py keeps this list complete.
+        "api.tasks.confluence_import", "api.tasks.document_batch_processing", "api.tasks.github_import",
+        "api.tasks.google_docs_import", "api.tasks.google_drive_import", "api.tasks.notion_import",
+        "api.tasks.onedrive_import", "api.tasks.reindex", "api.tasks.sitemap_import", "api.tasks.url_import",
+        "api.tasks.zip_import",
     ],
 )
 
@@ -233,6 +239,12 @@ celery_app.conf.beat_schedule = {
     "check-scheduled-reindexes": {
         "task": "api.tasks.reindex_schedule.check_scheduled_reindexes_task",
         "schedule": timedelta(minutes=1),
+    },
+    # RAG-003 -- a document whose processing task was lost (broker hiccup, task that ran before the upload committed) would stay
+    # `pending` forever; this sweep re-dispatches the ones that have been pending for too long.
+    "requeue-stale-pending-documents": {
+        "task": "api.tasks.document_processing.requeue_stale_pending_documents_task",
+        "schedule": timedelta(minutes=10),
     },
     # Partie 5.4.2 -- same "timedelta, not crontab" reasoning as
     # check-scheduled-reindexes just above: a workflow's own `schedule`
