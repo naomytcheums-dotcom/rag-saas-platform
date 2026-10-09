@@ -25,6 +25,8 @@ already the real, working admin CRUD; this router's plan endpoints are
 read-only, for the same reason GET /billing/plans is public.
 """
 
+import datetime as dt
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -32,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db
-from api.models.admin import Plan
+from api.models.admin import Plan, SubscriptionStatus
 from api.models.billing import InvoiceStatus
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User, UserRole
@@ -55,6 +57,7 @@ from api.utils import MAX_PAGE_SIZE, client_ip
 
 router = APIRouter(tags=["Billing"])
 org_router = APIRouter(prefix="/organizations/{org_id}/billing", tags=["Billing"])
+logger = logging.getLogger(__name__)
 
 
 # -- 12.1 plans (public catalog) ---------------------------------------------
@@ -143,14 +146,49 @@ async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _calle
 @org_router.post("/cancel", response_model=SubscriptionResponse)
 async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscriptionRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    if sub.stripe_subscription_id or sub.paystack_subscription_code:
+        # BILL-006: a provider-managed subscription is cancelled at the provider first (at period end), otherwise the provider
+        # keeps charging. Access runs until the period ends; the provider's webhook then moves the subscription to canceled.
+        await _cancel_at_provider(db, org_id, sub)
+        sub.canceled_at = dt.datetime.now(dt.timezone.utc)
+        sub.cancel_reason = body.reason
+        await db.commit()
+        return sub
     result = await admin_subscriptions.cancel_subscription(db, sub.id, reason=body.reason)
     await db.commit()
     return result
 
 
+async def _cancel_at_provider(db: AsyncSession, org_id: uuid.UUID, sub) -> None:
+    try:
+        if sub.stripe_subscription_id:
+            await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=True)
+        else:
+            from api.services import billing_paystack
+
+            await billing_paystack.cancel_paystack_subscription(db, org_id, at_period_end=True)
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 -- the provider SDK/HTTP failure must not be hidden as a local cancellation
+        logger.warning("billing: provider cancellation failed for organization %s: %s", org_id, type(exc).__name__)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The payment provider could not cancel the subscription; nothing was changed")
+
+
 @org_router.post("/reactivate", response_model=SubscriptionResponse)
 async def reactivate_subscription_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    if sub.stripe_subscription_id and sub.status == SubscriptionStatus.active and sub.canceled_at is not None:
+        # Scheduled cancellation not yet effective: withdraw it at the provider too.
+        try:
+            await billing_stripe.resume_stripe_subscription(db, org_id)
+        except ProviderNotConfiguredError as exc:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("billing: provider reactivation failed for organization %s: %s", org_id, type(exc).__name__)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The payment provider could not reactivate the subscription; nothing was changed")
+    elif sub.stripe_subscription_id or sub.paystack_subscription_code:
+        if sub.status == SubscriptionStatus.canceled:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This subscription has ended at the payment provider: start a new checkout instead")
     result = await admin_subscriptions.reactivate_subscription(db, sub.id)
     await db.commit()
     return result

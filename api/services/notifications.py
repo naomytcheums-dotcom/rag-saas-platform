@@ -413,7 +413,6 @@ async def notify_billing_payment_succeeded(db: AsyncSession, organization_id: uu
         db,
         user_id=owner.user_id,
         organization_id=organization_id,
-        type="billing_payment_succeeded",
-        title="Payment received",
-        body=f"Your payment for {org.name} was received successfully.",
+        notification_type="billing_payment_succeeded",
+        context={"organization_name": org.name},
     )
