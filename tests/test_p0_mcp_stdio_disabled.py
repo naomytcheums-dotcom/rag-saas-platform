@@ -214,7 +214,8 @@ async def test_when_enabled_the_client_reaches_the_launcher_with_the_configured_
     monkeypatch.setattr(mcp_client, "stdio_client", fake_stdio_client)
     server = MCPServerConfig(organization_id=None, name="trusted", transport="stdio", command="python", args=["-c", "x"], env={})
 
-    with pytest.raises(MCPClientError, match="failed to discover tools"  # SEC-005: transport error text is hidden; `seen` below proves the launcher was reached):
+    # SEC-005: transport error text is hidden; `seen` below proves the launcher was reached.
+    with pytest.raises(MCPClientError, match="failed to discover tools"):
         await discover_tools(server)
 
     assert len(seen) == 1 and seen[0].command == "python"
