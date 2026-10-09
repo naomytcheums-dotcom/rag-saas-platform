@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin, require_superadmin
-from api.models.admin import Plan
+from api.models.admin import Plan, SubscriptionStatus
 from api.models.audit_log import AuditAction
 from api.models.user import User
-from api.routers.billing import _settle_invoice_or_http_error
+from api.routers.billing import _cancel_at_provider, _settle_invoice_or_http_error
 from api.schemas.billing import InvoiceResponse, VoidInvoiceRequest
 from api.schemas.admin_dashboard import (
     PlanCreateRequest,
@@ -102,6 +102,15 @@ async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionU
     return SubscriptionResponse.model_validate(sub)
 
 
+async def _cancel_with_provider(db, sub_id, reason):
+    """V8: a back-office cancellation must stop the provider's billing too (immediately: the local status becomes canceled now), otherwise
+    the customer keeps being charged for a subscription the platform shows as ended. A provider failure changes nothing (502/501)."""
+    sub = await get_subscription(db, sub_id)
+    if (sub.stripe_subscription_id or sub.paystack_subscription_code) and sub.status != SubscriptionStatus.canceled:
+        await _cancel_at_provider(db, sub.organization_id, sub, at_period_end=False)
+    return await cancel_subscription(db, sub_id, reason=reason)
+
+
 @router.post("/subscriptions/{sub_id}/cancel", response_model=SubscriptionResponse)
 async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionCancelRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Real, deliberate: POST, not DELETE -- a DELETE carrying a JSON
@@ -112,7 +121,7 @@ async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionC
     is kept working too, see below, but without a body."""
     try:
         before = _subscription_state(await get_subscription(db, sub_id))
-        sub = await cancel_subscription(db, sub_id, reason=payload.reason)
+        sub = await _cancel_with_provider(db, sub_id, payload.reason)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await _audit_subscription_change(db, request, admin, sub, "cancel", before)
@@ -126,7 +135,7 @@ async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admi
     same real cancel, no reason (real HTTP DELETE carries no body)."""
     try:
         before = _subscription_state(await get_subscription(db, sub_id))
-        sub = await cancel_subscription(db, sub_id, reason=None)
+        sub = await _cancel_with_provider(db, sub_id, None)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await _audit_subscription_change(db, request, admin, sub, "cancel", before)

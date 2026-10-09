@@ -164,14 +164,14 @@ async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscripti
     return result
 
 
-async def _cancel_at_provider(db: AsyncSession, org_id: uuid.UUID, sub) -> None:
+async def _cancel_at_provider(db: AsyncSession, org_id: uuid.UUID, sub, *, at_period_end: bool = True) -> None:
     try:
         if sub.stripe_subscription_id:
-            await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=True)
+            await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=at_period_end)
         else:
             from api.services import billing_paystack
 
-            await billing_paystack.cancel_paystack_subscription(db, org_id, at_period_end=True)
+            await billing_paystack.cancel_paystack_subscription(db, org_id, at_period_end=at_period_end)
     except ProviderNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 -- the provider SDK/HTTP failure must not be hidden as a local cancellation
