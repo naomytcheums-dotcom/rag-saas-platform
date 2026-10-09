@@ -11,6 +11,8 @@ from api.dependencies import get_db, require_admin, require_superadmin
 from api.models.admin import Plan
 from api.models.audit_log import AuditAction
 from api.models.user import User
+from api.routers.billing import _settle_invoice_or_http_error
+from api.schemas.billing import InvoiceResponse, VoidInvoiceRequest
 from api.schemas.admin_dashboard import (
     PlanCreateRequest,
     PlanResponse,
@@ -154,6 +156,17 @@ async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionE
     await _audit_subscription_change(db, request, admin, sub, "extend", before, extra={"days": payload.days})
     await db.commit()
     return SubscriptionResponse.model_validate(sub)
+
+
+@router.post("/organizations/{org_id}/invoices/{invoice_id}/mark-paid", response_model=InvoiceResponse)
+async def admin_mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """BILL-002 back-office reconciliation (bank transfer, manual settlement): the platform's own route, not tied to the organization's membership."""
+    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="paid", reason=None, actor=admin, request=request)
+
+
+@router.post("/organizations/{org_id}/invoices/{invoice_id}/void", response_model=InvoiceResponse)
+async def admin_void_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, body: VoidInvoiceRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="void", reason=body.reason, actor=admin, request=request)
 
 
 @router.get("/plans", response_model=list[PlanResponse])

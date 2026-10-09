@@ -356,30 +356,37 @@ async def remind_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _cal
 
 
 @org_router.post("/invoices/{invoice_id}/pay", response_model=InvoiceResponse)
-async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    # BILL-002 -- an organization must not be able to declare its own invoice paid: only the provider's webhook or a
-    # platform admin (back-office reconciliation) may. Same opt-out as plans for self-hosted/dev instances.
-    if current_user.role not in (UserRole.admin, UserRole.superadmin) and not settings.BILLING_ALLOW_SELF_SERVICE_PAID_PLANS:
+async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, request: Request, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # BILL-002 -- an organization must not be able to declare its own invoice paid: only the provider's webhook or the platform
+    # superadmin (back-office reconciliation) may. Same opt-out as plans for self-hosted/dev instances.
+    if current_user.role != UserRole.superadmin and not settings.BILLING_ALLOW_SELF_SERVICE_PAID_PLANS:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invoices are marked paid by the payment provider once the payment is confirmed; organizations cannot mark them paid",
         )
+    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="paid", reason=None, actor=current_user, request=request)
+
+
+async def _settle_invoice_or_http_error(db: AsyncSession, org_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor: User, request: Request):
     try:
-        invoice = await billing_invoices.mark_invoice_paid(db, org_id, invoice_id)
+        invoice = await billing_invoices.settle_invoice(
+            db, org_id, invoice_id, operation=operation, reason=reason, actor_id=actor.id, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except billing_invoices.InvoiceNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    except billing_invoices.InvoiceStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     await db.commit()
     return invoice
 
 
 @org_router.post("/invoices/{invoice_id}/void", response_model=InvoiceResponse)
-async def void_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, body: VoidInvoiceRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
-    try:
-        invoice = await billing_invoices.void_invoice(db, org_id, invoice_id, reason=body.reason)
-    except billing_invoices.InvoiceNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
-    await db.commit()
-    return invoice
+async def void_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, body: VoidInvoiceRequest, request: Request, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # BILL-002 -- voiding cancels what the organization owes: a platform decision (superadmin), never the debtor's. A paid invoice
+    # can never be voided (409). Same opt-out as `/pay` for self-hosted/dev instances without a payment provider.
+    if current_user.role != UserRole.superadmin and not settings.BILLING_ALLOW_SELF_SERVICE_PAID_PLANS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invoices are voided by the platform; contact support to cancel an invoice")
+    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="void", reason=body.reason, actor=current_user, request=request)
 
 
 # -- 12.2 Stripe (org-scoped checkout/portal/payment methods/invoices) --------

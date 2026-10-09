@@ -27,8 +27,29 @@ class InvoiceNotFoundError(InvoiceError):
     pass
 
 
+class InvoiceStateError(InvoiceError):
+    """The requested transition is not allowed from the invoice's current status (BILL-002)."""
+
+    def __init__(self, current: InvoiceStatus, requested: str):
+        super().__init__(f"An invoice that is {current.value} cannot be {requested}")
+        self.current = current
+        self.requested = requested
+
+
 class PDFUnavailableError(InvoiceError):
     pass
+
+
+async def audit_invoice_transition(db: AsyncSession, *, user_id: uuid.UUID, ip: str | None, user_agent: str | None, invoice: Invoice, operation: str, before: InvoiceStatus, reason: str | None = None) -> None:
+    """BILL-002 / V9: marking an invoice paid or voiding it is a financial act: who, on which organization, from which status to which."""
+    from api.models.audit_log import AuditAction
+    from api.security.audit_log import log_audit_action
+
+    await log_audit_action(
+        db, user_id=user_id, action=AuditAction.INVOICE_MARKED_PAID if operation == "paid" else AuditAction.INVOICE_VOIDED, ip=ip, user_agent=user_agent,
+        success=True, organization_id=invoice.organization_id, resource_type="invoice", resource_id=str(invoice.id),
+        metadata={"number": invoice.number, "before": before.value, "after": invoice.status.value, "total_cents": invoice.total_cents, **({"reason": reason} if reason else {})},
+    )
 
 
 async def generate_invoice_number(db: AsyncSession) -> str:
@@ -136,7 +157,12 @@ async def remind_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_i
 
 
 async def mark_invoice_paid(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
+    """paid is terminal: marking a paid invoice again is a no-op (the first paid_at is kept); a void or refunded invoice cannot be paid."""
     invoice = await get_invoice(db, organization_id, invoice_id)
+    if invoice.status == InvoiceStatus.paid:
+        return invoice
+    if invoice.status in (InvoiceStatus.void, InvoiceStatus.refunded):
+        raise InvoiceStateError(invoice.status, "marked paid")
     invoice.status = InvoiceStatus.paid
     invoice.paid_at = dt.datetime.now(dt.timezone.utc)
     await db.flush()
@@ -144,11 +170,28 @@ async def mark_invoice_paid(db: AsyncSession, organization_id: uuid.UUID, invoic
 
 
 async def void_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, reason: str | None) -> Invoice:
+    """A paid invoice can never be voided (that would erase collected revenue; a refund is a separate operation); voiding twice is a no-op."""
     invoice = await get_invoice(db, organization_id, invoice_id)
+    if invoice.status == InvoiceStatus.void:
+        return invoice
+    if invoice.status in (InvoiceStatus.paid, InvoiceStatus.refunded):
+        raise InvoiceStateError(invoice.status, "voided")
     invoice.status = InvoiceStatus.void
     invoice.voided_at = dt.datetime.now(dt.timezone.utc)
     invoice.void_reason = reason
     await db.flush()
+    return invoice
+
+
+async def settle_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor_id: uuid.UUID, ip: str | None, user_agent: str | None) -> Invoice:
+    """The single entry point for the two privileged invoice transitions (`paid` / `void`): state machine + audit in the caller's transaction."""
+    before = (await get_invoice(db, organization_id, invoice_id)).status
+    if operation == "paid":
+        invoice = await mark_invoice_paid(db, organization_id, invoice_id)
+    else:
+        invoice = await void_invoice(db, organization_id, invoice_id, reason=reason)
+    if invoice.status != before:  # a repeated call is an idempotent no-op, not a second financial act
+        await audit_invoice_transition(db, user_id=actor_id, ip=ip, user_agent=user_agent, invoice=invoice, operation=operation, before=before, reason=reason)
     return invoice
 
 

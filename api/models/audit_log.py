@@ -81,6 +81,8 @@ class AuditAction(StrEnum):
     TELEPHONY_CALL_ENDED = "telephony_call_ended"
     ADMIN_SUBSCRIPTION_CHANGED = "admin_subscription_changed"
     ADMIN_PLAN_CHANGED = "admin_plan_changed"
+    INVOICE_MARKED_PAID = "invoice_marked_paid"
+    INVOICE_VOIDED = "invoice_voided"
     DOCUMENT_UPLOADED = "document_uploaded"
     DOCUMENT_DELETED = "document_deleted"
     AGENT_CREATED = "agent_created"

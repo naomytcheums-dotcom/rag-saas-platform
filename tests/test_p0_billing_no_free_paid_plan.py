@@ -251,7 +251,7 @@ async def test_a_platform_admin_can_still_reconcile_an_invoice(client, db_sessio
     token, org_id = await _org(client, register_payload)
     invoice_id = await _pending_invoice(db_session, org_id)
     user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
-    user.role = UserRole.admin
+    user.role = UserRole.superadmin  # SADM-005 / BILL-002: reconciliation is a superadmin act (a plain admin is refused, see test_p1_bill002_invoice_state_machine.py)
     await db_session.commit()
 
     response = await client.post(f"/organizations/{org_id}/billing/invoices/{invoice_id}/pay", headers=_auth(token))
