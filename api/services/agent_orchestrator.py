@@ -87,7 +87,7 @@ from api.services.agent_permissions import check_agent_permission
 from api.services.agent_tools import resolve_agent_tools
 from api.services.citations import add_citations_to_response
 from api.services.agent_traces import end_trace, start_trace
-from api.security.credit_packs import credits_for_usage
+from api.security.credit_packs import credits_for_llm_usage
 from api.services.billing_credits import deduct_credits_up_to
 from api.services.llm_byok import resolve_org_api_key
 from api.services.llm_config import resolve_llm_config
@@ -485,9 +485,7 @@ class AgentOrchestrator:
                 nonlocal credits_exhausted
                 if organization_id is None or byok_key or not usage:
                     return
-                cost = credits_for_usage("tokens_input", usage.get("prompt_tokens") or 0) + credits_for_usage(
-                    "tokens_output", usage.get("completion_tokens") or 0
-                )
+                cost = credits_for_llm_usage(usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, llm_cfg.get("model"))
                 if cost > 0:
                     async with self._db_lock:
                         credit_after, _charged, shortfall = await deduct_credits_up_to(
@@ -992,9 +990,7 @@ class AgentOrchestrator:
             # fabricate a cost" reasoning as the non-streaming path's
             # own `completion.get("usage")` check.
             if organization_id is not None and not stream_byok_key and stream_usage:
-                cost = credits_for_usage("tokens_input", stream_usage.get("prompt_tokens") or 0) + credits_for_usage(
-                    "tokens_output", stream_usage.get("completion_tokens") or 0
-                )
+                cost = credits_for_llm_usage(stream_usage.get("prompt_tokens") or 0, stream_usage.get("completion_tokens") or 0, llm_cfg.get("model"))
                 if cost > 0:
                     # BILL-008 -- min(balance, cost): never negative, never silently unbilled (shortfall in the ledger + log).
                     async with self._db_lock:

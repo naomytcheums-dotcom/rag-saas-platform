@@ -1615,6 +1615,10 @@ class Settings(BaseSettings):
         "mistral-small": {"input": 0.15, "output": 0.60},
     })
     COST_DEFAULT_CURRENCY: str = "USD"
+    # BILL-009 -- credit pricing is calibrated on the default chat model; a dearer model is charged proportionally more credits.
+    CREDITS_BASELINE_INPUT_USD_PER_M: float = 2.0
+    CREDITS_BASELINE_OUTPUT_USD_PER_M: float = 10.0
+    CREDITS_UNKNOWN_MODEL_MULTIPLIER: float = 1.0
 
     # -- Regression detection (Partie 7.3.3) -------------------------------------
     REGRESSION_DETECTION_ENABLED: bool = True
