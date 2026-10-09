@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import settings
 from api.dependencies import get_current_user, get_db
 from api.models.admin import Plan, SubscriptionStatus
+from api.models.audit_log import AuditAction
 from api.models.billing import InvoiceStatus
 from api.models.organization import Organization, OrganizationMember
 from api.models.user import User, UserRole
@@ -45,6 +46,7 @@ from api.schemas.billing import (
     PlanResponse, PortalSessionResponse, ProviderInvoiceResponse, PurchaseCreditsRequest, StripeInvoiceResponse,
     SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest,
 )
+from api.security.audit_log import log_audit_action
 from api.security.permissions import require_permission
 from api.security.credit_packs import CREDIT_PACKS, get_credit_pack
 from api.security.organizations import require_org_admin, require_org_member, require_org_owner
@@ -58,6 +60,15 @@ from api.utils import MAX_PAGE_SIZE, client_ip
 router = APIRouter(tags=["Billing"])
 org_router = APIRouter(prefix="/organizations/{org_id}/billing", tags=["Billing"])
 logger = logging.getLogger(__name__)
+
+
+async def _audit_billing(db: AsyncSession, request: Request, caller: OrganizationMember, org_id: uuid.UUID, action: AuditAction, **metadata) -> None:
+    """V9: every state-changing billing action of an organization (plan, cancellation, credits, country, payment method) leaves an audit row
+    scoped to the organization, written in the same transaction as the change."""
+    await log_audit_action(
+        db, user_id=caller.user_id, action=action, ip=client_ip(request), user_agent=request.headers.get("user-agent"), success=True,
+        organization_id=org_id, resource_type="billing", resource_id=str(org_id), metadata=metadata,
+    )
 
 
 # -- 12.1 plans (public catalog) ---------------------------------------------
@@ -122,8 +133,9 @@ async def _enforce_no_free_paid_plan(db: AsyncSession, sub, body: SubscribeReque
 
 
 @org_router.post("/subscribe", response_model=SubscriptionResponse)
-async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    before = {"plan_id": str(sub.plan_id), "billing_period": sub.billing_period}
     await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
@@ -131,25 +143,28 @@ async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_PLAN_CHANGED, operation="subscribe", before=before, after={"plan_id": str(result.plan_id), "billing_period": result.billing_period})
     await db.commit()
     return result
 
 
 @org_router.post("/upgrade", response_model=SubscriptionResponse)
 @org_router.post("/downgrade", response_model=SubscriptionResponse)
-async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    before = {"plan_id": str(sub.plan_id), "billing_period": sub.billing_period}
     await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_PLAN_CHANGED, operation="change", before=before, after={"plan_id": str(result.plan_id), "billing_period": result.billing_period})
     await db.commit()
     return result
 
 
 @org_router.post("/cancel", response_model=SubscriptionResponse)
-async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscriptionRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscriptionRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     if sub.stripe_subscription_id or sub.paystack_subscription_code:
         # BILL-006: a provider-managed subscription is cancelled at the provider first (at period end), otherwise the provider
@@ -157,9 +172,11 @@ async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscripti
         await _cancel_at_provider(db, org_id, sub)
         sub.canceled_at = dt.datetime.now(dt.timezone.utc)
         sub.cancel_reason = body.reason
+        await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via="provider", at_period_end=True)
         await db.commit()
         return sub
     result = await admin_subscriptions.cancel_subscription(db, sub.id, reason=body.reason)
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via="local")
     await db.commit()
     return result
 
@@ -180,7 +197,7 @@ async def _cancel_at_provider(db: AsyncSession, org_id: uuid.UUID, sub, *, at_pe
 
 
 @org_router.post("/reactivate", response_model=SubscriptionResponse)
-async def reactivate_subscription_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def reactivate_subscription_endpoint(org_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     if sub.stripe_subscription_id and sub.status == SubscriptionStatus.active and sub.canceled_at is not None:
         # Scheduled cancellation not yet effective: withdraw it at the provider too.
@@ -195,6 +212,7 @@ async def reactivate_subscription_endpoint(org_id: uuid.UUID, _caller: Organizat
         if sub.status == SubscriptionStatus.canceled:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This subscription has ended at the payment provider: start a new checkout instead")
     result = await admin_subscriptions.reactivate_subscription(db, sub.id)
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_REACTIVATED)
     await db.commit()
     return result
 
@@ -255,7 +273,7 @@ async def list_credit_packs_endpoint(_caller: OrganizationMember = Depends(requi
 
 
 @org_router.post("/credits/purchase", response_model=CreditResponse)
-async def purchase_credits_endpoint(org_id: uuid.UUID, body: PurchaseCreditsRequest, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def purchase_credits_endpoint(org_id: uuid.UUID, body: PurchaseCreditsRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     pack = get_credit_pack(body.pack_id)
     if pack is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown credit pack")
@@ -277,6 +295,7 @@ async def purchase_credits_endpoint(org_id: uuid.UUID, body: PurchaseCreditsRequ
     if not settings.CREDITS_ALLOW_UNPAID_TOPUP:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unpaid credit top-ups are disabled on this deployment")
     credit = await billing_credits.add_credits(db, org_id, pack["credits"], source=f"Purchased pack '{pack['name']}'", user_id=caller.user_id)
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_CREDITS_ADDED, pack_id=body.pack_id, credits=pack["credits"], paid=False)
     await db.commit()
     return credit
 
@@ -420,8 +439,8 @@ async def list_payment_methods_endpoint(org_id: uuid.UUID, _caller: Organization
 
 @org_router.delete("/stripe/payment-methods/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_payment_method_endpoint(
-    org_id: uuid.UUID, payment_method_id: str,
-    _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID, payment_method_id: str, request: Request,
+    caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
 ):
     try:
         await billing_stripe.detach_payment_method(
@@ -431,14 +450,18 @@ async def remove_payment_method_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment method not found") from exc
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_PAYMENT_METHOD_REMOVED)
+    await db.commit()
 
 
 @org_router.post("/stripe/cancel", status_code=status.HTTP_204_NO_CONTENT)
-async def cancel_stripe_subscription_endpoint(org_id: uuid.UUID, at_period_end: bool = True, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def cancel_stripe_subscription_endpoint(org_id: uuid.UUID, request: Request, at_period_end: bool = True, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     try:
         await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=at_period_end)
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via="stripe", at_period_end=at_period_end)
+    await db.commit()
 
 
 @org_router.get("/stripe/invoices", response_model=list[StripeInvoiceResponse])
@@ -516,9 +539,11 @@ async def get_billing_country_endpoint(org_id: uuid.UUID, _caller: OrganizationM
 
 
 @org_router.patch("/country", response_model=BillingCountryResponse)
-async def update_billing_country_endpoint(org_id: uuid.UUID, body: BillingCountryUpdateRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def update_billing_country_endpoint(org_id: uuid.UUID, body: BillingCountryUpdateRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     org = await db.get(Organization, org_id)
+    before = org.billing_country
     org.billing_country = body.billing_country
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_COUNTRY_CHANGED, before=before, after=body.billing_country)
     await db.commit()
     return BillingCountryResponse(billing_country=org.billing_country)
 
@@ -559,12 +584,14 @@ async def list_unified_payment_methods_endpoint(org_id: uuid.UUID, _caller: Orga
 
 
 @org_router.post("/cancel-active-subscription", status_code=status.HTTP_204_NO_CONTENT)
-async def cancel_unified_subscription_endpoint(org_id: uuid.UUID, at_period_end: bool = True, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
+async def cancel_unified_subscription_endpoint(org_id: uuid.UUID, request: Request, at_period_end: bool = True, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     try:
         provider = await resolve_provider_for_organization(db, org_id)
         await provider.cancel_subscription(db, org_id, at_period_end=at_period_end)
     except ProviderNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via=provider.name, at_period_end=at_period_end)
+    await db.commit()
 
 
 @org_router.get("/provider-invoices", response_model=list[ProviderInvoiceResponse])

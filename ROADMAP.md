@@ -58,8 +58,21 @@ itemized breakdown of each part.
   `monthly_price_cents >= 0`, `days` entre 1 et 3650. Flux de l'organisation (`/organizations/{id}/billing/*`) inchangés.
 - Tests : `tests/test_p1_sadm005_superadmin_gate.py` (9 tests ; 5 échouent sur l'ancien code, vérifié dans un worktree jetable) ; dans
   `tests/test_admin_subscriptions.py`, 6 tests changent d'appelant (admin → superadmin), assertions inchangées.
-- Reste : machine d'états des factures (`void` après `paid`, `void` par un owner), annulation admin côté fournisseur, audit des écritures de
-  `billing.py`, route plateforme de réconciliation de facture. Non fait, à valider.
+- Reste (traité ci-dessous) : machine d'états des factures, annulation admin côté fournisseur, audit des écritures de `billing.py`.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — V1/V8/V9 : factures, annulation fournisseur, audit de la facturation
+
+- V1 (BILL-002) : `paid` et `void` sont terminaux (facture payée jamais annulable, annulée jamais payable, répétition = sans effet, 409 sinon).
+  `void` et `pay` réservés au superadmin : routes plateforme `POST /admin/organizations/{org}/invoices/{id}/mark-paid|void` ; les routes de
+  l'organisation ne l'acceptent que d'un superadmin membre (ou du réglage auto-hébergé `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`). Audit avant/après
+  (`invoice_marked_paid`, `invoice_voided`). Test existant adapté : `test_a_platform_admin_can_still_reconcile_an_invoice` s'exécute en superadmin.
+- V8 (BILL-006) : l'annulation par le back-office (`/admin/subscriptions/{id}/cancel`, `DELETE`) annule d'abord chez Stripe/Paystack (immédiat pour
+  Stripe) ; échec fournisseur → 502, fournisseur non configuré → 501, rien n'est modifié.
+- V9 : audit organisationnel des écritures de `billing.py` (changement de plan, annulation, réactivation, crédits sans paiement, pays de
+  facturation, moyen de paiement retiré, annulations fournisseur) ; aucune ligne pour une action refusée ou échouée.
+- Tests : `test_p1_bill002_invoice_state_machine.py` (10), `test_p1_bill006_admin_cancel_at_provider.py` (6), `test_p1_billing_audit.py` (7) ;
+  sur l'ancien code 9, 5 et 6 d'entre eux échouent (worktree jetable). Régression : 455 passés, 17 ignorés sur 38 fichiers billing/audit/p0/p1.
+- Reste : aucun webhook ne marque une facture locale payée (la réconciliation reste manuelle) ; V2, V3, V4, V5, V6, V7, V10 en attente de décision.
 
 ### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
 
