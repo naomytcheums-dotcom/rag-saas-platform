@@ -69,7 +69,7 @@ async def create_workflow_endpoint(
 
 @router.get("/organizations/{org_id}/workflows", response_model=list[WorkflowResponse])
 async def list_workflows_endpoint(
-    org_id: uuid.UUID, limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    org_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     _caller: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db),
 ):
     return await list_workflows(db, org_id, limit=limit, offset=offset)

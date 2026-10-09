@@ -100,7 +100,7 @@ async def create_conversation_endpoint(
 
 @router.get("", response_model=list[ConversationResponse])
 async def list_conversations_endpoint(
-    agent_id: str | None = None, limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    agent_id: str | None = None, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     return await get_conversations(db, current_user.id, agent_id=agent_id, limit=limit, offset=offset)
@@ -121,7 +121,7 @@ async def get_conversation_stats_endpoint(current_user: User = Depends(get_curre
 
 @router.get("/search", response_model=list[SearchResultResponse])
 async def search_conversations_endpoint(
-    q: str = Query(min_length=1), limit: int = Query(default=20, le=100), offset: int = Query(default=0, ge=0),
+    q: str = Query(min_length=1), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -139,7 +139,7 @@ async def search_conversations_endpoint(
 
 @router.get("/deleted", response_model=list[DeletedConversationResponse])
 async def list_deleted_conversations_endpoint(
-    limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     return await list_deleted_conversations(db, current_user.id, limit=limit, offset=offset)
@@ -147,7 +147,7 @@ async def list_deleted_conversations_endpoint(
 
 @router.get("/public", response_model=list[ConversationResponse])
 async def list_public_conversations_endpoint(
-    organization_id: uuid.UUID, limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    organization_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     return await list_public_conversations(db, organization_id, limit=limit, offset=offset)
@@ -162,7 +162,7 @@ async def get_conversation_endpoint(
 
 @router.get("/{conversation_id}/messages", response_model=list[ConversationMessageResponse])
 async def list_conversation_messages_endpoint(
-    conversation_id: uuid.UUID, limit: int = Query(default=50, le=200), offset: int = Query(default=0, ge=0),
+    conversation_id: uuid.UUID, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_conversation(db, conversation_id, current_user)

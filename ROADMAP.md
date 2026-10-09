@@ -31,6 +31,25 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-09 — Audit P1/P2 : chaîne de paiement, suspension, Celery, pool, liens, entrées mal formées
+
+- Branche `bob/auto-fix-20261009-0715` (depuis la tête de la PR n°19, `61d1873`) ; un commit par faille ; aucun push sur main, aucune fusion.
+- Paiement : BILL-003/005/006 (checkout identifiable, résolution de l'organisation, statuts Stripe explicites, plan écrit depuis le prix, annulation
+  chez le fournisseur → 502 si échec, reprise), BILL-007 (plan effectif : fin de période payée, délai de grâce `BILLING_GRACE_PERIOD_DAYS`),
+  BILL-009 (multiplicateur de crédits par modèle), BILL-010 (factures annuelles 1×/an, numérotation sûre), BILL-004 (achat de crédits via checkout).
+- Back-office : TEN-002/SADM-004 (organisation suspendue = 403 sur tous les chemins par organisation et les clés API), SADM-002/003/005
+  (hiérarchie admin/superadmin, pas d'auto-suspension, suppression d'organisation sans 500, audit avant/après des écritures abonnement/plan).
+  Décision en attente : réserver les écritures financières au superadmin casserait 7 tests existants de `test_admin_subscriptions.py`.
+- RAG/Prod : RAG-002/003 (11 modules Celery enregistrés, rattrapage des documents `pending`), RAG-004 (refus avant génération sans contexte),
+  PROD-001 (`celery beat` persistant sur Redis), PROD-003 (pool 3+2 sans pooler transactionnel, 5+10 avec), MAP-001/002 (pages d'invitation et de retour OAuth).
+- Entrées mal formées : TEN-006 (migration `0136_notification_templates` : la table du modèle n'avait aucune migration), TEN-007/021/022
+  (`api/db_errors.py` : SQLSTATE 23505 → 409, 23503 → 422, classe 22 → 422 ; le reste reste un 500), TEN-008 (`limit >= 1`).
+- Preuves : base PostgreSQL jetable (`rag-pr1-disposable-pg`, hôte vérifié, jamais la base du `.env`) : migrations 0→0136 + aller-retour OK ;
+  sonde : NUL/100 000 caractères → 422, 8 inscriptions concurrentes → 1×201 + 7×409, alerte en double → 409, `limit=-1` → 422.
+  Tests ciblés : `tests/test_p1_*.py`, `tests/test_p2_malformed_inputs.py` ; 970 passés/8 ignorés sur les fichiers existants liés ;
+  `ruff check api/` propre. Stripe, Celery et beat sont simulés (aucune clé payante, aucun Redis réel).
+- Reste : voir le tableau du compte rendu (MAP-003, TEN-009, citations RAG-004, TVA par pays, etc.).
+
 ### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
 
 - Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;
