@@ -12,15 +12,13 @@ import psutil
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.database import engine
 from api.security.rate_limit import is_redis_reachable
 
 
 async def get_system_health(db: AsyncSession) -> dict:
     database_ok = True
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
     except Exception:
         database_ok = False
 

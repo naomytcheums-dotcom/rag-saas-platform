@@ -24,7 +24,7 @@ def _real_completion_response(text: str, prompt_tokens: int = 0, completion_toke
     response = ModelResponse(choices=[choice])
     if prompt_tokens or completion_tokens:
         response.usage = Usage(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, total_tokens=prompt_tokens + completion_tokens)
-        response.model = "claude-3-5-sonnet-20241022"  # matches the real COST_MODEL_PRICING substring key
+        response.model = "claude-sonnet-5-5"  # matches the configured Anthropic request model
     return response
 
 
@@ -82,8 +82,9 @@ async def test_execute_step_accumulates_real_cost_on_step_and_agent(client, db_s
 
     import litellm
 
-    # Real Claude 3.5 Sonnet pricing: $3/M input, $15/M output -- 1000
-    # prompt + 500 completion tokens = real $0.003 + $0.0075 = $0.0105.
+    # The configured Claude Sonnet 5.5 is $2/M input and $10/M output
+    # in the installed LiteLLM price map -- 1000 input + 500 output
+    # tokens = real $0.002 + $0.005 = $0.007.
     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_completion_response(
         "A real summary.", prompt_tokens=1000, completion_tokens=500,
     )))
@@ -92,8 +93,8 @@ async def test_execute_step_accumulates_real_cost_on_step_and_agent(client, db_s
     await db_session.commit()
 
     assert updated.status == AgentStepStatus.completed.value
-    assert float(updated.total_cost) == pytest.approx(0.0105, rel=1e-3)
-    assert float(agent.total_cost) == pytest.approx(0.0105, rel=1e-3)
+    assert float(updated.total_cost) == pytest.approx(0.007, rel=1e-3)
+    assert float(agent.total_cost) == pytest.approx(0.007, rel=1e-3)
 
 
 async def test_get_agent_cost_endpoint_returns_real_total_and_breakdown(client, db_session, register_payload, monkeypatch):
@@ -114,10 +115,10 @@ async def test_get_agent_cost_endpoint_returns_real_total_and_breakdown(client, 
     response = await client.get(f"/autonomous-agents/{agent.id}/cost", headers=_auth_header(owner_token))
     assert response.status_code == 200
     body = response.json()
-    assert body["total_cost"] == pytest.approx(0.018, rel=1e-3)  # 1000*3/1e6 + 1000*15/1e6
+    assert body["total_cost"] == pytest.approx(0.012, rel=1e-3)  # 1000*2/1e6 + 1000*10/1e6
     assert body["currency"] == "USD"
     assert len(body["steps"]) == 1
-    assert body["steps"][0]["cost"] == pytest.approx(0.018, rel=1e-3)
+    assert body["steps"][0]["cost"] == pytest.approx(0.012, rel=1e-3)
 
 
 async def test_run_autonomous_agent_pauses_when_max_cost_exceeded(client, db_session, register_payload, monkeypatch):
