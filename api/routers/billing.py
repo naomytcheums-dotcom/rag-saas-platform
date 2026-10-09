@@ -47,6 +47,7 @@ from api.schemas.billing import (
     SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest,
 )
 from api.security.audit_log import log_audit_action
+from api.security.logging_correlation import get_request_id
 from api.security.permissions import require_permission
 from api.security.credit_packs import CREDIT_PACKS, get_credit_pack
 from api.security.organizations import require_org_admin, require_org_member, require_org_owner
@@ -67,7 +68,7 @@ async def _audit_billing(db: AsyncSession, request: Request, caller: Organizatio
     scoped to the organization, written in the same transaction as the change."""
     await log_audit_action(
         db, user_id=caller.user_id, action=action, ip=client_ip(request), user_agent=request.headers.get("user-agent"), success=True,
-        organization_id=org_id, resource_type="billing", resource_id=str(org_id), metadata=metadata,
+        organization_id=org_id, resource_type="billing", resource_id=str(org_id), metadata={"request_id": get_request_id(), **metadata},
     )
 
 
@@ -386,10 +387,10 @@ async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, r
     return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="paid", reason=None, actor=current_user, request=request)
 
 
-async def _settle_invoice_or_http_error(db: AsyncSession, org_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor: User, request: Request):
+async def _settle_invoice_or_http_error(db: AsyncSession, org_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor: User, request: Request, reference: str | None = None):
     try:
         invoice = await billing_invoices.settle_invoice(
-            db, org_id, invoice_id, operation=operation, reason=reason, actor_id=actor.id, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+            db, org_id, invoice_id, operation=operation, reason=reason, actor_id=actor.id, ip=client_ip(request), user_agent=request.headers.get("user-agent"), reference=reference,
         )
     except billing_invoices.InvoiceNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
@@ -437,6 +438,14 @@ async def list_payment_methods_endpoint(org_id: uuid.UUID, _caller: Organization
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
 
 
+async def _record_cancellation_request(db: AsyncSession, org_id: uuid.UUID) -> None:
+    """The provider accepted a cancellation made through a provider-level route: record it locally the way `/cancel` does (canceled_at
+    set, status unchanged). The status only moves to canceled when the provider's own event confirms it, so a cancellation that is
+    still pending synchronization stays visible instead of being either invisible or reported as final."""
+    sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
+
+
 @org_router.delete("/stripe/payment-methods/{payment_method_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_payment_method_endpoint(
     org_id: uuid.UUID, payment_method_id: str, request: Request,
@@ -460,6 +469,7 @@ async def cancel_stripe_subscription_endpoint(org_id: uuid.UUID, request: Reques
         await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=at_period_end)
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _record_cancellation_request(db, org_id)
     await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via="stripe", at_period_end=at_period_end)
     await db.commit()
 
@@ -590,6 +600,7 @@ async def cancel_unified_subscription_endpoint(org_id: uuid.UUID, request: Reque
         await provider.cancel_subscription(db, org_id, at_period_end=at_period_end)
     except ProviderNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _record_cancellation_request(db, org_id)
     await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via=provider.name, at_period_end=at_period_end)
     await db.commit()
 

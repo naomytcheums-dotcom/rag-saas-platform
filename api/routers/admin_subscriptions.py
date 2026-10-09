@@ -2,17 +2,18 @@
 api/services/admin_subscriptions.py's own docstring for this module's
 honest scope: real CRUD and real math, zero real payment processor."""
 
+import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, require_admin, require_superadmin
+from api.dependencies import get_current_user, get_db, require_admin
 from api.models.admin import Plan, SubscriptionStatus
 from api.models.audit_log import AuditAction
-from api.models.user import User
+from api.models.user import User, UserRole
 from api.routers.billing import _cancel_at_provider, _settle_invoice_or_http_error
-from api.schemas.billing import InvoiceResponse, VoidInvoiceRequest
+from api.schemas.billing import InvoiceResponse, MarkInvoicePaidRequest, VoidInvoiceRequest
 from api.schemas.admin_dashboard import (
     PlanCreateRequest,
     PlanResponse,
@@ -39,11 +40,26 @@ from api.services.admin_subscriptions import (
 )
 from api.utils import MAX_PAGE_SIZE, client_ip
 from api.security.audit_log import log_audit_action
+from api.security.logging_correlation import get_request_id
 
 router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
 
 # SADM-005: reading is open to any platform admin; every write here grants value without a payment (plan, status, period), moves money
 # (refund) or changes what every customer is charged (catalogue, provider sync), so it requires the superadmin tier (403, not 404).
+
+
+async def require_superadmin(request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    """Same rule and same 403 as `api.dependencies.require_superadmin`, plus an audit row for the refused attempt (who, which route): a
+    platform admin trying a financial write is worth knowing about. The row is committed here because the request is about to fail."""
+    if user.role == UserRole.superadmin:
+        return user
+    await log_audit_action(
+        db, user_id=user.id, action=AuditAction.ADMIN_FINANCIAL_ACTION_DENIED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=False, failure_reason="superadmin required", resource_type="admin_route", resource_id=f"{request.method} {request.url.path}",
+        metadata={"role": user.role.value, "request_id": get_request_id()},
+    )
+    await db.commit()
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
 
 
 def _subscription_state(sub) -> dict:
@@ -58,14 +74,14 @@ async def _audit_subscription_change(db, request, admin, sub, operation, before,
     await log_audit_action(
         db, user_id=admin.id, action=AuditAction.ADMIN_SUBSCRIPTION_CHANGED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
         success=True, organization_id=sub.organization_id, resource_type="subscription", resource_id=str(sub.id),
-        metadata={"operation": operation, "before": before, "after": _subscription_state(sub), **(extra or {})},
+        metadata={"operation": operation, "before": before, "after": _subscription_state(sub), "request_id": get_request_id(), **(extra or {})},
     )
 
 
 async def _audit_plan_change(db, request, admin, plan_id, operation, before, after) -> None:
     await log_audit_action(
         db, user_id=admin.id, action=AuditAction.ADMIN_PLAN_CHANGED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
-        success=True, resource_type="plan", resource_id=str(plan_id), metadata={"operation": operation, "before": before, "after": after},
+        success=True, resource_type="plan", resource_id=str(plan_id), metadata={"operation": operation, "before": before, "after": after, "request_id": get_request_id()},
     )
 
 
@@ -103,11 +119,19 @@ async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionU
 
 
 async def _cancel_with_provider(db, sub_id, reason):
-    """V8: a back-office cancellation must stop the provider's billing too (immediately: the local status becomes canceled now), otherwise
-    the customer keeps being charged for a subscription the platform shows as ended. A provider failure changes nothing (502/501)."""
+    """V8: a back-office cancellation must stop the provider's billing too, otherwise the customer keeps being charged for a subscription
+    the platform shows as ended. A provider failure changes nothing (502/501). Stripe cancels immediately, so the local status follows at
+    once; Paystack can only disable at the end of the paid period, so the cancellation stays scheduled (canceled_at set, status unchanged)
+    until Paystack's own `subscription.disable` event ends it -- the platform never claims more than the provider has done."""
     sub = await get_subscription(db, sub_id)
-    if (sub.stripe_subscription_id or sub.paystack_subscription_code) and sub.status != SubscriptionStatus.canceled:
+    if sub.status != SubscriptionStatus.canceled and sub.stripe_subscription_id:
         await _cancel_at_provider(db, sub.organization_id, sub, at_period_end=False)
+    elif sub.status != SubscriptionStatus.canceled and sub.paystack_subscription_code:
+        await _cancel_at_provider(db, sub.organization_id, sub, at_period_end=True)
+        sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
+        sub.cancel_reason = reason
+        await db.flush()
+        return sub
     return await cancel_subscription(db, sub_id, reason=reason)
 
 
@@ -144,14 +168,20 @@ async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admi
 
 
 @router.post("/subscriptions/{sub_id}/refund")
-async def refund_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+async def refund_subscription_endpoint(sub_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Real, honest response: with no real payment processor wired
     (Partie 12, 0/23), there is no real charge to reverse -- refuses
     rather than pretending to move real money."""
     try:
-        await get_subscription(db, sub_id)
+        sub = await get_subscription(db, sub_id)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await log_audit_action(
+        db, user_id=admin.id, action=AuditAction.ADMIN_REFUND_ATTEMPTED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=False, failure_reason="no payment processor", organization_id=sub.organization_id, resource_type="subscription", resource_id=str(sub.id),
+        metadata={"request_id": get_request_id()},
+    )
+    await db.commit()
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="No real payment processor is configured in this environment -- there is no real charge to refund.")
 
 
@@ -168,9 +198,10 @@ async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionE
 
 
 @router.post("/organizations/{org_id}/invoices/{invoice_id}/mark-paid", response_model=InvoiceResponse)
-async def admin_mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
-    """BILL-002 back-office reconciliation (bank transfer, manual settlement): the platform's own route, not tied to the organization's membership."""
-    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="paid", reason=None, actor=admin, request=request)
+async def admin_mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, body: MarkInvoicePaidRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """BILL-002 back-office reconciliation (bank transfer, manual settlement): the platform's own route, not tied to the organization's
+    membership. The external `reference` of the payment is mandatory and kept in the audit row: nobody marks an invoice paid on a bare call."""
+    return await _settle_invoice_or_http_error(db, org_id, invoice_id, operation="paid", reason=None, actor=admin, request=request, reference=body.reference)
 
 
 @router.post("/organizations/{org_id}/invoices/{invoice_id}/void", response_model=InvoiceResponse)
@@ -222,27 +253,37 @@ async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User
 # wire it, not delete working code nor leave it silently unreachable.
 # These two endpoints are the only way to actually invoke it.
 
-@router.post("/plans/sync/stripe-products", status_code=status.HTTP_200_OK)
-async def sync_stripe_products_endpoint(_admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+async def _run_stripe_sync(db: AsyncSession, request: Request, admin: User, kind: str, sync) -> dict:
+    """Runs a Stripe catalogue sync and audits the attempt either way (it writes to the provider's account, so it is never silent)."""
     from api.services.billing_stripe import StripeNotConfiguredError
-    from api.services.billing_stripe_sync import sync_stripe_products
+
+    async def _audit(success: bool, **extra) -> None:
+        await log_audit_action(
+            db, user_id=admin.id, action=AuditAction.ADMIN_PROVIDER_SYNC, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+            success=success, failure_reason=None if success else "provider not configured", resource_type="provider_sync", resource_id=kind,
+            metadata={"provider": "stripe", "request_id": get_request_id(), **extra},
+        )
 
     try:
-        synced = await sync_stripe_products(db)
+        synced = await sync(db)
     except StripeNotConfiguredError as exc:
+        await _audit(False)
+        await db.commit()
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    await _audit(True, synced=synced)
     await db.commit()
     return {"synced": synced}
+
+
+@router.post("/plans/sync/stripe-products", status_code=status.HTTP_200_OK)
+async def sync_stripe_products_endpoint(request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    from api.services.billing_stripe_sync import sync_stripe_products
+
+    return await _run_stripe_sync(db, request, admin, "products", sync_stripe_products)
 
 
 @router.post("/plans/sync/stripe-prices", status_code=status.HTTP_200_OK)
-async def sync_stripe_prices_endpoint(_admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
-    from api.services.billing_stripe import StripeNotConfiguredError
+async def sync_stripe_prices_endpoint(request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     from api.services.billing_stripe_sync import sync_stripe_prices
 
-    try:
-        synced = await sync_stripe_prices(db)
-    except StripeNotConfiguredError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    await db.commit()
-    return {"synced": synced}
+    return await _run_stripe_sync(db, request, admin, "prices", sync_stripe_prices)

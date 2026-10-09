@@ -17,6 +17,8 @@ from api.services.billing_invoices import create_invoice
 from test_p0_billing_no_free_paid_plan import _auth, _org
 from test_p1_backoffice_and_suspension import _bearer, _platform_user
 
+PROOF = {"reference": "WIRE-2026-0001"}
+
 
 async def _invoice(db_session, org_id, status=InvoiceStatus.pending):
     invoice = await create_invoice(db_session, org_id, lines=[{"description": "Pro plan", "quantity": 1, "unit_price_cents": 19900}])
@@ -79,7 +81,7 @@ async def test_a_paid_invoice_can_never_be_voided(client, db_session, register_p
 async def test_a_void_invoice_cannot_be_paid(client, db_session, register_payload):
     _token, org_id, super_h, _a = await _world(client, db_session, register_payload, "voidpay")
     invoice_id = await _invoice(db_session, org_id, InvoiceStatus.void)
-    response = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", headers=super_h)
+    response = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", json=PROOF, headers=super_h)
     assert response.status_code == 409
     assert (await _state(db_session, invoice_id))[0] == InvoiceStatus.void
 
@@ -87,9 +89,9 @@ async def test_a_void_invoice_cannot_be_paid(client, db_session, register_payloa
 async def test_marking_paid_twice_keeps_the_first_payment_date_and_audits_once(client, db_session, register_payload):
     _token, org_id, super_h, _a = await _world(client, db_session, register_payload, "paytwice")
     invoice_id = await _invoice(db_session, org_id)
-    first = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", headers=super_h)
+    first = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", json=PROOF, headers=super_h)
     paid_at = (await _state(db_session, invoice_id))[1]
-    second = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", headers=super_h)
+    second = await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", json=PROOF, headers=super_h)
     assert (first.status_code, second.status_code) == (200, 200)
     assert (await _state(db_session, invoice_id))[1] == paid_at
     assert len(await _audits(db_session, "invoice_marked_paid")) == 1
@@ -106,7 +108,7 @@ async def test_voiding_twice_is_idempotent(client, db_session, register_payload)
 async def test_a_plain_platform_admin_cannot_settle_invoices(client, db_session, register_payload):
     _token, org_id, _s, admin_h = await _world(client, db_session, register_payload, "adminsettle")
     invoice_id = await _invoice(db_session, org_id)
-    for path, body in ((f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", None), (f"/admin/organizations/{org_id}/invoices/{invoice_id}/void", {"reason": "x"})):
+    for path, body in ((f"/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid", PROOF), (f"/admin/organizations/{org_id}/invoices/{invoice_id}/void", {"reason": "x"})):
         assert (await client.post(path, json=body, headers=admin_h)).status_code == 403
     assert (await _state(db_session, invoice_id))[0] == InvoiceStatus.pending
 
@@ -117,7 +119,7 @@ async def test_anonymous_and_other_organizations_are_refused(client, db_session,
     other_org = uuid.uuid4()
     assert (await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/void", json={"reason": "x"})).status_code in (401, 403)
     assert (await client.post(f"/admin/organizations/{org_id}/invoices/{invoice_id}/void", json={"reason": "x"}, headers=_auth(token))).status_code == 403
-    wrong_scope = await client.post(f"/admin/organizations/{other_org}/invoices/{invoice_id}/mark-paid", headers=super_h)
+    wrong_scope = await client.post(f"/admin/organizations/{other_org}/invoices/{invoice_id}/mark-paid", json=PROOF, headers=super_h)
     assert wrong_scope.status_code == 404, "an invoice is only reachable through its own organization"
     assert (await _state(db_session, invoice_id))[0] == InvoiceStatus.pending
 

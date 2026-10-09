@@ -230,15 +230,18 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
         org_id = await _resolve_stripe_org_id(db, data)
         if org_id:
             sub = await _subscription_for_event(db, org_id)
-            sub.status = SubscriptionStatus.canceled
-            sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
-            await _store_period_end(sub, data)
-            await db.flush()
+            if _is_about_another_subscription(sub, data):
+                logger.warning("stripe event %s: deletion of subscription %s ignored (the organization's current subscription is another one)", event_id, data.get("id"))
+            else:
+                sub.status = SubscriptionStatus.canceled
+                sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
+                await _store_period_end(sub, data)
+                await db.flush()
     elif event_type == "invoice.payment_failed":
         org_id = await _resolve_stripe_org_id(db, data)
         if org_id:
             sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_id))
-            if sub is not None:
+            if sub is not None and sub.status == SubscriptionStatus.active:  # a late failure never reopens a canceled or pending subscription
                 sub.status = SubscriptionStatus.past_due
                 await db.flush()
             await _notify_safely(db, org_id, "notify_billing_payment_failed")
@@ -254,7 +257,24 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
             await db.flush()
             await _notify_safely(db, org_id, "notify_billing_payment_succeeded")
 
+    if event_type in _AUDITED_EVENT_TYPES:
+        from api.services.billing_providers.base import audit_webhook_applied
+
+        await audit_webhook_applied(db, "stripe", event_id, event_type, await _resolve_stripe_org_id(db, data))
     return True
+
+
+_AUDITED_EVENT_TYPES = frozenset({
+    "checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted",
+    "invoice.payment_failed", "invoice.paid",
+})
+
+
+def _is_about_another_subscription(sub: Subscription, data: dict) -> bool:
+    """Events are neither ordered nor exclusive to the current subscription: one about a different Stripe subscription than the one the
+    organization is currently linked to (an old one deleted late, for instance) must not touch the current one."""
+    event_sub_id = data.get("id") if data.get("object") == "subscription" else None
+    return bool(sub.stripe_subscription_id and isinstance(event_sub_id, str) and event_sub_id != sub.stripe_subscription_id)
 
 
 # Stripe subscription status -> local status, explicit on purpose: an unknown status must never silently grant or revoke access.
@@ -363,8 +383,16 @@ async def _apply_subscription_state(db: AsyncSession, subscription: dict) -> Non
         logger.error("stripe subscription %s has an unknown status %r: nothing applied", subscription.get("id"), subscription.get("status"))
         return
     sub = await _subscription_for_event(db, org_id)
-    if isinstance(subscription.get("id"), str):
-        sub.stripe_subscription_id = subscription["id"]
+    incoming_id = subscription.get("id")
+    if sub.status == SubscriptionStatus.canceled and sub.stripe_subscription_id == incoming_id and local_status != SubscriptionStatus.canceled:
+        # A Stripe subscription that ended never comes back (a new one gets a new id): this is a late event, not a reactivation.
+        logger.warning("stripe subscription %s: stale %r event ignored, the subscription already ended", incoming_id, subscription.get("status"))
+        return
+    if local_status == SubscriptionStatus.canceled and _is_about_another_subscription(sub, subscription) and sub.status != SubscriptionStatus.canceled:
+        logger.warning("stripe subscription %s: cancellation ignored, the organization's current subscription is another one", incoming_id)
+        return
+    if isinstance(incoming_id, str):
+        sub.stripe_subscription_id = incoming_id
     sub.status = local_status
     await _store_period_end(sub, subscription)
     trial_end = _epoch_to_datetime(subscription.get("trial_end"))

@@ -218,25 +218,64 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
         if customer is not None:
             org_id = str(customer.organization_id)
 
+    org_uuid = None
     if org_id:
-        sub = await db.scalar(select(Subscription).where(Subscription.organization_id == uuid.UUID(org_id)))
+        try:
+            org_uuid = uuid.UUID(str(org_id))
+        except ValueError:
+            logger.error("paystack event %s: malformed organization id in metadata; ignored", event_id)
+
+    if org_uuid is not None:
+        sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_uuid))
         if sub is not None:
+            code = data.get("subscription_code")
+            other_subscription = bool(sub.paystack_subscription_code and code and code != sub.paystack_subscription_code)
+            ended_same = sub.status == SubscriptionStatus.canceled and bool(code) and code == sub.paystack_subscription_code
             if event_type == "subscription.create":
-                sub.status = SubscriptionStatus.active
-                sub.paystack_subscription_code = data.get("subscription_code")
+                if ended_same:
+                    # A Paystack subscription that was disabled never comes back: a late `create` is not a reactivation.
+                    logger.warning("paystack event %s: late subscription.create for the already disabled %s ignored", event_id, code)
+                else:
+                    sub.status = SubscriptionStatus.active
+                    sub.paystack_subscription_code = code
+                    await _apply_paystack_plan(db, sub, data)
             elif event_type == "charge.success":
-                sub.status = SubscriptionStatus.active
+                # A successful charge only restores a subscription that was waiting for payment; it never reopens a canceled one.
+                if sub.status in (SubscriptionStatus.past_due, SubscriptionStatus.pending):
+                    sub.status = SubscriptionStatus.active
             elif event_type == "subscription.disable":
-                sub.status = SubscriptionStatus.canceled
+                if other_subscription and sub.status != SubscriptionStatus.canceled:
+                    logger.warning("paystack event %s: disabling of %s ignored (the organization's current subscription is %s)", event_id, code, "another one")
+                else:
+                    sub.status = SubscriptionStatus.canceled
             elif event_type == "invoice.payment_failed":
-                sub.status = SubscriptionStatus.past_due
+                if sub.status == SubscriptionStatus.active:  # a late failure never reopens a canceled or pending subscription
+                    sub.status = SubscriptionStatus.past_due
             await db.flush()
             if event_type == "invoice.payment_failed":
                 from api.services.notifications import notify_billing_payment_failed
 
-                await notify_billing_payment_failed(db, uuid.UUID(org_id))
+                await notify_billing_payment_failed(db, org_uuid)
 
+    if event_type in ("subscription.create", "subscription.disable", "charge.success", "invoice.payment_failed"):
+        from api.services.billing_providers.base import audit_webhook_applied
+
+        await audit_webhook_applied(db, "paystack", event_id, event_type, org_uuid)
     return True
+
+
+async def _apply_paystack_plan(db: AsyncSession, sub: Subscription, data: dict) -> None:
+    """The plan comes from the plan code Paystack reports on the new subscription (code -> Plan row), never from the client. An unknown
+    code leaves the plan unchanged and is logged (an unmatched plan must neither grant nor revoke anything)."""
+    plan_code = (data.get("plan") or {}).get("plan_code")
+    if not plan_code:
+        return
+    plan = await db.scalar(select(Plan).where((Plan.paystack_plan_code_monthly == plan_code) | (Plan.paystack_plan_code_yearly == plan_code)))
+    if plan is None:
+        logger.warning("paystack subscription %s: plan code %r matches no plan; the plan is left unchanged", data.get("subscription_code"), plan_code)
+        return
+    sub.plan_id = plan.id
+    sub.billing_period = "yearly" if plan.paystack_plan_code_yearly == plan_code and plan.paystack_plan_code_monthly != plan_code else "monthly"
 
 
 class PaystackProvider:

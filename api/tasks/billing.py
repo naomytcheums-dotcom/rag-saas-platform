@@ -6,7 +6,7 @@ and api/tasks/compliance.py -- Celery's worker model is sync by default."""
 import datetime as dt
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SyncSession
 
@@ -107,13 +107,12 @@ def _add_numbered_invoice(db, today: dt.date, **fields) -> Invoice:
 def mark_overdue_invoices_task() -> int:
     today = dt.date.today()
     with SyncSession(_sync_engine) as db:
-        due = db.scalars(
-            select(Invoice).where(Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.pending]), Invoice.due_date < today)
-        ).all()
-        for invoice in due:
-            invoice.status = InvoiceStatus.overdue
+        # One atomic UPDATE limited to the statuses that may become overdue: a payment committed between a SELECT and the write is never overwritten.
+        result = db.execute(
+            update(Invoice).where(Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.pending]), Invoice.due_date < today).values(status=InvoiceStatus.overdue)
+        )
         db.commit()
-        count = len(due)
+        count = result.rowcount or 0
     logger.info("mark_overdue_invoices: %d invoice(s) marked overdue", count)
     return count
 
