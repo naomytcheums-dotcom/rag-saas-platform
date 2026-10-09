@@ -1072,6 +1072,10 @@ class Settings(BaseSettings):
     SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # SEC-002/RAG-025 -- the MCP `stdio` transport spawns an operator-supplied command on the API/worker
+    # host. Off by default: no stdio server can be created/updated and the client never spawns one, even for
+    # an existing row. When enabled, only a platform superadmin may create or modify a stdio server.
+    MCP_STDIO_ENABLED: bool = False
     EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
