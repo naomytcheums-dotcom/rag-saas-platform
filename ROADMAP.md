@@ -50,6 +50,17 @@ itemized breakdown of each part.
   `ruff check api/` propre. Stripe, Celery et beat sont simulés (aucune clé payante, aucun Redis réel).
 - Reste : voir le tableau du compte rendu (MAP-003, TEN-009, citations RAG-004, TVA par pays, etc.).
 
+### [Bob-Auto-Fixes] — 2026-10-09 — SADM-005 : écritures financières de la plateforme réservées au superadmin
+
+- Problème : un admin plateforme (rôle `admin`) pouvait créer/modifier des plans, forcer le plan ou le statut d'un abonnement, prolonger une période
+  sans paiement et lancer la synchro Stripe ; aucune borne sur les prix et la durée de prolongation.
+- Changement : les 11 écritures de `api/routers/admin_subscriptions.py` exigent `require_superadmin` (403) ; les 4 lectures restent `require_admin`.
+  `monthly_price_cents >= 0`, `days` entre 1 et 3650. Flux de l'organisation (`/organizations/{id}/billing/*`) inchangés.
+- Tests : `tests/test_p1_sadm005_superadmin_gate.py` (9 tests ; 5 échouent sur l'ancien code, vérifié dans un worktree jetable) ; dans
+  `tests/test_admin_subscriptions.py`, 6 tests changent d'appelant (admin → superadmin), assertions inchangées.
+- Reste : machine d'états des factures (`void` après `paid`, `void` par un owner), annulation admin côté fournisseur, audit des écritures de
+  `billing.py`, route plateforme de réconciliation de facture. Non fait, à valider.
+
 ### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
 
 - Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;

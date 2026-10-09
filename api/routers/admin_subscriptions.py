@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, require_admin
+from api.dependencies import get_db, require_admin, require_superadmin
 from api.models.admin import Plan
 from api.models.audit_log import AuditAction
 from api.models.user import User
@@ -39,6 +39,9 @@ from api.utils import MAX_PAGE_SIZE, client_ip
 from api.security.audit_log import log_audit_action
 
 router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
+
+# SADM-005: reading is open to any platform admin; every write here grants value without a payment (plan, status, period), moves money
+# (refund) or changes what every customer is charged (catalogue, provider sync), so it requires the superadmin tier (403, not 404).
 
 
 def _subscription_state(sub) -> dict:
@@ -84,7 +87,7 @@ async def get_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(re
 
 
 @router.patch("/subscriptions/{sub_id}", response_model=SubscriptionResponse)
-async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionUpdateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionUpdateRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         before = _subscription_state(await get_subscription(db, sub_id))
         sub = await update_subscription(db, sub_id, plan_id=payload.plan_id, status_value=payload.status)
@@ -98,7 +101,7 @@ async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionU
 
 
 @router.post("/subscriptions/{sub_id}/cancel", response_model=SubscriptionResponse)
-async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionCancelRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionCancelRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Real, deliberate: POST, not DELETE -- a DELETE carrying a JSON
     body (the cancellation reason) is non-standard and unsupported by
     several real HTTP clients (httpx's own `.delete()` convenience
@@ -116,7 +119,7 @@ async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionC
 
 
 @router.delete("/subscriptions/{sub_id}", response_model=SubscriptionResponse)
-async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """The literal spec's own `DELETE /admin/subscriptions/{id}` --
     same real cancel, no reason (real HTTP DELETE carries no body)."""
     try:
@@ -130,7 +133,7 @@ async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admi
 
 
 @router.post("/subscriptions/{sub_id}/refund")
-async def refund_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def refund_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Real, honest response: with no real payment processor wired
     (Partie 12, 0/23), there is no real charge to reverse -- refuses
     rather than pretending to move real money."""
@@ -142,7 +145,7 @@ async def refund_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends
 
 
 @router.post("/subscriptions/{sub_id}/extend", response_model=SubscriptionResponse)
-async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionExtendRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionExtendRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         before = _subscription_state(await get_subscription(db, sub_id))
         sub = await extend_subscription(db, sub_id, days=payload.days)
@@ -161,7 +164,7 @@ async def list_plans_endpoint(_admin: User = Depends(require_admin), db: AsyncSe
 
 
 @router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
-async def create_plan_endpoint(payload: PlanCreateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def create_plan_endpoint(payload: PlanCreateRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     plan = await create_plan(db, **payload.model_dump())
     await _audit_plan_change(db, request, admin, plan.id, "create", None, payload.model_dump())
     await db.commit()
@@ -169,7 +172,7 @@ async def create_plan_endpoint(payload: PlanCreateRequest, request: Request, adm
 
 
 @router.patch("/plans/{plan_id}", response_model=PlanResponse)
-async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         existing = await db.get(Plan, plan_id)
         before = {"monthly_price_cents": existing.monthly_price_cents, "yearly_price_cents": existing.yearly_price_cents, "name": existing.name} if existing else None
@@ -182,7 +185,7 @@ async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, r
 
 
 @router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         await delete_plan(db, plan_id)
     except PlanNotFoundError:
@@ -198,7 +201,7 @@ async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User
 # These two endpoints are the only way to actually invoke it.
 
 @router.post("/plans/sync/stripe-products", status_code=status.HTTP_200_OK)
-async def sync_stripe_products_endpoint(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def sync_stripe_products_endpoint(_admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     from api.services.billing_stripe import StripeNotConfiguredError
     from api.services.billing_stripe_sync import sync_stripe_products
 
@@ -211,7 +214,7 @@ async def sync_stripe_products_endpoint(_admin: User = Depends(require_admin), d
 
 
 @router.post("/plans/sync/stripe-prices", status_code=status.HTTP_200_OK)
-async def sync_stripe_prices_endpoint(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def sync_stripe_prices_endpoint(_admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     from api.services.billing_stripe import StripeNotConfiguredError
     from api.services.billing_stripe_sync import sync_stripe_prices
 

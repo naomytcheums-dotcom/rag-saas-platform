@@ -3,7 +3,7 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.models.admin import SubscriptionStatus
 
@@ -125,7 +125,7 @@ class PlanResponse(BaseModel):
 class PlanCreateRequest(BaseModel):
     key: str
     name: str
-    monthly_price_cents: int = 0
+    monthly_price_cents: int = Field(default=0, ge=0)
     max_documents: int | None = None
     max_agents: int | None = None
     max_members: int | None = None
@@ -135,7 +135,7 @@ class PlanCreateRequest(BaseModel):
 
 class PlanUpdateRequest(BaseModel):
     name: str | None = None
-    monthly_price_cents: int | None = None
+    monthly_price_cents: int | None = Field(default=None, ge=0)
     max_documents: int | None = None
     max_agents: int | None = None
     max_members: int | None = None
@@ -165,7 +165,7 @@ class SubscriptionCancelRequest(BaseModel):
 
 
 class SubscriptionExtendRequest(BaseModel):
-    days: int
+    days: int = Field(ge=1, le=3650)
 
 
 class RevenueStatsResponse(BaseModel):
