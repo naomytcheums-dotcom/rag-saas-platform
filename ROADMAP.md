@@ -31,6 +31,112 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
+
+- Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;
+  `POST .../invoices/{id}/pay` laissait une organisation déclarer sa facture payée ; avec `0 < solde < coût`, `deduct_credits` refusait,
+  l'exception était avalée et la réponse LLM servie sans débit.
+- Changement : ces routes n'acceptent plus qu'un plan gratuit, un plan strictement moins cher (downgrade) ou la re-sélection du plan courant ;
+  sinon 402 « utiliser le checkout » (réglage `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`, défaut `False`, réservé aux instances dev/self-hosted).
+  `/pay` réservé aux admins plateforme (403 sinon). Nouveau `deduct_credits_up_to` : débite `min(solde, coût)`, solde jamais négatif,
+  manque inscrit dans le ledger et loggé ; plus d'exception avalée (orchestrateur run/stream, voix) ; une boucle d'outils est arrêtée une fois
+  le solde épuisé ; pré-contrôle voix sur le coût du tour. Frontend : « Choisir ce plan » appelle `/billing/checkout` pour un plan payant.
+- Tests : nouveaux `tests/test_p0_billing_no_free_paid_plan.py`, `tests/test_p0_credits_no_free_response.py`, `frontend/app/dashboard/billing/plan-checkout.test.tsx`.
+- Limite : la chaîne webhook → plan (BILL-003/005/006/007) reste à corriger ; aucun webhook n'écrit encore `plan_id`.
+- Test existant adapté avec accord utilisateur : `tests/test_billing.py::test_owner_can_subscribe_upgrade_cancel_reactivate` encodait l'upgrade gratuit ;
+  il vérifie maintenant le 402 puis active le réglage de développement pour le reste du parcours.
+- Décision : commit `07451e2` sur `bob/auto-fix-20261009-0358`.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — Audit forensique : 6 failles P0 corrigées (TEN-001, SEC-001, SEC-002, BILL-001/002/008, SADM-001)
+
+- Problème : l'audit (rapports `rag-work\audit-evidence\*.md`) a trouvé 144 anomalies ; les P0 corrigés ici : écriture inter-tenant via
+  `/chat/stream` (TEN-001/RAG-001, RAG-017), contournement du filtre tenant de l'outil SQL par une chaîne `E'...'` (SEC-001), transport MCP `stdio`
+  = exécution de commande par tout owner (SEC-002/RAG-025), plan payant gratuit / facture auto-payée / réponse LLM sans débit (BILL-001/002/008),
+  prise de contrôle de comptes par un mapping SSO d'admin plateforme non vérifié (SADM-001).
+- Changement : un commit par faille (a263074, 3a30a4d, 1789e91, 07451e2, d29f8a0). Migration `0134_enterprise_sso_domain_verification` (colonnes
+  `domain_verified*`, aller-retour upgrade/downgrade/upgrade testé sur base jetable) ; `MCP_STDIO_ENABLED` (défaut false) ; `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`
+  (défaut false).
+- Tests : 108 nouveaux tests `tests/test_p0_*.py` + 5 tests vitest ; suite combinée 166 passés, 9 ignorés (preuve PostgreSQL de SEC-001 : 8/8 passés
+  sur base jetable lors de la passe dédiée) ; `ruff check api/` propre. Tests existants adaptés avec accord utilisateur : 15 dans
+  `tests/test_enterprise_sso_integration.py`, 5 dans `tests/test_mcp_client.py`, 1 dans `tests/test_billing.py`, car ils encodaient l'ancien comportement dangereux.
+- Reste (P1/P2, non corrigé) : SEC-003/004/005, chaîne de paiement Stripe/Paystack, suspension d'organisation, tâches Celery manquantes, RLS/PostgreSQL non prouvé,
+  CI/Snyk. Voir `tests.md`, `billing.md`, `tenant.md`, `rag.md`, `superadmin.md`, `ux.md`.
+- Décision : branche `bob/auto-fix-20261009-0358`, PR à ouvrir ; jamais poussé sur main.
+
+### [Bob-Auto-Fixes] — 2026-10-08 — Validation backend/API, prix modèles et dépendances
+
+- Prix : le modèle Anthropic demandé par défaut est désormais `claude-sonnet-5-5`;
+  la carte LiteLLM installée indique 2 $/M tokens en entrée et 10 $/M en sortie.
+  Le fixture de coût périmé (Claude 3.5 Sonnet à 3/15 $) a été aligné sur ce
+  modèle; les assertions de coût unitaire (0,007 $ pour 1 000/500 tokens) et
+  d'endpoint (0,012 $ pour 1 000/1 000 tokens) sont conservées.
+- Correctif API : `get_system_health` exécute son `SELECT 1` sur la session
+  injectée, plutôt que sur l'engine global, afin de mesurer la connexion réellement
+  fournie par l'application et les tests.
+- Dépendances : WeasyPrint 65.0 -> 70.0 après approbation; Docling 2.130.0 ->
+  2.132.0. `pip-audit -r requirements-api.txt` : aucune vulnérabilité connue;
+  l'audit optional reste bloqué par `diskcache 5.6.3 / PYSEC-2026-2447`, sans
+  version corrective disponible. Aucun avis supprimé ni règle d'audit ignorée.
+- OpenAPI : `scripts/export_openapi.py` a généré le schéma depuis l'application
+  isolée (782 chemins); `tests/docs/test_api_reference.py` : 16/16 réussis.
+- Tests ciblés : coût 5/5, PDF/export 10/10, santé admin après correctif 1/1,
+  HIBP/dotenv/import différé 10/10; suite auth/tenant/webhook 218 réussis,
+  1 skip (DB/Redis isolés volontairement injoignables).
+- Suite complète isolée avec `pytest tests/ -x` : 545 réussis, 23 désélectionnés,
+  premier arrêt sur le health check admin. Cause corrigée : le service sondait
+  l'engine global au lieu de la session injectée; le test ciblé passe maintenant.
+  Rejeu ciblé `test_admin_dashboard.py -x` : 6 réussis, puis blocage dans
+  `test_system_log_handler_writes_real_rows`, qui ouvre directement une session
+  PostgreSQL sync sur `settings.DATABASE_URL` (port isolé 1, volontairement sans
+  serveur) plutôt que le fixture SQLite. Aucun accès à la base de production;
+  la suite complète reste bloquée par ce test dépendant d'une vraie DB.
+- Lint `ruff check api/` réussi. `ruff format --check api/` reste rouge sur
+  734 fichiers (88 déjà formatés); aucun reformatage global ni migration existante
+  modifiée. Analyse Bandit comparative : aucun problème exploitable nouveau identifié.
+- Décision : changements locaux non commités; aucun push, aucune clé réelle ni appel
+  payant utilisé.
+
+### [Bob-Auto-Fixes] — 2026-10-08 — Etats de données dashboard/admin
+
+- Problème : certains compteurs absents ou indisponibles pouvaient apparaître
+  comme des zéros ou conserver des données après un changement d'organisation;
+  des erreurs admin pouvaient être confondues avec des listes vides.
+- Changement : valeurs « — » pour les métriques non disponibles, remise à zéro
+  des données dérivées lors d'un changement d'organisation, et états d'erreur/
+  d'accès refusé explicites dans l'admin. Les résultats d'évaluation ne sont
+  calculés qu'à partir des résultats API présents.
+  Les quatre requêtes dashboard affichent désormais leurs erreurs traduites,
+  filtrées par organisation; les rejets tardifs après changement de tenant sont
+  ignorés par la garde d'annulation, sans conserver l'erreur du tenant précédent.
+- Tests : frontend `npm run lint`, `npm run type-check`, Vitest (19 fichiers,
+  137 tests, `npx vitest run --maxWorkers=2`, 33.60 s) et `npm run build`
+  (47/47 pages statiques) réussis sur le correctif final. Audit npm
+  production : 0 vulnérabilité après mise à jour lock-only de sharp 0.35.4
+  vers 0.35.5.
+  Régression ciblée supplémentaire : `npx vitest run app/dashboard/page.test.tsx`,
+  5/5 tests réussis (5.78 s, `--maxWorkers=1`). Le lancement sans limite de
+  workers a rencontré 15 délais de démarrage de forks; le rejeu borné a exécuté
+  les 137 tests sans affaiblir les assertions ni modifier la configuration.
+- Vérification navigateur : 43 routes dashboard et 8 onglets admin avec un
+  serveur API local à fixtures mockées. Aucun crash React ni 5xx observé.
+  L'accès client refusé et les 403/404 de contrôle d'accès sont attendus.
+  Complément avec proxy mock local tenant compte des rôles : les six endpoints
+  `/analytics/business/*` retournent 200 au superadmin (métriques affichées,
+  MRR 150 EUR de fixture) et 403 à l'admin non-superadmin. Les chemins frontend
+  correspondent aux routes backend protégées par `require_superadmin`;
+  aucune autorisation réelle modifiée.
+- Limites : compteurs observés issus exclusivement de fixtures, non de données
+  backend réelles. Aucun pytest backend ni benchmark RAG exécuté ici.
+  Captures : `D:\rag-work\screens\dashboard-home-mocked.png`,
+  `D:\rag-work\screens\dashboard-widget-mocked.png`,
+  `D:\rag-work\screens\admin-client-denied-mocked.png`,
+  `D:\rag-work\screens\admin-overview-mocked.png`,
+  `D:\rag-work\screens\admin-alerting-mocked.png`,
+  `D:\rag-work\screens\admin-business-superadmin-mocked.png`,
+  `D:\rag-work\screens\admin-business-nonsuperadmin-403-mocked.png`.
+- Décision : changements non commités sur
+  `bob/auto-fix-20261003-191324`; aucun push ni appel à un service réel.
+
 ### [Bob-Auto-Fixes] — 2026-10-07 — Cache d'index BM25 par organisation
 
 - Probleme : reconstruction et rechargement du corpus a chaque recherche BM25.

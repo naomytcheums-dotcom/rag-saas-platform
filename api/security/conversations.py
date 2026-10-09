@@ -15,10 +15,61 @@ caller" convention as every other module in this codebase)."""
 import datetime as dt
 import uuid
 
+from fastapi import HTTPException, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.models.agent import Agent
 from api.models.conversation import Conversation, ConversationMessage
+from api.models.organization import OrganizationMember
+
+_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
+async def _is_org_member(db: AsyncSession, organization_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    return await db.scalar(
+        select(OrganizationMember.user_id).where(
+            OrganizationMember.organization_id == organization_id, OrganizationMember.user_id == user_id,
+        )
+    ) is not None
+
+
+async def require_conversation_for_stream(
+    db: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID, organization_id: uuid.UUID,
+) -> Conversation:
+    """The conversation a chat stream may read history from / write
+    into: it must exist, be live, belong to the caller AND be scoped to
+    the agent's own organization. Anything else is an indistinguishable
+    404 (anti-enumeration), raised before any read or write."""
+    conversation = await db.get(Conversation, conversation_id)
+    if (
+        conversation is None or conversation.deleted_at is not None
+        or conversation.user_id != user_id or conversation.organization_id != organization_id
+    ):
+        raise _NOT_FOUND
+    return conversation
+
+
+async def require_conversation_creation_scope(
+    db: AsyncSession, user_id: uuid.UUID, agent_id: str, organization_id: uuid.UUID | None,
+) -> None:
+    """A conversation may only be attached to an organization the caller
+    belongs to, and to an agent of such an organization. `agent_id` is a
+    free string (legacy ids have no `Agent` row), so only an id that
+    resolves to a real `Agent` row is checked."""
+    if organization_id is not None and not await _is_org_member(db, organization_id, user_id):
+        raise _NOT_FOUND
+    try:
+        agent_uuid = uuid.UUID(agent_id)
+    except ValueError:
+        return
+    agent = await db.get(Agent, agent_uuid)
+    if agent is None:
+        return
+    if (organization_id is not None and agent.organization_id != organization_id) or not await _is_org_member(
+        db, agent.organization_id, user_id,
+    ):
+        raise _NOT_FOUND
 
 
 async def create_conversation(

@@ -13,11 +13,6 @@ import os
 import time
 from pathlib import Path
 
-import anthropic
-from anthropic import Anthropic
-
-from retrieval import FINAL_TOP_K, Retriever
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 MODEL_NAME = os.environ.get("RAG_GENERATION_MODEL", "claude-sonnet-5")
@@ -110,9 +105,13 @@ class Generator:
                 "and either export it in your shell or put it in a .env file at the project "
                 "root as ANTHROPIC_API_KEY=sk-ant-..."
             )
+        from anthropic import Anthropic
+
         self.client = Anthropic(api_key=api_key, timeout=CLIENT_TIMEOUT_SECONDS)
 
     def generate(self, question, chunks):
+        import anthropic
+
         user_prompt = build_user_prompt(question, chunks)
 
         start = time.perf_counter()
@@ -157,6 +156,8 @@ class Generator:
 
 
 def main():
+    from retrieval import FINAL_TOP_K, Retriever
+
     parser = argparse.ArgumentParser(description="Ask the FastAPI RAG assistant a question end-to-end.")
     parser.add_argument("question")
     parser.add_argument("--top-k", type=int, default=FINAL_TOP_K)

@@ -6,19 +6,17 @@ installed dependency -- `pip index versions mcp` confirms `mcp==2.0.0`
 importable, `ClientSession`/`stdio_client`/`sse_client`/
 `streamable_http_client` all real, not hand-rolled JSON-RPC).
 
-**Real, deliberate security boundary for `stdio` transport**: `command`
-is only ever a value an ORG ADMIN explicitly configured (see
-`api/routers/mcp_servers.py`'s own `require_org_admin` gate on
-create/update) -- never derived from a workflow variable, an LLM's own
-tool-call arguments, or any other end-user-controlled input. This is
-the same trust boundary this codebase already draws around
-`api/services/custom_tools.py`'s own webhook URLs (operator-configured,
-not LLM-configured), just for a local subprocess instead of a remote
-HTTP call. Running an operator-configured local binary is real,
-inherent stdio-MCP risk (the whole point of stdio transport); it is not
-mitigated further here, and not appropriate for a multi-tenant SaaS
-deployment where tenants themselves configure servers -- see this
-module's own ROADMAP entry.
+**Real, deliberate security boundary for `stdio` transport**: spawning
+a subprocess from the API/worker host is arbitrary command execution,
+so it is OFF by default (`MCP_STDIO_ENABLED=false`): `_open_session`
+refuses to spawn anything, even for a row already in the database. When
+enabled, `command` is only ever a value a PLATFORM SUPERADMIN configured
+(see `api/routers/mcp_servers.py`'s own stdio gate on create/update) --
+never derived from a workflow variable, an LLM's own
+tool-call arguments, or any other end-user-controlled input. Running a
+local binary is real, inherent stdio-MCP risk (the whole point of stdio
+transport); it is not mitigated further here, and not appropriate for a
+multi-tenant SaaS deployment where tenants themselves configure servers.
 
 **One real client session per call, not a persistent pool**: an MCP
 `ClientSession` is cheap to establish and each of `discover_tools`/
@@ -39,6 +37,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from opentelemetry import trace
 
+from api.config import settings
 from api.models.mcp_server import MCPAuthType, MCPServerConfig, MCPTransport
 from api.security.encryption import decrypt_field
 from api.services.outbound_http import describe_outbound_error, mcp_http_client, validate_outbound_url
@@ -93,6 +92,10 @@ async def _open_session(server: MCPServerConfig, stack: AsyncExitStack) -> Clien
     `server.transport`, then a real, initialized `ClientSession` on top,
     all cleaned up via the caller's own `AsyncExitStack`."""
     if server.transport == MCPTransport.stdio.value:
+        if not settings.MCP_STDIO_ENABLED:
+            raise MCPClientError(
+                f"MCP server {server.name!r} uses the stdio transport, which is disabled on this platform (MCP_STDIO_ENABLED=false)"
+            )
         if not server.command:
             raise MCPClientError(f"MCP server {server.name!r} is configured for stdio but has no command")
         params = StdioServerParameters(command=server.command, args=list(server.args or []), env=dict(server.env or {}) or None)

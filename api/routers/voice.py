@@ -92,7 +92,7 @@ async def voice_agent_endpoint(
     credit charge for non-BYOK organizations, injection guardrails (a blocked utterance answers 400)."""
     from api.config import settings
     from api.security.rate_limit import enforce_rate_limit
-    from api.services.billing_credits import InsufficientCreditsError, SpendCapExceededError, assert_org_can_spend, deduct_credits
+    from api.services.billing_credits import InsufficientCreditsError, SpendCapExceededError, assert_org_can_spend, deduct_credits_up_to
     from api.services.llm_config import resolve_llm_config
     from api.security.organization_settings import get_org_settings
     from api.services.llm_byok import resolve_org_api_key
@@ -101,7 +101,7 @@ async def voice_agent_endpoint(
     org_settings = await get_org_settings(db, org_id)
     provider = resolve_llm_config(org_settings)["provider"]
     try:
-        await assert_org_can_spend(db, org_id, org_settings, provider)
+        await assert_org_can_spend(db, org_id, org_settings, provider, minimum_credits=max(settings.VOICE_AGENT_TURN_CREDIT_COST, 1))
     except InsufficientCreditsError as exc:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Insufficient AI credits -- add a credit pack or configure your own provider key (BYOK)") from exc
     except SpendCapExceededError as exc:
@@ -119,11 +119,8 @@ async def voice_agent_endpoint(
 
     charged = 0
     if not await resolve_org_api_key(db, org_id, provider):
-        try:
-            await deduct_credits(db, org_id, settings.VOICE_AGENT_TURN_CREDIT_COST, resource_type="voice_agent_turn")
-            charged = settings.VOICE_AGENT_TURN_CREDIT_COST
-        except InsufficientCreditsError:
-            pass  # the answer was already produced; the pre-flight above is the gate, a race only costs one turn
+        # BILL-008 -- min(balance, cost) instead of a swallowed InsufficientCreditsError (a race can no longer serve a free turn).
+        _credit, charged, _shortfall = await deduct_credits_up_to(db, org_id, settings.VOICE_AGENT_TURN_CREDIT_COST, resource_type="voice_agent_turn")
     await db.commit()
     audio = result["answer_audio"]
     return VoiceAgentResponse(

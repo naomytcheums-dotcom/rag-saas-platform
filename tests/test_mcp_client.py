@@ -9,11 +9,20 @@ from pathlib import Path
 
 import pytest
 
+from api.config import settings
 from api.models.mcp_server import MCPServerConfig
 from api.services.mcp.client import MCPClientError, call_tool, discover_tools
 from api.services.mcp.client import test_connection as mcp_test_connection
 
 _SERVER_SCRIPT = str(Path(__file__).resolve().parent / "mcp_test_server.py")
+
+
+@pytest.fixture
+def stdio_enabled(monkeypatch):
+    """SEC-002: stdio is off by default (MCP_STDIO_ENABLED=False). These tests
+    deliberately launch the repo's own local test MCP server as a subprocess,
+    so they opt in explicitly -- for the test only."""
+    monkeypatch.setattr(settings, "MCP_STDIO_ENABLED", True)
 
 
 def _stdio_server() -> MCPServerConfig:
@@ -23,6 +32,7 @@ def _stdio_server() -> MCPServerConfig:
     )
 
 
+@pytest.mark.usefixtures("stdio_enabled")
 async def test_discover_tools_against_a_real_stdio_mcp_server():
     """Validation criterion: un vrai tools/list contre un vrai serveur."""
     tools = await discover_tools(_stdio_server())
@@ -33,6 +43,7 @@ async def test_discover_tools_against_a_real_stdio_mcp_server():
     assert add_tool["input_schema"]["properties"].keys() == {"a", "b"}
 
 
+@pytest.mark.usefixtures("stdio_enabled")
 async def test_call_tool_against_a_real_stdio_mcp_server():
     """Validation criterion: un vrai tools/call contre un vrai serveur."""
     result = await call_tool(_stdio_server(), "add", {"a": 2, "b": 3})
@@ -40,16 +51,19 @@ async def test_call_tool_against_a_real_stdio_mcp_server():
     assert result == "5"
 
 
+@pytest.mark.usefixtures("stdio_enabled")
 async def test_call_tool_surfaces_a_real_tool_error():
     with pytest.raises(MCPClientError):
         await call_tool(_stdio_server(), "fail", {})
 
 
+@pytest.mark.usefixtures("stdio_enabled")
 async def test_call_tool_raises_for_an_unknown_tool_name():
     with pytest.raises(MCPClientError):
         await call_tool(_stdio_server(), "does_not_exist", {})
 
 
+@pytest.mark.usefixtures("stdio_enabled")
 async def test_test_connection_reports_the_real_tool_count():
     result = await mcp_test_connection(_stdio_server())
 

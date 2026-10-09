@@ -32,6 +32,9 @@ class EnterpriseSSOConnectionEntry(BaseModel):
     issuer: str
     client_id: str
     is_enabled: bool
+    domain_verified: bool = False
+    # Published in DNS by design (TXT `_rag-verify.<domain>`), not a secret.
+    domain_verification_token: str | None = None
     created_at: dt.datetime
 
     model_config = {"from_attributes": True}

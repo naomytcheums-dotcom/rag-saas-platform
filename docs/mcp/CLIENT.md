@@ -18,10 +18,14 @@ curl -X POST https://your-instance/organizations/{org_id}/mcp-servers \
 ```
 
 `transport` is one of `stdio`, `sse`, `streamable_http`. `stdio` needs
-`command`/`args`/`env` instead of `url` — a real, local subprocess this
-platform's own host runs, so only configure it with a command you trust
-(same trust boundary as a custom webhook tool's URL, just for a local
-binary instead of a remote call).
+`command`/`args`/`env` instead of `url` and runs a local subprocess on this
+platform's own host, i.e. arbitrary command execution. It is therefore
+**disabled by default** (`MCP_STDIO_ENABLED=false`): creating or updating a
+`stdio` server returns `403`, and the client refuses to launch a `stdio`
+subprocess even for a row already in the database. Setting
+`MCP_STDIO_ENABLED=true` only allows a platform **superadmin** to create or
+modify `stdio` servers (never an organization Owner/Admin); only enable it on
+single-tenant or trusted deployments, with commands you trust.
 
 `auth_credential` (bearer token or API key) is encrypted at rest
 (`api/security/encryption.py`) and never returned by any `GET`.

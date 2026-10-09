@@ -220,12 +220,24 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
     void load();
   }, [load]);
 
-  async function choosePlan(planId: string) {
+  async function choosePlan(plan: Plan) {
+    // A paid plan is only ever activated by a confirmed payment (BILL-001): go through the provider checkout and
+    // let its webhook change the plan. `subscribe` is reserved for free plans.
+    const isPaid = plan.monthly_price_cents > 0 || plan.yearly_price_cents > 0;
     try {
-      await api.post(`/organizations/${orgId}/billing/subscribe`, { plan_id: planId, billing_period: period });
+      if (isPaid) {
+        const res = await api.post<{ url: string }>(`/organizations/${orgId}/billing/checkout`, { plan_id: plan.id, billing_period: period });
+        window.location.assign(res.url);
+        return;
+      }
+      await api.post(`/organizations/${orgId}/billing/subscribe`, { plan_id: plan.id, billing_period: period });
       await load();
     } catch (err) {
-      onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plan_change"));
+      if (err instanceof ApiError && err.status === 501) {
+        onError(t("billing.payment_not_configured"));
+      } else {
+        onError(err instanceof ApiError ? String(err.detail) : t("billing.error_plan_change"));
+      }
     }
   }
 
@@ -255,7 +267,7 @@ function PlansTab({ orgId, onError }: { orgId: string; onError: (e: string) => v
               <button
                 type="button"
                 disabled={isCurrent}
-                onClick={() => void choosePlan(plan.id)}
+                onClick={() => void choosePlan(plan)}
                 className="mt-4 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCurrent ? t("billing.current_plan_button") : t("billing.choose_plan")}

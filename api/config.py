@@ -1072,6 +1072,10 @@ class Settings(BaseSettings):
     SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # SEC-002/RAG-025 -- the MCP `stdio` transport spawns an operator-supplied command on the API/worker
+    # host. Off by default: no stdio server can be created/updated and the client never spawns one, even for
+    # an existing row. When enabled, only a platform superadmin may create or modify a stdio server.
+    MCP_STDIO_ENABLED: bool = False
     EVALUATION_RUN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     EVALUATION_RUN_RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
@@ -2268,6 +2272,12 @@ class Settings(BaseSettings):
     # Explicitly opt in on a self-hosted / development deployment with no
     # payment processor; public deployments fail closed by default.
     CREDITS_ALLOW_UNPAID_TOPUP: bool = False
+    # BILL-001/BILL-002 -- `POST .../billing/subscribe|upgrade|downgrade` only rewrite `Subscription.plan_id` and
+    # `POST .../invoices/{id}/pay` only flips an invoice to "paid": neither charges anything. By default they are
+    # refused for any paid plan / for organization callers (402/403): a paid plan comes from a confirmed checkout
+    # (provider webhook). Set True ONLY on a self-hosted / development deployment with no payment provider, where
+    # an organization owner may move to a paid plan and mark invoices paid by hand. NEVER enable it on a public deployment.
+    BILLING_ALLOW_SELF_SERVICE_PAID_PLANS: bool = False
     # Currency the fixed credit packs (api/security/credit_packs.py `price_cents`) are charged in at checkout.
     CREDIT_PACK_CURRENCY: str = "usd"
     # Hardening Mission (§8, retrieval) -- when policy-aware retrieval is active, the strategy fetches
