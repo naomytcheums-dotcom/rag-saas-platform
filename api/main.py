@@ -26,6 +26,7 @@ import api.models  # noqa: F401 -- real, necessary: guarantees every model in
 # building Partie 5.1.10's human_approvals table).
 from api.config import settings
 from api.database import AsyncSessionLocal, engine
+from api.db_errors import register_db_error_handlers
 from api.monitoring import render_prometheus_metrics, track_request_duration_middleware
 from api.routers import (
     a2a, agent_factory, quality_alerts,
@@ -369,6 +370,8 @@ app.include_router(voice_messages.router)
 app.include_router(voice_settings.router)
 app.include_router(twilio.router)
 app.include_router(twilio.org_router)
+
+register_db_error_handlers(app)
 app.include_router(public_api.router)
 app.include_router(webhooks.router)
 app.include_router(api_versioning.router)
