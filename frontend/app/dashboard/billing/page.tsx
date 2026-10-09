@@ -393,6 +393,15 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
 
   async function purchase(packId: string) {
     try {
+      // BILL-004: a credit pack is paid at the provider's hosted checkout; the credits arrive with its webhook. Only a deployment
+      // with no payment provider (501) falls back to the direct top-up, which the API itself refuses unless that is allowed.
+      try {
+        const res = await api.post<{ url: string }>(`/organizations/${orgId}/billing/credits/checkout`, { pack_id: packId });
+        window.location.assign(res.url);
+        return;
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 501)) throw err;
+      }
       await api.post(`/organizations/${orgId}/billing/credits/purchase`, { pack_id: packId });
       await load();
     } catch (err) {
