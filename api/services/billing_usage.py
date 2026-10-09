@@ -12,9 +12,45 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models.admin import Plan, Subscription
+from api.config import settings
+from api.models.admin import Plan, Subscription, SubscriptionStatus
 from api.models.billing import UsageAlert
 from api.security.usage import get_usage, get_usage_summary
+
+
+def _aware(moment: dt.datetime) -> dt.datetime:
+    return moment if moment.tzinfo else moment.replace(tzinfo=dt.timezone.utc)
+
+
+def subscription_grants_paid_access(sub: Subscription, now: dt.datetime | None = None) -> bool:
+    """BILL-007 -- whether a subscription still entitles its organization to its (paid) plan.
+
+    Access follows what the provider reported, not just the stored plan: a canceled subscription keeps its plan only until the
+    paid period ends, a past-due one only for `BILLING_GRACE_PERIOD_DAYS` after the period end, and a `pending` (incomplete) one never.
+    Without a known period end (self-hosted/dev, manually assigned plans) the stored status decides, so nothing changes there."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    period_end = _aware(sub.current_period_end) if sub.current_period_end else None
+    grace = dt.timedelta(days=max(settings.BILLING_GRACE_PERIOD_DAYS, 0))
+    if sub.status == SubscriptionStatus.pending:
+        return False
+    if sub.status == SubscriptionStatus.canceled:
+        return period_end is not None and now <= period_end
+    if sub.status == SubscriptionStatus.past_due:
+        return period_end is None or now <= period_end + grace
+    return period_end is None or now <= period_end + grace
+
+
+async def get_effective_plan(db: AsyncSession, organization_id: uuid.UUID) -> Plan | None:
+    """The plan whose limits and features apply to the organization right now (None when it has no subscription at all)."""
+    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
+    if sub is None:
+        return None
+    plan = await db.get(Plan, sub.plan_id)
+    if plan is None or ((plan.monthly_price_cents or 0) <= 0 and (plan.yearly_price_cents or 0) <= 0):
+        return plan
+    if subscription_grants_paid_access(sub):
+        return plan
+    return await db.scalar(select(Plan).where(Plan.key == "free")) or plan
 
 # Metric -> the Plan column that caps it. Only metrics this codebase
 # actually has a real Plan limit for are checked -- an unlisted metric
@@ -42,10 +78,7 @@ async def check_limits(db: AsyncSession, organization_id: uuid.UUID, resource_ty
     if limit_attr is None:
         return True
 
-    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
-    if sub is None:
-        return True
-    plan = await db.get(Plan, sub.plan_id)
+    plan = await get_effective_plan(db, organization_id)
     limit = getattr(plan, limit_attr, None) if plan else None
     if limit is None:
         return True
@@ -107,10 +140,7 @@ async def check_plan_resource_limit(db: AsyncSession, organization_id: uuid.UUID
     from api.models.document import Document
     from api.models.organization import OrganizationMember
 
-    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
-    if sub is None:
-        return True, None, None
-    plan = await db.get(Plan, sub.plan_id)
+    plan = await get_effective_plan(db, organization_id)
     if plan is None:
         return True, None, None
 
