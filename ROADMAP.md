@@ -31,6 +31,38 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
+
+- Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;
+  `POST .../invoices/{id}/pay` laissait une organisation déclarer sa facture payée ; avec `0 < solde < coût`, `deduct_credits` refusait,
+  l'exception était avalée et la réponse LLM servie sans débit.
+- Changement : ces routes n'acceptent plus qu'un plan gratuit, un plan strictement moins cher (downgrade) ou la re-sélection du plan courant ;
+  sinon 402 « utiliser le checkout » (réglage `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`, défaut `False`, réservé aux instances dev/self-hosted).
+  `/pay` réservé aux admins plateforme (403 sinon). Nouveau `deduct_credits_up_to` : débite `min(solde, coût)`, solde jamais négatif,
+  manque inscrit dans le ledger et loggé ; plus d'exception avalée (orchestrateur run/stream, voix) ; une boucle d'outils est arrêtée une fois
+  le solde épuisé ; pré-contrôle voix sur le coût du tour. Frontend : « Choisir ce plan » appelle `/billing/checkout` pour un plan payant.
+- Tests : nouveaux `tests/test_p0_billing_no_free_paid_plan.py`, `tests/test_p0_credits_no_free_response.py`, `frontend/app/dashboard/billing/plan-checkout.test.tsx`.
+- Limite : la chaîne webhook → plan (BILL-003/005/006/007) reste à corriger ; aucun webhook n'écrit encore `plan_id`.
+- Test existant adapté avec accord utilisateur : `tests/test_billing.py::test_owner_can_subscribe_upgrade_cancel_reactivate` encodait l'upgrade gratuit ;
+  il vérifie maintenant le 402 puis active le réglage de développement pour le reste du parcours.
+- Décision : commit `07451e2` sur `bob/auto-fix-20261009-0358`.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — Audit forensique : 6 failles P0 corrigées (TEN-001, SEC-001, SEC-002, BILL-001/002/008, SADM-001)
+
+- Problème : l'audit (rapports `rag-work\audit-evidence\*.md`) a trouvé 144 anomalies ; les P0 corrigés ici : écriture inter-tenant via
+  `/chat/stream` (TEN-001/RAG-001, RAG-017), contournement du filtre tenant de l'outil SQL par une chaîne `E'...'` (SEC-001), transport MCP `stdio`
+  = exécution de commande par tout owner (SEC-002/RAG-025), plan payant gratuit / facture auto-payée / réponse LLM sans débit (BILL-001/002/008),
+  prise de contrôle de comptes par un mapping SSO d'admin plateforme non vérifié (SADM-001).
+- Changement : un commit par faille (a263074, 3a30a4d, 1789e91, 07451e2, d29f8a0). Migration `0134_enterprise_sso_domain_verification` (colonnes
+  `domain_verified*`, aller-retour upgrade/downgrade/upgrade testé sur base jetable) ; `MCP_STDIO_ENABLED` (défaut false) ; `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`
+  (défaut false).
+- Tests : 108 nouveaux tests `tests/test_p0_*.py` + 5 tests vitest ; suite combinée 166 passés, 9 ignorés (preuve PostgreSQL de SEC-001 : 8/8 passés
+  sur base jetable lors de la passe dédiée) ; `ruff check api/` propre. Tests existants adaptés avec accord utilisateur : 15 dans
+  `tests/test_enterprise_sso_integration.py`, 5 dans `tests/test_mcp_client.py`, 1 dans `tests/test_billing.py`, car ils encodaient l'ancien comportement dangereux.
+- Reste (P1/P2, non corrigé) : SEC-003/004/005, chaîne de paiement Stripe/Paystack, suspension d'organisation, tâches Celery manquantes, RLS/PostgreSQL non prouvé,
+  CI/Snyk. Voir `tests.md`, `billing.md`, `tenant.md`, `rag.md`, `superadmin.md`, `ux.md`.
+- Décision : branche `bob/auto-fix-20261009-0358`, PR à ouvrir ; jamais poussé sur main.
+
 ### [Bob-Auto-Fixes] — 2026-10-08 — Validation backend/API, prix modèles et dépendances
 
 - Prix : le modèle Anthropic demandé par défaut est désormais `claude-sonnet-5-5`;
