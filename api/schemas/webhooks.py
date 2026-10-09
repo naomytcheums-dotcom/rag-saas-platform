@@ -3,7 +3,9 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from api.services.outbound_http import validate_outbound_url
 
 
 class WebhookCreateRequest(BaseModel):
@@ -13,6 +15,11 @@ class WebhookCreateRequest(BaseModel):
     headers: dict | None = None
     secret: str | None = None
 
+    @field_validator("url")
+    @classmethod
+    def _url_is_a_public_http_url(cls, value: str) -> str:
+        return validate_outbound_url(value)
+
 
 class WebhookUpdateRequest(BaseModel):
     name: str | None = None
@@ -20,6 +27,11 @@ class WebhookUpdateRequest(BaseModel):
     events: list[str] | None = None
     headers: dict | None = None
     is_active: bool | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _url_is_a_public_http_url(cls, value: str | None) -> str | None:
+        return validate_outbound_url(value) if value is not None else value
 
 
 class WebhookResponse(BaseModel):

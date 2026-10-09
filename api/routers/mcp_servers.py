@@ -32,6 +32,7 @@ from api.security.organizations import require_org_admin, require_org_member
 from api.security.rate_limit import enforce_rate_limit
 from api.utils import client_ip
 from api.services.mcp.client import MCPClientError, test_connection
+from api.services.outbound_http import validate_outbound_url
 from api.services.mcp.discovery import (
     call_cached_tool, create_mcp_server, delete_mcp_server, list_cached_tools, list_mcp_servers, sync_tools,
 )
@@ -40,6 +41,13 @@ router = APIRouter(tags=["mcp-servers"])
 
 _VALID_TRANSPORTS = ("stdio", "sse", "streamable_http")
 _VALID_AUTH_TYPES = ("none", "bearer", "api_key")
+
+
+def _validate_public_url(url: str | None) -> None:
+    try:
+        validate_outbound_url(url or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 async def _get_owned_server(db: AsyncSession, org_id: uuid.UUID, server_id: uuid.UUID) -> MCPServerConfig:
@@ -62,6 +70,8 @@ async def create_mcp_server_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="command is required for the stdio transport")
     if payload.transport in ("sse", "streamable_http") and not payload.url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"url is required for the {payload.transport} transport")
+    if payload.transport in ("sse", "streamable_http"):
+        _validate_public_url(payload.url)
 
     server = await create_mcp_server(
         db, org_id, name=payload.name, description=payload.description, transport=payload.transport, url=payload.url,
@@ -85,6 +95,8 @@ async def update_mcp_server_endpoint(
     _caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned_server(db, org_id, server_id)
+    if payload.url is not None and server.transport in ("sse", "streamable_http"):
+        _validate_public_url(payload.url)
     for field in ("name", "description", "url", "command", "args", "env", "auth_type", "is_active"):
         value = getattr(payload, field)
         if value is not None:

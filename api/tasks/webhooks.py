@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from api.config import settings
 from api.models.webhook import Webhook, WebhookDelivery
+from api.services.outbound_http import describe_outbound_error, safe_webhook_client
 from api.services.webhooks import decrypt_webhook_secret, sign_webhook_payload
 from api.tasks.celery_app import celery_app
 from api.tasks._sync_engine import sync_engine as _sync_engine
@@ -46,7 +47,8 @@ def deliver_webhook_task(self, delivery_id: str) -> None:
             headers["X-Webhook-Signature"] = sign_webhook_payload(delivery.payload, plaintext_secret)
 
         try:
-            response = httpx.post(webhook.url, json=delivery.payload, headers=headers, timeout=webhook.timeout)
+            with safe_webhook_client(timeout=webhook.timeout) as http:
+                response = http.post(webhook.url, json=delivery.payload, headers=headers)
             delivery.status_code = response.status_code
             delivery.response_body = response.text[:5000]
             delivery.delivered_at = dt.datetime.now(dt.timezone.utc)
@@ -54,7 +56,9 @@ def deliver_webhook_task(self, delivery_id: str) -> None:
                 raise httpx.HTTPStatusError(f"status {response.status_code}", request=response.request, response=response)
             db.commit()
         except Exception as exc:  # noqa: BLE001 -- any real network/HTTP failure below is real, deliberately retried
-            delivery.error = str(exc)
+            # Never persist str(exc): it can carry resolved addresses or remote text, and this column is readable by the tenant.
+            delivery.error = describe_outbound_error(exc)
+            logger.warning("deliver_webhook_task: delivery %s failed (%s)", delivery.id, type(exc).__name__)
             db.commit()
             if delivery.attempt < webhook.retry_count:
                 delivery.attempt += 1

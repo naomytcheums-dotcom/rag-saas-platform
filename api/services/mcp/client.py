@@ -41,6 +41,7 @@ from opentelemetry import trace
 
 from api.models.mcp_server import MCPAuthType, MCPServerConfig, MCPTransport
 from api.security.encryption import decrypt_field
+from api.services.outbound_http import describe_outbound_error, mcp_http_client, validate_outbound_url
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,14 @@ def _auth_headers(server: MCPServerConfig) -> dict[str, str]:
     return {}
 
 
+def _require_public_url(server: MCPServerConfig) -> None:
+    """Offline pre-check of a stored URL (rows created before SEC-005 may hold anything); the connection itself is guarded as well."""
+    try:
+        validate_outbound_url(server.url)
+    except ValueError as exc:
+        raise MCPClientError(f"MCP server {server.name!r} has a URL that is not allowed: {exc}") from exc
+
+
 async def _open_session(server: MCPServerConfig, stack: AsyncExitStack) -> ClientSession:
     """Real transport dispatch -- opens the real read/write streams for
     `server.transport`, then a real, initialized `ClientSession` on top,
@@ -91,13 +100,18 @@ async def _open_session(server: MCPServerConfig, stack: AsyncExitStack) -> Clien
     elif server.transport == MCPTransport.sse.value:
         if not server.url:
             raise MCPClientError(f"MCP server {server.name!r} is configured for sse but has no url")
+        _require_public_url(server)
         read_stream, write_stream = await stack.enter_async_context(
-            sse_client(server.url, headers=_auth_headers(server), timeout=_DEFAULT_TIMEOUT_SECONDS)
+            sse_client(
+                server.url, headers=_auth_headers(server), timeout=_DEFAULT_TIMEOUT_SECONDS, httpx_client_factory=mcp_http_client,
+            )
         )
     elif server.transport == MCPTransport.streamable_http.value:
         if not server.url:
             raise MCPClientError(f"MCP server {server.name!r} is configured for streamable_http but has no url")
-        read_stream, write_stream = await stack.enter_async_context(streamable_http_client(server.url))
+        _require_public_url(server)
+        http_client = await stack.enter_async_context(mcp_http_client())
+        read_stream, write_stream = await stack.enter_async_context(streamable_http_client(server.url, http_client=http_client))
     else:
         raise MCPClientError(f"MCP server {server.name!r} has an unknown transport {server.transport!r}")
 
@@ -123,7 +137,7 @@ async def discover_tools(server: MCPServerConfig) -> list[dict[str, Any]]:
     except MCPClientError:
         raise
     except Exception as exc:  # noqa: BLE001 -- any real transport/protocol failure must surface as one honest, typed error
-        raise MCPClientError(f"failed to discover tools from MCP server {server.name!r}: {exc}") from exc
+        raise MCPClientError(f"failed to discover tools from MCP server {server.name!r}: {describe_outbound_error(exc)}") from exc
 
 
 async def call_tool(server: MCPServerConfig, tool_name: str, arguments: dict[str, Any]) -> str:
@@ -151,7 +165,7 @@ async def call_tool(server: MCPServerConfig, tool_name: str, arguments: dict[str
         except MCPClientError:
             raise
         except Exception as exc:  # noqa: BLE001 -- same reasoning as discover_tools
-            raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {exc}") from exc
+            raise MCPClientError(f"failed to call MCP tool {tool_name!r} on server {server.name!r}: {describe_outbound_error(exc)}") from exc
 
     parts: list[str] = []
     for block in result.content:

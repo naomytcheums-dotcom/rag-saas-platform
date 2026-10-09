@@ -1803,6 +1803,9 @@ class Settings(BaseSettings):
     # SEC-004: per-organization cap on outbound calls (each one is billed to the platform's Twilio account).
     TWILIO_OUTBOUND_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     TWILIO_OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+    # SEC-005: webhooks and MCP servers may only reach public addresses. Self-hosted installations that need an internal receiver can
+    # list it here (comma separated host names, IP addresses or CIDR ranges). Empty = no exception, the default.
+    OUTBOUND_PRIVATE_HOST_ALLOWLIST: str = ""
 
     # -- Public API (Partie 9.1) -----------------------------------------------------
     # Real, per-API-key rate limit -- see api/security/public_api_auth.py's
