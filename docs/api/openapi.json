@@ -2768,6 +2768,55 @@
         ]
       }
     },
+    "/admin/sso/connections/{connection_id}/verify-domain": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify Sso Connection Domain",
+        "description": "Marks the connection's domain verified only if the `_rag-verify.<domain>` TXT record carries its token.",
+        "operationId": "verify_sso_connection_domain_admin_sso_connections__connection_id__verify_domain_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseSSOConnectionEntry"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/sso/connections/{connection_id}": {
       "delete": {
         "tags": [
@@ -59271,6 +59320,22 @@
           "is_enabled": {
             "type": "boolean",
             "title": "Is Enabled"
+          },
+          "domain_verified": {
+            "type": "boolean",
+            "title": "Domain Verified",
+            "default": false
+          },
+          "domain_verification_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain Verification Token"
           },
           "created_at": {
             "type": "string",

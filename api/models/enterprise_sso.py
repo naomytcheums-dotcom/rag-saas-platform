@@ -54,6 +54,15 @@ class EnterpriseSSOConnection(Base):
     # module's docstring.
     client_secret_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # A connection only routes logins (discover/authorize/callback) once
+    # its email_domain is proven to belong to whoever configured it --
+    # via the `_rag-verify.<domain>` DNS TXT challenge below
+    # (api/security/email_domains.py's check_email_verification_txt_record).
+    # Without it, anyone able to create a row could capture the logins of
+    # every account under that domain.
+    domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    domain_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    domain_verification_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
