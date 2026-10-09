@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_current_user, get_db
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.security.organizations import ensure_organization_active
 from api.models.workflow import Workflow, WorkflowStatus
 from api.models.workflow_run import WorkflowRun
 from api.services.workflows import validate_workflow_data
@@ -37,6 +38,7 @@ async def _resolve_workflow_and_membership(workflow_id: uuid.UUID, current_user:
     )
     if membership is None:
         raise _NOT_FOUND
+    await ensure_organization_active(db, workflow.organization_id)
     return workflow, membership
 
 

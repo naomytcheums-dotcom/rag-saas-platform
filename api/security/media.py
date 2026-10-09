@@ -16,6 +16,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.media import MediaAsset
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.security.organizations import ensure_organization_active
 
 _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
@@ -28,6 +29,7 @@ async def _membership_for(organization_id: uuid.UUID, current_user: User, db: As
     )
     if membership is None:
         raise _NOT_FOUND
+    await ensure_organization_active(db, organization_id)
     return membership
 
 

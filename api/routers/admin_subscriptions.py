@@ -4,10 +4,12 @@ honest scope: real CRUD and real math, zero real payment processor."""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin
+from api.models.admin import Plan
+from api.models.audit_log import AuditAction
 from api.models.user import User
 from api.schemas.admin_dashboard import (
     PlanCreateRequest,
@@ -33,9 +35,33 @@ from api.services.admin_subscriptions import (
     update_plan,
     update_subscription,
 )
-from api.utils import MAX_PAGE_SIZE
+from api.utils import MAX_PAGE_SIZE, client_ip
+from api.security.audit_log import log_audit_action
 
 router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
+
+
+def _subscription_state(sub) -> dict:
+    return {
+        "plan_id": str(sub.plan_id), "status": sub.status.value,
+        "current_period_end": sub.current_period_end.isoformat() if sub.current_period_end else None,
+    }
+
+
+async def _audit_subscription_change(db, request, admin, sub, operation, before, extra=None) -> None:
+    """SADM-005 -- a manual plan/status/period change is a financial act: who, on which organization, from what to what."""
+    await log_audit_action(
+        db, user_id=admin.id, action=AuditAction.ADMIN_SUBSCRIPTION_CHANGED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, organization_id=sub.organization_id, resource_type="subscription", resource_id=str(sub.id),
+        metadata={"operation": operation, "before": before, "after": _subscription_state(sub), **(extra or {})},
+    )
+
+
+async def _audit_plan_change(db, request, admin, plan_id, operation, before, after) -> None:
+    await log_audit_action(
+        db, user_id=admin.id, action=AuditAction.ADMIN_PLAN_CHANGED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+        success=True, resource_type="plan", resource_id=str(plan_id), metadata={"operation": operation, "before": before, "after": after},
+    )
 
 
 @router.get("/subscriptions", response_model=list[SubscriptionResponse])
@@ -58,17 +84,21 @@ async def get_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(re
 
 
 @router.patch("/subscriptions/{sub_id}", response_model=SubscriptionResponse)
-async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionUpdateRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def update_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionUpdateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     try:
+        before = _subscription_state(await get_subscription(db, sub_id))
         sub = await update_subscription(db, sub_id, plan_id=payload.plan_id, status_value=payload.status)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    await _audit_subscription_change(db, request, admin, sub, "update", before)
     await db.commit()
     return SubscriptionResponse.model_validate(sub)
 
 
 @router.post("/subscriptions/{sub_id}/cancel", response_model=SubscriptionResponse)
-async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionCancelRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionCancelRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Real, deliberate: POST, not DELETE -- a DELETE carrying a JSON
     body (the cancellation reason) is non-standard and unsupported by
     several real HTTP clients (httpx's own `.delete()` convenience
@@ -76,21 +106,25 @@ async def cancel_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionC
     own tests) -- the literal spec's `DELETE /admin/subscriptions/{id}`
     is kept working too, see below, but without a body."""
     try:
+        before = _subscription_state(await get_subscription(db, sub_id))
         sub = await cancel_subscription(db, sub_id, reason=payload.reason)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await _audit_subscription_change(db, request, admin, sub, "cancel", before)
     await db.commit()
     return SubscriptionResponse.model_validate(sub)
 
 
 @router.delete("/subscriptions/{sub_id}", response_model=SubscriptionResponse)
-async def delete_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_subscription_endpoint(sub_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """The literal spec's own `DELETE /admin/subscriptions/{id}` --
     same real cancel, no reason (real HTTP DELETE carries no body)."""
     try:
+        before = _subscription_state(await get_subscription(db, sub_id))
         sub = await cancel_subscription(db, sub_id, reason=None)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await _audit_subscription_change(db, request, admin, sub, "cancel", before)
     await db.commit()
     return SubscriptionResponse.model_validate(sub)
 
@@ -108,11 +142,13 @@ async def refund_subscription_endpoint(sub_id: uuid.UUID, _admin: User = Depends
 
 
 @router.post("/subscriptions/{sub_id}/extend", response_model=SubscriptionResponse)
-async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionExtendRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def extend_subscription_endpoint(sub_id: uuid.UUID, payload: SubscriptionExtendRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     try:
+        before = _subscription_state(await get_subscription(db, sub_id))
         sub = await extend_subscription(db, sub_id, days=payload.days)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await _audit_subscription_change(db, request, admin, sub, "extend", before, extra={"days": payload.days})
     await db.commit()
     return SubscriptionResponse.model_validate(sub)
 
@@ -125,28 +161,33 @@ async def list_plans_endpoint(_admin: User = Depends(require_admin), db: AsyncSe
 
 
 @router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
-async def create_plan_endpoint(payload: PlanCreateRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def create_plan_endpoint(payload: PlanCreateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     plan = await create_plan(db, **payload.model_dump())
+    await _audit_plan_change(db, request, admin, plan.id, "create", None, payload.model_dump())
     await db.commit()
     return PlanResponse.model_validate(plan)
 
 
 @router.patch("/plans/{plan_id}", response_model=PlanResponse)
-async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     try:
+        existing = await db.get(Plan, plan_id)
+        before = {"monthly_price_cents": existing.monthly_price_cents, "yearly_price_cents": existing.yearly_price_cents, "name": existing.name} if existing else None
         plan = await update_plan(db, plan_id, **payload.model_dump())
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await _audit_plan_change(db, request, admin, plan_id, "update", before, {k: v for k, v in payload.model_dump().items() if v is not None})
     await db.commit()
     return PlanResponse.model_validate(plan)
 
 
 @router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_plan_endpoint(plan_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     try:
         await delete_plan(db, plan_id)
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    await _audit_plan_change(db, request, admin, plan_id, "delete", None, None)
     await db.commit()
 
 

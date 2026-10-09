@@ -129,6 +129,8 @@ async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
     except SubscriptionNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
     await db.commit()
     return result
 
@@ -138,7 +140,10 @@ async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller:
 async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     await _enforce_no_free_paid_plan(db, sub, body)
-    result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
+    try:
+        result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
     await db.commit()
     return result
 

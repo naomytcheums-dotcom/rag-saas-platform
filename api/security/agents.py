@@ -27,6 +27,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.agent import Agent, AgentStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.security.organizations import ensure_organization_active
 from api.services.agent_guardrails import validate_guardrails_config
 from api.services.agent_idk import validate_idk_threshold
 from api.services.agent_knowledge_base import validate_knowledge_base_access
@@ -49,6 +50,7 @@ async def resolve_agent_and_membership(agent_id: uuid.UUID, current_user: User, 
     )
     if membership is None:
         raise _NOT_FOUND
+    await ensure_organization_active(db, agent.organization_id)
     return agent, membership
 
 

@@ -103,6 +103,13 @@ async def get_user_org_role(db: AsyncSession, user_id: uuid.UUID, org_id: uuid.U
     )
 
 
+async def ensure_organization_active(db: AsyncSession, organization_id: uuid.UUID) -> None:
+    """TEN-002 / SADM-004 -- a suspended organization is cut off: every membership-based access path (and API-key authentication)
+    calls this, so the platform-admin suspension has a real effect. 403, after the membership check, so a non-member still learns nothing."""
+    if await db.scalar(select(Organization.is_suspended).where(Organization.id == organization_id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This organization is suspended")
+
+
 async def require_org_member(
     org_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> OrganizationMember:
@@ -127,6 +134,7 @@ async def require_org_member(
     )
     if membership is None:
         raise not_found
+    await ensure_organization_active(db, org_id)
     from api.security.logging_correlation import bind_log_context
 
     bind_log_context(organization_id=org_id)

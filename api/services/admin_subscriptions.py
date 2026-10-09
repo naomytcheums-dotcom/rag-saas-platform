@@ -159,6 +159,7 @@ async def update_subscription(
 ) -> Subscription:
     sub = await get_subscription(db, sub_id)
     if plan_id is not None:
+        await get_plan(db, plan_id)  # an unknown plan is a PlanNotFoundError (404), not a foreign-key failure at commit time
         sub.plan_id = plan_id
     if status_value is not None:
         sub.status = status_value
