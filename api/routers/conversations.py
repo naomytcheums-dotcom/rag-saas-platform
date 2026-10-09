@@ -30,7 +30,7 @@ from api.schemas.message_actions import (
 )
 from api.security.conversations import (
     add_message, archive_conversation, create_conversation, get_conversation,
-    get_conversation_messages, get_conversations,
+    get_conversation_messages, get_conversations, require_conversation_creation_scope,
 )
 from api.services.conversation_management import (
     ConversationManagementError, get_conversation_stats, list_deleted_conversations,
@@ -68,6 +68,7 @@ async def _get_owned_conversation(db: AsyncSession, conversation_id: uuid.UUID, 
 async def create_conversation_endpoint(
     payload: ConversationCreateRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    await require_conversation_creation_scope(db, current_user.id, payload.agent_id, payload.organization_id)
     conversation = await create_conversation(
         db, payload.agent_id, current_user.id, payload.title, organization_id=payload.organization_id,
     )

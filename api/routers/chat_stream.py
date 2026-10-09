@@ -25,6 +25,7 @@ from api.dependencies import get_current_user, get_db
 from api.models.user import User
 from api.schemas.chat_stream import ChatStreamRequest
 from api.security.agents import resolve_agent_and_membership
+from api.security.conversations import require_conversation_for_stream
 from api.security.organization_settings import get_org_settings
 from api.services.retrieval_pipeline import build_llm_context, search_with_context
 from api.services.streaming import stream_agent_response
@@ -38,6 +39,10 @@ async def _stream_response(
     agent_id: uuid.UUID, message: str, conversation_id: uuid.UUID | None, current_user: User, db: AsyncSession,
 ) -> StreamingResponse:
     agent, membership = await resolve_agent_and_membership(agent_id, current_user, db)
+    # Must run before retrieval and before the stream ever reads or
+    # writes conversation history (TEN-001: cross-tenant write/read).
+    if conversation_id is not None:
+        await require_conversation_for_stream(db, conversation_id, current_user.id, agent.organization_id)
     # Real bug found (2026-09-18) via a live end-to-end test: this route
     # never ran retrieval at all, so a streamed reply was never grounded
     # in this organization's documents and never carried citations --
