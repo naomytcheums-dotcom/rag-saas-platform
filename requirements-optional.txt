@@ -1,6 +1,6 @@
 # Lazily imported integrations, activated by settings or explicit feature calls.
 # Installed by default in the API image; disable with INSTALL_OPTIONAL_RAG_DEPS=0.
-docling==2.130.0
+docling==2.132.0
 deepeval==4.2.6
 dspy==3.4.0
 mem0ai==2.2.1

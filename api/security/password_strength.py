@@ -39,7 +39,11 @@ async def is_password_known_breached(password: str) -> bool:
     check" (network error/timeout/non-200) -- callers must not treat
     those two as distinguishable, see this module's docstring on the
     fail-open design."""
-    sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+    sha1 = (
+        hashlib.sha1(password.encode("utf-8"), usedforsecurity=False)
+        .hexdigest()
+        .upper()
+    )
     prefix, suffix = sha1[:5], sha1[5:]
 
     try:
