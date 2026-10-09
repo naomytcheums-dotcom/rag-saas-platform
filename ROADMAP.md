@@ -31,6 +31,80 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-08 — Validation backend/API, prix modèles et dépendances
+
+- Prix : le modèle Anthropic demandé par défaut est désormais `claude-sonnet-5-5`;
+  la carte LiteLLM installée indique 2 $/M tokens en entrée et 10 $/M en sortie.
+  Le fixture de coût périmé (Claude 3.5 Sonnet à 3/15 $) a été aligné sur ce
+  modèle; les assertions de coût unitaire (0,007 $ pour 1 000/500 tokens) et
+  d'endpoint (0,012 $ pour 1 000/1 000 tokens) sont conservées.
+- Correctif API : `get_system_health` exécute son `SELECT 1` sur la session
+  injectée, plutôt que sur l'engine global, afin de mesurer la connexion réellement
+  fournie par l'application et les tests.
+- Dépendances : WeasyPrint 65.0 -> 70.0 après approbation; Docling 2.130.0 ->
+  2.132.0. `pip-audit -r requirements-api.txt` : aucune vulnérabilité connue;
+  l'audit optional reste bloqué par `diskcache 5.6.3 / PYSEC-2026-2447`, sans
+  version corrective disponible. Aucun avis supprimé ni règle d'audit ignorée.
+- OpenAPI : `scripts/export_openapi.py` a généré le schéma depuis l'application
+  isolée (782 chemins); `tests/docs/test_api_reference.py` : 16/16 réussis.
+- Tests ciblés : coût 5/5, PDF/export 10/10, santé admin après correctif 1/1,
+  HIBP/dotenv/import différé 10/10; suite auth/tenant/webhook 218 réussis,
+  1 skip (DB/Redis isolés volontairement injoignables).
+- Suite complète isolée avec `pytest tests/ -x` : 545 réussis, 23 désélectionnés,
+  premier arrêt sur le health check admin. Cause corrigée : le service sondait
+  l'engine global au lieu de la session injectée; le test ciblé passe maintenant.
+  Rejeu ciblé `test_admin_dashboard.py -x` : 6 réussis, puis blocage dans
+  `test_system_log_handler_writes_real_rows`, qui ouvre directement une session
+  PostgreSQL sync sur `settings.DATABASE_URL` (port isolé 1, volontairement sans
+  serveur) plutôt que le fixture SQLite. Aucun accès à la base de production;
+  la suite complète reste bloquée par ce test dépendant d'une vraie DB.
+- Lint `ruff check api/` réussi. `ruff format --check api/` reste rouge sur
+  734 fichiers (88 déjà formatés); aucun reformatage global ni migration existante
+  modifiée. Analyse Bandit comparative : aucun problème exploitable nouveau identifié.
+- Décision : changements locaux non commités; aucun push, aucune clé réelle ni appel
+  payant utilisé.
+
+### [Bob-Auto-Fixes] — 2026-10-08 — Etats de données dashboard/admin
+
+- Problème : certains compteurs absents ou indisponibles pouvaient apparaître
+  comme des zéros ou conserver des données après un changement d'organisation;
+  des erreurs admin pouvaient être confondues avec des listes vides.
+- Changement : valeurs « — » pour les métriques non disponibles, remise à zéro
+  des données dérivées lors d'un changement d'organisation, et états d'erreur/
+  d'accès refusé explicites dans l'admin. Les résultats d'évaluation ne sont
+  calculés qu'à partir des résultats API présents.
+  Les quatre requêtes dashboard affichent désormais leurs erreurs traduites,
+  filtrées par organisation; les rejets tardifs après changement de tenant sont
+  ignorés par la garde d'annulation, sans conserver l'erreur du tenant précédent.
+- Tests : frontend `npm run lint`, `npm run type-check`, Vitest (19 fichiers,
+  137 tests, `npx vitest run --maxWorkers=2`, 33.60 s) et `npm run build`
+  (47/47 pages statiques) réussis sur le correctif final. Audit npm
+  production : 0 vulnérabilité après mise à jour lock-only de sharp 0.35.4
+  vers 0.35.5.
+  Régression ciblée supplémentaire : `npx vitest run app/dashboard/page.test.tsx`,
+  5/5 tests réussis (5.78 s, `--maxWorkers=1`). Le lancement sans limite de
+  workers a rencontré 15 délais de démarrage de forks; le rejeu borné a exécuté
+  les 137 tests sans affaiblir les assertions ni modifier la configuration.
+- Vérification navigateur : 43 routes dashboard et 8 onglets admin avec un
+  serveur API local à fixtures mockées. Aucun crash React ni 5xx observé.
+  L'accès client refusé et les 403/404 de contrôle d'accès sont attendus.
+  Complément avec proxy mock local tenant compte des rôles : les six endpoints
+  `/analytics/business/*` retournent 200 au superadmin (métriques affichées,
+  MRR 150 EUR de fixture) et 403 à l'admin non-superadmin. Les chemins frontend
+  correspondent aux routes backend protégées par `require_superadmin`;
+  aucune autorisation réelle modifiée.
+- Limites : compteurs observés issus exclusivement de fixtures, non de données
+  backend réelles. Aucun pytest backend ni benchmark RAG exécuté ici.
+  Captures : `D:\rag-work\screens\dashboard-home-mocked.png`,
+  `D:\rag-work\screens\dashboard-widget-mocked.png`,
+  `D:\rag-work\screens\admin-client-denied-mocked.png`,
+  `D:\rag-work\screens\admin-overview-mocked.png`,
+  `D:\rag-work\screens\admin-alerting-mocked.png`,
+  `D:\rag-work\screens\admin-business-superadmin-mocked.png`,
+  `D:\rag-work\screens\admin-business-nonsuperadmin-403-mocked.png`.
+- Décision : changements non commités sur
+  `bob/auto-fix-20261003-191324`; aucun push ni appel à un service réel.
+
 ### [Bob-Auto-Fixes] — 2026-10-07 — Cache d'index BM25 par organisation
 
 - Probleme : reconstruction et rechargement du corpus a chaque recherche BM25.
