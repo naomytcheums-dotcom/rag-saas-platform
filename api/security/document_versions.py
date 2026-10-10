@@ -9,6 +9,7 @@ place DELETE /documents/{document_id}'s own real permission check
 already lives.
 """
 
+import asyncio
 import uuid
 
 from sqlalchemy import func, select
@@ -77,7 +78,7 @@ async def create_document_version_from_upload(
         raise ValueError(f"'{document_id}' is not a registered document")
 
     content_type = validate_document_upload(content, filename)
-    file_key = upload_document_file(document.organization_id, document.id, filename, content, content_type)
+    file_key = await asyncio.to_thread(upload_document_file, document.organization_id, document.id, filename, content, content_type)  # sync boto3, off the event loop (TEN-003)
     version = await create_document_version(db, document_id, file_key, len(content), None, created_by, file_type=content_type)
     # Partie 2.2.10 -- the ONE real shared choke point both
     # POST .../versions and POST .../replace go through, so logging
