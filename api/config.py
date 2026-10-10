@@ -896,6 +896,10 @@ class Settings(BaseSettings):
     TASK_PLANNING_ENABLED: bool = True
     TASK_PLANNING_MAX_STEPS: int = 20
     TASK_PLANNING_TIMEOUT: int = 300
+    # Spec 5.1.13: when True (and the caller asked for plan_first), the plan is EXECUTED step by step (api/services/task_planning.execute_plan, one model call per
+    # step, dependencies respected) and the results are handed to the final answer. Off by default because it multiplies the model calls (cost and latency).
+    TASK_PLAN_EXECUTE_STEPS: bool = False
+    TASK_PLAN_STEP_RESULT_MAX_CHARS: int = 1500
 
     # -- Agent traces (Partie 5.1.14) --------------------------------------------
     AGENT_TRACES_ENABLED: bool = True

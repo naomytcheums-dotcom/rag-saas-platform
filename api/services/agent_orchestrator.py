@@ -94,7 +94,7 @@ from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_stream_with_tools, chat_completion_with_usage
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
-from api.services.task_planning import get_plan_steps, plan_task
+from api.services.task_planning import execute_plan, get_plan_steps, plan_task
 from api.services.fallback import run_tool_fallbacks
 from api.services.output_guard import detect_unsafe_tool_call
 from api.services.tool_budget import cap_tool_output
@@ -363,6 +363,20 @@ class AgentOrchestrator:
             if len(plan_steps) > 1:
                 steps_text = "\n".join(f"{i + 1}. {s.description}" for i, s in enumerate(plan_steps))
                 system_prompt = f"{system_prompt}\n\nSuggested plan for this task:\n{steps_text}"
+                if settings.TASK_PLAN_EXECUTE_STEPS:
+                    # Spec 5.1.13: really run the plan, step by step (one call each, dependencies respected, a failed step skips its dependants), then give the
+                    # outcomes to the final answer. execute_plan never raises: a failed step is recorded as data.
+                    async with self._db_lock:
+                        executed = await execute_plan(db, plan.id)
+                        executed_steps = await get_plan_steps(db, plan.id)
+                        await db.commit()
+                    limit = settings.TASK_PLAN_STEP_RESULT_MAX_CHARS
+                    outcomes = "\n".join(
+                        f"{i + 1}. {s.description} -> " + (str(s.result)[:limit] if s.status == "completed" else f"[{s.status}]")
+                        for i, s in enumerate(executed_steps)
+                    )
+                    trace.append(self._trace_event("plan_executed", {"plan_id": str(plan.id), "status": executed.status, "completed": sum(1 for s in executed_steps if s.status == "completed")}))
+                    system_prompt = f"{system_prompt}\n\nResults of the planned steps (use them, and say so when a step failed):\n{outcomes}"
 
         selected_tools: list[ToolSpec] = []
         if tools:
