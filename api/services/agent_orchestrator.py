@@ -95,6 +95,7 @@ from api.services.llm_providers import LLMError, chat_completion, chat_completio
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
+from api.services.tool_budget import cap_tool_output
 from api.services.tool_selection import select_tools
 from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout, get_tool_timeout
 from api.services.tool_validation import get_validation_errors
@@ -522,6 +523,8 @@ class AgentOrchestrator:
                     timeout = await get_tool_timeout(db, tool.name)
                 try:
                     output = await execute_tool_with_timeout(tool, tool_call["arguments"], timeout=timeout)
+                    async with self._db_lock:
+                        output = await cap_tool_output(db, tool.name, output)
                     return tool_call, output, None
                 except ToolTimeoutError as exc:
                     return tool_call, None, str(exc)
@@ -922,6 +925,8 @@ class AgentOrchestrator:
                 tool_timeout = await get_tool_timeout(db, tool.name)
             try:
                 output = await execute_tool_with_timeout(tool, tool_call["arguments"], timeout=tool_timeout)
+                async with self._db_lock:
+                    output = await cap_tool_output(db, tool.name, output)
                 return tool_call, output, None
             except ToolTimeoutError as exc:
                 return tool_call, None, str(exc)

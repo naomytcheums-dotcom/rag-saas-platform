@@ -91,3 +91,28 @@ async def reset_tool_budget(db: AsyncSession, tool_name: str) -> bool:
     row.tokens_used = 0
     await db.flush()
     return True
+
+
+_CHARS_PER_TOKEN = 4  # the usual rough conversion; the cap is a safeguard, not a billing figure
+
+
+async def cap_tool_output(db: AsyncSession, tool_name: str, output: str) -> str:
+    """Partie 5.1.5 -- enforce the per-tool token budget on what a tool call feeds back to the model.
+
+    Enforcement is deliberately opt-in: it only applies to a tool that has an explicit `ToolBudget` row (set through
+    `set_tool_budget`, i.e. by an admin). The global default (`TOOL_BUDGET_DEFAULT`) is NOT applied, otherwise every
+    knowledge-base search would be cut at ~1000 tokens the day this was wired in. A call whose output is above the
+    budget is truncated with an explicit marker (the model is told the output was cut); the call's size is added to the
+    tool's cumulative usage so the admin can see it. No-op when `TOOL_BUDGET_TRACKING_ENABLED` is off.
+    """
+    if not settings.TOOL_BUDGET_TRACKING_ENABLED or not isinstance(output, str):
+        return output
+    row = await db.get(ToolBudget, tool_name)
+    if row is None:
+        return output
+    max_chars = max(row.budget_limit, 1) * _CHARS_PER_TOKEN
+    used = max(len(output) // _CHARS_PER_TOKEN, 1)
+    await track_tool_usage(db, tool_name, min(used, row.budget_limit))
+    if len(output) <= max_chars:
+        return output
+    return output[:max_chars] + f"\n[output truncated: tool '{tool_name}' is limited to {row.budget_limit} tokens per call]"
