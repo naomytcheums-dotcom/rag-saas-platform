@@ -34,12 +34,41 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.document import Document
 from api.models.evaluation import EvaluationDataset, EvaluationQuestion
 from api.services.question_difficulty import auto_detect_difficulty
 
 _IMPORT_FORMATS = ("json", "csv")
 _EXPORT_FORMATS = ("json", "csv")
 _CSV_FIELDNAMES = ("question", "expected_answer", "difficulty", "category")
+
+
+def _expected_documents_problem(expected_documents, existing_documents: set[str] | None) -> str | None:
+    """Why a row's `expected_documents` is unusable, or None. Shape rule = ground_truth_documents.set_ground_truth_documents; existence only when checked."""
+    if not isinstance(expected_documents, list):
+        return "'expected_documents' must be a list of {document_id, ...} objects"
+    for entry in expected_documents:
+        if not isinstance(entry, dict) or not entry.get("document_id"):
+            return "each expected document must be an object with at least a 'document_id'"
+        if existing_documents is not None and str(entry["document_id"]) not in existing_documents:
+            return f"expected document {entry['document_id']} does not exist in this organization"
+    return None
+
+
+async def _existing_document_ids(db: AsyncSession, dataset_id: uuid.UUID, wanted: set[str]) -> set[str]:
+    dataset = await get_dataset(db, dataset_id)
+    valid = set()
+    for value in wanted:
+        try:
+            valid.add(uuid.UUID(value))
+        except ValueError:
+            continue
+    if dataset is None or not valid:
+        return set()
+    found = await db.scalars(
+        select(Document.id).where(Document.organization_id == dataset.organization_id, Document.id.in_(valid), Document.deleted_at.is_(None))
+    )
+    return {str(document_id) for document_id in found}
 
 
 async def create_dataset(
@@ -182,11 +211,16 @@ async def get_questions(
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
 
 
-async def import_questions(db: AsyncSession, dataset_id: uuid.UUID, content: bytes, format: str) -> dict:
+async def import_questions(db: AsyncSession, dataset_id: uuid.UUID, content: bytes, format: str, verify_documents: bool = False) -> dict:
     """Item 3's own literal function -- real, bulk-inserted (see this
     module's own top docstring for the real scalability reasoning). A
     malformed real row is honestly SKIPPED and reported, not one that
-    silently aborts the whole real import."""
+    silently aborts the whole real import.
+
+    Ground-truth documents (JSON `expected_documents`): every entry must be a dict with a `document_id` (same rule as
+    `ground_truth_documents.set_ground_truth_documents`); a row that breaks it is skipped and reported. With `verify_documents=True`
+    each `document_id` must also be a real, non-deleted document of THIS dataset's organization, otherwise the row is skipped and
+    reported (a dataset that points at documents that do not exist silently scores every retrieval metric 0)."""
     if format not in _IMPORT_FORMATS:
         raise ValueError(f"Unknown import format: {format!r} (expected one of {_IMPORT_FORMATS})")
 
@@ -207,6 +241,14 @@ async def import_questions(db: AsyncSession, dataset_id: uuid.UUID, content: byt
             return {"imported": 0, "errors": [f"invalid CSV encoding: {exc}"]}
         raw_rows = list(csv.DictReader(io.StringIO(text)))
 
+    existing_documents: set[str] | None = None
+    if verify_documents and format == "json":
+        wanted = {
+            str(entry["document_id"]) for raw in raw_rows if isinstance(raw, dict) and isinstance(raw.get("expected_documents"), list)
+            for entry in raw["expected_documents"] if isinstance(entry, dict) and entry.get("document_id")
+        }
+        existing_documents = await _existing_document_ids(db, dataset_id, wanted)
+
     questions = []
     for index, raw in enumerate(raw_rows):
         question_text = (raw.get("question") or "").strip() if isinstance(raw, dict) else ""
@@ -215,6 +257,11 @@ async def import_questions(db: AsyncSession, dataset_id: uuid.UUID, content: byt
             continue
         difficulty = raw.get("difficulty") or None
         expected_documents = raw.get("expected_documents") if format == "json" else None
+        if expected_documents is not None:
+            problem = _expected_documents_problem(expected_documents, existing_documents)
+            if problem:
+                errors.append(f"row {index}: {problem}, skipped")
+                continue
         if difficulty is None and settings.DIFFICULTY_AUTO_DETECT_ENABLED:
             difficulty = auto_detect_difficulty(question_text, raw.get("expected_answer"), expected_documents)
         questions.append(EvaluationQuestion(
