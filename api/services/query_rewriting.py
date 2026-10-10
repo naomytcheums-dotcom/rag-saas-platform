@@ -90,6 +90,42 @@ def expand_abbreviations(query: str) -> str:
     return " ".join(expanded_words)
 
 
+# Spec 3.4.5 -- synonym expansion. A small built-in table of generic support / business terms (English and French) that an organization extends or overrides
+# with its own `query_synonyms` setting (its own vocabulary matters far more than any built-in list).
+_BUILTIN_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "price": ("cost", "pricing", "fee"), "cost": ("price", "fee"), "refund": ("reimbursement", "money back"), "cancel": ("terminate", "unsubscribe"),
+    "invoice": ("bill", "receipt"), "login": ("sign in", "log in"), "password": ("passphrase", "credentials"), "delete": ("remove", "erase"),
+    "error": ("bug", "failure", "problem"), "contract": ("agreement",), "employee": ("staff", "worker"), "holiday": ("vacation", "leave"),
+    "prix": ("tarif", "cout"), "tarif": ("prix", "cout"), "remboursement": ("rembourser", "restitution"), "annuler": ("resilier", "supprimer"),
+    "facture": ("note", "reçu"), "connexion": ("identification", "authentification"), "contrat": ("accord", "convention"), "salarie": ("employe", "collaborateur"),
+    "conges": ("vacances", "absence"), "erreur": ("bug", "panne", "probleme"),
+}
+
+
+def expand_with_synonyms(query: str, custom_synonyms: dict[str, list[str]] | None = None, max_additions: int = 6) -> str:
+    """Append synonyms of the query's words, so a keyword search also matches documents that use another word for the same thing.
+
+    The original query always comes first and unchanged; at most `max_additions` synonyms are appended (no duplicates, none already in the query)
+    so a long query cannot explode. `custom_synonyms` (term -> synonyms) takes precedence over the built-in table."""
+    if not query or not query.strip():
+        return query
+    table: dict[str, tuple[str, ...]] = dict(_BUILTIN_SYNONYMS)
+    for term, synonyms in (custom_synonyms or {}).items():
+        if isinstance(term, str) and isinstance(synonyms, (list, tuple)):
+            table[term.strip().lower()] = tuple(str(s).strip() for s in synonyms if str(s).strip())
+    present = {w.strip(".,!?;:").lower() for w in query.split()}
+    additions: list[str] = []
+    for word in query.split():
+        for synonym in table.get(word.strip(".,!?;:").lower(), ()):
+            if synonym.lower() not in present and synonym not in additions:
+                additions.append(synonym)
+            if len(additions) >= max_additions:
+                break
+        if len(additions) >= max_additions:
+            break
+    return f"{query} {' '.join(additions)}" if additions else query
+
+
 def _get_spell_checker(language: str) -> SpellChecker:
     language = language if language in _SPELL_CHECKER_LANGUAGES else "en"
     if language not in _SPELL_CHECKERS:

@@ -251,6 +251,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # api/services/retrieval_config.py's own "Phase 4, Étape 2" section
     # for the resolvers that read these.
     "query_rewriting_enabled": False,
+    # Spec 3.4.5 -- synonym expansion of the question before retrieval; `query_synonyms` = {term: [synonyms]} owned by the organization.
+    "query_expansion_enabled": False,
+    "query_synonyms": None,
     "multi_query_enabled": False,
     # Real, deliberate default: the SAME real value
     # api.config.settings.MULTI_QUERY_NUM_VARIANTS already is, so an
