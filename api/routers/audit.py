@@ -39,6 +39,8 @@ from api.security.organizations import require_org_admin as _require_org_admin_f
 router = APIRouter(tags=["audit"])
 
 PROTECTED_FINANCIAL_RESOURCE_TYPES = ("subscription", "plan", "billing", "invoice", "credits", "credit_pack", "provider_sync", "admin_route")
+# Metadata keys that only the platform side may read (see _list_audit_logs): the staff's internal notes on a financial action.
+STAFF_ONLY_METADATA_KEYS = frozenset({"reference", "reason"})
 
 
 
@@ -73,11 +75,18 @@ async def _list_audit_logs(
     )).all()
     items = [_to_entry(r) for r in rows]
     if hide_non_member_actors and organization_id is not None:
-        # The organization's own admins may see what happened on their account, but not who, on the platform staff, did it.
+        # The organization's own admins may see what happened on their account, but not who, on the platform staff, did it: the actor's
+        # id, IP address and user agent are masked, and so are the staff's internal notes (the payment reference of a manual settlement,
+        # the reason of a void or a cancellation). The action, its result and the before/after state stay visible. Rows written by the
+        # organization's own members, and by the system (no actor), are shown in full.
         member_ids = set((await db.scalars(select(OrganizationMember.user_id).where(OrganizationMember.organization_id == organization_id))).all())
         for entry in items:
             if entry.user_id is not None and entry.user_id not in member_ids:
                 entry.user_id = None
+                entry.ip = None
+                entry.user_agent = None
+                if entry.metadata:
+                    entry.metadata = {key: value for key, value in entry.metadata.items() if key not in STAFF_ONLY_METADATA_KEYS}
     return AuditLogListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
