@@ -178,7 +178,9 @@ def grant_monthly_plan_credits() -> int:
             if already_granted is not None:
                 continue
 
-            credit = db.scalar(select(Credit).where(Credit.organization_id == sub.organization_id))
+            credit = db.scalar(
+                select(Credit).where(Credit.organization_id == sub.organization_id).with_for_update().execution_options(populate_existing=True)
+            )
             if credit is None:
                 credit = Credit(organization_id=sub.organization_id, balance=0)
                 db.add(credit)
@@ -204,7 +206,9 @@ def auto_refill_credits() -> int:
         return 0
     refilled = 0
     with SyncSession(_sync_engine) as db:
-        low = db.scalars(select(Credit).where(Credit.balance < settings.CREDITS_REFILL_THRESHOLD)).all()
+        low = db.scalars(
+            select(Credit).where(Credit.balance < settings.CREDITS_REFILL_THRESHOLD).with_for_update().execution_options(populate_existing=True)
+        ).all()
         for credit in low:
             credit.balance += settings.CREDITS_REFILL_AMOUNT
             # Every balance change must be traceable: a refill without a ledger row would be credit created out of nothing.
