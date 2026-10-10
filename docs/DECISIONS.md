@@ -57,3 +57,12 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
 ## D12 - Encryption at rest (spec 10.1.14)
 - **In the application:** secrets (API keys, tokens, webhook secrets) are encrypted with Fernet / AES-256-GCM before they are stored. Document text and chat messages are **not** encrypted by the application.
 - **At the provider:** disk-level encryption of the database and of object storage is the provider's feature. It is documented by Supabase for its managed databases and storage, but it was **not verified from this repository**: the owner should confirm it in the Supabase project settings and note the result here.
+
+## D13 - Usage billing (spec 12.1.9): prepaid credits, not post-paid invoices
+- **Decision:** usage is paid through prepaid credits that are debited as the product is used (`billing_usage`, credit ledger, spend caps). The platform does not send metered usage to Stripe or Paystack to be invoiced afterwards.
+- **Why:** prepaid credits cannot create unpaid debt, which fits the "no free paid plans" rule (BILL-007). If metered invoicing is wanted later, Stripe's usage records can be added next to the ledger without replacing it.
+- **Known limit:** the spend caps are not proven atomic under heavy concurrency (BILL-012); a load test on PostgreSQL is still to do.
+
+## D14 - Payment providers (spec 12.1.1): Stripe and Paystack, no Flutterwave
+- **Decision:** Flutterwave is not integrated. Stripe covers cards worldwide and Paystack covers the African markets the spec targets.
+- **Still to do by the owner:** run both providers in their test mode with the owner's test keys (checkout, webhook, refund). Nothing in this repository has been run against a real provider sandbox.
