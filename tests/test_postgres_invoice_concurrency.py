@@ -1,8 +1,10 @@
 """Invoice transitions under real concurrency, on a DISPOSABLE PostgreSQL only (row locks are not provable on SQLite).
 
-Opt-in: set RAG_DISPOSABLE_PG_URL to a throwaway database on localhost (for instance the docker container used for migration round
-trips). The URL of DATABASE_URL (a shared or real database) is deliberately never used here. Without the variable, or with a non-local
-host, the whole module is skipped; nothing is claimed as verified.
+Opt-in and guarded (see tests/disposable_pg_guard.py, unit-tested in test_disposable_pg_guard.py). Every condition is required:
+RAG_DISPOSABLE_PG_URL points at a LOCAL database whose name contains disposable, roundtrip, scratch or throwaway,
+RAG_DISPOSABLE_PG_CONFIRM equals that database name, and the target is not the application's own DATABASE_URL. Otherwise the whole
+module is skipped with the reason; nothing is claimed as verified. A local host alone is NOT enough (a tunnel to a shared or real
+database is local too).
 
 Each scenario holds the first transaction open (no commit) while a second one starts on the same invoice: without `SELECT ... FOR UPDATE`
 the second would read the old status and transition again (two audit rows, or a paid invoice voided).
@@ -11,22 +13,23 @@ the second would read the old status and transition again (two audit rows, or a 
 import asyncio
 import os
 import uuid
-from urllib.parse import urlparse
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from api.config import settings
 from api.models.audit_log import AuditLog
 from api.models.billing import Invoice, InvoiceStatus
 from api.models.organization import Organization
 from api.models.user import User, UserRole
 from api.services.billing_invoices import InvoiceStateError, create_invoice, settle_invoice
+from disposable_pg_guard import disposable_pg_refusal
 
 URL = os.environ.get("RAG_DISPOSABLE_PG_URL", "")
-_HOST = urlparse(URL.replace("+asyncpg", "")).hostname if URL else None
+_REFUSAL = disposable_pg_refusal(URL, os.environ.get("RAG_DISPOSABLE_PG_CONFIRM"), str(settings.DATABASE_URL), os.environ.get("DATABASE_URL"))
 
-pytestmark = pytest.mark.skipif(_HOST not in ("127.0.0.1", "localhost"), reason="RAG_DISPOSABLE_PG_URL is not set to a local throwaway PostgreSQL")
+pytestmark = pytest.mark.skipif(_REFUSAL is not None, reason=f"PostgreSQL concurrency tests not authorized: {_REFUSAL}")
 
 
 async def _world():
