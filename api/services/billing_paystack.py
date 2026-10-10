@@ -226,7 +226,9 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
             logger.error("paystack event %s: malformed organization id in metadata; ignored", event_id)
 
     if org_uuid is not None:
-        sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_uuid))
+        sub = await db.scalar(
+            select(Subscription).where(Subscription.organization_id == org_uuid).with_for_update().execution_options(populate_existing=True)
+        )
         if sub is not None:
             code = data.get("subscription_code")
             other_subscription = bool(sub.paystack_subscription_code and code and code != sub.paystack_subscription_code)

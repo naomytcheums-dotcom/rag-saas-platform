@@ -145,6 +145,7 @@ async def _cancel_with_provider(db, sub_id, reason):
         await _cancel_at_provider(db, sub.organization_id, sub, at_period_end=False)
     elif sub.status != SubscriptionStatus.canceled and sub.paystack_subscription_code:
         await _cancel_at_provider(db, sub.organization_id, sub, at_period_end=True)
+        sub = await get_subscription(db, sub_id, lock=True)  # re-read under lock AFTER the network call
         sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
         sub.cancel_reason = reason
         await db.flush()

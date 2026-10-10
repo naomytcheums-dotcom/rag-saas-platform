@@ -44,7 +44,7 @@ from api.schemas.billing import (
     CheckoutSessionRequest, CheckoutSessionResponse, CreateUsageAlertRequest, CreditResponse,
     CreditTransactionResponse, DisplayCurrencyResponse, InvoiceDetailResponse, InvoiceResponse, InvoiceStatsResponse, PaymentMethodResponse,
     PlanResponse, PortalSessionResponse, ProviderInvoiceResponse, PurchaseCreditsRequest, StripeInvoiceResponse,
-    SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest, MarkInvoicePaidRequest,
+    SubscribeRequest, SubscriptionResponse, UnifiedCheckoutRequest, UsageAlertResponse, VoidInvoiceRequest, OrgMarkInvoicePaidRequest,
 )
 from api.security.audit_log import log_audit_action
 from api.security.logging_correlation import get_request_id
@@ -171,6 +171,7 @@ async def cancel_subscription_endpoint(org_id: uuid.UUID, body: CancelSubscripti
         # BILL-006: a provider-managed subscription is cancelled at the provider first (at period end), otherwise the provider
         # keeps charging. Access runs until the period ends; the provider's webhook then moves the subscription to canceled.
         await _cancel_at_provider(db, org_id, sub)
+        sub = await admin_subscriptions.get_or_create_subscription(db, org_id, lock=True)  # re-read under lock AFTER the network call
         sub.canceled_at = dt.datetime.now(dt.timezone.utc)
         sub.cancel_reason = body.reason
         await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_SUBSCRIPTION_CANCELED, via="provider", at_period_end=True)
@@ -376,7 +377,7 @@ async def remind_invoice_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, _cal
 
 
 @org_router.post("/invoices/{invoice_id}/pay", response_model=InvoiceResponse)
-async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, request: Request, body: MarkInvoicePaidRequest | None = None, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, request: Request, body: OrgMarkInvoicePaidRequest | None = None, _caller: OrganizationMember = Depends(require_permission("billing:manage")), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # BILL-002 -- an organization must not be able to declare its own invoice paid: only the provider's webhook or the platform
     # superadmin (back-office reconciliation) may, and a superadmin must give the external payment reference (422 otherwise).
     # Self-hosted/dev instances without a provider can opt out (BILLING_ALLOW_SELF_SERVICE_PAID_PLANS): no reference required there,
@@ -387,7 +388,7 @@ async def mark_invoice_paid_endpoint(org_id: uuid.UUID, invoice_id: uuid.UUID, r
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invoices are marked paid by the payment provider once the payment is confirmed; organizations cannot mark them paid",
         )
-    if is_superadmin and body is None:
+    if is_superadmin and (body is None or body.reference is None):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A payment reference is required to mark an invoice paid by hand")
     return await _settle_invoice_or_http_error(
         db, org_id, invoice_id, operation="paid", reason=None, actor=current_user, request=request,
@@ -452,7 +453,7 @@ async def _record_cancellation_request(db: AsyncSession, org_id: uuid.UUID) -> N
     """The provider accepted a cancellation made through a provider-level route: record it locally the way `/cancel` does (canceled_at
     set, status unchanged). The status only moves to canceled when the provider's own event confirms it, so a cancellation that is
     still pending synchronization stays visible instead of being either invisible or reported as final."""
-    sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
+    sub = await admin_subscriptions.get_or_create_subscription(db, org_id, lock=True)
     sub.canceled_at = sub.canceled_at or dt.datetime.now(dt.timezone.utc)
 
 

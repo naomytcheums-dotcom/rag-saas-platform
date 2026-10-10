@@ -38881,7 +38881,7 @@
               "schema": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/MarkInvoicePaidRequest"
+                    "$ref": "#/components/schemas/OrgMarkInvoicePaidRequest"
                   },
                   {
                     "type": "null"
@@ -64972,6 +64972,26 @@
         ],
         "title": "OneDriveImportResponse",
         "description": "Same real, honest, minimal acknowledgment as every prior async\nimport step's own response, and for the identical reason."
+      },
+      "OrgMarkInvoicePaidRequest": {
+        "properties": {
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference",
+            "description": "Bank transfer id, receipt number, ..."
+          }
+        },
+        "type": "object",
+        "title": "OrgMarkInvoicePaidRequest",
+        "description": "Body of the organization route `/pay`. The reference is optional at the schema level so that access control (403) and the\ninvoice lookup (404) answer before a payload problem does; the handler then requires it from a superadmin (422)."
       },
       "OrganizationAPIKeyCreateRequest": {
         "properties": {

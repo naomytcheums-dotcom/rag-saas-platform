@@ -240,7 +240,7 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
     elif event_type == "invoice.payment_failed":
         org_id = await _resolve_stripe_org_id(db, data)
         if org_id:
-            sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_id))
+            sub = await _locked_subscription(db, org_id)
             if sub is not None and sub.status == SubscriptionStatus.active:  # a late failure never reopens a canceled or pending subscription
                 sub.status = SubscriptionStatus.past_due
                 await db.flush()
@@ -249,7 +249,7 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
         # The "a payment succeeded" events. Real no-op when no organization can be resolved (e.g. a one-off charge).
         org_id = await _resolve_stripe_org_id(db, data)
         if org_id:
-            sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_id))
+            sub = await _locked_subscription(db, org_id)
             if sub is not None and sub.status == SubscriptionStatus.past_due:
                 sub.status = SubscriptionStatus.active
             if sub is not None and event_type == "invoice.paid":
@@ -345,7 +345,15 @@ async def _resolve_stripe_org_id(db: AsyncSession, data: dict) -> uuid.UUID | No
 async def _subscription_for_event(db: AsyncSession, organization_id: uuid.UUID) -> Subscription:
     from api.services.admin_subscriptions import get_or_create_subscription
 
-    return await get_or_create_subscription(db, organization_id)
+    return await get_or_create_subscription(db, organization_id, lock=True)
+
+
+async def _locked_subscription(db: AsyncSession, organization_id: uuid.UUID) -> Subscription | None:
+    """The organization's subscription, row-locked and refreshed: a webhook is a state transition and must not overwrite (or be
+    overwritten by) a concurrent back-office change or another event."""
+    return await db.scalar(
+        select(Subscription).where(Subscription.organization_id == organization_id).with_for_update().execution_options(populate_existing=True)
+    )
 
 
 async def _plan_for_price(db: AsyncSession, price_id: str | None) -> tuple[Plan, str] | None:
@@ -369,7 +377,10 @@ def _extend_period_from_invoice(sub: Subscription, invoice: dict) -> None:
     lines = _nested(invoice, "lines", "data") or []
     ends = [_epoch_to_datetime(_nested(line, "period", "end")) for line in lines]
     latest = max((end for end in ends if end is not None), default=None)
-    if latest is not None and (sub.current_period_end is None or latest > sub.current_period_end):
+    current = sub.current_period_end
+    if current is not None and current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)  # a refreshed row can come back naive (SQLite); the stored value is UTC
+    if latest is not None and (current is None or latest > current):
         sub.current_period_end = latest
 
 

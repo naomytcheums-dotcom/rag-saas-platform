@@ -268,6 +268,23 @@ class MarkInvoicePaidRequest(BaseModel):
         return value
 
 
+class OrgMarkInvoicePaidRequest(BaseModel):
+    """Body of the organization route `/pay`. The reference is optional at the schema level so that access control (403) and the
+    invoice lookup (404) answer before a payload problem does; the handler then requires it from a superadmin (422)."""
+
+    reference: str | None = Field(default=None, max_length=200, description="Bank transfer id, receipt number, ...")
+
+    @field_validator("reference")
+    @classmethod
+    def _reference_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("a payment reference of at least 3 characters is required")
+        return value
+
+
 class InvoiceStatsResponse(BaseModel):
     total_paid_cents: int
     total_outstanding_cents: int
