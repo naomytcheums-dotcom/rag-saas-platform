@@ -220,7 +220,7 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
     if not await claim_payment_event(db, PaymentProvider.stripe, event_id, event_type, str(data.get("id", ""))):
         return False
 
-    if event_type == "checkout.session.completed" and (data.get("metadata") or {}).get("kind") == "credit_pack":
+    if event_type in _CREDIT_PACK_EVENT_TYPES and (data.get("metadata") or {}).get("kind") == "credit_pack":
         await _grant_paid_credit_pack(db, data)
     elif event_type == "checkout.session.completed" and data.get("mode") == "subscription":
         await _apply_subscription_checkout(db, data)
@@ -265,9 +265,13 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
 
 
 _AUDITED_EVENT_TYPES = frozenset({
-    "checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted",
-    "invoice.payment_failed", "invoice.paid",
+    "checkout.session.completed", "checkout.session.async_payment_succeeded", "customer.subscription.created",
+    "customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed", "invoice.paid",
 })
+
+# A deferred payment method (SEPA, bank transfer) completes the session UNPAID and reports the money later with `async_payment_succeeded`.
+# `async_payment_failed` is deliberately not here: nothing was paid, so there is nothing to grant.
+_CREDIT_PACK_EVENT_TYPES = frozenset({"checkout.session.completed", "checkout.session.async_payment_succeeded"})
 
 
 def _is_about_another_subscription(sub: Subscription, data: dict) -> bool:
@@ -463,8 +467,9 @@ async def _notify_safely(db: AsyncSession, organization_id: uuid.UUID, function_
 async def _grant_paid_credit_pack(db: AsyncSession, session: dict) -> None:
     """Grants the credits of a PAID credit-pack checkout. Defensive on purpose: anything that does not
     match what `create_credit_pack_checkout_session` created (unpaid, unknown pack, amount not the pack's price,
-    malformed organization id) grants NOTHING and is logged. Idempotency is the event-id claim made by the caller
-    (`claim_payment_event`), so a re-delivered event cannot grant twice."""
+    malformed organization id) grants NOTHING and is logged. Idempotency is twofold: the event-id claim made by the caller
+    (`claim_payment_event`) and a per-checkout-session claim made here, so neither a re-delivered event nor a second event
+    for the same session (deferred payments, dashboard replays) can grant twice."""
     from api.security.credit_packs import get_credit_pack
     from api.services.billing_credits import add_credits
 
@@ -476,10 +481,23 @@ async def _grant_paid_credit_pack(db: AsyncSession, session: dict) -> None:
     if pack is None or session.get("amount_total") != pack["price_cents"]:
         logger.error("credit pack checkout %s does not match a known pack/price (pack=%s, amount=%s): nothing granted", session.get("id"), metadata.get("pack_id"), session.get("amount_total"))
         return
+    currency = session.get("currency")
+    if currency and str(currency).lower() != settings.CREDIT_PACK_CURRENCY.lower():
+        logger.error("credit pack checkout %s was paid in %s, the pack is priced in %s: nothing granted", session.get("id"), currency, settings.CREDIT_PACK_CURRENCY)
+        return
+    session_id = session.get("id")
+    if not session_id:
+        logger.error("credit pack checkout without a session id: nothing granted")
+        return
     try:
         organization_id = uuid.UUID(metadata.get("organization_id", ""))
     except ValueError:
         logger.error("credit pack checkout %s has no valid organization id: nothing granted", session.get("id"))
+        return
+    # Business idempotency: one grant per checkout SESSION, whatever the event ids (a dashboard replay or a deferred payment's second
+    # event carries a new id). Claimed only once the session is known to be valid and paid.
+    if not await claim_payment_event(db, PaymentProvider.stripe, f"credit_pack_session:{session_id}", "credit_pack_grant", str(session_id)):
+        logger.warning("credit pack checkout %s was already granted: nothing more granted", session_id)
         return
     await add_credits(db, organization_id, pack["credits"], source=f"Stripe checkout {session.get('id')} ({pack['name']} pack)")
 
