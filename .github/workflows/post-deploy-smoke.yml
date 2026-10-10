@@ -1,0 +1,31 @@
+name: Post-deploy smoke (manual)
+
+# Read-only checks of a running deployment (scripts/post_deploy_smoke.py). Run it by hand after a deploy: Actions -> this workflow -> Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Base URL of the API (for example https://api.example.com)
+        required: true
+      frontend_url:
+        description: Base URL of the web app (optional)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Smoke test
+        env:
+          API_URL: ${{ inputs.api_url }}
+          FRONTEND_URL: ${{ inputs.frontend_url }}
+        run: |
+          if [ -n "$FRONTEND_URL" ]; then python scripts/post_deploy_smoke.py --api "$API_URL" --frontend "$FRONTEND_URL"; else python scripts/post_deploy_smoke.py --api "$API_URL"; fi
