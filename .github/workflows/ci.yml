@@ -37,6 +37,22 @@ jobs:
     # previous run -- either way, not what a fast, isolated test run
     # needs).
     services:
+      # Disposable database for THIS job only. Until 2026-10-10 this job used the repository secret DATABASE_URL, i.e. the real database, and its
+      # integration tests (JWT key rotation, PostgreSQL concurrency, admin dashboard) read and DELETED rows there. Never again: see tests/conftest.py,
+      # which now refuses to run against a remote database or service.
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_saas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports:
@@ -59,6 +75,20 @@ jobs:
 
       - name: Lint (runtime-error rules)
         run: pip install --no-cache-dir ruff && ruff check api/
+
+      - name: Apply the migrations to the disposable database
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+          JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+          SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+          AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+          SUPPORT_EMAIL: support@ci-test.invalid
+          EMAIL_FROM_ADDRESS: onboarding@resend.dev
+          RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/1
+          RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+        run: python -m alembic upgrade head
 
       - name: Run test suite
         env:
@@ -89,28 +119,28 @@ jobs:
           # suite itself runs against an in-memory SQLite DB, not
           # DATABASE_URL, but every required (no-default) setting must
           # still resolve for api.config.settings to import at all.
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
-          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/1
           # Real, deliberate override of the shared secret above: THIS
           # job's own real, isolated Redis service, not whatever
           # RATE_LIMIT_REDIS_URL's own secret value points to.
-          RATE_LIMIT_REDIS_URL: redis://localhost:6379/0
-          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-          SESSION_MIDDLEWARE_SECRET: ${{ secrets.SESSION_MIDDLEWARE_SECRET }}
-          AUDIT_LOG_HMAC_SECRET_KEY: ${{ secrets.AUDIT_LOG_HMAC_SECRET_KEY }}
-          SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
-          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
-          SUPPORT_EMAIL: ${{ secrets.SUPPORT_EMAIL }}
-          S3_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT_URL }}
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          S3_REGION: ${{ secrets.S3_REGION }}
-          S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
-          S3_DOCUMENTS_BUCKET_NAME: ${{ secrets.S3_DOCUMENTS_BUCKET_NAME }}
+          RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+          JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+          SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+          AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+          SECRET_ENCRYPTION_KEY: ci-only-secret-encryption-key-never-used-outside-ci-32c
+          ENCRYPTION_MASTER_KEY: gBZ-pfccwD20XSBiesnRCAo9e7_y7E0LOAAvsXGJXyg=
+          RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+          EMAIL_FROM_ADDRESS: onboarding@resend.dev
+          SUPPORT_EMAIL: support@ci-test.invalid
+          S3_ENDPOINT_URL: http://localhost:9000
+          S3_BUCKET_NAME: avatars
+          S3_ACCESS_KEY_ID: minioadmin
+          S3_SECRET_ACCESS_KEY: minioadmin
+          S3_REGION: us-east-1
+          S3_PUBLIC_BASE_URL: http://localhost:9000/public/avatars
+          S3_DOCUMENTS_BUCKET_NAME: documents
         # Real bug found by this étape's own first-ever completed CI run
         # (GitHub Actions never got this far before -- see ROADMAP.md's
         # own Étape 7 entry on the account-wide billing block): 7 test
