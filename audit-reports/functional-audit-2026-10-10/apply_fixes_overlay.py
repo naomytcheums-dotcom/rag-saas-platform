@@ -56,6 +56,18 @@ add(["6.1.8"], T, "GET /citations/{id}/preview wires api/services/citation_previ
 add(["11.3.7", "11.3.8"], T + " (configuration probes, not live calls)", "admin system health now reports pgvector extension status and which LLM providers have a platform key (tests/test_p2_health_probes.py)")
 add(["5.4.12"], "assessment corrected", "the database workflow block reuses the SQL tool validator and tenant filter, covered by tests/test_workflow_block_database.py and the P0 SQL bypass test")
 
+add(["1.1.11"], T, "authenticated download of the personal data export from the profile page (frontend/lib/download.ts, 3 vitest cases)")
+add(["15.2.1", "15.2.2", "15.2.3"], T + " (components); not run in a browser against a live LLM", "frontend/components/FeedbackButtons.tsx: thumbs, reason categories, free comment and correction (vitest) on top of migration 0139")
+add(["2.1.11"], T + " (UI); real remote sitemaps not fetched", "frontend/components/ImportSources.tsx: sitemap, URL, GitHub, Notion and other importers from the documents page (5 vitest cases)")
+add(["7.1.8"], T, "eval_datasets/verticals/{fastapi,legal,hr,finance}.csv, 15 questions each, imported through the real endpoint (tests/test_eval_vertical_datasets.py, 12 cases)")
+add(["13.2.4", "13.3.7"], "executed locally: 10/10 passed; not wired into CI", "e2e/ Playwright package (login, register, dashboard pages, documents, escalations) run against the real API and Next.js on a disposable database")
+add(["14.3.2", "14.3.4", "14.3.8"], "written; typecheck and lint pass; not viewed in a browser", "landing page: product-tour video, four-step architecture section, documentation PDF links (frontend/components/figma/LandingSections.tsx)")
+add(["10.1.3"], T + " (UI); real provider round-trip not run", "OAuth buttons on the login and register screens (same component as 1.1.5, 1.1.6)")
+add(["10.1.4"], T, "tests/test_p2_viewer_route_matrix.py: route x role matrix checked against the real routers")
+add(["13.3.2"], "configured, report-only", "pyproject.toml [tool.mypy] and .github/workflows/mypy.yml (non-blocking: the existing code base is not yet type clean)")
+add(["13.1.3"], "decision recorded", "docs/DECISIONS.md: ruff format is the formatter (Black-compatible output); Black is not added as a second tool")
+add(["14.1.2"], "documentation corrected", "agents.md now lists the real Eval Lab and MCP routes (verified against the OpenAPI document); docs/architecture/LEGACY.md not re-audited")
+
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
 fields = list(rows[0].keys()) + ["fix_status", "fix_evidence"]

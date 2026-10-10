@@ -29,3 +29,11 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
 ## D5 - Promo codes of type percent-off
 - **Decision:** recorded at redemption, not applied automatically at checkout.
 - **Why:** applying a discount to Stripe / Paystack needs provider-side coupon objects and has to be validated in each provider's sandbox with the owner's test keys.
+
+## D6 - Code formatter (spec 13.1.3): ruff format instead of Black
+- **Decision:** `ruff format` is the project formatter. Its output is designed to match Black's, so the spec's goal (one uniform, automatic style) is met without a second tool.
+- **Why:** adding Black next to ruff would mean two formatters that can disagree, and a large reformatting diff for no gain. Revisit only if the team wants Black's exact behaviour on edge cases.
+
+## D7 - Interface languages: French and English only (until further notice)
+- **Decision:** `UI_SUPPORTED_LANGUAGES` is `["fr", "en"]`; the Spanish, German, Portuguese and Arabic bundles were removed. An unsupported `Accept-Language` falls back to the default language.
+- **Why:** the owner asked to ship two languages first. To add a language back: create `locales/<code>/common.json`, add the code to `UI_SUPPORTED_LANGUAGES`, `scripts/sync_frontend_locales.py`, `frontend/lib/i18n.tsx` and `frontend/components/LanguageMenu.tsx`.
