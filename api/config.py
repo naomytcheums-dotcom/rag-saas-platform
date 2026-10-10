@@ -1075,6 +1075,9 @@ class Settings(BaseSettings):
     # When set, GET /metrics requires `Authorization: Bearer <token>` (Prometheus `authorization` / `bearer_token` scrape option).
     # Unset keeps it open for a scraper inside a private network; set it on any deployment reachable from the Internet.
     METRICS_AUTH_TOKEN: str | None = None
+    # True = FAIL CLOSED: if no METRICS_AUTH_TOKEN is configured, /metrics answers 503 instead of being public. Default False keeps the
+    # historical "open inside a private network" behaviour; set it (with the token) on any deployment reachable from the Internet.
+    METRICS_REQUIRE_AUTH: bool = False
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3

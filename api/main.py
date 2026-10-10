@@ -475,6 +475,9 @@ async def metrics(authorization: str | None = Header(default=None)):
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode("utf-8"), settings.METRICS_AUTH_TOKEN.encode("utf-8")):
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    elif settings.METRICS_REQUIRE_AUTH:
+        # Fail closed: the operator declared the endpoint must be protected but configured no token, so it is not served at all.
+        return Response(status_code=503, content="metrics are disabled: METRICS_REQUIRE_AUTH is set but METRICS_AUTH_TOKEN is not")
     return Response(content=render_prometheus_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 
