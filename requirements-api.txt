@@ -543,4 +543,4 @@ sentry-sdk[fastapi,celery]==2.40.0
 # Real, minimal AgentExecutor wrapping this codebase's own existing agent
 # capability -- api/services/a2a_integration.py's own module docstring
 # for the honest, current scope (no full A2A server route wired yet).
-a2a-sdk==1.2.0
+a2a-sdk==1.2.2
