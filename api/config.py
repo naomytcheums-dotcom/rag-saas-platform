@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Real, optional: Supabase's TRANSACTION-mode pooler (port 6543).
     # Falls back to DATABASE_URL if unset. See .env's own comment.
     DATABASE_URL_TRANSACTION: str | None = None
+    # "preview" = local interface preview: start-up is refused if any data store is not local or any external credential is set
+    # (api/security/runtime_guard.py). Anything else (default) leaves the behaviour unchanged.
+    RAG_RUN_MODE: str = ""
 
 
     # -- JWT ------------------------------------------------------------
@@ -2157,6 +2160,17 @@ class Settings(BaseSettings):
                 f"Regression thresholds must be strictly ordered LOW < MEDIUM < HIGH < CRITICAL, got "
                 f"{low} < {medium} < {high} < {critical}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _preview_mode_must_be_isolated(self) -> "Settings":
+        """RAG_RUN_MODE=preview (local interface preview): refuse to start if any data store is not local or any external-service
+        credential is set (api/security/runtime_guard.py). Unset or any other value = unchanged behaviour (production, tests)."""
+        from api.security.runtime_guard import assert_preview_is_isolated, is_preview
+
+        values = {name: getattr(self, name, None) for name in type(self).model_fields}
+        if is_preview(values):
+            assert_preview_is_isolated(values)
         return self
 
 
