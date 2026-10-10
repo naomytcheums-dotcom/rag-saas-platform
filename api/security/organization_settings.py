@@ -171,6 +171,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "prompt_injection_detection_enabled": False,
     # Spec 10.2.7 -- opt-in toxicity filter (api/services/toxicity_filter.py) on the question and on the answer of the agent-less RAG path.
     "toxicity_filter_enabled": False,
+    # Specs 10.2.3/10.2.5/10.2.6/10.2.10 -- redact credentials (always) and, with output_guard_mask_pii, personal data in answers of the agent-less RAG path. See api/services/output_guard.py.
+    "output_guard_enabled": False,
+    "output_guard_mask_pii": True,
     # Spec 10.4.5/10.4.6 -- delete this organization's conversations after this many days without activity (None = keep forever). See api/tasks/retention.py.
     "conversation_retention_days": None,
     # Spec 12.3.6 -- monthly voice minutes allowed (None = unlimited), normally set from the plan. See api/services/voice_usage.py.

@@ -971,6 +971,8 @@ class Settings(BaseSettings):
     HUMAN_ESCALATION_PRIORITY_LEVELS: list[str] = ["low", "medium", "high", "critical"]
     HUMAN_ESCALATION_NOTIFICATION_CHANNELS: list[str] = ["email"]
     # Spec 15.1.4 -- hours allowed to answer a ticket, by priority (the SLA clock starts when the ticket is created).
+    # Specs 10.2.8 -- refuse tool calls requested by a model that target the internal network, carry a credential or contain destructive SQL.
+    UNSAFE_TOOL_CALL_DETECTION_ENABLED: bool = True
     ESCALATION_SLA_HOURS: dict[str, int] = {"critical": 1, "high": 4, "medium": 24, "low": 72}
 
     # -- Celery -------------------------------------------------------------

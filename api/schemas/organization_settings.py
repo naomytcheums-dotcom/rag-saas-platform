@@ -29,6 +29,8 @@ class OrganizationSettingsResponse(BaseModel):
     policy_aware_retrieval_enabled: bool
     prompt_injection_detection_enabled: bool
     toxicity_filter_enabled: bool = False
+    output_guard_enabled: bool = False
+    output_guard_mask_pii: bool = True
     conversation_retention_days: int | None = None
     voice_minutes_per_month: int | None = None
     adaptive_routing_enabled: bool
@@ -110,6 +112,8 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     policy_aware_retrieval_enabled: bool | None = None
     prompt_injection_detection_enabled: bool | None = None
     toxicity_filter_enabled: bool | None = None
+    output_guard_enabled: bool | None = None
+    output_guard_mask_pii: bool | None = None
     voice_minutes_per_month: int | None = Field(default=None, ge=0, le=10_000_000, description="Monthly voice minutes allowed (calls and voice messages)")
     conversation_retention_days: int | None = Field(default=None, ge=1, le=3650, description="Delete conversations after this many days without activity")
     adaptive_routing_enabled: bool | None = None

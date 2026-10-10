@@ -96,6 +96,7 @@ from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
 from api.services.fallback import run_tool_fallbacks
+from api.services.output_guard import detect_unsafe_tool_call
 from api.services.tool_budget import cap_tool_output
 from api.services.tool_selection import select_tools
 from api.services.tool_timeout import execute_tool_with_timeout, get_tool_timeout
@@ -520,6 +521,8 @@ class AgentOrchestrator:
                 errors = get_validation_errors(tool_call["arguments"], tool_input_schema(tool))
                 if errors:
                     return tool_call, None, f"Invalid arguments for {tool.name!r}: {errors}"
+                if settings.UNSAFE_TOOL_CALL_DETECTION_ENABLED and (unsafe := detect_unsafe_tool_call(tool.name, tool_call["arguments"])):
+                    return tool_call, None, f"Blocked unsafe tool call to {tool.name!r}: {', '.join(unsafe)}"
                 async with self._db_lock:
                     timeout = await get_tool_timeout(db, tool.name)
                 try:
@@ -924,6 +927,8 @@ class AgentOrchestrator:
             errors = get_validation_errors(tool_call["arguments"], tool_input_schema(tool))
             if errors:
                 return tool_call, None, f"Invalid arguments for {tool.name!r}: {errors}"
+            if settings.UNSAFE_TOOL_CALL_DETECTION_ENABLED and (unsafe := detect_unsafe_tool_call(tool.name, tool_call["arguments"])):
+                return tool_call, None, f"Blocked unsafe tool call to {tool.name!r}: {', '.join(unsafe)}"
             async with self._db_lock:
                 tool_timeout = await get_tool_timeout(db, tool.name)
             try:

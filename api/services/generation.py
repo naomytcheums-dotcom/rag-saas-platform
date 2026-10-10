@@ -209,6 +209,11 @@ async def generate_response(
         if detect_toxicity(answer)["is_toxic"]:
             raise GenerationBlockedError("The generated answer was blocked by the toxicity filter")
 
+    if org_settings.get("output_guard_enabled", False):
+        from api.services.output_guard import redact_output  # noqa: PLC0415
+
+        answer, _leaks = redact_output(answer, mask_pii=bool(org_settings.get("output_guard_mask_pii", True)))
+
     response = Response(
         organization_id=organization_id, workspace_id=workspace_id, query=query, answer=answer, created_by=created_by,
         # Hardening Mission, Phase 7 -- real provenance, stamped from the
