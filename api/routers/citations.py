@@ -56,6 +56,7 @@ from api.services.citation_location import enrich_citation_with_location, enrich
 from api.services.citation_passage import enrich_citation_with_passage, enrich_citations_with_passage
 from api.services.citation_relevance import enrich_citation_with_relevance, enrich_citations_with_relevance
 from api.services.citation_url import enrich_citation_with_url, enrich_citations_with_url
+from api.services.citation_preview import format_citation_preview
 from api.services.citations import get_citations_by_document, get_citations_by_response
 from api.services.response_confidence import (
     calculate_confidence_factors, calculate_confidence_score, get_confidence_color, get_confidence_label,
@@ -140,6 +141,13 @@ async def get_citation_endpoint(
     citation = await enrich_citation_with_chunk(db, citation)
     citation = await enrich_citation_with_passage(db, citation)
     return enrich_citation_with_relevance(citation)
+
+
+@router.get("/citations/{citation_id}/preview")
+async def get_citation_preview_endpoint(citation_ctx: tuple[Citation, OrganizationMember] = Depends(require_citation_member), preview_length: int | None = None):
+    """Spec 6.1.8 -- the short text shown when hovering a citation (first characters of the cited passage, cut at a word). Same access rule as the citation itself."""
+    citation, _caller = citation_ctx
+    return {"citation_id": str(citation.id), "preview": format_citation_preview(citation, preview_length)}
 
 
 @router.get("/documents/{document_id}/citations", response_model=list[CitationResponse])
