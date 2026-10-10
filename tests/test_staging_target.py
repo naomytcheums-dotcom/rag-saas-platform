@@ -151,7 +151,7 @@ def test_isolated_environment_prevents_third_party_dotenv_loading(monkeypatch, t
 
 @pytest.mark.parametrize("entrypoint", [
     ["-m", "scripts.staging_validate"],
-    ["scripts\\staging_validate.py"],
+    [str(Path("scripts") / "staging_validate.py")],
 ])
 def test_staging_runner_supports_module_and_script_entrypoints(entrypoint):
     result = subprocess.run(

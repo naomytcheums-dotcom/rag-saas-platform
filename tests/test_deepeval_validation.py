@@ -59,11 +59,12 @@ async def test_cross_validate_answer_uses_this_organizations_real_configured_mod
     assert result["answer_relevancy"] == {"score": 0.85, "reason": "Relevant to the question."}
 
 
-async def test_cross_validate_answer_skips_ground_truth_dependent_metrics_without_an_expected_answer():
+async def test_cross_validate_answer_skips_ground_truth_dependent_metrics_without_an_expected_answer(monkeypatch):
     """Real, honest behavior: contextual_precision/contextual_recall
     are real, ground-truth-dependent DeepEval metrics -- a question
     with no real expected_answer gets exactly the 2 metrics honestly
     computable, never a fabricated score for the other 2."""
+    monkeypatch.setattr("api.services.llm_providers.settings.ANTHROPIC_API_KEY", "sk-ant-test")  # the provider key must exist, as on a dev machine
     question = _make_question(expected_answer=None)
 
     with patch("deepeval.models.LiteLLMModel", MagicMock()), \
@@ -74,10 +75,11 @@ async def test_cross_validate_answer_skips_ground_truth_dependent_metrics_withou
     assert set(result.keys()) == {"faithfulness", "answer_relevancy"}
 
 
-async def test_cross_validate_answer_includes_ground_truth_dependent_metrics_when_available():
+async def test_cross_validate_answer_includes_ground_truth_dependent_metrics_when_available(monkeypatch):
     """Real, honest opposite case: a question WITH a real expected
     answer gets all 4 real metrics, including the 2 that genuinely
     need ground truth to compute."""
+    monkeypatch.setattr("api.services.llm_providers.settings.ANTHROPIC_API_KEY", "sk-ant-test")  # the provider key must exist, as on a dev machine
     question = _make_question(expected_answer="Paris is the capital of France.")
 
     with patch("deepeval.models.LiteLLMModel", MagicMock()), \
