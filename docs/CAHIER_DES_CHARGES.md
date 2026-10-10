@@ -9,6 +9,12 @@ discussion trop long. Il contient :
 3. Une feuille de route en Étapes pour continuer le travail sans tout
    mélanger.
 
+> **Note d'audit (2026-10-10, `audit-reports/radiographie-2026-10-10/01_INVENTAIRE_FONCTIONNALITES.md`)** : le chiffre « 515 fonctionnalités »
+> ci-dessus n'est **pas reproductible** à partir de ce document (une seule occurrence, aucune méthode de comptage). Décomptes mesurables :
+> 150 lignes de tableau `N.N.N` (parties 1, 2, 3, 4, 10), 275 identifiants `N.N.N` tableaux + titres, 323 jetons `N.N.N` ; les parties 9, 11-14 et
+> 18-25 n'ont pas de lignes numérotées. Aucune exigence n'a été supprimée ni modifiée ; la Partie 15 reste incomplète dans la source.
+> La mention « GitHub Actions désactivé explicitement » (2026-09-18) plus bas est périmée : `.github/workflows/ci.yml` est actif.
+
 **Note honnête sur la fiabilité de ce document** : le texte brut d'origine
 (rédigé directement dans le chat, jamais sauvegardé) n'existe plus nulle
 part — il précède tous les logs de session encore présents sur ce PC. Ce
