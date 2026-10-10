@@ -80,7 +80,7 @@ acme==5.8.0
 josepy==2.2.0
 
 # -- Object storage (avatar uploads, 1.1.13) ----------------------------------
-boto3==1.43.83
+boto3==1.43.108
 
 # -- Background jobs (1.1.10's account-purge sweep) --------------------------
 celery==5.6.3
