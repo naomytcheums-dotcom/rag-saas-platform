@@ -36,7 +36,7 @@ export default defineConfig({
       url: `http://localhost:${WEB_PORT}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 600_000,
-      env: { NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}` },
+      env: { NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`, NODE_OPTIONS: "--max-old-space-size=3072" },
     },
   ],
 });
