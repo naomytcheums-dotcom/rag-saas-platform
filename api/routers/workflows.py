@@ -32,7 +32,7 @@ from api.schemas.workflows import (
 from api.security.organizations import require_org_manager
 from api.security.workflows import (
     create_workflow, delete_workflow, import_workflow, list_workflow_runs, list_workflows, require_workflow_manager,
-    require_workflow_member, require_workflow_run_member, update_workflow,
+    require_workflow_member, require_workflow_run_member, require_workflow_runner, update_workflow,
 )
 from api.services.workflow_block_human import get_human_approval, list_human_blocks, submit_human_input
 from api.services.workflow_blocks import WorkflowBlockError
@@ -204,7 +204,7 @@ async def run_workflow_via_webhook_endpoint(
 @router.post("/workflows/{workflow_id}/run", response_model=WorkflowRunResponse)
 async def run_workflow_manually_endpoint(
     payload: WorkflowRunRequest,
-    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_member), db: AsyncSession = Depends(get_db),
+    workflow_ctx: tuple[Workflow, OrganizationMember] = Depends(require_workflow_runner), db: AsyncSession = Depends(get_db),
 ):
     workflow, _caller = workflow_ctx
     run = await trigger_workflow(db, workflow.id, payload.input)
