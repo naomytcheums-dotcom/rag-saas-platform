@@ -134,6 +134,9 @@ async def require_org_member(
     )
     if membership is None:
         raise not_found
+    from api.db_tenant_context import bind_tenant
+
+    await bind_tenant(db, org_id)  # tells PostgreSQL which organization this request acts for (RLS policies, inert for bypassing roles)
     await ensure_organization_active(db, org_id)
     from api.security.logging_correlation import bind_log_context
 
