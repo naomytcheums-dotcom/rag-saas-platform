@@ -48,7 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
 from api.models.billing import PaymentCustomer, PaymentProvider
-from api.services.billing_providers.base import ProviderNotConfiguredError, claim_payment_event
+from api.services.billing_providers.base import BillingProvider, ProviderNotConfiguredError, claim_payment_event
 
 logger = logging.getLogger(__name__)
 
@@ -281,10 +281,11 @@ async def _apply_paystack_plan(db: AsyncSession, sub: Subscription, data: dict) 
     sub.billing_period = "yearly" if plan.paystack_plan_code_yearly == plan_code and plan.paystack_plan_code_monthly != plan_code else "monthly"
 
 
-class PaystackProvider:
+class PaystackProvider(BillingProvider):
     """Thin `BillingProvider` adapter over the module-level functions
     above -- registered as `PaymentProvider.paystack` in
-    api/services/billing_providers/registry.py."""
+    api/services/billing_providers/registry.py. Credit packs are not sold through Paystack (BILL-013): it inherits the base
+    class's honest `NotImplementedError` (HTTP 501)."""
 
     name = "paystack"
 
