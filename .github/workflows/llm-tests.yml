@@ -1,0 +1,36 @@
+name: Real-LLM tests (manual)
+
+# Runs tests/llm_optin against a real model. Costs a few cents per run, so it is manual. Needs the repository secret ANTHROPIC_API_KEY.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  llm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+      - run: pip install --no-cache-dir -r requirements-api.txt
+      - name: Real-LLM tests
+        env:
+          RUN_REAL_LLM_TESTS: "1"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DATABASE_URL: sqlite+aiosqlite:///./llm-tests.db
+          JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+          SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+          AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+          SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
+          RESEND_API_KEY: re_ci_placeholder_never_a_real_key
+          EMAIL_FROM_ADDRESS: onboarding@resend.dev
+          SUPPORT_EMAIL: support@ci-test.invalid
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/1
+          RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+        run: pytest tests/llm_optin -q
