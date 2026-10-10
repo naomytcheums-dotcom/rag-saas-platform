@@ -27,6 +27,17 @@ from api.security.usage import get_usage, get_usage_summary
 router = APIRouter(tags=["usage"])
 
 
+@router.get("/organizations/{org_id}/usage/voice-minutes")
+async def voice_minutes_usage(
+    org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db),
+):
+    """Spec 12.3.6 -- voice minutes used this month against the organization's monthly limit (None = unlimited)."""
+    from api.security.organization_settings import get_org_settings  # noqa: PLC0415
+    from api.services.voice_usage import voice_usage_summary  # noqa: PLC0415
+
+    return await voice_usage_summary(db, org_id, await get_org_settings(db, org_id))
+
+
 
 @router.get("/organizations/{org_id}/usage", response_model=UsageResponse)
 async def get_organization_usage(

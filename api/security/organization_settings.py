@@ -173,6 +173,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "toxicity_filter_enabled": False,
     # Spec 10.4.5/10.4.6 -- delete this organization's conversations after this many days without activity (None = keep forever). See api/tasks/retention.py.
     "conversation_retention_days": None,
+    # Spec 12.3.6 -- monthly voice minutes allowed (None = unlimited), normally set from the plan. See api/services/voice_usage.py.
+    "voice_minutes_per_month": None,
     # Systèmes internes, item 25 -- gate for
     # api.services.query_router.suggest_retrieval_strategy, wired into
     # search() -- default False, same rétrocompatibilité discipline.
