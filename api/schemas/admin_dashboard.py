@@ -182,6 +182,8 @@ class SystemHealthResponse(BaseModel):
     database: str
     redis: str
     celery: str
+    vector_store: str = "unknown"
+    llm_providers: dict[str, str] = {}
     checked_at: dt.datetime
 
 
