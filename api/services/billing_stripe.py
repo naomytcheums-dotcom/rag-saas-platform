@@ -97,6 +97,9 @@ async def create_checkout_session(
         metadata["plan_id"] = str(plan_id)
     if billing_period:
         metadata["billing_period"] = billing_period
+    subscription_data: dict = {"metadata": metadata}
+    if settings.STRIPE_CHECKOUT_TRIAL_DAYS > 0:
+        subscription_data["trial_period_days"] = settings.STRIPE_CHECKOUT_TRIAL_DAYS
     session = stripe.checkout.Session.create(
         customer=customer.external_customer_id,
         mode="subscription",
@@ -105,7 +108,7 @@ async def create_checkout_session(
         success_url=settings.STRIPE_SUCCESS_URL,
         cancel_url=settings.STRIPE_CANCEL_URL,
         metadata=metadata,
-        subscription_data={"metadata": metadata},
+        subscription_data=subscription_data,
     )
     return session["url"]
 

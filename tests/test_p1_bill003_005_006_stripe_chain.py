@@ -181,6 +181,23 @@ async def test_the_checkout_session_carries_the_organization_on_the_subscription
     assert kwargs["metadata"]["organization_id"] == str(org_id)
 
 
+async def test_the_checkout_has_no_trial_by_default_and_a_stripe_trial_when_configured(db_session, monkeypatch):
+    """Spec 12.1.5 - a paid-plan trial exists only when the owner sets STRIPE_CHECKOUT_TRIAL_DAYS."""
+    from api.config import settings
+
+    async def checkout():
+        fake = MagicMock()
+        fake.Customer.create.return_value = {"id": f"cus_{uuid.uuid4().hex}"}
+        fake.checkout.Session.create.return_value = {"url": "https://checkout.stripe.test/s/1"}
+        with patch.object(billing_stripe, "_client", return_value=fake):
+            await billing_stripe.create_checkout_session(db_session, uuid.uuid4(), price_id="price_pro_m", email="a@example.com", org_name="Acme")
+        return fake.checkout.Session.create.call_args.kwargs["subscription_data"]
+
+    assert "trial_period_days" not in await checkout()
+    monkeypatch.setattr(settings, "STRIPE_CHECKOUT_TRIAL_DAYS", 7)
+    assert (await checkout())["trial_period_days"] == 7
+
+
 async def test_subscription_deletion_cancels_and_cancel_at_period_end_is_recorded(client, db_session, monkeypatch):
     _h, org_id, _u, _plans = await _org_with_stripe_customer(client, db_session, monkeypatch)
     await billing_stripe.handle_stripe_webhook(db_session, _event("customer.subscription.updated", _stripe_subscription(cancel_at_period_end=True)))
