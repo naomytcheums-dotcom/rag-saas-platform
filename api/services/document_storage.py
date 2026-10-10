@@ -136,6 +136,8 @@ document itself, unlike every other format this module detects.
 
 import io
 import json
+import re
+import unicodedata
 import uuid
 import zipfile
 
@@ -404,6 +406,21 @@ def _client():
     )
 
 
+def safe_object_name(filename: str) -> str:
+    """TEN-005 -- the uploaded file name is untrusted: only its last path component, reduced to plain ASCII `[A-Za-z0-9._-]`, may become the
+    last segment of an object key (no path-segment injection into the tenant prefix, no accents or control characters the object store
+    rejects). The original name stays in the document row for display; the extension is kept (it is only a hint, the content is sniffed)."""
+    leaf = re.split(r"[\\/]", filename or "")[-1]
+    leaf = unicodedata.normalize("NFKD", leaf).encode("ascii", "ignore").decode("ascii")
+    leaf = re.sub(r"[^A-Za-z0-9._-]+", "_", leaf)
+    stem, dot, extension = leaf.rpartition(".")
+    if not dot:
+        stem, extension = leaf, ""
+    stem = re.sub(r"\.{2,}", ".", stem).strip("._-")[:100] or "file"
+    extension = re.sub(r"[^A-Za-z0-9]", "", extension)[:10]
+    return f"{stem}.{extension}" if extension else stem
+
+
 def upload_document_file(organization_id: uuid.UUID, document_id: uuid.UUID, filename: str, content: bytes, content_type: str) -> str:
     """
     Uploads one document's already-validated bytes, returning its S3
@@ -417,7 +434,7 @@ def upload_document_file(organization_id: uuid.UUID, document_id: uuid.UUID, fil
     re-detected here, so the real format is only ever sniffed once per
     upload.
     """
-    key = f"documents/{organization_id}/{document_id}/{filename}"
+    key = f"documents/{organization_id}/{document_id}/{safe_object_name(filename)}"
 
     try:
         _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
@@ -454,7 +471,7 @@ def upload_media_file(organization_id: uuid.UUID, media_asset_id: uuid.UUID, fil
     private S3 bucket (this part's own audit's own recommendation:
     documents already store non-text images here, a 4th bucket for
     media specifically was not justified)."""
-    key = f"media/{organization_id}/{media_asset_id}/{filename}"
+    key = f"media/{organization_id}/{media_asset_id}/{safe_object_name(filename)}"
     try:
         _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
     except (BotoCoreError, ClientError) as exc:
