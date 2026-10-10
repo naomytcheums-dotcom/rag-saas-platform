@@ -131,8 +131,11 @@ async def run_tool_fallbacks(
     from api.services.tool_validation import get_validation_errors  # noqa: PLC0415
     from api.services.tools import tool_input_schema  # noqa: PLC0415
 
-    async with db_lock:
-        chain = await get_tool_fallback_chain(db, failed_tool)
+    try:
+        async with db_lock:
+            chain = await get_tool_fallback_chain(db, failed_tool)
+    except Exception:  # noqa: BLE001 -- a problem while looking up fallbacks must never hide the original tool error
+        return None
     for name in chain:
         spec = allowed_tools.get(name)
         if spec is None or name == failed_tool or get_validation_errors(arguments, tool_input_schema(spec)):

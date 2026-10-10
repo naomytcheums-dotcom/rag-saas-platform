@@ -108,7 +108,7 @@ async def cap_tool_output(db: AsyncSession, tool_name: str, output: str) -> str:
     if not settings.TOOL_BUDGET_TRACKING_ENABLED or not isinstance(output, str):
         return output
     row = await db.get(ToolBudget, tool_name)
-    if row is None:
+    if row is None or not isinstance(row.budget_limit, int):
         return output
     max_chars = max(row.budget_limit, 1) * _CHARS_PER_TOKEN
     used = max(len(output) // _CHARS_PER_TOKEN, 1)
