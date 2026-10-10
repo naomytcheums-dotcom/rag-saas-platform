@@ -59,6 +59,13 @@ async def _stream_response(
     agent_id: uuid.UUID, message: str, conversation_id: uuid.UUID | None, current_user: User, db: AsyncSession,
 ) -> StreamingResponse:
     agent, membership = await resolve_agent_and_membership(agent_id, current_user, db)
+    # Spec 1.3.7 -- per-user request limit on the costly chat path (after authorization, so a stranger cannot probe it). Fails open without Redis like every limiter here.
+    from api.config import settings as app_settings  # noqa: PLC0415
+    from api.security.rate_limit import enforce_rate_limit  # noqa: PLC0415
+
+    await enforce_rate_limit(
+        f"ratelimit:chat_stream:user:{current_user.id}", app_settings.CHAT_USER_RATE_LIMIT_MAX_ATTEMPTS, app_settings.CHAT_USER_RATE_LIMIT_WINDOW_SECONDS,
+    )
     # Must run before retrieval and before the stream ever reads or
     # writes conversation history (TEN-001: cross-tenant write/read).
     if conversation_id is not None:

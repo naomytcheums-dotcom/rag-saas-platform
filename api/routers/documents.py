@@ -122,6 +122,7 @@ from api.security.document_versions import (
 )
 from api.security.organizations import ensure_organization_active, require_org_admin, require_org_member, require_org_member_excluding_viewer
 from api.security.permissions import require_permission
+from api.security.document_capacity import require_batch_capacity, require_document_capacity, require_storage_available
 from api.security.rate_limit import enforce_rate_limit
 from api.services.document_storage import stream_document_file
 from api.services.metadata_normalization import normalize_document_metadata
@@ -243,6 +244,7 @@ async def create_document(
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"This organization's plan allows {limit} documents (currently {count}). Upgrade the plan to upload more.")
 
     content = await file.read()
+    await require_storage_available(db, org_id, len(content))
     try:
         document, is_duplicate = await upload_document(db, org_id, workspace_id, current_user.id, file.filename or "document.pdf", content)
     except ValueError as exc:
@@ -281,6 +283,8 @@ async def create_documents_batch(
     (vision critique 3/4's own answer) runs synchronously here, real S3
     upload is deferred to Celery (vision critique 2's own answer)."""
     file_payloads = [(f.filename or "document", await f.read()) for f in files]
+    await require_batch_capacity(db, org_id, len(file_payloads))
+    await require_storage_available(db, org_id, sum(len(content) for _name, content in file_payloads))
     try:
         validate_upload_batch(file_payloads)
     except ValueError as exc:
@@ -298,7 +302,7 @@ async def create_documents_batch(
     )
 
 
-@router.post("/organizations/{org_id}/documents/url", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/organizations/{org_id}/documents/url", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_document_capacity)])
 async def create_document_from_url(
     org_id: uuid.UUID, payload: DocumentUrlImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -320,7 +324,7 @@ async def create_document_from_url(
     return _to_response(document)
 
 
-@router.post("/organizations/{org_id}/documents/sitemap", response_model=SitemapImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/sitemap", response_model=SitemapImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_sitemap(
     org_id: uuid.UUID, payload: SitemapImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -343,7 +347,7 @@ async def create_documents_from_sitemap(
     return SitemapImportResponse(sitemap_url=normalized_url, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/github/repo", response_model=GitHubRepoImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/github/repo", response_model=GitHubRepoImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_github_repo(
     org_id: uuid.UUID, payload: GitHubRepoImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -367,7 +371,7 @@ async def create_documents_from_github_repo(
     return GitHubRepoImportResponse(owner=owner, repo=repo, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/github/issues", response_model=GitHubIssuesImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/github/issues", response_model=GitHubIssuesImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_github_issues(
     org_id: uuid.UUID, payload: GitHubIssuesImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -393,7 +397,7 @@ async def create_documents_from_github_issues(
     return GitHubIssuesImportResponse(owner=owner, repo=repo, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/google-drive", response_model=GoogleDriveImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/google-drive", response_model=GoogleDriveImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_google_drive(
     org_id: uuid.UUID, payload: GoogleDriveImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -417,7 +421,7 @@ async def create_documents_from_google_drive(
     return GoogleDriveImportResponse(drive_id=drive_id, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/google-docs", response_model=GoogleDocImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/google-docs", response_model=GoogleDocImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_google_docs(
     org_id: uuid.UUID, payload: GoogleDocImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -442,7 +446,7 @@ async def create_documents_from_google_docs(
     return GoogleDocImportResponse(document_ids=document_ids, mode=mode, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/notion", response_model=NotionImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/notion", response_model=NotionImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_notion(
     org_id: uuid.UUID, payload: NotionImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -465,7 +469,7 @@ async def create_documents_from_notion(
     return NotionImportResponse(notion_id=notion_id, kind=kind, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/confluence", response_model=ConfluenceImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/confluence", response_model=ConfluenceImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_confluence(
     org_id: uuid.UUID, payload: ConfluenceImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
@@ -488,7 +492,7 @@ async def create_documents_from_confluence(
     return ConfluenceImportResponse(confluence_id=confluence_id, kind=kind, status="scheduled")
 
 
-@router.post("/organizations/{org_id}/documents/onedrive", response_model=OneDriveImportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/organizations/{org_id}/documents/onedrive", response_model=OneDriveImportResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_document_capacity)])
 async def create_documents_from_onedrive(
     org_id: uuid.UUID, payload: OneDriveImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),

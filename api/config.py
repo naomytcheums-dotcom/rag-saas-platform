@@ -1070,6 +1070,9 @@ class Settings(BaseSettings):
     # LLM-generation pass per question on evaluation) had none at all --
     # scoped per organization, same fail-open-on-Redis-down behavior as
     # every other enforce_rate_limit call in this codebase.
+    # Spec 1.3.7 -- requests per user on the authenticated chat stream (each one is a paid LLM call).
+    CHAT_USER_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    CHAT_USER_RATE_LIMIT_WINDOW_SECONDS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
     # RAG-003 -- a document still `pending` after this long has lost its processing task and is re-dispatched by the periodic sweep.
