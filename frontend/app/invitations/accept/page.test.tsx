@@ -70,7 +70,7 @@ describe("Accept invitation page", () => {
     render(<AcceptInvitationPage />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Accept invitation" }));
-    await userEvent.type(await screen.findByLabelText("Password"), "correct-horse-battery");
+    await userEvent.type(await screen.findByLabelText("Password"), "horse-battery-1");
     await userEvent.type(screen.getByLabelText("Full name"), "Ada Lovelace");
     const submit = screen.getByRole("button", { name: "Create account and join" });
     expect(submit).toBeDisabled();
@@ -78,7 +78,7 @@ describe("Accept invitation page", () => {
     await userEvent.click(submit);
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
-    expect(post).toHaveBeenLastCalledWith("/invitations/accept", { token: "tok-123", password: "correct-horse-battery", full_name: "Ada Lovelace", accept_terms: true });
+    expect(post).toHaveBeenLastCalledWith("/invitations/accept", { token: "tok-123", password: "horse-battery-1", full_name: "Ada Lovelace", accept_terms: true });
     expect(window.localStorage.getItem("access_token")).toBe("jwt-abc");
   });
 
