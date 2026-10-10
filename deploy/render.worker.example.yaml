@@ -1,0 +1,39 @@
+# EXAMPLE ONLY -- not read by Render (Render reads render.yaml at the repository root). Copy the two services you want into your own blueprint
+# or create them by hand. Creating them starts billing on your account: nothing here has been created or applied.
+# Environment variables are listed by NAME; set the values in the provider's dashboard (sync: false), never in this file.
+services:
+  - type: worker                # Celery worker (many may run)
+    name: rag-saas-celery-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerCommand: celery -A api.tasks.celery_app worker --loglevel=info --concurrency=1
+    plan: starter               # ESTIMATE: pick a plan with enough RAM for the embedding model; see docs/devops/CELERY_WORKERS.md
+    envVars: &shared_env
+      - { key: DATABASE_URL, sync: false }
+      - { key: DATABASE_URL_TRANSACTION, sync: false }
+      - { key: CELERY_BROKER_URL, sync: false }
+      - { key: CELERY_RESULT_BACKEND, sync: false }
+      - { key: RATE_LIMIT_REDIS_URL, sync: false }
+      - { key: JWT_SECRET_KEY, sync: false }
+      - { key: SESSION_MIDDLEWARE_SECRET, sync: false }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, sync: false }
+      - { key: SUPPORT_EMAIL, sync: false }
+      - { key: ENCRYPTION_MASTER_KEY, sync: false }
+      - { key: S3_ENDPOINT_URL, sync: false }
+      - { key: S3_ACCESS_KEY_ID, sync: false }
+      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: S3_DOCUMENTS_BUCKET_NAME, sync: false }
+      - { key: RESEND_API_KEY, sync: false }
+      - { key: STRIPE_SECRET_KEY, sync: false }
+      - { key: PAYSTACK_SECRET_KEY, sync: false }
+      - { key: ANTHROPIC_API_KEY, sync: false }
+      - { key: EMBEDDER_WARMUP_ON_STARTUP, value: "false" }
+
+  - type: worker                # Celery beat: EXACTLY ONE instance (never scale this service above 1)
+    name: rag-saas-celery-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerCommand: celery -A api.tasks.celery_app beat --loglevel=info
+    plan: starter
+    numInstances: 1
+    envVars: *shared_env
