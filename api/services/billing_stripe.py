@@ -213,9 +213,12 @@ async def handle_stripe_webhook(db: AsyncSession, event: dict) -> bool:
     effect runs, closing a real race window where two concurrent
     deliveries of the same event could both pass a plain existence
     check and both apply their side effects."""
-    event_id = event["id"]
-    event_type = event["type"]
-    data = event["data"]["object"]
+    event_id = event.get("id")
+    event_type = event.get("type")
+    data = (event.get("data") or {}).get("object")
+    if not event_id or not event_type or not isinstance(data, dict):
+        logger.error("stripe webhook: event without id, type or data.object ignored (type=%r)", event_type)
+        return False
 
     if not await claim_payment_event(db, PaymentProvider.stripe, event_id, event_type, str(data.get("id", ""))):
         return False
@@ -493,6 +496,9 @@ async def _grant_paid_credit_pack(db: AsyncSession, session: dict) -> None:
         organization_id = uuid.UUID(metadata.get("organization_id", ""))
     except ValueError:
         logger.error("credit pack checkout %s has no valid organization id: nothing granted", session.get("id"))
+        return
+    if await db.get(Organization, organization_id) is None:  # would be a foreign-key violation (500, and Stripe retries for days)
+        logger.error("credit pack checkout %s is for an organization that does not exist: nothing granted", session.get("id"))
         return
     # Business idempotency: one grant per checkout SESSION, whatever the event ids (a dashboard replay or a deferred payment's second
     # event carries a new id). Claimed only once the session is known to be valid and paid.

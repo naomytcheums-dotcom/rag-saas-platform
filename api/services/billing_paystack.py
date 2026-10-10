@@ -196,9 +196,13 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
     idempotency key instead, which is unique per real Paystack event in
     practice (Paystack never re-emits the exact same object id twice
     for two logically different events of the same type)."""
-    data = event.get("data", {})
+    data = event.get("data") or {}
     event_type = event.get("event", "")
-    object_id = str(data.get("id", data.get("subscription_code", "")))
+    object_id = str(data.get("id") or data.get("subscription_code") or "")
+    if not object_id:
+        # No object id: a bare "<type>:" key would make every such event of EVERY organization a duplicate of the first one. The payload's
+        # own digest keeps an exact re-delivery idempotent without colliding with another organization's event.
+        object_id = "sha256-" + hashlib.sha256(json.dumps(event, sort_keys=True, default=str).encode()).hexdigest()[:32]
     event_id = f"{event_type}:{object_id}"
 
     # Hardening Mission (§5, webhook anti-replay) -- same atomic claim

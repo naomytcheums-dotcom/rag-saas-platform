@@ -516,7 +516,12 @@ async def stripe_webhook_endpoint(request: Request, db: AsyncSession = Depends(g
         event = billing_stripe.verify_webhook_signature(payload, signature)
     except billing_stripe.StripeNotConfiguredError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    except Exception:
+    except ImportError:
+        # The SDK is missing: every genuine webhook would otherwise be rejected as a "bad signature" with no trace.
+        logger.error("stripe webhook: the stripe SDK is not installed on this deployment")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Stripe webhook processing is unavailable")
+    except Exception as exc:
+        logger.warning("stripe webhook rejected: %s", type(exc).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature")
 
     applied = await billing_stripe.handle_stripe_webhook(db, dict(event))
