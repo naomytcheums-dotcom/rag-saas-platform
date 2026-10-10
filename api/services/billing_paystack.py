@@ -237,7 +237,8 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
                     logger.warning("paystack event %s: late subscription.create for the already disabled %s ignored", event_id, code)
                 else:
                     sub.status = SubscriptionStatus.active
-                    sub.paystack_subscription_code = code
+                    if code:  # an event without a code must not erase the one already stored
+                        sub.paystack_subscription_code = code
                     await _apply_paystack_plan(db, sub, data)
             elif event_type == "charge.success":
                 # A successful charge only restores a subscription that was waiting for payment; it never reopens a canceled one.
