@@ -1,0 +1,16 @@
+== part 8
+........................................................................ [ 29%]
+........................................................................ [ 58%]
+........................................................................ [ 87%]
+..............................                                           [100%]Running teardown with pytest sessionfinish...
+
+============================== warnings summary ===============================
+tests/test_voice_agent.py::test_endpoint_is_closed_to_another_tenant
+  C:\Users\NITROV15\Downloads\rag-saas-platform\.venv\Lib\site-packages\sqlalchemy\sql\crud.py:1720: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    implicit_return_defaults = set(stmt._return_defaults_columns)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+246 passed, 1 warning in 349.22s (0:05:49)
+exit:0
