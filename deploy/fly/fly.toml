@@ -1,0 +1,34 @@
+# Fly.io (not deployed by the authoring session). `fly launch --no-deploy --copy-config`, then `fly secrets set DATABASE_URL=... REDIS_URL=... JWT_SECRET_KEY=...`
+app = "rag-saas-api"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "../../Dockerfile.api"
+
+[env]
+  COOKIE_SECURE = "true"
+  CREDITS_ALLOW_UNPAID_TOPUP = "false"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[processes]
+  app = "gunicorn -c gunicorn.conf.py api.main:app"
+  worker = "celery -A api.tasks.celery_app worker --loglevel=info"
+  beat = "celery -A api.tasks.celery_app beat --loglevel=info"
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2

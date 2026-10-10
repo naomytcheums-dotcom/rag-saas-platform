@@ -1,0 +1,6 @@
+apiVersion: v2
+name: rag-saas
+description: RAG SaaS Platform API with its Celery worker and beat (not linted by the authoring session - run `helm lint` and `helm template` first)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

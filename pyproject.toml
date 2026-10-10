@@ -69,3 +69,12 @@ select = ["E9", "F63", "F7", "F82", "F811", "F841"]
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "frontend", ".git"]
 skips = ["B101"]
+
+[tool.mypy]
+# Spec 13.1.4. Deliberately lenient to start with (the codebase was not written against a type checker); tighten module by module.
+python_version = "3.13"
+files = ["api"]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+exclude = ["api/alembic/"]
