@@ -34,7 +34,7 @@ from api.routers import (
     benchmark_versions, billing,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
-    chat_stream, citations, compliance, conversations, conversation_shares,
+    chat_stream, citations, request_trace, compliance, conversations, conversation_shares,
     crm, custom_domains, custom_tools, documents, documents_sync, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notification_templates, notifications, observability,
     plugins,
     sales,
@@ -354,6 +354,7 @@ app.include_router(external_sources.router)
 app.include_router(reindex_schedules.router)
 app.include_router(batch_jobs.router)
 app.include_router(citations.router)
+app.include_router(request_trace.router)
 app.include_router(chat_stream.router)
 app.include_router(search.router)
 app.include_router(rag_control_plane.router)
