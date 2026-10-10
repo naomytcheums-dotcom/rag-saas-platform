@@ -1,6 +1,6 @@
 import {
   BookOpen, Bot, Building2, ChartColumn, Cpu, CreditCard, Crown, FileText, FlaskConical, KeyRound, LayoutDashboard, Lock, MessageSquare, Mic,
-  LifeBuoy, Plug, Puzzle, Settings2, ShieldCheck, SlidersHorizontal, Store, TrendingUp, User, Webhook, Workflow, type LucideIcon,
+  Lightbulb, LifeBuoy, Plug, Puzzle, Settings2, ShieldCheck, SlidersHorizontal, Store, TrendingUp, User, Webhook, Workflow, type LucideIcon,
 } from "lucide-react";
 
 /** One icon per dashboard destination (same visual language as the Figma "Designo" sidebar). Unknown routes fall back to a generic icon. */
@@ -18,6 +18,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/quality": ShieldCheck,
   "/dashboard/voice-agent": Mic,
   "/dashboard/escalations": LifeBuoy,
+  "/dashboard/insights": Lightbulb,
   "/dashboard/settings/api-keys": KeyRound,
   "/dashboard/settings/webhooks": Webhook,
   "/dashboard/settings/llm-config": Settings2,

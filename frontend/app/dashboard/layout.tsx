@@ -36,6 +36,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
         { href: "/dashboard/quality", label: t("nav.quality") },
         { href: "/dashboard/voice-agent", label: t("nav.voice_agent") },
         { href: "/dashboard/escalations", label: t("nav.escalations") },
+        { href: "/dashboard/insights", label: t("nav.insights") },
       ],
     },
     {
