@@ -1,0 +1,113 @@
+# Kubernetes manifests (not applied by the authoring session; validate with `kubectl apply --dry-run=server -f` on a staging cluster).
+# Secrets: create `rag-saas-secrets` first, e.g.
+#   kubectl -n rag-saas create secret generic rag-saas-secrets --from-literal=DATABASE_URL=... --from-literal=REDIS_URL=... --from-literal=JWT_SECRET_KEY=...
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rag-saas
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-saas-api
+  namespace: rag-saas
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: rag-saas-api }
+  template:
+    metadata:
+      labels: { app: rag-saas-api }
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/naomytcheums-dotcom/rag-saas-api:latest   # replace with your registry image built from Dockerfile.api
+          ports: [{ containerPort: 8000 }]
+          envFrom: [{ secretRef: { name: rag-saas-secrets } }]
+          env:
+            - { name: COOKIE_SECURE, value: "true" }
+            - { name: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
+          readinessProbe: { httpGet: { path: /health/ready, port: 8000 }, initialDelaySeconds: 20, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /health, port: 8000 }, initialDelaySeconds: 40, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "2", memory: 3Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-saas-api
+  namespace: rag-saas
+spec:
+  selector: { app: rag-saas-api }
+  ports: [{ port: 80, targetPort: 8000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-saas-worker
+  namespace: rag-saas
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: rag-saas-worker }
+  template:
+    metadata:
+      labels: { app: rag-saas-worker }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/naomytcheums-dotcom/rag-saas-api:latest
+          command: ["celery", "-A", "api.tasks.celery_app", "worker", "--loglevel=info"]
+          envFrom: [{ secretRef: { name: rag-saas-secrets } }]
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "2", memory: 3Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-saas-beat
+  namespace: rag-saas
+spec:
+  replicas: 1            # exactly one scheduler, otherwise periodic jobs run twice
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: rag-saas-beat }
+  template:
+    metadata:
+      labels: { app: rag-saas-beat }
+    spec:
+      containers:
+        - name: beat
+          image: ghcr.io/naomytcheums-dotcom/rag-saas-api:latest
+          command: ["celery", "-A", "api.tasks.celery_app", "beat", "--loglevel=info"]
+          envFrom: [{ secretRef: { name: rag-saas-secrets } }]
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { cpu: 500m, memory: 1Gi }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-saas-api
+  namespace: rag-saas
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls: [{ hosts: [api.example.com], secretName: rag-saas-api-tls }]
+  rules:
+    - host: api.example.com
+      http:
+        paths: [{ path: /, pathType: Prefix, backend: { service: { name: rag-saas-api, port: { number: 80 } } } }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rag-saas-api
+  namespace: rag-saas
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: rag-saas-api }
+  minReplicas: 2
+  maxReplicas: 6
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]

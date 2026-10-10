@@ -29,8 +29,30 @@ async def get_system_health(db: AsyncSession) -> dict:
         "database": "ok" if database_ok else "unreachable",
         "redis": "ok" if redis_ok else "unreachable",
         "celery": "ok" if celery_ok else "unreachable",
+        "vector_store": await vector_store_status(db) if database_ok else "unknown (database unreachable)",
+        "llm_providers": llm_providers_status(),
         "checked_at": dt.datetime.now(dt.timezone.utc),
     }
+
+
+async def vector_store_status(db: AsyncSession) -> str:
+    """Spec 11.3.7 -- the vector store is PostgreSQL + the `vector` extension: report whether the extension is installed (and its version)."""
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return "not applicable (not PostgreSQL: vector search runs in memory)"
+    try:
+        version = (await db.execute(text("SELECT extversion FROM pg_extension WHERE extname = 'vector'"))).scalar()
+    except Exception:  # noqa: BLE001 -- a probe must never raise
+        return "unknown (query failed)"
+    return f"ok (pgvector {version})" if version else "missing: the pgvector extension is not installed"
+
+
+def llm_providers_status() -> dict[str, str]:
+    """Spec 11.3.8 -- which hosted LLM providers have a platform-level key. This is a configuration check, not a live call (no cost, no latency):
+    organizations may still bring their own key. A provider showing "not configured" only matters for organizations that rely on the platform key."""
+    from api.config import settings  # noqa: PLC0415
+
+    keys = {"anthropic": settings.ANTHROPIC_API_KEY, "openai": settings.OPENAI_API_KEY, "gemini": settings.GEMINI_API_KEY, "mistral": settings.MISTRAL_API_KEY}
+    return {name: "configured" if key else "not configured" for name, key in keys.items()}
 
 
 def _celery_reachable() -> bool:

@@ -321,6 +321,7 @@ _VALID_RATINGS = ("positive", "negative")
 
 async def add_feedback(
     db: AsyncSession, message_id: uuid.UUID, user_id: uuid.UUID, rating: str, reason: str | None = None, comment: str | None = None,
+    correction: str | None = None,
 ) -> MessageFeedback:
     """Item 3's own literal function -- real UPSERT semantics (one
     real vote per real user per real message: a second call from the
@@ -332,10 +333,10 @@ async def add_feedback(
     query = select(MessageFeedback).where(MessageFeedback.message_id == message_id, MessageFeedback.user_id == user_id)
     existing = (await db.scalars(query)).first()
     if existing is not None:
-        existing.rating, existing.reason, existing.comment = rating, reason, comment
+        existing.rating, existing.reason, existing.comment, existing.correction = rating, reason, comment, correction
         await db.flush()
         return existing
-    feedback = MessageFeedback(message_id=message_id, user_id=user_id, rating=rating, reason=reason, comment=comment)
+    feedback = MessageFeedback(message_id=message_id, user_id=user_id, rating=rating, reason=reason, comment=comment, correction=correction)
     db.add(feedback)
     await db.flush()
     return feedback
@@ -347,7 +348,10 @@ async def get_feedback(db: AsyncSession, message_id: uuid.UUID) -> list[MessageF
     return list((await db.scalars(query)).all())
 
 
-async def update_feedback(db: AsyncSession, feedback_id: uuid.UUID, rating: str | None = None, reason: str | None = None, comment: str | None = None) -> MessageFeedback:
+async def update_feedback(
+    db: AsyncSession, feedback_id: uuid.UUID, rating: str | None = None, reason: str | None = None, comment: str | None = None,
+    correction: str | None = None,
+) -> MessageFeedback:
     """Item 3's own literal function."""
     feedback = await db.get(MessageFeedback, feedback_id)
     if feedback is None:
@@ -360,6 +364,8 @@ async def update_feedback(db: AsyncSession, feedback_id: uuid.UUID, rating: str 
         feedback.reason = reason
     if comment is not None:
         feedback.comment = comment
+    if correction is not None:
+        feedback.correction = correction
     await db.flush()
     return feedback
 

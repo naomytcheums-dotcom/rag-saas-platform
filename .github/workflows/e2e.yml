@@ -1,0 +1,33 @@
+name: End-to-end browser tests (manual)
+
+# Playwright smoke tests (e2e/). They start the API on a throw-away SQLite file with every external service blanked, and the Next.js dev server.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install --no-cache-dir -r requirements-api.txt
+      - run: npm ci
+        working-directory: frontend
+      - run: npm install
+        working-directory: e2e
+      - run: npx playwright install --with-deps chrome
+        working-directory: e2e
+      - run: npx playwright test
+        working-directory: e2e
+        env:
+          PYTHON: python

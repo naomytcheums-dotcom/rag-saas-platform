@@ -6,6 +6,7 @@ import AuthShell, { AuthButton, AuthField, AuthLink } from "@/components/auth/Au
 import { ApiError, useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
+import OAuthButtons from "@/components/auth/OAuthButtons";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -82,6 +83,7 @@ export default function LoginPage() {
           <AuthButton disabled={loading}>{loading ? t("auth.login.submitting") : t("auth.login.submit")}</AuthButton>
         </form>
       )}
+      {!mfaToken && <OAuthButtons />}
     </AuthShell>
   );
 }

@@ -40,6 +40,13 @@ logger = logging.getLogger(__name__)
 _RESUMABLE_STATUSES = (EvaluationJobStatus.pending, EvaluationJobStatus.running, EvaluationJobStatus.failed)
 
 
+def _filter_by_split(questions: list[EvaluationQuestion], split: str | None) -> list[EvaluationQuestion]:
+    """Partie 7.1.7 -- a job with a split only evaluates that side; a question with no split counts as "tuning"."""
+    if split is None:
+        return questions
+    return [q for q in questions if (q.split or "tuning") == split]
+
+
 async def _job_questions(db: AsyncSession, job: EvaluationJob) -> list[EvaluationQuestion]:
     """Real, UNPAGINATED question resolution -- `question_set_id` when
     given (`get_questions_in_set`, already real and unpaginated, Partie
@@ -49,22 +56,22 @@ async def _job_questions(db: AsyncSession, job: EvaluationJob) -> list[Evaluatio
     dataset larger than 50 questions would otherwise silently evaluate
     only its own first real page)."""
     if job.question_set_id is not None:
-        return await get_questions_in_set(db, job.question_set_id)
+        return _filter_by_split(await get_questions_in_set(db, job.question_set_id), job.split)
     rows = (await db.scalars(
         select(EvaluationQuestion).where(EvaluationQuestion.dataset_id == job.dataset_id).order_by(EvaluationQuestion.created_at)
     )).all()
-    return list(rows)
+    return _filter_by_split(list(rows), job.split)
 
 
 async def create_evaluation_job(
     db: AsyncSession, dataset_id: uuid.UUID, question_set_id: uuid.UUID | None = None, agent_id: uuid.UUID | None = None,
-    model_config: dict | None = None, created_by: uuid.UUID | None = None,
+    model_config: dict | None = None, created_by: uuid.UUID | None = None, split: str | None = None,
 ) -> EvaluationJob:
     """Item 2's own literal function -- a real, `pending` row only;
     real work happens later, in `run_evaluation_job` (see this
     module's own top docstring for why)."""
     job = EvaluationJob(
-        dataset_id=dataset_id, question_set_id=question_set_id, agent_id=agent_id, model_config_json=model_config or {},
+        dataset_id=dataset_id, question_set_id=question_set_id, agent_id=agent_id, model_config_json=model_config or {}, split=split,
         status=EvaluationJobStatus.pending, created_by=created_by,
     )
     db.add(job)

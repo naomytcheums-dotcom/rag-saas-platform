@@ -20,6 +20,19 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from api.config import settings
+
+# Stop BEFORE any test runs when the environment points at a real database or real services (incident of 2026-10-10, see tests/_remote_guard.py).
+import os as _os
+
+import _remote_guard
+
+_remote = _remote_guard.find_remote_services({k: getattr(settings, k, "") for k in (*_remote_guard.URL_SETTINGS, "RESEND_API_KEY", "STRIPE_SECRET_KEY", "PAYSTACK_SECRET_KEY")})
+if _remote and _os.environ.get("ALLOW_REMOTE_TEST_SERVICES") != "1":
+    raise pytest.UsageError(
+        "Refusing to run the test suite: " + "; ".join(_remote) + ". The tests read and delete rows. Point DATABASE_URL, DATABASE_URL_TRANSACTION, REDIS and S3 settings "
+        "at a disposable local stack (see .circleci/config.yml), or set ALLOW_REMOTE_TEST_SERVICES=1 if you are sure."
+    )
+
 from api.database import Base, get_db
 from api.main import app
 from api.services.mem0_service import close_all_memories

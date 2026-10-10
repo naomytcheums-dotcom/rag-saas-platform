@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
+import AudioPermission from "./AudioPermission";
 import PushToTalkButton from "./PushToTalkButton";
 import VoiceInput from "./VoiceInput";
 
@@ -64,7 +65,7 @@ export default function ChatComposer({ value, onChange, onSend, disabled, sugges
                   ))}
                 </div>
                 <div className="scale-[0.8]">
-                  {voiceMode === "tap" ? <VoiceInput onTranscript={append} /> : <PushToTalkButton onTranscript={append} />}
+                  <AudioPermission>{voiceMode === "tap" ? <VoiceInput onTranscript={append} /> : <PushToTalkButton onTranscript={append} />}</AudioPermission>
                 </div>
               </div>
               <button

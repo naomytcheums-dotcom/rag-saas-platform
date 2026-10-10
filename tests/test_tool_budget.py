@@ -118,3 +118,42 @@ async def test_non_superadmin_cannot_update_tool_budgets(client, register_payloa
     token = await _register(client, register_payload["email"], register_payload["password"])
     response = await client.patch("/admin/tools/calculator/budget", json={"budget_limit": 2000}, headers=_auth_header(token))
     assert response.status_code == 403
+
+
+# ----------------------------------------------- cap_tool_output (wired in the orchestrator) --
+
+
+async def test_cap_tool_output_leaves_a_tool_without_an_explicit_budget_untouched(db_session):
+    from api.services.tool_budget import cap_tool_output
+
+    big = "x" * 50_000
+    assert await cap_tool_output(db_session, "search_kb", big) == big
+
+
+async def test_cap_tool_output_truncates_to_the_explicit_budget_and_says_so(db_session):
+    from api.services.tool_budget import cap_tool_output
+
+    await set_tool_budget(db_session, "web_search", 100)  # 100 tokens ~ 400 characters
+    capped = await cap_tool_output(db_session, "web_search", "y" * 5_000)
+    assert capped.startswith("y" * 400)
+    assert len(capped) < 5_000
+    assert "output truncated" in capped and "100 tokens" in capped
+    assert await get_tool_usage(db_session, "web_search") > 0
+
+
+async def test_cap_tool_output_keeps_a_short_output_intact_but_counts_it(db_session):
+    from api.services.tool_budget import cap_tool_output
+
+    await set_tool_budget(db_session, "calculator", 100)
+    assert await cap_tool_output(db_session, "calculator", "42") == "42"
+    assert await get_tool_usage(db_session, "calculator") >= 1
+
+
+async def test_cap_tool_output_is_a_noop_when_tracking_is_disabled(db_session, monkeypatch):
+    from api.config import settings
+    from api.services.tool_budget import cap_tool_output
+
+    await set_tool_budget(db_session, "web_search", 100)
+    monkeypatch.setattr(settings, "TOOL_BUDGET_TRACKING_ENABLED", False)
+    big = "z" * 5_000
+    assert await cap_tool_output(db_session, "web_search", big) == big

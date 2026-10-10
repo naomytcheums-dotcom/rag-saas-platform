@@ -28,6 +28,11 @@ class OrganizationSettingsResponse(BaseModel):
     # discover they existed.
     policy_aware_retrieval_enabled: bool
     prompt_injection_detection_enabled: bool
+    toxicity_filter_enabled: bool = False
+    output_guard_enabled: bool = False
+    output_guard_mask_pii: bool = True
+    conversation_retention_days: int | None = None
+    voice_minutes_per_month: int | None = None
     adaptive_routing_enabled: bool
     cost_budget_per_request: float | None
     # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
@@ -65,6 +70,8 @@ class OrganizationSettingsResponse(BaseModel):
     # docstring for why every one of these 7 new fields defaults to
     # False/the pre-existing global default.
     query_rewriting_enabled: bool
+    query_expansion_enabled: bool = False
+    query_synonyms: dict[str, list[str]] | None = None
     multi_query_enabled: bool
     multi_query_count: int
     hyde_enabled: bool
@@ -106,6 +113,11 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # them on to edit the DB row directly.
     policy_aware_retrieval_enabled: bool | None = None
     prompt_injection_detection_enabled: bool | None = None
+    toxicity_filter_enabled: bool | None = None
+    output_guard_enabled: bool | None = None
+    output_guard_mask_pii: bool | None = None
+    voice_minutes_per_month: int | None = Field(default=None, ge=0, le=10_000_000, description="Monthly voice minutes allowed (calls and voice messages)")
+    conversation_retention_days: int | None = Field(default=None, ge=1, le=3650, description="Delete conversations after this many days without activity")
     adaptive_routing_enabled: bool | None = None
     cost_budget_per_request: float | None = Field(default=None, ge=0.0)
     # Phase 4, Étape 1 (correctif config parent_child) -- same real
@@ -161,6 +173,20 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # api/services/retrieval_config.py (never a second, independently
     # hardcoded ceiling).
     query_rewriting_enabled: bool | None = None
+    query_expansion_enabled: bool | None = None
+    query_synonyms: dict[str, list[str]] | None = Field(default=None, description="term -> synonyms; at most 200 terms, 20 synonyms each, 64 characters each")
+
+    @field_validator("query_synonyms")
+    @classmethod
+    def _check_query_synonyms(cls, value):
+        if value is None:
+            return value
+        if len(value) > 200:
+            raise ValueError("at most 200 terms")
+        for term, synonyms in value.items():
+            if not term.strip() or len(term) > 64 or len(synonyms) > 20 or any(not s.strip() or len(s) > 64 for s in synonyms):
+                raise ValueError("terms and synonyms must be 1-64 characters, at most 20 synonyms per term")
+        return value
     multi_query_enabled: bool | None = None
     multi_query_count: int | None = Field(default=None, ge=1, le=10, description="Number of query variants generated, including the original query")
     hyde_enabled: bool | None = None

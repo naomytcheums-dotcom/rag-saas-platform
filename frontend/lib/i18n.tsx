@@ -10,10 +10,6 @@ import en from "@/lib/locales/en.json";
 const BUNDLED: Record<string, () => Promise<Record<string, string>>> = {
   en: async () => en,
   fr: async () => (await import("@/lib/locales/fr.json")).default,
-  es: async () => (await import("@/lib/locales/es.json")).default,
-  de: async () => (await import("@/lib/locales/de.json")).default,
-  pt: async () => (await import("@/lib/locales/pt.json")).default,
-  ar: async () => (await import("@/lib/locales/ar.json")).default,
 };
 
 // Real fix for a real bug found by manual QA: the language switcher

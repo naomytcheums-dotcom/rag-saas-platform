@@ -76,6 +76,8 @@ class MessageFeedback(Base):
     rating: Mapped[str] = mapped_column(String(20), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Spec 15.2.4 -- the answer the user says would have been right (feeds evaluation cases, see api/services/insights.py)
+    correction: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (

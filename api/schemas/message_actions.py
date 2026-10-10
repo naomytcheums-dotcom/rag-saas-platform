@@ -48,12 +48,14 @@ class FeedbackCreateRequest(BaseModel):
     rating: str = Field(pattern="^(positive|negative)$")
     reason: str | None = None
     comment: str | None = None
+    correction: str | None = Field(default=None, max_length=10000)
 
 
 class FeedbackUpdateRequest(BaseModel):
     rating: str | None = Field(default=None, pattern="^(positive|negative)$")
     reason: str | None = None
     comment: str | None = None
+    correction: str | None = Field(default=None, max_length=10000)
 
 
 class FeedbackResponse(BaseModel):
@@ -63,6 +65,7 @@ class FeedbackResponse(BaseModel):
     rating: str
     reason: str | None
     comment: str | None
+    correction: str | None = None
     created_at: dt.datetime
 
     model_config = {"from_attributes": True}

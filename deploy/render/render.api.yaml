@@ -1,0 +1,49 @@
+# Render blueprint for the real API (the repository's root render.yaml still describes the old Streamlit prototype).
+# NOT applied by this repository change: use it as `render blueprint launch --file deploy/render/render.api.yaml` on a staging account first.
+services:
+  - type: web
+    name: rag-saas-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: standard            # the free 512 MB plan cannot hold the ML dependencies plus a worker
+    healthCheckPath: /health
+    envVars:
+      - { key: DATABASE_URL, sync: false }
+      - { key: REDIS_URL, sync: false }
+      - { key: JWT_SECRET_KEY, sync: false }
+      - { key: METRICS_AUTH_TOKEN, sync: false }
+      - { key: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
+      - { key: COOKIE_SECURE, value: "true" }
+  - type: worker
+    name: rag-saas-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: standard
+    dockerCommand: celery -A api.tasks.celery_app worker --loglevel=info
+    envVars:
+      - { key: DATABASE_URL, sync: false }
+      - { key: REDIS_URL, sync: false }
+      - { key: JWT_SECRET_KEY, sync: false }
+  - type: worker
+    name: rag-saas-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: starter
+    dockerCommand: celery -A api.tasks.celery_app beat --loglevel=info
+    envVars:
+      - { key: DATABASE_URL, sync: false }
+      - { key: REDIS_URL, sync: false }
+      - { key: JWT_SECRET_KEY, sync: false }
+  # Cheaper alternative to the worker + beat pair above for the account purge and the other daily clean-ups (spec 1.1.10): one cron job that
+  # runs scripts/run_maintenance_tasks.py once a day. Keep it OR the beat worker, not both (the tasks are idempotent, so running both is only wasteful).
+  - type: cron
+    name: rag-saas-maintenance
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: starter
+    schedule: "0 3 * * *"
+    dockerCommand: python scripts/run_maintenance_tasks.py
+    envVars:
+      - { key: DATABASE_URL, sync: false }
+      - { key: REDIS_URL, sync: false }
+      - { key: JWT_SECRET_KEY, sync: false }

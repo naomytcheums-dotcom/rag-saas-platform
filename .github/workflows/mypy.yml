@@ -1,0 +1,19 @@
+name: Mypy (non-blocking)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install mypy -r requirements-api.txt
+      - name: Run mypy (report only; the number of errors is the baseline to reduce)
+        run: mypy

@@ -34,7 +34,11 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
         { href: "/dashboard/eval", label: t("nav.eval") },
         { href: "/dashboard/eval/evolution", label: t("nav.evolution") },
         { href: "/dashboard/quality", label: t("nav.quality") },
+        { href: "/dashboard/quality-scores", label: t("nav.quality_scores") },
         { href: "/dashboard/voice-agent", label: t("nav.voice_agent") },
+        { href: "/dashboard/voice-settings", label: t("nav.voice_settings") },
+        { href: "/dashboard/escalations", label: t("nav.escalations") },
+        { href: "/dashboard/insights", label: t("nav.insights") },
       ],
     },
     {
@@ -58,6 +62,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
       label: t("nav.section.account"),
       items: [
         { href: "/dashboard/profile", label: t("nav.profile") },
+        { href: "/dashboard/teams", label: t("nav.teams") },
         { href: "/dashboard/settings/organization", label: t("nav.organization") },
       ],
     },

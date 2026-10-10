@@ -970,6 +970,10 @@ class Settings(BaseSettings):
     HUMAN_ESCALATION_ENABLED: bool = True
     HUMAN_ESCALATION_PRIORITY_LEVELS: list[str] = ["low", "medium", "high", "critical"]
     HUMAN_ESCALATION_NOTIFICATION_CHANNELS: list[str] = ["email"]
+    # Spec 15.1.4 -- hours allowed to answer a ticket, by priority (the SLA clock starts when the ticket is created).
+    # Specs 10.2.8 -- refuse tool calls requested by a model that target the internal network, carry a credential or contain destructive SQL.
+    UNSAFE_TOOL_CALL_DETECTION_ENABLED: bool = True
+    ESCALATION_SLA_HOURS: dict[str, int] = {"critical": 1, "high": 4, "medium": 24, "low": 72}
 
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
@@ -1066,6 +1070,9 @@ class Settings(BaseSettings):
     # LLM-generation pass per question on evaluation) had none at all --
     # scoped per organization, same fail-open-on-Redis-down behavior as
     # every other enforce_rate_limit call in this codebase.
+    # Spec 1.3.7 -- requests per user on the authenticated chat stream (each one is a paid LLM call).
+    CHAT_USER_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    CHAT_USER_RATE_LIMIT_WINDOW_SECONDS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
     # RAG-003 -- a document still `pending` after this long has lost its processing task and is re-dispatched by the periodic sweep.
@@ -1726,7 +1733,7 @@ class Settings(BaseSettings):
     # reintroduced later, but no longer offered through the UI. See
     # docs/developer/I18N.md.
     UI_DEFAULT_LANGUAGE: str = "en"
-    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en", "es", "de", "pt", "ar"])
+    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
 
     # -- Speech-to-text (Partie 8.2.1) -----------------------------------------------

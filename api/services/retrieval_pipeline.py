@@ -996,6 +996,12 @@ async def search(
         if trace_stages is not None:
             trace_stages.append(timer.record)
 
+    # Spec 3.4.5 -- opt-in synonym expansion (built-in table + the organization's own `query_synonyms`).
+    if (org_settings or {}).get("query_expansion_enabled", False):
+        from api.services.query_rewriting import expand_with_synonyms
+
+        effective_query = expand_with_synonyms(effective_query, (org_settings or {}).get("query_synonyms"))
+
     # Systèmes internes, item 25 (Query Intelligence Router) -- real,
     # opt-in adaptive routing: only ever runs when a real caller passed
     # NO explicit `strategy` override (a real, explicit override always

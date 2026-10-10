@@ -12,6 +12,7 @@ interface Profile {
   email: string;
   full_name: string | null;
   company: string | null;
+  job_title?: string | null;
   avatar_url: string | null;
   locale: string;
   timezone: string;
@@ -105,13 +106,14 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
   const { t } = useTranslation();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [company, setCompany] = useState(profile.company ?? "");
+  const [jobTitle, setJobTitle] = useState(profile.job_title ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   async function save() {
     setSaving(true);
     try {
-      onSaved(await api.patch<Profile>("/account/profile", { full_name: fullName, company }));
+      onSaved(await api.patch<Profile>("/account/profile", { full_name: fullName, company, job_title: jobTitle }));
     } catch (err) {
       onError(err instanceof ApiError ? String(err.detail) : t("profile.error_save"));
     } finally {
@@ -152,8 +154,12 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
         <input id="profile-company" value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
       </div>
       <div>
+        <label htmlFor="profile-job-title" className="text-sm font-medium text-foreground">{t("profile.job_title")}</label>
+        <input id="profile-job-title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent" />
+      </div>
+      <div>
         <p className="text-sm font-medium text-foreground">{t("profile.email")}</p>
-        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ " + t("profile.verified") : t("profile.unverified")}</p>
+        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ " + t("profile.verified") : t("profile.unverified")}{!profile.is_email_verified && <> · <a href="/verify-email" className="text-accent underline">{t("profile.verify_now")}</a></>}</p>
       </div>
       <div>
         <p className="text-sm font-medium text-foreground">{t("profile.member_since")}</p>

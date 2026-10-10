@@ -1,0 +1,16 @@
+question,expected_answer,difficulty,category
+What is FastAPI built on top of?,FastAPI is built on Starlette for the web parts and Pydantic for the data parts.,easy,basics
+Which Python feature does FastAPI use to declare request parameters and validate them?,Standard Python type hints.,easy,basics
+What command is commonly used to run a FastAPI application during development?,uvicorn main:app --reload (or the fastapi dev command).,easy,deployment
+Where does FastAPI automatically publish interactive API documentation?,At /docs (Swagger UI) and /redoc (ReDoc).,easy,documentation
+How do you declare a path parameter in FastAPI?,By putting the name in braces in the path (for example /items/{item_id}) and declaring a function argument with the same name.,easy,routing
+How do you declare an optional query parameter?,Give the function argument a default value (for example q: str | None = None).,easy,routing
+What is the role of a Pydantic model in a FastAPI request body?,It declares the expected structure and types of the JSON body and validates it automatically.,medium,validation
+What HTTP status code does FastAPI return when request validation fails?,422 Unprocessable Entity.,medium,validation
+How do you reuse logic such as authentication across several routes?,With dependencies: Depends() in the function signature or in the decorator's dependencies list.,medium,dependencies
+What is the difference between def and async def path operation functions?,async def runs on the event loop and must not block; plain def functions are run in a thread pool.,medium,concurrency
+How can a route return a custom status code?,Pass status_code to the route decorator (for example status_code=201).,easy,routing
+Which parameter of the decorator controls the shape of the data returned to the client?,response_model.,medium,serialization
+How do you run code once at application start and stop?,With a lifespan context manager passed to the FastAPI constructor (older code used startup and shutdown events).,hard,lifecycle
+How do you protect a route with an OAuth2 bearer token?,Use OAuth2PasswordBearer (or another security scheme) as a dependency that reads the Authorization header.,hard,security
+How can background work be run after a response has been sent?,With BackgroundTasks injected into the path operation function.,medium,concurrency

@@ -49,7 +49,9 @@ import api.models.bm25_revision  # noqa: F401 -- registers SQLite corpus revisio
 from api.models.document_image import DocumentImage
 from api.models.encryption_audit import EncryptionAudit, EncryptionKeyRecord
 from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection
-from api.models.escalation import Escalation
+from api.models.coupon import Coupon, CouponRedemption
+from api.models.scim import ScimToken
+from api.models.escalation import Escalation, EscalationNote
 from api.models.evaluation import (
     ABTest, ABTestAssignment, ABTestResult, BenchmarkVersion, ComparisonJob, DeploymentEvaluation, EvaluationDataset,
     EvaluationFailure, EvaluationJob, EvaluationQuestion, EvaluationResult, ManualEvaluation, QuestionSet,

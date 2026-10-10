@@ -17,13 +17,13 @@ from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.evaluation import (
     DatasetCreateRequest, DatasetListResponse, DatasetResponse, DatasetUpdateRequest, QuestionCreateRequest,
-    QuestionImportResponse, QuestionListResponse, QuestionResponse, QuestionUpdateRequest,
+    QuestionImportResponse, QuestionListResponse, QuestionResponse, QuestionUpdateRequest, SplitAssignRequest, SplitAssignResponse,
 )
 from api.security.permissions import require_permission
 from api.security.evaluation import require_dataset_admin, require_question_admin
 from api.security.organizations import require_org_admin
 from api.services.evaluation_datasets import (
-    add_question, create_dataset, delete_dataset, delete_question, export_questions, get_questions, import_questions,
+    add_question, assign_dataset_split, create_dataset, delete_dataset, delete_question, export_questions, get_questions, import_questions,
     list_datasets, update_dataset, update_question,
 )
 
@@ -83,10 +83,21 @@ async def add_question_endpoint(
     dataset, _caller = dataset_ctx
     question = await add_question(
         db, dataset.id, payload.question, payload.expected_answer, payload.expected_documents,
-        payload.difficulty, payload.category,
+        payload.difficulty, payload.category, split=payload.split,
     )
     await db.commit()
     return question
+
+
+@router.post("/datasets/{dataset_id}/questions/assign-split", response_model=SplitAssignResponse)
+async def assign_split_endpoint(
+    payload: SplitAssignRequest = SplitAssignRequest(), dataset_ctx: tuple[EvaluationDataset, OrganizationMember] = Depends(require_dataset_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    dataset, _caller = dataset_ctx
+    counts = await assign_dataset_split(db, dataset.id, payload.held_out_ratio, payload.seed, payload.overwrite)
+    await db.commit()
+    return SplitAssignResponse(**counts)
 
 
 @router.get("/datasets/{dataset_id}/questions", response_model=QuestionListResponse)
@@ -108,6 +119,7 @@ async def update_question_endpoint(
     question, _caller = question_ctx
     updated = await update_question(db, question.id, payload.model_dump(exclude_unset=True))
     await db.commit()
+    await db.refresh(updated)  # updated_at is recomputed by the database (onupdate): without a refresh the response serialisation raised MissingGreenlet
     return updated
 
 

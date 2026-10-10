@@ -1,0 +1,33 @@
+image:
+  repository: ghcr.io/naomytcheums-dotcom/rag-saas-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Name of an existing Secret holding DATABASE_URL, REDIS_URL, JWT_SECRET_KEY, ... (never put secrets in this file)
+existingSecret: rag-saas-secrets
+
+env:
+  COOKIE_SECURE: "true"
+  CREDITS_ALLOW_UNPAID_TOPUP: "false"
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 3Gi }
+
+worker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 3Gi }
+
+beat:
+  enabled: true   # always exactly 1 replica
+
+ingress:
+  enabled: false
+  className: ""
+  host: api.example.com
+  tlsSecretName: rag-saas-api-tls

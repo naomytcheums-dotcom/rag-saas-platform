@@ -1,0 +1,35 @@
+name: Database migration (manual)
+
+# The migration step of the deployment (spec 13.3.8). Manual on purpose: nothing changes a production database unless the owner starts this
+# workflow. It needs the repository secret DATABASE_URL, which should be bound to a protected GitHub "environment" with a required reviewer.
+# Default mode is a REHEARSAL: the pending migrations run inside one transaction that is always rolled back. Tick "apply" to really migrate.
+# Take a database backup first (scripts/backup.sh).
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Really apply the migrations after a passing rehearsal (default - rehearsal only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-migrations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+      - run: pip install --no-cache-dir -r requirements-api.txt
+      - name: Rehearse (and apply when asked)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [ "$APPLY" = "true" ]; then python scripts/migrate_with_rehearsal.py --apply; else python scripts/migrate_with_rehearsal.py; fi

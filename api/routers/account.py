@@ -120,6 +120,9 @@ async def update_profile(payload: ProfileUpdateRequest, current_user: User = Dep
     if payload.company is not None:
         current_user.company = payload.company
         changed_fields.append("company")
+    if payload.job_title is not None:
+        current_user.job_title = payload.job_title.strip() or None
+        changed_fields.append("job_title")
     await db.commit()
     await db.refresh(current_user)
 

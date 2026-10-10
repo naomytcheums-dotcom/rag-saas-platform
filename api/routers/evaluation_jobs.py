@@ -42,7 +42,7 @@ async def create_evaluation_job_endpoint(
     )
     job = await create_evaluation_job(
         db, dataset.id, question_set_id=payload.question_set_id, agent_id=payload.agent_id,
-        model_config=payload.model_config_override, created_by=current_user.id,
+        model_config=payload.model_config_override, created_by=current_user.id, split=payload.split,
     )
     await db.commit()
     await db.refresh(job)

@@ -5,6 +5,7 @@ import { useState } from "react";
 import AuthShell, { AuthButton, AuthField, AuthLink } from "@/components/auth/AuthShell";
 import { ApiError, useAuth } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
+import OAuthButtons from "@/components/auth/OAuthButtons";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function RegisterPage() {
         <AuthField label={t("auth.login.password")} type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         <AuthButton disabled={loading}>{loading ? t("auth.register.submitting") : t("auth.register.submit")}</AuthButton>
       </form>
+      <OAuthButtons />
     </AuthShell>
   );
 }

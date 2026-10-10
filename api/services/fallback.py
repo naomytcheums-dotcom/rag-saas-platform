@@ -117,3 +117,33 @@ async def execute_with_fallback(tool: ToolSpec, params: dict, fallback_chain: li
             except Exception as exc:
                 last_exception = exc
         raise last_exception
+
+
+async def run_tool_fallbacks(
+    db: AsyncSession, db_lock, failed_tool: str, arguments: dict, allowed_tools: dict[str, ToolSpec],
+) -> tuple[str, str] | None:
+    """Partie 5.1.7 -- used by the agent orchestrator when a tool call has failed: try the configured fallback tools in priority order.
+
+    Only tools in `allowed_tools` (the ones this agent run is actually allowed to use) can be chosen, so a fallback can never
+    bypass tool permissions. A fallback whose parameters do not accept the original arguments is skipped (validated against
+    its own input schema). Returns `(fallback_tool_name, output)` for the first fallback that works, or `None`."""
+    from api.services.tool_timeout import execute_tool_with_timeout, get_tool_timeout  # noqa: PLC0415 -- avoid an import cycle at module load
+    from api.services.tool_validation import get_validation_errors  # noqa: PLC0415
+    from api.services.tools import tool_input_schema  # noqa: PLC0415
+
+    try:
+        async with db_lock:
+            chain = await get_tool_fallback_chain(db, failed_tool)
+    except Exception:  # noqa: BLE001 -- a problem while looking up fallbacks must never hide the original tool error
+        return None
+    for name in chain:
+        spec = allowed_tools.get(name)
+        if spec is None or name == failed_tool or get_validation_errors(arguments, tool_input_schema(spec)):
+            continue
+        async with db_lock:
+            timeout = await get_tool_timeout(db, name)
+        try:
+            return name, await execute_tool_with_timeout(spec, arguments, timeout=timeout)
+        except Exception:  # noqa: BLE001 -- a failing fallback just moves on to the next one
+            continue
+    return None

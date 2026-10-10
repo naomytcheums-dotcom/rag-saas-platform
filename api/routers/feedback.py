@@ -47,7 +47,7 @@ async def add_feedback_endpoint(
 ):
     await _get_owned_message(db, message_id, current_user)
     try:
-        feedback = await add_feedback(db, message_id, current_user.id, payload.rating, reason=payload.reason, comment=payload.comment)
+        feedback = await add_feedback(db, message_id, current_user.id, payload.rating, reason=payload.reason, comment=payload.comment, correction=payload.correction)
     except MessageActionError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -74,7 +74,7 @@ async def update_feedback_endpoint(
     if existing is None or existing.user_id != current_user.id:
         raise _NOT_FOUND
     try:
-        feedback = await update_feedback(db, feedback_id, rating=payload.rating, reason=payload.reason, comment=payload.comment)
+        feedback = await update_feedback(db, feedback_id, rating=payload.rating, reason=payload.reason, comment=payload.comment, correction=payload.correction)
     except MessageActionError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

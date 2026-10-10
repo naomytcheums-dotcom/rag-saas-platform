@@ -169,6 +169,15 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # same rétrocompatibilité discipline as every other advanced-feature
     # flag in this codebase.
     "prompt_injection_detection_enabled": False,
+    # Spec 10.2.7 -- opt-in toxicity filter (api/services/toxicity_filter.py) on the question and on the answer of the agent-less RAG path.
+    "toxicity_filter_enabled": False,
+    # Specs 10.2.3/10.2.5/10.2.6/10.2.10 -- redact credentials (always) and, with output_guard_mask_pii, personal data in answers of the agent-less RAG path. See api/services/output_guard.py.
+    "output_guard_enabled": False,
+    "output_guard_mask_pii": True,
+    # Spec 10.4.5/10.4.6 -- delete this organization's conversations after this many days without activity (None = keep forever). See api/tasks/retention.py.
+    "conversation_retention_days": None,
+    # Spec 12.3.6 -- monthly voice minutes allowed (None = unlimited), normally set from the plan. See api/services/voice_usage.py.
+    "voice_minutes_per_month": None,
     # Systèmes internes, item 25 -- gate for
     # api.services.query_router.suggest_retrieval_strategy, wired into
     # search() -- default False, same rétrocompatibilité discipline.
@@ -242,6 +251,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # api/services/retrieval_config.py's own "Phase 4, Étape 2" section
     # for the resolvers that read these.
     "query_rewriting_enabled": False,
+    # Spec 3.4.5 -- synonym expansion of the question before retrieval; `query_synonyms` = {term: [synonyms]} owned by the organization.
+    "query_expansion_enabled": False,
+    "query_synonyms": None,
     "multi_query_enabled": False,
     # Real, deliberate default: the SAME real value
     # api.config.settings.MULTI_QUERY_NUM_VARIANTS already is, so an

@@ -99,6 +99,9 @@ async def voice_agent_endpoint(
 
     await enforce_rate_limit(f"ratelimit:voice_agent:org:{org_id}", settings.VOICE_AGENT_RATE_LIMIT_MAX_ATTEMPTS, settings.VOICE_AGENT_RATE_LIMIT_WINDOW_SECONDS)
     org_settings = await get_org_settings(db, org_id)
+    from api.services.voice_usage import assert_voice_minutes_available
+
+    await assert_voice_minutes_available(db, org_id, org_settings)
     provider = resolve_llm_config(org_settings)["provider"]
     try:
         await assert_org_can_spend(db, org_id, org_settings, provider, minimum_credits=max(settings.VOICE_AGENT_TURN_CREDIT_COST, 1))

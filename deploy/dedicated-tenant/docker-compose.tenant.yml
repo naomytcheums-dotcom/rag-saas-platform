@@ -1,0 +1,44 @@
+# One isolated stack per customer (spec 10.4.7 "dedicated tenant" and 10.4.8 "dedicated database"): its own API, worker, beat, PostgreSQL (pgvector) and Redis,
+# on its own network and volumes. Provision with:  TENANT=acme ./provision.sh   (see provision.sh). Not run by the authoring session.
+name: rag-saas-${TENANT:?set TENANT}
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ragsaas
+      POSTGRES_USER: ragsaas
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ragsaas"], interval: 10s, timeout: 5s, retries: 10 }
+
+  redis:
+    image: redis:7-alpine
+    volumes: [redisdata:/data]
+
+  api:
+    build: { context: ../.., dockerfile: Dockerfile.api }
+    environment: &env
+      DATABASE_URL: postgresql+asyncpg://ragsaas:${DB_PASSWORD}@db:5432/ragsaas
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      COOKIE_SECURE: "true"
+      CREDITS_ALLOW_UNPAID_TOPUP: "false"
+    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
+    ports: ["${API_PORT:-8000}:8000"]
+
+  worker:
+    build: { context: ../.., dockerfile: Dockerfile.api }
+    command: celery -A api.tasks.celery_app worker --loglevel=info
+    environment: *env
+    depends_on: [api]
+
+  beat:
+    build: { context: ../.., dockerfile: Dockerfile.api }
+    command: celery -A api.tasks.celery_app beat --loglevel=info
+    environment: *env
+    depends_on: [api]
+
+volumes:
+  dbdata: {}
+  redisdata: {}

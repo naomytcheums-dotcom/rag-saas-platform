@@ -1823,7 +1823,7 @@
           "audit"
         ],
         "summary": "Get Organization Audit Logs",
-        "description": "Partie 10.2/10.6 -- an org-scoped view for the Security screen,\ngated by that ORGANIZATION's own Admin/Owner (require_org_admin) --\ndeliberately NOT the same tier as GET /admin/audit-logs above\n(a global platform admin, unrelated to any one organization). Only\nrows carrying this org's organization_id (populated going forward\nby the specific actions this \u00e9tape wired -- webhooks, documents,\nagents, conversations, integrations, widget, API keys) are visible\nhere; older, pre-existing action types never populate that column\nand so never appear in this org-scoped view (see AuditLog's own\ndocstring).",
+        "description": "Partie 10.2/10.6 -- an org-scoped view for the Security screen,\ngated by that ORGANIZATION's own Admin/Owner (require_org_admin) --\ndeliberately NOT the same tier as GET /admin/audit-logs above\n(a global platform admin, unrelated to any one organization). Only\nrows carrying this org's organization_id (populated going forward\nby the specific actions this étape wired -- webhooks, documents,\nagents, conversations, integrations, widget, API keys) are visible\nhere; older, pre-existing action types never populate that column\nand so never appear in this org-scoped view (see AuditLog's own\ndocstring).",
         "operationId": "get_organization_audit_logs_organizations__org_id__audit_logs_get",
         "security": [
           {
@@ -6368,13 +6368,60 @@
         }
       }
     },
+    "/organizations/{org_id}/usage/voice-minutes": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Voice Minutes Usage",
+        "description": "Spec 12.3.6 -- voice minutes used this month against the organization's monthly limit (None = unlimited).",
+        "operationId": "voice_minutes_usage_organizations__org_id__usage_voice_minutes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations/{org_id}/usage": {
       "get": {
         "tags": [
           "usage"
         ],
         "summary": "Get Organization Usage",
-        "description": "`metric` omitted: the full r\u00e9sum\u00e9 across every metric this\norganization has ever recorded (get_usage_summary) -- total per\nmetric, plus a per-day breakdown. `metric` given: just that one\ndimension's summed total over the range (get_usage) -- see\nUsageResponse's own docstring for why the two modes share one\nresponse shape instead of two separate endpoints.",
+        "description": "`metric` omitted: the full résumé across every metric this\norganization has ever recorded (get_usage_summary) -- total per\nmetric, plus a per-day breakdown. `metric` given: just that one\ndimension's summed total over the range (get_usage) -- see\nUsageResponse's own docstring for why the two modes share one\nresponse shape instead of two separate endpoints.",
         "operationId": "get_organization_usage_organizations__org_id__usage_get",
         "security": [
           {
@@ -13659,7 +13706,7 @@
           "documents"
         ],
         "summary": "Delete Document",
-        "description": "Partie 2.2.8, item 3's own literal ask -- this route is now a\nreal SOFT delete (`soft_delete_document`), not the real, permanent\nrow+S3 removal it used to be before this \u00e9tape -- see this\nmodule's own top docstring update and `DELETE .../permanent` below\nfor the new real, irreversible route this behavior moved to.",
+        "description": "Partie 2.2.8, item 3's own literal ask -- this route is now a\nreal SOFT delete (`soft_delete_document`), not the real, permanent\nrow+S3 removal it used to be before this étape -- see this\nmodule's own top docstring update and `DELETE .../permanent` below\nfor the new real, irreversible route this behavior moved to.",
         "operationId": "delete_document_documents__document_id__delete",
         "security": [
           {
@@ -13706,7 +13753,7 @@
           "documents"
         ],
         "summary": "Check Document Modified Route",
-        "description": "Item 3's own literal route -- Member+ (Viewer included, a real\nread-triggered check, not a document mutation a Viewer's own\nread-only role should be blocked from triggering), same real\n`_get_document_and_membership` anti-enumeration guard. Runs\nsynchronously (a single real HTTP HEAD request, not the periodic\nsystem-wide sweep below, which IS Celery -- vision critique 2's own\n\"g\u00e9r\u00e9e par Celery\" question is about THAT bulk sweep, not this\nsingle, caller-triggered, already-bounded real check).",
+        "description": "Item 3's own literal route -- Member+ (Viewer included, a real\nread-triggered check, not a document mutation a Viewer's own\nread-only role should be blocked from triggering), same real\n`_get_document_and_membership` anti-enumeration guard. Runs\nsynchronously (a single real HTTP HEAD request, not the periodic\nsystem-wide sweep below, which IS Celery -- vision critique 2's own\n\"gérée par Celery\" question is about THAT bulk sweep, not this\nsingle, caller-triggered, already-bounded real check).",
         "operationId": "check_document_modified_route_documents__document_id__check_modified_post",
         "security": [
           {
@@ -13804,7 +13851,7 @@
           "documents"
         ],
         "summary": "List Document Images Route",
-        "description": "Partie 3.1.5 -- a real, small, deliberate addition beyond this\n\u00e9tape's own literal action list (see `DocumentImageResponse`'s own\ndocstring for why). Same real `_get_document_and_membership`\nanti-enumeration guard as every other document route -- never\nreturns a raw image's own bytes or its real S3 `file_key`, only\nreal, already-extracted metadata.",
+        "description": "Partie 3.1.5 -- a real, small, deliberate addition beyond this\nétape's own literal action list (see `DocumentImageResponse`'s own\ndocstring for why). Same real `_get_document_and_membership`\nanti-enumeration guard as every other document route -- never\nreturns a raw image's own bytes or its real S3 `file_key`, only\nreal, already-extracted metadata.",
         "operationId": "list_document_images_route_documents__document_id__images_get",
         "security": [
           {
@@ -13857,7 +13904,7 @@
           "documents"
         ],
         "summary": "Preview Document",
-        "description": "Partie 2.2.4, item 2's own literal route -- serves a document's\nown real content SECURELY (vision critique 2's own \"pas d'acc\u00e8s\ndirect S3\" answer): always proxied through this authenticated,\nmembership-checked endpoint (same real `_get_document_and_membership`\nanti-enumeration guard as every other document endpoint), NEVER a\ndirect/public/pre-signed S3 URL. Real, chunked streaming\n(api/services/document_storage.py's own stream_document_file) --\nvision critique 1's own \"la preview est-elle rapide pour les gros\nfichiers\" answer: a large real document is never fully buffered in\nthis server's own memory just to preview it. Thumbnail generation\n(this step's own literal spec explicitly marks it optional) is\ndeliberately NOT built here -- a real, stated scope narrowing, not\nan oversight; any future frontend renders the real content this\nroute already serves (PDF.js for a real PDF, an <img> tag for a\nreal image, ...) directly.",
+        "description": "Partie 2.2.4, item 2's own literal route -- serves a document's\nown real content SECURELY (vision critique 2's own \"pas d'accès\ndirect S3\" answer): always proxied through this authenticated,\nmembership-checked endpoint (same real `_get_document_and_membership`\nanti-enumeration guard as every other document endpoint), NEVER a\ndirect/public/pre-signed S3 URL. Real, chunked streaming\n(api/services/document_storage.py's own stream_document_file) --\nvision critique 1's own \"la preview est-elle rapide pour les gros\nfichiers\" answer: a large real document is never fully buffered in\nthis server's own memory just to preview it. Thumbnail generation\n(this step's own literal spec explicitly marks it optional) is\ndeliberately NOT built here -- a real, stated scope narrowing, not\nan oversight; any future frontend renders the real content this\nroute already serves (PDF.js for a real PDF, an <img> tag for a\nreal image, ...) directly.",
         "operationId": "preview_document_documents__document_id__preview_get",
         "security": [
           {
@@ -14047,7 +14094,7 @@
           "documents"
         ],
         "summary": "Replace Document Route",
-        "description": "Partie 2.2.8, item 2's own literal route -- Member+ si\npropri\u00e9taire, same real permission shape as version creation. A\nreal, honest alias for Partie 2.2.7's own version-creation\nmechanism -- see `api/security/documents.py`'s own\n`replace_document` docstring for why this is a deliberate reuse,\nnot a second implementation.",
+        "description": "Partie 2.2.8, item 2's own literal route -- Member+ si\npropriétaire, same real permission shape as version creation. A\nreal, honest alias for Partie 2.2.7's own version-creation\nmechanism -- see `api/security/documents.py`'s own\n`replace_document` docstring for why this is a deliberate reuse,\nnot a second implementation.",
         "operationId": "replace_document_route_documents__document_id__replace_post",
         "security": [
           {
@@ -14216,7 +14263,7 @@
           "documents"
         ],
         "summary": "Update Document Tag",
-        "description": "Item 3's own literal route -- Member+ AND (creator OR Admin/\nOwner override), the SAME real permission shape as\nDELETE /documents/{document_id} above (vision critique 3's own \"un\nutilisateur peut-il modifier un tag cr\u00e9\u00e9 par un autre\" answer: no,\nunless they're also an Admin/Owner).",
+        "description": "Item 3's own literal route -- Member+ AND (creator OR Admin/\nOwner override), the SAME real permission shape as\nDELETE /documents/{document_id} above (vision critique 3's own \"un\nutilisateur peut-il modifier un tag créé par un autre\" answer: no,\nunless they're also an Admin/Owner).",
         "operationId": "update_document_tag_tags__tag_id__patch",
         "security": [
           {
@@ -14320,7 +14367,7 @@
           "documents"
         ],
         "summary": "Add Tag To Document",
-        "description": "Item 3's own literal route -- Member+ AND (document owner OR\nAdmin/Owner override), this step's own literal \"Member+ si\npropri\u00e9taire\" -- the SAME real permission shape as\nDELETE /documents/{document_id}, applied to the DOCUMENT being\ntagged rather than the tag itself.",
+        "description": "Item 3's own literal route -- Member+ AND (document owner OR\nAdmin/Owner override), this step's own literal \"Member+ si\npropriétaire\" -- the SAME real permission shape as\nDELETE /documents/{document_id}, applied to the DOCUMENT being\ntagged rather than the tag itself.",
         "operationId": "add_tag_to_document_documents__document_id__tags_post",
         "security": [
           {
@@ -14538,7 +14585,7 @@
           "documents"
         ],
         "summary": "Create New Document Version",
-        "description": "Item 4's own literal route -- Member+ si propri\u00e9taire, same real\npermission shape as `DELETE /documents/{document_id}`. Stays thin,\nsame convention as every other upload route in this codebase --\nreal content validation and the real S3 write both happen inside\n`create_document_version_from_upload`\n(`api/security/document_versions.py`), not here. Re-schedules real\nprocessing afterward (vision critique 1's own \"r\u00e9utilise-t-il le\npipeline existant\" answer): `process_document`'s own real,\nalready-established behavior deletes and recreates a document's\nown chunks on any rerun, so the new version's own real content is\nwhat gets chunked/embedded next, with zero new logic needed for\nthat part.",
+        "description": "Item 4's own literal route -- Member+ si propriétaire, same real\npermission shape as `DELETE /documents/{document_id}`. Stays thin,\nsame convention as every other upload route in this codebase --\nreal content validation and the real S3 write both happen inside\n`create_document_version_from_upload`\n(`api/security/document_versions.py`), not here. Re-schedules real\nprocessing afterward (vision critique 1's own \"réutilise-t-il le\npipeline existant\" answer): `process_document`'s own real,\nalready-established behavior deletes and recreates a document's\nown chunks on any rerun, so the new version's own real content is\nwhat gets chunked/embedded next, with zero new logic needed for\nthat part.",
         "operationId": "create_new_document_version_documents__document_id__versions_post",
         "security": [
           {
@@ -14714,7 +14761,7 @@
           "documents"
         ],
         "summary": "Reindex Document Route",
-        "description": "Item 1's own literal route -- Member+ si propri\u00e9taire, same real\npermission shape as version creation/replace above.",
+        "description": "Item 1's own literal route -- Member+ si propriétaire, same real\npermission shape as version creation/replace above.",
         "operationId": "reindex_document_route_documents__document_id__reindex_post",
         "security": [
           {
@@ -14982,7 +15029,7 @@
           "documents"
         ],
         "summary": "Get Embedding Staleness Route",
-        "description": "Hardening Mission, Phase 1 -- the real, explicit, user-facing\nanswer this mission's own point 5 demands (\"exposer l'\u00e9tat du\nreindex\", \"fournir une erreur utilisateur explicite\" rather than an\norganization silently losing recall on its own older documents\nafter an `embedding_model` change). Same real Admin+ permission\nlevel as the org-wide reindex/status routes above -- see\n`api.security.documents.get_embedding_staleness_summary`'s own\ndocstring for the real comparison this is built from. When\n`reindex_recommended` is true, trigger\n`POST /organizations/{org_id}/documents/reindex` (already real,\nalready wired, already progressive/staggered -- see that route and\n`api.security.documents.reindex_organization`) to bring every\nstale/legacy chunk onto the organization's current embedding model.",
+        "description": "Hardening Mission, Phase 1 -- the real, explicit, user-facing\nanswer this mission's own point 5 demands (\"exposer l'état du\nreindex\", \"fournir une erreur utilisateur explicite\" rather than an\norganization silently losing recall on its own older documents\nafter an `embedding_model` change). Same real Admin+ permission\nlevel as the org-wide reindex/status routes above -- see\n`api.security.documents.get_embedding_staleness_summary`'s own\ndocstring for the real comparison this is built from. When\n`reindex_recommended` is true, trigger\n`POST /organizations/{org_id}/documents/reindex` (already real,\nalready wired, already progressive/staggered -- see that route and\n`api.security.documents.reindex_organization`) to bring every\nstale/legacy chunk onto the organization's current embedding model.",
         "operationId": "get_embedding_staleness_route_organizations__org_id__embeddings_status_get",
         "security": [
           {
@@ -16175,6 +16222,69 @@
                 "schema": {
                   "$ref": "#/components/schemas/CitationResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citations/{citation_id}/preview": {
+      "get": {
+        "tags": [
+          "citations"
+        ],
+        "summary": "Get Citation Preview Endpoint",
+        "description": "Spec 6.1.8 -- the short text shown when hovering a citation (first characters of the cited passage, cut at a word). Same access rule as the citation itself.",
+        "operationId": "get_citation_preview_endpoint_citations__citation_id__preview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "citation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Citation Id"
+            }
+          },
+          {
+            "name": "preview_length",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preview Length"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -17636,6 +17746,2032 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/escalations": {
+      "get": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "List Escalations",
+        "operationId": "list_escalations_organizations__org_id__escalations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Priority"
+            }
+          },
+          {
+            "name": "assignee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/escalations/stats": {
+      "get": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "Escalation Stats",
+        "operationId": "escalation_stats_organizations__org_id__escalations_stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationStatsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/escalations/{escalation_id}": {
+      "get": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "Get Escalation",
+        "operationId": "get_escalation_organizations__org_id__escalations__escalation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "escalation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Escalation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "Update Escalation",
+        "operationId": "update_escalation_organizations__org_id__escalations__escalation_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "escalation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Escalation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/escalations/{escalation_id}/assign": {
+      "post": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "Assign",
+        "operationId": "assign_organizations__org_id__escalations__escalation_id__assign_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "escalation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Escalation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/escalations/{escalation_id}/notes": {
+      "post": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "Add Note",
+        "operationId": "add_note_organizations__org_id__escalations__escalation_id__notes_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "escalation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Escalation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationNoteCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationNoteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "escalations"
+        ],
+        "summary": "List Notes",
+        "operationId": "list_notes_organizations__org_id__escalations__escalation_id__notes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "escalation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Escalation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EscalationNoteResponse"
+                  },
+                  "title": "Response List Notes Organizations  Org Id  Escalations  Escalation Id  Notes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/most-asked": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Most Asked Questions",
+        "operationId": "most_asked_questions_organizations__org_id__insights_most_asked_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/failed-questions": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Failed Questions",
+        "operationId": "failed_questions_organizations__org_id__insights_failed_questions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/retrieval-success": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Retrieval Success",
+        "operationId": "retrieval_success_organizations__org_id__insights_retrieval_success_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/question-clusters": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Question Clusters",
+        "operationId": "question_clusters_organizations__org_id__insights_question_clusters_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/knowledge-gaps": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Knowledge Gaps",
+        "operationId": "knowledge_gaps_organizations__org_id__insights_knowledge_gaps_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "min_count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Count"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/documentation-gaps": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Documentation Gaps",
+        "operationId": "documentation_gaps_organizations__org_id__insights_documentation_gaps_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "min_count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 2,
+              "title": "Min Count"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/documents/top": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Top Documents",
+        "operationId": "top_documents_organizations__org_id__insights_documents_top_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/documents/worst": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Worst Documents",
+        "operationId": "worst_documents_organizations__org_id__insights_documents_worst_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/cost-per-user": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Cost Per User",
+        "operationId": "cost_per_user_organizations__org_id__insights_cost_per_user_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/insights/cost-per-answer": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Cost Per Answer",
+        "operationId": "cost_per_answer_organizations__org_id__insights_cost_per_answer_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/feedback/analysis": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Feedback Analysis",
+        "operationId": "feedback_analysis_organizations__org_id__feedback_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/feedback/to-evaluation": {
+      "post": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Feedback To Evaluation",
+        "operationId": "feedback_to_evaluation_organizations__org_id__feedback_to_evaluation_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackToEvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/coupons": {
+      "get": {
+        "tags": [
+          "coupons"
+        ],
+        "summary": "List Coupons",
+        "operationId": "list_coupons_admin_coupons_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CouponResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Coupons Admin Coupons Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "coupons"
+        ],
+        "summary": "Create Coupon",
+        "operationId": "create_coupon_admin_coupons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/coupons/{coupon_id}": {
+      "patch": {
+        "tags": [
+          "coupons"
+        ],
+        "summary": "Update Coupon",
+        "operationId": "update_coupon_admin_coupons__coupon_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "coupon_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Coupon Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/billing/coupons/redeem": {
+      "post": {
+        "tags": [
+          "coupons"
+        ],
+        "summary": "Redeem Coupon",
+        "operationId": "redeem_coupon_organizations__org_id__billing_coupons_redeem_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/scim/tokens": {
+      "post": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Create Scim Token",
+        "operationId": "create_scim_token_organizations__org_id__scim_tokens_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScimTokenCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "List Scim Tokens",
+        "operationId": "list_scim_tokens_organizations__org_id__scim_tokens_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/scim/tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Revoke Scim Token",
+        "operationId": "revoke_scim_token_organizations__org_id__scim_tokens__token_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/ServiceProviderConfig": {
+      "get": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Service Provider Config",
+        "operationId": "service_provider_config_scim_v2_ServiceProviderConfig_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Users": {
+      "get": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_scim_v2_Users_get",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter"
+            }
+          },
+          {
+            "name": "startIndex",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Startindex"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 0,
+              "default": 100,
+              "title": "Count"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Create User",
+        "operationId": "create_user_scim_v2_Users_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Users/{user_id}": {
+      "get": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Get User",
+        "operationId": "get_user_scim_v2_Users__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Patch User",
+        "operationId": "patch_user_scim_v2_Users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Replace User",
+        "operationId": "replace_user_scim_v2_Users__user_id__put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "scim"
+        ],
+        "summary": "Delete User",
+        "operationId": "delete_user_scim_v2_Users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -23145,7 +25281,7 @@
           "Widget"
         ],
         "summary": "Get Widget Iframe",
-        "description": "Item 3's own literal function (`render_iframe_html`) -- the\nreal HTML shell itself needs no config baked in server-side\n(chat.js fetches /widget/config client-side once loaded), so this\njust serves the real static template with the widget's own real\nsecurity headers layered on top.\n\nPhase 4, \u00c9tape 5 (Domain Allowlist Widget) -- `frame-ancestors` is\nnow real, per-organization: `config.allowed_domains` empty/`None`\n(every real, pre-existing organization's own real default) keeps\nthe real, EXACT, unchanged `*` this codebase already, deliberately\nused (api/main.py's own `_WIDGET_FRAMEABLE_PATH` docstring: \"the\nONE real, deliberate exception... that's the whole point of an\niframe-embed integration\"); a real, non-empty allowlist restricts\nembedding to those real, configured origins instead -- `'self'` is\nNOT added (an organization's own real frontend dashboard has no\nreal reason to iframe its own widget).",
+        "description": "Item 3's own literal function (`render_iframe_html`) -- the\nreal HTML shell itself needs no config baked in server-side\n(chat.js fetches /widget/config client-side once loaded), so this\njust serves the real static template with the widget's own real\nsecurity headers layered on top.\n\nPhase 4, Étape 5 (Domain Allowlist Widget) -- `frame-ancestors` is\nnow real, per-organization: `config.allowed_domains` empty/`None`\n(every real, pre-existing organization's own real default) keeps\nthe real, EXACT, unchanged `*` this codebase already, deliberately\nused (api/main.py's own `_WIDGET_FRAMEABLE_PATH` docstring: \"the\nONE real, deliberate exception... that's the whole point of an\niframe-embed integration\"); a real, non-empty allowlist restricts\nembedding to those real, configured origins instead -- `'self'` is\nNOT added (an organization's own real frontend dashboard has no\nreal reason to iframe its own widget).",
         "operationId": "get_widget_iframe_widget_iframe_get",
         "parameters": [
           {
@@ -28890,6 +31026,68 @@
         }
       }
     },
+    "/datasets/{dataset_id}/questions/assign-split": {
+      "post": {
+        "tags": [
+          "evaluation-datasets"
+        ],
+        "summary": "Assign Split Endpoint",
+        "operationId": "assign_split_endpoint_datasets__dataset_id__questions_assign_split_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitAssignRequest",
+                "default": {
+                  "held_out_ratio": 0.3,
+                  "seed": 42,
+                  "overwrite": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplitAssignResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/questions/{question_id}": {
       "patch": {
         "tags": [
@@ -30940,7 +33138,7 @@
           "manual-evaluations"
         ],
         "summary": "Update Manual Evaluation Endpoint",
-        "description": "Item 4's own literal \"Member+ si propri\u00e9taire\" -- the real\nownership check (`evaluator_id == current_user.id`) OR real Admin+\nlives here, one real layer above `require_manual_evaluation_access`'s\nown base real Member+ resolution (same real, deliberate split as\nevery other dependency in `api/security/evaluation.py`).",
+        "description": "Item 4's own literal \"Member+ si propriétaire\" -- the real\nownership check (`evaluator_id == current_user.id`) OR real Admin+\nlives here, one real layer above `require_manual_evaluation_access`'s\nown base real Member+ resolution (same real, deliberate split as\nevery other dependency in `api/security/evaluation.py`).",
         "operationId": "update_manual_evaluation_endpoint_evaluations__evaluation_id__patch",
         "security": [
           {
@@ -38419,7 +40617,7 @@
           "Billing"
         ],
         "summary": "Credit Pack Checkout Endpoint",
-        "description": "Hardening Mission (\u00a723) -- the REAL way to buy a credit pack when a payment provider is configured: returns a\nhosted checkout URL; the credits are granted by the provider's webhook once the payment is confirmed.",
+        "description": "Hardening Mission (§23) -- the REAL way to buy a credit pack when a payment provider is configured: returns a\nhosted checkout URL; the credits are granted by the provider's webhook once the payment is confirmed.",
         "operationId": "credit_pack_checkout_endpoint_organizations__org_id__billing_credits_checkout_post",
         "security": [
           {
@@ -42324,7 +44522,7 @@
           "Notifications"
         ],
         "summary": "Stream Notifications Endpoint",
-        "description": "Real-time delivery via Server-Sent Events -- a real browser\nEventSource reconnects automatically on drop, same real behavior\napi/routers/documents.py's own SSE route already relies on.\n\nPhase 5, \u00c9tape 4bis -- sends a real initial snapshot of unread\nnotifications before streaming new ones, so a reconnecting client\nnever misses what happened while offline.",
+        "description": "Real-time delivery via Server-Sent Events -- a real browser\nEventSource reconnects automatically on drop, same real behavior\napi/routers/documents.py's own SSE route already relies on.\n\nPhase 5, Étape 4bis -- sends a real initial snapshot of unread\nnotifications before streaming new ones, so a reconnecting client\nnever misses what happened while offline.",
         "operationId": "stream_notifications_endpoint_notifications_stream_get",
         "responses": {
           "200": {
@@ -56448,6 +58646,211 @@
         ],
         "title": "ConversationTitleUpdateRequest"
       },
+      "CouponCreateRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 4,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Code"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "bonus_credits",
+              "percent_off"
+            ],
+            "title": "Kind"
+          },
+          "bonus_credits": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus Credits"
+          },
+          "percent_off": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent Off"
+          },
+          "max_redemptions": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Redemptions"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "kind"
+        ],
+        "title": "CouponCreateRequest"
+      },
+      "CouponResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "bonus_credits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus Credits"
+          },
+          "percent_off": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent Off"
+          },
+          "max_redemptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Redemptions"
+          },
+          "redeemed_count": {
+            "type": "integer",
+            "title": "Redeemed Count"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "kind",
+          "bonus_credits",
+          "percent_off",
+          "max_redemptions",
+          "redeemed_count",
+          "expires_at",
+          "active",
+          "created_at"
+        ],
+        "title": "CouponResponse"
+      },
+      "CouponUpdateRequest": {
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "max_redemptions": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Redemptions"
+          }
+        },
+        "type": "object",
+        "title": "CouponUpdateRequest"
+      },
       "CreateDashboardRequest": {
         "properties": {
           "name": {
@@ -58440,7 +60843,7 @@
           "created_at"
         ],
         "title": "DocumentImageResponse",
-        "description": "Partie 3.1.5 -- real image metadata, never the raw bytes\nthemselves (those stay private in S3, same \"never expose file_key\"\nreasoning as `DocumentResponse` itself) -- a real, deliberate,\nsmall addition beyond this \u00e9tape's own literal action list (which\nnamed the extraction functions/model but never a read route; see\napi/security/documents.py's own process_document docstring on\nPartie 3.1.5 for why storing images with no way to read them back\nwould be a real, inert feature)."
+        "description": "Partie 3.1.5 -- real image metadata, never the raw bytes\nthemselves (those stay private in S3, same \"never expose file_key\"\nreasoning as `DocumentResponse` itself) -- a real, deliberate,\nsmall addition beyond this étape's own literal action list (which\nnamed the extraction functions/model but never a read route; see\napi/security/documents.py's own process_document docstring on\nPartie 3.1.5 for why storing images with no way to read them back\nwould be a real, inert feature)."
       },
       "DocumentListResponse": {
         "properties": {
@@ -59724,6 +62127,319 @@
         ],
         "title": "EnterpriseSSOConnectionListResponse"
       },
+      "EscalationAssignRequest": {
+        "properties": {
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Assignee Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignee_id"
+        ],
+        "title": "EscalationAssignRequest"
+      },
+      "EscalationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EscalationResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "EscalationListResponse"
+      },
+      "EscalationNoteCreateRequest": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "EscalationNoteCreateRequest"
+      },
+      "EscalationNoteResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "escalation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Escalation Id"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "escalation_id",
+          "author_id",
+          "body",
+          "created_at"
+        ],
+        "title": "EscalationNoteResponse"
+      },
+      "EscalationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "agent_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Run Id"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "issue": {
+            "type": "string",
+            "title": "Issue"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "sla_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Due At"
+          },
+          "sla_breached": {
+            "type": "boolean",
+            "title": "Sla Breached",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "agent_run_id",
+          "organization_id",
+          "issue",
+          "context",
+          "priority",
+          "status",
+          "resolution",
+          "assignee_id",
+          "created_at",
+          "resolved_at",
+          "sla_due_at"
+        ],
+        "title": "EscalationResponse"
+      },
+      "EscalationStatsResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "by_priority": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Priority"
+          },
+          "sla_breached": {
+            "type": "integer",
+            "title": "Sla Breached"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "by_status",
+          "by_priority",
+          "sla_breached"
+        ],
+        "title": "EscalationStatsResponse"
+      },
+      "EscalationUpdateRequest": {
+        "properties": {
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "assigned",
+                  "resolved",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          }
+        },
+        "type": "object",
+        "title": "EscalationUpdateRequest"
+      },
       "EvaluationFailureCategoriesResponse": {
         "properties": {
           "retrieval": {
@@ -59852,6 +62568,21 @@
               }
             ],
             "title": "Model Config Override"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "tuning",
+                  "held_out"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
           }
         },
         "type": "object",
@@ -59928,6 +62659,17 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Model Config"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
           },
           "status": {
             "type": "string",
@@ -60531,6 +63273,18 @@
               }
             ],
             "title": "Comment"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction"
           }
         },
         "type": "object",
@@ -60581,6 +63335,17 @@
               }
             ],
             "title": "Comment"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction"
           },
           "created_at": {
             "type": "string",
@@ -60635,6 +63400,25 @@
         ],
         "title": "FeedbackStatsResponse"
       },
+      "FeedbackToEvaluationRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Dataset Id"
+          },
+          "only_with_correction": {
+            "type": "boolean",
+            "title": "Only With Correction",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id"
+        ],
+        "title": "FeedbackToEvaluationRequest"
+      },
       "FeedbackUpdateRequest": {
         "properties": {
           "rating": {
@@ -60670,6 +63454,18 @@
               }
             ],
             "title": "Comment"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction"
           }
         },
         "type": "object",
@@ -61242,7 +64038,7 @@
           "created_at"
         ],
         "title": "FlightRecordingDetailResponse",
-        "description": "Hardening Mission, Phase 7 -- the real, reproducible, stage-by-\nstage trace `GET /responses/{response_id}/flight-recording` exposes\n-- the real, concrete answer to \"pourquoi cette r\u00e9ponse a-t-elle \u00e9t\u00e9\ng\u00e9n\u00e9r\u00e9e ?\" the mission's own Flight Recorder requirement asks for,\nreachable through the SAME real `require_response_member` boundary\nas every other response-scoped read in this router."
+        "description": "Hardening Mission, Phase 7 -- the real, reproducible, stage-by-\nstage trace `GET /responses/{response_id}/flight-recording` exposes\n-- the real, concrete answer to \"pourquoi cette réponse a-t-elle été\ngénérée ?\" the mission's own Flight Recorder requirement asks for,\nreachable through the SAME real `require_response_member` boundary\nas every other response-scoped read in this router."
       },
       "FollowUpQuestionGenerateRequest": {
         "properties": {
@@ -66008,6 +68804,43 @@
             "type": "boolean",
             "title": "Prompt Injection Detection Enabled"
           },
+          "toxicity_filter_enabled": {
+            "type": "boolean",
+            "title": "Toxicity Filter Enabled",
+            "default": false
+          },
+          "output_guard_enabled": {
+            "type": "boolean",
+            "title": "Output Guard Enabled",
+            "default": false
+          },
+          "output_guard_mask_pii": {
+            "type": "boolean",
+            "title": "Output Guard Mask Pii",
+            "default": true
+          },
+          "conversation_retention_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Retention Days"
+          },
+          "voice_minutes_per_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Minutes Per Month"
+          },
           "adaptive_routing_enabled": {
             "type": "boolean",
             "title": "Adaptive Routing Enabled"
@@ -66113,6 +68946,28 @@
           "query_rewriting_enabled": {
             "type": "boolean",
             "title": "Query Rewriting Enabled"
+          },
+          "query_expansion_enabled": {
+            "type": "boolean",
+            "title": "Query Expansion Enabled",
+            "default": false
+          },
+          "query_synonyms": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Synonyms"
           },
           "multi_query_enabled": {
             "type": "boolean",
@@ -66314,6 +69169,67 @@
               }
             ],
             "title": "Prompt Injection Detection Enabled"
+          },
+          "toxicity_filter_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toxicity Filter Enabled"
+          },
+          "output_guard_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Guard Enabled"
+          },
+          "output_guard_mask_pii": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Guard Mask Pii"
+          },
+          "voice_minutes_per_month": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Minutes Per Month",
+            "description": "Monthly voice minutes allowed (calls and voice messages)"
+          },
+          "conversation_retention_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3650.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Retention Days",
+            "description": "Delete conversations after this many days without activity"
           },
           "adaptive_routing_enabled": {
             "anyOf": [
@@ -66619,6 +69535,35 @@
               }
             ],
             "title": "Query Rewriting Enabled"
+          },
+          "query_expansion_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Expansion Enabled"
+          },
+          "query_synonyms": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Synonyms",
+            "description": "term -> synonyms; at most 200 terms, 20 synonyms each, 64 characters each"
           },
           "multi_query_enabled": {
             "anyOf": [
@@ -67621,6 +70566,18 @@
               }
             ],
             "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
           }
         },
         "type": "object",
@@ -68342,6 +71299,21 @@
               }
             ],
             "title": "Category"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "tuning",
+                  "held_out"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
           }
         },
         "type": "object",
@@ -68497,6 +71469,17 @@
               }
             ],
             "title": "Expected Answer Metadata"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
           },
           "created_at": {
             "type": "string",
@@ -68731,6 +71714,21 @@
               }
             ],
             "title": "Category"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "tuning",
+                  "held_out"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
           }
         },
         "type": "object",
@@ -68937,6 +71935,61 @@
           "review_count"
         ],
         "title": "RatingSummaryResponse"
+      },
+      "RedeemRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "RedeemRequest"
+      },
+      "RedeemResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "bonus_credits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus Credits"
+          },
+          "percent_off": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent Off"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "RedeemResponse"
       },
       "RegenerateRequest": {
         "properties": {
@@ -70813,6 +73866,21 @@
         ],
         "title": "ScheduleRotationRequest"
       },
+      "ScimTokenCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ScimTokenCreate"
+      },
       "ScopesUpdateRequest": {
         "properties": {
           "scopes": {
@@ -71842,6 +74910,48 @@
         ],
         "title": "SmsStatus"
       },
+      "SplitAssignRequest": {
+        "properties": {
+          "held_out_ratio": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Held Out Ratio",
+            "default": 0.3
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SplitAssignRequest",
+        "description": "Partie 7.1.7 -- randomly but reproducibly mark a share of the dataset's questions as held out."
+      },
+      "SplitAssignResponse": {
+        "properties": {
+          "tuning": {
+            "type": "integer",
+            "title": "Tuning"
+          },
+          "held_out": {
+            "type": "integer",
+            "title": "Held Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tuning",
+          "held_out"
+        ],
+        "title": "SplitAssignResponse"
+      },
       "StripeInvoiceResponse": {
         "properties": {
           "id": {
@@ -72182,6 +75292,19 @@
           "celery": {
             "type": "string",
             "title": "Celery"
+          },
+          "vector_store": {
+            "type": "string",
+            "title": "Vector Store",
+            "default": "unknown"
+          },
+          "llm_providers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Llm Providers",
+            "default": {}
           },
           "checked_at": {
             "type": "string",
@@ -73925,6 +77048,17 @@
               }
             ],
             "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
           },
           "avatar_url": {
             "anyOf": [
@@ -77890,7 +81024,7 @@
           "end_date"
         ],
         "title": "UsageResponse",
-        "description": "GET /organizations/{org_id}/usage. Shape depends on whether the\n`metric` query parameter was supplied:\n\n- `metric` given: `metric`/`total` are populated, `total_by_metric`/\n  `by_day` are None -- a single-metric aggregate (get_usage).\n- `metric` omitted: `total_by_metric`/`by_day` are populated,\n  `metric`/`total` are None -- the full r\u00e9sum\u00e9 (get_usage_summary)."
+        "description": "GET /organizations/{org_id}/usage. Shape depends on whether the\n`metric` query parameter was supplied:\n\n- `metric` given: `metric`/`total` are populated, `total_by_metric`/\n  `by_day` are None -- a single-metric aggregate (get_usage).\n- `metric` omitted: `total_by_metric`/`by_day` are populated,\n  `metric`/`total` are None -- the full résumé (get_usage_summary)."
       }
     },
     "securitySchemes": {

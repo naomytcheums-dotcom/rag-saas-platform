@@ -128,6 +128,19 @@ async def add_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int,
     return credit
 
 
+async def grant_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, source: str, user_id: uuid.UUID | None = None) -> Credit:
+    """Free credits (promo code, goodwill): same locked balance update as `add_credits`, but recorded as a `grant`, not as a purchase."""
+    _check_amount(amount)
+    credit = await _locked_credit(db, organization_id)
+    credit.balance += amount
+    db.add(CreditTransaction(
+        organization_id=organization_id, type=CreditTransactionType.grant, amount=amount,
+        balance_after=credit.balance, reason=source, user_id=user_id,
+    ))
+    await db.flush()
+    return credit
+
+
 async def deduct_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, resource_type: str, user_id: uuid.UUID | None = None) -> Credit:
     _check_amount(amount)
     # Refresh the row under a database lock so concurrent debits cannot

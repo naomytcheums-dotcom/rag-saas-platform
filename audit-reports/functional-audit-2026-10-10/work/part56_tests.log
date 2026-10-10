@@ -1,0 +1,75 @@
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 19%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 38%]
+........................................................................ [ 44%]
+........................................................................ [ 50%]
+........................................................................ [ 57%]
+.....................................................sssssssss.......... [ 63%]
+........................................................................ [ 69%]
+........................................................................ [ 76%]
+........................................................................ [ 82%]
+........................................................................ [ 89%]
+........................................................................ [ 95%]
+....................................................                     [100%]Running teardown with pytest sessionfinish...
+
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows[1=1 OR name IS NOT NULL] was skipped. 
+Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows[(1=1) OR (1=1)] was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows[NOT (name = 'nothing')] was skipped. 
+Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_adversarial_where_clauses_neve
+r_return_the_other_organizations_rows was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 179, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_unfiltered_query_and_count_are
+_scoped_to_the_organization was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 188, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_exploit_is_rejected_by_the_val
+idator was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 195, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+Test 
+tests/test_p0_sql_tool_tenant_bypass.py::test_pg_even_with_the_validator_bypass
+ed_the_exploit_cannot_widen_the_tenant_filter was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_p0_sql_tool_te
+nant_bypass.py', 202, 'Skipped: P0_PG_TEST_URL not set -- PostgreSQL proof 
+skipped')
+1123 passed, 9 skipped in 780.32s (0:13:00)
+exit:0

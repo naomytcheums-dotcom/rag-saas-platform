@@ -1,0 +1,515 @@
+﻿id,fonctionnalité,description (texte original),statut déclaré (CAHIER_DES_CHARGES.md),nb fichiers code citant l id,nb tests citant l id,exemples de preuve
+1.1.1,Inscription (email + mot de passe),Création de compte avec email et mot de passe sécurisé,FAIT (déclaré),3,2,api/models/user.py ; api/routers/auth.py
+1.1.2,Connexion / Déconnexion,Session utilisateur avec JWT,FAIT (déclaré),1,1,api/routers/auth.py ; tests/test_auth_api.py
+1.1.3,Mot de passe oublié / Réinitialisation,Envoi d'email de réinitialisation,FAIT (déclaré),3,1,api/models/token.py ; api/routers/password.py
+1.1.4,Vérification email,Envoi d'un code OTP pour valider l'email,FAIT (déclaré),6,2,api/models/token.py ; api/models/user.py
+1.1.5,OAuth Google,Connexion avec compte Google,FAIT (déclaré),3,1,api/models/oauth.py ; api/models/user.py
+1.1.6,OAuth GitHub,Connexion avec compte GitHub,FAIT (déclaré),3,1,api/models/oauth.py ; api/models/user.py
+1.1.7,2FA (Authentification à deux facteurs),Code TOTP pour renforcer la sécurité,FAIT (déclaré),8,1,api/models/lockout_recovery_token.py ; api/models/recovery_code.py
+1.1.8,Sessions sécurisées,Gestion des tokens JWT avec refresh,FAIT (déclaré),5,1,api/models/session.py ; api/models/user.py
+1.1.9,Gestion des appareils / sessions actives,Visualiser et révoquer les sessions,FAIT (déclaré),5,2,api/models/session.py ; api/models/user.py
+1.1.10,Suppression du compte,Supprimer définitivement compte et données,FAIT (déclaré),5,2,api/models/restore_token.py ; api/models/user.py
+1.1.11,Export des données utilisateur (RGPD),Exporter toutes les données en JSON,FAIT (déclaré),1,1,api/routers/account.py ; tests/test_auth_api.py
+1.1.12,Consentement RGPD,Demander et enregistrer le consentement,FAIT (déclaré),6,1,api/dependencies.py ; api/models/consent_reactivation_token.py
+1.1.13,"Gestion du profil (avatar, nom, entreprise, rôle)",Modifier ses informations personnelles,FAIT (déclaré),4,3,api/models/user.py ; api/routers/account.py
+1.1.14,"Préférences utilisateur (langue, fuseau horaire)",Personnaliser l'interface utilisateur,FAIT (déclaré),3,0,api/models/user.py ; api/routers/account.py
+1.2.1,Super Admin,Accès total à toute la plateforme,FAIT (déclaré),3,1,api/dependencies.py ; api/routers/admin_users.py
+1.2.2,Organization Owner,Propriétaire d'une organisation,FAIT (déclaré),14,5,api/alembic/versions/0014_organizations.py ; api/models/organization.py
+1.2.3,Admin,"Gestion des utilisateurs, paramètres",FAIT (déclaré),8,2,api/models/invitation.py ; api/routers/invitations.py
+1.2.4,Manager,"Gestion des projets, équipes",FAIT (déclaré),12,5,api/alembic/versions/0015_workspaces.py ; api/models/invitation.py
+1.2.5,Member,Utilisateur standard,FAIT (déclaré),3,2,api/security/organizations.py ; api/security/rbac.py
+1.2.6,Viewer,Lecture seule,FAIT (déclaré),6,1,api/models/organization.py ; api/models/resource_permission.py
+1.2.7,RBAC complet,Contrôle d'accès basé sur les rôles,PARTIEL (déclaré),4,1,api/alembic/versions/0016_casbin_rules.py ; api/main.py
+1.2.8,Permissions granulaires par ressource,Droit de lire/modifier/supprimer chaque ressource,PARTIEL (déclaré),7,2,api/alembic/versions/0017_resource_permissions.py ; api/models/resource_permission.py
+1.3.1,Organizations,Groupe d'utilisateurs partageant des ressources,FAIT (déclaré),0,0,
+1.3.2,Workspaces,Espaces de travail au sein d'une organisation,PARTIEL (déclaré),2,0,api/models/agent.py ; api/models/workspace.py
+1.3.3,Teams,Sous-groupes d'utilisateurs dans un workspace,FAIT (déclaré),6,2,api/alembic/versions/0018_teams.py ; api/models/team.py
+1.3.4,Invitations (email + lien),Inviter des utilisateurs par email,FAIT (déclaré),11,3,api/alembic/versions/0020_invitations.py ; api/config.py
+1.3.5,Isolation des données,Chaque organisation a ses propres documents et conversations,PARTIEL (déclaré),1,1,api/alembic/versions/0098_rls_coverage_gap.py ; tests/test_postgres_integration.py
+1.3.6,Quotas par organisation,"Limites de documents, utilisateurs, requêtes",FAIT (déclaré),17,2,api/alembic/versions/0021_organization_quotas.py ; api/config.py
+1.3.7,Limites par utilisateur,Nombre de requêtes par utilisateur,FAIT (déclaré),10,2,api/alembic/versions/0022_organization_member_limits.py ; api/models/organization.py
+1.3.8,Usage par organisation,Dashboard des statistiques par organisation,FAIT (déclaré),15,2,api/alembic/versions/0023_organization_usage.py ; api/models/billing.py
+1.3.9,Configuration par organisation,Paramètres spécifiques à chaque organisation,FAIT (déclaré),16,2,api/alembic/versions/0024_organization_settings.py ; api/models/analytics.py
+1.3.10,Branding par organisation,"Logo, couleurs, nom personnalisables",FAIT (déclaré),14,5,api/alembic/versions/0025_organization_branding.py ; api/alembic/versions/0101_whitelabel_extended_branding.py
+1.4.1,Custom domains (app.client.com),Chaque client peut utiliser son propre domaine,FAIT (déclaré),15,4,api/alembic/versions/0026_custom_domains.py ; api/config.py
+1.4.2,DNS instructions,Instructions pour configurer le DNS,FAIT (déclaré),4,1,api/schemas/custom_domains.py ; api/security/custom_domains.py
+1.4.3,SSL automatique (Let's Encrypt),Certificat SSL automatique,FAIT (déclaré),12,4,api/alembic/versions/0027_ssl_certificates.py ; api/config.py
+1.4.4,Domain verification,Vérifier la propriété du domaine,FAIT (déclaré),10,3,api/alembic/versions/0028_domain_verification_attempts.py ; api/config.py
+1.4.5,Custom email domain,Utiliser le domaine pour les emails,FAIT (déclaré),12,3,api/alembic/versions/0029_email_domain_verification.py ; api/config.py
+1.4.6,White-label complet,Supprimer toute mention de ta marque,FAIT (déclaré),6,1,api/alembic/versions/0030_hide_platform_branding.py ; api/models/organization_branding.py
+1.4.7,"Brand name, logo, favicon personnalisables",Modifier l'identité visuelle,FAIT (déclaré),0,0,
+1.4.8,"Couleurs, polices, thème personnalisables",Adapter l'apparence,PARTIEL (déclaré),0,0,
+1.4.9,Email sender personnalisable,Modifier l'adresse d'envoi des emails,PARTIEL (déclaré),0,0,
+1.4.10,Welcome message / AI personality / System prompt,Personnaliser le comportement de l'IA,FAIT (déclaré),0,0,
+2.1.1,PDF,"Extraire texte, tableaux, images",FAIT (déclaré),27,7,api/alembic/versions/0031_documents.py ; api/config.py
+2.1.2,DOCX,"Extraire texte, tableaux, styles",FAIT (déclaré),11,5,api/config.py ; api/models/document.py
+2.1.3,TXT,Texte brut,FAIT (déclaré),4,4,api/security/documents.py ; api/services/document_extraction.py
+2.1.4,Markdown,"Titres, sections, code",FAIT (déclaré),9,5,api/security/documents.py ; api/services/document_extraction.py
+2.1.5,HTML,Extraire texte structuré,FAIT (déclaré),9,4,api/security/documents.py ; api/services/confluence_extraction.py
+2.1.6,CSV,Extraire données tabulaires,FAIT (déclaré),6,4,api/config.py ; api/security/documents.py
+2.1.7,JSON,Extraire structures imbriquées,FAIT (déclaré),5,5,api/security/documents.py ; api/services/document_extraction.py
+2.1.8,XML,Extraire données structurées,FAIT (déclaré),5,4,api/security/documents.py ; api/services/document_extraction.py
+2.1.9,EPUB,Extraire livre numérique,FAIT (déclaré),6,4,api/config.py ; api/routers/documents.py
+2.1.10,URLs / pages web,Extraire contenu d'une page web,FAIT (déclaré),22,10,api/alembic/versions/0033_document_source_url.py ; api/config.py
+2.1.11,Sitemap,Extraire plusieurs pages d'un site,FAIT (déclaré),11,6,api/config.py ; api/routers/documents.py
+2.1.12,GitHub repositories,Indexer le code et README d'un repo,FAIT (déclaré),14,9,api/config.py ; api/models/external_source.py
+2.1.13,GitHub issues,Indexer les issues d'un projet,FAIT (déclaré),7,8,api/routers/documents.py ; api/schemas/documents.py
+2.1.14,Google Drive,Importer des fichiers depuis Google Drive,FAIT (déclaré),12,10,api/config.py ; api/routers/documents.py
+2.1.15,Google Docs,Importer des documents Google Docs,FAIT (déclaré),8,5,api/config.py ; api/routers/documents.py
+2.1.16,Notion,Importer des pages Notion,FAIT (déclaré),7,5,api/config.py ; api/routers/documents.py
+2.1.17,Confluence,Importer des pages Confluence,PARTIEL (déclaré),8,6,api/config.py ; api/routers/documents.py
+2.1.18,OneDrive,Importer depuis OneDrive,FAIT (déclaré),9,8,api/config.py ; api/models/external_source.py
+2.1.19,Fichiers ZIP,Importer plusieurs fichiers compressés,FAIT (déclaré),5,4,api/config.py ; api/security/documents.py
+2.2.1,Upload multiple,Importer plusieurs fichiers en une fois,FAIT (déclaré),7,3,api/config.py ; api/models/batch_job.py
+2.2.2,Drag & drop,Glisser-déposer pour importer,PARTIEL (déclaré),0,0,
+2.2.3,Progression d'import,Barre de progression et statut,PARTIEL (déclaré),4,3,api/models/document.py ; api/routers/documents.py
+2.2.4,File preview,Aperçu du document avant import,PARTIEL (déclaré),2,2,api/routers/documents.py ; api/services/document_storage.py
+2.2.5,Metadata extraction,"Extraire auteur, date, mots-clés",PARTIEL (déclaré),6,5,api/routers/documents.py ; api/schemas/documents.py
+2.2.6,Tags et catégories,Organiser les documents par tags,FAIT (déclaré),8,1,api/alembic/versions/0034_document_tags.py ; api/models/document.py
+2.2.7,Versioning,Conserver l'historique des versions,FAIT (déclaré),7,1,api/alembic/versions/0035_document_versions.py ; api/models/document.py
+2.2.8,Suppression / Remplacement,Supprimer ou remplacer un document,FAIT (déclaré),8,2,api/alembic/versions/0036_document_soft_delete.py ; api/models/document.py
+2.2.9,Réindexation manuelle,Reconstruire l'index vectoriel,FAIT (déclaré),9,4,api/models/reindex_schedule.py ; api/routers/batch_jobs.py
+2.2.10,Historique des modifications,Suivre toutes les modifications,FAIT (déclaré),11,1,api/alembic/versions/0038_document_audit_logs.py ; api/models/batch_job.py
+2.2.11,Statut d'indexation,"En cours, terminé, échec",PARTIEL (déclaré),6,3,api/alembic/versions/0039_document_indexing_status.py ; api/models/document.py
+2.2.12,Détection de doublons,Éviter l'indexation en double,FAIT (déclaré),7,3,api/alembic/versions/0040_document_content_hash.py ; api/models/document.py
+2.2.13,Détection de documents modifiés,Réindexer automatiquement les changements,FAIT (déclaré),11,4,api/alembic/versions/0041_document_modification_tracking.py ; api/models/document.py
+2.2.14,Synchronisation automatique,Synchroniser avec les sources externes,FAIT (déclaré),13,2,api/alembic/versions/0042_external_sources.py ; api/models/document.py
+2.2.15,Auto-reindexation programmée,Planifier des réindexations automatiques,FAIT (déclaré),9,1,api/alembic/versions/0043_reindex_schedules.py ; api/models/document.py
+2.2.16,Batch Processing,Traiter plusieurs documents par lots,FAIT (déclaré),9,1,api/alembic/versions/0044_batch_jobs.py ; api/models/batch_job.py
+3.1.1,Nettoyage du texte,Supprimer les caractères spéciaux inutiles,FAIT (déclaré),4,2,api/security/documents.py ; api/services/structure_detection.py
+3.1.2,"Normalisation (unicode, casse)",Standardiser le texte,FAIT (déclaré),5,2,api/security/documents.py ; api/services/metadata_enrichment.py
+3.1.3,Extraction du texte,Extraire le texte des documents,FAIT (déclaré),2,2,api/services/document_extraction.py ; api/services/docx_extraction.py
+3.1.4,Extraction des tableaux,Convertir les tableaux en texte structuré,FAIT (déclaré),6,3,api/models/metadata_enrichment.py ; api/security/documents.py
+3.1.5,Extraction des images,Extraire les légendes et descriptions,FAIT (déclaré),8,4,api/alembic/versions/0045_document_images.py ; api/models/document_image.py
+3.1.6,OCR optionnel,Reconnaissance de caractères dans les images scannées,FAIT (déclaré),5,2,api/config.py ; api/security/documents.py
+3.1.7,Détection de langue,Identifier la langue du document,FAIT (déclaré),6,2,api/config.py ; api/security/documents.py
+3.1.8,Détection de structure documentaire,"Identifier titres, sections, paragraphes",FAIT (déclaré),4,2,api/models/metadata_enrichment.py ; api/security/documents.py
+3.1.9,Extraction des titres et sections,Structurer le document,FAIT (déclaré),3,1,api/services/headings_extraction.py ; api/services/markdown_chunking.py
+3.1.10,Metadata extraction,"Extraire auteur, date, mots-clés",FAIT (déclaré),8,3,api/alembic/versions/0046_document_keywords_entities.py ; api/models/metadata_enrichment.py
+3.2.1,Fixed-size,Découpage en blocs de taille fixe,FAIT (déclaré),7,0,api/config.py ; api/security/organization_settings.py
+3.2.2,Recursive,Découpage récursif pour respecter la taille,FAIT (déclaré),10,4,api/config.py ; api/security/organization_settings.py
+3.2.3,Semantic chunking,Découpage basé sur le sens,FAIT (déclaré),6,2,api/services/chunking.py ; api/services/duplicate_removal.py
+3.2.4,Markdown-aware,Découpage respectant la structure Markdown,FAIT (déclaré),3,1,api/services/chunking.py ; api/services/docx_extraction.py
+3.2.5,Code-aware,Découpage respectant la structure du code,FAIT (déclaré),3,1,api/config.py ; api/services/chunking.py
+3.2.6,Sentence-based,Découpage par phrases,FAIT (déclaré),5,1,api/config.py ; api/services/context_compression.py
+3.2.7,Paragraph-based,Découpage par paragraphes,FAIT (déclaré),4,2,api/services/chunk_config.py ; api/services/paragraph_chunking.py
+3.2.8,Parent-child chunks,Blocs parents/enfants pour hiérarchie,FAIT (déclaré),6,2,api/config.py ; api/security/documents.py
+3.3.1,Chunk size,Taille des blocs (configurable par organisation),FAIT (déclaré),7,1,api/config.py ; api/schemas/organization_settings.py
+3.3.2,Overlap,Chevauchement entre blocs,FAIT (déclaré),4,1,api/config.py ; api/security/organization_settings.py
+3.3.3,Embedding model,Choix du modèle d'embedding,FAIT (déclaré),5,1,api/security/organization_settings.py ; api/services/embedding_config.py
+3.3.4,Retrieval strategy,"Stratégie de recherche (hybride, vectoriel, BM25)",FAIT (déclaré),12,3,api/alembic/versions/0047_document_chunks_organization_id.py ; api/config.py
+3.3.5,Reranker,Choix du reranker (cross-encoder),FAIT (déclaré),2,2,api/services/retrieval_config.py ; api/services/retrieval_pipeline.py
+3.3.6,Top K,Nombre de documents à récupérer,FAIT (déclaré),6,3,api/config.py ; api/routers/search.py
+3.3.7,Score threshold,Seuil de score minimum,FAIT (déclaré),7,3,api/schemas/organization_settings.py ; api/schemas/search.py
+3.4.1,BM25,Recherche par mots-clés,FAIT (déclaré),0,0,
+3.4.2,Vector Search,Recherche sémantique par embeddings,FAIT (déclaré),5,1,api/config.py ; api/services/agent_orchestrator.py
+3.4.3,RRF,Fusion des résultats par Reciprocal Rank Fusion,FAIT (déclaré),5,1,api/config.py ; api/services/agent_orchestrator.py
+3.4.4,Cross-encoder reranking,Reclassement des résultats avec cross-encoder,FAIT (déclaré),4,1,api/config.py ; api/services/agent_orchestrator.py
+3.4.5,Query expansion,Étendre la requête avec des synonymes,FAIT (déclaré),3,0,api/config.py ; api/services/metadata_filtering.py
+3.4.6,Query rewriting,Réécrire la requête pour améliorer la pertinence,FAIT (déclaré),6,1,api/config.py ; api/services/context_compression.py
+3.4.7,HyDE,Générer un document hypothétique pour la recherche,NON LISTÉ dans le document de suivi,5,2,api/schemas/organization_settings.py ; api/security/organization_settings.py
+3.4.8,Multi-query retrieval,Lancer plusieurs requêtes en parallèle,NON LISTÉ dans le document de suivi,0,0,
+3.4.9,Metadata filtering,"Filtrer par métadonnées (auteur, date, tags)",NON LISTÉ dans le document de suivi,0,0,
+3.4.10,Semantic filtering,Filtrer par similarité sémantique,FAIT (déclaré),2,1,api/config.py ; api/services/context_compression.py
+3.4.11,RRF configurable,Ajuster les poids des sources,FAIT (déclaré),4,1,api/config.py ; api/services/duplicate_removal.py
+3.4.12,Reranker configurable,Choisir le reranker,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/services/mmr.py
+3.4.13,Top-K configurable,Ajuster le nombre de résultats,NON LISTÉ dans le document de suivi,0,0,
+3.4.14,Context compression,Compresser le contexte pour réduire les tokens,NON LISTÉ dans le document de suivi,0,0,
+3.4.15,Duplicate removal,Supprimer les résultats en double,NON LISTÉ dans le document de suivi,0,0,
+3.4.16,Diversity filtering,Garantir la diversité des résultats,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/services/mmr.py
+4.1.1,Anthropic Claude,Modèle Claude (actuel),FAIT (déclaré),3,1,api/config.py ; api/schemas/organization_settings.py
+4.1.2,OpenAI GPT,"Modèles GPT-4, GPT-3.5",FAIT (déclaré),1,0,api/services/llm_providers.py
+4.1.3,Google Gemini,"Modèles Gemini Pro, Flash",FAIT (déclaré),1,0,api/services/llm_providers.py
+4.1.4,Mistral,"Modèles Mistral Large, Small",FAIT (déclaré),1,0,api/services/llm_providers.py
+4.1.5,Ollama (local),"Modèles locaux (Llama, Mistral, Phi)",FAIT (déclaré),1,1,api/services/llm_providers.py ; tests/test_llm_providers.py
+4.1.6,OpenAI-compatible APIs,Toute API compatible OpenAI,FAIT (déclaré),2,0,api/schemas/organization_settings.py ; api/services/llm_providers.py
+4.1.7,Abstraction LLM,Adapter pattern pour changer facilement de fournisseur,FAIT (déclaré),15,1,api/config.py ; api/services/agent_models.py
+4.2.1,OpenAI embeddings,Texte-embedding-ada-002,FAIT (déclaré),3,1,api/config.py ; api/services/embedding_config.py
+4.2.2,Voyage AI,Embeddings haute performance,FAIT (déclaré),1,0,api/services/embedding_providers.py
+4.2.3,Cohere,Embeddings multilingues,FAIT (déclaré),2,0,api/services/embedding_config.py ; api/services/embedding_providers.py
+4.2.4,Sentence Transformers,"Modèles locaux MiniLM, MPNet",FAIT (déclaré),2,0,api/security/documents.py ; api/services/embedding_providers.py
+4.2.5,Hugging Face models,Tout modèle de Hugging Face,FAIT (déclaré),1,0,api/services/embedding_providers.py
+4.2.6,Abstraction Embeddings,Adapter pattern,FAIT (déclaré),3,1,api/config.py ; api/services/embedding_config.py
+4.3.1,Choix du modèle par utilisateur/organisation,Chaque organisation choisit son LLM,FAIT (déclaré),7,1,api/config.py ; api/security/organization_settings.py
+4.3.2,Temperature,Contrôle la créativité des réponses,FAIT (déclaré),1,1,api/services/llm_config.py ; tests/test_llm_config.py
+4.3.3,Top P,Échantillonnage nucleus,FAIT (déclaré),3,2,api/schemas/organization_settings.py ; api/security/organization_settings.py
+4.3.4,System prompt personnalisable,Modifier le prompt système,FAIT (déclaré),2,1,api/services/agent_prompts.py ; api/services/llm_config.py
+4.3.5,Max tokens,Nombre maximum de tokens de réponse,FAIT (déclaré),7,2,api/config.py ; api/schemas/organization_settings.py
+5.1.1,Orchestrateur central,Coordonne l'exécution des outils,NON LISTÉ dans le document de suivi,14,1,api/alembic/versions/0048_agent_runs.py ; api/config.py
+5.1.2,Tool selection automatique,L'agent choisit les outils à utiliser,NON LISTÉ dans le document de suivi,11,3,api/config.py ; api/services/agent_orchestrator.py
+5.1.3,Tool permissions,Restrictions sur l'utilisation des outils,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0049_tool_permissions.py ; api/models/conversation.py
+5.1.4,Tool timeout,Temps maximum d'exécution d'un outil,NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0050_tool_timeout_and_budget.py ; api/config.py
+5.1.5,Per-tool budget (tokens),Limite de tokens par outil,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0050_tool_timeout_and_budget.py ; api/config.py
+5.1.6,Retry mechanism,Réessayer en cas d'échec,NON LISTÉ dans le document de suivi,4,2,api/config.py ; api/services/custom_tools.py
+5.1.7,Fallback,Outil alternatif en cas d'échec,NON LISTÉ dans le document de suivi,5,1,api/alembic/versions/0051_tool_and_llm_fallback.py ; api/config.py
+5.1.8,Parallel tool calls,Appels d'outils en parallèle,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/parallel_tools.py
+5.1.9,Tool result validation,Vérifier les résultats des outils,NON LISTÉ dans le document de suivi,5,2,api/config.py ; api/models/custom_tool.py
+5.1.10,Human approval,Approbation humaine pour les actions sensibles,NON LISTÉ dans le document de suivi,14,1,api/alembic/versions/0052_human_approvals.py ; api/config.py
+5.1.11,Agent memory (short-term),Mémoire de la conversation en cours,NON LISTÉ dans le document de suivi,8,3,api/alembic/versions/0053_agent_memory.py ; api/config.py
+5.1.12,Conversation memory,Historique des conversations,NON LISTÉ dans le document de suivi,10,2,api/alembic/versions/0054_conversations.py ; api/config.py
+5.1.13,Task planning,Planifier les étapes d'une tâche complexe,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0055_task_planning.py ; api/config.py
+5.1.14,Agent traces,Journalisation des décisions de l'agent,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0056_agent_traces.py ; api/config.py
+5.2.1,Search Knowledge Base,Recherche RAG,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/retrieval_pipeline.py
+5.2.2,Web Search,"Recherche en ligne (Tavily, Google)",NON LISTÉ dans le document de suivi,4,2,api/config.py ; api/services/agent_guardrails.py
+5.2.3,"GitHub (issues, repos)",Recherche dans GitHub,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/tools/github_tools.py
+5.2.4,Database (SQL),Exécution de requêtes SQL,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/workflow_block_database.py
+5.2.5,Calculator,Calculs arithmétiques,NON LISTÉ dans le document de suivi,1,1,api/tools/calculator.py ; tests/test_calculator_tool.py
+5.2.6,URL Reader,Lire le contenu d'une URL,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/tools/url_reader.py
+5.2.7,"Calendar (Google, Outlook)","Créer, lire, modifier des événements",NON LISTÉ dans le document de suivi,4,2,api/config.py ; api/services/workflow_block_calendar.py
+5.2.8,"Email (Gmail, Outlook, SMTP)","Envoyer, lire, résumer des emails",NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/services/workflow_block_email.py
+5.2.9,Human Escalation,Créer un ticket pour un humain,NON LISTÉ dans le document de suivi,4,1,api/alembic/versions/0057_escalations.py ; api/config.py
+5.2.10,Custom Tools,Ajouter des outils personnalisés,NON LISTÉ dans le document de suivi,6,1,api/alembic/versions/0064_custom_tools.py ; api/models/custom_tool.py
+5.3.1,Création d'agent personnalisé,Interface pour créer un agent,NON LISTÉ dans le document de suivi,16,1,api/alembic/versions/0058_agents.py ; api/models/agent.py
+5.3.2,Instructions personnalisées,Définir le comportement de l'agent,NON LISTÉ dans le document de suivi,7,1,api/models/agent.py ; api/routers/agents.py
+5.3.3,Choix du modèle LLM,Sélectionner le LLM pour l'agent,NON LISTÉ dans le document de suivi,4,2,api/models/agent.py ; api/routers/agents.py
+5.3.4,Sélection de la Knowledge Base,Choisir la base de connaissances,NON LISTÉ dans le document de suivi,7,1,api/models/agent.py ; api/routers/agents.py
+5.3.5,Sélection des outils,Activer/désactiver des outils,NON LISTÉ dans le document de suivi,4,1,api/models/agent.py ; api/routers/agents.py
+5.3.6,Configuration de la mémoire,"Taille de la mémoire, durée",NON LISTÉ dans le document de suivi,4,1,api/alembic/versions/0058_agents.py ; api/models/agent.py
+5.3.7,Permissions,Qui peut utiliser l'agent,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0059_agent_permissions.py ; api/models/agent.py
+5.3.8,Temperature,Ajuster la créativité,NON LISTÉ dans le document de suivi,0,0,
+5.3.9,Guardrails,Activer les garde-fous de sécurité,NON LISTÉ dans le document de suivi,9,3,api/alembic/versions/0060_agent_guardrails.py ; api/models/agent.py
+5.3.10,Déploiement,Déployer l'agent en production,NON LISTÉ dans le document de suivi,10,1,api/alembic/versions/0061_agent_api_keys.py ; api/models/agent_api_key.py
+5.4.1,Interface visuelle,Construire des workflows en no-code,NON LISTÉ dans le document de suivi,9,1,api/alembic/versions/0062_workflows.py ; api/models/custom_tool.py
+5.4.2,Bloc Trigger,"Déclencheur (webhook, planifié)",NON LISTÉ dans le document de suivi,6,1,api/models/workflow_human_input.py ; api/models/workflow_run.py
+5.4.3,Bloc LLM,Appel à un LLM,NON LISTÉ dans le document de suivi,10,2,api/models/workflow.py ; api/models/workflow_human_input.py
+5.4.4,Bloc RAG,Recherche RAG,NON LISTÉ dans le document de suivi,2,1,api/services/workflow_block_database.py ; api/services/workflow_block_rag.py
+5.4.5,Bloc Search,Recherche web ou interne,NON LISTÉ dans le document de suivi,2,1,api/services/workflow_block_search.py ; api/tools/web_search.py
+5.4.6,Bloc HTTP,Appel API HTTP,NON LISTÉ dans le document de suivi,3,1,api/services/custom_tools.py ; api/services/url_fetching.py
+5.4.7,Bloc Condition,Condition if/else,NON LISTÉ dans le document de suivi,3,1,api/services/workflow_block_code.py ; api/services/workflow_block_condition.py
+5.4.8,Bloc Code,Exécution de code Python/JS,NON LISTÉ dans le document de suivi,3,1,api/models/workflow_human_input.py ; api/services/workflow_block_code.py
+5.4.9,Bloc Human,Escalade humaine,NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0063_workflow_human_inputs.py ; api/models/workflow_human_input.py
+5.4.10,Bloc Email,Envoi d'email,NON LISTÉ dans le document de suivi,3,2,api/services/template_rendering.py ; api/services/workflow_block_calendar.py
+5.4.11,Bloc Calendar,Gestion de calendrier,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0062_workflows.py ; api/models/workflow.py
+5.4.12,Bloc Database,Requête SQL,NON LISTÉ dans le document de suivi,1,1,api/services/workflow_block_database.py ; tests/test_workflow_block_database.py
+5.4.13,Versioning des workflows,Historique des modifications,NON LISTÉ dans le document de suivi,5,1,api/alembic/versions/0065_workflow_versions.py ; api/models/workflow_version.py
+6.1.1,Citations cliquables,Cliquer sur la citation pour voir la source,NON LISTÉ dans le document de suivi,25,3,api/alembic/versions/0066_responses_and_citations.py ; api/alembic/versions/0067_agent_runs_response_id.py
+6.1.2,Source document (nom),Afficher le document source,NON LISTÉ dans le document de suivi,6,1,api/models/citation.py ; api/routers/citations.py
+6.1.3,Page PDF / Section,Afficher la page ou section précise,NON LISTÉ dans le document de suivi,4,1,api/models/citation.py ; api/routers/citations.py
+6.1.4,URL source,Lien vers la source web,NON LISTÉ dans le document de suivi,4,2,api/routers/citations.py ; api/services/citation_url.py
+6.1.5,Chunk ID,Identifiant du bloc de texte,NON LISTÉ dans le document de suivi,10,2,api/alembic/versions/0068_document_chunks_chunk_index.py ; api/models/citation.py
+6.1.6,Score de pertinence,Afficher le score de confiance,NON LISTÉ dans le document de suivi,5,1,api/config.py ; api/models/citation.py
+6.1.7,Passage exact,Surligner le passage cité,NON LISTÉ dans le document de suivi,5,2,api/models/citation.py ; api/routers/citations.py
+6.1.8,Citation preview,Aperçu au survol de la souris,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/services/citation_preview.py
+6.1.9,Sources secondaires,Afficher les sources alternatives,NON LISTÉ dans le document de suivi,7,1,api/config.py ; api/models/citation.py
+6.1.10,Confidence score,Score global de confiance,NON LISTÉ dans le document de suivi,13,1,api/alembic/versions/0066_responses_and_citations.py ; api/config.py
+6.2.1,Citation-required mode,L'IA ne répond qu'avec des citations,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0070_agent_gates_and_response_metrics.py ; api/models/agent.py
+6.2.2,Answer only from retrieved context,Réponse uniquement basée sur le contexte,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0070_agent_gates_and_response_metrics.py ; api/config.py
+6.2.3,"""I don't know"" threshold","L'IA dit ""je ne sais pas"" si trop incertain",NON LISTÉ dans le document de suivi,5,3,api/alembic/versions/0070_agent_gates_and_response_metrics.py ; api/config.py
+6.2.4,Confidence estimation,Estimation de la confiance en la réponse,NON LISTÉ dans le document de suivi,18,3,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.5,Unsupported claim detection,Détecter les affirmations sans source,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0070_agent_gates_and_response_metrics.py ; api/config.py
+6.2.6,Claim verification,Vérifier les affirmations,NON LISTÉ dans le document de suivi,16,3,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.7,Contradiction detection,Détecter les contradictions,NON LISTÉ dans le document de suivi,17,3,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.8,Source consistency check,Vérifier la cohérence des sources,NON LISTÉ dans le document de suivi,14,2,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.9,Hallucination detector,Détecter les hallucinations,NON LISTÉ dans le document de suivi,16,3,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.10,Groundedness score,Score d'ancrage (0-100%),NON LISTÉ dans le document de suivi,16,3,api/alembic/versions/0069_response_hallucination_fields.py ; api/config.py
+6.2.11,Faithfulness score,Fidélité à la source,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0070_agent_gates_and_response_metrics.py ; api/config.py
+6.2.12,Dashboard qualité,Afficher les scores dans le dashboard,NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/routers/quality_dashboard.py
+7.1.1,Dataset manager,Interface pour gérer les datasets,NON LISTÉ dans le document de suivi,10,2,api/alembic/versions/0071_evaluation_lab.py ; api/models/evaluation.py
+7.1.2,Question sets,Créer des ensembles de questions,NON LISTÉ dans le document de suivi,9,2,api/models/evaluation.py ; api/routers/question_sets.py
+7.1.3,Ground-truth answers,Définir les réponses correctes,NON LISTÉ dans le document de suivi,6,1,api/config.py ; api/models/evaluation.py
+7.1.4,Ground-truth documents,Définir les documents corrects,NON LISTÉ dans le document de suivi,5,1,api/config.py ; api/models/evaluation.py
+7.1.5,Easy / Medium / Hard,Classifier la difficulté,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/evaluation_datasets.py
+7.1.6,Benchmark versions,Versionner les benchmarks,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0071_evaluation_lab.py ; api/models/evaluation.py
+7.1.7,Tuning / Held-out split,Séparer entraînement et test,NON LISTÉ dans le document de suivi,0,0,
+7.1.8,Datasets verticaux,"FastAPI, Legal, HR, Finance, etc.",NON LISTÉ dans le document de suivi,0,0,
+7.2.1,Recall@1,Taux de réussite au 1er résultat,NON LISTÉ dans le document de suivi,12,3,api/alembic/versions/0072_evaluation_results.py ; api/config.py
+7.2.2,Recall@3,Taux de réussite dans les 3 premiers,NON LISTÉ dans le document de suivi,3,1,api/services/evaluation_results.py ; api/services/latency_metrics.py
+7.2.3,Recall@5,Taux de réussite dans les 5 premiers,NON LISTÉ dans le document de suivi,1,1,api/services/retrieval_metrics.py ; tests/test_retrieval_metrics.py
+7.2.4,Recall@10,Taux de réussite dans les 10 premiers,NON LISTÉ dans le document de suivi,1,1,api/services/retrieval_metrics.py ; tests/test_retrieval_metrics.py
+7.2.5,MRR,Mean Reciprocal Rank,NON LISTÉ dans le document de suivi,1,1,api/services/retrieval_metrics.py ; tests/test_retrieval_metrics.py
+7.2.6,NDCG,Normalized Discounted Cumulative Gain,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/ground_truth_documents.py
+7.2.7,Precision,Précision des résultats,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/services/retrieval_metrics.py
+7.2.8,Faithfulness,Fidélité de la réponse,NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/services/answer_quality_metrics.py
+7.2.9,Answer relevance,Pertinence de la réponse,NON LISTÉ dans le document de suivi,8,2,api/config.py ; api/services/answer_quality_metrics.py
+7.2.10,Context relevance,Pertinence du contexte,NON LISTÉ dans le document de suivi,4,3,api/config.py ; api/routers/evaluation_results.py
+7.2.11,Citation correctness,Correctness des citations,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/services/citation_correctness.py
+7.2.12,Hallucination rate,Taux d'hallucinations,NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/models/evaluation.py
+7.2.13,Latency,Temps de réponse,NON LISTÉ dans le document de suivi,3,2,api/config.py ; api/routers/evaluation_results.py
+7.2.14,Token usage,Utilisation des tokens,NON LISTÉ dans le document de suivi,6,2,api/config.py ; api/services/autonomous_agents.py
+7.2.15,Cost/request,Coût par requête,NON LISTÉ dans le document de suivi,7,4,api/config.py ; api/routers/evaluation_results.py
+7.3.1,Automatic evaluation,Évaluation automatisée,NON LISTÉ dans le document de suivi,9,2,api/alembic/versions/0073_evaluation_jobs_and_manual_evaluations.py ; api/models/evaluation.py
+7.3.2,Manual evaluation,Évaluation manuelle,NON LISTÉ dans le document de suivi,5,2,api/alembic/versions/0073_evaluation_jobs_and_manual_evaluations.py ; api/models/evaluation.py
+7.3.3,Regression detection,Détecter les régressions de performance,NON LISTÉ dans le document de suivi,8,2,api/alembic/versions/0075_regression_detection_and_thresholds.py ; api/config.py
+7.3.4,Model comparison,Comparer différents modèles,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0074_comparison_jobs.py ; api/models/evaluation.py
+7.3.5,Retriever comparison,Comparer différents retrievers,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0074_comparison_jobs.py ; api/models/evaluation.py
+7.3.6,Reranker comparison,Comparer différents rerankers,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0074_comparison_jobs.py ; api/models/evaluation.py
+7.3.7,Prompt comparison,Comparer différents prompts,NON LISTÉ dans le document de suivi,7,2,api/alembic/versions/0074_comparison_jobs.py ; api/models/evaluation.py
+7.3.8,Automatic evaluation before deployment,Valider avant déploiement,NON LISTÉ dans le document de suivi,6,2,api/alembic/versions/0076_deployment_evaluations.py ; api/models/evaluation.py
+7.3.9,Seuils de régression,Blocage si régression > 5%,NON LISTÉ dans le document de suivi,5,2,api/alembic/versions/0075_regression_detection_and_thresholds.py ; api/models/evaluation.py
+7.3.10,A/B testing,Tester différentes configurations,NON LISTÉ dans le document de suivi,7,4,api/alembic/versions/0077_ab_tests.py ; api/alembic/versions/0103_ab_testing_advanced.py
+8.1.1,Streaming,Affichage des réponses en temps réel,NON LISTÉ dans le document de suivi,6,1,api/config.py ; api/routers/chat_stream.py
+8.1.2,Markdown,Formatage des réponses,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/conversation_export.py
+8.1.3,Code highlighting,Coloration du code,NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/services/code_highlighter.py
+8.1.4,Citations,Afficher les sources,NON LISTÉ dans le document de suivi,5,0,frontend/components/Citation.tsx ; frontend/components/CitationList.tsx
+8.1.5,Copy,Copier la réponse,NON LISTÉ dans le document de suivi,2,0,api/services/code_highlighter.py ; frontend/components/CopyButton.tsx
+8.1.6,Regenerate,Régénérer la réponse,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0078_message_actions.py ; api/models/message_actions.py
+8.1.7,Edit question,Modifier la question,NON LISTÉ dans le document de suivi,6,1,api/alembic/versions/0078_message_actions.py ; api/models/message_actions.py
+8.1.8,Retry,Réessayer avec les mêmes paramètres,NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0078_message_actions.py ; api/config.py
+8.1.9,Feedback (👍/👎 + reason + comment),Noter la réponse,NON LISTÉ dans le document de suivi,6,1,api/alembic/versions/0078_message_actions.py ; api/models/message_actions.py
+8.1.10,Conversation history,Historique des conversations,NON LISTÉ dans le document de suivi,7,1,api/routers/conversations.py ; api/routers/public_api.py
+8.1.11,Rename conversation,Renommer la conversation,NON LISTÉ dans le document de suivi,5,1,api/config.py ; api/routers/conversations.py
+8.1.12,Search conversations,Rechercher dans les conversations,NON LISTÉ dans le document de suivi,7,1,api/config.py ; api/routers/conversations.py
+8.1.13,Delete conversation,Supprimer une conversation,NON LISTÉ dans le document de suivi,9,1,api/alembic/versions/0079_conversation_delete_and_visibility.py ; api/config.py
+8.1.14,Export conversation,"Exporter en PDF, DOCX, JSON",NON LISTÉ dans le document de suivi,3,1,api/config.py ; api/routers/conversations.py
+8.1.15,Share conversation,Partager une conversation,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0080_conversation_shares.py ; api/models/conversation_share.py
+8.1.16,Public / Private conversations,Contrôle de visibilité,NON LISTÉ dans le document de suivi,5,1,api/alembic/versions/0079_conversation_delete_and_visibility.py ; api/models/conversation.py
+8.1.17,Suggested questions,Questions suggérées,NON LISTÉ dans le document de suivi,7,1,api/config.py ; api/models/widget.py
+8.1.18,Follow-up questions,Questions de suivi,NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0081_follow_up_questions.py ; api/config.py
+8.1.19,Multi-langue,Interface en plusieurs langues,NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/routers/i18n.py
+8.2.1,Speech-to-text (STT),Transcrire la parole en texte,NON LISTÉ dans le document de suivi,6,1,api/config.py ; api/routers/voice.py
+8.2.2,Text-to-speech (TTS),Synthèse vocale,NON LISTÉ dans le document de suivi,6,1,api/config.py ; api/routers/voice.py
+8.2.3,Streaming voice,Lecture en temps réel,NON LISTÉ dans le document de suivi,3,0,api/config.py ; frontend/components/VoiceOutput.tsx
+8.2.4,Push-to-talk,Appuyer pour parler,NON LISTÉ dans le document de suivi,2,0,api/config.py ; frontend/components/PushToTalkButton.tsx
+8.2.5,Voice activity detection,Détection automatique de la parole,NON LISTÉ dans le document de suivi,2,0,api/config.py ; frontend/components/VADIndicator.tsx
+8.2.6,Multi-language,Support multilingue,NON LISTÉ dans le document de suivi,3,0,api/config.py ; frontend/components/LanguageFlag.tsx
+8.2.7,Audio history,Historique des audios,NON LISTÉ dans le document de suivi,11,1,api/alembic/versions/0082_voice.py ; api/config.py
+8.2.8,Voice settings,Paramètres de la voix,NON LISTÉ dans le document de suivi,6,1,api/alembic/versions/0082_voice.py ; api/models/voice.py
+8.2.9,Voice selection,"Choisir la voix (ElevenLabs, etc.)",NON LISTÉ dans le document de suivi,5,1,api/config.py ; api/routers/voice.py
+8.2.10,Microphone test,Tester le microphone,NON LISTÉ dans le document de suivi,2,0,api/config.py ; frontend/components/MicrophoneTest.tsx
+8.2.11,Audio permissions,Gérer les permissions audio,NON LISTÉ dans le document de suivi,2,0,api/config.py ; frontend/components/AudioPermission.tsx
+8.2.12,Voice error handling,Gestion des erreurs vocales,NON LISTÉ dans le document de suivi,3,0,api/config.py ; frontend/components/VoiceError.tsx
+8.2.13,Téléphonie,"Intégration Twilio, SIP (optionnel)",NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0082_voice.py ; api/config.py
+9.1.1,POST /v1/chat,Envoyer une question,NON LISTÉ dans le document de suivi,4,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.2,POST /v1/documents,Importer un document,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.3,POST /v1/knowledge-bases,Créer une base de connaissances,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.4,GET /v1/conversations,Historique des conversations,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.5,POST /v1/search,Recherche dans la KB,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.6,POST /v1/agents/run,Exécuter un agent,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.7,GET /v1/usage,Statistiques d'utilisation,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.8,GET /v1/analytics,Analyses détaillées,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.1.9,POST /v1/embed,Générer des embeddings,NON LISTÉ dans le document de suivi,3,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.2.1,API keys,Générer des clés API,NON LISTÉ dans le document de suivi,4,1,api/alembic/versions/0084_key_management_and_webhooks.py ; api/models/organization_api_key.py
+9.2.2,Key rotation,Renouveler les clés,NON LISTÉ dans le document de suivi,8,1,api/alembic/versions/0084_key_management_and_webhooks.py ; api/config.py
+9.2.3,Key expiration,Date d'expiration des clés,NON LISTÉ dans le document de suivi,7,1,api/config.py ; api/models/organization_api_key.py
+9.2.4,Scopes,Permissions par clé,NON LISTÉ dans le document de suivi,5,1,api/routers/public_api.py ; api/schemas/public_api.py
+9.2.5,Rate limits,Limites de requêtes par seconde,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0084_key_management_and_webhooks.py ; api/config.py
+9.2.6,Quotas,Limites de requêtes par mois,NON LISTÉ dans le document de suivi,9,1,api/alembic/versions/0084_key_management_and_webhooks.py ; api/config.py
+9.2.7,Webhooks,Notifications en temps réel,NON LISTÉ dans le document de suivi,7,1,api/alembic/versions/0084_key_management_and_webhooks.py ; api/models/integrations.py
+9.2.8,API versioning,Gestion des versions,NON LISTÉ dans le document de suivi,4,1,api/config.py ; api/main.py
+9.2.9,OpenAPI / Swagger,Documentation interactive,NON LISTÉ dans le document de suivi,2,1,api/config.py ; api/main.py
+9.2.10,SDK Python,Client Python officiel,NON LISTÉ dans le document de suivi,1,0,api/config.py
+9.2.11,SDK JavaScript/TypeScript,Client JS officiel,NON LISTÉ dans le document de suivi,1,0,api/config.py
+9.3.1,Script tag,Intégration via une ligne de code,NON LISTÉ dans le document de suivi,2,1,api/routers/widget.py ; api/services/widget.py
+9.3.2,Logo personnalisable,Modifier le logo,NON LISTÉ dans le document de suivi,5,1,api/config.py ; api/models/widget.py
+9.3.3,Couleur personnalisable,Modifier la couleur primaire,NON LISTÉ dans le document de suivi,2,1,api/models/widget.py ; api/routers/widget.py
+9.3.4,Nom personnalisable,Nom du widget,NON LISTÉ dans le document de suivi,3,1,api/models/widget.py ; api/routers/widget.py
+9.3.5,Avatar personnalisable,Avatar du chatbot,NON LISTÉ dans le document de suivi,4,1,api/models/widget.py ; api/routers/widget.py
+9.3.6,Welcome message,Message d'accueil,NON LISTÉ dans le document de suivi,3,1,api/models/widget.py ; api/routers/widget.py
+9.3.7,Suggested questions,Questions suggérées,NON LISTÉ dans le document de suivi,3,1,api/models/widget.py ; api/routers/widget.py
+9.3.8,Position,Placement sur la page,NON LISTÉ dans le document de suivi,3,1,api/models/widget.py ; api/routers/widget.py
+9.3.9,Language,Langue du widget,NON LISTÉ dans le document de suivi,4,1,api/models/widget.py ; api/routers/widget.py
+9.3.10,Theme,Mode clair/sombre,NON LISTÉ dans le document de suivi,2,1,api/models/widget.py ; api/routers/widget.py
+9.3.11,React component,Composant React,NON LISTÉ dans le document de suivi,0,0,
+9.3.12,Vue component,Composant Vue,NON LISTÉ dans le document de suivi,0,0,
+9.3.13,iframe,Intégration via iframe,NON LISTÉ dans le document de suivi,2,0,api/main.py ; api/routers/widget.py
+9.3.14,JavaScript SDK,SDK complet,NON LISTÉ dans le document de suivi,1,0,api/routers/widget.py
+9.4.1,Slack,Intégration avec Slack,NON LISTÉ dans le document de suivi,3,1,api/routers/chat_integrations_slack.py ; api/services/chat_integrations/_common.py
+9.4.2,Microsoft Teams,Intégration avec Teams,NON LISTÉ dans le document de suivi,3,1,api/routers/chat_integrations_teams.py ; api/services/chat_integrations/_common.py
+9.4.3,Discord,Intégration avec Discord,NON LISTÉ dans le document de suivi,3,1,api/routers/chat_integrations_discord.py ; api/services/chat_integrations/_common.py
+10.1.1,JWT,JSON Web Tokens,FAIT (déclaré),0,0,
+10.1.2,Refresh tokens,Renouvellement des tokens,FAIT (déclaré),0,0,
+10.1.3,OAuth,"Google, GitHub",FAIT (déclaré),0,0,
+10.1.4,RBAC,Contrôle d'accès basé sur les rôles,PARTIEL (déclaré),0,0,
+10.1.5,Rate limiting,Limitation des requêtes,FAIT (déclaré),0,0,
+10.1.6,Request validation,Validation des entrées,FAIT (déclaré),0,0,
+10.1.7,Input sanitization,Nettoyage des entrées,PARTIEL (déclaré),0,0,
+10.1.8,Prompt injection protection,Protection contre les injections,PARTIEL (déclaré),0,0,
+10.1.9,SSRF protection,Protection contre les SSRF,FAIT (déclaré),1,0,api/services/chat_integrations/teams.py
+10.1.10,File validation,Validation des fichiers,FAIT (déclaré),0,0,
+10.1.11,MIME validation,Validation des types MIME,FAIT (déclaré),0,0,
+10.1.12,Malware scanning,Analyse des fichiers,NON COMMENCÉ (déclaré),0,0,
+10.1.13,Secret management,Gestion des secrets,PARTIEL (déclaré),0,0,
+10.1.14,Encryption at rest,Chiffrement des données stockées,PARTIEL (déclaré),0,0,
+10.1.15,Encryption in transit,Chiffrement TLS/SSL,FAIT (déclaré),0,0,
+10.2.1,Prompt injection detection,Détection des injections de prompt,NON LISTÉ dans le document de suivi,0,0,
+10.2.2,Jailbreak detection,Détection des tentatives de jailbreak,NON LISTÉ dans le document de suivi,0,0,
+10.2.3,Data leakage protection,Protection contre les fuites de données,NON LISTÉ dans le document de suivi,0,0,
+10.2.4,PII detection,Détection des informations personnelles,NON LISTÉ dans le document de suivi,0,0,
+10.2.5,PII masking,Masquage des informations personnelles,NON LISTÉ dans le document de suivi,0,0,
+10.2.6,Sensitive information filtering,Filtrage des informations sensibles,NON LISTÉ dans le document de suivi,0,0,
+10.2.7,Toxicity filtering,Filtrage des propos toxiques,NON LISTÉ dans le document de suivi,0,0,
+10.2.8,Unsafe tool-call detection,Détection des appels d'outils dangereux,NON LISTÉ dans le document de suivi,0,0,
+10.2.9,Tool permission boundaries,Limites de permissions des outils,NON LISTÉ dans le document de suivi,0,0,
+10.2.10,Output validation,Validation des sorties,NON LISTÉ dans le document de suivi,0,0,
+10.3.1,Audit log,Journalisation des actions,FAIT (déclaré),0,0,
+10.3.2,Structured logging,Logs structurés,PARTIEL (déclaré),0,0,
+10.3.3,Request IDs,Identification des requêtes,NON LISTÉ dans le document de suivi,0,0,
+10.3.4,Trace IDs,Identification des traces,NON LISTÉ dans le document de suivi,0,0,
+10.3.5,Distributed tracing,Traçage distribué,NON LISTÉ dans le document de suivi,0,0,
+10.3.6,LLM traces,Traçage des appels LLM,NON LISTÉ dans le document de suivi,0,0,
+10.3.7,Retrieval traces,Traçage des recherches RAG,NON LISTÉ dans le document de suivi,0,0,
+10.3.8,Tool traces,Traçage des appels d'outils,NON LISTÉ dans le document de suivi,0,0,
+10.3.9,Error tracking,Suivi des erreurs,FAIT (déclaré),0,0,
+10.3.10,Performance monitoring,Monitoring des performances,NON LISTÉ dans le document de suivi,0,0,
+10.3.11,Cost monitoring,Suivi des coûts,NON LISTÉ dans le document de suivi,0,0,
+10.3.12,Token monitoring,Suivi des tokens,NON LISTÉ dans le document de suivi,0,0,
+10.4.1,SSO,Single Sign-On,FAIT (déclaré),0,0,
+10.4.2,SAML,Authentification SAML,NON COMMENCÉ (déclaré),0,0,
+10.4.3,SCIM,Provisioning SCIM,NON LISTÉ dans le document de suivi,0,0,
+10.4.4,Enterprise roles,Rôles spécifiques aux grandes entreprises,NON LISTÉ dans le document de suivi,0,0,
+10.4.5,Data retention policies,Politiques de conservation,NON LISTÉ dans le document de suivi,0,0,
+10.4.6,Custom retention,Conservation personnalisée,NON LISTÉ dans le document de suivi,0,0,
+10.4.7,Dedicated tenant,Tenant dédié,NON LISTÉ dans le document de suivi,0,0,
+10.4.8,Dedicated database,Base de données dédiée,NON LISTÉ dans le document de suivi,0,0,
+10.4.9,Private deployment,Déploiement privé,NON LISTÉ dans le document de suivi,0,0,
+10.4.10,On-premise deployment,Déploiement on-premise,NON LISTÉ dans le document de suivi,0,0,
+10.4.11,VPC deployment,Déploiement VPC,NON LISTÉ dans le document de suivi,0,0,
+10.4.12,Custom SLA,SLA personnalisé,NON LISTÉ dans le document de suivi,0,0,
+11.1.1,Organizations,Nombre d'organisations,NON LISTÉ dans le document de suivi,0,0,
+11.1.2,Users,Nombre d'utilisateurs,NON LISTÉ dans le document de suivi,0,0,
+11.1.3,Requests,Nombre de requêtes,NON LISTÉ dans le document de suivi,0,0,
+11.1.4,Tokens,Utilisation des tokens,NON LISTÉ dans le document de suivi,0,0,
+11.1.5,Cost,Coût total,NON LISTÉ dans le document de suivi,0,0,
+11.1.6,Revenue,Revenus générés,NON LISTÉ dans le document de suivi,0,0,
+11.1.7,Errors,Taux d'erreurs,NON LISTÉ dans le document de suivi,0,0,
+11.1.8,Latency,Latence moyenne,NON LISTÉ dans le document de suivi,0,0,
+11.2.1,Requests/day,Requêtes par jour,NON LISTÉ dans le document de suivi,0,0,
+11.2.2,Active users,Utilisateurs actifs,NON LISTÉ dans le document de suivi,0,0,
+11.2.3,Questions/day,Questions par jour,NON LISTÉ dans le document de suivi,0,0,
+11.2.4,Documents,Total et par type,NON LISTÉ dans le document de suivi,0,0,
+11.2.5,Retrieval success rate,Taux de succès des recherches,NON LISTÉ dans le document de suivi,0,0,
+11.2.6,Answer quality score,Score de qualité des réponses,NON LISTÉ dans le document de suivi,0,0,
+11.2.7,Most asked questions,Questions les plus fréquentes,NON LISTÉ dans le document de suivi,0,0,
+11.2.8,Failed questions,Questions en échec,NON LISTÉ dans le document de suivi,0,0,
+11.2.9,Top documents,Documents les plus utilisés,NON LISTÉ dans le document de suivi,0,0,
+11.2.10,Worst documents,Documents les moins pertinents,NON LISTÉ dans le document de suivi,0,0,
+11.2.11,Cost per organization,Coût par organisation,NON LISTÉ dans le document de suivi,0,0,
+11.2.12,Cost per user,Coût par utilisateur,NON LISTÉ dans le document de suivi,0,0,
+11.2.13,Cost per answer,Coût par réponse,NON LISTÉ dans le document de suivi,0,0,
+11.2.14,Question clusters,Groupes de questions similaires,NON LISTÉ dans le document de suivi,0,0,
+11.2.15,Knowledge gap detection,Détection des lacunes documentaires,NON LISTÉ dans le document de suivi,0,0,
+11.2.16,Documentation gap reports,Rapports de documentation manquante,NON LISTÉ dans le document de suivi,0,0,
+11.3.1,GET /health,Health check,NON LISTÉ dans le document de suivi,0,0,
+11.3.2,GET /ready,Readiness check,NON LISTÉ dans le document de suivi,0,0,
+11.3.3,GET /metrics,Métriques Prometheus,NON LISTÉ dans le document de suivi,0,0,
+11.3.4,Uptime monitoring,Monitoring de disponibilité,NON LISTÉ dans le document de suivi,0,0,
+11.3.5,Queue monitoring,Monitoring des queues,NON LISTÉ dans le document de suivi,0,0,
+11.3.6,Database health,Santé de la base de données,NON LISTÉ dans le document de suivi,0,0,
+11.3.7,Vector DB health,Santé de la base vectorielle,NON LISTÉ dans le document de suivi,0,0,
+11.3.8,LLM availability,Disponibilité des LLM,NON LISTÉ dans le document de suivi,0,0,
+11.3.9,API latency,Latence de l'API,NON LISTÉ dans le document de suivi,0,0,
+11.3.10,Error rate,Taux d'erreurs,NON LISTÉ dans le document de suivi,0,0,
+12.1.1,Checkout,"Paiement en ligne (Paystack, Flutterwave)",NON LISTÉ dans le document de suivi,0,0,
+12.1.2,Subscriptions,Abonnements récurrents,NON LISTÉ dans le document de suivi,0,0,
+12.1.3,Invoices,Génération de factures,NON LISTÉ dans le document de suivi,0,0,
+12.1.4,Coupons,Codes promo,NON LISTÉ dans le document de suivi,0,0,
+12.1.5,Trials,Périodes d'essai,NON LISTÉ dans le document de suivi,0,0,
+12.1.6,Upgrade,Passage à un plan supérieur,NON LISTÉ dans le document de suivi,0,0,
+12.1.7,Downgrade,Passage à un plan inférieur,NON LISTÉ dans le document de suivi,0,0,
+12.1.8,Cancellation,Annulation d'abonnement,NON LISTÉ dans le document de suivi,0,0,
+12.1.9,Usage billing,Facturation à l'usage,NON LISTÉ dans le document de suivi,0,0,
+12.1.10,Credits,Système de crédits,NON LISTÉ dans le document de suivi,0,0,
+12.1.11,Payment history,Historique des paiements,NON LISTÉ dans le document de suivi,0,0,
+12.2.1,Free,"3 documents, 10 questions/jour",NON LISTÉ dans le document de suivi,0,0,
+12.2.2,Starter,"100 documents, 500 questions/jour",NON LISTÉ dans le document de suivi,0,0,
+12.2.3,Pro,"1 000 documents, questions illimitées",NON LISTÉ dans le document de suivi,0,0,
+12.2.4,Business,"10 000 documents, API, white-label",NON LISTÉ dans le document de suivi,0,0,
+12.2.5,Enterprise,"Illimité, SSO, on-premise",NON LISTÉ dans le document de suivi,0,0,
+12.3.1,AI credits,Crédits pour l'IA,NON LISTÉ dans le document de suivi,0,0,
+12.3.2,Document limits,Limite de documents,NON LISTÉ dans le document de suivi,0,0,
+12.3.3,Storage limits,Limite de stockage,NON LISTÉ dans le document de suivi,0,0,
+12.3.4,Requests/month,Requêtes par mois,NON LISTÉ dans le document de suivi,0,0,
+12.3.5,Tokens/month,Tokens par mois,NON LISTÉ dans le document de suivi,0,0,
+12.3.6,Voice minutes,Minutes vocales,NON LISTÉ dans le document de suivi,0,0,
+12.3.7,Dashboard usage,Usage du dashboard,NON LISTÉ dans le document de suivi,0,0,
+13.1.1,Python type hints,Ajouter des type hints partout,NON LISTÉ dans le document de suivi,0,0,
+13.1.2,Ruff,Linting,NON LISTÉ dans le document de suivi,0,0,
+13.1.3,Black,Formatage automatique,NON LISTÉ dans le document de suivi,0,0,
+13.1.4,MyPy,Vérification des types,NON LISTÉ dans le document de suivi,0,0,
+13.1.5,Pytest,Tests unitaires,NON LISTÉ dans le document de suivi,0,0,
+13.1.6,Coverage > 90%,Couverture de code,NON LISTÉ dans le document de suivi,0,0,
+13.1.7,Pre-commit hooks,Hooks de pre-commit,NON LISTÉ dans le document de suivi,0,0,
+13.1.8,Dependabot,Mises à jour automatiques,NON LISTÉ dans le document de suivi,0,0,
+13.1.9,Security scanning,Analyse de sécurité,NON LISTÉ dans le document de suivi,0,0,
+13.2.1,Unit tests,Tests unitaires,NON LISTÉ dans le document de suivi,0,0,
+13.2.2,Integration tests,Tests d'intégration,NON LISTÉ dans le document de suivi,0,0,
+13.2.3,API tests,Tests d'API,NON LISTÉ dans le document de suivi,0,0,
+13.2.4,E2E tests,Tests de bout en bout,NON LISTÉ dans le document de suivi,0,0,
+13.2.5,Security tests,Tests de sécurité,NON LISTÉ dans le document de suivi,0,0,
+13.2.6,Regression tests,Tests de régression,NON LISTÉ dans le document de suivi,0,0,
+13.2.7,LLM tests,Tests avec LLM,NON LISTÉ dans le document de suivi,0,0,
+13.2.8,RAG tests,Tests RAG,NON LISTÉ dans le document de suivi,0,0,
+13.2.9,Agent tests,Tests d'agent,NON LISTÉ dans le document de suivi,0,0,
+13.2.10,Database tests,Tests de base de données,NON LISTÉ dans le document de suivi,0,0,
+13.2.11,Deployment tests,Tests de déploiement,NON LISTÉ dans le document de suivi,0,0,
+13.3.1,Lint,Vérification du code,NON LISTÉ dans le document de suivi,0,0,
+13.3.2,Type check,Vérification des types,NON LISTÉ dans le document de suivi,0,0,
+13.3.3,Unit tests,Tests unitaires,NON LISTÉ dans le document de suivi,0,0,
+13.3.4,Integration tests,Tests d'intégration,NON LISTÉ dans le document de suivi,0,0,
+13.3.5,Security scan,Analyse de sécurité,NON LISTÉ dans le document de suivi,0,0,
+13.3.6,Docker build,Construction Docker,NON LISTÉ dans le document de suivi,0,0,
+13.3.7,E2E tests,Tests de bout en bout,NON LISTÉ dans le document de suivi,0,0,
+13.3.8,Deploy,Déploiement automatique,NON LISTÉ dans le document de suivi,0,0,
+13.4.1,Docker,Conteneurisation,NON LISTÉ dans le document de suivi,0,0,
+13.4.2,Docker Compose,Orchestration locale,NON LISTÉ dans le document de suivi,0,0,
+13.4.3,Render,Déploiement Render,NON LISTÉ dans le document de suivi,0,0,
+13.4.4,Railway,Déploiement Railway,NON LISTÉ dans le document de suivi,0,0,
+13.4.5,Fly.io,Déploiement Fly.io,NON LISTÉ dans le document de suivi,0,0,
+13.4.6,AWS,Déploiement AWS,NON LISTÉ dans le document de suivi,0,0,
+13.4.7,GCP,Déploiement Google Cloud,NON LISTÉ dans le document de suivi,0,0,
+13.4.8,Azure,Déploiement Azure,NON LISTÉ dans le document de suivi,0,0,
+13.4.9,DigitalOcean,Déploiement DO,NON LISTÉ dans le document de suivi,0,0,
+13.4.10,Kubernetes,Orchestration Kubernetes,NON LISTÉ dans le document de suivi,0,0,
+13.4.11,Helm,Packaging Helm,NON LISTÉ dans le document de suivi,0,0,
+13.4.12,Terraform,Infrastructure as Code,NON LISTÉ dans le document de suivi,0,0,
+13.5.1,Structured logging,Logs structurés,NON LISTÉ dans le document de suivi,0,0,
+13.5.2,Request IDs,Identification des requêtes,NON LISTÉ dans le document de suivi,0,0,
+13.5.3,Trace IDs,Identification des traces,NON LISTÉ dans le document de suivi,0,0,
+13.5.4,Distributed tracing,Traçage distribué,NON LISTÉ dans le document de suivi,0,0,
+13.5.5,LLM traces,Traçage LLM,NON LISTÉ dans le document de suivi,0,0,
+13.5.6,Retrieval traces,Traçage RAG,NON LISTÉ dans le document de suivi,0,0,
+13.5.7,Tool traces,Traçage outils,NON LISTÉ dans le document de suivi,0,0,
+13.5.8,Error tracking,Suivi des erreurs,NON LISTÉ dans le document de suivi,0,0,
+13.5.9,Performance monitoring,Monitoring des performances,NON LISTÉ dans le document de suivi,0,0,
+13.5.10,Cost monitoring,Suivi des coûts,NON LISTÉ dans le document de suivi,0,0,
+13.5.11,Token monitoring,Suivi des tokens,NON LISTÉ dans le document de suivi,0,0,
+13.5.12,Traçabilité complète d'une requête,Suivi de bout en bout,NON LISTÉ dans le document de suivi,0,0,
+14.1.1,README,Présentation du projet,NON LISTÉ dans le document de suivi,0,0,
+14.1.2,Architecture (diagrammes),Schéma d'architecture,NON LISTÉ dans le document de suivi,0,0,
+14.1.3,Installation guide,Guide d'installation,NON LISTÉ dans le document de suivi,0,0,
+14.1.4,API documentation,Documentation de l'API,NON LISTÉ dans le document de suivi,0,0,
+14.1.5,Deployment guide,Guide de déploiement,NON LISTÉ dans le document de suivi,0,0,
+14.1.6,Security guide,Guide de sécurité,NON LISTÉ dans le document de suivi,0,0,
+14.1.7,Admin guide,Guide administrateur,NON LISTÉ dans le document de suivi,0,0,
+14.1.8,User guide,Guide utilisateur,NON LISTÉ dans le document de suivi,0,0,
+14.1.9,White-label guide,Guide de personnalisation,NON LISTÉ dans le document de suivi,0,0,
+14.1.10,Customization guide,Guide de modification,NON LISTÉ dans le document de suivi,0,0,
+14.1.11,Troubleshooting,Résolution des problèmes,NON LISTÉ dans le document de suivi,0,0,
+14.1.12,FAQ,Foire aux questions,NON LISTÉ dans le document de suivi,0,0,
+14.2.1,Architecture PDF,Présentation détaillée,NON LISTÉ dans le document de suivi,0,0,
+14.2.2,Feature list PDF,Liste des fonctionnalités,NON LISTÉ dans le document de suivi,0,0,
+14.2.3,Deployment guide PDF,Guide de déploiement,NON LISTÉ dans le document de suivi,0,0,
+14.2.4,API documentation PDF,Documentation API,NON LISTÉ dans le document de suivi,0,0,
+14.2.5,Security audit PDF,Audit de sécurité,NON LISTÉ dans le document de suivi,0,0,
+14.2.6,Benchmark report PDF,Rapport de performance,NON LISTÉ dans le document de suivi,0,0,
+14.2.7,Demo video,Vidéo de démonstration,NON LISTÉ dans le document de suivi,0,0,
+14.2.8,Setup guide,Guide de configuration,NON LISTÉ dans le document de suivi,0,0,
+14.3.1,Hero,"Titre, sous-titre, CTA",NON LISTÉ dans le document de suivi,0,0,
+14.3.2,Demo,Vidéo ou démo interactive,NON LISTÉ dans le document de suivi,0,0,
+14.3.3,Features,Liste des fonctionnalités,NON LISTÉ dans le document de suivi,0,0,
+14.3.4,Architecture,Schéma d'architecture,NON LISTÉ dans le document de suivi,0,0,
+14.3.5,Integrations,Intégrations disponibles,NON LISTÉ dans le document de suivi,0,0,
+14.3.6,Pricing,Plans tarifaires,NON LISTÉ dans le document de suivi,0,0,
+14.3.7,Security,Sécurité et conformité,NON LISTÉ dans le document de suivi,0,0,
+14.3.8,Documentation,Liens vers la documentation,NON LISTÉ dans le document de suivi,0,0,
+14.3.9,FAQ,Questions fréquentes,NON LISTÉ dans le document de suivi,0,0,
+14.4.1,Nom produit,KnowFlow AI (ou autre),NON LISTÉ dans le document de suivi,0,0,
+14.4.2,Logo,Logo de la marque,NON LISTÉ dans le document de suivi,0,0,
+14.4.3,Couleurs,Palette de couleurs,NON LISTÉ dans le document de suivi,0,0,
+14.4.4,Charte graphique,Lignes directrices,NON LISTÉ dans le document de suivi,0,0,
+15.1.1,Ticket ID,Identifiant unique du ticket,NON LISTÉ dans le document de suivi,0,0,
+15.1.2,Priority,"Priorité (urgent, normal, bas)",NON LISTÉ dans le document de suivi,0,0,
+15.1.3,Assignment,Assignation à un humain,NON LISTÉ dans le document de suivi,0,0,
+15.1.4,SLA,Délai de réponse,NON LISTÉ dans le document de suivi,0,0,
+15.1.5,Status,"Ouvert, en cours, résolu, fermé",NON LISTÉ dans le document de suivi,0,0,
+15.1.6,Internal notes,Notes internes,NON LISTÉ dans le document de suivi,0,0,
+15.1.7,Conversation context,Contexte de la conversation,NON LISTÉ dans le document de suivi,0,0,
+15.1.8,Resolution,Résolution du ticket,NON LISTÉ dans le document de suivi,0,0,
+15.1.9,Dashboard humain,Interface pour les humains,NON LISTÉ dans le document de suivi,0,0,
+15.2.1,Feedback (👍/👎),Notation des réponses,NON LISTÉ dans le document de suivi,0,0,
+15.2.2,Raison,"Hallucination, incomplet, source incorrecte",NON LISTÉ dans le document de suivi,0,0,
+15.2.3,Commentaire libre,Feedback textuel,NON LISTÉ dans le document de suivi,0,0,
+15.2.4,Correction proposée,Proposition de correction,NON LISTÉ dans le document de suivi,0,0,
+15.2.5,Analyse de l'échec,"Analyse retrieval, prompt, LLM",NON LISTÉ dans le document de suivi,0,0,
+15.2.6,Création automatique de cas d'évaluation,Génération de nouveaux tests,NON LISTÉ dans le document de suivi,0,0,
+15.2.7,Benchmark → amélioration,Amélioration continue,NON LISTÉ dans le document de suivi,0,0,

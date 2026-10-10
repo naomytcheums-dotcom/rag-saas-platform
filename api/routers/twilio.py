@@ -17,6 +17,7 @@ from api.schemas.telephony import CallRecordResponse, OutboundCallRequest
 from api.security.audit_log import log_audit_action
 from api.security.permissions import require_permission
 from api.security.rate_limit import enforce_rate_limit
+from api.services.voice_usage import assert_voice_minutes_available
 from api.services.telephony import (
     TelephonyError, TelephonyNotFoundError, end_call, end_organization_call, handle_call_status, handle_dtmf_input,
     handle_incoming_call, handle_speech_input, list_calls, list_organization_calls, make_outbound_call,
@@ -116,6 +117,9 @@ async def place_organization_call_endpoint(
     await enforce_rate_limit(
         f"ratelimit:twilio_outbound:org:{org_id}", settings.TWILIO_OUTBOUND_RATE_LIMIT_MAX_ATTEMPTS, settings.TWILIO_OUTBOUND_RATE_LIMIT_WINDOW_SECONDS,
     )
+    from api.security.organization_settings import get_org_settings  # noqa: PLC0415
+
+    await assert_voice_minutes_available(db, org_id, await get_org_settings(db, org_id))
     try:
         call = await place_organization_call(db, org_id, payload.to, payload.agent_id)
     except TelephonyNotFoundError as exc:

@@ -6,6 +6,7 @@ import type { ChatMessage } from "@/lib/useRealChat";
 import CitationList from "./CitationList";
 import CopyButton from "./CopyButton";
 import FeedbackButtons from "./FeedbackButtons";
+import FollowUpQuestions from "./FollowUpQuestions";
 import MessageContent from "./MessageContent";
 import VoiceOutput from "./VoiceOutput";
 
@@ -15,12 +16,13 @@ interface MessageBubbleProps {
   onEdit: (id: string, content: string) => void;
   onRegenerate: (id: string) => void;
   regenerating: boolean;
+  onFollowUp?: (question: string) => void;
 }
 
 // One message row -- user (right-aligned) or assistant (left-aligned,
 // with the real 8.1 components: citations, copy, feedback, voice
 // playback), driven by the real backend conversation (lib/useRealChat.ts).
-export default function MessageBubble({ message, isLast, onEdit, onRegenerate, regenerating }: MessageBubbleProps) {
+export default function MessageBubble({ message, isLast, onEdit, onRegenerate, regenerating, onFollowUp }: MessageBubbleProps) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -87,6 +89,7 @@ export default function MessageBubble({ message, isLast, onEdit, onRegenerate, r
         </div>
 
         {message.citations && <CitationList citations={message.citations} />}
+        {isLast && !regenerating && onFollowUp && message.content && <FollowUpQuestions messageId={message.id} onSelect={onFollowUp} />}
       </div>
     </div>
   );

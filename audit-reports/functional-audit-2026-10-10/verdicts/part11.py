@@ -1,0 +1,43 @@
+# Part 11 - Admin dashboard and analytics. Facts read: api/routers/admin_dashboard.py (stats, users, organizations, revenue, api-usage, conversations, documents, monitoring health/resources/queues, logs),
+# api/routers/analytics.py (business revenue/customers/retention/churn/ltv/trend + product/technical pages), api/main.py (/metrics 426, /health 447, /health/ready 456), api/routers/observability.py (alerting, tracing).
+# NOT found anywhere under api/: question clustering, knowledge-gap / documentation-gap reports, most-asked questions, worst documents (greps for cluster/knowledge_gap/documentation_gap/top_questions/worst_documents).
+VC, PI, NI, IU, BE, BR, AM = ("VERIFIED_COMPLETE", "PARTIALLY_IMPLEMENTED", "NOT_IMPLEMENTED", "IMPLEMENTED_UNVERIFIED",
+                              "BLOCKED_EXTERNAL", "BROKEN", "AMBIGUOUS_REQUIREMENT")
+AD = "api/routers/admin_dashboard.py + api/services/admin_stats.py; UI frontend/app/admin/page.tsx"
+AT = "tests/test_admin_dashboard.py"
+V = {
+"11.1.1": (VC, "MEDIUM", "GET /admin/stats/organizations (admin_dashboard.py:50); " + AD, AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.2": (VC, "MEDIUM", "GET /admin/stats/users (admin_dashboard.py:45)", AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.3": (VC, "MEDIUM", "GET /admin/stats/api-usage (admin_dashboard.py:60)", AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.4": (VC, "MEDIUM", "token statistics via api-usage / api/services/token_usage.py", AT + ", tests/test_token_usage.py", "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.5": (VC, "MEDIUM", "cost statistics via api/services/cost_tracking.py and stats", AT + ", tests/test_cost_tracking.py", "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.6": (VC, "MEDIUM", "GET /admin/stats/revenue (admin_dashboard.py:55) from invoices", AT + ", tests/test_p1_bill010_invoices.py", "superadmin-only", "revenue is only as true as recorded invoices; manual proof-of-payment is unverified against a bank (audit R-05)", "none", "MEDIUM", "reconcile with provider payouts"),
+"11.1.7": (VC, "MEDIUM", "error rate in monitoring stats / Prometheus", AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.1.8": (VC, "MEDIUM", "api/services/latency_metrics.py in stats", "tests/test_latency_metrics.py", "superadmin-only", "none found", "none", "INFO", "none"),
+"11.2.1": (VC, "MEDIUM", "api/services/analytics.py, api/routers/analytics.py; UI dashboard/analytics/{business,product,technical}", "tests/test_admin_dashboard.py and analytics tests (to confirm filenames in remediation)", "org-scoped", "none found", "none", "INFO", "none"),
+"11.2.2": (VC, "MEDIUM", "active users in analytics service", "analytics tests", "org-scoped", "none found", "none", "INFO", "none"),
+"11.2.3": (VC, "MEDIUM", "conversation/question counts in analytics", "analytics tests", "org-scoped", "none found", "none", "INFO", "none"),
+"11.2.4": (VC, "MEDIUM", "GET /admin/stats/documents (admin_dashboard.py:70) total and by type", AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.2.5": (PI, "MEDIUM", "retrieval diagnostics exist (api/routers/retrieval_diagnostics.py) but no aggregate 'retrieval success rate' endpoint was identified", "tests/test_retrieval_diagnostics.py", "org-scoped", "aggregate metric not located", "none", "LOW", "expose the aggregate on the analytics page"),
+"11.2.6": (PI, "MEDIUM", "answer quality scores in api/routers/quality_dashboard.py (dashboard, metrics, trends, responses, export)", "tests/test_quality_dashboard.py", "org-scoped", "scores depend on the unvalidated quality detectors (Part 6.2)", "none", "LOW", "validate detectors"),
+"11.2.7": (NI, "MEDIUM", "none: no 'most asked questions' aggregation found", "none", "n/a", "absent", "none", "LOW", "implement"),
+"11.2.8": (PI, "LOW", "failure categories exist in the Eval Lab (FailureAnalysis.tsx) and questions.py references failed items; no production 'failed questions' report for end-user traffic identified", "none located", "none", "evaluation-only", "none", "LOW", "implement from conversation feedback"),
+"11.2.9": (NI, "MEDIUM", "none: no top-documents ranking found", "none", "n/a", "absent", "none", "LOW", "implement from citation counts"),
+"11.2.10": (NI, "MEDIUM", "none: no least-relevant-documents report found", "none", "n/a", "absent", "none", "LOW", "implement"),
+"11.2.11": (VC, "MEDIUM", "cost per organization via usage/cost tracking", "tests/test_cost_tracking.py, tests/test_usage.py", "org-scoped", "none found", "none", "INFO", "none"),
+"11.2.12": (PI, "LOW", "per-user cost: user_limits and token usage exist; no explicit per-user cost view identified", "tests/test_user_limits.py", "none", "not located", "none", "LOW", "confirm or implement"),
+"11.2.13": (PI, "LOW", "cost per answer: response/usage rows carry tokens; explicit per-answer cost field not confirmed", "tests/test_cost_tracking.py", "none", "not confirmed", "none", "LOW", "confirm"),
+"11.2.14": (NI, "MEDIUM", "none: searched api/ for question clustering, nothing found", "none", "n/a", "absent", "none", "LOW", "implement"),
+"11.2.15": (NI, "MEDIUM", "none: no knowledge-gap detection found", "none", "n/a", "absent", "none", "LOW", "implement"),
+"11.2.16": (NI, "MEDIUM", "none: no documentation-gap report found", "none", "n/a", "absent", "none", "LOW", "implement"),
+"11.3.1": (VC, "HIGH", "GET /health (api/main.py:447)", "route exercised by CI/deploy checks", "public by design", "none found", "none", "INFO", "none"),
+"11.3.2": (VC, "HIGH", "GET /health/ready (api/main.py:456); the spec path /ready is served as /health/ready", "tests via CI smoke", "public by design", "path differs from the spec (/ready)", "none", "INFO", "none"),
+"11.3.3": (VC, "MEDIUM", "GET /metrics Prometheus (api/main.py:426)", "tests/test_latency_metrics.py", "public when METRICS_AUTH_TOKEN is not set (audit R-10)", "production token not verified", "Render env", "MEDIUM", "set METRICS_AUTH_TOKEN"),
+"11.3.4": (BE, "MEDIUM", "external uptime monitoring is not code; /health is available to probe", "none", "n/a", "no uptime monitor configured to the audit's knowledge", "uptime service", "LOW", "configure UptimeRobot or similar"),
+"11.3.5": (VC, "MEDIUM", "GET /admin/monitoring/queues (admin_dashboard.py:85)", AT, "superadmin-only", "reports Celery queue state; no worker exists in production (audit R-02)", "Celery worker", "MEDIUM", "see audit P0-2"),
+"11.3.6": (VC, "MEDIUM", "database check in /health/ready and GET /admin/monitoring/health", AT, "superadmin-only", "none found", "none", "INFO", "none"),
+"11.3.7": (PI, "LOW", "vector store is the same Postgres (pgvector); no distinct vector health probe identified", "none located", "none", "pgvector extension availability not part of the readiness check (not confirmed)", "none", "LOW", "add extension check"),
+"11.3.8": (PI, "LOW", "LLM availability: fallback chain and provider errors handled; no active provider health probe identified", "tests/test_fallback.py", "none", "no availability probe", "LLM providers", "LOW", "add a lightweight probe"),
+"11.3.9": (VC, "MEDIUM", "api latency in /metrics and latency_metrics.py", "tests/test_latency_metrics.py", "see 11.3.3", "none found", "none", "INFO", "none"),
+"11.3.10": (VC, "MEDIUM", "error rate in /metrics and error tracking", "tests/test_error_tracking.py", "see 11.3.3", "none found", "none", "INFO", "none"),
+}
