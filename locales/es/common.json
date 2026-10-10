@@ -982,5 +982,8 @@
   "chat.audio_history": "Historial de audio",
   "voice_agent.settings_title": "Ajustes de voz",
   "voice_agent.telephony_title": "Llamadas telefónicas",
-  "nav.voice_settings": "Ajustes de voz"
+  "nav.voice_settings": "Ajustes de voz",
+  "insights.cost": "Coste",
+  "insights.cost_per_answer": "Créditos por respuesta",
+  "insights.credits": "créditos"
 }

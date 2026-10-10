@@ -11,6 +11,8 @@ interface Failed { question: string; reasons: string[] }
 interface Gap { suggested_topic: string; times_asked: number; example_questions: string[]; related_documents: string[]; status: string }
 interface DocUse { document_id: string; name: string | null; citations: number; average_relevance: number }
 interface Success { answered_questions: number; refused: number; success_rate: number | null }
+interface UserCost { user_id: string | null; email: string | null; operations: number; credits_spent: number }
+interface AnswerCost { credits_spent: number; billed_operations: number; credits_per_operation: number | null }
 interface Analysis { negative_feedback: number; by_category: Record<string, number> }
 
 /** Specs 11.2.5, 11.2.7-11.2.10, 11.2.14-11.2.16, 15.2.5: what users ask, where the knowledge base fails them and what to document next.
@@ -26,6 +28,8 @@ export default function InsightsPage() {
   const [worst, setWorst] = useState<DocUse[]>([]);
   const [success, setSuccess] = useState<Success | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [userCosts, setUserCosts] = useState<UserCost[]>([]);
+  const [answerCost, setAnswerCost] = useState<AnswerCost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,10 +47,12 @@ export default function InsightsPage() {
       api.get<{ items: DocUse[] }>(`${base}/insights/documents/worst?days=${days}`),
       api.get<Success>(`${base}/insights/retrieval-success?days=${days}`),
       api.get<Analysis>(`${base}/feedback/analysis`),
+      api.get<{ items: UserCost[] }>(`${base}/insights/cost-per-user?days=${days}`),
+      api.get<AnswerCost>(`${base}/insights/cost-per-answer?days=${days}`),
     ])
-      .then(([a, f, g, tp, w, s, an]) => {
+      .then(([a, f, g, tp, w, s, an, uc, ac]) => {
         if (cancelled) return;
-        setAsked(a.items); setFailed(f.items); setGaps(g.items); setTop(tp.items); setWorst(w.items); setSuccess(s); setAnalysis(an); setError(null);
+        setAsked(a.items); setFailed(f.items); setGaps(g.items); setTop(tp.items); setWorst(w.items); setSuccess(s); setAnalysis(an); setUserCosts(uc.items); setAnswerCost(ac); setError(null);
       })
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? String(err.detail) : t("insights.error_load")); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -100,6 +106,11 @@ export default function InsightsPage() {
           <section className={section}>
             <h2 className={h2}>{t("insights.top_docs")}</h2>
             {top.length === 0 ? <p className={muted}>{t("insights.empty")}</p> : <ul className="space-y-1 text-sm text-foreground">{top.map((d) => <li key={d.document_id}>{d.name ?? d.document_id} <span className="text-foreground-muted">×{d.citations}</span></li>)}</ul>}
+          </section>
+          <section className={section}>
+            <h2 className={h2}>{t("insights.cost")}</h2>
+            <p className={muted}>{t("insights.cost_per_answer")}: {answerCost?.credits_per_operation == null ? "—" : answerCost.credits_per_operation} ({answerCost?.credits_spent ?? 0} {t("insights.credits")})</p>
+            {userCosts.length === 0 ? <p className={muted}>{t("insights.empty")}</p> : <ul className="mt-2 space-y-1 text-sm text-foreground">{userCosts.map((u) => <li key={u.user_id ?? "none"}>{u.email ?? "—"} <span className="text-foreground-muted">{u.credits_spent} {t("insights.credits")}</span></li>)}</ul>}
           </section>
           <section className={section}>
             <h2 className={h2}>{t("insights.worst_docs")}</h2>

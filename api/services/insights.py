@@ -14,12 +14,14 @@ from collections import Counter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.models.billing import CreditTransaction, CreditTransactionType
 from api.models.citation import Citation
 from api.models.conversation import Conversation, ConversationMessage
 from api.models.document import Document
 from api.models.evaluation import EvaluationDataset, EvaluationQuestion
 from api.models.message_actions import MessageFeedback
 from api.models.response import Response
+from api.models.user import User
 
 _MAX_MESSAGES = 20000
 _REFUSAL_MARKERS = (
@@ -255,3 +257,34 @@ async def feedback_to_evaluation_cases(db: AsyncSession, org_id: uuid.UUID, data
         created += 1
     await db.flush()
     return {"created": created, "skipped": skipped}
+
+
+# ----- spec 11.2.12 / 11.2.13: cost per user and per answer, in AI credits (organizations that bring their own provider key consume no credits and show 0)
+
+async def cost_per_user(db: AsyncSession, org_id: uuid.UUID, days: int = 30) -> list[dict]:
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+    rows = (await db.execute(
+        select(CreditTransaction.user_id, User.email, func.count(CreditTransaction.id), func.coalesce(func.sum(-CreditTransaction.amount), 0))
+        .join(User, User.id == CreditTransaction.user_id, isouter=True)
+        .where(CreditTransaction.organization_id == org_id, CreditTransaction.type == CreditTransactionType.consume, CreditTransaction.created_at >= since)
+        .group_by(CreditTransaction.user_id, User.email)
+    )).all()
+    return sorted(
+        [{"user_id": r[0], "email": r[1], "operations": r[2], "credits_spent": int(r[3])} for r in rows], key=lambda x: -x["credits_spent"],
+    )
+
+
+async def cost_per_answer(db: AsyncSession, org_id: uuid.UUID, days: int = 30) -> dict:
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+    spent = int(await db.scalar(
+        select(func.coalesce(func.sum(-CreditTransaction.amount), 0)).where(
+            CreditTransaction.organization_id == org_id, CreditTransaction.type == CreditTransactionType.consume, CreditTransaction.created_at >= since,
+        )
+    ) or 0)
+    operations = int(await db.scalar(
+        select(func.count(CreditTransaction.id)).where(
+            CreditTransaction.organization_id == org_id, CreditTransaction.type == CreditTransactionType.consume, CreditTransaction.created_at >= since,
+        )
+    ) or 0)
+    return {"credits_spent": spent, "billed_operations": operations, "credits_per_operation": round(spent / operations, 4) if operations else None}
+

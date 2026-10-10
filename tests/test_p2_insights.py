@@ -158,3 +158,20 @@ async def test_insights_are_isolated_per_organization_and_closed_to_plain_member
     await db_session.commit()
     assert (await client.get(f"/organizations/{org_id}/insights/most-asked", headers=_h(member_token))).status_code == 403
     assert other_owner and token
+
+
+async def test_cost_per_user_and_per_answer_come_from_credit_consumption(client, db_session):
+    from api.models.billing import CreditTransaction, CreditTransactionType
+
+    token, owner, org_id = await _org(client, db_session, "insights-cost@example.com")
+    other = await db_session.scalar(select(User).where(User.email == "insights-cost@example.com"))
+    for amount in (-4, -6, -2):
+        db_session.add(CreditTransaction(organization_id=org_id, type=CreditTransactionType.consume, amount=amount, balance_after=100, reason="chat", user_id=other.id))
+    db_session.add(CreditTransaction(organization_id=org_id, type=CreditTransactionType.purchase, amount=500, balance_after=600, reason="pack", user_id=other.id))
+    await db_session.commit()
+    per_user = (await client.get(f"/organizations/{org_id}/insights/cost-per-user", headers=_h(token))).json()["items"]
+    assert per_user == [{"user_id": str(owner.id), "email": "insights-cost@example.com", "operations": 3, "credits_spent": 12}]
+    per_answer = (await client.get(f"/organizations/{org_id}/insights/cost-per-answer", headers=_h(token))).json()
+    assert per_answer == {"credits_spent": 12, "billed_operations": 3, "credits_per_operation": 4.0}
+    empty_token, _o, empty_org = await _org(client, db_session, "insights-cost-empty@example.com")
+    assert (await client.get(f"/organizations/{empty_org}/insights/cost-per-answer", headers=_h(empty_token))).json()["credits_per_operation"] is None

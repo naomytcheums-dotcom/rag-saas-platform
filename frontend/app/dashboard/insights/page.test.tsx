@@ -33,6 +33,8 @@ function answer(path: string) {
   if (path.includes("documents/top")) return { items: [{ document_id: "d1", name: "Handbook.pdf", citations: 5, average_relevance: 0.9 }] };
   if (path.includes("documents/worst")) return { items: [{ document_id: "d2", name: "Misc.pdf", citations: 2, average_relevance: 0.1 }] };
   if (path.includes("retrieval-success")) return { answered_questions: 4, refused: 1, success_rate: 0.75 };
+  if (path.includes("cost-per-user")) return { items: [{ user_id: "u1", email: "ana@example.com", operations: 3, credits_spent: 12 }] };
+  if (path.includes("cost-per-answer")) return { credits_spent: 12, billed_operations: 3, credits_per_operation: 4 };
   return { negative_feedback: 2, by_category: { RETRIEVAL_FAILURE: 2 } };
 }
 
@@ -50,6 +52,8 @@ describe("InsightsPage", () => {
     expect(screen.getByText("invoices, export")).toBeInTheDocument();
     expect(screen.getByText(/Handbook\.pdf/)).toBeInTheDocument();
     expect(screen.getByText(/Misc\.pdf/)).toBeInTheDocument();
+    expect(screen.getByText(/ana@example\.com/)).toBeInTheDocument();
+    expect(screen.getByText(/insights\.cost_per_answer: 4/)).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith("/organizations/org-1/insights/most-asked?days=30");
   });
 

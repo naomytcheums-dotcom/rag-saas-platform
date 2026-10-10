@@ -65,6 +65,16 @@ async def worst_documents(org_id: uuid.UUID, days: int = _DAYS, limit: int = Que
     return {"items": insights.worst_documents(await insights.document_usage(db, org_id, days), limit)}
 
 
+@router.get("/organizations/{org_id}/insights/cost-per-user")
+async def cost_per_user(org_id: uuid.UUID, days: int = _DAYS, _c: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db)):
+    return {"items": await insights.cost_per_user(db, org_id, days)}
+
+
+@router.get("/organizations/{org_id}/insights/cost-per-answer")
+async def cost_per_answer(org_id: uuid.UUID, days: int = _DAYS, _c: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db)):
+    return await insights.cost_per_answer(db, org_id, days)
+
+
 @router.get("/organizations/{org_id}/feedback/analysis")
 async def feedback_analysis(org_id: uuid.UUID, days: int = Query(default=90, ge=1, le=365), _c: OrganizationMember = Depends(require_org_manager), db: AsyncSession = Depends(get_db)):
     return await insights.feedback_failure_analysis(db, org_id, days)
