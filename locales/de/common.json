@@ -1029,5 +1029,15 @@
   "feedback.reason_incomplete": "Unvollständige Antwort",
   "feedback.reason_wrong_source": "Falsche oder irrelevante Quelle",
   "feedback.reason_other": "Sonstiges",
-  "feedback.correction": "Wie hätte die Antwort lauten sollen? (optional)"
+  "feedback.correction": "Wie hätte die Antwort lauten sollen? (optional)",
+  "documents.import_title": "Aus einer Quelle importieren",
+  "documents.import_source": "Quelle",
+  "documents.import_target": "Adresse oder Kennung",
+  "documents.import_button": "Importieren",
+  "documents.import_started": "Import gestartet: Die Dokumente erscheinen unten, sobald sie verarbeitet sind.",
+  "documents.import_error": "Der Import ist fehlgeschlagen.",
+  "documents.source_url": "Webseite",
+  "documents.source_sitemap": "Sitemap",
+  "documents.source_github": "GitHub-Repository",
+  "documents.source_notion": "Notion"
 }

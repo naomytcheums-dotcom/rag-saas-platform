@@ -1029,5 +1029,15 @@
   "feedback.reason_incomplete": "إجابة ناقصة",
   "feedback.reason_wrong_source": "مصدر خاطئ أو غير ذي صلة",
   "feedback.reason_other": "أخرى",
-  "feedback.correction": "ما الإجابة الصحيحة؟ (اختياري)"
+  "feedback.correction": "ما الإجابة الصحيحة؟ (اختياري)",
+  "documents.import_title": "الاستيراد من مصدر",
+  "documents.import_source": "المصدر",
+  "documents.import_target": "العنوان أو المعرّف",
+  "documents.import_button": "استيراد",
+  "documents.import_started": "بدأ الاستيراد: تظهر الوثائق أدناه أثناء معالجتها.",
+  "documents.import_error": "فشل الاستيراد.",
+  "documents.source_url": "صفحة ويب",
+  "documents.source_sitemap": "خريطة الموقع",
+  "documents.source_github": "مستودع GitHub",
+  "documents.source_notion": "Notion"
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import DocumentDetails from "@/components/DocumentDetails";
+import ImportSources from "@/components/ImportSources";
 import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -100,6 +101,8 @@ export default function DocumentsPage() {
         <span className="text-xs text-foreground-muted">{t("documents.supported_formats")}</span>
         <input type="file" multiple className="hidden" disabled={uploading} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void uploadMany(files); }} />
       </label>
+
+      {org && <ImportSources orgId={org.id} onImported={() => void load()} />}
 
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold text-foreground">{t("documents.your_documents")}</h2>

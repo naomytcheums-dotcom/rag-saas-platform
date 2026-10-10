@@ -1029,5 +1029,15 @@
   "feedback.reason_incomplete": "Incomplete answer",
   "feedback.reason_wrong_source": "Wrong or irrelevant source",
   "feedback.reason_other": "Other",
-  "feedback.correction": "What should the answer have been? (optional)"
+  "feedback.correction": "What should the answer have been? (optional)",
+  "documents.import_title": "Import from a source",
+  "documents.import_source": "Source",
+  "documents.import_target": "Address or identifier",
+  "documents.import_button": "Import",
+  "documents.import_started": "Import started: the documents appear below as they are processed.",
+  "documents.import_error": "The import failed.",
+  "documents.source_url": "Web page",
+  "documents.source_sitemap": "Sitemap",
+  "documents.source_github": "GitHub repository",
+  "documents.source_notion": "Notion"
 }
