@@ -31,6 +31,87 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-10 — Suite de l'audit PR n°20 : R1-R7, CI, BILL/TEN/MAP restants
+
+- Branche `bob/auto-fix-20261009-0715` ; un commit par faille, un test qui échoue avant et passe après (sauf TEN-009 : garde de non-régression) ;
+  aucun push sur main, aucune fusion. `main` fusionné dans la branche (`--no-ff`, seulement `.circleci/config.yml` et `frontend/package-lock.json`).
+- Corrigé : R1 (refus d'audit seulement pour un admin de plateforme, dédupliqué), R2 (référence de paiement obligatoire pour un superadmin,
+  `self_service` dans l'audit, `draft → paid` refusé, motif d'annulation obligatoire), R3 (garde pure de la base PostgreSQL jetable), R4 (verrous de ligne
+  sur les transitions d'abonnement et les webhooks, relecture sous verrou après les appels réseau), R5 (Paystack n'écrase plus `subscription_code`), R6
+  (synchro Stripe : audit + 502 propre), R7 (référence de paiement et motif masqués dans la vue d'audit de l'organisation).
+- CI : exception `pip-audit` ciblée pour `diskcache` (PYSEC-2026-2447, aucune version corrigée, dépendance transitive de `dspy`), délai de `backend-tests`
+  porté de 30 à 75 min (annulé à ~61 % de la suite), isolation du test de limite d'inscription (clé Redis partagée).
+- Facturation : BILL-011 (verrou sur tous les mouvements de crédits), BILL-020 (montants négatifs refusés), BILL-013 (Paystack : 501 au lieu de 500),
+  BILL-014 (crédits une seule fois par session Stripe, paiements différés, devise), BILL-015 (id Paystack vide, événement Stripe mal formé, SDK absent,
+  organisation fantôme), BILL-017 (plan inactif refusé pour l'organisation).
+- Autres : TEN-005 (nom de fichier assaini dans la clé d'objet), TEN-003 (écriture S3 hors de la boucle d'événements), MAP-003 (pages restore-account,
+  reactivate-consent, 2fa-lockout-recovery + contrat « chaque lien e-mailé a une page »), TEN-009 (déjà corrigé : garde de non-régression).
+- Non corrigé : TEN-012 (un viewer peut lancer un workflow : décision produit requise) ; TEN-003 partiel (les autres importeurs asynchrones appellent
+  encore boto3 en synchrone, pas de timeouts client) ; BILL-016 (remboursement : non géré, documenté) ; Paystack : achat de crédits non implémenté (501).
+- Preuves : base PostgreSQL jetable pour R3/R4/BILL-011 (opt-in, garde stricte) ; Stripe, Paystack, Redis, Celery et S3 simulés ; aucune clé payante.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — Audit P1/P2 : chaîne de paiement, suspension, Celery, pool, liens, entrées mal formées
+
+- Branche `bob/auto-fix-20261009-0715` (depuis la tête de la PR n°19, `61d1873`) ; un commit par faille ; aucun push sur main, aucune fusion.
+- Paiement : BILL-003/005/006 (checkout identifiable, résolution de l'organisation, statuts Stripe explicites, plan écrit depuis le prix, annulation
+  chez le fournisseur → 502 si échec, reprise), BILL-007 (plan effectif : fin de période payée, délai de grâce `BILLING_GRACE_PERIOD_DAYS`),
+  BILL-009 (multiplicateur de crédits par modèle), BILL-010 (factures annuelles 1×/an, numérotation sûre), BILL-004 (achat de crédits via checkout).
+- Back-office : TEN-002/SADM-004 (organisation suspendue = 403 sur tous les chemins par organisation et les clés API), SADM-002/003/005
+  (hiérarchie admin/superadmin, pas d'auto-suspension, suppression d'organisation sans 500, audit avant/après des écritures abonnement/plan).
+  Décision en attente : réserver les écritures financières au superadmin casserait 7 tests existants de `test_admin_subscriptions.py`.
+- RAG/Prod : RAG-002/003 (11 modules Celery enregistrés, rattrapage des documents `pending`), RAG-004 (refus avant génération sans contexte),
+  PROD-001 (`celery beat` persistant sur Redis), PROD-003 (pool 3+2 sans pooler transactionnel, 5+10 avec), MAP-001/002 (pages d'invitation et de retour OAuth).
+- Entrées mal formées : TEN-006 (migration `0136_notification_templates` : la table du modèle n'avait aucune migration), TEN-007/021/022
+  (`api/db_errors.py` : SQLSTATE 23505 → 409, 23503 → 422, classe 22 → 422 ; le reste reste un 500), TEN-008 (`limit >= 1`).
+- Preuves : base PostgreSQL jetable (`rag-pr1-disposable-pg`, hôte vérifié, jamais la base du `.env`) : migrations 0→0136 + aller-retour OK ;
+  sonde : NUL/100 000 caractères → 422, 8 inscriptions concurrentes → 1×201 + 7×409, alerte en double → 409, `limit=-1` → 422.
+  Tests ciblés : `tests/test_p1_*.py`, `tests/test_p2_malformed_inputs.py` ; 970 passés/8 ignorés sur les fichiers existants liés ;
+  `ruff check api/` propre. Stripe, Celery et beat sont simulés (aucune clé payante, aucun Redis réel).
+- Reste : voir le tableau du compte rendu (MAP-003, TEN-009, citations RAG-004, TVA par pays, etc.).
+
+### [Bob-Auto-Fixes] — 2026-10-09 — SADM-005 : écritures financières de la plateforme réservées au superadmin
+
+- Problème : un admin plateforme (rôle `admin`) pouvait créer/modifier des plans, forcer le plan ou le statut d'un abonnement, prolonger une période
+  sans paiement et lancer la synchro Stripe ; aucune borne sur les prix et la durée de prolongation.
+- Changement : les 11 écritures de `api/routers/admin_subscriptions.py` exigent `require_superadmin` (403) ; les 4 lectures restent `require_admin`.
+  `monthly_price_cents >= 0`, `days` entre 1 et 3650. Flux de l'organisation (`/organizations/{id}/billing/*`) inchangés.
+- Tests : `tests/test_p1_sadm005_superadmin_gate.py` (9 tests ; 5 échouent sur l'ancien code, vérifié dans un worktree jetable) ; dans
+  `tests/test_admin_subscriptions.py`, 6 tests changent d'appelant (admin → superadmin), assertions inchangées.
+- Reste (traité ci-dessous) : machine d'états des factures, annulation admin côté fournisseur, audit des écritures de `billing.py`.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — V1/V8/V9 : factures, annulation fournisseur, audit de la facturation
+
+- V1 (BILL-002) : `paid` et `void` sont terminaux (facture payée jamais annulable, annulée jamais payable, répétition = sans effet, 409 sinon).
+  `void` et `pay` réservés au superadmin : routes plateforme `POST /admin/organizations/{org}/invoices/{id}/mark-paid|void` ; les routes de
+  l'organisation ne l'acceptent que d'un superadmin membre (ou du réglage auto-hébergé `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`). Audit avant/après
+  (`invoice_marked_paid`, `invoice_voided`). Test existant adapté : `test_a_platform_admin_can_still_reconcile_an_invoice` s'exécute en superadmin.
+- V8 (BILL-006) : l'annulation par le back-office (`/admin/subscriptions/{id}/cancel`, `DELETE`) annule d'abord chez Stripe/Paystack (immédiat pour
+  Stripe) ; échec fournisseur → 502, fournisseur non configuré → 501, rien n'est modifié.
+- V9 : audit organisationnel des écritures de `billing.py` (changement de plan, annulation, réactivation, crédits sans paiement, pays de
+  facturation, moyen de paiement retiré, annulations fournisseur) ; aucune ligne pour une action refusée ou échouée.
+- Tests : `test_p1_bill002_invoice_state_machine.py` (10), `test_p1_bill006_admin_cancel_at_provider.py` (6), `test_p1_billing_audit.py` (7) ;
+  sur l'ancien code 9, 5 et 6 d'entre eux échouent (worktree jetable). Régression : 455 passés, 17 ignorés sur 38 fichiers billing/audit/p0/p1.
+- Reste : aucun webhook ne marque une facture locale payée (la réconciliation reste manuelle) ; V2, V3, V4, V5, V6, V7, V10 en attente de décision.
+
+### [Bob-Auto-Fixes] — 2026-10-09 — Lots factures / annulation / validation SADM-005
+
+- Factures : verrou de ligne (`SELECT … FOR UPDATE`) sur les transitions `paid`/`void` ; le balayage « en retard » (service et tâche Celery) devient un
+  seul UPDATE conditionnel qui ne peut plus écraser un paiement (cause racine confirmée : lecture puis écriture sans garde) ; `mark-paid` plateforme
+  exige une référence de paiement (conservée dans l'audit). Tests : 4 des 5 tests de concurrence PostgreSQL échouent sans le verrou (preuve sur base jetable).
+- Audit : tentatives refusées (`admin_financial_action_denied`), remboursement et synchro Stripe tentés, événements fournisseur appliqués
+  (`billing_webhook_applied`, acteur système, identifiant d'événement) ; `request_id` dans les métadonnées ; écriture dans la transaction métier.
+- Validation : plans (clé, prix ≤ 1 M, quotas), `billing_period` limité à monthly/yearly, seuils d'alerte 1–100, longueurs de motifs.
+- Webhooks : un événement tardif ne rouvre plus un abonnement terminé (Stripe `updated` après `deleted`, `payment_failed` tardif ; Paystack
+  `create` tardif, `charge.success`, `payment_failed`) ; la suppression d'un ancien abonnement n'annule plus l'actuel ; Paystack applique enfin le
+  plan payé (code de plan → plan, cause confirmée : jamais assigné) ; identifiant d'organisation mal formé ignoré (plus de 500).
+- Annulation : routes `/stripe/cancel` et `/cancel-active-subscription` enregistrent une annulation en attente (statut inchangé jusqu'à l'événement
+  fournisseur) ; l'annulation back-office d'un abonnement Paystack reste programmée (Paystack ne désactive qu'en fin de période).
+- SADM-005 : 10 écritures abonnement/plan/synchro + 2 routes facture, toutes superadmin (introspection des routeurs, 0 route alternative) ; l'annonce
+  précédente de « 11 écritures » était un mauvais comptage ; clé API et webhooks non signés n'atteignent aucune de ces routes. Frontend : une erreur de
+  création de forfait s'affiche à côté du formulaire (403 expliqué, 422 lisible, prix négatif refusé) au lieu de remplacer l'onglet.
+- Preuves : 565 passés, 22 ignorés, 1 échec préexistant (`test_i18n`, identique sur HEAD propre) ; PostgreSQL jetable : 5 passés ; vitest 172 passés ; tsc, eslint, ruff propres.
+- Non vérifié : Stripe/Paystack réels (mockés), Redis/worker réels, CI.
+
 ### [Bob-Auto-Fixes] — 2026-10-09 — P0 facturation : plan payant gratuit (BILL-001/UX-001), facture auto-payée (BILL-002), réponse LLM sans débit (BILL-008)
 
 - Problème : `POST .../billing/subscribe|upgrade|downgrade` écrivait `plan_id` sans paiement (Enterprise gratuit pour tout owner/admin) ;

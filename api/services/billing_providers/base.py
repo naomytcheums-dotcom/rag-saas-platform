@@ -61,6 +61,19 @@ async def claim_payment_event(db: AsyncSession, provider, event_id: str, event_t
         return False
 
 
+async def audit_webhook_applied(db: AsyncSession, provider: str, event_id: str, event_type: str, organization_id: uuid.UUID | None) -> None:
+    """One audit row per applied state-changing provider event (system actor, no user): the provider's own event id is the correlation
+    identifier. Written in the webhook's transaction, after the claim, so a rolled-back event leaves no row."""
+    from api.models.audit_log import AuditAction
+    from api.security.audit_log import log_audit_action
+    from api.security.logging_correlation import get_request_id
+
+    await log_audit_action(
+        db, user_id=None, action=AuditAction.BILLING_WEBHOOK_APPLIED, ip=None, user_agent=None, success=True, organization_id=organization_id,
+        resource_type="payment_event", resource_id=event_id, metadata={"provider": provider, "type": event_type, "request_id": get_request_id()},
+    )
+
+
 class BillingProvider(abc.ABC):
     """One instance per request, stateless beyond its own name --
     real API calls go out through each provider's own SDK/HTTP client,

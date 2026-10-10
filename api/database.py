@@ -44,12 +44,10 @@ if settings.DATABASE_URL_TRANSACTION:
 
 import os as _os
 
-# Hackathon fix: allow forcing pool_size/max_overflow via env vars so
-# Render Free can override the defaults without a code change. The
-# default remains 5/10 as patched above.
-_pool_size = int(_os.environ.get("SQLALCHEMY_POOL_SIZE", "5"))
-_max_overflow = int(_os.environ.get("SQLALCHEMY_MAX_OVERFLOW", "10"))
-_pool_timeout = int(_os.environ.get("SQLALCHEMY_POOL_TIMEOUT", "60"))
+from api.db_pool import resolve_pool_settings
+
+# Pool sizing: see api/db_pool.py (PROD-003) -- 5+10 behind a transaction-mode pooler, 3+2 otherwise; env vars still override.
+_pool_size, _max_overflow, _pool_timeout = resolve_pool_settings(_os.environ, bool(settings.DATABASE_URL_TRANSACTION))
 
 engine = create_async_engine(
     _engine_url,

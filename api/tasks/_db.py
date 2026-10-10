@@ -35,9 +35,10 @@ def make_async_engine():
     # connections server-side, so the client-side pool can safely hold
     # more than one connection. Override via env vars for Render Free.
     import os as _os
-    _pool_size = int(_os.environ.get("SQLALCHEMY_POOL_SIZE", "5"))
-    _max_overflow = int(_os.environ.get("SQLALCHEMY_MAX_OVERFLOW", "10"))
-    _pool_timeout = int(_os.environ.get("SQLALCHEMY_POOL_TIMEOUT", "60"))
+
+    from api.db_pool import resolve_pool_settings
+
+    _pool_size, _max_overflow, _pool_timeout = resolve_pool_settings(_os.environ, bool(settings.DATABASE_URL_TRANSACTION))
 
     engine = create_async_engine(
         transaction_url(),

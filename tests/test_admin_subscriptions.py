@@ -1,19 +1,24 @@
-"""Partie 11.4 -- plans/subscriptions, real CRUD + real (honestly-zero) revenue math."""
+"""Partie 11.4 -- plans/subscriptions, real CRUD + real (honestly-zero) revenue math.
+
+SADM-005: reads are open to a platform admin; every write requires the superadmin tier, so the write tests below run as a superadmin
+(tests/test_p1_sadm005_superadmin_gate.py proves the refusal for an admin)."""
+
+from api.models.user import UserRole
 
 
 def _auth_header(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-async def _make_admin_and_org(client, db_session, register_payload):
+async def _make_admin_and_org(client, db_session, register_payload, role=UserRole.admin):
     from sqlalchemy import select
 
-    from api.models.user import User, UserRole
+    from api.models.user import User
 
     token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     user = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
     org_id = (await client.post("/organizations", json={"name": "Sub Org"}, headers=_auth_header(token))).json()["id"]
-    user.role = UserRole.admin
+    user.role = role
     await db_session.commit()
     return token, user, org_id
 
@@ -38,7 +43,7 @@ async def test_revenue_stats_are_honestly_zero_without_a_real_paid_plan(client, 
 
 
 async def test_create_paid_plan_and_assign_changes_real_mrr(client, db_session, register_payload):
-    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
     billing = await client.get(f"/admin/organizations/{org_id}/billing", headers=_auth_header(token))
     sub_id = billing.json()["subscription_id"]
 
@@ -62,7 +67,7 @@ async def test_admin_can_set_paystack_plan_codes_through_the_real_endpoint(clien
     paystack_plan_code_monthly/yearly to the latter, which no real
     endpoint ever imports, so an admin had no real way to set a
     Paystack plan code through the API at all. This proves the fix."""
-    token, _, _ = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, _ = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
 
     create_response = await client.post(
         "/admin/plans",
@@ -82,7 +87,7 @@ async def test_admin_can_set_paystack_plan_codes_through_the_real_endpoint(clien
 
 
 async def test_cancel_subscription(client, db_session, register_payload):
-    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
     billing = await client.get(f"/admin/organizations/{org_id}/billing", headers=_auth_header(token))
     sub_id = billing.json()["subscription_id"]
 
@@ -92,7 +97,7 @@ async def test_cancel_subscription(client, db_session, register_payload):
 
 
 async def test_extend_subscription(client, db_session, register_payload):
-    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
     billing = await client.get(f"/admin/organizations/{org_id}/billing", headers=_auth_header(token))
     sub_id = billing.json()["subscription_id"]
 
@@ -105,7 +110,7 @@ async def test_stripe_sync_endpoints_honestly_501_without_configured_keys(client
     """Phase 5, Étape 3 correctif: billing_stripe_sync.py had zero
     callers anywhere -- confirmed dead code, now wired to these two
     admin endpoints rather than left unreachable or deleted."""
-    token, _, _ = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, _ = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
 
     products = await client.post("/admin/plans/sync/stripe-products", headers=_auth_header(token))
     assert products.status_code == 501
@@ -115,7 +120,7 @@ async def test_stripe_sync_endpoints_honestly_501_without_configured_keys(client
 
 
 async def test_refund_refuses_honestly_without_a_real_payment_processor(client, db_session, register_payload):
-    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload)
+    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload, UserRole.superadmin)
     billing = await client.get(f"/admin/organizations/{org_id}/billing", headers=_auth_header(token))
     sub_id = billing.json()["subscription_id"]
 

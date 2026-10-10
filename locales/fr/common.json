@@ -550,6 +550,8 @@
   "admin.user_verified": "vérifié",
   "admin.user_unverified": "non vérifié",
   "admin.users_empty": "Aucun utilisateur trouvé.",
+  "admin.plan_price_invalid": "Le prix mensuel doit être un nombre supérieur ou égal à zéro.",
+  "admin.plan_write_forbidden": "Seul un superadmin peut créer ou modifier les forfaits et les prix.",
   "admin.plans": "Forfaits",
   "admin.plan_monthly": "/mois",
   "admin.plan_name_placeholder": "Nom du forfait",

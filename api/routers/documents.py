@@ -120,7 +120,7 @@ from api.security.document_versions import (
     get_document_versions,
     restore_document_version,
 )
-from api.security.organizations import require_org_admin, require_org_member, require_org_member_excluding_viewer
+from api.security.organizations import ensure_organization_active, require_org_admin, require_org_member, require_org_member_excluding_viewer
 from api.security.permissions import require_permission
 from api.security.rate_limit import enforce_rate_limit
 from api.services.document_storage import stream_document_file
@@ -172,6 +172,7 @@ async def _get_document_and_membership(db: AsyncSession, document_id: uuid.UUID,
     )
     if membership is None:
         raise not_found
+    await ensure_organization_active(db, document.organization_id)
     return document, membership
 
 
@@ -191,6 +192,7 @@ async def _get_document_and_membership_including_deleted(db: AsyncSession, docum
     )
     if membership is None:
         raise not_found
+    await ensure_organization_active(db, document.organization_id)
     return document, membership
 
 

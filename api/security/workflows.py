@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import get_current_user, get_db
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
+from api.security.organizations import ensure_organization_active
 from api.models.workflow import Workflow, WorkflowStatus
 from api.models.workflow_run import WorkflowRun
 from api.services.workflows import validate_workflow_data
@@ -37,6 +38,7 @@ async def _resolve_workflow_and_membership(workflow_id: uuid.UUID, current_user:
     )
     if membership is None:
         raise _NOT_FOUND
+    await ensure_organization_active(db, workflow.organization_id)
     return workflow, membership
 
 
@@ -44,6 +46,16 @@ async def require_workflow_member(
     workflow_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> tuple[Workflow, OrganizationMember]:
     return await _resolve_workflow_and_membership(workflow_id, current_user, db)
+
+
+async def require_workflow_runner(
+    workflow_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> tuple[Workflow, OrganizationMember]:
+    """TEN-012: running a workflow spends credits and can have side effects, so a read-only viewer may look at a workflow but not run it."""
+    workflow, membership = await _resolve_workflow_and_membership(workflow_id, current_user, db)
+    if membership.role == OrganizationRole.viewer:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Running a workflow needs the member role or above")
+    return workflow, membership
 
 
 async def require_workflow_manager(

@@ -3837,6 +3837,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -17729,6 +17730,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -17829,6 +17831,7 @@
             "schema": {
               "type": "integer",
               "maximum": 100,
+              "minimum": 1,
               "default": 20,
               "title": "Limit"
             }
@@ -17893,6 +17896,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -17967,6 +17971,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -18186,6 +18191,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -26077,6 +26083,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -37010,6 +37017,143 @@
         }
       }
     },
+    "/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid": {
+      "post": {
+        "tags": [
+          "Admin Subscriptions"
+        ],
+        "summary": "Admin Mark Invoice Paid Endpoint",
+        "description": "BILL-002 back-office reconciliation (bank transfer, manual settlement): the platform's own route, not tied to the organization's\nmembership. The external `reference` of the payment is mandatory and kept in the audit row: nobody marks an invoice paid on a bare call.",
+        "operationId": "admin_mark_invoice_paid_endpoint_admin_organizations__org_id__invoices__invoice_id__mark_paid_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "invoice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invoice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkInvoicePaidRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/organizations/{org_id}/invoices/{invoice_id}/void": {
+      "post": {
+        "tags": [
+          "Admin Subscriptions"
+        ],
+        "summary": "Admin Void Invoice Endpoint",
+        "operationId": "admin_void_invoice_endpoint_admin_organizations__org_id__invoices__invoice_id__void_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "invoice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invoice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidInvoiceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/plans": {
       "get": {
         "tags": [
@@ -38731,6 +38875,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OrgMarkInvoicePaidRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -55026,7 +55187,8 @@
           "reason": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 500
               },
               {
                 "type": "null"
@@ -56355,10 +56517,14 @@
         "properties": {
           "resource_type": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Resource Type"
           },
           "threshold_percent": {
             "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Threshold Percent"
           }
         },
@@ -63661,6 +63827,23 @@
         ],
         "title": "MarkAllReadResponse"
       },
+      "MarkInvoicePaidRequest": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Reference",
+            "description": "Bank transfer id, receipt number, ..."
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "title": "MarkInvoicePaidRequest",
+        "description": "Manual settlement: an invoice is never marked paid by a superadmin without the external proof of the payment."
+      },
       "MediaAssetListResponse": {
         "properties": {
           "items": {
@@ -64789,6 +64972,26 @@
         ],
         "title": "OneDriveImportResponse",
         "description": "Same real, honest, minimal acknowledgment as every prior async\nimport step's own response, and for the identical reason."
+      },
+      "OrgMarkInvoicePaidRequest": {
+        "properties": {
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference",
+            "description": "Bank transfer id, receipt number, ..."
+          }
+        },
+        "type": "object",
+        "title": "OrgMarkInvoicePaidRequest",
+        "description": "Body of the organization route `/pay`. The reference is optional at the schema level so that access control (403) and the\ninvoice lookup (404) answer before a payload problem does; the handler then requires it from a superadmin (422)."
       },
       "OrganizationAPIKeyCreateRequest": {
         "properties": {
@@ -66820,21 +67023,28 @@
         "properties": {
           "key": {
             "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
             "title": "Key"
           },
           "name": {
             "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
             "title": "Name"
           },
           "monthly_price_cents": {
             "type": "integer",
+            "maximum": 100000000.0,
+            "minimum": 0.0,
             "title": "Monthly Price Cents",
             "default": 0
           },
           "max_documents": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66845,7 +67055,9 @@
           "max_agents": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66856,7 +67068,9 @@
           "max_members": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66867,7 +67081,8 @@
           "paystack_plan_code_monthly": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100
               },
               {
                 "type": "null"
@@ -66878,7 +67093,8 @@
           "paystack_plan_code_yearly": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100
               },
               {
                 "type": "null"
@@ -66899,7 +67115,9 @@
           "name": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
               },
               {
                 "type": "null"
@@ -66910,7 +67128,9 @@
           "monthly_price_cents": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 100000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66921,7 +67141,9 @@
           "max_documents": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66932,7 +67154,9 @@
           "max_agents": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66943,7 +67167,9 @@
           "max_members": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -66965,7 +67191,8 @@
           "paystack_plan_code_monthly": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100
               },
               {
                 "type": "null"
@@ -66976,7 +67203,8 @@
           "paystack_plan_code_yearly": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100
               },
               {
                 "type": "null"
@@ -67552,6 +67780,8 @@
         "properties": {
           "pack_id": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Pack Id"
           }
         },
@@ -71705,6 +71935,10 @@
           },
           "billing_period": {
             "type": "string",
+            "enum": [
+              "monthly",
+              "yearly"
+            ],
             "title": "Billing Period",
             "default": "monthly"
           }
@@ -71720,7 +71954,8 @@
           "reason": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 500
               },
               {
                 "type": "null"
@@ -71736,6 +71971,8 @@
         "properties": {
           "days": {
             "type": "integer",
+            "maximum": 3650.0,
+            "minimum": 1.0,
             "title": "Days"
           }
         },
@@ -73152,6 +73389,10 @@
           },
           "billing_period": {
             "type": "string",
+            "enum": [
+              "monthly",
+              "yearly"
+            ],
             "title": "Billing Period",
             "default": "monthly"
           }
@@ -74456,19 +74697,18 @@
       "VoidInvoiceRequest": {
         "properties": {
           "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
             "title": "Reason"
           }
         },
         "type": "object",
-        "title": "VoidInvoiceRequest"
+        "required": [
+          "reason"
+        ],
+        "title": "VoidInvoiceRequest",
+        "description": "Voiding cancels what the organization owes: the reason is mandatory and audited."
       },
       "VulnerabilityResponse": {
         "properties": {

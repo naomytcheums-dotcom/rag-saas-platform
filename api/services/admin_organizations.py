@@ -3,6 +3,7 @@ existing, real Organization/OrganizationMember/quota/usage machinery
 rather than duplicating it (member listing, usage figures)."""
 
 import datetime as dt
+import logging
 import uuid
 
 from sqlalchemy import func, select
@@ -12,6 +13,8 @@ from sqlalchemy.orm import selectinload
 from api.models.agent import Agent
 from api.models.document import Document
 from api.models.organization import Organization, OrganizationMember
+
+logger = logging.getLogger(__name__)
 
 
 class OrganizationAdminError(Exception):
@@ -46,10 +49,37 @@ async def update_organization_admin(db: AsyncSession, org_id: uuid.UUID, *, name
     return org
 
 
-async def delete_organization_admin(db: AsyncSession, org_id: uuid.UUID) -> None:
+async def delete_organization_admin(db: AsyncSession, org_id: uuid.UUID) -> list[str]:
+    """Deletes the organization and returns the object-storage keys of its files, to be purged once the deletion is committed.
+    A provider subscription (Stripe) is cancelled first so that the customer is not billed for an organization that no longer exists."""
+    from api.models.admin import Subscription
+    from api.models.media import MediaAsset, MediaFrame
+
     org = await get_organization_admin(db, org_id)
+    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == org_id))
+    if sub is not None and sub.stripe_subscription_id:
+        from api.services import billing_stripe
+
+        try:
+            await billing_stripe.cancel_stripe_subscription(db, org_id, at_period_end=False)
+        except Exception as exc:  # noqa: BLE001 -- the deletion must not hang on the provider; the failure is logged for follow-up
+            logger.error("organization %s deleted but its Stripe subscription could not be cancelled (%s)", org_id, type(exc).__name__)
+    keys = list((await db.scalars(select(Document.file_key).where(Document.organization_id == org_id, Document.file_key.is_not(None)))).all())
+    keys += list((await db.scalars(select(MediaAsset.file_key).where(MediaAsset.organization_id == org_id, MediaAsset.file_key != ""))).all())
+    keys += list((await db.scalars(
+        select(MediaFrame.file_key).join(MediaAsset, MediaAsset.id == MediaFrame.media_asset_id).where(MediaAsset.organization_id == org_id)
+    )).all())
     await db.delete(org)
     await db.flush()
+    return [key for key in keys if key]
+
+
+def purge_organization_storage(keys: list[str]) -> None:
+    """Best effort, after the commit (`delete_document_file` never raises): objects of a deleted organization are not left orphaned."""
+    from api.services.document_storage import delete_document_file
+
+    for key in keys:
+        delete_document_file(key)
 
 
 async def suspend_organization(db: AsyncSession, org_id: uuid.UUID, *, reason: str | None) -> Organization:

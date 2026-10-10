@@ -27,12 +27,32 @@ from api.schemas.chat_stream import ChatStreamRequest
 from api.security.agents import resolve_agent_and_membership
 from api.security.conversations import require_conversation_for_stream
 from api.security.organization_settings import get_org_settings
+from api.services.agent_citation_required import format_citation_required_response, get_citation_required_message
+from api.services.agent_context_only import format_context_only_response, get_context_only_message
 from api.services.retrieval_pipeline import build_llm_context, search_with_context
-from api.services.streaming import stream_agent_response
+from api.services.streaming import send_done, send_start, send_token, stream_agent_response
 
 router = APIRouter(tags=["chat-stream"])
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
+
+
+async def _no_context_refusal(db: AsyncSession, agent, citation_chunks: list[dict]) -> str | None:
+    """The agent's own refusal text when it is configured to answer only from sources (`citation_required` or
+    `answer_only_from_context`, both opt-in) and retrieval found nothing; None when the model may answer."""
+    if citation_chunks:
+        return None
+    if agent.citation_required:
+        return format_citation_required_response(await get_citation_required_message(db, agent.id))
+    if agent.answer_only_from_context:
+        return format_context_only_response(await get_context_only_message(db, agent.id))
+    return None
+
+
+async def _refusal_events(message: str):
+    yield send_start({"gated": True})
+    yield send_token(message)
+    yield send_done({"gated": True, "reason": "no_context"})
 
 
 async def _stream_response(
@@ -67,6 +87,11 @@ async def _stream_response(
         db, agent.organization_id, message, top_k=5, org_settings=org_settings, user_context=user_context,
     )
     context = build_llm_context(citation_chunks, org_settings)
+    refusal = await _no_context_refusal(db, agent, citation_chunks)
+    if refusal is not None:
+        # RAG-004: decided BEFORE generation -- tokens already sent cannot be taken back, so an agent that must answer from sources
+        # never calls the model when retrieval found nothing.
+        return StreamingResponse(_refusal_events(refusal), media_type="text/event-stream", headers=_SSE_HEADERS)
     generator = stream_agent_response(
         db, str(agent.id), message, conversation_id=conversation_id, user_id=current_user.id, organization_id=agent.organization_id,
         context=context, citation_chunks=citation_chunks,

@@ -11,12 +11,13 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_admin, require_superadmin
 from api.models.audit_log import AuditAction, AuditLog
 from api.models.jwt_signing_key import JWTSigningKey
+from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.audit import (
     AuditActionEntry,
@@ -37,6 +38,10 @@ from api.security.organizations import require_org_admin as _require_org_admin_f
 
 router = APIRouter(tags=["audit"])
 
+PROTECTED_FINANCIAL_RESOURCE_TYPES = ("subscription", "plan", "billing", "invoice", "credits", "credit_pack", "provider_sync", "admin_route")
+# Metadata keys that only the platform side may read (see _list_audit_logs): the staff's internal notes on a financial action.
+STAFF_ONLY_METADATA_KEYS = frozenset({"reference", "reason"})
+
 
 
 def _to_entry(row: AuditLog) -> AuditLogEntry:
@@ -50,6 +55,7 @@ def _to_entry(row: AuditLog) -> AuditLogEntry:
 async def _list_audit_logs(
     db: AsyncSession, *, user_id: uuid.UUID | None, action: str | None, since: dt.datetime | None,
     until: dt.datetime | None, limit: int, offset: int, organization_id: uuid.UUID | None = None,
+    hide_non_member_actors: bool = False,
 ) -> AuditLogListResponse:
     filters = []
     if user_id is not None:
@@ -67,7 +73,21 @@ async def _list_audit_logs(
     rows = (await db.scalars(
         select(AuditLog).where(*filters).order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
     )).all()
-    return AuditLogListResponse(items=[_to_entry(r) for r in rows], total=total, limit=limit, offset=offset)
+    items = [_to_entry(r) for r in rows]
+    if hide_non_member_actors and organization_id is not None:
+        # The organization's own admins may see what happened on their account, but not who, on the platform staff, did it: the actor's
+        # id, IP address and user agent are masked, and so are the staff's internal notes (the payment reference of a manual settlement,
+        # the reason of a void or a cancellation). The action, its result and the before/after state stay visible. Rows written by the
+        # organization's own members, and by the system (no actor), are shown in full.
+        member_ids = set((await db.scalars(select(OrganizationMember.user_id).where(OrganizationMember.organization_id == organization_id))).all())
+        for entry in items:
+            if entry.user_id is not None and entry.user_id not in member_ids:
+                entry.user_id = None
+                entry.ip = None
+                entry.user_agent = None
+                if entry.metadata:
+                    entry.metadata = {key: value for key, value in entry.metadata.items() if key not in STAFF_ONLY_METADATA_KEYS}
+    return AuditLogListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/account/audit-logs", response_model=AuditLogListResponse)
@@ -122,7 +142,7 @@ async def get_organization_audit_logs(
     here; older, pre-existing action types never populate that column
     and so never appear in this org-scoped view (see AuditLog's own
     docstring)."""
-    return await _list_audit_logs(db, user_id=None, action=action, since=since, until=until, limit=limit, offset=offset, organization_id=org_id)
+    return await _list_audit_logs(db, user_id=None, action=action, since=since, until=until, limit=limit, offset=offset, organization_id=org_id, hide_non_member_actors=True)
 
 
 @router.get("/admin/failed-logins", response_model=FailedLoginStatsResponse)
@@ -283,7 +303,11 @@ async def purge_audit_logs_endpoint(
     surviving row after this runs, which is the honest, expected result
     of a real purge, not a bug to hide."""
     threshold = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=older_than_days)
-    rows = (await db.scalars(select(AuditLog).where(AuditLog.timestamp < threshold))).all()
+    # Financial trail (plans, subscriptions, invoices, credits, provider syncs) is never purged: it is the proof of what was charged.
+    rows = (await db.scalars(select(AuditLog).where(
+        AuditLog.timestamp < threshold,
+        or_(AuditLog.resource_type.is_(None), AuditLog.resource_type.notin_(PROTECTED_FINANCIAL_RESOURCE_TYPES)),
+    ))).all()
     count = len(rows)
     for row in rows:
         await db.delete(row)

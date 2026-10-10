@@ -24,12 +24,18 @@ fonctionner (TLS Redis, timeout de job, config S3).
   l'incident documente dans `docs/deployment/GITHUB_ACTIONS.md`,
   cause par un ancien workflow de tests casse qui a consomme tout le
   quota avant meme la creation de ce worker).
-- Aucune vraie planification `beat` (les taches periodiques definies
-  dans `celery_app.py`, purge de comptes supprimes, rotation de cles
-  JWT, etc.) ne s'execute de facon fiable sur cet intervalle de 10
-  minutes -- certaines de ces taches attendent une heure precise
-  (`crontab(hour=3, minute=0)`), qui peut etre manquee si le run de
-  10 minutes le plus proche ne tombe pas dedans.
+- ~~Aucune vraie planification `beat`~~ **(corrige, PROD-001)** : le workflow
+  demarre desormais un processus `celery beat` a cote du worker, avec un
+  ordonnanceur qui memorise dans Redis l'heure du dernier lancement de chaque
+  tache (`api/tasks/beat_scheduler.py`). Une tache devenue due entre deux
+  passages (facturation mensuelle, credits mensuels, relances, purges RGPD,
+  renouvellement SSL, balayage des documents `pending`) est envoyee au
+  passage suivant (au plus ~10 min de retard), et une tache deja executee
+  n'est pas renvoyee. **Limites** : il faut que le worker reste planifie
+  (quota Actions) ; une tache planifiee prend le retard de l'intervalle du
+  workflow ; un vrai service `beat` permanent (solution perenne ci-dessous)
+  reste preferable. Non verifie en conditions reelles ici (aucun Redis ni
+  runner GitHub disponibles) : verifie par test unitaire de l'ordonnanceur.
 
 ## Solution perenne recommandee
 

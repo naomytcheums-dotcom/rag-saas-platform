@@ -6,6 +6,7 @@ import LoadingState from "@/components/LoadingState";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, fileUrl } from "@/lib/api";
+import { describeApiDetail } from "@/lib/api-errors";
 import { useRequireAuth } from "@/lib/auth";
 import { useTranslation } from "@/lib/i18n";
 
@@ -347,6 +348,7 @@ function SubscriptionsTab() {
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     void api.get<AdminPlan[]>("/admin/plans").then((items) => { setPlans(items); setError(null); }).catch((err) => setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load")));
@@ -359,13 +361,21 @@ function SubscriptionsTab() {
 
   async function createPlan() {
     if (!newPlanName.trim()) return;
+    const price = Number(newPlanPrice || "0");
+    if (!Number.isFinite(price) || price < 0) {
+      setActionError(t("admin.plan_price_invalid"));
+      return;
+    }
+    setActionError(null);
     try {
-      await api.post("/admin/plans", { key: newPlanName.toLowerCase().replace(/\s+/g, "-"), name: newPlanName, monthly_price_cents: Math.round(Number(newPlanPrice || "0") * 100) });
+      await api.post("/admin/plans", { key: newPlanName.toLowerCase().replace(/\s+/g, "-"), name: newPlanName, monthly_price_cents: Math.round(price * 100) });
       setNewPlanName("");
       setNewPlanPrice("");
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : t("admin.error_load"));
+      // An action failure is shown next to the form: the plans list stays on screen (only a failed LOAD replaces it).
+      if (err instanceof ApiError && err.status === 403) setActionError(t("admin.plan_write_forbidden"));
+      else setActionError(err instanceof ApiError ? describeApiDetail(err.detail, t("admin.error_load")) : t("admin.error_load"));
     }
   }
 
@@ -388,6 +398,7 @@ function SubscriptionsTab() {
           <input value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder={t("admin.plan_price_placeholder")} type="number" className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
           <button type="button" onClick={() => void createPlan()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">{t("admin.create_plan")}</button>
         </div>
+        {actionError && <p className="mt-2 text-sm text-danger" role="alert">{actionError}</p>}
       </div>
 
       <div>

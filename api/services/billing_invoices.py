@@ -8,7 +8,7 @@ import datetime as dt
 import logging
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -27,8 +27,33 @@ class InvoiceNotFoundError(InvoiceError):
     pass
 
 
+class InvoiceStateError(InvoiceError):
+    """The requested transition is not allowed from the invoice's current status (BILL-002)."""
+
+    def __init__(self, current: InvoiceStatus, requested: str):
+        super().__init__(f"An invoice that is {current.value} cannot be {requested}")
+        self.current = current
+        self.requested = requested
+
+
 class PDFUnavailableError(InvoiceError):
     pass
+
+
+async def audit_invoice_transition(db: AsyncSession, *, user_id: uuid.UUID, ip: str | None, user_agent: str | None, invoice: Invoice, operation: str, before: InvoiceStatus, reason: str | None = None, reference: str | None = None, self_service: bool = False) -> None:
+    """BILL-002 / V9: marking an invoice paid or voiding it is a financial act: who, on which organization, from which status to which."""
+    from api.models.audit_log import AuditAction
+    from api.security.audit_log import log_audit_action
+    from api.security.logging_correlation import get_request_id
+
+    await log_audit_action(
+        db, user_id=user_id, action=AuditAction.INVOICE_MARKED_PAID if operation == "paid" else AuditAction.INVOICE_VOIDED, ip=ip, user_agent=user_agent,
+        success=True, organization_id=invoice.organization_id, resource_type="invoice", resource_id=str(invoice.id),
+        metadata={
+            "number": invoice.number, "before": before.value, "after": invoice.status.value, "total_cents": invoice.total_cents, "currency": invoice.currency,
+            "request_id": get_request_id(), **({"reason": reason} if reason else {}), **({"reference": reference} if reference else {}), **({"self_service": True} if self_service else {}),
+        },
+    )
 
 
 async def generate_invoice_number(db: AsyncSession) -> str:
@@ -79,9 +104,18 @@ async def list_invoices(db: AsyncSession, organization_id: uuid.UUID, *, status_
     return list((await db.scalars(stmt)).all())
 
 
-async def get_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
-    invoice = await db.get(Invoice, invoice_id)
-    if invoice is None or invoice.organization_id != organization_id:
+async def get_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, lock: bool = False) -> Invoice:
+    """`lock=True` takes a row lock (SELECT ... FOR UPDATE on PostgreSQL; ignored by SQLite) and refreshes the row, so two concurrent
+    transitions on the same invoice are serialized and the second one sees the first one's committed status."""
+    if not lock:
+        invoice = await db.get(Invoice, invoice_id)
+        if invoice is None or invoice.organization_id != organization_id:
+            raise InvoiceNotFoundError(str(invoice_id))
+        return invoice
+    invoice = await db.scalar(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.organization_id == organization_id).with_for_update().execution_options(populate_existing=True)
+    )
+    if invoice is None:
         raise InvoiceNotFoundError(str(invoice_id))
     return invoice
 
@@ -136,7 +170,13 @@ async def remind_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_i
 
 
 async def mark_invoice_paid(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
-    invoice = await get_invoice(db, organization_id, invoice_id)
+    """paid is terminal: marking a paid invoice again is a no-op (the first paid_at is kept). A draft was never issued, so it cannot be
+    settled; a void or refunded invoice cannot be paid either. pending/sent/overdue -> paid is the only way in."""
+    invoice = await get_invoice(db, organization_id, invoice_id, lock=True)
+    if invoice.status == InvoiceStatus.paid:
+        return invoice
+    if invoice.status in (InvoiceStatus.draft, InvoiceStatus.void, InvoiceStatus.refunded):
+        raise InvoiceStateError(invoice.status, "marked paid")
     invoice.status = InvoiceStatus.paid
     invoice.paid_at = dt.datetime.now(dt.timezone.utc)
     await db.flush()
@@ -144,7 +184,12 @@ async def mark_invoice_paid(db: AsyncSession, organization_id: uuid.UUID, invoic
 
 
 async def void_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, reason: str | None) -> Invoice:
-    invoice = await get_invoice(db, organization_id, invoice_id)
+    """A paid invoice can never be voided (that would erase collected revenue; a refund is a separate operation); voiding twice is a no-op."""
+    invoice = await get_invoice(db, organization_id, invoice_id, lock=True)
+    if invoice.status == InvoiceStatus.void:
+        return invoice
+    if invoice.status in (InvoiceStatus.paid, InvoiceStatus.refunded):
+        raise InvoiceStateError(invoice.status, "voided")
     invoice.status = InvoiceStatus.void
     invoice.voided_at = dt.datetime.now(dt.timezone.utc)
     invoice.void_reason = reason
@@ -152,15 +197,28 @@ async def void_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id:
     return invoice
 
 
+async def settle_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor_id: uuid.UUID, ip: str | None, user_agent: str | None, reference: str | None = None, self_service: bool = False) -> Invoice:
+    """The single entry point for the two privileged invoice transitions (`paid` / `void`): row lock + state machine + audit in the
+    caller's transaction. `reference` is the external proof of a manual settlement (bank transfer id, ...), kept in the audit row;
+    `self_service` marks a transition made by an organization itself on a self-hosted instance (no proof required there)."""
+    before = (await get_invoice(db, organization_id, invoice_id, lock=True)).status
+    if operation == "paid":
+        invoice = await mark_invoice_paid(db, organization_id, invoice_id)
+    else:
+        invoice = await void_invoice(db, organization_id, invoice_id, reason=reason)
+    if invoice.status != before:  # a repeated call is an idempotent no-op, not a second financial act
+        await audit_invoice_transition(db, user_id=actor_id, ip=ip, user_agent=user_agent, invoice=invoice, operation=operation, before=before, reason=reason, reference=reference, self_service=self_service)
+    return invoice
+
+
 async def mark_overdue_invoices(db: AsyncSession) -> int:
+    """One atomic UPDATE restricted to the statuses that may become overdue: a payment committed meanwhile is never overwritten."""
     today = dt.date.today()
-    due = list((await db.scalars(
-        select(Invoice).where(Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.pending]), Invoice.due_date < today)
-    )).all())
-    for invoice in due:
-        invoice.status = InvoiceStatus.overdue
+    result = await db.execute(
+        update(Invoice).where(Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.pending]), Invoice.due_date < today).values(status=InvoiceStatus.overdue)
+    )
     await db.flush()
-    return len(due)
+    return result.rowcount or 0
 
 
 async def get_invoice_stats(db: AsyncSession, organization_id: uuid.UUID) -> dict:

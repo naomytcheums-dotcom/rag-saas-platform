@@ -64,8 +64,12 @@ async def ensure_default_plans_seeded(db: AsyncSession) -> list[Plan]:
     return seeded
 
 
-async def get_or_create_subscription(db: AsyncSession, organization_id: uuid.UUID) -> Subscription:
-    sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
+async def get_or_create_subscription(db: AsyncSession, organization_id: uuid.UUID, *, lock: bool = False) -> Subscription:
+    """`lock=True`: SELECT ... FOR UPDATE + refresh (see get_subscription), for callers that are about to change the row."""
+    stmt = select(Subscription).where(Subscription.organization_id == organization_id)
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    sub = await db.scalar(stmt)
     if sub is None:
         free_plan = await ensure_free_plan_seeded(db)
         # Partie 16 (bis) -- a real 14-day trial starts the moment an
@@ -146,8 +150,14 @@ async def list_subscriptions(db: AsyncSession, limit: int = 50, offset: int = 0)
     return list((await db.scalars(select(Subscription).order_by(Subscription.created_at.desc()).limit(limit).offset(offset))).all())
 
 
-async def get_subscription(db: AsyncSession, sub_id: uuid.UUID) -> Subscription:
-    sub = await db.get(Subscription, sub_id)
+async def get_subscription(db: AsyncSession, sub_id: uuid.UUID, *, lock: bool = False) -> Subscription:
+    """`lock=True` takes a row lock (SELECT ... FOR UPDATE on PostgreSQL, ignored by SQLite) and refreshes the row, so concurrent
+    transitions (a webhook, a back-office change, a cancellation) are serialized and each one starts from the previous one's result
+    instead of overwriting it."""
+    if not lock:
+        sub = await db.get(Subscription, sub_id)
+    else:
+        sub = await db.scalar(select(Subscription).where(Subscription.id == sub_id).with_for_update().execution_options(populate_existing=True))
     if sub is None:
         raise SubscriptionNotFoundError(str(sub_id))
     return sub
@@ -157,8 +167,9 @@ async def update_subscription(
     db: AsyncSession, sub_id: uuid.UUID, *, plan_id: uuid.UUID | None = None,
     status_value: SubscriptionStatus | None = None, billing_period: str | None = None,
 ) -> Subscription:
-    sub = await get_subscription(db, sub_id)
+    sub = await get_subscription(db, sub_id, lock=True)
     if plan_id is not None:
+        await get_plan(db, plan_id)  # an unknown plan is a PlanNotFoundError (404), not a foreign-key failure at commit time
         sub.plan_id = plan_id
     if status_value is not None:
         sub.status = status_value
@@ -169,7 +180,7 @@ async def update_subscription(
 
 
 async def reactivate_subscription(db: AsyncSession, sub_id: uuid.UUID) -> Subscription:
-    sub = await get_subscription(db, sub_id)
+    sub = await get_subscription(db, sub_id, lock=True)
     sub.status = SubscriptionStatus.active
     sub.canceled_at = None
     sub.cancel_reason = None
@@ -178,7 +189,7 @@ async def reactivate_subscription(db: AsyncSession, sub_id: uuid.UUID) -> Subscr
 
 
 async def cancel_subscription(db: AsyncSession, sub_id: uuid.UUID, *, reason: str | None) -> Subscription:
-    sub = await get_subscription(db, sub_id)
+    sub = await get_subscription(db, sub_id, lock=True)
     sub.status = SubscriptionStatus.canceled
     sub.canceled_at = dt.datetime.now(dt.timezone.utc)
     sub.cancel_reason = reason
@@ -187,7 +198,7 @@ async def cancel_subscription(db: AsyncSession, sub_id: uuid.UUID, *, reason: st
 
 
 async def extend_subscription(db: AsyncSession, sub_id: uuid.UUID, *, days: int) -> Subscription:
-    sub = await get_subscription(db, sub_id)
+    sub = await get_subscription(db, sub_id, lock=True)
     base = sub.current_period_end or dt.datetime.now(dt.timezone.utc)
     sub.current_period_end = base + dt.timedelta(days=days)
     await db.flush()

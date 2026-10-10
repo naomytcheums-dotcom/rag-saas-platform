@@ -71,9 +71,16 @@ jobs:
         # `timeout 420` (7 min) leaves ~5 min of the 12-min job timeout
         # for checkout/install. TERM requests warm shutdown; allow
         # another 60 seconds before forced termination, which fails CI.
+        # PROD-001: a beat process runs next to the worker so that the periodic tasks (invoices, monthly credits, reminders, purges,
+        # renewals, the pending-document sweep...) are actually sent. Its schedule state lives in Redis (api/tasks/beat_scheduler.py), so
+        # the fresh runner of each burst knows what already ran and sends what became due since the previous burst.
         run: |
           status=0
+          celery -A api.tasks.celery_app beat --loglevel=info --max-interval=30 \
+            --scheduler api.tasks.beat_scheduler:RedisPersistentScheduler --schedule=/tmp/celerybeat-schedule &
+          beat_pid=$!
           timeout --signal=TERM --kill-after=60 420 celery -A api.tasks.celery_app worker --loglevel=info --pool=solo --concurrency=1 || status=$?
+          kill "$beat_pid" 2>/dev/null || true
           case "$status" in
             0) echo "Celery worker exited successfully." ;;
             124) echo "Celery worker reached the scheduled burst limit and shut down." ;;

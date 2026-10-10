@@ -3,8 +3,9 @@ and Phase 5, Étape 2 (Paystack + provider-generic checkout/portal)."""
 
 import datetime as dt
 import uuid
+from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from api.models.admin import SubscriptionStatus
 from api.models.billing import CreditTransactionType, InvoiceStatus
@@ -87,11 +88,11 @@ class SubscriptionResponse(BaseModel):
 
 class SubscribeRequest(BaseModel):
     plan_id: uuid.UUID
-    billing_period: str = "monthly"
+    billing_period: Literal["monthly", "yearly"] = "monthly"
 
 
 class CancelSubscriptionRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
 
 
 # -- 12.2 Stripe --------------------------------------------------------------
@@ -136,7 +137,7 @@ class UnifiedCheckoutRequest(BaseModel):
     id has no Paystack equivalent to accept instead."""
 
     plan_id: uuid.UUID
-    billing_period: str = "monthly"
+    billing_period: Literal["monthly", "yearly"] = "monthly"
 
 
 class ProviderInvoiceResponse(BaseModel):
@@ -192,7 +193,7 @@ class CreditTransactionResponse(BaseModel):
 
 
 class PurchaseCreditsRequest(BaseModel):
-    pack_id: str
+    pack_id: str = Field(min_length=1, max_length=100)
 
 
 class UsageAlertResponse(BaseModel):
@@ -204,8 +205,8 @@ class UsageAlertResponse(BaseModel):
 
 
 class CreateUsageAlertRequest(BaseModel):
-    resource_type: str
-    threshold_percent: int
+    resource_type: str = Field(min_length=1, max_length=100)
+    threshold_percent: int = Field(ge=1, le=100)
 
 
 # -- 12.4 invoices --------------------------------------------------------------
@@ -240,7 +241,48 @@ class InvoiceDetailResponse(InvoiceResponse):
 
 
 class VoidInvoiceRequest(BaseModel):
-    reason: str | None = None
+    """Voiding cancels what the organization owes: the reason is mandatory and audited."""
+
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a reason is required to void an invoice")
+        return value
+
+
+class MarkInvoicePaidRequest(BaseModel):
+    """Manual settlement: an invoice is never marked paid by a superadmin without the external proof of the payment."""
+
+    reference: str = Field(min_length=3, max_length=200, description="Bank transfer id, receipt number, ...")
+
+    @field_validator("reference")
+    @classmethod
+    def _reference_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("a payment reference of at least 3 characters is required")
+        return value
+
+
+class OrgMarkInvoicePaidRequest(BaseModel):
+    """Body of the organization route `/pay`. The reference is optional at the schema level so that access control (403) and the
+    invoice lookup (404) answer before a payload problem does; the handler then requires it from a superadmin (422)."""
+
+    reference: str | None = Field(default=None, max_length=200, description="Bank transfer id, receipt number, ...")
+
+    @field_validator("reference")
+    @classmethod
+    def _reference_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("a payment reference of at least 3 characters is required")
+        return value
 
 
 class InvoiceStatsResponse(BaseModel):

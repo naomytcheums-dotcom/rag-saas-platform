@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db, require_admin
 from api.models.audit_log import AuditAction
-from api.models.user import User
+from api.models.user import User, UserRole
 from api.schemas.admin_dashboard import (
     UserAdminListResponse,
     UserAdminResponse,
@@ -35,6 +35,18 @@ from api.utils import MAX_PAGE_SIZE, client_ip
 router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 
 
+async def _guard_target(db: AsyncSession, actor: User, user_id: uuid.UUID, *, allow_self: bool = True) -> None:
+    """SADM-002 -- the rank rule of the user back-office: a platform admin may act on ordinary accounts only; accounts of an equal or
+    higher rank (admin, superadmin) are for superadmins. Nobody suspends themselves (it would lock the last operator out)."""
+    if user_id == actor.id:
+        if not allow_self:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot perform this action on your own account")
+        return
+    target = await db.get(User, user_id)
+    if target is not None and actor.role != UserRole.superadmin and target.role in (UserRole.admin, UserRole.superadmin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only a superadmin can act on an admin or superadmin account")
+
+
 @router.get("", response_model=UserAdminListResponse)
 async def list_users_endpoint(limit: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE), offset: int = Query(default=0, ge=0), search: str | None = None, is_active: bool | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rows, total = await list_users_admin(db, limit=limit, offset=offset, search=search, is_active=is_active)
@@ -51,7 +63,8 @@ async def get_user_endpoint(user_id: uuid.UUID, _admin: User = Depends(require_a
 
 
 @router.patch("/{user_id}", response_model=UserAdminResponse)
-async def update_user_endpoint(user_id: uuid.UUID, payload: UserUpdateAdminRequest, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def update_user_endpoint(user_id: uuid.UUID, payload: UserUpdateAdminRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await _guard_target(db, admin, user_id)
     try:
         user = await update_user_admin(db, user_id, full_name=payload.full_name, company=payload.company)
     except UserNotFoundError:
@@ -62,6 +75,7 @@ async def update_user_endpoint(user_id: uuid.UUID, payload: UserUpdateAdminReque
 
 @router.post("/{user_id}/suspend", response_model=UserAdminResponse)
 async def suspend_user_endpoint(user_id: uuid.UUID, payload: UserSuspendRequest, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await _guard_target(db, admin, user_id, allow_self=False)
     try:
         user = await suspend_user(db, user_id, reason=payload.reason)
     except UserNotFoundError:
@@ -76,6 +90,7 @@ async def suspend_user_endpoint(user_id: uuid.UUID, payload: UserSuspendRequest,
 
 @router.post("/{user_id}/activate", response_model=UserAdminResponse)
 async def activate_user_endpoint(user_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await _guard_target(db, admin, user_id)
     try:
         user = await activate_user(db, user_id)
     except UserNotFoundError:
@@ -89,10 +104,11 @@ async def activate_user_endpoint(user_id: uuid.UUID, request: Request, admin: Us
 
 
 @router.post("/{user_id}/reset-password")
-async def reset_user_password_endpoint(user_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def reset_user_password_endpoint(user_id: uuid.UUID, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Real: triggers the same real password-reset EMAIL flow a user's
     own "forgot password" link uses (create_and_send_password_reset) --
     an admin never sees or sets the new password directly."""
+    await _guard_target(db, admin, user_id)
     try:
         user = await get_user_admin(db, user_id)
     except UserNotFoundError:
@@ -106,7 +122,8 @@ async def reset_user_password_endpoint(user_id: uuid.UUID, _admin: User = Depend
 
 
 @router.post("/{user_id}/verify-email", response_model=UserAdminResponse)
-async def verify_user_email_endpoint(user_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def verify_user_email_endpoint(user_id: uuid.UUID, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await _guard_target(db, admin, user_id)
     try:
         user = await verify_user_email_admin(db, user_id)
     except UserNotFoundError:
@@ -122,7 +139,8 @@ async def get_user_sessions_endpoint(user_id: uuid.UUID, _admin: User = Depends(
 
 
 @router.delete("/{user_id}/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def terminate_user_session_endpoint(user_id: uuid.UUID, session_id: uuid.UUID, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def terminate_user_session_endpoint(user_id: uuid.UUID, session_id: uuid.UUID, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await _guard_target(db, admin, user_id)
     terminated = await terminate_user_session_admin(db, user_id, session_id)
     if not terminated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")

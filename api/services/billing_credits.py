@@ -99,8 +99,26 @@ async def get_or_create_credit(db: AsyncSession, organization_id: uuid.UUID) -> 
     return credit
 
 
+def _check_amount(amount: int) -> None:
+    if amount < 0:
+        raise ValueError("a credit amount cannot be negative (BILL-020): use the opposite operation instead")
+
+
+async def _locked_credit(db: AsyncSession, organization_id: uuid.UUID) -> Credit:
+    """The organization's balance row, locked (SELECT ... FOR UPDATE) and refreshed: every balance movement starts from the
+    committed value, so concurrent credits, refunds and debits cannot overwrite each other (BILL-011)."""
+    await get_or_create_credit(db, organization_id)
+    credit = await db.scalar(
+        select(Credit).where(Credit.organization_id == organization_id).with_for_update().execution_options(populate_existing=True)
+    )
+    if credit is None:
+        raise InsufficientCreditsError(f"organization {organization_id} has no credit account")
+    return credit
+
+
 async def add_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, source: str, user_id: uuid.UUID | None = None) -> Credit:
-    credit = await get_or_create_credit(db, organization_id)
+    _check_amount(amount)
+    credit = await _locked_credit(db, organization_id)
     credit.balance += amount
     db.add(CreditTransaction(
         organization_id=organization_id, type=CreditTransactionType.purchase, amount=amount,
@@ -111,17 +129,10 @@ async def add_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int,
 
 
 async def deduct_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, resource_type: str, user_id: uuid.UUID | None = None) -> Credit:
-    await get_or_create_credit(db, organization_id)
+    _check_amount(amount)
     # Refresh the row under a database lock so concurrent debits cannot
     # approve themselves against the same stale balance.
-    credit = await db.scalar(
-        select(Credit)
-        .where(Credit.organization_id == organization_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    if credit is None:
-        raise InsufficientCreditsError(f"organization {organization_id} has no credit account")
+    credit = await _locked_credit(db, organization_id)
     if credit.balance < amount:
         raise InsufficientCreditsError(f"organization {organization_id} has {credit.balance} credits, needs {amount}")
     credit.balance -= amount
@@ -166,7 +177,8 @@ async def deduct_credits_up_to(
 
 
 async def refund_credits(db: AsyncSession, organization_id: uuid.UUID, amount: int, *, reason: str, user_id: uuid.UUID | None = None) -> Credit:
-    credit = await get_or_create_credit(db, organization_id)
+    _check_amount(amount)
+    credit = await _locked_credit(db, organization_id)
     credit.balance += amount
     db.add(CreditTransaction(
         organization_id=organization_id, type=CreditTransactionType.refund, amount=amount,

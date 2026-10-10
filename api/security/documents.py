@@ -653,7 +653,8 @@ async def upload_document(
     db.add(document)
     await db.flush()  # assigns document.id, needed for the S3 key below
 
-    document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+    # boto3 is synchronous: off the event loop, so a slow or retrying S3 never freezes the other requests (TEN-003)
+    document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
     await db.flush()
 
     if content_type == ZIP_CONTENT_TYPE:

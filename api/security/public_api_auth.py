@@ -23,6 +23,7 @@ from api.dependencies import get_current_user
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.organization_api_key import OrganizationAPIKey
 from api.models.user import User
+from api.security.organizations import ensure_organization_active
 from api.services.organization_api_keys import check_quota_with_notification, check_rate_limit, increment_quota, verify_api_key
 
 _INVALID_KEY = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired API key")
@@ -41,6 +42,7 @@ async def require_organization_api_key(
     key_row = await verify_api_key(db, x_api_key)
     if key_row is None:
         raise _INVALID_KEY
+    await ensure_organization_active(db, key_row.organization_id)
 
     await check_rate_limit(key_row)
     await check_quota_with_notification(db, key_row)
@@ -69,6 +71,7 @@ async def require_key_org_admin(key_id: uuid.UUID, current_user: User = Depends(
     )
     if membership is None:
         raise not_found
+    await ensure_organization_active(db, key_row.organization_id)
     if membership.role not in (OrganizationRole.owner, OrganizationRole.admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin access required")
     return key_row

@@ -1068,6 +1068,9 @@ class Settings(BaseSettings):
     # every other enforce_rate_limit call in this codebase.
     DOCUMENT_UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: int = 60
     DOCUMENT_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # RAG-003 -- a document still `pending` after this long has lost its processing task and is re-dispatched by the periodic sweep.
+    DOCUMENT_PENDING_REQUEUE_AFTER_MINUTES: int = 10
+    DOCUMENT_PENDING_REQUEUE_BATCH_SIZE: int = 100
     SEARCH_RATE_LIMIT_MAX_ATTEMPTS: int = 120
     SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
     MCP_TOOL_CALL_RATE_LIMIT_MAX_ATTEMPTS: int = 60
@@ -1615,6 +1618,10 @@ class Settings(BaseSettings):
         "mistral-small": {"input": 0.15, "output": 0.60},
     })
     COST_DEFAULT_CURRENCY: str = "USD"
+    # BILL-009 -- credit pricing is calibrated on the default chat model; a dearer model is charged proportionally more credits.
+    CREDITS_BASELINE_INPUT_USD_PER_M: float = 2.0
+    CREDITS_BASELINE_OUTPUT_USD_PER_M: float = 10.0
+    CREDITS_UNKNOWN_MODEL_MULTIPLIER: float = 1.0
 
     # -- Regression detection (Partie 7.3.3) -------------------------------------
     REGRESSION_DETECTION_ENABLED: bool = True

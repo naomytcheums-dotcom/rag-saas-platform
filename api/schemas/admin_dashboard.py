@@ -3,7 +3,7 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.models.admin import SubscriptionStatus
 
@@ -123,25 +123,25 @@ class PlanResponse(BaseModel):
 
 
 class PlanCreateRequest(BaseModel):
-    key: str
-    name: str
-    monthly_price_cents: int = 0
-    max_documents: int | None = None
-    max_agents: int | None = None
-    max_members: int | None = None
-    paystack_plan_code_monthly: str | None = None
-    paystack_plan_code_yearly: str | None = None
+    key: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    name: str = Field(min_length=1, max_length=120)
+    monthly_price_cents: int = Field(default=0, ge=0, le=100_000_000)
+    max_documents: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    max_agents: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    max_members: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    paystack_plan_code_monthly: str | None = Field(default=None, max_length=100)
+    paystack_plan_code_yearly: str | None = Field(default=None, max_length=100)
 
 
 class PlanUpdateRequest(BaseModel):
-    name: str | None = None
-    monthly_price_cents: int | None = None
-    max_documents: int | None = None
-    max_agents: int | None = None
-    max_members: int | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    monthly_price_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+    max_documents: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    max_agents: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    max_members: int | None = Field(default=None, ge=0, le=1_000_000_000)
     is_active: bool | None = None
-    paystack_plan_code_monthly: str | None = None
-    paystack_plan_code_yearly: str | None = None
+    paystack_plan_code_monthly: str | None = Field(default=None, max_length=100)
+    paystack_plan_code_yearly: str | None = Field(default=None, max_length=100)
 
 
 class SubscriptionResponse(BaseModel):
@@ -161,11 +161,11 @@ class SubscriptionUpdateRequest(BaseModel):
 
 
 class SubscriptionCancelRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class SubscriptionExtendRequest(BaseModel):
-    days: int
+    days: int = Field(ge=1, le=3650)
 
 
 class RevenueStatsResponse(BaseModel):

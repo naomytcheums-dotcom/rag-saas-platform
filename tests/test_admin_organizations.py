@@ -31,13 +31,21 @@ async def test_list_and_get_organization_admin(client, db_session, register_payl
 
 
 async def test_suspend_and_activate_organization(client, db_session, register_payload):
-    token, _, org_id = await _make_admin_and_org(client, db_session, register_payload)
+    token, user, org_id = await _make_admin_and_org(client, db_session, register_payload)
 
     suspend_response = await client.post(f"/admin/organizations/{org_id}/suspend", json={"reason": "TOS violation"}, headers=_auth_header(token))
     assert suspend_response.status_code == 200
     assert suspend_response.json()["is_suspended"] is True
     assert suspend_response.json()["suspended_reason"] == "TOS violation"
 
+    # V3 (security): a platform admin can suspend but no longer lift a suspension; only a superadmin can. The reactivation below
+    # therefore runs as a superadmin (the assertions are unchanged).
+    refused = await client.post(f"/admin/organizations/{org_id}/activate", headers=_auth_header(token))
+    assert refused.status_code == 403
+    from api.models.user import UserRole
+
+    user.role = UserRole.superadmin
+    await db_session.commit()
     activate_response = await client.post(f"/admin/organizations/{org_id}/activate", headers=_auth_header(token))
     assert activate_response.status_code == 200
     assert activate_response.json()["is_suspended"] is False

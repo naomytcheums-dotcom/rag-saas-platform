@@ -25,6 +25,7 @@ from api.services.admin_organizations import (
     get_organization_members_admin,
     get_organization_usage_admin,
     list_organizations_admin,
+    purge_organization_storage,
     suspend_organization,
     update_organization_admin,
 )
@@ -61,14 +62,18 @@ async def update_organization_endpoint(org_id: uuid.UUID, payload: OrganizationU
 @router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_organization_endpoint(org_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
-        await delete_organization_admin(db, org_id)
+        org = await get_organization_admin(db, org_id)
     except OrganizationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    # The audit row is written BEFORE the delete and without organization_id: that column is a foreign key to the organization,
+    # and a row pointing at an organization deleted in the same transaction made the commit fail with a 500 (SADM-003).
     await log_audit_action(
         db, user_id=admin.id, action=AuditAction.ORGANIZATION_DELETED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
-        success=True, organization_id=org_id, resource_type="organization", resource_id=str(org_id),
+        success=True, resource_type="organization", resource_id=str(org_id), metadata={"organization_name": org.name},
     )
+    storage_keys = await delete_organization_admin(db, org_id)
     await db.commit()
+    purge_organization_storage(storage_keys)
 
 
 @router.post("/{org_id}/suspend", response_model=OrganizationAdminResponse)
@@ -86,7 +91,7 @@ async def suspend_organization_endpoint(org_id: uuid.UUID, payload: Organization
 
 
 @router.post("/{org_id}/activate", response_model=OrganizationAdminResponse)
-async def activate_organization_endpoint(org_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def activate_organization_endpoint(org_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         org = await activate_organization(db, org_id)
     except OrganizationNotFoundError:

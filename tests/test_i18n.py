@@ -41,7 +41,9 @@ def test_detect_user_language_prefers_cookie():
 
 
 def test_detect_user_language_falls_back_to_accept_language_header():
-    assert detect_user_language("de-DE,de;q=0.9,en;q=0.8") == "en"
+    # All six shipped interface languages (en, fr, es, de, pt, ar) are supported since the multilingual front end, so a German
+    # Accept-Language is honored instead of falling back to English.
+    assert detect_user_language("de-DE,de;q=0.9,en;q=0.8") == "de"
 
 
 def test_detect_user_language_falls_back_to_default():
