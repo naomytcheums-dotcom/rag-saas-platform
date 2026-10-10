@@ -54,6 +54,7 @@ class AuditAction(StrEnum):
     ORGANIZATION_DELETED = "organization_deleted"
     ORGANIZATION_MEMBER_ADDED = "organization_member_added"
     ESCALATION_UPDATED = "escalation_updated"
+    COUPON_REDEEMED = "coupon_redeemed"
     ESCALATION_ASSIGNED = "escalation_assigned"
     ORGANIZATION_MEMBER_ROLE_CHANGED = "organization_member_role_changed"
     ORGANIZATION_MEMBER_REMOVED = "organization_member_removed"
