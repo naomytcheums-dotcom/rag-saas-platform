@@ -916,5 +916,18 @@
   "chat.err_no_agent": "Aucun agent n'existe encore pour cette organisation. Créez-en un dans Agents.",
   "chat.err_load": "Impossible de charger la conversation.",
   "chat.err_generic": "Une erreur est survenue.",
-  "chat.err_connection": "La connexion au serveur de chat a échoué."
+  "chat.err_connection": "La connexion au serveur de chat a échoué.",
+  "auth.oauth.or": "ou continuer avec",
+  "auth.oauth.google": "Continuer avec Google",
+  "auth.oauth.github": "Continuer avec GitHub",
+  "auth.verify.title": "Vérifiez votre email",
+  "auth.verify.subtitle": "Saisissez le code à 6 chiffres que nous vous avons envoyé.",
+  "auth.verify.code": "Code à 6 chiffres",
+  "auth.verify.submit": "Vérifier",
+  "auth.verify.submitting": "Vérification…",
+  "auth.verify.resend": "Renvoyer un code",
+  "auth.verify.sent": "Un nouveau code a été envoyé.",
+  "auth.verify.later": "Plus tard",
+  "auth.verify.error_generic": "La vérification a échoué. Réessayez.",
+  "profile.verify_now": "Vérifier maintenant"
 }

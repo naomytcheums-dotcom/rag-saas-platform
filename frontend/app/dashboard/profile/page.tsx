@@ -153,7 +153,7 @@ function InformationTab({ profile, onSaved, onError }: { profile: Profile; onSav
       </div>
       <div>
         <p className="text-sm font-medium text-foreground">{t("profile.email")}</p>
-        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ " + t("profile.verified") : t("profile.unverified")}</p>
+        <p className="mt-1 text-sm text-foreground-muted">{profile.email} {profile.is_email_verified ? "✓ " + t("profile.verified") : t("profile.unverified")}{!profile.is_email_verified && <> · <a href="/verify-email" className="text-accent underline">{t("profile.verify_now")}</a></>}</p>
       </div>
       <div>
         <p className="text-sm font-medium text-foreground">{t("profile.member_since")}</p>

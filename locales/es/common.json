@@ -916,5 +916,18 @@
   "chat.err_no_agent": "Todavía no hay ningún agente en esta organización. Crea uno en Agentes.",
   "chat.err_load": "No se pudo cargar la conversación.",
   "chat.err_generic": "Se ha producido un error.",
-  "chat.err_connection": "Falló la conexión con el servidor de chat."
+  "chat.err_connection": "Falló la conexión con el servidor de chat.",
+  "auth.oauth.or": "o continuar con",
+  "auth.oauth.google": "Continuar con Google",
+  "auth.oauth.github": "Continuar con GitHub",
+  "auth.verify.title": "Verifica tu correo",
+  "auth.verify.subtitle": "Introduce el código de 6 dígitos que te enviamos.",
+  "auth.verify.code": "Código de 6 dígitos",
+  "auth.verify.submit": "Verificar",
+  "auth.verify.submitting": "Verificando…",
+  "auth.verify.resend": "Enviar un código nuevo",
+  "auth.verify.sent": "Se ha enviado un código nuevo.",
+  "auth.verify.later": "Más tarde",
+  "auth.verify.error_generic": "La verificación falló. Inténtalo de nuevo.",
+  "profile.verify_now": "Verificar ahora"
 }

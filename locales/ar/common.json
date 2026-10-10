@@ -916,5 +916,18 @@
   "chat.err_no_agent": "لا يوجد أي وكيل لهذه المؤسسة بعد. أنشئ واحدًا من قسم الوكلاء.",
   "chat.err_load": "تعذّر تحميل المحادثة.",
   "chat.err_generic": "حدث خطأ ما.",
-  "chat.err_connection": "فشل الاتصال بخادم الدردشة."
+  "chat.err_connection": "فشل الاتصال بخادم الدردشة.",
+  "auth.oauth.or": "أو المتابعة عبر",
+  "auth.oauth.google": "المتابعة عبر Google",
+  "auth.oauth.github": "المتابعة عبر GitHub",
+  "auth.verify.title": "تحقق من بريدك الإلكتروني",
+  "auth.verify.subtitle": "أدخل الرمز المكوّن من 6 أرقام الذي أرسلناه إليك.",
+  "auth.verify.code": "رمز من 6 أرقام",
+  "auth.verify.submit": "تحقق",
+  "auth.verify.submitting": "جارٍ التحقق…",
+  "auth.verify.resend": "إرسال رمز جديد",
+  "auth.verify.sent": "تم إرسال رمز جديد.",
+  "auth.verify.later": "لاحقًا",
+  "auth.verify.error_generic": "فشل التحقق. حاول مرة أخرى.",
+  "profile.verify_now": "تحقق الآن"
 }

@@ -14,6 +14,8 @@ interface DocumentEntry {
   status: string;
 }
 
+const PROCESSING_STATUSES = new Set(["pending", "processing", "uploading", "indexing", "queued"]);
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -26,6 +28,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -46,18 +49,30 @@ export default function DocumentsPage() {
     void load();
   }, [load]);
 
-  async function upload(file: File) {
-    if (!org) return;
+  // Spec 2.2.3: while some documents are still being processed, refresh the list every few seconds so the status moves on its own.
+  const inProgress = documents.some((doc) => PROCESSING_STATUSES.has(doc.status.toLowerCase()));
+  useEffect(() => {
+    if (!inProgress) return;
+    const timer = window.setInterval(() => void load(), 4000);
+    return () => window.clearInterval(timer);
+  }, [inProgress, load]);
+
+  // Spec 2.2.1 / 2.2.2: several files at once, chosen in the picker or dropped on the zone. Each file is sent on its own so one rejected file does not block the others.
+  async function uploadMany(files: File[]) {
+    if (!org || files.length === 0) return;
     setUploading(true);
     setError(null);
-    try {
-      await api.postFile(`/organizations/${org.id}/documents`, file);
-      await load();
-    } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : t("documents.error_upload"));
-    } finally {
-      setUploading(false);
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        await api.postFile(`/organizations/${org.id}/documents`, file);
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof ApiError ? String(err.detail) : t("documents.error_upload")}`);
+      }
     }
+    if (failures.length > 0) setError(failures.join(" | "));
+    await load();
+    setUploading(false);
   }
 
   async function remove(id: string) {
@@ -72,10 +87,16 @@ export default function DocumentsPage() {
 
       {error && <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
-      <label className="mt-6 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface p-8 text-center hover:border-accent">
+      <label
+        data-testid="drop-zone"
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadMany(Array.from(e.dataTransfer.files)); }}
+        className={`mt-6 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-surface p-8 text-center hover:border-accent ${dragging ? "border-accent" : "border-border-strong"}`}
+      >
         <span className="text-sm font-medium text-foreground">{uploading ? t("documents.uploading") : t("documents.upload_prompt")}</span>
         <span className="text-xs text-foreground-muted">{t("documents.supported_formats")}</span>
-        <input type="file" className="hidden" disabled={uploading} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+        <input type="file" multiple className="hidden" disabled={uploading} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void uploadMany(files); }} />
       </label>
 
       <div className="mt-6">
@@ -90,7 +111,7 @@ export default function DocumentsPage() {
               <div key={doc.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">{doc.name}</p>
-                  <p className="text-xs text-foreground-muted">{formatSize(doc.file_size)} · {doc.file_type} · {doc.status}</p>
+                  <p className="text-xs text-foreground-muted">{formatSize(doc.file_size)} · {doc.file_type} · {doc.status}{PROCESSING_STATUSES.has(doc.status.toLowerCase()) ? " …" : ""}</p>
                 </div>
                 <button type="button" onClick={() => void remove(doc.id)} className="text-xs font-medium text-danger hover:underline">{t("documents.delete")}</button>
               </div>
