@@ -41,7 +41,7 @@ from api.routers import (
     sandbox,
     analytics,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
-    escalations, coupons, insights, evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
+    escalations, coupons, scim, insights, evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, rag_control_plane, rbac, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, retrieval_diagnostics, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
@@ -363,6 +363,7 @@ app.include_router(human_approval.router)
 app.include_router(escalations.router)
 app.include_router(insights.router)
 app.include_router(coupons.router)
+app.include_router(scim.router)
 app.include_router(conversations.router)
 app.include_router(conversation_shares.router)
 app.include_router(feedback.router)
