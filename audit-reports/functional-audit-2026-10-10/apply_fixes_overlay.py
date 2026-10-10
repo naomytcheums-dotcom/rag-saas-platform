@@ -49,6 +49,13 @@ add(["14.4.4"], "written", "docs/commercial/BRAND_GUIDE.md (product name and log
 add(["15.1.1", "15.1.2", "15.1.3", "15.1.4", "15.1.5", "15.1.6", "15.1.7", "15.1.8", "15.1.9"], T, "api/routers/escalations.py, escalation_notes + sla_due_at (migration 0138), dashboard/escalations page (tests/test_p2_escalation_tickets_api.py, 5 vitest cases)")
 add(["15.2.4", "15.2.5", "15.2.6"], T, "message_feedback.correction (migration 0139), feedback/analysis, feedback/to-evaluation (tests/test_p2_insights.py)")
 
+add(["1.2.6"], T, "tests/test_p2_viewer_route_matrix.py: 233 organization write operations probed as a viewer, only 3 reachable (search, template preview, plugin review), all allow-listed with a reason")
+add(["1.3.6", "12.3.2", "12.3.3"], T, "api/security/document_capacity.py: plan document limit now also on the batch upload and the 9 importers, storage quota enforced on upload and batch (tests/test_p2_document_capacity.py)")
+add(["1.3.7"], T, "per-user rate limit on /chat/stream (CHAT_USER_RATE_LIMIT_*; fails open without Redis) (tests/test_p2_chat_user_rate_limit.py)")
+add(["6.1.8"], T, "GET /citations/{id}/preview wires api/services/citation_preview.py (tests/test_p2_citation_preview_route.py)")
+add(["11.3.7", "11.3.8"], T + " (configuration probes, not live calls)", "admin system health now reports pgvector extension status and which LLM providers have a platform key (tests/test_p2_health_probes.py)")
+add(["5.4.12"], "assessment corrected", "the database workflow block reuses the SQL tool validator and tenant filter, covered by tests/test_workflow_block_database.py and the P0 SQL bypass test")
+
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
 fields = list(rows[0].keys()) + ["fix_status", "fix_evidence"]

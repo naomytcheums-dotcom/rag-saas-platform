@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (93 features touched)
+# 09 - Fixes applied on the fix branch (102 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -8,8 +8,11 @@
 | 1.1.5 | tests pass (UI); real provider round-trip not run | frontend/components/auth/OAuthButtons.tsx on login and register, opt-in NEXT_PUBLIC_OAUTH_PROVIDERS (3 vitest cases) |
 | 1.1.6 | tests pass (UI); real provider round-trip not run | frontend/components/auth/OAuthButtons.tsx on login and register, opt-in NEXT_PUBLIC_OAUTH_PROVIDERS (3 vitest cases) |
 | 1.1.13 | tests pass | users.job_title + migration 0142 + profile field (tests/test_p2_insights.py::test_profile_stores_a_job_title) |
+| 1.2.6 | tests pass | tests/test_p2_viewer_route_matrix.py: 233 organization write operations probed as a viewer, only 3 reachable (search, template preview, plugin review), all allow-listed with a reason |
 | 1.3.2 | tests pass | frontend/app/dashboard/teams (4 vitest cases) |
 | 1.3.3 | tests pass | frontend/app/dashboard/teams (4 vitest cases) |
+| 1.3.6 | tests pass | api/security/document_capacity.py: plan document limit now also on the batch upload and the 9 importers, storage quota enforced on upload and batch (tests/test_p2_document_capacity.py) |
+| 1.3.7 | tests pass | per-user rate limit on /chat/stream (CHAT_USER_RATE_LIMIT_*; fails open without Redis) (tests/test_p2_chat_user_rate_limit.py) |
 | 2.2.1 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
 | 2.2.2 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
 | 2.2.3 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
@@ -23,6 +26,8 @@
 | 3.4.5 | tests pass | api/services/query_rewriting.py expand_with_synonyms + org settings (tests/test_p2_query_synonyms.py) |
 | 5.1.5 | tests pass | api/services/tool_budget.py cap_tool_output wired in the orchestrator (tests/test_tool_budget.py) |
 | 5.1.7 | tests pass | api/services/fallback.py run_tool_fallbacks wired in the orchestrator (tests/test_fallback.py) |
+| 5.4.12 | assessment corrected | the database workflow block reuses the SQL tool validator and tenant filter, covered by tests/test_workflow_block_database.py and the P0 SQL bypass test |
+| 6.1.8 | tests pass | GET /citations/{id}/preview wires api/services/citation_preview.py (tests/test_p2_citation_preview_route.py) |
 | 7.1.7 | tests pass | evaluation split column, assign-split route, job split filter, migration 0137 (tests/test_p2_eval_split_held_out.py) |
 | 8.1.8 | tests pass (components); not run in a browser against a live LLM | chat page mounts RetryButton, ShareConversation, ConversationTools (export, visibility), SuggestedQuestions, FollowUpQuestions; persisted ids after streaming |
 | 8.1.14 | tests pass (components); not run in a browser against a live LLM | chat page mounts RetryButton, ShareConversation, ConversationTools (export, visibility), SuggestedQuestions, FollowUpQuestions; persisted ids after streaming |
@@ -59,7 +64,11 @@
 | 11.2.14 | tests pass | api/services/insights.py + routers/insights.py + dashboard/insights page (tests/test_p2_insights.py) |
 | 11.2.15 | tests pass | api/services/insights.py + routers/insights.py + dashboard/insights page (tests/test_p2_insights.py) |
 | 11.2.16 | tests pass | api/services/insights.py + routers/insights.py + dashboard/insights page (tests/test_p2_insights.py) |
+| 11.3.7 | tests pass (configuration probes, not live calls) | admin system health now reports pgvector extension status and which LLM providers have a platform key (tests/test_p2_health_probes.py) |
+| 11.3.8 | tests pass (configuration probes, not live calls) | admin system health now reports pgvector extension status and which LLM providers have a platform key (tests/test_p2_health_probes.py) |
 | 12.1.4 | tests pass (bonus credits); percent_off is recorded, not applied at checkout | api/routers/coupons.py, migration 0140 (tests/test_p2_coupons.py) |
+| 12.3.2 | tests pass | api/security/document_capacity.py: plan document limit now also on the batch upload and the 9 importers, storage quota enforced on upload and batch (tests/test_p2_document_capacity.py) |
+| 12.3.3 | tests pass | api/security/document_capacity.py: plan document limit now also on the batch upload and the 9 importers, storage quota enforced on upload and batch (tests/test_p2_document_capacity.py) |
 | 12.3.6 | tests pass | api/services/voice_usage.py, limit on outbound calls and voice-agent turns (tests/test_p2_voice_minutes.py) |
 | 13.1.4 | configured, report-only | [tool.mypy] in pyproject.toml and a non-blocking mypy workflow; the number of type errors is not yet measured |
 | 13.4.3 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
