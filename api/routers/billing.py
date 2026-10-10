@@ -108,6 +108,17 @@ def _monthly_equivalent_cents(plan) -> int:
     return max(plan.monthly_price_cents or 0, -(-(plan.yearly_price_cents or 0) // 12))
 
 
+async def _require_selectable_plan(db: AsyncSession, sub, plan_id: uuid.UUID) -> None:
+    """BILL-017 -- an organization cannot move itself to an unknown or retired plan (`is_active = false`); keeping the plan it is
+    already on is always allowed. The platform superadmin (admin routes) is not bound by this."""
+    try:
+        plan = await admin_subscriptions.get_plan(db, plan_id)
+    except PlanNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    if not plan.is_active and sub.plan_id != plan.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+
+
 async def _enforce_no_free_paid_plan(db: AsyncSession, sub, body: SubscribeRequest) -> None:
     """BILL-001 -- subscribe/upgrade/downgrade only write `Subscription.plan_id`; they never charge anything. A paid
     plan must therefore come from a confirmed payment (the provider's verified webhook after a checkout), never from
@@ -137,6 +148,7 @@ async def _enforce_no_free_paid_plan(db: AsyncSession, sub, body: SubscribeReque
 async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     before = {"plan_id": str(sub.plan_id), "billing_period": sub.billing_period}
+    await _require_selectable_plan(db, sub, body.plan_id)
     await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
@@ -154,6 +166,7 @@ async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request:
 async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     before = {"plan_id": str(sub.plan_id), "billing_period": sub.billing_period}
+    await _require_selectable_plan(db, sub, body.plan_id)
     await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
