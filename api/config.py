@@ -896,6 +896,10 @@ class Settings(BaseSettings):
     TASK_PLANNING_ENABLED: bool = True
     TASK_PLANNING_MAX_STEPS: int = 20
     TASK_PLANNING_TIMEOUT: int = 300
+    # Spec 5.1.13: when True (and the caller asked for plan_first), the plan is EXECUTED step by step (api/services/task_planning.execute_plan, one model call per
+    # step, dependencies respected) and the results are handed to the final answer. Off by default because it multiplies the model calls (cost and latency).
+    TASK_PLAN_EXECUTE_STEPS: bool = False
+    TASK_PLAN_STEP_RESULT_MAX_CHARS: int = 1500
 
     # -- Agent traces (Partie 5.1.14) --------------------------------------------
     AGENT_TRACES_ENABLED: bool = True
@@ -2237,6 +2241,10 @@ class Settings(BaseSettings):
     BILLING_CURRENCY: str = "EUR"
     BILLING_DEFAULT_PLAN: str = "free"
     BILLING_TRIAL_DAYS: int = 14
+    # Spec 12.1.5: a real paid-plan trial is a Stripe trial on the subscription checkout (the card is still collected; Stripe converts the subscription
+    # when the trial ends and our webhooks record `trialing` -> active/past_due/canceled). 0 = no trial, which is the default: no paid plan is free
+    # unless the owner chooses so. BILLING_TRIAL_DAYS above is only the informational free-plan counter.
+    STRIPE_CHECKOUT_TRIAL_DAYS: int = 0
     BILLING_GRACE_PERIOD_DAYS: int = 7
 
     # -- Partie 12.2: Stripe -- honestly absent in this environment (no

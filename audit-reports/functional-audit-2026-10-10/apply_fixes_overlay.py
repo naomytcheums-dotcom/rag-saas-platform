@@ -68,6 +68,30 @@ add(["13.3.2"], "configured, report-only", "pyproject.toml [tool.mypy] and .gith
 add(["13.1.3"], "decision recorded", "docs/DECISIONS.md: ruff format is the formatter (Black-compatible output); Black is not added as a second tool")
 add(["14.1.2"], "documentation corrected", "agents.md now lists the real Eval Lab and MCP routes (verified against the OpenAPI document); docs/architecture/LEGACY.md not re-audited")
 
+add(["1.1.10"], "written; runner tests pass; the cron job is not applied on Render", "scripts/run_maintenance_tasks.py runs the account purge and the other daily clean-ups without a worker; cron entry in deploy/render/render.api.yaml (tests/test_run_maintenance_tasks.py)")
+add(["1.2.7"], T, "tests/test_route_auth_classification.py: the 101 operations open without a bearer token are on a reviewed list with reasons; a new open route fails the test")
+add(["1.2.8"], "assessment corrected; decision recorded", "grants are accepted only for resource types that enforce them (workspaces); other types are rejected with 400; scope and extension path in docs/DECISIONS.md D11")
+add(["1.3.5", "13.2.10"], "CI now runs the PostgreSQL integration files; RLS not enabled", "backend-tests starts a pgvector PostgreSQL with all migrations; 61 PostgreSQL integration tests pass locally; RLS rollout decision in D8")
+add(["1.4.6", "1.4.8"], T + " (components)", "organization brand name in the chat header and tab title, accent colour and font applied across the interface (frontend/components/BrandingApplier.test.tsx)")
+add(["3.1.5"], "assessment corrected", "describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run")
+add(["5.1.13"], T + " (opt-in TASK_PLAN_EXECUTE_STEPS)", "the plan can be executed step by step and its results reach the final answer (tests/test_agent_orchestrator.py); default stays advisory")
+add(["6.2.12", "11.2.6"], T + " (page tests)", "frontend/app/dashboard/quality-scores: averages, trend, per-answer scores, CSV export")
+add(["10.1.14"], "documented; provider settings not verified", "docs/DECISIONS.md D12: what the application encrypts and what depends on Supabase")
+add(["10.4.2"], "decision recorded; not built", "docs/DECISIONS.md D9: python3-saml behind a flag after a security review")
+add(["10.4.4"], "decision recorded", "docs/DECISIONS.md D10: built-in roles plus custom roles, SCIM-provisioned")
+add(["12.1.5"], T + " (opt-in STRIPE_CHECKOUT_TRIAL_DAYS); no sandbox run", "Stripe trial_period_days on the subscription checkout (tests/test_p1_bill003_005_006_stripe_chain.py)")
+add(["12.1.9"], "decision recorded", "docs/DECISIONS.md D13: prepaid credits")
+add(["12.1.1"], "decision recorded; sandbox run still to do", "docs/DECISIONS.md D14: Stripe and Paystack, no Flutterwave")
+add(["13.1.1"], "measured; ratchet test", "scripts/type_hint_coverage.py: 69.1 % of api/ functions fully annotated; tests/test_type_hint_coverage.py stops it falling")
+add(["13.2.7", "13.2.8"], "written; not run (no paid key)", "tests/llm_optin/test_real_llm.py and .github/workflows/llm-tests.yml, skipped unless RUN_REAL_LLM_TESTS=1")
+add(["13.2.11", "13.3.8"], "written; smoke tests pass; workflows not run", "scripts/post_deploy_smoke.py (tests/test_post_deploy_smoke.py), .github/workflows/post-deploy-smoke.yml and migrate.yml (manual, rehearsal by default)")
+add(["13.5.12"], T, "GET /responses/{id}/trace joins retrieval, generation, checks, agent steps and citations (tests/test_p2_request_trace.py)")
+add(["14.1.2"], "documentation corrected", "agents.md routes verified against OpenAPI; docs/architecture/OVERVIEW.md now has component, chat and ingestion diagrams; the multi-tenant line no longer claims RLS policies")
+
+add(["13.1.6"], "target not reached", "measured about 77 % on the CircleCI subset; the 90 % target needs many more tests, not a configuration change")
+add(["14.4.2"], "owner decision pending", "docs/DECISIONS.md D3 and docs/commercial/BRAND_GUIDE.md: no logo is invented; the guide lists what to change once one is chosen")
+add(["15.2.7"], "mechanism exists; not run on real data", "feedback can be turned into evaluation questions (POST /organizations/{id}/feedback/to-evaluation); no benchmark on real user data has been run")
+
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
 fields = list(rows[0].keys()) + ["fix_status", "fix_evidence"]
