@@ -31,6 +31,25 @@ itemized breakdown of each part.
 
 ## Known, honestly-documented gaps
 
+### [Bob-Auto-Fixes] — 2026-10-10 — Suite de l'audit PR n°20 : R1-R7, CI, BILL/TEN/MAP restants
+
+- Branche `bob/auto-fix-20261009-0715` ; un commit par faille, un test qui échoue avant et passe après (sauf TEN-009 : garde de non-régression) ;
+  aucun push sur main, aucune fusion. `main` fusionné dans la branche (`--no-ff`, seulement `.circleci/config.yml` et `frontend/package-lock.json`).
+- Corrigé : R1 (refus d'audit seulement pour un admin de plateforme, dédupliqué), R2 (référence de paiement obligatoire pour un superadmin,
+  `self_service` dans l'audit, `draft → paid` refusé, motif d'annulation obligatoire), R3 (garde pure de la base PostgreSQL jetable), R4 (verrous de ligne
+  sur les transitions d'abonnement et les webhooks, relecture sous verrou après les appels réseau), R5 (Paystack n'écrase plus `subscription_code`), R6
+  (synchro Stripe : audit + 502 propre), R7 (référence de paiement et motif masqués dans la vue d'audit de l'organisation).
+- CI : exception `pip-audit` ciblée pour `diskcache` (PYSEC-2026-2447, aucune version corrigée, dépendance transitive de `dspy`), délai de `backend-tests`
+  porté de 30 à 75 min (annulé à ~61 % de la suite), isolation du test de limite d'inscription (clé Redis partagée).
+- Facturation : BILL-011 (verrou sur tous les mouvements de crédits), BILL-020 (montants négatifs refusés), BILL-013 (Paystack : 501 au lieu de 500),
+  BILL-014 (crédits une seule fois par session Stripe, paiements différés, devise), BILL-015 (id Paystack vide, événement Stripe mal formé, SDK absent,
+  organisation fantôme), BILL-017 (plan inactif refusé pour l'organisation).
+- Autres : TEN-005 (nom de fichier assaini dans la clé d'objet), TEN-003 (écriture S3 hors de la boucle d'événements), MAP-003 (pages restore-account,
+  reactivate-consent, 2fa-lockout-recovery + contrat « chaque lien e-mailé a une page »), TEN-009 (déjà corrigé : garde de non-régression).
+- Non corrigé : TEN-012 (un viewer peut lancer un workflow : décision produit requise) ; TEN-003 partiel (les autres importeurs asynchrones appellent
+  encore boto3 en synchrone, pas de timeouts client) ; BILL-016 (remboursement : non géré, documenté) ; Paystack : achat de crédits non implémenté (501).
+- Preuves : base PostgreSQL jetable pour R3/R4/BILL-011 (opt-in, garde stricte) ; Stripe, Paystack, Redis, Celery et S3 simulés ; aucune clé payante.
+
 ### [Bob-Auto-Fixes] — 2026-10-09 — Audit P1/P2 : chaîne de paiement, suspension, Celery, pool, liens, entrées mal formées
 
 - Branche `bob/auto-fix-20261009-0715` (depuis la tête de la PR n°19, `61d1873`) ; un commit par faille ; aucun push sur main, aucune fusion.
