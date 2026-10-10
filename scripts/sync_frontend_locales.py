@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGUAGES = ("en", "fr", "es", "de", "pt", "ar")
+LANGUAGES = ("en", "fr")
 
 
 def merged(language: str) -> dict:

@@ -1,19 +1,15 @@
 "use client";
 
-import { DE, ES, FR, GB, PT, SA } from "country-flag-icons/react/3x2";
+import { FR, GB } from "country-flag-icons/react/3x2";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useTranslation } from "@/lib/i18n";
 
 const LANGUAGES: { code: string; name: string; Flag: ComponentType<{ className?: string; "aria-hidden"?: boolean }> }[] = [
   { code: "en", name: "English", Flag: GB },
   { code: "fr", name: "Français", Flag: FR },
-  { code: "es", name: "Español", Flag: ES },
-  { code: "de", name: "Deutsch", Flag: DE },
-  { code: "pt", name: "Português", Flag: PT },
-  { code: "ar", name: "العربية", Flag: SA },
 ];
 
-/** Language switcher: just the current flag; a click on it opens the list of the six interface languages, each with its country flag. */
+/** Language switcher: just the current flag; a click on it opens the list of the two interface languages, each with its country flag. */
 export default function LanguageMenu() {
   const { language, setLanguage } = useTranslation();
   const [open, setOpen] = useState(false);

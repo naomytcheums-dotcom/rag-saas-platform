@@ -1733,7 +1733,7 @@ class Settings(BaseSettings):
     # reintroduced later, but no longer offered through the UI. See
     # docs/developer/I18N.md.
     UI_DEFAULT_LANGUAGE: str = "en"
-    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en", "es", "de", "pt", "ar"])
+    UI_SUPPORTED_LANGUAGES: list[str] = Field(default_factory=lambda: ["fr", "en"])
     UI_LANGUAGE_COOKIE_NAME: str = "lang"
 
     # -- Speech-to-text (Partie 8.2.1) -----------------------------------------------
