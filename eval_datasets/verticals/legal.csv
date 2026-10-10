@@ -1,0 +1,16 @@
+question,expected_answer,difficulty,category
+What does GDPR stand for?,General Data Protection Regulation.,easy,privacy
+Within how many hours must a personal data breach normally be notified to the supervisory authority under the GDPR?,Without undue delay and where feasible within 72 hours after becoming aware of it.,medium,privacy
+What is a data controller under the GDPR?,The entity that determines the purposes and means of processing personal data.,easy,privacy
+What is a data processor under the GDPR?,An entity that processes personal data on behalf of the controller.,easy,privacy
+Which three data subject rights does the GDPR give people?,"For example access, rectification, erasure (right to be forgotten), restriction, portability and objection.",medium,privacy
+What are the maximum administrative fines for the most serious GDPR infringements?,"Up to 20 million euros or 4 percent of total worldwide annual turnover, whichever is higher.",hard,privacy
+What are the essential elements of a valid contract in most legal systems?,"Offer, acceptance, consideration or a lawful cause, capacity of the parties and a lawful object.",medium,contracts
+What is a non-disclosure agreement used for?,To oblige the parties to keep specified confidential information secret.,easy,contracts
+What does force majeure mean in a contract?,An unforeseeable and unavoidable event outside the parties' control that can excuse or suspend performance.,medium,contracts
+What is the difference between a warranty and an indemnity clause?,A warranty is a promise that a statement is true; an indemnity is a promise to compensate a loss.,hard,contracts
+What is intellectual property?,"Legal rights over creations of the mind such as inventions, works, designs, trademarks and trade secrets.",easy,ip
+How long does copyright generally last in the European Union?,The life of the author plus 70 years.,medium,ip
+What is the purpose of a limitation of liability clause?,To cap or exclude the amount or types of damages one party can claim from the other.,medium,contracts
+What is a statute of limitations?,A time limit after which a legal claim can no longer be brought.,easy,procedure
+What is the burden of proof in a civil case in common law systems?,The claimant must prove the case on the balance of probabilities.,hard,procedure

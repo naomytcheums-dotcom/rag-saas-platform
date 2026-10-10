@@ -1,0 +1,16 @@
+question,expected_answer,difficulty,category
+What are the three main financial statements?,"The balance sheet, the income statement and the cash flow statement.",easy,reporting
+What does the accounting equation state?,Assets equal liabilities plus equity.,easy,accounting
+What is revenue?,The income a company earns from its normal business activities before costs are deducted.,easy,reporting
+What is the difference between gross profit and net profit?,"Gross profit is revenue minus cost of goods sold; net profit is what remains after all expenses, interest and taxes.",medium,reporting
+What is depreciation?,The systematic allocation of the cost of a tangible asset over its useful life.,medium,accounting
+What is working capital?,Current assets minus current liabilities.,medium,liquidity
+What does EBITDA stand for?,"Earnings before interest, taxes, depreciation and amortization.",medium,metrics
+What is accounts receivable?,Money owed to a company by customers for goods or services already delivered.,easy,accounting
+What is the difference between cash basis and accrual accounting?,Cash basis records transactions when cash moves; accrual records them when earned or incurred.,hard,accounting
+What does a current ratio below 1 indicate?,"That current liabilities exceed current assets, which may signal liquidity problems.",hard,liquidity
+What is an invoice?,A document issued by a seller requesting payment for goods or services supplied.,easy,operations
+What is VAT?,Value added tax: a consumption tax collected at each stage of the supply chain and borne by the final consumer.,medium,tax
+What is a budget variance?,The difference between a budgeted amount and the actual amount.,medium,planning
+What is the time value of money?,A sum of money is worth more now than the same sum in the future because it can earn a return.,hard,valuation
+What is a bank reconciliation?,The comparison of a company's cash records with the bank statement to explain differences.,medium,accounting
