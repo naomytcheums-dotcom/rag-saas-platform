@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.engine import URL
@@ -34,7 +35,13 @@ def _test_environment():
         port=1,
         database="test",
     )
-    env = isolated_environment(loopback_url)
+    # CI has no .env.staging: provide throwaway allowlist values (the target here is loopback, never a real staging host).
+    with patch.dict(os.environ, {
+        "STAGING_ALLOWED_DIRECT_HOST": "db.example-ref.supabase.co",
+        "STAGING_ALLOWED_POOLER_HOST": "pooler.example-ref.supabase.com",
+        "STAGING_ALLOWED_POOLER_USER": "postgres.example-ref",
+    }):
+        env = isolated_environment(loopback_url)
     env["POSTGRES_HEALTHCHECK_MAX_ATTEMPTS"] = HEALTHCHECK_ATTEMPTS
     return env
 
