@@ -1,5 +1,6 @@
 "use client";
 
+import DocumentDetails from "@/components/DocumentDetails";
 import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -29,6 +30,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -108,12 +110,18 @@ export default function DocumentsPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {documents.map((doc) => (
-              <div key={doc.id} className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
+              <div key={doc.id} className="rounded-lg border border-border bg-surface p-3">
+              <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-foreground">{doc.name}</p>
                   <p className="text-xs text-foreground-muted">{formatSize(doc.file_size)} · {doc.file_type} · {doc.status}{PROCESSING_STATUSES.has(doc.status.toLowerCase()) ? " …" : ""}</p>
                 </div>
-                <button type="button" onClick={() => void remove(doc.id)} className="text-xs font-medium text-danger hover:underline">{t("documents.delete")}</button>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setOpenId(openId === doc.id ? null : doc.id)} className="text-xs font-medium text-accent hover:underline">{t("documents.details")}</button>
+                  <button type="button" onClick={() => void remove(doc.id)} className="text-xs font-medium text-danger hover:underline">{t("documents.delete")}</button>
+                </div>
+              </div>
+              {openId === doc.id && org && <DocumentDetails documentId={doc.id} orgId={org.id} onChanged={() => void load()} />}
               </div>
             ))}
           </div>
