@@ -973,5 +973,14 @@
   "insights.empty": "Für diesen Zeitraum nichts anzuzeigen.",
   "insights.status.missing": "nicht dokumentiert",
   "insights.status.partially_covered": "teilweise abgedeckt",
-  "insights.error_load": "Analysen konnten nicht geladen werden."
+  "insights.error_load": "Analysen konnten nicht geladen werden.",
+  "chat.export": "Exportieren",
+  "chat.export_error": "Export fehlgeschlagen.",
+  "chat.visibility_public": "Öffentlich",
+  "chat.visibility_private": "Privat",
+  "chat.visibility_error": "Sichtbarkeit konnte nicht geändert werden.",
+  "chat.audio_history": "Audioverlauf",
+  "voice_agent.settings_title": "Spracheinstellungen",
+  "voice_agent.telephony_title": "Telefonanrufe",
+  "nav.voice_settings": "Spracheinstellungen"
 }

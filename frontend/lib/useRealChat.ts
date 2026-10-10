@@ -130,9 +130,32 @@ export function useRealChat(orgId: string) {
         setPending(false);
         abortControllerRef.current = null;
       }
+      // The messages above carry client-side ids until the server has persisted them. Feedback, follow-up questions and retry address a message by its
+      // server id, so adopt the persisted ids of the last user / assistant pair (keeping the citations received on the stream).
+      if (conversationId) {
+        try {
+          const history = await api.get<ConversationMessage[]>(`/conversations/${conversationId}/messages`);
+          const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
+          const lastUser = [...history].reverse().find((m) => m.role === "user");
+          setMessages((prev) => prev.map((m) => {
+            if (m.id === assistantId && lastAssistant) return { ...m, id: lastAssistant.id };
+            if (m.id === userMessage.id && lastUser) return { ...m, id: lastUser.id };
+            return m;
+          }));
+        } catch {
+          /* the ids stay local; the actions that need a server id will report their own error */
+        }
+      }
     },
     [agentId, conversationId, pending, t],
   );
+
+  const refresh = useCallback(async () => {
+    if (!conversationId) return;
+    const history = await api.get<ConversationMessage[]>(`/conversations/${conversationId}/messages`);
+    setMessages(history.map((m) => ({ id: m.id, role: m.role, content: m.content, created_at: m.created_at })));
+    setError(null);
+  }, [conversationId]);
 
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -157,5 +180,5 @@ export function useRealChat(orgId: string) {
     [messages, sendMessage],
   );
 
-  return { messages, pending, error, sendMessage, editMessage, regenerate, stopGeneration };
+  return { messages, pending, error, conversationId, sendMessage, editMessage, regenerate, stopGeneration, refresh };
 }

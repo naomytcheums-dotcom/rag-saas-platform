@@ -973,5 +973,14 @@
   "insights.empty": "Nothing to show for this period.",
   "insights.status.missing": "not documented",
   "insights.status.partially_covered": "partly covered",
-  "insights.error_load": "Could not load the insights."
+  "insights.error_load": "Could not load the insights.",
+  "chat.export": "Export",
+  "chat.export_error": "Export failed.",
+  "chat.visibility_public": "Public",
+  "chat.visibility_private": "Private",
+  "chat.visibility_error": "Could not change the visibility.",
+  "chat.audio_history": "Audio history",
+  "voice_agent.settings_title": "Voice settings",
+  "voice_agent.telephony_title": "Phone calls",
+  "nav.voice_settings": "Voice settings"
 }

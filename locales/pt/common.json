@@ -973,5 +973,14 @@
   "insights.empty": "Nada a mostrar neste período.",
   "insights.status.missing": "não documentado",
   "insights.status.partially_covered": "parcialmente coberto",
-  "insights.error_load": "Não foi possível carregar as análises."
+  "insights.error_load": "Não foi possível carregar as análises.",
+  "chat.export": "Exportar",
+  "chat.export_error": "A exportação falhou.",
+  "chat.visibility_public": "Público",
+  "chat.visibility_private": "Privado",
+  "chat.visibility_error": "Não foi possível alterar a visibilidade.",
+  "chat.audio_history": "Histórico de áudio",
+  "voice_agent.settings_title": "Definições de voz",
+  "voice_agent.telephony_title": "Chamadas telefónicas",
+  "nav.voice_settings": "Definições de voz"
 }

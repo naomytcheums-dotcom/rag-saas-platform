@@ -973,5 +973,14 @@
   "insights.empty": "لا شيء لعرضه في هذه الفترة.",
   "insights.status.missing": "غير موثّق",
   "insights.status.partially_covered": "مغطى جزئيًا",
-  "insights.error_load": "تعذّر تحميل التحليلات."
+  "insights.error_load": "تعذّر تحميل التحليلات.",
+  "chat.export": "تصدير",
+  "chat.export_error": "فشل التصدير.",
+  "chat.visibility_public": "عام",
+  "chat.visibility_private": "خاص",
+  "chat.visibility_error": "تعذّر تغيير الظهور.",
+  "chat.audio_history": "سجل الصوت",
+  "voice_agent.settings_title": "إعدادات الصوت",
+  "voice_agent.telephony_title": "المكالمات الهاتفية",
+  "nav.voice_settings": "إعدادات الصوت"
 }

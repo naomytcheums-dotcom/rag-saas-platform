@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import ChatComposer from "@/components/ChatComposer";
 import ChatSidebar from "@/components/ChatSidebar";
+import ConversationTools from "@/components/ConversationTools";
 import LoadingState from "@/components/LoadingState";
 import MessageBubble from "@/components/MessageBubble";
+import RetryButton from "@/components/RetryButton";
+import ShareConversation from "@/components/ShareConversation";
+import SuggestedQuestions from "@/components/SuggestedQuestions";
+import VoiceMessageList from "@/components/VoiceMessageList";
 import { useTranslation } from "@/lib/i18n";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useRealChat } from "@/lib/useRealChat";
@@ -22,7 +27,7 @@ import { useRealChat } from "@/lib/useRealChat";
 export default function Home() {
   const { t } = useTranslation();
   const { org, loading: orgLoading } = useCurrentOrg();
-  const { messages, pending, error, sendMessage, editMessage, regenerate, stopGeneration } = useRealChat(org?.id ?? "");
+  const { messages, pending, error, conversationId, sendMessage, editMessage, regenerate, stopGeneration, refresh } = useRealChat(org?.id ?? "");
   const [draft, setDraft] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -38,6 +43,10 @@ export default function Home() {
   }
 
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  // Spec 8.1.8: a question whose answer is missing (the stream failed) can be retried with the same parameters.
+  const canRetry = !pending && !!error && !!conversationId && !!lastUser && (!lastAssistant || lastAssistant.content === "");
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -56,6 +65,10 @@ export default function Home() {
             </button>
             <h1 className="text-base font-semibold text-foreground sm:text-lg">RAG SaaS Platform</h1>
           </div>
+          <div className="flex items-center gap-3">
+            <ConversationTools conversationId={conversationId} />
+            {conversationId && <ShareConversation conversationId={conversationId} />}
+          </div>
         </header>
 
         <main ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
@@ -70,8 +83,20 @@ export default function Home() {
                 onEdit={editMessage}
                 onRegenerate={regenerate}
                 regenerating={pending && message.id === lastAssistantId}
+                onFollowUp={sendMessage}
               />
             ))}
+
+            {canRetry && lastUser && conversationId && (
+              <RetryButton conversationId={conversationId} messageId={lastUser.id} onRetried={() => void refresh()} />
+            )}
+
+            {conversationId && (
+              <details className="text-xs text-foreground-muted">
+                <summary className="cursor-pointer">{t("chat.audio_history")}</summary>
+                <VoiceMessageList conversationId={conversationId} />
+              </details>
+            )}
 
             {pending && (
               <div className="flex justify-start">
@@ -95,6 +120,7 @@ export default function Home() {
           </div>
         </main>
 
+        {messages.length <= 2 && !pending && <SuggestedQuestions organizationId={org.id} onSelect={sendMessage} />}
         <ChatComposer value={draft} onChange={setDraft} onSend={sendMessage} disabled={pending} suggestions={messages.length <= 2 ? STARTER_QUESTIONS : []} />
       </div>
     </div>

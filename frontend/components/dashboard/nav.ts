@@ -17,6 +17,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/eval/evolution": TrendingUp,
   "/dashboard/quality": ShieldCheck,
   "/dashboard/voice-agent": Mic,
+  "/dashboard/voice-settings": Settings2,
   "/dashboard/escalations": LifeBuoy,
   "/dashboard/insights": Lightbulb,
   "/dashboard/settings/api-keys": KeyRound,
