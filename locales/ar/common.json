@@ -1023,5 +1023,11 @@
   "teams.delete": "حذف",
   "teams.remove": "إزالة",
   "teams.error_load": "تعذّر تحميل الفرق والمساحات.",
-  "teams.error_action": "فشل الإجراء."
+  "teams.error_action": "فشل الإجراء.",
+  "feedback.reason": "السبب",
+  "feedback.reason_hallucination": "معلومات مختلقة",
+  "feedback.reason_incomplete": "إجابة ناقصة",
+  "feedback.reason_wrong_source": "مصدر خاطئ أو غير ذي صلة",
+  "feedback.reason_other": "أخرى",
+  "feedback.correction": "ما الإجابة الصحيحة؟ (اختياري)"
 }

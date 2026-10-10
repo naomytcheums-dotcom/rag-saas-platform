@@ -1,25 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { api, ApiError, fileUrl } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { downloadWithAuth } from "@/lib/download";
 import { useTranslation } from "@/lib/i18n";
 
 const FORMATS = ["pdf", "docx", "json", "markdown"] as const;
-
-async function download(conversationId: string, format: (typeof FORMATS)[number]): Promise<void> {
-  const token = window.localStorage.getItem("access_token");
-  const response = await fetch(fileUrl(`/conversations/${conversationId}/export/${format}`), {
-    credentials: "include",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!response.ok) throw new ApiError(response.status, await response.text());
-  const blob = await response.blob();
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `conversation.${format === "markdown" ? "md" : format}`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
 
 /** Specs 8.1.14 (export PDF / DOCX / JSON / Markdown) and 8.1.16 (public / private): the two conversation-level controls of the chat header. */
 export default function ConversationTools({ conversationId }: { conversationId: string | null }) {
@@ -31,7 +17,7 @@ export default function ConversationTools({ conversationId }: { conversationId: 
   async function exportAs(format: (typeof FORMATS)[number]) {
     setError(null);
     try {
-      await download(conversationId as string, format);
+      await downloadWithAuth(`/conversations/${conversationId}/export/${format}`, `conversation.${format === "markdown" ? "md" : format}`);
     } catch {
       setError(t("chat.export_error"));
     }

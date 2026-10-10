@@ -1023,5 +1023,11 @@
   "teams.delete": "Supprimer",
   "teams.remove": "Retirer",
   "teams.error_load": "Impossible de charger les équipes et espaces.",
-  "teams.error_action": "L'action a échoué."
+  "teams.error_action": "L'action a échoué.",
+  "feedback.reason": "Raison",
+  "feedback.reason_hallucination": "Information inventée",
+  "feedback.reason_incomplete": "Réponse incomplète",
+  "feedback.reason_wrong_source": "Source incorrecte ou hors sujet",
+  "feedback.reason_other": "Autre",
+  "feedback.correction": "Quelle aurait dû être la réponse ? (facultatif)"
 }

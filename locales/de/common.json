@@ -1023,5 +1023,11 @@
   "teams.delete": "Löschen",
   "teams.remove": "Entfernen",
   "teams.error_load": "Teams und Arbeitsbereiche konnten nicht geladen werden.",
-  "teams.error_action": "Die Aktion ist fehlgeschlagen."
+  "teams.error_action": "Die Aktion ist fehlgeschlagen.",
+  "feedback.reason": "Grund",
+  "feedback.reason_hallucination": "Erfundene Information",
+  "feedback.reason_incomplete": "Unvollständige Antwort",
+  "feedback.reason_wrong_source": "Falsche oder irrelevante Quelle",
+  "feedback.reason_other": "Sonstiges",
+  "feedback.correction": "Wie hätte die Antwort lauten sollen? (optional)"
 }

@@ -18,12 +18,14 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
   const [rating, setRating] = useState<"positive" | "negative" | null>(null);
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [comment, setComment] = useState("");
+  const [reason, setReason] = useState("");
+  const [correction, setCorrection] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function submit(newRating: "positive" | "negative", withComment?: string) {
+  async function submit(newRating: "positive" | "negative", withComment?: string, details?: { reason?: string; correction?: string }) {
     setSaving(true);
     try {
-      await api.post<MessageFeedback>(`/messages/${messageId}/feedback`, { rating: newRating, comment: withComment ?? null });
+      await api.post<MessageFeedback>(`/messages/${messageId}/feedback`, { rating: newRating, comment: withComment ?? null, reason: details?.reason || null, correction: details?.correction || null });
       setRating(newRating);
     } catch (err) {
       // Real, honest no-op on failure: the buttons stay usable so the
@@ -80,12 +82,27 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
 
       {showCommentBox && rating !== "negative" && (
         <div className="w-64 rounded-lg border border-border bg-surface p-2 shadow-sm">
+          <select aria-label={t("feedback.reason")} value={reason} onChange={(event) => setReason(event.target.value)} className="mb-1.5 w-full rounded-md border border-border bg-background p-1 text-xs text-foreground">
+            <option value="">{t("feedback.reason")}</option>
+            <option value="hallucination">{t("feedback.reason_hallucination")}</option>
+            <option value="incomplete">{t("feedback.reason_incomplete")}</option>
+            <option value="wrong_source">{t("feedback.reason_wrong_source")}</option>
+            <option value="other">{t("feedback.reason_other")}</option>
+          </select>
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder={t("what_went_wrong")}
             rows={2}
             className="w-full resize-none rounded-md border border-border bg-background p-1.5 text-xs text-foreground outline-none focus:border-accent"
+          />
+          <textarea
+            value={correction}
+            onChange={(event) => setCorrection(event.target.value)}
+            placeholder={t("feedback.correction")}
+            aria-label={t("feedback.correction")}
+            rows={2}
+            className="mt-1.5 w-full resize-none rounded-md border border-border bg-background p-1.5 text-xs text-foreground outline-none focus:border-accent"
           />
           <div className="mt-1.5 flex justify-end gap-2">
             <button type="button" onClick={() => setShowCommentBox(false)} className="text-xs text-foreground-muted hover:underline">
@@ -94,7 +111,7 @@ export default function FeedbackButtons({ messageId }: FeedbackButtonsProps) {
             <button
               type="button"
               onClick={() => {
-                void submit("negative", comment || undefined);
+                void submit("negative", comment || undefined, { reason, correction: correction.trim() });
                 setShowCommentBox(false);
               }}
               className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover"

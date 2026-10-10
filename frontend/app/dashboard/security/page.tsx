@@ -2,7 +2,8 @@
 
 import LoadingState from "@/components/LoadingState";
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, fileUrl } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { downloadWithAuth } from "@/lib/download";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useTranslation } from "@/lib/i18n";
 
@@ -333,7 +334,7 @@ function AuditLogTab({ orgId, onError }: { orgId: string; onError: (e: string) =
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-foreground-muted">{total} {t("security.audit.total")}</p>
-        <a href={fileUrl(`/audit/export?fmt=csv`)} target="_blank" rel="noreferrer" className="text-xs font-medium text-accent hover:underline">{t("security.audit.export")}</a>
+        <button type="button" onClick={() => void downloadWithAuth("/audit/export?fmt=csv", "audit-log.csv")} className="text-xs font-medium text-accent hover:underline">{t("security.audit.export")}</button>
       </div>
       <div className="flex flex-col gap-1">
         {logs.map((log) => (
@@ -452,7 +453,7 @@ function ComplianceTab({ onError }: { orgId: string; onError: (e: string) => voi
         <h2 className="text-sm font-semibold text-foreground">{t("security.compliance.my_data")}</h2>
         <p className="mt-1 text-xs text-foreground-muted">{t("security.compliance.my_data_desc")}</p>
         <div className="mt-3 flex gap-3">
-          <a href={fileUrl("/compliance/data-export?fmt=json")} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">{t("security.compliance.export_data")}</a>
+          <button type="button" onClick={() => void downloadWithAuth("/compliance/data-export?fmt=json", "my-data.json")} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">{t("security.compliance.export_data")}</button>
           <a href="/dashboard/profile" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted">{t("security.compliance.delete_account")}</a>
         </div>
 

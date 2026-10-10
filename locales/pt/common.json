@@ -1023,5 +1023,11 @@
   "teams.delete": "Eliminar",
   "teams.remove": "Remover",
   "teams.error_load": "Não foi possível carregar equipas e espaços.",
-  "teams.error_action": "A ação falhou."
+  "teams.error_action": "A ação falhou.",
+  "feedback.reason": "Motivo",
+  "feedback.reason_hallucination": "Informação inventada",
+  "feedback.reason_incomplete": "Resposta incompleta",
+  "feedback.reason_wrong_source": "Fonte incorreta ou irrelevante",
+  "feedback.reason_other": "Outro",
+  "feedback.correction": "Qual devia ser a resposta? (opcional)"
 }

@@ -1023,5 +1023,11 @@
   "teams.delete": "Delete",
   "teams.remove": "Remove",
   "teams.error_load": "Could not load teams and workspaces.",
-  "teams.error_action": "The action failed."
+  "teams.error_action": "The action failed.",
+  "feedback.reason": "Reason",
+  "feedback.reason_hallucination": "Made-up information",
+  "feedback.reason_incomplete": "Incomplete answer",
+  "feedback.reason_wrong_source": "Wrong or irrelevant source",
+  "feedback.reason_other": "Other",
+  "feedback.correction": "What should the answer have been? (optional)"
 }

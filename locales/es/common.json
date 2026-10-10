@@ -1023,5 +1023,11 @@
   "teams.delete": "Eliminar",
   "teams.remove": "Quitar",
   "teams.error_load": "No se pudieron cargar los equipos y espacios.",
-  "teams.error_action": "La acción falló."
+  "teams.error_action": "La acción falló.",
+  "feedback.reason": "Motivo",
+  "feedback.reason_hallucination": "Información inventada",
+  "feedback.reason_incomplete": "Respuesta incompleta",
+  "feedback.reason_wrong_source": "Fuente incorrecta o irrelevante",
+  "feedback.reason_other": "Otro",
+  "feedback.correction": "¿Cuál debía ser la respuesta? (opcional)"
 }
