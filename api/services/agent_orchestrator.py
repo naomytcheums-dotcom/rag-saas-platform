@@ -95,9 +95,10 @@ from api.services.llm_providers import LLMError, chat_completion, chat_completio
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
 from api.services.task_planning import get_plan_steps, plan_task
+from api.services.fallback import run_tool_fallbacks
 from api.services.tool_budget import cap_tool_output
 from api.services.tool_selection import select_tools
-from api.services.tool_timeout import ToolTimeoutError, execute_tool_with_timeout, get_tool_timeout
+from api.services.tool_timeout import execute_tool_with_timeout, get_tool_timeout
 from api.services.tool_validation import get_validation_errors
 from api.services.tools import ToolSpec, tool_input_schema, tool_to_function_schema
 
@@ -526,9 +527,11 @@ class AgentOrchestrator:
                     async with self._db_lock:
                         output = await cap_tool_output(db, tool.name, output)
                     return tool_call, output, None
-                except ToolTimeoutError as exc:
-                    return tool_call, None, str(exc)
-                except Exception as exc:  # noqa: BLE001 -- any real handler failure is real, reportable tool-call data, not a crash of the whole agent run
+                except Exception as exc:  # noqa: BLE001 -- a timeout or any real handler failure is reportable tool-call data, not a crash of the whole agent run
+                    fallback = await run_tool_fallbacks(db, self._db_lock, tool.name, tool_call["arguments"], tools_by_name)
+                    if fallback is not None:
+                        fallback_name, fallback_output = fallback
+                        return tool_call, f"[fallback tool {fallback_name!r} used because {tool.name!r} failed] {fallback_output}", None
                     return tool_call, None, str(exc)
 
             try:
@@ -928,9 +931,11 @@ class AgentOrchestrator:
                 async with self._db_lock:
                     output = await cap_tool_output(db, tool.name, output)
                 return tool_call, output, None
-            except ToolTimeoutError as exc:
-                return tool_call, None, str(exc)
-            except Exception as exc:  # noqa: BLE001 -- tool failure is reportable data, not a crash of the whole stream
+            except Exception as exc:  # noqa: BLE001 -- a timeout or any tool failure is reportable data, not a crash of the whole stream
+                fallback = await run_tool_fallbacks(db, self._db_lock, tool.name, tool_call["arguments"], stream_tools_by_name)
+                if fallback is not None:
+                    fallback_name, fallback_output = fallback
+                    return tool_call, f"[fallback tool {fallback_name!r} used because {tool.name!r} failed] {fallback_output}", None
                 return tool_call, None, str(exc)
 
         try:

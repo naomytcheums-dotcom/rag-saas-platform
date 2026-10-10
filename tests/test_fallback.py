@@ -153,3 +153,35 @@ async def test_non_superadmin_cannot_create_tool_fallback(client, register_paylo
     token = await _register(client, register_payload["email"], register_payload["password"])
     response = await client.post("/admin/tools/fallback", json={"tool_name": "primary", "fallback_tool": "backup"}, headers=_auth_header(token))
     assert response.status_code == 403
+
+
+# ------------------------------------------------ run_tool_fallbacks (wired in the orchestrator) --
+
+
+async def test_run_tool_fallbacks_uses_the_first_allowed_working_fallback(db_session):
+    import asyncio
+
+    from api.services.fallback import run_tool_fallbacks
+
+    await set_tool_fallback(db_session, "primary", "broken-fallback", 1)
+    await set_tool_fallback(db_session, "primary", "fallback", 2)
+    allowed = {"broken-fallback": BROKEN_FALLBACK, "fallback": WORKING_FALLBACK}
+    result = await run_tool_fallbacks(db_session, asyncio.Lock(), "primary", {}, allowed)
+    assert result is not None and result[0] == "fallback"
+
+
+async def test_run_tool_fallbacks_never_uses_a_tool_the_agent_is_not_allowed_to_use(db_session):
+    import asyncio
+
+    from api.services.fallback import run_tool_fallbacks
+
+    await set_tool_fallback(db_session, "primary", "fallback", 1)
+    assert await run_tool_fallbacks(db_session, asyncio.Lock(), "primary", {}, {"broken-fallback": BROKEN_FALLBACK}) is None
+
+
+async def test_run_tool_fallbacks_returns_none_without_any_configured_fallback(db_session):
+    import asyncio
+
+    from api.services.fallback import run_tool_fallbacks
+
+    assert await run_tool_fallbacks(db_session, asyncio.Lock(), "primary", {}, {"fallback": WORKING_FALLBACK}) is None
