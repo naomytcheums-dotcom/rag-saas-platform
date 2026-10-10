@@ -28,6 +28,7 @@ class OrganizationSettingsResponse(BaseModel):
     # discover they existed.
     policy_aware_retrieval_enabled: bool
     prompt_injection_detection_enabled: bool
+    toxicity_filter_enabled: bool = False
     adaptive_routing_enabled: bool
     cost_budget_per_request: float | None
     # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
@@ -106,6 +107,7 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # them on to edit the DB row directly.
     policy_aware_retrieval_enabled: bool | None = None
     prompt_injection_detection_enabled: bool | None = None
+    toxicity_filter_enabled: bool | None = None
     adaptive_routing_enabled: bool | None = None
     cost_budget_per_request: float | None = Field(default=None, ge=0.0)
     # Phase 4, Étape 1 (correctif config parent_child) -- same real

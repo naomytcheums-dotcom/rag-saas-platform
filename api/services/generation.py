@@ -191,11 +191,23 @@ async def generate_response(
             if context_result["is_injection"]:
                 raise GenerationBlockedError(f"Prompt injection detected in retrieved context (score={context_result['score']:.2f})")
 
+    if org_settings.get("toxicity_filter_enabled", False):
+        from api.services.toxicity_filter import detect_toxicity  # noqa: PLC0415
+
+        if detect_toxicity(query)["is_toxic"]:
+            raise GenerationBlockedError("The question was blocked by the toxicity filter")
+
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": query}]
     answer = await chat_completion(
         messages, provider=llm_cfg["provider"], model=llm_cfg["model"],
         temperature=llm_cfg["temperature"], top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
     )
+
+    if org_settings.get("toxicity_filter_enabled", False):
+        from api.services.toxicity_filter import detect_toxicity  # noqa: PLC0415
+
+        if detect_toxicity(answer)["is_toxic"]:
+            raise GenerationBlockedError("The generated answer was blocked by the toxicity filter")
 
     response = Response(
         organization_id=organization_id, workspace_id=workspace_id, query=query, answer=answer, created_by=created_by,
