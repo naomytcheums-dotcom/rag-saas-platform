@@ -171,6 +171,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "prompt_injection_detection_enabled": False,
     # Spec 10.2.7 -- opt-in toxicity filter (api/services/toxicity_filter.py) on the question and on the answer of the agent-less RAG path.
     "toxicity_filter_enabled": False,
+    # Spec 10.4.5/10.4.6 -- delete this organization's conversations after this many days without activity (None = keep forever). See api/tasks/retention.py.
+    "conversation_retention_days": None,
     # Systèmes internes, item 25 -- gate for
     # api.services.query_router.suggest_retrieval_strategy, wired into
     # search() -- default False, same rétrocompatibilité discipline.

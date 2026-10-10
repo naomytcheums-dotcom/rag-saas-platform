@@ -114,7 +114,7 @@ celery_app = Celery(
         "api.tasks.jwt_key_rotation", "api.tasks.ssl_certificate_renewal", "api.tasks.domain_verification",
         "api.tasks.document_processing", "api.tasks.document_modification_check", "api.tasks.external_source_sync",
         "api.tasks.reindex_schedule", "api.tasks.batch_jobs", "api.tasks.evaluation_jobs", "api.tasks.comparison_jobs",
-        "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.voice_message_cleanup",
+        "api.tasks.deployment_evaluations", "api.tasks.conversation_cleanup", "api.tasks.retention", "api.tasks.voice_message_cleanup",
         "api.tasks.api_key_maintenance", "api.tasks.webhooks",
         "api.tasks.audit", "api.tasks.compliance", "api.tasks.security_scan", "api.tasks.billing", "api.tasks.alerting",
         "api.tasks.integrations", "api.tasks.plugins", "api.tasks.sales", "api.tasks.analytics", "api.tasks.ab_tests",
@@ -258,6 +258,11 @@ celery_app.conf.beat_schedule = {
     "purge-deleted-conversations-daily": {
         "task": "api.tasks.conversation_cleanup.purge_deleted_conversations_task",
         "schedule": crontab(hour=5, minute=30),
+    },
+    # Spec 10.4.5/10.4.6 -- per-organization retention policies (api/tasks/retention.py), idempotent.
+    "purge-expired-conversations-retention-daily": {
+        "task": "api.tasks.retention.purge_expired_conversations_task",
+        "schedule": crontab(hour=5, minute=15),
     },
     # Partie 8.2.7 -- same low-traffic window, offset again. Idempotent
     # (see api/tasks/voice_message_cleanup.py's own docstring).

@@ -29,6 +29,7 @@ class OrganizationSettingsResponse(BaseModel):
     policy_aware_retrieval_enabled: bool
     prompt_injection_detection_enabled: bool
     toxicity_filter_enabled: bool = False
+    conversation_retention_days: int | None = None
     adaptive_routing_enabled: bool
     cost_budget_per_request: float | None
     # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
@@ -108,6 +109,7 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     policy_aware_retrieval_enabled: bool | None = None
     prompt_injection_detection_enabled: bool | None = None
     toxicity_filter_enabled: bool | None = None
+    conversation_retention_days: int | None = Field(default=None, ge=1, le=3650, description="Delete conversations after this many days without activity")
     adaptive_routing_enabled: bool | None = None
     cost_budget_per_request: float | None = Field(default=None, ge=0.0)
     # Phase 4, Étape 1 (correctif config parent_child) -- same real
