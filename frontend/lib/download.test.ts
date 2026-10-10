@@ -26,6 +26,7 @@ beforeEach(() => {
   window.localStorage.setItem("access_token", "tok-1");
   URL.createObjectURL = vi.fn(() => "blob:abc");
   URL.revokeObjectURL = vi.fn();
+  // eslint-disable-next-line @typescript-eslint/no-this-alias -- the spy must capture the clicked anchor
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { clicked = this; });
 });
 afterEach(() => {
