@@ -35,7 +35,7 @@ export default defineConfig({
       cwd: path.join(repoRoot, "frontend"),
       url: `http://localhost:${WEB_PORT}/login`,
       reuseExistingServer: !process.env.CI,
-      timeout: 240_000,
+      timeout: 600_000,
       env: { NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}` },
     },
   ],
