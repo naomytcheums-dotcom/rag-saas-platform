@@ -11,8 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LINK = re.compile(r"FRONTEND_URL[^}\n]*\}/([a-z0-9][a-z0-9\-/]*)")
 
-# MAP-003 (P2), not fixed yet: account restoration, consent reactivation and 2FA lockout recovery confirmation pages.
-KNOWN_MISSING_PAGES = {"restore-account", "reactivate-consent", "2fa-lockout-recovery"}
+# MAP-003 is fixed (pages restore-account, reactivate-consent, 2fa-lockout-recovery now exist): no known gap remains. A new gap must be fixed,
+# or listed here on purpose, never left silent.
+KNOWN_MISSING_PAGES: set[str] = set()
 
 
 def _linked_paths() -> set[str]:
