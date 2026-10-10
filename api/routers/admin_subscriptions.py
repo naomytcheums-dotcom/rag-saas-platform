@@ -3,14 +3,16 @@ api/services/admin_subscriptions.py's own docstring for this module's
 honest scope: real CRUD and real math, zero real payment processor."""
 
 import datetime as dt
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db, require_admin
 from api.models.admin import Plan, SubscriptionStatus
-from api.models.audit_log import AuditAction
+from api.models.audit_log import AuditAction, AuditLog
 from api.models.user import User, UserRole
 from api.routers.billing import _cancel_at_provider, _settle_invoice_or_http_error
 from api.schemas.billing import InvoiceResponse, MarkInvoicePaidRequest, VoidInvoiceRequest
@@ -43,22 +45,37 @@ from api.security.audit_log import log_audit_action
 from api.security.logging_correlation import get_request_id
 
 router = APIRouter(prefix="/admin", tags=["Admin Subscriptions"])
+logger = logging.getLogger(__name__)
+_DENIED_AUDIT_WINDOW = dt.timedelta(minutes=1)
 
 # SADM-005: reading is open to any platform admin; every write here grants value without a payment (plan, status, period), moves money
 # (refund) or changes what every customer is charged (catalogue, provider sync), so it requires the superadmin tier (403, not 404).
 
 
 async def require_superadmin(request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
-    """Same rule and same 403 as `api.dependencies.require_superadmin`, plus an audit row for the refused attempt (who, which route): a
-    platform admin trying a financial write is worth knowing about. The row is committed here because the request is about to fail."""
+    """Same rule and same 403 as `api.dependencies.require_superadmin`. A refused attempt by PLATFORM STAFF (role admin) leaves an audit
+    row, deduplicated per (user, route template) and minute; an ordinary user only gets a log line, so nobody can grow the audit table
+    or contend for its chain lock by hammering these routes. The row is committed here because the request is about to fail."""
     if user.role == UserRole.superadmin:
         return user
-    await log_audit_action(
-        db, user_id=user.id, action=AuditAction.ADMIN_FINANCIAL_ACTION_DENIED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
-        success=False, failure_reason="superadmin required", resource_type="admin_route", resource_id=f"{request.method} {request.url.path}",
-        metadata={"role": user.role.value, "request_id": get_request_id()},
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path  # template: ids in the URL do not open a new row
+    if user.role != UserRole.admin:
+        logger.warning("superadmin-only route %s %s refused to a non-staff user %s", request.method, route, user.id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
+    recent = await db.scalar(
+        select(AuditLog.id).where(
+            AuditLog.action == AuditAction.ADMIN_FINANCIAL_ACTION_DENIED.value, AuditLog.user_id == user.id,
+            AuditLog.metadata_json.contains(f'"route": "{request.method} {route}"'),
+            AuditLog.timestamp >= dt.datetime.now(dt.timezone.utc) - _DENIED_AUDIT_WINDOW,
+        ).limit(1)
     )
-    await db.commit()
+    if recent is None:
+        await log_audit_action(
+            db, user_id=user.id, action=AuditAction.ADMIN_FINANCIAL_ACTION_DENIED, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
+            success=False, failure_reason="superadmin required", resource_type="admin_route", resource_id=f"{request.method} {request.url.path}",
+            metadata={"role": user.role.value, "route": f"{request.method} {route}", "request_id": get_request_id()},
+        )
+        await db.commit()
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
 
 
