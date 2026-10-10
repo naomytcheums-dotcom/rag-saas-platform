@@ -1039,5 +1039,22 @@
   "documents.source_url": "Page web",
   "documents.source_sitemap": "Sitemap",
   "documents.source_github": "Dépôt GitHub",
-  "documents.source_notion": "Notion"
+  "documents.source_notion": "Notion",
+  "lp.tour.title": "Voir le produit en action",
+  "lp.tour.subtitle": "Une visite de deux minutes : importer des documents, poser une question, lire la réponse avec ses sources.",
+  "lp.tour.novideo": "Votre navigateur ne peut pas lire cette vidéo.",
+  "lp.arch.title": "Comment ça marche",
+  "lp.arch.subtitle": "Quatre étapes de vos documents à une réponse citée, dans votre propre organisation.",
+  "lp.arch.1.title": "Ingestion",
+  "lp.arch.1.desc": "Les documents sont analysés, découpés en passages et vectorisés.",
+  "lp.arch.2.title": "Recherche",
+  "lp.arch.2.desc": "Recherche hybride vectorielle et par mots-clés, avec reranker optionnel.",
+  "lp.arch.3.title": "Génération",
+  "lp.arch.3.desc": "Le modèle répond uniquement à partir des passages retrouvés.",
+  "lp.arch.4.title": "Citer et mesurer",
+  "lp.arch.4.desc": "Chaque réponse renvoie à ses sources et est notée dans l'Eval Lab.",
+  "landing.footer.doc_architecture": "Architecture (PDF)",
+  "landing.footer.doc_setup": "Guide d'installation (PDF)",
+  "landing.footer.doc_api": "Documentation de l'API (PDF)",
+  "landing.footer.docs": "Documentation"
 }

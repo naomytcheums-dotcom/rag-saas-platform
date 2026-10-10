@@ -90,6 +90,14 @@ jobs:
           RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
         run: python -m alembic upgrade head
 
+      - name: Start a disposable MinIO (S3) and create the buckets
+        # Throw-away container with throw-away credentials, the same image CircleCI uses. The avatar, branding and purge tests talk to a real
+        # S3 endpoint; without it they fail with "Could not connect to the endpoint URL".
+        run: |
+          docker run -d --name ci-minio -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin bitnamilegacy/minio:2025.7.23-debian-12-r5
+          for i in $(seq 1 40); do curl -sf http://localhost:9000/minio/health/live && break; sleep 1; done
+          S3_ENDPOINT_URL=http://localhost:9000 S3_BUCKET_NAME=avatars S3_ACCESS_KEY_ID=minioadmin S3_SECRET_ACCESS_KEY=minioadmin S3_REGION=us-east-1 S3_DOCUMENTS_BUCKET_NAME=documents S3_VOICE_BUCKET_NAME=voice python scripts/ci_create_buckets.py
+
       - name: Run test suite
         env:
           # Real root cause found (Phase 5, Étape 12) for the ~15
@@ -129,7 +137,7 @@ jobs:
           JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
           SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
           AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
-          SECRET_ENCRYPTION_KEY: ci-only-secret-encryption-key-never-used-outside-ci-32c
+          SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
           ENCRYPTION_MASTER_KEY: gBZ-pfccwD20XSBiesnRCAo9e7_y7E0LOAAvsXGJXyg=
           RESEND_API_KEY: re_ci_placeholder_never_a_real_key
           EMAIL_FROM_ADDRESS: onboarding@resend.dev
@@ -141,6 +149,7 @@ jobs:
           S3_REGION: us-east-1
           S3_PUBLIC_BASE_URL: http://localhost:9000/public/avatars
           S3_DOCUMENTS_BUCKET_NAME: documents
+          S3_VOICE_BUCKET_NAME: voice
         # Real bug found by this étape's own first-ever completed CI run
         # (GitHub Actions never got this far before -- see ROADMAP.md's
         # own Étape 7 entry on the account-wide billing block): 7 test

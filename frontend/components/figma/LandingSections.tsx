@@ -116,6 +116,28 @@ function InfoCards({ id, title, subtitle, items, columns }: { id?: string; title
   );
 }
 
+export function ProductTourSection() {
+  const { t } = useTranslation();
+  return (
+    <section id="tour" className="relative px-6 py-20">
+      <div className="mx-auto max-w-[960px]">
+        <Heading className="text-center">{t("lp.tour.title")}</Heading>
+        <p className="mx-auto mt-5 max-w-[780px] text-center text-[20px] leading-[28px] text-[#d9d9d9]">{t("lp.tour.subtitle")}</p>
+        <video className="mt-12 w-full rounded-[20px] border-[1.25px] border-[rgba(255,84,31,0.3)] bg-black" controls preload="metadata" playsInline>
+          <source src="/landing/product-tour.mp4" type="video/mp4" />
+          {t("lp.tour.novideo")}
+        </video>
+      </div>
+    </section>
+  );
+}
+
+export function ArchitectureSection() {
+  const { t } = useTranslation();
+  const items = [1, 2, 3, 4].map((n) => ({ title: t(`lp.arch.${n}.title`), description: t(`lp.arch.${n}.desc`) }));
+  return <InfoCards title={t("lp.arch.title")} subtitle={t("lp.arch.subtitle")} items={items} columns="md:grid-cols-2" />;
+}
+
 export function AiCreditsSection() {
   const { t } = useTranslation();
   const items = [1, 2, 3, 4].map((n) => ({ title: t(`lp.credits.${n}.title`), description: t(`lp.credits.${n}.desc`) }));
@@ -331,6 +353,9 @@ export function FooterSection() {
       { label: t("landing.footer.api_keys"), href: "/dashboard/settings/api-keys" },
       { label: t("landing.footer.webhooks"), href: "/dashboard/settings/webhooks" },
       { label: t("landing.footer.api_ref"), href: `${API_BASE_URL}/docs` },
+      { label: t("landing.footer.doc_architecture"), href: "/docs/architecture.pdf" },
+      { label: t("landing.footer.doc_setup"), href: "/docs/setup-guide.pdf" },
+      { label: t("landing.footer.doc_api"), href: "/docs/api-documentation.pdf" },
     ] },
     { title: t("landing.footer.account"), links: [
       { label: t("landing.login"), href: "/login" },
