@@ -10,6 +10,7 @@ import RetryButton from "@/components/RetryButton";
 import ShareConversation from "@/components/ShareConversation";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
 import VoiceMessageList from "@/components/VoiceMessageList";
+import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "@/lib/i18n";
 import { useCurrentOrg } from "@/lib/useCurrentOrg";
 import { useRealChat } from "@/lib/useRealChat";
@@ -26,6 +27,7 @@ import { useRealChat } from "@/lib/useRealChat";
 // a real agent, and a real, persisted conversation.
 export default function Home() {
   const { t } = useTranslation();
+  const { branding } = useBranding();
   const { org, loading: orgLoading } = useCurrentOrg();
   const { messages, pending, error, conversationId, sendMessage, editMessage, regenerate, stopGeneration, refresh } = useRealChat(org?.id ?? "");
   const [draft, setDraft] = useState("");
@@ -63,7 +65,7 @@ export default function Home() {
             >
               ☰
             </button>
-            <h1 className="text-base font-semibold text-foreground sm:text-lg">RAG SaaS Platform</h1>
+            <h1 className="text-base font-semibold text-foreground sm:text-lg">{branding.brand_name ?? t("nav.brand_fallback")}</h1>
           </div>
           <div className="flex items-center gap-3">
             <ConversationTools conversationId={conversationId} />

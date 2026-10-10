@@ -130,7 +130,7 @@ async def send_test_delivery(db: AsyncSession, webhook: Webhook) -> WebhookDeliv
     from api.tasks.webhooks import deliver_webhook_task
 
     delivery = WebhookDelivery(
-        webhook_id=webhook.id, event="test", payload={"event": "test", "message": "This is a test delivery from your RAG SaaS Platform dashboard."}, attempt=1,
+        webhook_id=webhook.id, event="test", payload={"event": "test", "message": "This is a test delivery from your dashboard."}, attempt=1,
     )
     db.add(delivery)
     await db.flush()

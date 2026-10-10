@@ -43,6 +43,11 @@ export function BrandingApplier() {
   }, [branding.primary_color, branding.secondary_color, branding.font_family]);
 
   useEffect(() => {
+    // The organization's own name replaces the platform name in the browser tab (white label, spec 1.4.6).
+    if (branding.brand_name) document.title = branding.brand_name;
+  }, [branding.brand_name]);
+
+  useEffect(() => {
     if (!branding.favicon_url) return;
     const existing = document.querySelector<HTMLLinkElement>(FAVICON_LINK_SELECTOR);
     if (existing) {
