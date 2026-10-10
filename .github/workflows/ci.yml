@@ -24,9 +24,10 @@ jobs:
     # tests, not stuck) -- a shared GitHub-hosted runner is real, but
     # slower per-test than this session's own dev machine (real bcrypt
     # hashing costs, real async DB round-trips, add up differently under
-    # shared CPU). 30 minutes leaves real headroom without masking an
-    # actual hang if one ever occurs.
-    timeout-minutes: 30
+    # shared CPU). Measured again on PR #20 and on main: the suite is now bigger and the job is cancelled at 30 minutes with pytest
+    # still running, at about 61% after 27 minutes (so ~45 minutes in total on a standard runner). 75 minutes leaves headroom
+    # without masking an actual hang. tests/test_ci_backend_timeout.py guards this limit.
+    timeout-minutes: 75
     # Phase 5, Étape 11 -- real fix for the ~15 auth/SSO test failures
     # traced in ROADMAP.md (Étape 10): a real Redis service for THIS
     # job specifically, so RATE_LIMIT_REDIS_URL points at something
@@ -115,7 +116,7 @@ jobs:
         # `.circleci/config.yml`'s own real, already-working job list
         # confirms this exact same exclusion is the established
         # precedent, not a new one invented here.
-        run: pytest -q --maxfail=20 --ignore=sdks/python/tests/test_client.py --ignore=tests/test_agent.py --ignore=tests/test_injection_test_set.py --ignore=tests/test_integrations.py --ignore=tests/test_regression.py --ignore=tests/test_voice.py --ignore=tests_pipeline/test_retrieval.py
+        run: pytest -q -rfE --maxfail=20 --ignore=sdks/python/tests/test_client.py --ignore=tests/test_agent.py --ignore=tests/test_injection_test_set.py --ignore=tests/test_integrations.py --ignore=tests/test_regression.py --ignore=tests/test_voice.py --ignore=tests_pipeline/test_retrieval.py
 
   backend-security:
     runs-on: ubuntu-latest
