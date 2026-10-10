@@ -1006,5 +1006,22 @@
   "documents.versions": "Versions",
   "documents.no_versions": "No previous version.",
   "documents.history": "History",
-  "documents.no_history": "No recorded change."
+  "documents.no_history": "No recorded change.",
+  "nav.teams": "Teams",
+  "teams.title": "Teams and workspaces",
+  "teams.subtitle": "Organize your members and your content.",
+  "teams.workspaces": "Workspaces",
+  "teams.teams": "Teams",
+  "teams.no_workspaces": "No workspace yet.",
+  "teams.no_teams": "No team yet.",
+  "teams.no_members": "No member.",
+  "teams.workspace_name": "Workspace name",
+  "teams.team_name": "Team name",
+  "teams.member_email": "Member e-mail",
+  "teams.add_member": "Add member",
+  "teams.create": "Create",
+  "teams.delete": "Delete",
+  "teams.remove": "Remove",
+  "teams.error_load": "Could not load teams and workspaces.",
+  "teams.error_action": "The action failed."
 }

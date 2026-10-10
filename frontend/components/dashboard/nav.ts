@@ -1,5 +1,5 @@
 import {
-  BookOpen, Bot, Building2, ChartColumn, Cpu, CreditCard, Crown, FileText, FlaskConical, KeyRound, LayoutDashboard, Lock, MessageSquare, Mic,
+  Users, BookOpen, Bot, Building2, ChartColumn, Cpu, CreditCard, Crown, FileText, FlaskConical, KeyRound, LayoutDashboard, Lock, MessageSquare, Mic,
   Lightbulb, LifeBuoy, Plug, Puzzle, Settings2, ShieldCheck, SlidersHorizontal, Store, TrendingUp, User, Webhook, Workflow, type LucideIcon,
 } from "lucide-react";
 
@@ -19,6 +19,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/voice-agent": Mic,
   "/dashboard/voice-settings": Settings2,
   "/dashboard/escalations": LifeBuoy,
+  "/dashboard/teams": Users,
   "/dashboard/insights": Lightbulb,
   "/dashboard/settings/api-keys": KeyRound,
   "/dashboard/settings/webhooks": Webhook,

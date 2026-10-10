@@ -1006,5 +1006,22 @@
   "documents.versions": "Versions",
   "documents.no_versions": "Aucune version précédente.",
   "documents.history": "Historique",
-  "documents.no_history": "Aucune modification enregistrée."
+  "documents.no_history": "Aucune modification enregistrée.",
+  "nav.teams": "Équipes",
+  "teams.title": "Équipes et espaces de travail",
+  "teams.subtitle": "Organisez vos membres et vos contenus.",
+  "teams.workspaces": "Espaces de travail",
+  "teams.teams": "Équipes",
+  "teams.no_workspaces": "Aucun espace de travail.",
+  "teams.no_teams": "Aucune équipe.",
+  "teams.no_members": "Aucun membre.",
+  "teams.workspace_name": "Nom de l'espace",
+  "teams.team_name": "Nom de l'équipe",
+  "teams.member_email": "E-mail du membre",
+  "teams.add_member": "Ajouter le membre",
+  "teams.create": "Créer",
+  "teams.delete": "Supprimer",
+  "teams.remove": "Retirer",
+  "teams.error_load": "Impossible de charger les équipes et espaces.",
+  "teams.error_action": "L'action a échoué."
 }

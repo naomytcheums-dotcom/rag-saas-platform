@@ -1006,5 +1006,22 @@
   "documents.versions": "Versiones",
   "documents.no_versions": "Sin versiones anteriores.",
   "documents.history": "Historial",
-  "documents.no_history": "Sin cambios registrados."
+  "documents.no_history": "Sin cambios registrados.",
+  "nav.teams": "Equipos",
+  "teams.title": "Equipos y espacios de trabajo",
+  "teams.subtitle": "Organice a sus miembros y sus contenidos.",
+  "teams.workspaces": "Espacios de trabajo",
+  "teams.teams": "Equipos",
+  "teams.no_workspaces": "Aún no hay espacios de trabajo.",
+  "teams.no_teams": "Aún no hay equipos.",
+  "teams.no_members": "Sin miembros.",
+  "teams.workspace_name": "Nombre del espacio",
+  "teams.team_name": "Nombre del equipo",
+  "teams.member_email": "Correo del miembro",
+  "teams.add_member": "Añadir miembro",
+  "teams.create": "Crear",
+  "teams.delete": "Eliminar",
+  "teams.remove": "Quitar",
+  "teams.error_load": "No se pudieron cargar los equipos y espacios.",
+  "teams.error_action": "La acción falló."
 }

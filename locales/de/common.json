@@ -1006,5 +1006,22 @@
   "documents.versions": "Versionen",
   "documents.no_versions": "Keine frühere Version.",
   "documents.history": "Verlauf",
-  "documents.no_history": "Keine Änderung aufgezeichnet."
+  "documents.no_history": "Keine Änderung aufgezeichnet.",
+  "nav.teams": "Teams",
+  "teams.title": "Teams und Arbeitsbereiche",
+  "teams.subtitle": "Organisieren Sie Mitglieder und Inhalte.",
+  "teams.workspaces": "Arbeitsbereiche",
+  "teams.teams": "Teams",
+  "teams.no_workspaces": "Noch kein Arbeitsbereich.",
+  "teams.no_teams": "Noch kein Team.",
+  "teams.no_members": "Keine Mitglieder.",
+  "teams.workspace_name": "Name des Arbeitsbereichs",
+  "teams.team_name": "Teamname",
+  "teams.member_email": "E-Mail des Mitglieds",
+  "teams.add_member": "Mitglied hinzufügen",
+  "teams.create": "Erstellen",
+  "teams.delete": "Löschen",
+  "teams.remove": "Entfernen",
+  "teams.error_load": "Teams und Arbeitsbereiche konnten nicht geladen werden.",
+  "teams.error_action": "Die Aktion ist fehlgeschlagen."
 }

@@ -1006,5 +1006,22 @@
   "documents.versions": "النسخ",
   "documents.no_versions": "لا توجد نسخ سابقة.",
   "documents.history": "السجل",
-  "documents.no_history": "لا تغييرات مسجلة."
+  "documents.no_history": "لا تغييرات مسجلة.",
+  "nav.teams": "الفرق",
+  "teams.title": "الفرق ومساحات العمل",
+  "teams.subtitle": "نظّم أعضاءك ومحتوياتك.",
+  "teams.workspaces": "مساحات العمل",
+  "teams.teams": "الفرق",
+  "teams.no_workspaces": "لا توجد مساحات عمل.",
+  "teams.no_teams": "لا توجد فرق.",
+  "teams.no_members": "لا أعضاء.",
+  "teams.workspace_name": "اسم المساحة",
+  "teams.team_name": "اسم الفريق",
+  "teams.member_email": "بريد العضو",
+  "teams.add_member": "إضافة عضو",
+  "teams.create": "إنشاء",
+  "teams.delete": "حذف",
+  "teams.remove": "إزالة",
+  "teams.error_load": "تعذّر تحميل الفرق والمساحات.",
+  "teams.error_action": "فشل الإجراء."
 }

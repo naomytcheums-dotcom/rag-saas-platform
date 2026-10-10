@@ -61,6 +61,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
       label: t("nav.section.account"),
       items: [
         { href: "/dashboard/profile", label: t("nav.profile") },
+        { href: "/dashboard/teams", label: t("nav.teams") },
         { href: "/dashboard/settings/organization", label: t("nav.organization") },
       ],
     },
