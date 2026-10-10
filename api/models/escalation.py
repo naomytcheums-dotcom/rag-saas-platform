@@ -52,3 +52,17 @@ class Escalation(Base):
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Spec 15.1.4 -- answer-by deadline, set when the ticket is created from the priority (settings.ESCALATION_SLA_HOURS).
+    sla_due_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EscalationNote(Base):
+    """Spec 15.1.6 -- internal notes on a ticket, visible to the organization's staff only."""
+
+    __tablename__ = "escalation_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    escalation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("escalations.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

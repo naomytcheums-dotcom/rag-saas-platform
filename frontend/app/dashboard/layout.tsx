@@ -35,6 +35,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
         { href: "/dashboard/eval/evolution", label: t("nav.evolution") },
         { href: "/dashboard/quality", label: t("nav.quality") },
         { href: "/dashboard/voice-agent", label: t("nav.voice_agent") },
+        { href: "/dashboard/escalations", label: t("nav.escalations") },
       ],
     },
     {

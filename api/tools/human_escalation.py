@@ -98,7 +98,11 @@ async def escalate_to_human(
     if priority not in settings.HUMAN_ESCALATION_PRIORITY_LEVELS:
         raise ValueError(f"Invalid priority: {priority!r} (expected one of {settings.HUMAN_ESCALATION_PRIORITY_LEVELS})")
 
-    escalation = Escalation(agent_run_id=agent_run_id, organization_id=organization_id, issue=issue, context=context, priority=priority)
+    sla_hours = settings.ESCALATION_SLA_HOURS.get(priority)
+    sla_due_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=sla_hours) if sla_hours else None
+    escalation = Escalation(
+        agent_run_id=agent_run_id, organization_id=organization_id, issue=issue, context=context, priority=priority, sla_due_at=sla_due_at,
+    )
     db.add(escalation)
     await db.flush()
 

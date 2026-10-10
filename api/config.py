@@ -970,6 +970,8 @@ class Settings(BaseSettings):
     HUMAN_ESCALATION_ENABLED: bool = True
     HUMAN_ESCALATION_PRIORITY_LEVELS: list[str] = ["low", "medium", "high", "critical"]
     HUMAN_ESCALATION_NOTIFICATION_CHANNELS: list[str] = ["email"]
+    # Spec 15.1.4 -- hours allowed to answer a ticket, by priority (the SLA clock starts when the ticket is created).
+    ESCALATION_SLA_HOURS: dict[str, int] = {"critical": 1, "high": 4, "medium": 24, "low": 72}
 
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
