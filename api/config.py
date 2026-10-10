@@ -977,6 +977,13 @@ class Settings(BaseSettings):
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    # Bounds for EVERY task (none had any before: a stuck task kept its worker slot forever). Seconds; 0 disables a limit. The soft limit raises
+    # SoftTimeLimitExceeded inside the task (it can clean up), the hard limit kills the worker process. Hard limits are not enforced by the
+    # `solo` pool. Raise them (or set 0) for a deployment that legitimately runs longer jobs.
+    CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = Field(default=3300, ge=0)
+    CELERY_TASK_TIME_LIMIT_SECONDS: int = Field(default=3600, ge=0)
+    # 1 = a worker process reserves one task at a time (fair between tenants; Celery's default of 4 lets one long job hold three queued ones).
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = Field(default=1, ge=1)
 
     # -- Rate limiting (brute-force / spam protection) --------------------
     # Uses its own Redis DB number (2) so its keys never collide with

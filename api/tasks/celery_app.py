@@ -135,6 +135,9 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS or None,
+    task_time_limit=settings.CELERY_TASK_TIME_LIMIT_SECONDS or None,
+    worker_prefetch_multiplier=settings.CELERY_WORKER_PREFETCH_MULTIPLIER,
 )
 
 
