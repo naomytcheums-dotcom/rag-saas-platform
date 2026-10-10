@@ -38875,6 +38875,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MarkInvoicePaidRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -63825,7 +63842,7 @@
           "reference"
         ],
         "title": "MarkInvoicePaidRequest",
-        "description": "Back-office reconciliation: an invoice is never marked paid without the external proof of the payment."
+        "description": "Manual settlement: an invoice is never marked paid by a superadmin without the external proof of the payment."
       },
       "MediaAssetListResponse": {
         "properties": {
@@ -74660,20 +74677,18 @@
       "VoidInvoiceRequest": {
         "properties": {
           "reason": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
             "title": "Reason"
           }
         },
         "type": "object",
-        "title": "VoidInvoiceRequest"
+        "required": [
+          "reason"
+        ],
+        "title": "VoidInvoiceRequest",
+        "description": "Voiding cancels what the organization owes: the reason is mandatory and audited."
       },
       "VulnerabilityResponse": {
         "properties": {

@@ -224,6 +224,7 @@ async def test_a_non_owner_member_still_gets_403_on_subscribe(client, db_session
 
 async def _pending_invoice(db_session, org_id: uuid.UUID) -> uuid.UUID:
     invoice = await create_invoice(db_session, org_id, lines=[{"description": "Pro plan", "quantity": 1, "unit_price_cents": 19900}])
+    invoice.status = InvoiceStatus.pending  # the helper's name was always "pending"; create_invoice leaves a draft, which can no longer be marked paid
     await db_session.commit()
     return invoice.id
 
@@ -254,7 +255,7 @@ async def test_a_platform_admin_can_still_reconcile_an_invoice(client, db_sessio
     user.role = UserRole.superadmin  # SADM-005 / BILL-002: reconciliation is a superadmin act (a plain admin is refused, see test_p1_bill002_invoice_state_machine.py)
     await db_session.commit()
 
-    response = await client.post(f"/organizations/{org_id}/billing/invoices/{invoice_id}/pay", headers=_auth(token))
+    response = await client.post(f"/organizations/{org_id}/billing/invoices/{invoice_id}/pay", json={"reference": "WIRE-2026-0001"}, headers=_auth(token))
 
     assert response.status_code == 200, response.text
     status_after, paid_at = await _invoice_status(db_session, invoice_id)

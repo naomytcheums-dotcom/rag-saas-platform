@@ -241,13 +241,31 @@ class InvoiceDetailResponse(InvoiceResponse):
 
 
 class VoidInvoiceRequest(BaseModel):
-    reason: str | None = Field(default=None, max_length=500)
+    """Voiding cancels what the organization owes: the reason is mandatory and audited."""
+
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a reason is required to void an invoice")
+        return value
 
 
 class MarkInvoicePaidRequest(BaseModel):
-    """Back-office reconciliation: an invoice is never marked paid without the external proof of the payment."""
+    """Manual settlement: an invoice is never marked paid by a superadmin without the external proof of the payment."""
 
     reference: str = Field(min_length=3, max_length=200, description="Bank transfer id, receipt number, ...")
+
+    @field_validator("reference")
+    @classmethod
+    def _reference_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("a payment reference of at least 3 characters is required")
+        return value
 
 
 class InvoiceStatsResponse(BaseModel):

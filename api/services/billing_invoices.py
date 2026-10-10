@@ -40,7 +40,7 @@ class PDFUnavailableError(InvoiceError):
     pass
 
 
-async def audit_invoice_transition(db: AsyncSession, *, user_id: uuid.UUID, ip: str | None, user_agent: str | None, invoice: Invoice, operation: str, before: InvoiceStatus, reason: str | None = None, reference: str | None = None) -> None:
+async def audit_invoice_transition(db: AsyncSession, *, user_id: uuid.UUID, ip: str | None, user_agent: str | None, invoice: Invoice, operation: str, before: InvoiceStatus, reason: str | None = None, reference: str | None = None, self_service: bool = False) -> None:
     """BILL-002 / V9: marking an invoice paid or voiding it is a financial act: who, on which organization, from which status to which."""
     from api.models.audit_log import AuditAction
     from api.security.audit_log import log_audit_action
@@ -51,7 +51,7 @@ async def audit_invoice_transition(db: AsyncSession, *, user_id: uuid.UUID, ip: 
         success=True, organization_id=invoice.organization_id, resource_type="invoice", resource_id=str(invoice.id),
         metadata={
             "number": invoice.number, "before": before.value, "after": invoice.status.value, "total_cents": invoice.total_cents, "currency": invoice.currency,
-            "request_id": get_request_id(), **({"reason": reason} if reason else {}), **({"reference": reference} if reference else {}),
+            "request_id": get_request_id(), **({"reason": reason} if reason else {}), **({"reference": reference} if reference else {}), **({"self_service": True} if self_service else {}),
         },
     )
 
@@ -170,11 +170,12 @@ async def remind_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_i
 
 
 async def mark_invoice_paid(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
-    """paid is terminal: marking a paid invoice again is a no-op (the first paid_at is kept); a void or refunded invoice cannot be paid."""
+    """paid is terminal: marking a paid invoice again is a no-op (the first paid_at is kept). A draft was never issued, so it cannot be
+    settled; a void or refunded invoice cannot be paid either. pending/sent/overdue -> paid is the only way in."""
     invoice = await get_invoice(db, organization_id, invoice_id, lock=True)
     if invoice.status == InvoiceStatus.paid:
         return invoice
-    if invoice.status in (InvoiceStatus.void, InvoiceStatus.refunded):
+    if invoice.status in (InvoiceStatus.draft, InvoiceStatus.void, InvoiceStatus.refunded):
         raise InvoiceStateError(invoice.status, "marked paid")
     invoice.status = InvoiceStatus.paid
     invoice.paid_at = dt.datetime.now(dt.timezone.utc)
@@ -196,16 +197,17 @@ async def void_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id:
     return invoice
 
 
-async def settle_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor_id: uuid.UUID, ip: str | None, user_agent: str | None, reference: str | None = None) -> Invoice:
+async def settle_invoice(db: AsyncSession, organization_id: uuid.UUID, invoice_id: uuid.UUID, *, operation: str, reason: str | None, actor_id: uuid.UUID, ip: str | None, user_agent: str | None, reference: str | None = None, self_service: bool = False) -> Invoice:
     """The single entry point for the two privileged invoice transitions (`paid` / `void`): row lock + state machine + audit in the
-    caller's transaction. `reference` is the external proof of a manual settlement (bank transfer id, ...), kept in the audit row."""
+    caller's transaction. `reference` is the external proof of a manual settlement (bank transfer id, ...), kept in the audit row;
+    `self_service` marks a transition made by an organization itself on a self-hosted instance (no proof required there)."""
     before = (await get_invoice(db, organization_id, invoice_id, lock=True)).status
     if operation == "paid":
         invoice = await mark_invoice_paid(db, organization_id, invoice_id)
     else:
         invoice = await void_invoice(db, organization_id, invoice_id, reason=reason)
     if invoice.status != before:  # a repeated call is an idempotent no-op, not a second financial act
-        await audit_invoice_transition(db, user_id=actor_id, ip=ip, user_agent=user_agent, invoice=invoice, operation=operation, before=before, reason=reason, reference=reference)
+        await audit_invoice_transition(db, user_id=actor_id, ip=ip, user_agent=user_agent, invoice=invoice, operation=operation, before=before, reason=reason, reference=reference, self_service=self_service)
     return invoice
 
 
