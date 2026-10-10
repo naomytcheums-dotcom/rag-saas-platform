@@ -4,6 +4,7 @@ api/routers/question_sets.py, and api/routers/benchmark_versions.py
 
 import datetime as dt
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,6 +47,7 @@ class QuestionCreateRequest(BaseModel):
     expected_documents: list[dict] | None = None
     difficulty: str | None = None
     category: str | None = None
+    split: Literal["tuning", "held_out"] | None = None
 
 
 class QuestionUpdateRequest(BaseModel):
@@ -54,6 +56,7 @@ class QuestionUpdateRequest(BaseModel):
     expected_documents: list[dict] | None = None
     difficulty: str | None = None
     category: str | None = None
+    split: Literal["tuning", "held_out"] | None = None
 
 
 class QuestionResponse(BaseModel):
@@ -69,8 +72,22 @@ class QuestionResponse(BaseModel):
     metadata_json: dict | None
     expected_answer_type: str | None
     expected_answer_metadata: dict | None
+    split: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+class SplitAssignRequest(BaseModel):
+    """Partie 7.1.7 -- randomly but reproducibly mark a share of the dataset's questions as held out."""
+
+    held_out_ratio: float = Field(default=0.3, gt=0.0, lt=1.0)
+    seed: int = 42
+    overwrite: bool = False
+
+
+class SplitAssignResponse(BaseModel):
+    tuning: int
+    held_out: int
 
 
 class QuestionListResponse(BaseModel):
@@ -269,6 +286,7 @@ class EvaluationJobCreateRequest(BaseModel):
     question_set_id: uuid.UUID | None = None
     agent_id: uuid.UUID | None = None
     model_config_override: dict | None = None
+    split: Literal["tuning", "held_out"] | None = None
 
 
 class EvaluationJobResponse(BaseModel):
@@ -279,6 +297,7 @@ class EvaluationJobResponse(BaseModel):
     question_set_id: uuid.UUID | None
     agent_id: uuid.UUID | None
     model_config_data: dict = Field(validation_alias="model_config_json", serialization_alias="model_config")
+    split: str | None = None
     status: str
     progress: int
     total_questions: int

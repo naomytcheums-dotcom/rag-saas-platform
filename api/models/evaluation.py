@@ -84,6 +84,8 @@ class EvaluationQuestion(Base):
     # api/services/ground_truth_answers.py consumes them.
     expected_answer_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
     expected_answer_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Partie 7.1.7 -- "tuning" (may be used to tune the RAG) or "held_out" (only used to report the final score). NULL = not assigned, treated as tuning.
+    split: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     __table_args__ = (
         Index("ix_evaluation_questions_dataset_id", "dataset_id"),
@@ -260,6 +262,8 @@ class EvaluationJob(Base):
     question_set_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("question_sets.id", ondelete="SET NULL"), nullable=True)
     agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     model_config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Partie 7.1.7 -- when set ("tuning" or "held_out"), the job only evaluates questions of that split.
+    split: Mapped[str | None] = mapped_column(String(10), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=EvaluationJobStatus.pending)
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_questions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -114,6 +114,7 @@ async def list_datasets(
 async def add_question(
     db: AsyncSession, dataset_id: uuid.UUID, question: str, expected_answer: str | None = None,
     expected_documents: list | None = None, difficulty: str | None = None, category: str | None = None,
+    split: str | None = None,
 ) -> EvaluationQuestion:
     """Item 3's own literal function -- real, auto-detected difficulty
     (Partie 7.1.5) when none is real-ily given and
@@ -122,7 +123,7 @@ async def add_question(
         difficulty = auto_detect_difficulty(question, expected_answer, expected_documents)
     row = EvaluationQuestion(
         dataset_id=dataset_id, question=question, expected_answer=expected_answer,
-        expected_documents=expected_documents, difficulty=difficulty, category=category,
+        expected_documents=expected_documents, difficulty=difficulty, category=category, split=split,
     )
     db.add(row)
     await db.flush()
@@ -141,7 +142,7 @@ async def update_question(db: AsyncSession, question_id: uuid.UUID, data: dict) 
     question = await get_question(db, question_id)
     if question is None:
         return None
-    for field in ("question", "expected_answer", "expected_documents", "difficulty", "category"):
+    for field in ("question", "expected_answer", "expected_documents", "difficulty", "category", "split"):
         if field in data:
             setattr(question, field, data[field])
     await db.flush()
@@ -252,4 +253,23 @@ async def export_questions(db: AsyncSession, dataset_id: uuid.UUID, format: str 
             "difficulty": row.difficulty, "category": row.category,
         }
         for row in rows
-    ], indent=2)
+    ], indent=2)
+
+async def assign_dataset_split(db: AsyncSession, dataset_id: uuid.UUID, held_out_ratio: float = 0.3, seed: int = 42, overwrite: bool = False) -> dict[str, int]:
+    """Partie 7.1.7 -- mark about `held_out_ratio` of a dataset's questions as "held_out" and the rest as "tuning".
+
+    Reproducible: each question's side depends only on a hash of (seed, question id), so the same seed gives the same split
+    and adding questions later never moves the existing ones. Questions already assigned are left alone unless `overwrite`.
+    Returns the final counts for the whole dataset."""
+    import hashlib  # noqa: PLC0415
+
+    rows = (await db.scalars(select(EvaluationQuestion).where(EvaluationQuestion.dataset_id == dataset_id))).all()
+    for question in rows:
+        if question.split is not None and not overwrite:
+            continue
+        bucket = int(hashlib.sha256(f"{seed}:{question.id}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+        question.split = "held_out" if bucket < held_out_ratio else "tuning"
+    await db.flush()
+    held_out = sum(1 for q in rows if q.split == "held_out")
+    return {"tuning": len(rows) - held_out, "held_out": held_out}
+
