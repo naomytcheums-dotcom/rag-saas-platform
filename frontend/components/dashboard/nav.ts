@@ -16,6 +16,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/eval": FlaskConical,
   "/dashboard/eval/evolution": TrendingUp,
   "/dashboard/quality": ShieldCheck,
+  "/dashboard/quality-scores": ShieldCheck,
   "/dashboard/voice-agent": Mic,
   "/dashboard/voice-settings": Settings2,
   "/dashboard/escalations": LifeBuoy,
