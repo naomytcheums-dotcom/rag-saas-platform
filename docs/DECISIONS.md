@@ -37,3 +37,23 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
 ## D7 - Interface languages: French and English only (until further notice)
 - **Decision:** `UI_SUPPORTED_LANGUAGES` is `["fr", "en"]`; the Spanish, German, Portuguese and Arabic bundles were removed. An unsupported `Accept-Language` falls back to the default language.
 - **Why:** the owner asked to ship two languages first. To add a language back: create `locales/<code>/common.json`, add the code to `UI_SUPPORTED_LANGUAGES`, `scripts/sync_frontend_locales.py`, `frontend/lib/i18n.tsx` and `frontend/components/LanguageMenu.tsx`.
+
+## D8 - Tenant isolation: application filters are the barrier, PostgreSQL integration tests run in CI (spec 1.3.5, 13.2.10)
+- **Decision:** isolation between organizations stays enforced by the application (every query is scoped by `organization_id`, every route by a `require_*` dependency; `tests/test_route_auth_classification.py` fails on any new open route). A database-level barrier (row-level security with `FORCE` and policies keyed on a per-request setting) is **not** switched on automatically: doing it blindly can lock the application out of its own tables, so it needs a staged rollout on a copy of production first.
+- **What changed:** the CI job `backend-tests` now starts a disposable pgvector PostgreSQL, applies every migration and runs the PostgreSQL integration files (`tests/test_postgres_integration.py`, `tests/test_rbac_integration.py`, ...) against it. Locally: 61 passed, 1 skipped (a staging-only policy check).
+- **Still to decide (owner):** when to roll out RLS policies (see `scripts/staging_validate.py` for the staging procedure).
+
+## D9 - SAML single sign-on (spec 10.4.2): not built without a security review
+- **Decision:** not implemented in this change. `agents.md` forbids changing security code without review, and a hand-written SAML flow is a classic source of authentication bypasses. OIDC SSO (`/auth/sso/*`) and SCIM provisioning (`/scim/v2/*`) already exist.
+- **When needed:** use the maintained open-source library `python3-saml` (needs the native `xmlsec1` library in `Dockerfile.api`), behind a feature flag, with a review of the assertion validation, replay protection and account linking, and a test against a real identity provider (for example Keycloak, free) in staging.
+
+## D10 - What "enterprise roles" means (spec 10.4.4)
+- **Definition adopted:** the built-in organization roles (owner, admin, manager, member, viewer) plus the organization's **custom roles** (`/organizations/{id}/rbac/*`, Casbin policies), assigned manually or provisioned through SCIM. No separate role family is added.
+
+## D11 - Per-resource permission grants (spec 1.2.8)
+- **Scope today:** a grant is accepted and enforced only for the resource types that really check it (workspaces). Other pairs are rejected with HTTP 400 instead of being stored as grants that nothing reads (`api/security/resource_permissions.py`). Agent tool permissions have their own enforcement (`api/services/agent_permissions.py`).
+- **Extending it** to documents, conversations or knowledge bases means adding the check to each router and a test per type; it is security code, so it goes through review.
+
+## D12 - Encryption at rest (spec 10.1.14)
+- **In the application:** secrets (API keys, tokens, webhook secrets) are encrypted with Fernet / AES-256-GCM before they are stored. Document text and chat messages are **not** encrypted by the application.
+- **At the provider:** disk-level encryption of the database and of object storage is the provider's feature. It is documented by Supabase for its managed databases and storage, but it was **not verified from this repository**: the owner should confirm it in the Supabase project settings and note the result here.
