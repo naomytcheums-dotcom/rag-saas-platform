@@ -12,7 +12,7 @@ Rien de ce qui est livré ne casse une fonctionnalité, mais plusieurs risques c
 | 3 | Worker Celery + beat (instance unique) réellement déployés ; `render.yaml` ne décrit que le prototype | BLOCKED_EXTERNAL |
 | 4 | Paiements Stripe/Paystack en sandbox ; politique de remboursement et de devise décidée (REM-018) | BLOCKED_EXTERNAL |
 | 5 | CI GitHub (dont `backend-postgres-tests`) et CircleCI verts sur cette branche : nécessite un push autorisé | NOT_RUN |
-| 6 | Suite backend complète locale terminée et analysée | en cours (voir `10-test-results.md`) |
+| 6 | Suite backend complète locale terminée et analysée | VERIFIED : 6037 passés, 3 échecs dus à l'environnement de test (rejoués verts), 194 ignorés |
 | 7 | IDOR par identifiant de ressource non audité exhaustivement (REM-021) | NOT_VERIFIED |
 | 8 | 125 constats historiques non vérifiés (`01-findings-register.csv`) | NOT_VERIFIED |
 | 9 | Variables sensibles vérifiées par nom sur l'hébergeur (`SENSITIVE_SETTINGS.md`) | BLOCKED_EXTERNAL |
