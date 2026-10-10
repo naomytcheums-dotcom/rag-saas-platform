@@ -1099,8 +1099,8 @@ async def process_upload_batch(
             )
             db.add(document)
             await db.flush()
-            document.file_key = upload_document_file(
-                organization_id, document.id, file_info["filename"], file_info["content"], file_info["content_type"],
+            document.file_key = await asyncio.to_thread(
+                upload_document_file, organization_id, document.id, file_info["filename"], file_info["content"], file_info["content_type"],
             )
             await db.flush()
             schedule_document_processing(document.id)
@@ -1230,7 +1230,7 @@ async def process_url_document(db: AsyncSession, document_id: uuid.UUID) -> Docu
 
         filename = final_url.rstrip("/").rsplit("/", 1)[-1] or url
         content_type = validate_document_upload(content, filename)
-        document.file_key = upload_document_file(document.organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, document.organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         document.source_url = final_url  # the REAL final url, after any redirects
@@ -1636,7 +1636,7 @@ async def import_and_process_github_file(
     try:
         content = await fetch_github_file_content(owner, repo, path, settings.GITHUB_API_TOKEN, ref=ref)
         content_type = validate_document_upload(content, filename=path)
-        document.file_key = upload_document_file(organization_id, document.id, path, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, path, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -1869,7 +1869,7 @@ async def import_and_process_github_issue(
         content = format_issue_for_import(issue, comments).encode("utf-8")
         filename = f"issue-{issue['number']}.md"
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2070,7 +2070,7 @@ async def import_and_process_google_drive_file(
     try:
         content = await download_drive_file(file_id, access_token)
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2150,7 +2150,7 @@ async def import_and_process_google_doc(
     try:
         content = await fetch_google_doc(document_id, access_token, export_format)
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2319,7 +2319,7 @@ async def import_and_process_notion_page(
     try:
         content = content_text.encode("utf-8")
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2520,7 +2520,7 @@ async def import_and_process_confluence_page(
         # chunked".
         content = (page.get("body", {}).get("storage", {}).get("value", "") or content_text).encode("utf-8")
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2705,7 +2705,7 @@ async def import_and_process_onedrive_file(
     try:
         content = await download_onedrive_file(file_id, access_token)
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
@@ -2907,7 +2907,7 @@ async def import_and_process_zip_entry(
 
         content = extract_zip_file(tmp_path, entry_name, settings.ZIP_MAX_ENTRY_SIZE)
         content_type = validate_document_upload(content, filename=filename)
-        document.file_key = upload_document_file(organization_id, document.id, filename, content, content_type)
+        document.file_key = await asyncio.to_thread(upload_document_file, organization_id, document.id, filename, content, content_type)
         document.file_size = len(content)
         document.file_type = content_type
         await db.flush()
