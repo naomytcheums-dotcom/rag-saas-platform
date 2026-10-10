@@ -765,6 +765,7 @@
  "profile.error_load": "Échec du chargement du profil",
  "profile.error_save": "Échec de l'enregistrement",
  "profile.full_name": "Nom complet",
+ "profile.job_title": "Poste",
  "profile.member_since": "Membre depuis",
  "profile.new_password": "Nouveau mot de passe",
  "profile.preferences_heading": "Langue",

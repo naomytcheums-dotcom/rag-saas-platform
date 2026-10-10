@@ -765,6 +765,7 @@
  "profile.error_load": "Failed to load profile",
  "profile.error_save": "Save failed",
  "profile.full_name": "Full name",
+ "profile.job_title": "Job title",
  "profile.member_since": "Member since",
  "profile.new_password": "New password",
  "profile.preferences_heading": "Language",

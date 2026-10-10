@@ -985,5 +985,6 @@
   "nav.voice_settings": "Ajustes de voz",
   "insights.cost": "Coste",
   "insights.cost_per_answer": "Créditos por respuesta",
-  "insights.credits": "créditos"
+  "insights.credits": "créditos",
+  "profile.job_title": "Cargo"
 }

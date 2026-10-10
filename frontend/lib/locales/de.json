@@ -765,6 +765,7 @@
  "profile.error_load": "Profil konnte nicht geladen werden",
  "profile.error_save": "Speichern fehlgeschlagen",
  "profile.full_name": "Vollständiger Name",
+ "profile.job_title": "Position",
  "profile.member_since": "Mitglied seit",
  "profile.new_password": "Neues Passwort",
  "profile.preferences_heading": "Sprache",

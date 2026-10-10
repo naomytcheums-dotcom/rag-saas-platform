@@ -765,6 +765,7 @@
  "profile.error_load": "Error al cargar el perfil",
  "profile.error_save": "Error al guardar",
  "profile.full_name": "Nombre completo",
+ "profile.job_title": "Cargo",
  "profile.member_since": "Miembro desde",
  "profile.new_password": "Nueva contraseña",
  "profile.preferences_heading": "Idioma",

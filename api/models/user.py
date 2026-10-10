@@ -95,6 +95,8 @@ class User(Base):
     # -- 1.1.13 profile ----------------------------------------------------
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     company: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Spec 1.1.13 -- the user's job title / role in their company.
+    job_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Public URL of the uploaded avatar image (see api/services/storage.py)
     # -- the file itself lives in S3/R2/Supabase Storage, not the database.
     avatar_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)

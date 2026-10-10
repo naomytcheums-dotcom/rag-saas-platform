@@ -765,6 +765,7 @@
  "profile.error_load": "فشل تحميل الملف الشخصي",
  "profile.error_save": "فشل الحفظ",
  "profile.full_name": "الاسم الكامل",
+ "profile.job_title": "المسمى الوظيفي",
  "profile.member_since": "عضو منذ",
  "profile.new_password": "كلمة المرور الجديدة",
  "profile.preferences_heading": "اللغة",

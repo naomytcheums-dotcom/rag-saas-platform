@@ -175,3 +175,13 @@ async def test_cost_per_user_and_per_answer_come_from_credit_consumption(client,
     assert per_answer == {"credits_spent": 12, "billed_operations": 3, "credits_per_operation": 4.0}
     empty_token, _o, empty_org = await _org(client, db_session, "insights-cost-empty@example.com")
     assert (await client.get(f"/organizations/{empty_org}/insights/cost-per-answer", headers=_h(empty_token))).json()["credits_per_operation"] is None
+
+
+async def test_profile_stores_a_job_title(client, db_session):
+    token, _owner, _org_id = await _org(client, db_session, "insights-title@example.com")
+    r = await client.patch("/account/profile", json={"job_title": "  Head of Legal "}, headers=_h(token))
+    assert r.status_code == 200 and r.json()["job_title"] == "Head of Legal"
+    assert (await client.get("/account/me", headers=_h(token))).json()["job_title"] == "Head of Legal"
+    cleared = await client.patch("/account/profile", json={"job_title": "   "}, headers=_h(token))
+    assert cleared.json()["job_title"] is None
+    assert (await client.patch("/account/profile", json={"job_title": "x" * 201}, headers=_h(token))).status_code == 422

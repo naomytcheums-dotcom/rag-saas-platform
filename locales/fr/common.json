@@ -985,5 +985,6 @@
   "nav.voice_settings": "Paramètres vocaux",
   "insights.cost": "Coût",
   "insights.cost_per_answer": "Crédits par réponse",
-  "insights.credits": "crédits"
+  "insights.credits": "crédits",
+  "profile.job_title": "Poste"
 }

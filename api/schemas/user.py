@@ -4,7 +4,7 @@ import datetime as dt
 import uuid
 import zoneinfo
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserProfileResponse(BaseModel):
@@ -21,6 +21,7 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str | None
     company: str | None
+    job_title: str | None = None
     avatar_url: str | None
     locale: str
     timezone: str
@@ -41,6 +42,7 @@ class ProfileUpdateRequest(BaseModel):
 
     full_name: str | None = None
     company: str | None = None
+    job_title: str | None = Field(default=None, max_length=200)
 
 
 class PreferencesUpdateRequest(BaseModel):
