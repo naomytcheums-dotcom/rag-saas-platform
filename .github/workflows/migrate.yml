@@ -32,4 +32,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           APPLY: ${{ inputs.apply }}
         run: |
-          if [ "$APPLY" = "true" ]; then python scripts/migrate_with_rehearsal.py --apply; else python scripts/migrate_with_rehearsal.py; fi
+          if [ "$APPLY" = "true" ]; then python scripts/migrate.py --apply; else python scripts/migrate.py; fi

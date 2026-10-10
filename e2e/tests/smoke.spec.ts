@@ -41,6 +41,26 @@ test.describe("authentication", () => {
   });
 });
 
+test.describe("landing page", () => {
+  test("shows the product tour video, the architecture steps and the documentation links", async ({ page, request }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await dismissCookieBanner(page);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "See it in action" })).toBeVisible();
+    await expect(page.locator("video source[src='/landing/product-tour.mp4']")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();
+    for (const name of ["Ingest", "Retrieve", "Generate", "Cite and measure"]) await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    for (const href of ["/docs/architecture.pdf", "/docs/setup-guide.pdf", "/docs/api-documentation.pdf", "/landing/product-tour.mp4"]) {
+      const link = page.locator(`a[href='${href}']`);
+      if (href.endsWith(".pdf")) await expect(link.first()).toBeVisible();
+      const response = await request.get(`http://localhost:3001${href}`);
+      expect(response.ok(), href).toBeTruthy();
+    }
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("signed-in navigation", () => {
   test.beforeEach(async ({ page, request }) => {
     await dismissCookieBanner(page);
@@ -56,6 +76,7 @@ test.describe("signed-in navigation", () => {
     ["/dashboard/escalations", /escalations/i],
     ["/dashboard/insights", /usage insights/i],
     ["/dashboard/teams", /teams and workspaces/i],
+    ["/dashboard/quality-scores", /answer quality scores/i],
   ] as const) {
     test(`${route} loads without a client error`, async ({ page }) => {
       const errors: string[] = [];
