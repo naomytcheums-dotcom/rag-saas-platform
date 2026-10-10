@@ -397,16 +397,36 @@ async def test_partner_registration_rejects_a_password_too_similar_to_the_email(
     assert response.status_code == 400
 
 
+async def test_a_leftover_attempt_from_an_earlier_test_cannot_trip_the_limits_below(client, monkeypatch):
+    """Isolation canary. The register and license limiters key on the caller's IP, and their state outlives a test (Redis in CI, the
+    in-process fallback locally): tests/test_rate_limiting_integration.py flushes Redis BEFORE each of its tests, never after, so its
+    last attempts on the default test-client IP were still counted when the next file ran (429 where 201 was expected). This test leaves
+    one attempt on the default IP on purpose; the two tests below must pass anyway because they use an IP of their own."""
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    await client.post("/partners/register", json={"organization_name": "Leftover", "email": "leftover@example.com", "password": "correct horse battery staple 42", "accept_terms": True})
+    await client.post("/license/validate", json={"key": "LEFTOVER"})
+
+
+def _own_ip() -> dict:
+    """A caller IP no other test (or earlier CI run inside the window) has used: the limiters key on it (api/utils.client_ip)."""
+    import uuid
+
+    return {"X-Forwarded-For": f"2001:db8::{uuid.uuid4().hex[:4]}:{uuid.uuid4().hex[:4]}"}
+
+
 async def test_partner_registration_is_rate_limited_per_ip(client, monkeypatch):
     from api.config import settings
 
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
     monkeypatch.setattr(settings, "REGISTER_RATE_LIMIT_MAX_ATTEMPTS", 2)
+    headers = _own_ip()
     codes = []
     for i in range(4):
         codes.append((await client.post("/partners/register", json={
             "organization_name": f"Flood {i}", "email": f"flood{i}@example.com", "password": "correct horse battery staple 42", "accept_terms": True,
-        })).status_code)
+        }, headers=headers)).status_code)
     assert codes[:2] == [201, 201] and codes[2:] == [429, 429]
 
 
@@ -415,5 +435,6 @@ async def test_license_validation_is_rate_limited_per_ip(client, monkeypatch):
 
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
     monkeypatch.setattr(settings, "LICENSE_VALIDATE_RATE_LIMIT_MAX_ATTEMPTS", 2)
-    codes = [(await client.post("/license/validate", json={"key": "GUESS-%d" % i})).status_code for i in range(4)]
+    headers = _own_ip()
+    codes = [(await client.post("/license/validate", json={"key": "GUESS-%d" % i}, headers=headers)).status_code for i in range(4)]
     assert codes[:2] == [200, 200] and codes[2:] == [429, 429]
