@@ -54,7 +54,63 @@ Voir aussi le diagramme haut-niveau : ARCHITECTURE.md (racine).
 | Storage | S3 / Cloudflare R2 |
 | LLM | litellm (Anthropic, OpenAI, Mistral, BYOK) |
 | Auth | Sessions + API keys + SSO + 2FA + WebAuthn |
-| Multi-tenant | RLS PostgreSQL + checks applicatifs |
+| Multi-tenant | Filtres applicatifs par organisation (RLS active mais sans politiques : voir docs/DECISIONS.md, D8) |
+
+## Diagrammes
+
+Composants (les fleches indiquent qui appelle qui) :
+
+```mermaid
+flowchart LR
+    Browser[Navigateur / widget] --> Web[Frontend Next.js]
+    Web -->|REST + SSE| API[API FastAPI]
+    SDK[SDK / API key] --> API
+    MCPClient[Client MCP externe] --> API
+    API --> PG[(PostgreSQL + pgvector)]
+    API --> Redis[(Redis : cache, limites, broker)]
+    API --> S3[(Stockage S3 / R2)]
+    API -->|litellm| LLM[Fournisseurs LLM]
+    Redis --> Worker[Worker Celery]
+    Worker --> PG
+    Worker --> S3
+    Worker -->|embeddings| LLM
+    API -->|webhooks sortants| Ext[Systemes externes]
+    Stripe[Stripe / Paystack] -->|webhooks signes| API
+```
+
+Question de chat, de bout en bout :
+
+```mermaid
+sequenceDiagram
+    participant U as Utilisateur
+    participant A as API (chat/stream)
+    participant R as Recuperation (pgvector + BM25)
+    participant L as LLM (litellm)
+    participant Q as Controles qualite
+    U->>A: question
+    A->>A: auth, quota, limite par utilisateur
+    A->>R: recherche hybride, reranker optionnel
+    R-->>A: passages + scores
+    A->>L: prompt avec passages
+    L-->>A: reponse (flux SSE)
+    A->>Q: ancrage, fidelite, hallucination, citations
+    Q-->>A: scores
+    A-->>U: reponse + citations
+    Note over A: la trace complete : GET /responses/{id}/trace
+```
+
+Ingestion d'un document :
+
+```mermaid
+flowchart LR
+    Upload[Import fichier / URL / connecteur] --> Check[Validation, capacite du plan]
+    Check --> Store[Stockage S3]
+    Store --> Task[Tache Celery process_document]
+    Task --> Extract[Extraction texte, OCR, images]
+    Extract --> Chunk[Decoupage en passages]
+    Chunk --> Embed[Embeddings]
+    Embed --> Index[(pgvector + index BM25)]
+```
 
 ## Flux principaux
 
