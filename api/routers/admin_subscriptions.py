@@ -271,22 +271,29 @@ async def delete_plan_endpoint(plan_id: uuid.UUID, request: Request, admin: User
 # These two endpoints are the only way to actually invoke it.
 
 async def _run_stripe_sync(db: AsyncSession, request: Request, admin: User, kind: str, sync) -> dict:
-    """Runs a Stripe catalogue sync and audits the attempt either way (it writes to the provider's account, so it is never silent)."""
+    """Runs a Stripe catalogue sync and audits the attempt whatever happens (it writes to the provider's account, so it is never silent).
+    A provider failure midway answers a fixed-text 502 (no provider message), keeps the ids already obtained from Stripe so that a retry
+    does not create duplicate products or prices there, and records the exception type only."""
     from api.services.billing_stripe import StripeNotConfiguredError
 
-    async def _audit(success: bool, **extra) -> None:
+    async def _audit(success: bool, reason: str | None = None, **extra) -> None:
         await log_audit_action(
             db, user_id=admin.id, action=AuditAction.ADMIN_PROVIDER_SYNC, ip=client_ip(request), user_agent=request.headers.get("user-agent"),
-            success=success, failure_reason=None if success else "provider not configured", resource_type="provider_sync", resource_id=kind,
+            success=success, failure_reason=None if success else reason, resource_type="provider_sync", resource_id=kind,
             metadata={"provider": "stripe", "request_id": get_request_id(), **extra},
         )
 
     try:
         synced = await sync(db)
     except StripeNotConfiguredError as exc:
-        await _audit(False)
+        await _audit(False, "provider not configured")
         await db.commit()
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 -- any provider/network failure: never a 500, never the provider's own message
+        logger.warning("stripe %s sync failed: %s", kind, type(exc).__name__)
+        await _audit(False, "provider error", error=type(exc).__name__)
+        await db.commit()  # keeps the ids assigned before the failure
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The payment provider could not complete the synchronization; ids already obtained were kept, run it again")
     await _audit(True, synced=synced)
     await db.commit()
     return {"synced": synced}
