@@ -207,6 +207,11 @@ def auto_refill_credits() -> int:
         low = db.scalars(select(Credit).where(Credit.balance < settings.CREDITS_REFILL_THRESHOLD)).all()
         for credit in low:
             credit.balance += settings.CREDITS_REFILL_AMOUNT
+            # Every balance change must be traceable: a refill without a ledger row would be credit created out of nothing.
+            db.add(CreditTransaction(
+                organization_id=credit.organization_id, type=CreditTransactionType.grant, amount=settings.CREDITS_REFILL_AMOUNT,
+                balance_after=credit.balance, reason="automatic refill (CREDITS_AUTO_REFILL)",
+            ))
             refilled += 1
         db.commit()
     logger.info("auto_refill_credits: %d organization(s) refilled", refilled)

@@ -91,7 +91,7 @@ async def suspend_organization_endpoint(org_id: uuid.UUID, payload: Organization
 
 
 @router.post("/{org_id}/activate", response_model=OrganizationAdminResponse)
-async def activate_organization_endpoint(org_id: uuid.UUID, request: Request, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def activate_organization_endpoint(org_id: uuid.UUID, request: Request, admin: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     try:
         org = await activate_organization(db, org_id)
     except OrganizationNotFoundError:
