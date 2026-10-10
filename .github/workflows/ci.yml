@@ -78,6 +78,12 @@ jobs:
           # failures, same exact assertions) BEFORE touching CI, per
           # this étape's own "one real CI run, not a guessing loop" rule.
           COOKIE_SECURE: "False"
+          # Placeholder OAuth client settings, the same fake values .circleci/config.yml already uses: the OAuth clients are registered at
+          # import time, and without them /auth/oauth/<provider>/authorize answers 503. Never real credentials.
+          GOOGLE_OAUTH_CLIENT_ID: ci-only-google-client-id-never-real
+          GOOGLE_OAUTH_CLIENT_SECRET: ci-only-google-client-secret-never-real
+          GITHUB_OAUTH_CLIENT_ID: ci-only-github-client-id-never-real
+          GITHUB_OAUTH_CLIENT_SECRET: ci-only-github-client-secret-never-real
           # Same secrets already configured for the Celery worker
           # workflow (.github/workflows/celery-worker.yml) -- the test
           # suite itself runs against an in-memory SQLite DB, not
