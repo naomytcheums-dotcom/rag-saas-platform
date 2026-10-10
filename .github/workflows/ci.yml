@@ -131,8 +131,12 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
 
+      # Narrow exception: PYSEC-2026-2447 (CVE-2025-69872, unsafe pickle in diskcache). There is no fixed release (5.6.3 is the last one
+      # and the advisory covers it). diskcache is not a direct dependency: dspy (requirements-optional.txt, used only by
+      # api/services/prompt_optimization.py) pulls it in for its on-disk LLM cache, and exploiting it needs write access to that cache
+      # directory. Remove this flag when diskcache ships a fix or dspy goes away (tests/test_ci_pip_audit_exception.py guards this).
       - name: pip-audit
-        run: pip-audit -r requirements-api.txt -r requirements-optional.txt --desc off
+        run: pip-audit -r requirements-api.txt -r requirements-optional.txt --desc off --ignore-vuln PYSEC-2026-2447
 
   build-backend:
     # Phase 5, Étape 10 -- real Docker build verification (P0, carried

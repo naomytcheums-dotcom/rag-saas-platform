@@ -18,7 +18,10 @@ vers `main`, 3 jobs paralleles :
    base Postgres necessaire). Les memes secrets deja configures pour
    `.github/workflows/celery-worker.yml` sont reutilises (requis pour
    que `api.config.settings` s'importe du tout).
-2. **backend-security** -- `pip-audit -r requirements-api.txt -r requirements-optional.txt`.
+2. **backend-security** -- `pip-audit -r requirements-api.txt -r requirements-optional.txt --ignore-vuln PYSEC-2026-2447`.
+   The single ignored advisory is the diskcache pickle issue (CVE-2025-69872): no fixed release exists, the package is only
+   pulled in by dspy (prompt optimization), and exploiting it needs write access to dspy's local cache directory.
+   `tests/test_ci_pip_audit_exception.py` fails if the ignore list grows or outlives dspy.
 3. **frontend-checks** -- dans `frontend/` : `tsc --noEmit`, `npm run
    lint`, `npm test` (vitest), `npm audit --production`.
 
