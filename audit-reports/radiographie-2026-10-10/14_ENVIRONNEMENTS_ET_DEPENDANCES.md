@@ -14,7 +14,7 @@ Audit du 2026-10-10. **Noms de variables uniquement, aucune valeur.** Les fichie
 | Auto-hébergé | `docker-compose.selfhosted.yml`, `install.sh`, `update.sh`, `uninstall.sh` ; `BILLING_ALLOW_SELF_SERVICE_PAID_PLANS`, `CREDITS_ALLOW_UNPAID_TOPUP` | non exécuté |
 
 ## Variables requises (sans valeur par défaut dans `api/config.py`)
-`JWT_SECRET_KEY`, `SESSION_MIDDLEWARE_SECRET`, `AUDIT_LOG_HMAC_SECRET_KEY` (chargement de la configuration impossible sans elles) + une URL de base de données (`DATABASE_URL`, éventuellement `DATABASE_URL_TRANSACTION`).
+`JWT_SECRET_KEY`, `SESSION_MIDDLEWARE_SECRET`, `AUDIT_LOG_HMAC_SECRET_KEY`, **`SUPPORT_EMAIL`** + une URL de base de données (`DATABASE_URL` ; `DATABASE_URL_TRANSACTION` optionnelle) : ce sont les **5 champs sans valeur par défaut** de `Settings` (vérifié par `Settings.model_fields[...].is_required()` ; la liste initiale de 3 était incomplète : un démarrage sans `SUPPORT_EMAIL` échoue).
 
 ## Variables opérationnelles (noms)
 - Données : `DATABASE_URL`, `DATABASE_URL_TRANSACTION`, `REDIS_URL`, `RATE_LIMIT_REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `WEB_CONCURRENCY`, `EMBEDDER_WARMUP_ON_STARTUP`, `EMBEDDING_VECTOR_DIM`.
