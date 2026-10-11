@@ -66,3 +66,15 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
 ## D14 - Payment providers (spec 12.1.1): Stripe and Paystack, no Flutterwave
 - **Decision:** Flutterwave is not integrated. Stripe covers cards worldwide and Paystack covers the African markets the spec targets.
 - **Still to do by the owner:** run both providers in their test mode with the owner's test keys (checkout, webhook, refund). Nothing in this repository has been run against a real provider sandbox.
+- **Superseded in part by D16 (2026-10-11):** the owner cannot open a Stripe account (it needs a company in a Stripe country) and Paystack is not available in Cameroon.
+
+## D15 - Prompt-injection detector (specs 10.1.8, 10.2.1, 10.2.2): measured, flag rather than block
+- **Measured (2026-10-11):** `protectai/deberta-v3-base-prompt-injection-v2` at threshold 0.75 on `tests/data/injection_eval_set.json` (43 attacks, 49 legitimate requests, English and French): recall 0.953 (41/43), false positive rate 0.122 (6/49). Three of the six false positives are French requests (password reset, privacy policy, two-factor authentication). `tests/test_prompt_injection_measured.py` (opt-in) fails below recall 0.90 or above 0.15 false positives.
+- **Decision:** the detector stays off by default and must not be used to BLOCK requests until the false positive rate on French input is brought down (threshold tuning cannot fix it: the wrong verdicts score 0.97 to 1.0). Use it to flag and log, or add a French-capable model or a rule layer first.
+- **Limit:** the set is small and written by the maintainers; it is not the rate on real traffic and says nothing about an adaptive attacker.
+
+## D16 - Payment providers (supersedes D14 in part): CinetPay first, owner constraints
+- **Owner constraints (stated 2026-10-11):** no company, so no Stripe; Paystack does not serve Cameroon; Cameroon-based freelancer who wants mobile money (MTN, Orange) and foreign cards.
+- **Decision:** the next provider to implement behind `BillingProvider` is CinetPay, then Flutterwave or Notch Pay if CinetPay cannot accept foreign currencies for a Cameroon account. Credits stay prepaid (D13), which suits mobile money.
+- **Not decided / to ask the provider in writing:** can an individual without a company open an account, which documents, are USD and EUR enabled for a Cameroon account, are foreign Visa/Mastercard accepted, test keys available, settlement to MTN / Orange / a Cameroon bank in XAF. CinetPay documents a separate test mode (`sk_test_` keys, `api.cinetpay.net`) in its JS SDK and the currencies XOF, XAF, GNF, CDF, USD; its older documentation says a Cameroon account can only initiate payments in XAF. PayPal is not documented by CinetPay.
+- **Nothing is implemented yet:** the connector must follow CinetPay's current official API documentation and be run against its test mode with the owner's test keys.

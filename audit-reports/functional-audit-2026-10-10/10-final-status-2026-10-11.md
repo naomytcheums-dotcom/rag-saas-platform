@@ -9,9 +9,9 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
 | FIXED_AND_TESTED | 109 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 20 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| DECISION_OR_CORRECTION | 23 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | WRITTEN_NOT_EXECUTED | 19 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 42 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| IMPLEMENTED_UNVERIFIED | 39 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 26 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 2 | the requirement has no testable acceptance criterion |
 
@@ -130,7 +130,7 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **10.4.12** Custom SLA - no technical acceptance criterion
 - **14.4.1** Nom produit - no decided brand name found
 
-## IMPLEMENTED_UNVERIFIED (42)
+## IMPLEMENTED_UNVERIFIED (39)
 
 - **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
 - **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
@@ -160,9 +160,6 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **7.3.1** Automatic evaluation [MEDIUM] - jobs run in Celery (no production worker, audit R-02); never run on real data
 - **8.2.3** Streaming voice [LOW] - real-time streaming playback not exercised
 - **8.2.5** Voice activity detection [LOW] - only on the demo page; real VAD accuracy not tested
-- **10.1.8** Prompt injection protection [MEDIUM] - detection effectiveness never measured on attack sets
-- **10.2.1** Prompt injection detection [MEDIUM] - effectiveness not measured
-- **10.2.2** Jailbreak detection [MEDIUM] - effectiveness not measured
 - **12.1.2** Subscriptions [HIGH] - never run against a real provider sandbox; live tests are skipped (audit R-05); recurring renewal events not observed
 - **12.1.6** Upgrade [MEDIUM] - never run against a real provider sandbox; live tests are skipped (audit R-05); proration not verified
 - **12.1.7** Downgrade [MEDIUM] - never run against a real provider sandbox; live tests are skipped (audit R-05); effect on existing data over new limits not verified

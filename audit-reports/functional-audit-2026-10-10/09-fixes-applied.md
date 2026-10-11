@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (161 features touched)
+# 09 - Fixes applied on the fix branch (164 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -66,9 +66,12 @@
 | 8.2.13 | tests pass (page tests); real Twilio / voice providers not run | frontend/app/dashboard/voice-settings, VoiceMessageList in chat, AudioPermission around voice input |
 | 10.1.3 | tests pass (UI); real provider round-trip not run | OAuth buttons on the login and register screens (same component as 1.1.5, 1.1.6) |
 | 10.1.4 | tests pass | tests/test_p2_viewer_route_matrix.py: route x role matrix checked against the real routers |
+| 10.1.8 | measured; flag rather than block | protectai/deberta-v3-base-prompt-injection-v2 at threshold 0.75 on 92 labelled sentences (43 attacks, 49 legitimate, English and French): recall 0.953, false positive rate 0.122 with 3 of 6 false positives in French; tests/test_prompt_injection_measured.py (opt-in) guards it; docs/DECISIONS.md D15 keeps the detector off by default and says not to block with it yet |
 | 10.1.9 | tests pass | tests/test_outbound_http_inventory.py: the 60 modules that call httpx directly were reviewed (hosts are constants or platform settings); the escalation webhook now goes through ssrf_safe_client (a loopback server proves it is not reached); a new unreviewed direct call fails the test |
 | 10.1.12 | tests pass (real clamd 1.5.4 in Docker); no scanner is deployed in production (CLAMAV_ENABLED defaults to off) | tests/test_clamav_real_daemon.py, 8 cases: EICAR refused, clean and 3 MB files accepted, fail closed when the scan is required and the daemon is down, infected refused even when optional, and the document upload endpoint answers 400 for EICAR and 201 for a clean file |
 | 10.1.14 | documented; provider settings not verified | docs/DECISIONS.md D12: what the application encrypts and what depends on Supabase |
+| 10.2.1 | measured; flag rather than block | protectai/deberta-v3-base-prompt-injection-v2 at threshold 0.75 on 92 labelled sentences (43 attacks, 49 legitimate, English and French): recall 0.953, false positive rate 0.122 with 3 of 6 false positives in French; tests/test_prompt_injection_measured.py (opt-in) guards it; docs/DECISIONS.md D15 keeps the detector off by default and says not to block with it yet |
+| 10.2.2 | measured; flag rather than block | protectai/deberta-v3-base-prompt-injection-v2 at threshold 0.75 on 92 labelled sentences (43 attacks, 49 legitimate, English and French): recall 0.953, false positive rate 0.122 with 3 of 6 false positives in French; tests/test_prompt_injection_measured.py (opt-in) guards it; docs/DECISIONS.md D15 keeps the detector off by default and says not to block with it yet |
 | 10.2.3 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
 | 10.2.5 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
 | 10.2.6 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
