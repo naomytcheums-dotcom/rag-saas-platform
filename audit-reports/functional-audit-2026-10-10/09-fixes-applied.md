@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (154 features touched)
+# 09 - Fixes applied on the fix branch (157 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -18,6 +18,7 @@
 | 1.3.5 | CI now runs the PostgreSQL integration files; RLS not enabled | backend-tests starts a pgvector PostgreSQL with all migrations; 61 PostgreSQL integration tests pass locally; RLS rollout decision in D8 |
 | 1.3.6 | tests pass | api/security/document_capacity.py: plan document limit now also on the batch upload and the 9 importers, storage quota enforced on upload and batch (tests/test_p2_document_capacity.py) |
 | 1.3.7 | tests pass | per-user rate limit on /chat/stream (CHAT_USER_RATE_LIMIT_*; fails open without Redis) (tests/test_p2_chat_user_rate_limit.py) |
+| 1.3.8 | assessment corrected | the billing page already has a Usage tab (frontend/app/dashboard/billing/page.tsx, UsageTab) fed by GET /organizations/{id}/billing/usage and /usage/forecast, for members with billing:manage; the route is covered by tests/test_billing.py (usage case passes); the tab itself has no component test |
 | 1.4.6 | tests pass (components) | organization brand name in the chat header and tab title, accent colour and font applied across the interface (frontend/components/BrandingApplier.test.tsx) |
 | 1.4.8 | tests pass (components) | organization brand name in the chat header and tab title, accent colour and font applied across the interface (frontend/components/BrandingApplier.test.tsx) |
 | 2.1.11 | tests pass (UI); real remote sitemaps not fetched | frontend/components/ImportSources.tsx: sitemap, URL, GitHub, Notion and other importers from the documents page (5 vitest cases) |
@@ -38,6 +39,7 @@
 | 2.2.9 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
 | 2.2.10 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
 | 2.2.12 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
+| 2.2.16 | assessment corrected; production worker still needed | the documents page already offers multi-file upload with live status (frontend/app/dashboard/documents, 3 vitest cases, see 2.2.1 to 2.2.3); what remains is a running Celery worker in production (deploy/render/render.api.yaml defines it, not applied) |
 | 3.1.5 | assessment corrected | describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run |
 | 3.4.5 | tests pass | api/services/query_rewriting.py expand_with_synonyms + org settings (tests/test_p2_query_synonyms.py) |
 | 5.1.5 | tests pass | api/services/tool_budget.py cap_tool_output wired in the orchestrator (tests/test_tool_budget.py) |
@@ -55,6 +57,7 @@
 | 8.1.16 | tests pass (components); not run in a browser against a live LLM | chat page mounts RetryButton, ShareConversation, ConversationTools (export, visibility), SuggestedQuestions, FollowUpQuestions; persisted ids after streaming |
 | 8.1.17 | tests pass (components); not run in a browser against a live LLM | chat page mounts RetryButton, ShareConversation, ConversationTools (export, visibility), SuggestedQuestions, FollowUpQuestions; persisted ids after streaming |
 | 8.1.18 | tests pass (components); not run in a browser against a live LLM | chat page mounts RetryButton, ShareConversation, ConversationTools (export, visibility), SuggestedQuestions, FollowUpQuestions; persisted ids after streaming |
+| 8.2.6 | assessment corrected | VoiceSettings.tsx is mounted by frontend/app/dashboard/voice-settings/page.tsx (2 vitest cases pass, 2026-10-11); the first pass looked for an importer and missed the page |
 | 8.2.7 | tests pass (page tests); real Twilio / voice providers not run | frontend/app/dashboard/voice-settings, VoiceMessageList in chat, AudioPermission around voice input |
 | 8.2.8 | tests pass (page tests); real Twilio / voice providers not run | frontend/app/dashboard/voice-settings, VoiceMessageList in chat, AudioPermission around voice input |
 | 8.2.9 | tests pass (page tests); real Twilio / voice providers not run | frontend/app/dashboard/voice-settings, VoiceMessageList in chat, AudioPermission around voice input |

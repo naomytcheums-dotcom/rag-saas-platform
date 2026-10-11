@@ -9,9 +9,9 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
 | FIXED_AND_TESTED | 105 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 15 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| DECISION_OR_CORRECTION | 18 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | WRITTEN_NOT_EXECUTED | 21 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 46 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| IMPLEMENTED_UNVERIFIED | 43 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 29 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 2 | the requirement has no testable acceptance criterion |
 
@@ -135,16 +135,14 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **10.4.12** Custom SLA - no technical acceptance criterion
 - **14.4.1** Nom produit - no decided brand name found
 
-## IMPLEMENTED_UNVERIFIED (46)
+## IMPLEMENTED_UNVERIFIED (43)
 
-- **1.3.8** Usage par organisation [LOW] - a usage dashboard for a normal org admin not confirmed
 - **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
 - **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
 - **1.4.9** Email sender personnalisable [LOW] - real sending not exercised
 - **2.2.13** Détection de documents modifiés [MEDIUM] - periodic run needs Celery beat (audit R-02); no UI
 - **2.2.14** Synchronisation automatique [MEDIUM] - depends on Celery beat; connectors external
 - **2.2.15** Auto-reindexation programmée [MEDIUM] - needs Celery beat; no UI
-- **2.2.16** Batch Processing [MEDIUM] - needs a Celery worker; no UI
 - **3.1.6** OCR optionnel [LOW] - cannot run on this machine without the binaries
 - **3.4.2** Vector Search [MEDIUM] - which branch production takes is unproven
 - **3.4.4** Cross-encoder reranking [MEDIUM] - real model load/latency/memory not measured
@@ -168,7 +166,6 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **7.3.1** Automatic evaluation [MEDIUM] - jobs run in Celery (no production worker, audit R-02); never run on real data
 - **8.2.3** Streaming voice [LOW] - real-time streaming playback not exercised
 - **8.2.5** Voice activity detection [LOW] - only on the demo page; real VAD accuracy not tested
-- **8.2.6** Multi-language [LOW] - VoiceSettings.tsx the UI component exists but no page imports it
 - **10.1.8** Prompt injection protection [MEDIUM] - detection effectiveness never measured on attack sets
 - **10.2.1** Prompt injection detection [MEDIUM] - effectiveness not measured
 - **10.2.2** Jailbreak detection [MEDIUM] - effectiveness not measured
