@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (166 features touched)
+# 09 - Fixes applied on the fix branch (169 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -39,6 +39,9 @@
 | 2.2.9 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
 | 2.2.10 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
 | 2.2.12 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
+| 2.2.13 | tests pass (real Celery beat + worker, empty database); no beat/worker deployed in production | scripts/test_env/celery_beat_probe.py: check_modified_documents_task and check_scheduled_reindexes_task were scheduled by a real beat every 8 s and executed by a real worker 10 times each, 0 failures (17 periodic tasks, 170 executions in total); an empty database proves scheduling, dispatch and no crash, not the processing of real data |
+| 2.2.14 | tests pass (scheduling only; real external sources not reached) | sync_all_sources_periodic_task ran 10 times under a real beat and worker without failure on an empty database; no external connector was exercised |
+| 2.2.15 | tests pass (real Celery beat + worker, empty database); no beat/worker deployed in production | scripts/test_env/celery_beat_probe.py: check_modified_documents_task and check_scheduled_reindexes_task were scheduled by a real beat every 8 s and executed by a real worker 10 times each, 0 failures (17 periodic tasks, 170 executions in total); an empty database proves scheduling, dispatch and no crash, not the processing of real data |
 | 2.2.16 | assessment corrected; production worker still needed | the documents page already offers multi-file upload with live status (frontend/app/dashboard/documents, 3 vitest cases, see 2.2.1 to 2.2.3); what remains is a running Celery worker in production (deploy/render/render.api.yaml defines it, not applied) |
 | 3.1.5 | assessment corrected | describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run |
 | 3.1.6 | tests pass (Tesseract 5.4 with eng and fra, 17 tests run, none skipped) | tests/test_ocr.py run with the Tesseract and Poppler binaries and the French language data; the scanned-PDF path through the documents pipeline needs the S3 stack and was not rerun here |
