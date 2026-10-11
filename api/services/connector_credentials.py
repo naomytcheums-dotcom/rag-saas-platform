@@ -23,7 +23,8 @@ import json
 import re
 import socket
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -117,13 +118,13 @@ def normalize_provider(provider: str) -> str:
 class _SettingsProxy:
     """Stands in for `settings` inside the connector modules: credential fields come from the active organization, everything else from the real settings."""
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         active = _active.get()
         if active is not None and name in _CREDENTIAL_NAMES:
             return active.get(name)  # never the server's value while an organization's scope is active
         return getattr(_settings, name)
 
-    def __setattr__(self, name: str, value) -> None:
+    def __setattr__(self, name: str, value: Any) -> None:
         setattr(_settings, name, value)
 
     def __delattr__(self, name: str) -> None:
@@ -242,7 +243,7 @@ def _recheck_hosts(provider: str, values: dict[str, str]) -> None:
             _public_host_or_raise(host)
 
 
-async def _resolve(db: AsyncSession, organization_id: uuid.UUID, provider: str):
+async def _resolve(db: AsyncSession, organization_id: uuid.UUID, provider: str) -> tuple[str, Any]:
     """The credentials a run for this organization may use: its own, the server's (only if the operator allowed the shared mode), none (public data), or a 403."""
     provider = normalize_provider(provider)
     stored = await load_credentials(db, organization_id, provider)
@@ -263,7 +264,7 @@ async def _resolve(db: AsyncSession, organization_id: uuid.UUID, provider: str):
 
 
 @asynccontextmanager
-async def _activated(resolved) -> AsyncIterator[None]:
+async def _activated(resolved: tuple[str, Any]) -> AsyncIterator[None]:
     _provider, mode = resolved
     token = _active.set(None if mode == _PLATFORM else ({} if mode == _PUBLIC else mode))
     try:
@@ -278,7 +279,7 @@ async def connector_scope_for(db: AsyncSession, organization_id: uuid.UUID, prov
         yield
 
 
-def connector_scope(provider: str):
+def connector_scope(provider: str) -> Callable[..., AsyncIterator[None]]:
     """FastAPI dependency (add to a route): the route body runs inside the organization's scope."""
     from api.database import get_db
 
@@ -289,7 +290,7 @@ def connector_scope(provider: str):
     return _dependency
 
 
-async def run_in_scope(provider: str, organization_id: str | uuid.UUID, coroutine_factory):
+async def run_in_scope(provider: str, organization_id: str | uuid.UUID, coroutine_factory: Callable[[], Awaitable[Any]]) -> Any:
     """For background tasks (they run in their own event loop with their own engine): resolve the credentials, then run the coroutine inside the scope."""
     from sqlalchemy.ext.asyncio import async_sessionmaker
 

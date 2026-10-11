@@ -8,6 +8,7 @@ Reading needs `integrations:read`, writing `integrations:write`. A secret is nev
 
 import datetime as dt
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
@@ -48,7 +49,7 @@ class ConnectorIn(BaseModel):
     fields: dict[str, str] = Field(min_length=1, max_length=20)
 
 
-def _describe(provider: str, row) -> ConnectorOut:
+def _describe(provider: str, row: Any) -> ConnectorOut:
     import json
 
     fields_set: list[str] = []
@@ -67,7 +68,7 @@ def _describe(provider: str, row) -> ConnectorOut:
 @router.get("/organizations/{org_id}/connectors", response_model=ConnectorListOut)
 async def list_connectors(
     org_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("integrations:read")), db: AsyncSession = Depends(get_db),
-):
+) -> ConnectorListOut:
     rows = await connected_providers(db, org_id)
     return ConnectorListOut(
         connectors=[_describe(provider, rows.get(provider)) for provider in sorted(PROVIDERS)],
@@ -80,7 +81,7 @@ async def put_connector(
     org_id: uuid.UUID, provider: str, payload: ConnectorIn, request: Request,
     _caller: OrganizationMember = Depends(require_permission("integrations:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
-):
+) -> ConnectorOut:
     provider = normalize_provider(provider)
     try:
         values = validate_credentials(provider, payload.fields)
@@ -103,7 +104,7 @@ async def remove_connector(
     org_id: uuid.UUID, provider: str, request: Request,
     _caller: OrganizationMember = Depends(require_permission("integrations:write")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
-):
+) -> None:
     provider = normalize_provider(provider)
     if not await delete_credentials(db, org_id, provider):
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No {provider} credentials stored for this organization")
