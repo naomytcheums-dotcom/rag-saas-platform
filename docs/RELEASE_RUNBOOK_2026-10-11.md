@@ -74,7 +74,7 @@ python -c "from api.security.encryption import generate_encryption_key; print(ge
 
 ## 6. Vérification après déploiement
 ```
-python scripts/post_deploy_smoke.py --base-url https://<votre-api>
+python scripts/post_deploy_smoke.py --api https://<votre-api> --frontend https://<votre-site>
 ```
 puis : inscription d'un compte de test, connexion, envoi d'un document, une question dans le chat, page *Paramètres > Comptes connectés*. Supprimez le compte de test ensuite.
 
