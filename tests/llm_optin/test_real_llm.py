@@ -4,17 +4,26 @@
 
 Without the switch every test here is skipped, so the normal suite and CI stay free and deterministic. The manual workflow
 `.github/workflows/llm-tests.yml` runs them with the repository secret ANTHROPIC_API_KEY.
+
+Any provider can be exercised: REAL_LLM_TEST_PROVIDER (default anthropic) and REAL_LLM_TEST_MODEL. A local model needs no key:
+
+    RUN_REAL_LLM_TESTS=1 REAL_LLM_TEST_PROVIDER=ollama REAL_LLM_TEST_MODEL=qwen2.5:3b OLLAMA_BASE_URL=http://127.0.0.1:11434 pytest tests/llm_optin -q
+    RUN_REAL_LLM_TESTS=1 REAL_LLM_TEST_PROVIDER=openai_compatible REAL_LLM_TEST_MODEL=qwen2.5:3b OPENAI_COMPATIBLE_BASE_URL=http://127.0.0.1:11434/v1 pytest tests/llm_optin -q
 """
 
 import os
 
 import pytest
 
-from api.services.llm_providers import chat_completion
+from api.services.llm_providers import _NO_KEY_REQUIRED, PROVIDER_SETTINGS, chat_completion
+
+PROVIDER = os.environ.get("REAL_LLM_TEST_PROVIDER", "anthropic")
+_KEY_VARIABLE = PROVIDER_SETTINGS.get(PROVIDER, {}).get("api_key")
+_KEY_MISSING = PROVIDER not in _NO_KEY_REQUIRED and not os.environ.get(_KEY_VARIABLE or "ANTHROPIC_API_KEY")
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("RUN_REAL_LLM_TESTS") != "1" or not os.environ.get("ANTHROPIC_API_KEY"),
-    reason="real-LLM tests are opt-in: set RUN_REAL_LLM_TESTS=1 and ANTHROPIC_API_KEY",
+    os.environ.get("RUN_REAL_LLM_TESTS") != "1" or _KEY_MISSING,
+    reason="real-LLM tests are opt-in: set RUN_REAL_LLM_TESTS=1 and the provider's API key (ANTHROPIC_API_KEY by default)",
 )
 
 PASSAGE = "Policy 4.2 - Refunds. Customers may request a refund within 30 days of purchase. After 30 days no refund is possible."
@@ -25,7 +34,8 @@ async def _ask(question: str) -> str:
         {"role": "system", "content": "Answer only from the passage. If the passage does not contain the answer, reply exactly: I do not know."},
         {"role": "user", "content": f"Passage:\n{PASSAGE}\n\nQuestion: {question}"},
     ]
-    return await chat_completion(messages, provider="anthropic", model=os.environ.get("REAL_LLM_TEST_MODEL", "claude-haiku-5-5"), max_tokens=100)
+    default_model = "claude-haiku-5-5" if PROVIDER == "anthropic" else None
+    return await chat_completion(messages, provider=PROVIDER, model=os.environ.get("REAL_LLM_TEST_MODEL", default_model), max_tokens=100)
 
 
 async def test_the_model_answers_a_question_from_the_passage():
