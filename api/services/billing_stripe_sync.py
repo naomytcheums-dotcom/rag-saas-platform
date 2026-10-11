@@ -2,6 +2,8 @@
 Products/Prices. Like every other function in api/services/billing_stripe.py,
 raises StripeNotConfiguredError until a real STRIPE_SECRET_KEY exists."""
 
+from typing import cast
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,11 +42,11 @@ async def sync_stripe_prices(db: AsyncSession) -> int:
     synced = 0
     for plan in plans:
         if not plan.stripe_price_id_monthly and plan.monthly_price_cents > 0:
-            price = await create_stripe_price(plan.stripe_product_id, plan.monthly_price_cents, "month")
+            price = await create_stripe_price(cast(str, plan.stripe_product_id), plan.monthly_price_cents, "month")
             plan.stripe_price_id_monthly = price["id"]
             synced += 1
         if not plan.stripe_price_id_yearly and plan.yearly_price_cents > 0:
-            price = await create_stripe_price(plan.stripe_product_id, plan.yearly_price_cents, "year")
+            price = await create_stripe_price(cast(str, plan.stripe_product_id), plan.yearly_price_cents, "year")
             plan.stripe_price_id_yearly = price["id"]
             synced += 1
     await db.flush()

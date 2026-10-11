@@ -462,7 +462,7 @@ async def test_generate_response_records_a_real_flight_when_trace_enabled(monkey
 
     org = await _make_org(db_session, "Generation Org Flight Trace")
     await db_session.commit()
-    response = await generate_response(db_session, org.id, "Why is the sky blue?", trace_enabled=True)
+    await generate_response(db_session, org.id, "Why is the sky blue?", trace_enabled=True)
     await db_session.commit()
 
     from api.services.flight_recorder import list_flight_recordings

@@ -1379,7 +1379,7 @@ async def test_lockout_recovery_confirm_rechecks_totp_is_still_enabled(client, r
     secret = (await client.post("/auth/2fa/setup", headers=auth_header)).json()["secret"]
     await client.post("/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()}, headers=auth_header)
 
-    request = await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
+    await client.post("/auth/2fa/lockout-recovery/request", json={"email": register_payload["email"], "password": register_payload["password"]})
     token = captured["link"].split("token=")[1]
 
     row = await db_session.scalar(select(TwoFactorLockoutRecoveryToken))

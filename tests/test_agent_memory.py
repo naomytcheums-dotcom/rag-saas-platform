@@ -96,7 +96,7 @@ async def test_get_from_memory_treats_a_real_expired_item_as_missing(db_session)
 
 async def test_get_all_memory_excludes_a_real_expired_item(db_session):
     session = await create_session(db_session, "agent-1")
-    fresh = await add_to_memory(db_session, session.id, "fresh", 1)
+    await add_to_memory(db_session, session.id, "fresh", 1)
     stale = await add_to_memory(db_session, session.id, "stale", 2)
     stale.expires_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=1)
     await db_session.commit()

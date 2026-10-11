@@ -183,7 +183,6 @@ async def test_the_checkout_session_carries_the_organization_on_the_subscription
 
 async def test_the_checkout_has_no_trial_by_default_and_a_stripe_trial_when_configured(db_session, monkeypatch):
     """Spec 12.1.5 - a paid-plan trial exists only when the owner sets STRIPE_CHECKOUT_TRIAL_DAYS."""
-    from api.config import settings
 
     async def checkout():
         fake = MagicMock()

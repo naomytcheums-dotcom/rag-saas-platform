@@ -67,7 +67,7 @@ async def test_poll_domain_verification_activates_when_dns_matches(client, db_se
     monkeypatch.setattr("api.security.custom_domains.check_domain_dns_txt_record", _dns_matches)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
-    domain_row = await _add_domain(client, db_session, owner_token, org["id"], "poll-match.acme.example")
+    await _add_domain(client, db_session, owner_token, org["id"], "poll-match.acme.example")
 
     updated = await poll_domain_verification(db_session, "poll-match.acme.example")
     assert updated.status == CustomDomainStatus.active.value

@@ -36,7 +36,7 @@ async def test_set_regression_threshold_upserts_the_real_existing_row(db_session
     await set_regression_threshold(db_session, org.id, "faithfulness", 0.7, "high")
     await db_session.commit()
 
-    updated = await set_regression_threshold(db_session, org.id, "faithfulness", 0.8, "critical")
+    await set_regression_threshold(db_session, org.id, "faithfulness", 0.8, "critical")
     await db_session.commit()
 
     rows = await get_regression_thresholds(db_session, org.id)

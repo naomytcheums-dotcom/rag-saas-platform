@@ -40,8 +40,6 @@ def _path_matches(documented: str, real_paths) -> bool:
     exact placeholder name (docs may use a friendlier name than the
     code's own parameter name).
     """
-    doc_pattern = re.sub(r"\{[^}]+\}", r"\\{[^}]+\\}", re.escape(documented).replace(r"\{", "{").replace(r"\}", "}"))
-    doc_pattern = re.sub(r"\\\{[^}]+\\\}", r"\\{[^}]+\\}", re.escape(documented))
     segments = documented.split("/")
     for real in real_paths:
         real_segments = real.split("/")

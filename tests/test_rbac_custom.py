@@ -33,7 +33,7 @@ async def _make_org_with_second_member(client, db_session, register_payload):
     await db_session.commit()
 
     member_payload = {"email": "member@example.com", "password": "correct-horse-battery-staple", "accept_terms": True}
-    member_token = (await client.post("/auth/register", json=member_payload)).json()["access_token"]
+    (await client.post("/auth/register", json=member_payload)).json()["access_token"]
     member = await db_session.scalar(select(User).where(User.email == member_payload["email"]))
 
     from api.models.organization import OrganizationMember
@@ -181,7 +181,7 @@ async def test_require_permission_allows_owner(client, db_session, register_payl
     from api.security.organizations import create_organization_with_owner
     from sqlalchemy import select
 
-    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
     org = await create_organization_with_owner(db_session, name="RBAC Perm Org", owner_user_id=owner.id)
     await db_session.commit()
@@ -207,7 +207,7 @@ async def test_require_permission_allows_admin(client, db_session, register_payl
     from api.security.organizations import create_organization_with_owner
     from sqlalchemy import select
 
-    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
     org = await create_organization_with_owner(db_session, name="RBAC Perm Admin Org", owner_user_id=owner.id)
 
@@ -235,7 +235,7 @@ async def test_require_permission_defaults_for_member(client, db_session, regist
     from api.security.organizations import create_organization_with_owner
     from sqlalchemy import select
 
-    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
     org = await create_organization_with_owner(db_session, name="RBAC Perm Member Org", owner_user_id=owner.id)
 
@@ -266,7 +266,7 @@ async def test_require_permission_defaults_for_viewer(client, db_session, regist
     from api.security.organizations import create_organization_with_owner
     from sqlalchemy import select
 
-    owner_token = (await client.post("/auth/register", json=register_payload)).json()["access_token"]
+    (await client.post("/auth/register", json=register_payload)).json()["access_token"]
     owner = await db_session.scalar(select(User).where(User.email == register_payload["email"]))
     org = await create_organization_with_owner(db_session, name="RBAC Perm Viewer Org", owner_user_id=owner.id)
 

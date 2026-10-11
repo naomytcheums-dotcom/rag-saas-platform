@@ -19836,6 +19836,169 @@
         }
       }
     },
+    "/organizations/{org_id}/connectors": {
+      "get": {
+        "tags": [
+          "connectors"
+        ],
+        "summary": "List Connectors",
+        "operationId": "list_connectors_organizations__org_id__connectors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/connectors/{provider}": {
+      "put": {
+        "tags": [
+          "connectors"
+        ],
+        "summary": "Put Connector",
+        "operationId": "put_connector_organizations__org_id__connectors__provider__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "connectors"
+        ],
+        "summary": "Remove Connector",
+        "operationId": "remove_connector_organizations__org_id__connectors__provider__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Org Id"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/conversations": {
       "post": {
         "tags": [
@@ -58312,6 +58475,104 @@
         "type": "object",
         "title": "ConnectionUpdateRequest"
       },
+      "ConnectorIn": {
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 20,
+            "minProperties": 1,
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fields"
+        ],
+        "title": "ConnectorIn"
+      },
+      "ConnectorListOut": {
+        "properties": {
+          "connectors": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorOut"
+            },
+            "type": "array",
+            "title": "Connectors"
+          },
+          "platform_credentials_allowed": {
+            "type": "boolean",
+            "title": "Platform Credentials Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connectors",
+          "platform_credentials_allowed"
+        ],
+        "title": "ConnectorListOut"
+      },
+      "ConnectorOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "fields_set": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields Set"
+          },
+          "required_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Fields"
+          },
+          "optional_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Optional Fields"
+          },
+          "works_without_credentials": {
+            "type": "boolean",
+            "title": "Works Without Credentials"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "connected",
+          "fields_set",
+          "required_fields",
+          "optional_fields",
+          "works_without_credentials"
+        ],
+        "title": "ConnectorOut"
+      },
       "ConsentReactivationConfirmRequest": {
         "properties": {
           "token": {
@@ -68891,6 +69152,20 @@
             ],
             "title": "Voice Minutes Per Month"
           },
+          "escalation_sla_hours": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Sla Hours"
+          },
           "adaptive_routing_enabled": {
             "type": "boolean",
             "title": "Adaptive Routing Enabled"
@@ -69280,6 +69555,21 @@
             ],
             "title": "Conversation Retention Days",
             "description": "Delete conversations after this many days without activity"
+          },
+          "escalation_sla_hours": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Sla Hours",
+            "description": "Answer-by delay in hours per escalation priority (critical, high, medium, low), 1 to 720; priorities left out keep the platform default"
           },
           "adaptive_routing_enabled": {
             "anyOf": [
