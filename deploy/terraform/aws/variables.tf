@@ -1,9 +1,9 @@
 variable "region" {
-  type = string
+  type    = string
   default = "eu-west-3"
 }
 variable "image" {
-  type = string
+  type        = string
   description = "API image built from Dockerfile.api and pushed to ECR"
 }
 variable "vpc_id" { type = string }
