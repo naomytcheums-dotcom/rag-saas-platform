@@ -33,7 +33,7 @@ Rule: a feature is VERIFIED_COMPLETE only if the code review judged it complete 
 | 10 | passed after rerun | 855 passed, 8 failed in the full run; the 8 pass by name in `work/part10_11_rerun.log` (7 = test database left at migration 0137 while the code needs 0142; 1 = `test_latency_metrics`, fixed in the code, see below) |
 | 11 | passed after rerun | 97 passed, 1 failed (the same latency test); passes by name in the rerun |
 | 12 | passed | 211 passed, 2 skipped (PostgreSQL concurrency, run separately: 24 passed) |
-| 13 | passed | 119 passed, 25 skipped (reasons: see below) |
+| 13 | passed | 143 passed, 1 skipped (staging-only tenant policies). The first run had 119 passed and 25 skipped because the PostgreSQL, S3 and Celery-worker tests were not given their disposable services; they now run (private Redis + worker for `test_e2e_lifecycle`, which proves the real account purge) |
 | 14 | passed | 26 passed |
 | 15 | passed | 41 passed |
 
