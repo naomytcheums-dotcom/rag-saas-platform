@@ -8,8 +8,13 @@ transaction isolation) -- that's what running the real Alembic migration
 against a real Postgres in CI/staging is for, not unit tests.
 """
 
+import os
 import sys
 from pathlib import Path
+
+# Must precede the first import of litellm: without it LiteLLM downloads a price map that changes over time, making cost/price tests
+# depend on the network and the day. An explicit value in the environment still wins.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 import pytest
 import pytest_asyncio
@@ -46,6 +51,21 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 def pytest_sessionfinish(session, exitstatus):
     close_all_memories()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Strict-skip mode (RAG_STRICT_SKIPS=1): a skip whose reason is not a documented EXTERNAL dependency becomes a failure."""
+    outcome = yield
+    report = outcome.get_result()
+    if os.environ.get("RAG_STRICT_SKIPS") != "1" or not report.skipped or hasattr(report, "wasxfail"):
+        return
+    from external_skip_allowlist import external_category
+
+    reason = str(report.longrepr[2]) if isinstance(report.longrepr, tuple) else str(report.longrepr)
+    if external_category(reason) is None:
+        report.outcome = "failed"
+        report.longrepr = f"strict-skip mode: a required local dependency is missing, the test did not run ({reason})"
 
 
 @pytest.fixture(autouse=True)

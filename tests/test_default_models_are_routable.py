@@ -5,14 +5,30 @@ answer failed with "LLM Provider NOT provided". The mocks used elsewhere in the 
 
 import contextlib
 import io
+import json
+from pathlib import Path
 
 import litellm
 import pytest
+from litellm.litellm_core_utils.get_model_cost_map import GetModelCostMap
 
 from api.config import settings
 from api.services.agent_models import MODEL_CATALOG
 from api.services.llm_config import _COST_AWARE_CANDIDATES
 from api.services.llm_providers import PROVIDER_SETTINGS, _provider_kwargs, to_litellm_model
+
+# LiteLLM downloads a moving price map at import unless LITELLM_LOCAL_MODEL_COST_MAP is set, and the map bundled with the pinned version
+# (litellm==1.99.0) does not list every model the catalog proposes (`claude-sonnet-5-5` is only in the remote map). The suite therefore
+# runs on a dated snapshot of the entries this product relies on (tests/data/litellm_price_snapshot.json): same answer online and offline.
+SNAPSHOT = json.loads((Path(__file__).parent / "data" / "litellm_price_snapshot.json").read_text(encoding="utf-8"))["entries"]
+
+
+@pytest.fixture(autouse=True)
+def _pinned_price_map(monkeypatch):
+    """Adds, for the duration of a test, the snapshot entries the active price map lacks. Entries it already has are left untouched."""
+    for model, entry in SNAPSHOT.items():
+        if model not in litellm.model_cost:
+            monkeypatch.setitem(litellm.model_cost, model, dict(entry))
 
 
 def _routable(model: str) -> bool:
@@ -85,3 +101,43 @@ def test_cost_pricing_matches_the_litellm_price_map(pricing_key, litellm_id):
     entry = litellm.model_cost[litellm_id]
     assert settings.COST_MODEL_PRICING[pricing_key]["input"] == pytest.approx(entry["input_cost_per_token"] * 1_000_000)
     assert settings.COST_MODEL_PRICING[pricing_key]["output"] == pytest.approx(entry["output_cost_per_token"] * 1_000_000)
+
+
+def _hosted_litellm_ids() -> set[str]:
+    return {to_litellm_model(provider, model) for provider, model in ALL_PAIRS if provider != "ollama"}
+
+
+def test_the_snapshot_lists_every_hosted_model_the_catalog_proposes():
+    """Adding a model to the catalog without refreshing tests/data/litellm_price_snapshot.json must fail here, not silently skip pricing."""
+    assert _hosted_litellm_ids() <= set(SNAPSHOT), sorted(_hosted_litellm_ids() - set(SNAPSHOT))
+
+
+def test_the_snapshot_agrees_with_the_price_map_bundled_with_the_pinned_litellm():
+    """Where the bundled map knows a model, the snapshot must carry exactly its prices (the snapshot cannot drift silently)."""
+    bundled = GetModelCostMap.load_local_model_cost_map()
+    disagreements = [
+        model
+        for model, entry in SNAPSHOT.items()
+        if model in bundled
+        and (bundled[model].get("input_cost_per_token"), bundled[model].get("output_cost_per_token"))
+        != (entry["input_cost_per_token"], entry["output_cost_per_token"])
+    ]
+    assert not disagreements, disagreements
+
+
+def test_the_application_pricing_table_matches_the_snapshot_for_every_hosted_pricing_key():
+    """Prices the application charges (COST_MODEL_PRICING) against the pinned reference, per million tokens."""
+    pairs = {
+        "claude-sonnet-5-5": "claude-sonnet-5-5",
+        "claude-haiku-4-5": "claude-haiku-4-5",
+        "gpt-4o": "gpt-4o",
+        "gpt-4o-mini": "gpt-4o-mini",
+        "gemini-2.5-pro": "gemini/gemini-2.5-pro",
+        "gemini-2.5-flash": "gemini/gemini-2.5-flash",
+        "mistral-large": "mistral/mistral-large-latest",
+        "mistral-small": "mistral/mistral-small-latest",
+    }
+    for pricing_key, litellm_id in pairs.items():
+        entry = SNAPSHOT[litellm_id]
+        assert settings.COST_MODEL_PRICING[pricing_key]["input"] == pytest.approx(entry["input_cost_per_token"] * 1_000_000), pricing_key
+        assert settings.COST_MODEL_PRICING[pricing_key]["output"] == pytest.approx(entry["output_cost_per_token"] * 1_000_000), pricing_key

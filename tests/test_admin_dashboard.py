@@ -72,7 +72,7 @@ async def test_purge_logs_requires_superadmin(client, db_session, register_paylo
     assert response.status_code == 403
 
 
-async def test_system_log_handler_writes_real_rows(db_session):
+async def test_system_log_handler_writes_real_rows(db_session, monkeypatch):
     """Real, direct test of the logging.Handler itself (not via the
     HTTP layer) -- confirms a real log record becomes a real SystemLog row.
 
@@ -114,7 +114,14 @@ async def test_system_log_handler_writes_real_rows(db_session):
     from sqlalchemy import select
 
     from api.models.admin import SystemLog
+    from api.security import system_log_handler
     from api.security.system_log_handler import SystemLogHandler
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    throwaway_engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    SystemLog.__table__.create(throwaway_engine)
+    monkeypatch.setattr(system_log_handler, "_sync_engine", throwaway_engine)
 
     message = f"a real warning captured by the real handler ({uuid.uuid4()})"
     handler = SystemLogHandler()
@@ -128,17 +135,17 @@ async def test_system_log_handler_writes_real_rows(db_session):
         logger.removeHandler(handler)
         logger.propagate = original_propagate
 
-    # The handler uses its own sync engine against the real DATABASE_URL,
-    # not the test's SQLite session -- verify against that real engine.
-    from sqlalchemy import create_engine
+    # The handler writes through its OWN synchronous engine (not the test's session). It is pointed at a throw-away in-memory database
+    # here, so this test can never write to whatever DATABASE_URL the environment holds (a hosted database included). The same
+    # behaviour on real PostgreSQL is covered by tests/test_postgres_system_log_handler.py.
     from sqlalchemy.orm import Session as SyncSession
 
-    from api.config import settings
-
-    sync_engine = create_engine(settings.DATABASE_URL.replace("+asyncpg", ""))
-    with SyncSession(sync_engine) as sync_db:
+    with SyncSession(throwaway_engine) as sync_db:
         row = sync_db.scalar(select(SystemLog).where(SystemLog.message == message))
         assert row is not None
         assert row.level == "WARNING"
+        assert row.logger_name == "test.system_log_handler"
+        assert row.function == "test_system_log_handler_writes_real_rows"
         sync_db.delete(row)
         sync_db.commit()
+        assert sync_db.scalar(select(SystemLog).where(SystemLog.message == message)) is None
