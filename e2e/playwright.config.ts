@@ -6,8 +6,9 @@ import os from "node:os";
 // They run against an ISOLATED stack started here: the API through scripts/dev_isolated_server.py (throw-away SQLite file, every external service blanked,
 // refuses to start if anything points outside this machine) and the Next.js dev server. Nothing here can reach production data.
 // The browser is the Chrome installed on the machine (channel "chrome"), so no browser download is needed.
-const API_PORT = 8765;
-const WEB_PORT = 3001;
+// Ports can be moved with E2E_API_PORT / E2E_WEB_PORT when another process already holds the default ones.
+const API_PORT = Number(process.env.E2E_API_PORT ?? 8765);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3001);
 const repoRoot = path.resolve(__dirname, "..");
 const dbPath = path.join(os.tmpdir(), `rag-e2e-${Date.now()}.db`);
 const python = process.env.PYTHON ?? (process.platform === "win32" ? path.join(repoRoot, ".venv", "Scripts", "python.exe") : "python3");
@@ -28,7 +29,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${API_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
-      env: { PREVIEW_DB_PATH: dbPath, PREVIEW_PORT: String(API_PORT), RATE_LIMIT_ENABLED: "false" },
+      env: { PREVIEW_DB_PATH: dbPath, PREVIEW_PORT: String(API_PORT), PREVIEW_FRONTEND_URL: `http://localhost:${WEB_PORT}`, RATE_LIMIT_ENABLED: "false" },
     },
     {
       command: `npx next dev -p ${WEB_PORT} --webpack`,

@@ -3,6 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 // A throw-away account on the isolated local database. The password is not a real credential and the database is deleted with the run.
 const EMAIL = `e2e-${Date.now()}@example.com`;
 const PASSWORD = "E2e-Smoke-Test-2026-xyz!";
+// Same ports as playwright.config.ts (E2E_API_PORT / E2E_WEB_PORT move them when the defaults are taken).
+const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? 8765}`;
+const WEB = `http://localhost:${process.env.E2E_WEB_PORT ?? 3001}`;
 
 async function dismissCookieBanner(page: Page) {
   await page.addInitScript(() => window.localStorage.setItem("cookie_consent_ack", "1"));
@@ -23,14 +26,15 @@ test.describe("authentication", () => {
     await page.getByLabel("Email").fill("nobody@example.com");
     await page.getByLabel("Password").fill("not-the-password");
     await page.getByRole("button", { name: /log in|sign in/i }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
+    // An alert WITH text: Next.js also keeps an empty role="alert" route announcer in the page, which made the bare role selector ambiguous.
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test("register, then reach the dashboard", async ({ page, request }) => {
     await dismissCookieBanner(page);
     // Register through the API (the registration form has its own unit tests), then log in through the real login form.
-    const registered = await request.post("http://127.0.0.1:8765/auth/register", { data: { email: EMAIL, password: PASSWORD, accept_terms: true } });
+    const registered = await request.post(`${API}/auth/register`, { data: { email: EMAIL, password: PASSWORD, accept_terms: true } });
     expect(registered.ok()).toBeTruthy();
     await page.goto("/login");
     await page.getByLabel("Email").fill(EMAIL);
@@ -54,7 +58,7 @@ test.describe("landing page", () => {
     for (const href of ["/docs/architecture.pdf", "/docs/setup-guide.pdf", "/docs/api-documentation.pdf", "/landing/product-tour.mp4"]) {
       const link = page.locator(`a[href='${href}']`);
       if (href.endsWith(".pdf")) await expect(link.first()).toBeVisible();
-      const response = await request.get(`http://localhost:3001${href}`);
+      const response = await request.get(`${WEB}${href}`);
       expect(response.ok(), href).toBeTruthy();
     }
     expect(errors).toEqual([]);
@@ -64,10 +68,10 @@ test.describe("landing page", () => {
 test.describe("signed-in navigation", () => {
   test.beforeEach(async ({ page, request }) => {
     await dismissCookieBanner(page);
-    const login = await request.post("http://127.0.0.1:8765/auth/login", { data: { email: EMAIL, password: PASSWORD } });
+    const login = await request.post(`${API}/auth/login`, { data: { email: EMAIL, password: PASSWORD } });
     expect(login.ok()).toBeTruthy();
     const { access_token } = await login.json();
-    await request.post("http://127.0.0.1:8765/organizations", { data: { name: "E2E Org" }, headers: { Authorization: `Bearer ${access_token}` } });
+    await request.post(`${API}/organizations`, { data: { name: "E2E Org" }, headers: { Authorization: `Bearer ${access_token}` } });
     await page.addInitScript((token) => window.localStorage.setItem("access_token", token), access_token);
   });
 
