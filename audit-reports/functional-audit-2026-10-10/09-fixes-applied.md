@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (165 features touched)
+# 09 - Fixes applied on the fix branch (166 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -151,6 +151,7 @@
 | 14.3.7 | assessment corrected | LandingSections.tsx already contains Features, Pricing, Security and FAQ sections (missed by the first pass) |
 | 14.3.8 | written; typecheck and lint pass; not viewed in a browser | landing page: product-tour video, four-step architecture section, documentation PDF links (frontend/components/figma/LandingSections.tsx) |
 | 14.3.9 | assessment corrected | LandingSections.tsx already contains Features, Pricing, Security and FAQ sections (missed by the first pass) |
+| 14.4.1 | decision recorded | owner decision 2026-10-11: the product name is 'RAG SaaS Platform', already shown by the interface (layout title, app_name, brand fallback); docs/DECISIONS.md D3 and docs/commercial/BRAND_GUIDE.md updated; e-mail sender name, widget title and PDFs still to check at publication |
 | 14.4.2 | owner decision pending | docs/DECISIONS.md D3 and docs/commercial/BRAND_GUIDE.md: no logo is invented; the guide lists what to change once one is chosen |
 | 14.4.4 | written | docs/commercial/BRAND_GUIDE.md (product name and logo still undecided: 14.4.1 / 14.4.2 remain open) |
 | 15.1.1 | tests pass | api/routers/escalations.py, escalation_notes + sla_due_at (migration 0138), dashboard/escalations page (tests/test_p2_escalation_tickets_api.py, 5 vitest cases) |

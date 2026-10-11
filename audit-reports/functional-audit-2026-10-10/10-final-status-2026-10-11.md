@@ -9,11 +9,11 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
 | FIXED_AND_TESTED | 110 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 23 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| DECISION_OR_CORRECTION | 24 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | WRITTEN_NOT_EXECUTED | 19 | code or documents exist; nothing proves them yet |
 | IMPLEMENTED_UNVERIFIED | 39 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 26 | cannot be proven without an account, key or service that is not available here |
-| AMBIGUOUS_REQUIREMENT | 1 | the requirement has no testable acceptance criterion |
+| AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
 
 Rule: a feature is VERIFIED_COMPLETE only if the code review judged it complete AND the targeted tests of its Part ran green. The unit of proof is the Part, not the sentence of each requirement.
 
@@ -125,9 +125,8 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **13.5.5** LLM traces - Datadog not configured
 - **13.5.8** Error tracking - Sentry DSN unverified
 
-## AMBIGUOUS_REQUIREMENT (1)
+## AMBIGUOUS_REQUIREMENT (0)
 
-- **14.4.1** Nom produit - no decided brand name found
 
 ## IMPLEMENTED_UNVERIFIED (39)
 

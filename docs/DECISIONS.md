@@ -18,9 +18,9 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
   5. extend table by table.
 - **Way back:** each step is a separate migration with a downgrade.
 
-## D3 - Product name and logo (spec 14.4.1, 14.4.2): unchanged until the owner chooses
-- **Decision:** the working name stays "RAG SaaS Platform". No name or logo is invented. `docs/commercial/BRAND_GUIDE.md` lists exactly what to change once a name is chosen (site title, e-mail sender, widget title, PDFs); all customer-facing text is in `locales/`.
-- **Before choosing:** check the name in the trademark databases of the target markets, the `.com` / `.ai` domains and the app-store / npm / PyPI namespaces.
+## D3 - Product name and logo (spec 14.4.1, 14.4.2): the name is chosen, the logo is not
+- **Decision (2026-10-11, owner):** the product name is "RAG SaaS Platform", which is what the interface already shows. No logo is invented (14.4.2 stays open). `docs/commercial/BRAND_GUIDE.md` lists what to check when publishing (e-mail sender, widget title, PDFs); all customer-facing text is in `locales/`.
+- **Advice, not a blocker:** a descriptive name is hard to protect and to rank on; check it in the trademark databases of the target markets, the `.com` / `.ai` domains and the app-store / npm / PyPI namespaces before investing in marketing.
 
 ## D4 - End-to-end browser tests (spec 13.2.4, 13.3.7): Playwright in a separate package
 - **Decision:** `e2e/` is its own npm package (Playwright 1.49.1, uses the Chrome already installed, no browser download). It starts the isolated API (SQLite, every external service blanked, refuses non-local URLs) and the frontend, and never touches production.

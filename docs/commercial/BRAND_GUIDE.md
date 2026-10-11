@@ -4,9 +4,10 @@ This guide documents the visual identity **as implemented** in the application (
 It is a record of what exists, not a new design.
 
 ## 1. Product name
-The repository and the product are currently called **RAG SaaS Platform**. Earlier planning documents use "KnowFlow AI" as a working name. **The commercial name has
-not been decided**: choose it before any public launch, then change the site title (`frontend/app/layout.tsx`), the e-mail sender name (`EMAIL_FROM_ADDRESS`), the
-widget title and the PDFs under `deliverables/`. Every customer-facing string comes from `locales/*/common.json`, so a rename is a text change, not a code change.
+The product name is **RAG SaaS Platform**, chosen by the owner on 2026-10-11 (decision D3). It is what the interface already displays (site title in
+`frontend/app/layout.tsx`, `app_name` and the brand fallback in `frontend/lib/locales`). "KnowFlow AI" in the competitive-audit documents is a competitor reference and an
+early working name, not the product. Remaining places to check when publishing: the e-mail sender name (`EMAIL_FROM_ADDRESS`), the widget title and the PDFs under `deliverables/`.
+Every customer-facing string comes from `locales/*/common.json`, so a later rename is a text change, not a code change.
 
 ## 2. Logo
 No final logo file is committed: the header uses a text wordmark (`frontend/components/figma/SiteHeader.tsx`). Provide an SVG (square and horizontal versions) and
