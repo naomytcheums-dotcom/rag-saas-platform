@@ -34,3 +34,16 @@ Staging accessible, corpus synthétique représentatif, jobs isolés,
 providers sandbox/budget, p95 SQL/HTTP, concurrence et tests de fuite
 tenant. Toute optimisation doit comparer au baseline sur la même machine
 et conserver les tests de sécurité.
+
+## Cross-encoder reranker, measured on 2026-10-11 (spec 3.4.4)
+Model `cross-encoder/ms-marco-MiniLM-L-6-v2` loaded through `api.services.retrieval_pipeline._get_reranker`, CPU only (Intel 16 logical cores, no GPU), passages of about 600 characters, 5 timed runs after one warm-up:
+
+| Measure | Value |
+|---|---|
+| Load time (model files already on disk) | 20.6 s |
+| Memory added by the loaded model | +561 MB (process peak 715 MB) |
+| Rerank 10 candidates | median 152 ms (min 118, max 232) |
+| Rerank 20 candidates | median 222 ms (min 200, max 286) |
+| Rerank 50 candidates | median 596 ms (min 539, max 756) |
+
+What it means: the first reranked request after a process start pays about 20 s, and each worker process keeps about 0.6 GB for this model on top of the embedding model, so the hosting plan must be sized for that (the 512 MB free plan cannot hold it). These are the numbers of one developer machine, not of the hosting provider's CPU; measure again on the real plan.

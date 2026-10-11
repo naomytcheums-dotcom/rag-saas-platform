@@ -7,11 +7,11 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 113 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| FIXED_AND_TESTED | 114 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 24 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| DECISION_OR_CORRECTION | 25 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | WRITTEN_NOT_EXECUTED | 19 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 36 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| IMPLEMENTED_UNVERIFIED | 34 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 26 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
 
@@ -128,13 +128,11 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 ## AMBIGUOUS_REQUIREMENT (0)
 
 
-## IMPLEMENTED_UNVERIFIED (36)
+## IMPLEMENTED_UNVERIFIED (34)
 
 - **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
 - **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
 - **1.4.9** Email sender personnalisable [LOW] - real sending not exercised
-- **3.4.2** Vector Search [MEDIUM] - which branch production takes is unproven
-- **3.4.4** Cross-encoder reranking [MEDIUM] - real model load/latency/memory not measured
 - **3.4.7** HyDE [LOW] - quality benefit never measured
 - **3.4.8** Multi-query retrieval [LOW] - quality benefit never measured
 - **4.1.6** OpenAI-compatible APIs [MEDIUM] - guard application not confirmed in this pass

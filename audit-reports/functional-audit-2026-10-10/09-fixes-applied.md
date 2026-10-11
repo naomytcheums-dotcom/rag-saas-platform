@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (169 features touched)
+# 09 - Fixes applied on the fix branch (171 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -45,6 +45,8 @@
 | 2.2.16 | assessment corrected; production worker still needed | the documents page already offers multi-file upload with live status (frontend/app/dashboard/documents, 3 vitest cases, see 2.2.1 to 2.2.3); what remains is a running Celery worker in production (deploy/render/render.api.yaml defines it, not applied) |
 | 3.1.5 | assessment corrected | describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run |
 | 3.1.6 | tests pass (Tesseract 5.4 with eng and fra, 17 tests run, none skipped) | tests/test_ocr.py run with the Tesseract and Poppler binaries and the French language data; the scanned-PDF path through the documents pipeline needs the S3 stack and was not rerun here |
+| 3.4.2 | tests pass (real pgvector 0.8.7 on PostgreSQL, HNSW index) | tests/test_pgvector_real_search.py (opt-in PGVECTOR_REAL_TEST=1): the native branch _pgvector_rank_chunks applies (does not fall back to numpy), a paraphrased question finds the right passage first among 8, a near-identical passage of another organization is never returned, and the ranking equals an independent cosine computation; which branch the hosting provider's database takes is still to check there (extension and index must exist) |
+| 3.4.4 | measured; sizing consequence | docs/PERFORMANCE_REPORT.md: cross-encoder MiniLM-L6 on a 16-thread CPU: load 20.6 s, +561 MB of memory, 152 ms for 10 candidates, 222 ms for 20, 596 ms for 50; to be measured again on the hosting plan |
 | 3.4.5 | tests pass | api/services/query_rewriting.py expand_with_synonyms + org settings (tests/test_p2_query_synonyms.py) |
 | 5.1.5 | tests pass | api/services/tool_budget.py cap_tool_output wired in the orchestrator (tests/test_tool_budget.py) |
 | 5.1.7 | tests pass | api/services/fallback.py run_tool_fallbacks wired in the orchestrator (tests/test_fallback.py) |
