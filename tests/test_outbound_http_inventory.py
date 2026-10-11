@@ -1,9 +1,11 @@
 """Audit item 10.1.9 (SSRF protection): inventory of the places that call httpx directly instead of through `ssrf_safe_client()`.
 
 A direct httpx call is only safe when the host it talks to is a constant (a vendor API) or a platform setting, never a value a tenant user
-can type. Reviewed 2026-10-11 module by module: none of the files below builds the target host from a request value (hosts come from
-`settings.*` or constants; function parameters named base_url / token_url come from settings or constants at the call site, e.g.
-api/security/documents.py reads settings.CONFLUENCE_BASE_URL). `api/tools/human_escalation.py` posts to a caller-supplied webhook URL and
+can type. Reviewed 2026-10-11 module by module: hosts come from constants or settings. EXCEPTION since the per-organization credentials (D17): the importers whose service
+can be self-hosted (Jira, Confluence, WooCommerce, Salesforce, GitLab...) or sits on a customer sub-domain (Zendesk, Shopify, Teamwork...) now read the address from the
+organization's stored credentials. api/services/connector_credentials.py validates it (https, no credentials or custom port, vendor domain when vendor-hosted, public address
+checked at save time AND again at use time) but the HTTP call itself is a plain httpx call: a host that changes its DNS answer between the check and the call (DNS rebinding)
+is not blocked. Moving those calls to ssrf_safe_client() closes that window; it was not done because the existing tests of these modules patch httpx.AsyncClient. `api/tools/human_escalation.py` posts to a caller-supplied webhook URL and
 therefore goes through the SSRF-safe client (tests below).
 
 This test fails when a NEW file calls httpx directly: either route the call through `ssrf_safe_client()` (api/services/url_fetching.py), or review
