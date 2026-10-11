@@ -29,10 +29,17 @@ La production est déclarée en révision 0130 (non vérifiée, `docs/audit/PROD
 | 0143 | identifiants de connecteurs par organisation | nouvelle table |
 
 ## 1. Sauvegarde (obligatoire)
+`scripts/backup.sh` sauvegarde la base **auto-hébergée** de `docker-compose.selfhosted.yml`, PAS la base de production (Supabase). Pour la production, faites un vrai `pg_dump`
+distant. Aucune installation : le client PostgreSQL passe par Docker. Depuis le dossier de ce dépôt, dans PowerShell (adresse de connexion DIRECTE de Supabase, port 5432, sans `+asyncpg` ;
+ne la collez jamais dans un chat) :
 ```
-bash scripts/backup.sh
+New-Item -ItemType Directory -Force backups | Out-Null
+$env:PGURL = "postgresql://postgres:<mot-de-passe>@db.<ref>.supabase.co:5432/postgres"
+docker run --rm -e PGURL -v "${PWD}ackups:/out" postgres:17 sh -c 'pg_dump "$PGURL" --no-owner --format=custom -f /out/prod_backup.dump'
+Get-Item backups\prod_backup.dump
 ```
-Gardez le fichier hors de la machine. Vérifiez sa taille et, idéalement, restaurez-le dans une base jetable avant de continuer.
+Vérifiez que la taille n'est pas nulle et gardez une copie hors de la machine. (Ne redirigez pas la sortie avec `>` sous PowerShell : cela corrompt un fichier binaire.)
+Option complémentaire : la sauvegarde du tableau de bord Supabase (Database > Backups) si votre offre en inclut.
 
 ## 2. Répétition à blanc (ne modifie rien)
 Dans un terminal PowerShell, avec l'adresse de la base de production dans la variable (ne la collez jamais dans un chat) :
