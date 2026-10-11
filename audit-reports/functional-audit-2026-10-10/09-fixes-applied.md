@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (144 features touched)
+# 09 - Fixes applied on the fix branch (154 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -21,6 +21,13 @@
 | 1.4.6 | tests pass (components) | organization brand name in the chat header and tab title, accent colour and font applied across the interface (frontend/components/BrandingApplier.test.tsx) |
 | 1.4.8 | tests pass (components) | organization brand name in the chat header and tab title, accent colour and font applied across the interface (frontend/components/BrandingApplier.test.tsx) |
 | 2.1.11 | tests pass (UI); real remote sitemaps not fetched | frontend/components/ImportSources.tsx: sitemap, URL, GitHub, Notion and other importers from the documents page (5 vitest cases) |
+| 2.1.12 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.13 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.14 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.15 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.16 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.17 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
+| 2.1.18 | tests pass (UI); real provider calls not run | frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean) |
 | 2.2.1 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
 | 2.2.2 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
 | 2.2.3 | tests pass | documents page multi-file, drop zone, status polling (3 vitest cases) |
@@ -36,6 +43,7 @@
 | 5.1.5 | tests pass | api/services/tool_budget.py cap_tool_output wired in the orchestrator (tests/test_tool_budget.py) |
 | 5.1.7 | tests pass | api/services/fallback.py run_tool_fallbacks wired in the orchestrator (tests/test_fallback.py) |
 | 5.1.13 | tests pass (opt-in TASK_PLAN_EXECUTE_STEPS) | the plan can be executed step by step and its results reach the final answer (tests/test_agent_orchestrator.py); default stays advisory |
+| 5.4.8 | tests pass (security review done) | the code block is an ast whitelist evaluator, not exec(); the review reproduced 3 bypasses (dunder access through str.format, unbounded memory through repeat/replace/join, unhandled MemoryError/RecursionError) and fixed them (tests/test_workflow_block_code_hardening.py, 30 cases); a process or container sandbox is not needed for this design |
 | 5.4.12 | assessment corrected | the database workflow block reuses the SQL tool validator and tenant filter, covered by tests/test_workflow_block_database.py and the P0 SQL bypass test |
 | 6.1.8 | tests pass | GET /citations/{id}/preview wires api/services/citation_preview.py (tests/test_p2_citation_preview_route.py) |
 | 6.2.12 | tests pass (page tests) | frontend/app/dashboard/quality-scores: averages, trend, per-answer scores, CSV export |
@@ -54,6 +62,7 @@
 | 8.2.13 | tests pass (page tests); real Twilio / voice providers not run | frontend/app/dashboard/voice-settings, VoiceMessageList in chat, AudioPermission around voice input |
 | 10.1.3 | tests pass (UI); real provider round-trip not run | OAuth buttons on the login and register screens (same component as 1.1.5, 1.1.6) |
 | 10.1.4 | tests pass | tests/test_p2_viewer_route_matrix.py: route x role matrix checked against the real routers |
+| 10.1.9 | tests pass | tests/test_outbound_http_inventory.py: the 60 modules that call httpx directly were reviewed (hosts are constants or platform settings); the escalation webhook now goes through ssrf_safe_client (a loopback server proves it is not reached); a new unreviewed direct call fails the test |
 | 10.1.14 | documented; provider settings not verified | docs/DECISIONS.md D12: what the application encrypts and what depends on Supabase |
 | 10.2.3 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
 | 10.2.5 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
@@ -66,11 +75,11 @@
 | 10.4.4 | decision recorded | docs/DECISIONS.md D10: built-in roles plus custom roles, SCIM-provisioned |
 | 10.4.5 | tests pass | conversation_retention_days + api/tasks/retention.py + beat entry (tests/test_p2_retention.py); the daily task needs a running Celery beat |
 | 10.4.6 | tests pass | conversation_retention_days + api/tasks/retention.py + beat entry (tests/test_p2_retention.py); the daily task needs a running Celery beat |
-| 10.4.7 | written, not executed on a real platform | deploy/dedicated-tenant (compose + provision.sh), deploy/kubernetes, deploy/helm, docker-compose.selfhosted.yml |
-| 10.4.8 | written, not executed on a real platform | deploy/dedicated-tenant (compose + provision.sh), deploy/kubernetes, deploy/helm, docker-compose.selfhosted.yml |
-| 10.4.9 | written, not executed on a real platform | deploy/dedicated-tenant (compose + provision.sh), deploy/kubernetes, deploy/helm, docker-compose.selfhosted.yml |
-| 10.4.10 | written, not executed on a real platform | deploy/dedicated-tenant (compose + provision.sh), deploy/kubernetes, deploy/helm, docker-compose.selfhosted.yml |
-| 10.4.11 | written, not executed on a real platform | deploy/dedicated-tenant (compose + provision.sh), deploy/kubernetes, deploy/helm, docker-compose.selfhosted.yml |
+| 10.4.7 | validated with the official tool; not applied to a real account or cluster | deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values |
+| 10.4.8 | validated with the official tool; not applied to a real account or cluster | deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values |
+| 10.4.9 | validated with the official tool; not applied to a real account or cluster | deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values |
+| 10.4.10 | validated with the official tool; not applied to a real account or cluster | deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values |
+| 10.4.11 | validated with the official tool; not applied to a real account or cluster | deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values |
 | 11.2.5 | tests pass | api/services/insights.py + routers/insights.py + dashboard/insights page (tests/test_p2_insights.py) |
 | 11.2.6 | tests pass (page tests) | frontend/app/dashboard/quality-scores: averages, trend, per-answer scores, CSV export |
 | 11.2.7 | tests pass | api/services/insights.py + routers/insights.py + dashboard/insights page (tests/test_p2_insights.py) |
@@ -95,24 +104,25 @@
 | 13.1.3 | decision recorded | docs/DECISIONS.md: ruff format is the formatter (Black-compatible output); Black is not added as a second tool |
 | 13.1.4 | configured, report-only | [tool.mypy] in pyproject.toml and a non-blocking mypy workflow; the number of type errors is not yet measured |
 | 13.1.6 | target not reached | measured about 77 % on the CircleCI subset; the 90 % target needs many more tests, not a configuration change |
+| 13.1.9 | triaged; 12 findings -> 5 left | bandit -ll: MD5 marked usedforsecurity=False, 4 false positives annotated with the reason, migrations excluded; 5 left = Hugging Face from_pretrained without a pinned revision (accepted until the model list is frozen) |
 | 13.2.4 | executed locally: 10/10 passed; not wired into CI | e2e/ Playwright package (login, register, dashboard pages, documents, escalations) run against the real API and Next.js on a disposable database |
 | 13.2.7 | written; not run (no paid key) | tests/llm_optin/test_real_llm.py and .github/workflows/llm-tests.yml, skipped unless RUN_REAL_LLM_TESTS=1 |
 | 13.2.8 | written; not run (no paid key) | tests/llm_optin/test_real_llm.py and .github/workflows/llm-tests.yml, skipped unless RUN_REAL_LLM_TESTS=1 |
 | 13.2.10 | CI now runs the PostgreSQL integration files; RLS not enabled | backend-tests starts a pgvector PostgreSQL with all migrations; 61 PostgreSQL integration tests pass locally; RLS rollout decision in D8 |
-| 13.2.11 | written; smoke tests pass; workflows not run | scripts/post_deploy_smoke.py (tests/test_post_deploy_smoke.py), .github/workflows/post-deploy-smoke.yml and migrate.yml (manual, rehearsal by default) |
+| 13.2.11 | validated with actionlint; workflows not run on GitHub | actionlint passes on all 8 workflows; scripts/post_deploy_smoke.py tests pass; migrate.yml is manual with a rehearsal by default |
 | 13.3.2 | configured, report-only | pyproject.toml [tool.mypy] and .github/workflows/mypy.yml (non-blocking: the existing code base is not yet type clean) |
 | 13.3.7 | executed locally: 10/10 passed; not wired into CI | e2e/ Playwright package (login, register, dashboard pages, documents, escalations) run against the real API and Next.js on a disposable database |
-| 13.3.8 | written; smoke tests pass; workflows not run | scripts/post_deploy_smoke.py (tests/test_post_deploy_smoke.py), .github/workflows/post-deploy-smoke.yml and migrate.yml (manual, rehearsal by default) |
+| 13.3.8 | validated with actionlint; workflows not run on GitHub | actionlint passes on all 8 workflows; scripts/post_deploy_smoke.py tests pass; migrate.yml is manual with a rehearsal by default |
 | 13.4.3 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
 | 13.4.4 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
 | 13.4.5 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.6 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.7 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.8 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
+| 13.4.6 | validated with the official tool; not applied to a real account or cluster | terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed |
+| 13.4.7 | validated with the official tool; not applied to a real account or cluster | terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed |
+| 13.4.8 | validated with the official tool; not applied to a real account or cluster | terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed |
 | 13.4.9 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.10 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.11 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
-| 13.4.12 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
+| 13.4.10 | validated with the official tool; not applied to a real account or cluster | helm lint (0 failed), helm template parsed by kubeconform strict (4/4 valid), deploy/kubernetes/rag-saas.yaml kubeconform strict (7/7 valid) |
+| 13.4.11 | validated with the official tool; not applied to a real account or cluster | helm lint (0 failed), helm template parsed by kubeconform strict (4/4 valid), deploy/kubernetes/rag-saas.yaml kubeconform strict (7/7 valid) |
+| 13.4.12 | validated with the official tool; not applied to a real account or cluster | terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed |
 | 13.5.12 | tests pass | GET /responses/{id}/trace joins retrieval, generation, checks, agent steps and citations (tests/test_p2_request_trace.py) |
 | 14.1.2 | documentation corrected | agents.md routes verified against OpenAPI; docs/architecture/OVERVIEW.md now has component, chat and ingestion diagrams; the multi-tenant line no longer claims RLS policies |
 | 14.1.11 | written | docs/guides/TROUBLESHOOTING.md |

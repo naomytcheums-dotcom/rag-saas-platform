@@ -92,6 +92,17 @@ add(["13.1.6"], "target not reached", "measured about 77 % on the CircleCI subse
 add(["14.4.2"], "owner decision pending", "docs/DECISIONS.md D3 and docs/commercial/BRAND_GUIDE.md: no logo is invented; the guide lists what to change once one is chosen")
 add(["15.2.7"], "mechanism exists; not run on real data", "feedback can be turned into evaluation questions (POST /organizations/{id}/feedback/to-evaluation); no benchmark on real user data has been run")
 
+# 2026-10-11 session: only what was really executed.
+V = "validated with the official tool; not applied to a real account or cluster"
+add(["13.4.6", "13.4.7", "13.4.8", "13.4.12"], V, "terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed")
+add(["13.4.10", "13.4.11"], V, "helm lint (0 failed), helm template parsed by kubeconform strict (4/4 valid), deploy/kubernetes/rag-saas.yaml kubeconform strict (7/7 valid)")
+add(["10.4.7", "10.4.8", "10.4.9", "10.4.10", "10.4.11"], V, "deploy/dedicated-tenant/provision.sh passes shellcheck; the helm chart and the Kubernetes manifest are validated as above; docker compose config -q passes for docker-compose.tenant.yml and docker-compose.selfhosted.yml (also with the proxy profile) once the required variables are given dummy values")
+add(["5.4.8"], T + " (security review done)", "the code block is an ast whitelist evaluator, not exec(); the review reproduced 3 bypasses (dunder access through str.format, unbounded memory through repeat/replace/join, unhandled MemoryError/RecursionError) and fixed them (tests/test_workflow_block_code_hardening.py, 30 cases); a process or container sandbox is not needed for this design")
+add(["10.1.9"], T, "tests/test_outbound_http_inventory.py: the 60 modules that call httpx directly were reviewed (hosts are constants or platform settings); the escalation webhook now goes through ssrf_safe_client (a loopback server proves it is not reached); a new unreviewed direct call fails the test")
+add(["13.1.9"], "triaged; 12 findings -> 5 left", "bandit -ll: MD5 marked usedforsecurity=False, 4 false positives annotated with the reason, migrations excluded; 5 left = Hugging Face from_pretrained without a pinned revision (accepted until the model list is frozen)")
+add(["2.1.12", "2.1.13", "2.1.14", "2.1.15", "2.1.16", "2.1.17", "2.1.18"], T + " (UI); real provider calls not run", "frontend/components/ImportSources.tsx now offers GitHub repository and issues, Google Drive and Docs, Notion, Confluence and OneDrive (10 vitest cases, tsc and eslint clean)")
+add(["13.2.11", "13.3.8"], "validated with actionlint; workflows not run on GitHub", "actionlint passes on all 8 workflows; scripts/post_deploy_smoke.py tests pass; migrate.yml is manual with a rehearsal by default")
+
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
 fields = list(rows[0].keys()) + ["fix_status", "fix_evidence"]
