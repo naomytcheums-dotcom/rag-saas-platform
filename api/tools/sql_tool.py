@@ -252,7 +252,7 @@ async def execute_sql_query(db: AsyncSession, query: str, organization_id: uuid.
     real_limit = min(int(limit), max_rows) if limit else max_rows
 
     final_query = (
-        f"SELECT {columns} FROM (SELECT * FROM {table} WHERE organization_id = :organization_id) AS {table} "
+        f"SELECT {columns} FROM (SELECT * FROM {table} WHERE organization_id = :organization_id) AS {table} "  # nosec B608 - validate_sql_query + tenant filter (tests/test_p0_sql_tool_tenant_bypass.py)
         f"{where_clause} {order_clause} LIMIT :real_limit"
     )
     # Real, necessary, portable fix -- found by actually running this

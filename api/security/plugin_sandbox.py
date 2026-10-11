@@ -198,7 +198,7 @@ def run_plugin_sandboxed_docker(entry_point: str, code: bytes, payload: dict, *,
             docker_bin, "run", "--rm", "-i",
             "--network", "none",
             "--read-only",
-            "--tmpfs", "/tmp:size=16m,noexec",
+            "--tmpfs", "/tmp:size=16m,noexec",  # nosec B108 - a path INSIDE the throw-away container, not on the host
             f"--cpus={cpu_limit}",
             f"--memory={max_memory_mb}m",
             f"--memory-swap={max_memory_mb}m",

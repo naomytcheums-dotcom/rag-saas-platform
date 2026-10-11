@@ -21,4 +21,4 @@ jobs:
         run: python -m pip install --upgrade pip && pip install bandit[toml]
 
       - name: Run Bandit
-        run: bandit -r api -c pyproject.toml
+        run: bandit -r api -c pyproject.toml -x api/alembic

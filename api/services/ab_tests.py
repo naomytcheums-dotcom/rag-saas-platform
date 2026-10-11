@@ -190,7 +190,7 @@ def get_ab_test_variant(test: ABTest, request_id: str) -> str:
     control) is the honest, safe default."""
     if test.status != ABTestStatus.running:
         return "a"
-    digest = hashlib.md5(f"{test.id}:{request_id}".encode()).hexdigest()
+    digest = hashlib.md5(f"{test.id}:{request_id}".encode(), usedforsecurity=False).hexdigest()  # traffic bucketing, not a security use
     bucket = int(digest, 16) % 100
     return "a" if bucket < test.traffic_split else "b"
 
