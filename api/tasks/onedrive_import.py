@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.security.documents import import_and_process_onedrive_file, process_onedrive
+from api.services.connector_credentials import run_in_scope
 from api.tasks.celery_app import celery_app
 from api.tasks._db import make_async_engine
 
@@ -69,7 +70,7 @@ def process_onedrive_file_task(file_id: str, organization_id: str, workspace_id:
     """Item 5's literal task -- import d'un fichier OneDrive, réutilisant
     le pipeline partagé (voir api/security/documents.py's
     import_and_process_onedrive_file)."""
-    return asyncio.run(_import_and_process_onedrive_file_async(file_id, organization_id, workspace_id, created_by))
+    return asyncio.run(run_in_scope("onedrive", organization_id, lambda: _import_and_process_onedrive_file_async(file_id, organization_id, workspace_id, created_by)))
 
 
 @celery_app.task(name="api.tasks.onedrive_import.process_onedrive_task")
@@ -80,7 +81,7 @@ def process_onedrive_task(
     filtre, dispatch (see api/security/documents.py's process_onedrive
     for the real logic, and this module's own docstring for why this
     bridge needs no database session)."""
-    return asyncio.run(process_onedrive(
+    return asyncio.run(run_in_scope("onedrive", organization_id, lambda: process_onedrive(
         uuid.UUID(organization_id), uuid.UUID(workspace_id) if workspace_id else None,
         folder_id, patterns, max_files, uuid.UUID(created_by),
-    ))
+    )))

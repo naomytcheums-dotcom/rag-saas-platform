@@ -34,6 +34,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.connector_credentials import connector_scope_for, run_in_scope
+
 from api.models.external_source import ExternalSource, ExternalSourceSyncStatus, ExternalSourceType
 from api.models.workspace import Workspace
 from api.security.documents import (
@@ -178,9 +180,9 @@ async def detect_source_changes(source: ExternalSource) -> bool:
     if source.source_type == ExternalSourceType.github.value:
         try:
             owner, repo = validate_github_repo_url(source.source_id)
-            from api.config import settings
+            from api.services.connector_credentials import connector_settings as settings
 
-            repo_data = await fetch_github_repo(owner, repo, settings.GITHUB_API_TOKEN)
+            repo_data = await run_in_scope("github", source.organization_id, lambda: fetch_github_repo(owner, repo, settings.GITHUB_API_TOKEN))
         except Exception as exc:  # noqa: BLE001 -- a real failure checking for changes must not itself block a sync from proceeding
             logger.warning("detect_source_changes: could not check '%s' for real changes, assuming one: %s", source.source_id, exc)
             return True
@@ -217,31 +219,34 @@ async def sync_external_source(db: AsyncSession, source_id: uuid.UUID, triggered
     config = decrypt_source_config(source)
     created_by = triggered_by or source.created_by
     try:
-        if source.source_type == ExternalSourceType.github.value:
-            result = await process_github_repo(
-                source.organization_id, source.workspace_id, source.source_id,
-                config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
-            )
-        elif source.source_type == ExternalSourceType.google_drive.value:
-            result = await process_google_drive(
-                source.organization_id, source.workspace_id, source.source_id,
-                config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
-            )
-        elif source.source_type == ExternalSourceType.notion.value:
-            result = await process_notion_database(
-                source.organization_id, source.workspace_id, source.source_id, config.get("max_pages", _DEFAULT_MAX_ITEMS), created_by,
-            )
-        elif source.source_type == ExternalSourceType.confluence.value:
-            result = await process_confluence_space(
-                source.organization_id, source.workspace_id, source.source_id, config.get("max_pages", _DEFAULT_MAX_ITEMS), created_by,
-            )
-        elif source.source_type == ExternalSourceType.onedrive.value:
-            result = await process_onedrive(
-                source.organization_id, source.workspace_id, source.source_id,
-                config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
-            )
-        else:
-            raise ValueError(f"unsupported source_type '{source.source_type}'")
+        # Each source is imported with ITS organization's credentials (docs/DECISIONS.md D17); an organization that never connected the service is refused
+        # here and the refusal is recorded in sync_error by the handler below.
+        async with connector_scope_for(db, source.organization_id, source.source_type):
+            if source.source_type == ExternalSourceType.github.value:
+                result = await process_github_repo(
+                    source.organization_id, source.workspace_id, source.source_id,
+                    config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
+                )
+            elif source.source_type == ExternalSourceType.google_drive.value:
+                result = await process_google_drive(
+                    source.organization_id, source.workspace_id, source.source_id,
+                    config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
+                )
+            elif source.source_type == ExternalSourceType.notion.value:
+                result = await process_notion_database(
+                    source.organization_id, source.workspace_id, source.source_id, config.get("max_pages", _DEFAULT_MAX_ITEMS), created_by,
+                )
+            elif source.source_type == ExternalSourceType.confluence.value:
+                result = await process_confluence_space(
+                    source.organization_id, source.workspace_id, source.source_id, config.get("max_pages", _DEFAULT_MAX_ITEMS), created_by,
+                )
+            elif source.source_type == ExternalSourceType.onedrive.value:
+                result = await process_onedrive(
+                    source.organization_id, source.workspace_id, source.source_id,
+                    config.get("patterns"), config.get("max_files", _DEFAULT_MAX_ITEMS), created_by,
+                )
+            else:
+                raise ValueError(f"unsupported source_type '{source.source_type}'")
 
         if result == "failed":
             raise RuntimeError(f"the underlying {source.source_type} import pipeline reported a real failure")

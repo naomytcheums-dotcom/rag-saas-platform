@@ -94,7 +94,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 import httpx
 import yaml
 
-from api.config import settings
+from api.services.connector_credentials import connector_settings as settings
 from api.services.url_fetching import USER_AGENT
 
 logger = logging.getLogger(__name__)

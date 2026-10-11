@@ -422,6 +422,7 @@ class Settings(BaseSettings):
     BITBUCKET_USERNAME: str | None = None
     BITBUCKET_APP_PASSWORD: str | None = None
     BITBUCKET_WORKSPACE: str | None = None
+    BITBUCKET_API_TOKEN: str | None = None  # the importer (api/services/bitbucket_extraction.py) reads this one; it was missing, so the connector could never run
 
     AZURE_DEVOPS_ENABLED: bool = False
     AZURE_DEVOPS_API_TOKEN: str | None = None
@@ -466,6 +467,7 @@ class Settings(BaseSettings):
 
     SMARTSUITE_ENABLED: bool = False
     SMARTSUITE_API_TOKEN: str | None = None
+    SMARTSUITE_ACCOUNT_ID: str | None = None  # read by api/services/smartsuite_extraction.py; it was missing, so the connector could never run
 
     PROCESS_STREET_ENABLED: bool = False
     PROCESS_STREET_API_TOKEN: str | None = None
@@ -2355,6 +2357,20 @@ class Settings(BaseSettings):
     ALERTING_ENABLED: bool = True
     ALERTING_CHECK_INTERVAL_SECONDS: int = 60
     ALERTING_SILENCE_MINUTES: int = 5
+
+    # -- Connectors (docs/DECISIONS.md D17) --------------------------------------
+    # False (default): an importer or CRM connector uses only the credentials the organization itself stored (PUT /organizations/{id}/connectors/{provider}); an organization
+    # without credentials is refused. True: the old shared mode, where the server-wide token of the *_API_TOKEN settings is used for EVERY organization. Only for a
+    # single-tenant installation whose operator is the only user: in a multi-tenant deployment it hands the operator's account to every customer.
+    CONNECTORS_ALLOW_PLATFORM_CREDENTIALS: bool = False
+
+    # -- Prompt injection: second opinion (docs/DECISIONS.md D15) ----------------
+    # The classifier flags 12 % of legitimate requests in the measured set (French ones too). When True, a message the classifier flags is re-read by a language model, which
+    # may CLEAR it (never block it on its own); no answer or an unclear answer keeps the classifier's verdict. Costs one short LLM call per flagged message only.
+    PROMPT_INJECTION_LLM_CONFIRM: bool = True
+    PROMPT_INJECTION_CONFIRM_PROVIDER: str = ""  # "" = the platform's default provider
+    PROMPT_INJECTION_CONFIRM_MODEL: str = ""     # "" = that provider's default model
+    PROMPT_INJECTION_CONFIRM_TIMEOUT_SECONDS: float = 15.0
 
     # -- Partie 13.4: Distributed tracing (OpenTelemetry) ------------------------
     OTEL_ENABLED: bool = False

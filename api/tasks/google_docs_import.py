@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.security.documents import import_and_process_google_doc, process_google_docs_batch
+from api.services.connector_credentials import run_in_scope
 from api.tasks.celery_app import celery_app
 from api.tasks._db import make_async_engine
 
@@ -68,7 +69,7 @@ def process_google_doc_task(
     """Item 5's literal task -- import d'un document Google
     Docs/Sheets/Slides, réutilisant le pipeline partagé (voir
     api/security/documents.py's import_and_process_google_doc)."""
-    return asyncio.run(_import_and_process_google_doc_async(document_id, organization_id, workspace_id, export_format, created_by))
+    return asyncio.run(run_in_scope("google_drive", organization_id, lambda: _import_and_process_google_doc_async(document_id, organization_id, workspace_id, export_format, created_by)))
 
 
 @celery_app.task(name="api.tasks.google_docs_import.process_google_docs_batch_task")

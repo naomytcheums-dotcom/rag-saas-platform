@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.security.documents import import_and_process_confluence_page, process_confluence_space
+from api.services.connector_credentials import run_in_scope
 from api.tasks.celery_app import celery_app
 from api.tasks._db import make_async_engine
 
@@ -59,7 +60,7 @@ def process_confluence_page_task(page_id: str, organization_id: str, workspace_i
     """Item 5's literal task -- import d'une page Confluence,
     réutilisant le pipeline partagé (voir api/security/documents.py's
     import_and_process_confluence_page)."""
-    return asyncio.run(_import_and_process_confluence_page_async(page_id, organization_id, workspace_id, created_by))
+    return asyncio.run(run_in_scope("confluence", organization_id, lambda: _import_and_process_confluence_page_async(page_id, organization_id, workspace_id, created_by)))
 
 
 @celery_app.task(name="api.tasks.confluence_import.process_confluence_space_task")
@@ -68,6 +69,6 @@ def process_confluence_space_task(space_key: str, organization_id: str, workspac
     filtre, dispatch (see api/security/documents.py's
     process_confluence_space for the real logic, and this module's own
     docstring for why this bridge needs no database session)."""
-    return asyncio.run(process_confluence_space(
+    return asyncio.run(run_in_scope("confluence", organization_id, lambda: process_confluence_space(
         uuid.UUID(organization_id), uuid.UUID(workspace_id) if workspace_id else None, space_key, max_pages, uuid.UUID(created_by),
-    ))
+    )))

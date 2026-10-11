@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.config import settings
 from api.security.documents import import_and_process_notion_page, process_notion_database
+from api.services.connector_credentials import run_in_scope
 from api.tasks.celery_app import celery_app
 from api.tasks._db import make_async_engine
 
@@ -66,7 +67,7 @@ def process_notion_page_task(page_id: str, organization_id: str, workspace_id: s
     """Item 5's literal task -- import d'une page Notion, réutilisant
     le pipeline partagé (voir api/security/documents.py's
     import_and_process_notion_page)."""
-    return asyncio.run(_import_and_process_notion_page_async(page_id, organization_id, workspace_id, created_by))
+    return asyncio.run(run_in_scope("notion", organization_id, lambda: _import_and_process_notion_page_async(page_id, organization_id, workspace_id, created_by)))
 
 
 @celery_app.task(name="api.tasks.notion_import.process_notion_database_task")
@@ -75,6 +76,6 @@ def process_notion_database_task(database_id: str, organization_id: str, workspa
     dispatch (see api/security/documents.py's process_notion_database
     for the real logic, and this module's own docstring for why this
     bridge needs no database session)."""
-    return asyncio.run(process_notion_database(
+    return asyncio.run(run_in_scope("notion", organization_id, lambda: process_notion_database(
         uuid.UUID(organization_id), uuid.UUID(workspace_id) if workspace_id else None, database_id, max_pages, uuid.UUID(created_by),
-    ))
+    )))

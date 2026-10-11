@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => {
   return { api: { post: (...a: unknown[]) => post(...a) }, ApiError };
 });
 
+import { ApiError } from "@/lib/api";
 import ImportSources from "./ImportSources";
 
 beforeEach(() => post.mockReset());
@@ -61,6 +62,16 @@ describe("ImportSources", () => {
     await userEvent.type(screen.getByLabelText("documents.import_target"), typed);
     await userEvent.click(screen.getByRole("button", { name: "documents.import_button" }));
     await waitFor(() => expect(post).toHaveBeenCalledWith(`/organizations/org-1/${path}`, body));
+  });
+
+  it("sends the user to Connected accounts when the organization has not connected the service", async () => {
+    post.mockImplementationOnce(() => Promise.reject(new ApiError(403, "This organization has not connected notion. Add its credentials first")));
+    render(<ImportSources orgId="org-1" onImported={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("documents.import_target"), "abc");
+    await userEvent.click(screen.getByRole("button", { name: "documents.import_button" }));
+    const link = await screen.findByRole("link", { name: "documents.import_connect_link" });
+    expect(link).toHaveAttribute("href", "/dashboard/settings/connectors");
+    expect(screen.getByRole("alert")).toHaveTextContent("documents.import_not_connected");
   });
 
   it("disables the button while the field is empty", () => {

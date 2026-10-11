@@ -424,3 +424,18 @@ def register_payload():
         "full_name": "Ada Lovelace",
         "accept_terms": True,
     }
+
+
+@pytest.fixture(autouse=True)
+def _legacy_shared_connector_credentials(monkeypatch):
+    """The tests of the importers and CRM connectors (written before per-organization credentials, docs/DECISIONS.md D17) check the extraction logic with
+    the server-wide *_API_TOKEN settings. They keep their meaning with the legacy shared mode switched on. The production default is OFF, and
+    tests/test_connector_credentials.py switches it off again to prove that an organization without credentials is refused."""
+    monkeypatch.setattr(settings, "CONNECTORS_ALLOW_PLATFORM_CREDENTIALS", True)
+
+
+@pytest.fixture(autouse=True)
+def _no_llm_second_opinion_on_prompt_injection_by_default(monkeypatch):
+    """The second opinion on a flagged message calls a language model (docs/DECISIONS.md D15). No test may reach a provider by accident: it is off for the
+    whole suite; tests/test_prompt_injection_second_opinion.py switches it on with a fake model."""
+    monkeypatch.setattr(settings, "PROMPT_INJECTION_LLM_CONFIRM", False)

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -28,12 +29,14 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsConnection, setNeedsConnection] = useState(false);
   const current = SOURCES.find((s) => s.key === source) ?? SOURCES[0];
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setNeedsConnection(false);
     setMessage(null);
     try {
       await api.post(`/organizations/${orgId}/${current.path}`, current.body(value.trim()));
@@ -41,7 +44,13 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
       setValue("");
       onImported();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : t("documents.import_error"));
+      // The server refuses (403) an organization that never connected the service: send the user to the screen where its own credentials are given.
+      if (err instanceof ApiError && err.status === 403 && String(err.detail).includes("has not connected")) {
+        setNeedsConnection(true);
+        setError(t("documents.import_not_connected"));
+      } else {
+        setError(err instanceof ApiError ? String(err.detail) : t("documents.import_error"));
+      }
     } finally {
       setBusy(false);
     }
@@ -65,7 +74,12 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
         <button type="submit" disabled={busy || !value.trim()} className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white disabled:opacity-50">{t("documents.import_button")}</button>
       </div>
       {message && <p role="status" className="mt-2 text-xs text-foreground-muted">{message}</p>}
-      {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+          {needsConnection && <> <Link href="/dashboard/settings/connectors" className="underline">{t("documents.import_connect_link")}</Link></>}
+        </p>
+      )}
     </form>
   );
 }

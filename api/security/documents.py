@@ -274,7 +274,7 @@ from api.services.document_storage import (
     validate_document_upload,
 )
 from api.services.clamav import ascan_document_for_malware
-from api.config import settings
+from api.services.connector_credentials import connector_settings as settings
 
 _TEMP_FILE_SUFFIXES = {
     PDF_CONTENT_TYPE: ".pdf", DOCX_CONTENT_TYPE: ".docx", TXT_CONTENT_TYPE: ".txt",
