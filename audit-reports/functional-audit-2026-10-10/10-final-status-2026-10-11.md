@@ -7,12 +7,12 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 105 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| FIXED_AND_TESTED | 109 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 18 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
-| WRITTEN_NOT_EXECUTED | 21 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 43 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
-| BLOCKED_EXTERNAL | 29 | cannot be proven without an account, key or service that is not available here |
+| DECISION_OR_CORRECTION | 20 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| WRITTEN_NOT_EXECUTED | 19 | code or documents exist; nothing proves them yet |
+| IMPLEMENTED_UNVERIFIED | 42 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| BLOCKED_EXTERNAL | 26 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 2 | the requirement has no testable acceptance criterion |
 
 Rule: a feature is VERIFIED_COMPLETE only if the code review judged it complete AND the targeted tests of its Part ran green. The unit of proof is the Part, not the sentence of each requirement.
@@ -58,17 +58,15 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **Product name (14.4.1) and logo (14.4.2)**, **custom SLA (10.4.12)**.
 - **Real provider sandboxes**: Stripe / Paystack (12.x), LLM / embedding providers (4.x), Slack / Teams / Discord (9.4.x), Twilio / STT / TTS (8.2.x), ClamAV (10.1.12), tracing and error tracking (10.3 / 13.5).
 
-## WRITTEN_NOT_EXECUTED (21)
+## WRITTEN_NOT_EXECUTED (19)
 
 - **1.1.10** Suppression du compte - written; runner tests pass; the cron job is not applied on Render
 - **1.3.5** Isolation des données - CI now runs the PostgreSQL integration files; RLS not enabled
 - **10.1.14** Encryption at rest - documented; provider settings not verified
-- **13.1.4** MyPy - configured, report-only
 - **13.1.6** Coverage > 90% - target not reached
 - **13.2.7** LLM tests - written; not run (no paid key)
 - **13.2.8** RAG tests - written; not run (no paid key)
 - **13.2.10** Database tests - CI now runs the PostgreSQL integration files; RLS not enabled
-- **13.3.2** Type check - configured, report-only
 - **13.4.3** Render - written, not executed on a real platform
 - **13.4.4** Railway - written, not executed on a real platform
 - **13.4.5** Fly.io - written, not executed on a real platform
@@ -98,7 +96,7 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **13.4.11** Helm - validated with the official tool; not applied to a real account or cluster
 - **13.4.12** Terraform - validated with the official tool; not applied to a real account or cluster
 
-## BLOCKED_EXTERNAL (29)
+## BLOCKED_EXTERNAL (26)
 
 - **1.4.3** SSL automatique (Let's Encrypt) - real issuance needs a public DNS name and reachable host; Render/Vercel terminate TLS themselves so this path may be unused in production
 - **4.1.1** Anthropic Claude - no real Anthropic call in the audit
@@ -120,13 +118,10 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **9.4.1** Slack - no real Slack workspace exercised
 - **9.4.2** Microsoft Teams - no real Teams tenant exercised
 - **9.4.3** Discord - no real Discord server exercised
-- **10.1.12** Malware scanning - scanner not running in production (audit)
 - **10.1.15** Encryption in transit - not verified against the live deployment
-- **10.3.5** Distributed tracing - no collector/backend in the deployment
 - **10.3.6** LLM traces - Datadog not configured
 - **10.3.9** Error tracking - Sentry DSN not verified in production
 - **11.3.4** Uptime monitoring - no uptime monitor configured to the audit's knowledge
-- **13.5.4** Distributed tracing - no collector
 - **13.5.5** LLM traces - Datadog not configured
 - **13.5.8** Error tracking - Sentry DSN unverified
 
@@ -135,7 +130,7 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **10.4.12** Custom SLA - no technical acceptance criterion
 - **14.4.1** Nom produit - no decided brand name found
 
-## IMPLEMENTED_UNVERIFIED (43)
+## IMPLEMENTED_UNVERIFIED (42)
 
 - **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
 - **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
@@ -143,7 +138,6 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **2.2.13** Détection de documents modifiés [MEDIUM] - periodic run needs Celery beat (audit R-02); no UI
 - **2.2.14** Synchronisation automatique [MEDIUM] - depends on Celery beat; connectors external
 - **2.2.15** Auto-reindexation programmée [MEDIUM] - needs Celery beat; no UI
-- **3.1.6** OCR optionnel [LOW] - cannot run on this machine without the binaries
 - **3.4.2** Vector Search [MEDIUM] - which branch production takes is unproven
 - **3.4.4** Cross-encoder reranking [MEDIUM] - real model load/latency/memory not measured
 - **3.4.7** HyDE [LOW] - quality benefit never measured

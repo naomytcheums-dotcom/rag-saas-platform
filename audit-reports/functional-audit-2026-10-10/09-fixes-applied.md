@@ -1,4 +1,4 @@
-# 09 - Fixes applied on the fix branch (157 features touched)
+# 09 - Fixes applied on the fix branch (161 features touched)
 
 `01-feature-verification.csv` is untouched (state of `main` when audited). `01b-feature-verification-after-fixes.csv` adds `fix_status` and `fix_evidence`.
 
@@ -41,6 +41,7 @@
 | 2.2.12 | tests pass | frontend/components/DocumentDetails.tsx (7 vitest cases) |
 | 2.2.16 | assessment corrected; production worker still needed | the documents page already offers multi-file upload with live status (frontend/app/dashboard/documents, 3 vitest cases, see 2.2.1 to 2.2.3); what remains is a running Celery worker in production (deploy/render/render.api.yaml defines it, not applied) |
 | 3.1.5 | assessment corrected | describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run |
+| 3.1.6 | tests pass (Tesseract 5.4 with eng and fra, 17 tests run, none skipped) | tests/test_ocr.py run with the Tesseract and Poppler binaries and the French language data; the scanned-PDF path through the documents pipeline needs the S3 stack and was not rerun here |
 | 3.4.5 | tests pass | api/services/query_rewriting.py expand_with_synonyms + org settings (tests/test_p2_query_synonyms.py) |
 | 5.1.5 | tests pass | api/services/tool_budget.py cap_tool_output wired in the orchestrator (tests/test_tool_budget.py) |
 | 5.1.7 | tests pass | api/services/fallback.py run_tool_fallbacks wired in the orchestrator (tests/test_fallback.py) |
@@ -66,6 +67,7 @@
 | 10.1.3 | tests pass (UI); real provider round-trip not run | OAuth buttons on the login and register screens (same component as 1.1.5, 1.1.6) |
 | 10.1.4 | tests pass | tests/test_p2_viewer_route_matrix.py: route x role matrix checked against the real routers |
 | 10.1.9 | tests pass | tests/test_outbound_http_inventory.py: the 60 modules that call httpx directly were reviewed (hosts are constants or platform settings); the escalation webhook now goes through ssrf_safe_client (a loopback server proves it is not reached); a new unreviewed direct call fails the test |
+| 10.1.12 | tests pass (real clamd 1.5.4 in Docker); no scanner is deployed in production (CLAMAV_ENABLED defaults to off) | tests/test_clamav_real_daemon.py, 8 cases: EICAR refused, clean and 3 MB files accepted, fail closed when the scan is required and the daemon is down, infected refused even when optional, and the document upload endpoint answers 400 for EICAR and 201 for a clean file |
 | 10.1.14 | documented; provider settings not verified | docs/DECISIONS.md D12: what the application encrypts and what depends on Supabase |
 | 10.2.3 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
 | 10.2.5 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
@@ -73,6 +75,7 @@
 | 10.2.7 | tests pass | api/services/toxicity_filter.py (tests/test_p2_toxicity_filter.py), org setting toxicity_filter_enabled (default off) |
 | 10.2.8 | tests pass | detect_unsafe_tool_call wired in both orchestrator tool paths (tests/test_p2_output_guard.py) |
 | 10.2.10 | tests pass | api/services/output_guard.py redact_output / validate_output (tests/test_p2_output_guard.py), org setting output_guard_enabled (default off) |
+| 10.3.5 | tests pass (real Jaeger); no collector is deployed in production (OTEL_ENABLED defaults to off) | tests/test_tracing_real_collector.py: setup_tracing exports the spans of a real request over OTLP/HTTP and the trace is read back from a running Jaeger 1.76; found on the way that the test environment inherited the production Tempo credentials, now blanked in scripts/run_tests_local.sh |
 | 10.4.2 | decision recorded; not built | docs/DECISIONS.md D9: python3-saml behind a flag after a security review |
 | 10.4.3 | tests pass | api/routers/scim.py, scim_tokens, migration 0141 (tests/test_p2_scim.py) |
 | 10.4.4 | decision recorded | docs/DECISIONS.md D10: built-in roles plus custom roles, SCIM-provisioned |
@@ -105,7 +108,7 @@
 | 12.3.6 | tests pass | api/services/voice_usage.py, limit on outbound calls and voice-agent turns (tests/test_p2_voice_minutes.py) |
 | 13.1.1 | measured; ratchet test | scripts/type_hint_coverage.py: 69.1 % of api/ functions fully annotated; tests/test_type_hint_coverage.py stops it falling |
 | 13.1.3 | decision recorded | docs/DECISIONS.md: ruff format is the formatter (Black-compatible output); Black is not added as a second tool |
-| 13.1.4 | configured, report-only | [tool.mypy] in pyproject.toml and a non-blocking mypy workflow; the number of type errors is not yet measured |
+| 13.1.4 | measured; report-only | mypy 2.4.0 on api/: 305 errors in 110 of 707 source files (measured 2026-10-11); the workflow stays non-blocking until that number is brought down |
 | 13.1.6 | target not reached | measured about 77 % on the CircleCI subset; the 90 % target needs many more tests, not a configuration change |
 | 13.1.9 | triaged; 12 findings -> 5 left | bandit -ll: MD5 marked usedforsecurity=False, 4 false positives annotated with the reason, migrations excluded; 5 left = Hugging Face from_pretrained without a pinned revision (accepted until the model list is frozen) |
 | 13.2.4 | tests pass (12/12 in Chrome, 2026-10-11); nightly workflow not yet observed on GitHub | e2e/ Playwright: login, wrong password, register then dashboard, landing page (video, architecture, PDFs), 5 dashboard pages, documents drop zone, chat without an agent, escalations filter; run against the isolated API (SQLite) and the Next dev server in the installed Chrome. Two selector/port problems found and fixed in the harness (ambiguous role=alert; ports and the CORS origin now configurable); .github/workflows/e2e.yml also runs nightly |
@@ -113,7 +116,7 @@
 | 13.2.8 | written; not run (no paid key) | tests/llm_optin/test_real_llm.py and .github/workflows/llm-tests.yml, skipped unless RUN_REAL_LLM_TESTS=1 |
 | 13.2.10 | CI now runs the PostgreSQL integration files; RLS not enabled | backend-tests starts a pgvector PostgreSQL with all migrations; 61 PostgreSQL integration tests pass locally; RLS rollout decision in D8 |
 | 13.2.11 | validated with actionlint; workflows not run on GitHub | actionlint passes on all 8 workflows; scripts/post_deploy_smoke.py tests pass; migrate.yml is manual with a rehearsal by default |
-| 13.3.2 | configured, report-only | pyproject.toml [tool.mypy] and .github/workflows/mypy.yml (non-blocking: the existing code base is not yet type clean) |
+| 13.3.2 | measured; report-only | mypy 2.4.0 on api/: 305 errors in 110 of 707 source files (measured 2026-10-11); the workflow stays non-blocking until that number is brought down |
 | 13.3.7 | tests pass (12/12 in Chrome, 2026-10-11); nightly workflow not yet observed on GitHub | e2e/ Playwright: login, wrong password, register then dashboard, landing page (video, architecture, PDFs), 5 dashboard pages, documents drop zone, chat without an agent, escalations filter; run against the isolated API (SQLite) and the Next dev server in the installed Chrome. Two selector/port problems found and fixed in the harness (ambiguous role=alert; ports and the CORS origin now configurable); .github/workflows/e2e.yml also runs nightly |
 | 13.3.8 | validated with actionlint; workflows not run on GitHub | actionlint passes on all 8 workflows; scripts/post_deploy_smoke.py tests pass; migrate.yml is manual with a rehearsal by default |
 | 13.4.3 | written, not executed on a real platform | deploy/render, railway, fly, kubernetes, helm, terraform/{aws,gcp,azure,digitalocean} |
@@ -126,6 +129,7 @@
 | 13.4.10 | validated with the official tool; not applied to a real account or cluster | helm lint (0 failed), helm template parsed by kubeconform strict (4/4 valid), deploy/kubernetes/rag-saas.yaml kubeconform strict (7/7 valid) |
 | 13.4.11 | validated with the official tool; not applied to a real account or cluster | helm lint (0 failed), helm template parsed by kubeconform strict (4/4 valid), deploy/kubernetes/rag-saas.yaml kubeconform strict (7/7 valid) |
 | 13.4.12 | validated with the official tool; not applied to a real account or cluster | terraform validate and fmt -check pass for deploy/terraform/{aws,gcp,azure} (hashicorp/terraform 1.9, init -backend=false); the Azure module had a real error (for_each over a sensitive map) that this run found and fixed |
+| 13.5.4 | tests pass (real Jaeger); no collector is deployed in production (OTEL_ENABLED defaults to off) | tests/test_tracing_real_collector.py: setup_tracing exports the spans of a real request over OTLP/HTTP and the trace is read back from a running Jaeger 1.76; found on the way that the test environment inherited the production Tempo credentials, now blanked in scripts/run_tests_local.sh |
 | 13.5.12 | tests pass | GET /responses/{id}/trace joins retrieval, generation, checks, agent steps and citations (tests/test_p2_request_trace.py) |
 | 14.1.2 | documentation corrected | agents.md routes verified against OpenAPI; docs/architecture/OVERVIEW.md now has component, chat and ingestion diagrams; the multi-tenant line no longer claims RLS policies |
 | 14.1.11 | written | docs/guides/TROUBLESHOOTING.md |

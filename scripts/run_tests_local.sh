@@ -15,4 +15,8 @@ REDIS="${TEST_REDIS_URL:-redis://localhost:16379}"
 export CELERY_BROKER_URL="$REDIS/0" CELERY_RESULT_BACKEND="$REDIS/1" RATE_LIMIT_REDIS_URL="$REDIS/2" CACHE_REDIS_URL="" REDIS_URL=""
 export S3_ENDPOINT_URL="http://localhost:9000" S3_ACCESS_KEY_ID="minioadmin" S3_SECRET_ACCESS_KEY="minioadmin"
 export RESEND_API_KEY="re_ci_placeholder_never_a_real_key" STRIPE_SECRET_KEY="" PAYSTACK_SECRET_KEY=""
+# Hosted observability services configured in .env (Grafana Cloud Loki / Tempo, Langfuse, Sentry, alert webhook): a test that switches tracing or
+# logging on must never reach them. Found 2026-10-11: a tracing test exported a span to the production Tempo through these variables.
+export LOKI_HOST="" LOKI_USERNAME="" LOKI_PASSWORD="" TEMPO_HOST="" TEMPO_USERNAME="" TEMPO_PASSWORD=""
+export LANGFUSE_HOST="" LANGFUSE_PUBLIC_KEY="" LANGFUSE_SECRET_KEY="" SENTRY_DSN="" SECURITY_ALERT_WEBHOOK_URL="" OTEL_EXPORTER_OTLP_ENDPOINT=""
 exec python -m pytest -p no:cacheprovider "$@"
