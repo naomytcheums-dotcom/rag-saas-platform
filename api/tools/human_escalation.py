@@ -102,7 +102,13 @@ async def escalate_to_human(
         raise ValueError(f"Invalid priority: {priority!r} (expected one of {settings.HUMAN_ESCALATION_PRIORITY_LEVELS})")
 
     sla_hours = settings.ESCALATION_SLA_HOURS.get(priority)
-    sla_due_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=sla_hours) if sla_hours else None
+    if organization_id is not None:
+        # Spec 10.4.12: an organization can carry its own answer-by delays (organization setting escalation_sla_hours); a priority it leaves out keeps the platform default.
+        from api.security.organization_settings import get_org_settings
+
+        custom = (await get_org_settings(db, organization_id)).get("escalation_sla_hours") or {}
+        sla_hours = custom.get(priority, sla_hours)
+    sla_due_at =dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=sla_hours) if sla_hours else None
     escalation = Escalation(
         agent_run_id=agent_run_id, organization_id=organization_id, issue=issue, context=context, priority=priority, sla_due_at=sla_due_at,
     )
