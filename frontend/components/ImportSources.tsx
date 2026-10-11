@@ -4,17 +4,23 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 
-type Source = "url" | "sitemap" | "github" | "notion";
+type Source = "url" | "sitemap" | "github" | "github_issues" | "google_drive" | "google_docs" | "notion" | "confluence" | "onedrive";
 
 const SOURCES: { key: Source; path: string; field: string; body: (value: string) => Record<string, unknown> }[] = [
   { key: "url", path: "documents/url", field: "https://example.com/page", body: (url) => ({ url }) },
   { key: "sitemap", path: "documents/sitemap", field: "https://example.com/sitemap.xml", body: (url) => ({ url }) },
   { key: "github", path: "documents/github/repo", field: "https://github.com/owner/repo", body: (repo_url) => ({ repo_url }) },
+  { key: "github_issues", path: "documents/github/issues", field: "https://github.com/owner/repo", body: (repo_url) => ({ repo_url }) },
+  { key: "google_drive", path: "documents/google-drive", field: "Google Drive folder or file id", body: (drive_id) => ({ drive_id }) },
+  { key: "google_docs", path: "documents/google-docs", field: "Google Docs / Sheets / Slides URL or id", body: (document_url_or_id) => ({ document_url_or_id }) },
   { key: "notion", path: "documents/notion", field: "Notion page or database URL / id", body: (url_or_id) => ({ url_or_id, kind: "page" }) },
+  { key: "confluence", path: "documents/confluence", field: "Confluence page or space URL / id", body: (url_or_id) => ({ url_or_id }) },
+  { key: "onedrive", path: "documents/onedrive", field: "OneDrive folder or file id", body: (folder_id) => ({ folder_id }) },
 ];
 
-/** Specs 2.1.10, 2.1.11, 2.1.12, 2.1.16: import documents from a web page, a sitemap, a GitHub repository or Notion. The import runs in the background; the
- * documents appear in the list below with their live status. (Google Drive, Confluence and OneDrive need an OAuth connection and are API-only for now.) */
+/** Specs 2.1.10 to 2.1.18: import documents from a web page, a sitemap, GitHub (repository or issues), Google Drive, Google Docs, Notion, Confluence
+ * or OneDrive. The import runs in the background; the documents appear in the list below with their live status. The provider credentials are
+ * platform settings (not per user), so each source only needs the address or id. */
 export default function ImportSources({ orgId, onImported }: { orgId: string; onImported: () => void }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<Source>("url");

@@ -39,13 +39,16 @@ from api.models.escalation import Escalation, EscalationStatus
 from api.models.organization import OrganizationMember, OrganizationRole
 from api.models.user import User
 from api.services.tools import ToolSpec
+from api.services.url_fetching import ssrf_safe_client
 
 _RESEND_API_URL = "https://api.resend.com/emails"
 _TIMEOUT_SECONDS = 10.0
 
 
 def _client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
+    # notify_via_webhook posts to a caller-supplied URL, so every request of this module goes through the SSRF-safe client
+    # (public addresses only, checked at connection time); Resend is a public host and is unaffected.
+    return ssrf_safe_client(_TIMEOUT_SECONDS)
 
 
 async def _send_escalation_email(to_email: str, issue: str, priority: str) -> None:
