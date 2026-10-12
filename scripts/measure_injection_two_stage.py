@@ -14,6 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from local_only_guard import require_local_services  # noqa: E402
+
+require_local_services()
+
 from api.services.prompt_injection_detection import detect_prompt_injection_confirmed  # noqa: E402
 
 DATA = json.loads((Path(__file__).resolve().parents[1] / "tests" / "data" / "injection_eval_set.json").read_text(encoding="utf-8"))

@@ -19,6 +19,6 @@ export RESEND_API_KEY="re_ci_placeholder_never_a_real_key" STRIPE_SECRET_KEY="" 
 # logging on must never reach them. Found 2026-10-11: a tracing test exported a span to the production Tempo through these variables.
 export LOKI_HOST="" LOKI_USERNAME="" LOKI_PASSWORD="" TEMPO_HOST="" TEMPO_USERNAME="" TEMPO_PASSWORD=""
 # Never spend real money in tests: paid LLM / embedding / search / voice providers are blanked (opt-in tests set their own local provider).
-export ANTHROPIC_API_KEY="" OPENAI_API_KEY="" GEMINI_API_KEY="" MISTRAL_API_KEY="" OPENAI_COMPATIBLE_API_KEY="" WATSONX_API_KEY="" OPENAI_EMBEDDING_API_KEY="" VOYAGE_API_KEY="" COHERE_API_KEY="" TAVILY_API_KEY="" DEEPGRAM_API_KEY="" GOOGLE_CLOUD_TTS_API_KEY="" ELEVENLABS_API_KEY=""
+export ANTHROPIC_API_KEY="" OPENAI_API_KEY="" GEMINI_API_KEY="" MISTRAL_API_KEY="" OPENAI_COMPATIBLE_API_KEY="" WATSONX_API_KEY="" OPENAI_EMBEDDING_API_KEY="" VOYAGE_API_KEY="" COHERE_API_KEY="" TAVILY_API_KEY="" DEEPGRAM_API_KEY="" GOOGLE_CLOUD_TTS_API_KEY="" ELEVENLABS_API_KEY="" TWILIO_AUTH_TOKEN=""
 export LANGFUSE_HOST="" LANGFUSE_PUBLIC_KEY="" LANGFUSE_SECRET_KEY="" SENTRY_DSN="" SECURITY_ALERT_WEBHOOK_URL="" OTEL_EXPORTER_OTLP_ENDPOINT=""
 exec python -m pytest -p no:cacheprovider "$@"

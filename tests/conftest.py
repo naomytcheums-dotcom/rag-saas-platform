@@ -26,11 +26,15 @@ import os as _os
 
 import _remote_guard
 
-_remote = _remote_guard.find_remote_services({k: getattr(settings, k, "") for k in (*_remote_guard.URL_SETTINGS, "RESEND_API_KEY", "STRIPE_SECRET_KEY", "PAYSTACK_SECRET_KEY")})
+_remote = _remote_guard.find_remote_services(
+    {k: getattr(settings, k, "") for k in _remote_guard.GUARDED_SETTINGS},
+    allow_paid_keys=_os.environ.get("RUN_REAL_LLM_TESTS") == "1",  # only the opt-in real-LLM run may keep paid provider keys
+)
 if _remote and _os.environ.get("ALLOW_REMOTE_TEST_SERVICES") != "1":
     raise pytest.UsageError(
         "Refusing to run the test suite: " + "; ".join(_remote) + ". The tests read and delete rows. Point DATABASE_URL, DATABASE_URL_TRANSACTION, REDIS and S3 settings "
-        "at a disposable local stack (see .circleci/config.yml), or set ALLOW_REMOTE_TEST_SERVICES=1 if you are sure."
+        "at a disposable local stack (see .circleci/config.yml), blank the hosted services and paid keys (scripts/run_tests_local.sh does), "
+        "or set ALLOW_REMOTE_TEST_SERVICES=1 if you are sure."
     )
 
 from api.database import Base, get_db
