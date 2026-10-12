@@ -141,8 +141,12 @@ async def _call_litellm_embedding(model: str, texts: list[str], api_key: str | N
         # Connection errors, 5xx and 404/400 answers do not inherit from litellm's APIError: without openai.APIError here they escaped as raw
         # exceptions and the provider fallback (which only catches EmbeddingError) never moved on.
         raise EmbeddingProviderError(str(exc)) from exc
-    ordered = sorted(response.data, key=lambda item: item.index)
-    return [item.embedding for item in ordered]
+    # Providers such as Ollama come back as plain dicts, OpenAI-style providers as objects.
+    def field(item, name: str):
+        return item[name] if isinstance(item, dict) else getattr(item, name)
+
+    ordered = sorted(response.data, key=lambda item: field(item, "index"))
+    return [field(item, "embedding") for item in ordered]
 
 
 # -- Partie 4.2.1: OpenAI --------------------------------------------------

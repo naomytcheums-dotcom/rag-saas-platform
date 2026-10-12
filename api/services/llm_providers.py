@@ -170,12 +170,17 @@ def get_default_provider(org_settings: dict | None = None) -> str:
 
 
 # LiteLLM only infers the provider from bare names for OpenAI/Anthropic; the catalog offers bare names for these providers too.
-LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama/"}
+LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama_chat/"}
+# `ollama/` sends the request to /api/generate, where a streamed tool call comes back as plain text; `ollama_chat/` uses /api/chat, which returns real tool calls
+# in both modes (checked against a real server). Names stored with the old prefix are routed to the chat endpoint too.
+_LEGACY_OLLAMA_PREFIX = "ollama/"
 
 
 def to_litellm_model(provider: str, model: str) -> str:
     """The model string actually sent to LiteLLM: `gemini-2.5-pro` becomes `gemini/gemini-2.5-pro`; already-prefixed names are kept."""
     prefix = LITELLM_PROVIDER_PREFIXES.get(provider)
+    if provider == "ollama" and model.startswith(_LEGACY_OLLAMA_PREFIX):
+        model = model[len(_LEGACY_OLLAMA_PREFIX):]
     if prefix and not model.startswith(prefix):
         return f"{prefix}{model}"
     return model
