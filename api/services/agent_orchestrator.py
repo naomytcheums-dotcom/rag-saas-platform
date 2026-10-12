@@ -887,6 +887,21 @@ class AgentOrchestrator:
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
 
+        # E2E finding 2026-10-12: the guardrails of a streamed answer ran only AFTER the last token (the stream cannot take tokens back), so with the
+        # injection detector on, a planted secret had already reached the client when the violation was recorded. The question and the retrieved
+        # context are input-side checks: they run BEFORE any generation here. The post-generation check below stays for the output-side rules.
+        if real_agent_id is not None:
+            async with self._db_lock:
+                input_check = await validate_guardrails(db, real_agent_id, input, "", retrieved_context=context)
+                if not input_check["passed"]:
+                    await update_run_status(
+                        db, run.id, AgentRunStatus.failed.value, error=f"Guardrail violation: {', '.join(input_check['violations'])}",
+                    )
+                    await db.commit()
+            if not input_check["passed"]:
+                yield {"type": "error", "error": f"Guardrail violation: {', '.join(input_check['violations'])}"}
+                return
+
         # Hardening Mission, Phase 13 -- same real, pre-flight credit
         # guard as `run_agent` above (see that one's own comment for the
         # full real reasoning): a cheap, real balance check BEFORE any

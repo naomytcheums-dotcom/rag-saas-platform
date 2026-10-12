@@ -1,0 +1,67 @@
+...............................................s..................F..... [ 49%]
+...................................s.................................... [ 98%]
+..                                                                       [100%]Running teardown with pytest sessionfinish...
+
+================================== FAILURES ===================================
+_ test_deleting_an_organization_cascades_through_custom_domains_to_ssl_certificates _
+
+pg_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x0000027E1279CE30>
+
+    async def test_deleting_an_organization_cascades_through_custom_domains_to_ssl_certificates(pg_session):
+        """Partie 1.4.3: a TWO-LEVEL cascade -- organizations -> custom_domains
+        (Partie 1.4.1's FK) -> ssl_certificates (this step's own FK, to
+        custom_domains.domain rather than .id). Deleting the organization
+        must remove both, which SQLite's fast suite won't enforce either way."""
+        owner_email = _unique_email()
+        owner = User(email=owner_email, hashed_password="irrelevant")
+        pg_session.add(owner)
+        await pg_session.flush()
+    
+        organization = Organization(name="SSL Cascade Test Org", slug=f"ssl-cascade-test-{uuid.uuid4().hex[:8]}")
+        pg_session.add(organization)
+        await pg_session.flush()
+        org_id = organization.id
+        pg_session.add(OrganizationMember(organization_id=org_id, user_id=owner.id, role=OrganizationRole.owner))
+        domain_str = f"app.ssl-cascade-test-{uuid.uuid4().hex[:8]}.example"
+        pg_session.add(CustomDomain(organization_id=org_id, domain=domain_str, verification_token="irrelevant-token"))
+        await pg_session.flush()
+>       pg_session.add(SSLCertificate(domain=domain_str, key_pem_encrypted=encrypt_secret("fake-key-placeholder")))
+                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_postgres_integration.py:790: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\security\secret_encryption.py:36: in encrypt_secret
+    return _fernet().encrypt(plaintext.encode()).decode()
+           ^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _fernet() -> Fernet:
+        if not settings.SECRET_ENCRYPTION_KEY:
+>           raise SecretEncryptionNotConfiguredError(
+                "SECRET_ENCRYPTION_KEY must be set to use this feature -- generate one with: "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+E           api.security.secret_encryption.SecretEncryptionNotConfiguredError: SECRET_ENCRYPTION_KEY must be set to use this feature -- generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+api\security\secret_encryption.py:28: SecretEncryptionNotConfiguredError
+============================== warnings summary ===============================
+tests/test_connector_credentials.py: 13 warnings
+  C:\Users\NITROV15\Downloads\rag-saas-platform\.venv\Lib\site-packages\fastapi\routing.py:352: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+Test tests/test_postgres_integration.py::test_rls_policies_exist_on_staging was
+skipped. Reason: 
+('C:\\Users\\NITROV15\\rag-work\\wt-e2e\\tests\\test_postgres_integration.py', 
+146, 'Skipped: Staging-only tenant policies are not provisioned in every 
+PostgreSQL profile')
+Test 
+tests/test_pgvector_real_search.py::test_the_native_pgvector_branch_finds_the_r
+ight_passage_and_never_crosses_tenants was skipped. Reason: 
+('C:\\Users\\NITROV15\\rag-work\\wt-e2e\\tests\\test_pgvector_real_search.py', 
+90, 'Skipped: set PGVECTOR_REAL_TEST=1 (needs PostgreSQL + pgvector and the 
+embedding model)')
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_postgres_integration.py:146: Staging-only tenant policies are not provisioned in every PostgreSQL profile
+SKIPPED [1] tests\test_pgvector_real_search.py:90: set PGVECTOR_REAL_TEST=1 (needs PostgreSQL + pgvector and the embedding model)
+1 failed, 143 passed, 2 skipped, 13 warnings in 184.13s (0:03:04)

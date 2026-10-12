@@ -34,6 +34,7 @@ class AgentCreateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+    prompt_injection_detection_enabled: bool = False
     citation_required: bool = False
     citation_required_message: str | None = None
     answer_only_from_context: bool = False
@@ -65,6 +66,7 @@ class AgentUpdateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+    prompt_injection_detection_enabled: bool | None = None
     citation_required: bool | None = None
     citation_required_message: str | None = None
     answer_only_from_context: bool | None = None
@@ -99,6 +101,7 @@ class AgentResponse(BaseModel):
     allowed_domains: list | None
     max_tokens_per_response: int | None
     content_filter_level: str | None
+    prompt_injection_detection_enabled: bool = False
     citation_required: bool
     citation_required_message: str | None
     answer_only_from_context: bool
@@ -223,6 +226,7 @@ class AgentGuardrailsResponse(BaseModel):
     allowed_domains: list[str]
     max_tokens_per_response: int | None
     content_filter_level: str
+    prompt_injection_detection_enabled: bool = False
 
 
 class AgentGuardrailsUpdateRequest(BaseModel):
@@ -231,6 +235,7 @@ class AgentGuardrailsUpdateRequest(BaseModel):
     allowed_domains: list[str] | None = None
     max_tokens_per_response: int | None = None
     content_filter_level: str | None = None
+    prompt_injection_detection_enabled: bool | None = None
 
 
 class AgentLongTermMemoryResponse(BaseModel):

@@ -228,6 +228,7 @@ async def get_agent_guardrails(db: AsyncSession, agent_id: uuid.UUID) -> dict | 
         "allowed_domains": list(agent.allowed_domains or []),
         "max_tokens_per_response": agent.max_tokens_per_response,
         "content_filter_level": agent.content_filter_level or "medium",
+        "prompt_injection_detection_enabled": bool(agent.prompt_injection_detection_enabled),
     }
 
 
@@ -239,7 +240,7 @@ async def set_agent_guardrails(db: AsyncSession, agent_id: uuid.UUID, **fields) 
     if agent is None or agent.deleted_at is not None:
         return None
     validate_guardrails_config(fields)
-    for field in ("guardrails_enabled", "blocked_topics", "allowed_domains", "max_tokens_per_response", "content_filter_level"):
+    for field in ("guardrails_enabled", "blocked_topics", "allowed_domains", "max_tokens_per_response", "content_filter_level", "prompt_injection_detection_enabled"):
         if field in fields:
             setattr(agent, field, fields[field])
     await db.flush()
