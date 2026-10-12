@@ -1,4 +1,29 @@
-# full-suite-results.md — RAPPORT PARTIEL (la suite complète n'a pas encore été rejouée de bout en bout)
+# full-suite-results.md — RÉSULTAT FINAL VÉRIFIÉ (suite complète rejouée de bout en bout)
+
+Dernière mise à jour : 2026-10-12. Vocabulaire : **PASS_VERIFIED**, **FAIL_VERIFIED**, **BLOCKED_INFRASTRUCTURE**, **NOT_RUN_EXTERNAL_DEPENDENCY**, **HISTORICAL_RESULT_UNVERIFIED** (annoncé pendant la session, sortie brute perdue avec `D:`), **NOT_RUN**.
+Preuves hors dépôt : `C:\Users\NITROV15\rag-test-evidence\2026-10-11\` (`run1\`, `run2\`, `run3\`, `raw\`).
+
+## 0. Résultat final (PASS_VERIFIED) sur le commit `c161b83`
+Commande : `.\scripts\test_env\Run-IsolatedBatches.ps1 -OutDir …\run3` (pile locale 127.0.0.1, `RAG_STRICT_SKIPS=1`, worker Celery réel, Tesseract + poppler, aucune nouvelle tentative automatique). Début 08:06, fin 10:56 (2 h 50). Les 8 lots ont tous le **code de sortie 0** (`run3\progress.txt`).
+| Lot | Fichiers | Passés | Ignorés | Échecs / erreurs |
+|---|---|---|---|---|
+| B1 (`tests/backend`, `tests/docs`) | 34 | 510 | 0 | 0 |
+| B2 (`test_a`…`test_c`) | 116 | 1465 | 8 | 0 |
+| B3 (`test_d`…`test_i`) | 82 | 1191 | 4 | 0 |
+| B4 (`test_j`…`test_o`) | 54 | 638 | 3 | 0 |
+| B5 (`test_p`…`test_r`) | 110 | 1282 | 1 | 0 |
+| B6 (`test_s`…`test_z`) | 89 | 1147 | 11 | 0 |
+| B7 (attrape-tout) | 1 | 9 | 0 | 0 |
+| B8 (les 7 fichiers que la CI ignore) | 7 | 75 | 0 | 0 |
+| **Total suite principale** | 493 | **6317** | **27** | **0** |
+Les 27 ignorés sont **tous** des dépendances externes documentées (`tests/external_skip_allowlist.py`) : Stripe 4, Paystack 4, Google Drive 4, OneDrive 2, Notion 1, staging hébergé 12 (11 + `test_rls_policies_exist_on_staging`). En mode strict, tout autre skip aurait été un échec. **Ils ne sont pas comptés comme réussis.**
+**Tests réseau (`network_flaky`, désélectionnés par défaut) : 23 passés**, lancés à part (`Run-IsolatedSuite.ps1 -Network`, code 0, `raw\network-run.xml`, le 2026-10-11 après `run2` ; quota GitHub 57 requêtes restantes avant, aucun jeton). Ce passage précède mes derniers commits, qui n'ont pas touché le code qu'il exerce (extraction GitHub / import) : il n'a pas été rejoué sur `c161b83`.
+Réconciliation : 6317 + 27 + 23 = **6367** = 6348 collectés au départ + 19 tests ajoutés pendant la reprise (13 `test_live_test_runner`, 4 `test_system_log_handler_dedupe`, 1 `test_celery_worker_workflow`, 1 `test_isolated_test_runner`). Aucun test supprimé, aucune exclusion ajoutée, aucune assertion retirée.
+Réserves : (1) cette passe vérifie les tests sur **PostgreSQL 17 / Redis 7 / MinIO locaux** ; ce n'est pas la production (rôle de base, pooler, quotas). (2) Les 27 tests externes restent **non exécutés**. (3) Le premier passage de ce lot (`run1`, 6295 passés / **3 échecs** / 27 ignorés) a révélé les trois échecs corrigés ensuite (voir `test-failures.csv`, V01-V03) ; `run2` (B2, B4, B5 rejoués : 0 échec) puis `run3` confirment. (4) Aucune CI GitHub / CircleCI n'a été exécutée sur cette branche (rien poussé).
+
+---
+
+# Rapport antérieur de ce fichier (état au 2026-10-11 07:30, conservé pour la traçabilité)
 
 Dernière mise à jour : 2026-10-11 (07:30). Vocabulaire : **PASS_VERIFIED**, **FAIL_VERIFIED**, **BLOCKED_INFRASTRUCTURE**, **NOT_RUN_EXTERNAL_DEPENDENCY**, **HISTORICAL_RESULT_UNVERIFIED** (annoncé pendant la session, sortie brute perdue avec `D:`), **NOT_RUN** (réalisable, pas encore lancé).
 Aucun résultat historique n'est présenté comme vérifié. Les sorties vérifiées sont dans `C:\Users\NITROV15\rag-test-evidence\2026-10-11\raw\` (hors dépôt).

@@ -1,7 +1,8 @@
-# resume-session.md — point de reprise (état au 2026-10-11, 07:40)
+# resume-session.md — point de reprise (mis à jour le 2026-10-12 ; état de départ : 2026-10-11, 07:40)
 
 ## 1. État du dépôt (vérifié)
-- Branche `bob/auto-fix-20261010-1555`, HEAD `0c4dfcf` (contient : lanceur isolé, mode strict des skips, snapshot de prix litellm, test `system_log` corrigé, job CI PostgreSQL étendu). `git status` : seuls non suivis `FGbmsPryLaJXqu5hfC24RTZe`, `scripts/pending/`, `audit-reports/functional-audit-2026-10-10/` (autre agent) et le dossier `audit-reports/test-remediation-2026-10-10/` (ces rapports).
+- **Mise à jour 2026-10-12 : HEAD `c161b83`** (cinq commits pour cette mission : `0c4dfcf`, `691f950`, `33be591`, `a4aba73`, `c161b83`). Suite principale rejouée de bout en bout sur ce commit : **6317 passés, 27 ignorés externes, 0 échec** (`full-suite-results.md` §0).
+- Branche `bob/auto-fix-20261010-1555`, HEAD de départ `0c4dfcf` (contenait : lanceur isolé, mode strict des skips, snapshot de prix litellm, test `system_log` corrigé, job CI PostgreSQL étendu). `git status` : seuls non suivis `FGbmsPryLaJXqu5hfC24RTZe`, `scripts/pending/`, `audit-reports/functional-audit-2026-10-10/` (autre agent) et le dossier `audit-reports/test-remediation-2026-10-10/` (ces rapports).
 - Ajouts non commités à ce stade : `scripts/test_env/Run-IsolatedBatches.ps1`, `scripts/run_live_tests.py`, `tests/test_live_test_runner.py` (6 tests, **pas encore exécutés**) et les rapports.
 - `origin/main` = `78ab2b7`, 44 commits d'avance ; un seul conflit textuel prévisible (`api/services/evaluation_datasets.py`). Ne pas pousser avant d'avoir intégré `main` (voir `ci-test-matrix.md`).
 - Rien poussé, fusionné ni déployé.
@@ -40,9 +41,10 @@ Le lanceur s'arrête (code 3) si Docker, PostgreSQL, Redis ou MinIO ne réponden
 `scripts/run_live_tests.py` refuse tout fichier d'environnement situé dans le dépôt, toute clé qui n'est pas `sk_test_`/`rk_test_`, et ne transmet que les variables du fournisseur choisi ; la base reste locale. Réserve : les deux tests de webhook live contiennent un `pytest.skip("paste a real captured webhook payload…")` **inconditionnel** (`test_billing_stripe_live.py:69`, `test_billing_paystack_live.py:71`) : ils ne peuvent pas passer même avec une clé ; il faut y coller un événement réel capturé, ou les réécrire.
 
 ## 5. Ce qui reste à faire (dans l'ordre)
-1. Terminer et lire la suite par lots (`run1`), classer chaque échec (code / infrastructure / environnement), corriger ce qui vient du code, rejouer ciblé puis le lot concerné.
-2. Réexaminer : `test_inbound_webhooks`, `test_mcp_builtin_tools_security`, `test_latency_metrics`, `test_json_extraction`, `test_markdown_extraction`, `test_mcp_idor`.
-3. Lot `B8` : les 75 tests des 7 fichiers que la CI ignore.
-4. Exécuter `tests/test_live_test_runner.py` (6 tests) et l'inclure dans le lot suivant.
-5. Intégrer `main` (hors `main` : worktree temporaire), relire `ci.yml`, puis seulement proposer le push.
-6. Décision de la propriétaire : limitation de `mask_sensitive` (voir `test-failures.csv`, F05) et durcissement des skips qui masquent une erreur de préparation (`test_bugs_found_by_the_real_data_sweep.py:24` et `:103`, `docs/test_examples.py:34`).
+Fait depuis la version précédente de ce document : suite complète par lots rejouée (`run1`, puis B2/B4/B5 en `run2`, puis tout en `run3` sur `c161b83` : 0 échec) ; les trois échecs ont été reproduits, diagnostiqués et corrigés ; les groupes `test_inbound_webhooks`, `test_mcp_builtin_tools_security`, `test_json_extraction`, `test_markdown_extraction`, `test_mcp_idor` et `test_latency_metrics` passent dans `run3` (la cause de leurs erreurs dans le passage interrompu n'a jamais été lue : elle est présumée d'infrastructure, non démontrée ; seul `test_latency_metrics` avait une cause établie, un défaut du test) ; lot B8 (75 tests) passé ; `tests/test_live_test_runner.py` (13 cas) passé.
+1. Intégrer `origin/main` (44 commits d'avance ; un conflit prévisible dans `api/services/evaluation_datasets.py` ; hors de l'arbre courant, dans un worktree temporaire), relire `ci.yml` (garder le job `backend-tests` de `main`, qui n'utilise plus la vraie base, et y ajouter `backend-postgres-tests`), rejouer la suite, **puis** seulement proposer le push.
+2. Exécuter les 27 tests externes avec les accès (§4).
+3. Décisions de la propriétaire : limitation de `mask_sensitive` (`Authorization: Bearer …` et `token=valeur` non masqués ; `test-failures.csv`, F05) ; skips qui masquent une erreur de préparation (`test_bugs_found_by_the_real_data_sweep.py:24` et `:103`, `docs/test_examples.py:34`) ; deux tests live à `pytest.skip` inconditionnel ; retrait ou non des 7 exclusions `--ignore` de la CI.
+4. Vérifier côté hébergeur ce que les anciens passages de CI ont écrit dans la vraie base (comptes `pg-integration-*@example.com`, `staging-idor-*@example.invalid`) : NOT_VERIFIED.
+5. Couverture manquante, hors de cette mission : TLS réel (certificat invalide, connexion refusée) ; test d'un rôle d'exécution PostgreSQL sans contournement RLS.
+6. Si Docker se bloque de nouveau : le redémarrer à la main, ne pas boucler ; `Run-IsolatedBatches.ps1 -Only B3,B5` relance seulement certains lots.
