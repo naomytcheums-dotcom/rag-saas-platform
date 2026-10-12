@@ -155,8 +155,10 @@ jobs:
           command: python -m alembic upgrade head
       - run:
           name: Start a live Celery worker in the background (needed by tests/test_e2e_lifecycle.py's real trigger -> Redis -> worker -> task chain)
+          # --concurrency=2: without it Celery starts one prefork child per CPU the host reports (CircleCI docker containers can see the whole host),
+          # each child importing the full application. Probable cause (not proven) of the MinIO service container being killed (exit 137) in run 608.
           command: |
-            nohup python -m celery -A api.tasks.celery_app worker --loglevel=info > celery-worker.log 2>&1 &
+            nohup python -m celery -A api.tasks.celery_app worker --loglevel=info --concurrency=2 > celery-worker.log 2>&1 &
             sleep 5
           background: true
       - run:
