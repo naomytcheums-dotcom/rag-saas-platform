@@ -13,13 +13,13 @@ l'ancien code : on peut donc migrer AVANT de déployer sans rien casser.
 ```
 
 ## 0. Ce qui est en attente
-La production est déclarée en révision 0130 (non vérifiée, `docs/audit/PRODUCTION_MIGRATION_PLAN.md`). La tête du code est 0143. Il faut donc 0131 à 0143 :
+La production est déclarée en révision 0130 (non vérifiée, `docs/audit/PRODUCTION_MIGRATION_PLAN.md`). La tête du code est 0144. Il faut donc 0131 à 0144 :
 
 | Révision | Effet | Point d'attention |
 |---|---|---|
 | 0131 | active la sécurité par ligne (RLS) sur 11 tables | les autres tables l'ont déjà depuis 0014 : même comportement, risque faible |
 | 0132 | description des espaces de travail | additive |
-| 0133 | révisions du corpus BM25 (déclencheurs) | écrit des déclencheurs SQL sur `documents`, `document_chunks`, `media_assets`. **Effet mesuré en base jetable (2026-10-12)** : chaque instruction d'écriture incrémente `organizations.bm25_corpus_revision`, donc deux transactions qui écrivent pour la **même organisation** s'attendent jusqu'à la validation de la première (4 s d'attente mesurées ; 0,3 s pour une autre organisation). Une ingestion longue et concurrente d'une même organisation sera sérialisée : surveiller les verrous après la mise en service |
+| 0133 | révisions du corpus BM25 (déclencheurs) | crée des déclencheurs d'instruction sur `documents`, `document_chunks`, `media_assets` qui incrémentent `organizations.bm25_corpus_revision`. **Mesuré en base jetable (2026-10-12)** : deux transactions qui écrivent pour la même organisation s'attendaient (4 s). **Corrigé par 0144**, appliquée dans la même montée : ne pas s'arrêter à 0133 |
 | 0134 | **SSO entreprise : propriété du domaine à prouver** | une connexion SSO créée par un client doit **repasser la vérification DNS TXT** ; avant, ses utilisateurs ne passent plus par ce SSO |
 | 0135 | propriétaire des appels Twilio | colonne nullable |
 | 0136 | crée `notification_templates` | la table n'existait pas (les routes répondaient 500) |
@@ -27,6 +27,7 @@ La production est déclarée en révision 0130 (non vérifiée, `docs/audit/PROD
 | 0140-0141 | codes promo, jetons SCIM | nouvelles tables |
 | 0142 | `users.job_title` | colonne nullable |
 | 0143 | identifiants de connecteurs par organisation | nouvelle table |
+| 0144 | révision BM25 incrémentée à la validation, une fois par transaction et organisation | remplace les déclencheurs de 0133 par des déclencheurs de contrainte différés : plus d'attente entre écritures concurrentes d'une même organisation (mesuré : 0 s au lieu de 4 s), surcoût de l'ordre de 0,3 à 0,5 s pour 50 000 lignes écrites d'un coup ; retour arrière testé |
 
 ## 1. Sauvegarde (obligatoire)
 `scripts/backup.sh` sauvegarde la base **auto-hébergée** de `docker-compose.selfhosted.yml`, PAS la base de production (Supabase). Pour la production, faites un vrai `pg_dump`
@@ -35,7 +36,8 @@ ne la collez jamais dans un chat) :
 ```
 New-Item -ItemType Directory -Force backups | Out-Null
 $env:PGURL = "postgresql://postgres:<mot-de-passe>@db.<ref>.supabase.co:5432/postgres"
-docker run --rm -e PGURL -v "${PWD}ackups:/out" postgres:17 sh -c 'pg_dump "$PGURL" --no-owner --format=custom -f /out/prod_backup.dump'
+docker run --rm -e PGURL -v "${PWD}\backups:/out" postgres:17 sh -c 'pg_dump "$PGURL" --no-owner --format=custom -f /out/prod_backup.dump'
+# (corrigé le 2026-10-12 : l'ancienne ligne contenait un caractère de contrôle à la place de "\b" ; son reste, ignoré, suit) ackups:/out" postgres:17 sh -c 'pg_dump "$PGURL" --no-owner --format=custom -f /out/prod_backup.dump'
 Get-Item backups\prod_backup.dump
 ```
 Vérifiez que la taille n'est pas nulle et gardez une copie hors de la machine. (Ne redirigez pas la sortie avec `>` sous PowerShell : cela corrompt un fichier binaire.)
@@ -53,7 +55,7 @@ Les migrations en attente s'exécutent dans UNE transaction toujours annulée. S
 ```
 python scripts/migrate.py --apply
 ```
-Elle refait la répétition puis applique `alembic upgrade head`. Contrôle : `python -m alembic current` doit afficher `0143`.
+Elle refait la répétition puis applique `alembic upgrade head`. Contrôle : `python -m alembic current` doit afficher `0144`.
 
 ## 4. Variables à régler sur l'hébergeur (Render) avant le déploiement
 | Variable | Valeur | Pourquoi |
