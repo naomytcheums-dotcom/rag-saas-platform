@@ -40,8 +40,10 @@ jobs:
     # thousands of prior tests (many loading sentence-transformers,
     # CLIP, cross-encoder models) had already accumulated memory in the
     # same long-lived process. "large" doubles both CPU and RAM.
-    # xlarge (16 GB): run 599 (large, 8 GB) still had the MinIO service container OOM-killed (exit 137) in one of four containers.
-    resource_class: xlarge
+    # xlarge is NOT available on this project's CircleCI plan (run 606 of 2026-10-12: "resource-class-not-in-plan", the job never started). Back to
+    # large (8 GB): run 599 had the MinIO service container OOM-killed in one of four containers while each container ran ONE long pytest process;
+    # the chunks of 10 files below (one pytest process per chunk) are the memory fix, large + chunks was not measured before this commit.
+    resource_class: large
     parallelism: 4
     docker:
       - image: cimg/python:3.13
@@ -192,7 +194,7 @@ jobs:
 workflows:
   regression-check:
     jobs:
-      # The four xlarge containers of api-tests are expensive: dependency-bot branches are covered by GitHub's own checks and are not built here.
+      # The four large containers of api-tests are expensive: dependency-bot branches are covered by GitHub's own checks and are not built here.
       - rag-pipeline-regression:
           filters:
             branches:

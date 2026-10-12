@@ -12,6 +12,7 @@ data/telemetry.jsonl
 .claude/
 dump.rdb
 .coverage
+coverage.xml
 htmlcov/
 
 # Local observability stack (docker-compose.observability.yml) -- bind-mounted
