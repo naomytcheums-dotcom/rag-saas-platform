@@ -32,3 +32,17 @@ storage/ml_models/
 SESSION_CONTEXT.md
 /storage/
 /requirements-api.txt;C
+
+# Database dumps and local backups (a production dump was found untracked and NOT ignored on 2026-10-12), never committed.
+backups/
+*.dump
+*.sql.gz
+*.pgdump
+
+# Every local environment file (real values), except the committed templates. `.env.sandbox` and `.env.local` are covered by this.
+.env.*
+!.env.example
+!.env.*.example
+
+# Owner evidence kept outside the repository by convention (logs, database answers).
+rag-secure-evidence/
