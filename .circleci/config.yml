@@ -40,7 +40,8 @@ jobs:
     # thousands of prior tests (many loading sentence-transformers,
     # CLIP, cross-encoder models) had already accumulated memory in the
     # same long-lived process. "large" doubles both CPU and RAM.
-    resource_class: large
+    # xlarge (16 GB): run 599 (large, 8 GB) still had the MinIO service container OOM-killed (exit 137) in one of four containers.
+    resource_class: xlarge
     parallelism: 4
     docker:
       - image: cimg/python:3.13
@@ -164,13 +165,13 @@ jobs:
             # container has its own PostgreSQL / Redis / MinIO / Celery worker (service containers are per parallel container) and its own
             # process, so memory is still released between runs. A new test file is picked up automatically (the old hand-written lists
             # silently skipped every file nobody had added). Excluded as before: legacy `src/` tests that import the private `agentfixture`
-            # package, and the browser-only voice test. The 75 % coverage gate cannot be computed per container: the combined report is
+            # package, tests/test_regression.py (legacy gate, run by the rag-pipeline-regression job), and the browser-only voice test. The 75 % coverage gate cannot be computed per container: the combined report is
             # produced by the GitHub `backend-tests` job; here coverage.xml is stored per container as an artifact.
-            FILES=$(circleci tests glob "tests/**/test_*.py" | grep -v -E '^tests/test_(agent|agent_evaluation|injection_test_set|integrations|voice)\.py$' | circleci tests split --split-by=filesize)
+            FILES=$(circleci tests glob "tests/**/test_*.py" | grep -v -E '^tests/test_(agent|agent_evaluation|injection_test_set|integrations|voice|regression)\.py$' | circleci tests split --split-by=filesize)
             echo "files in this container: $(echo $FILES | wc -w)"
-            # Run this container's files in chunks of 20, one pytest process per chunk (run 596 of 2026-10-11: a single process per container let model memory
+            # Run this container's files in chunks of 10, one pytest process per chunk (run 596 of 2026-10-11: a single process per container let model memory
             # pile up until the kernel killed the MinIO service container, and every S3 test after that failed with "Could not connect to localhost:9000").
-            printf '%s\n' $FILES | split -l 20 - /tmp/chunk_
+            printf '%s\n' $FILES | split -l 10 - /tmp/chunk_
             set +e
             RC=0
             for chunk in /tmp/chunk_*; do
