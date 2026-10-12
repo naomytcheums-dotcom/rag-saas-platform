@@ -93,7 +93,7 @@ async def _prepare_public_chat(db: AsyncSession, organization_id: uuid.UUID, cre
     org_settings = await get_org_settings(db, organization_id)
     user_context = {"organization_id": str(organization_id), "created_by": str(created_by), "auth": "api_key"}
     citation_chunks = await search_with_context(
-        db, organization_id, message, top_k=5, org_settings=org_settings, user_context=user_context,
+        db, organization_id, message, org_settings=org_settings, user_context=user_context,
     )
     context = build_llm_context(citation_chunks, org_settings)
     return conversation, context, citation_chunks

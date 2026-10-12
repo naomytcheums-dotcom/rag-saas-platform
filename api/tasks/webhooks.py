@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as SyncSession
 from api.config import settings
 from api.models.webhook import Webhook, WebhookDelivery
 from api.services.outbound_http import describe_outbound_error, safe_webhook_client
-from api.services.webhooks import decrypt_webhook_secret, sign_webhook_payload
+from api.services.webhooks import decrypt_webhook_secret, sign_webhook_payload, sign_webhook_payload_v2
 from api.tasks.celery_app import celery_app
 from api.tasks._sync_engine import sync_engine as _sync_engine
 
@@ -45,6 +45,9 @@ def deliver_webhook_task(self, delivery_id: str) -> None:
         plaintext_secret = decrypt_webhook_secret(webhook)
         if plaintext_secret:
             headers["X-Webhook-Signature"] = sign_webhook_payload(delivery.payload, plaintext_secret)
+            sent_at = int(dt.datetime.now(dt.timezone.utc).timestamp())
+            headers["X-Webhook-Timestamp"] = str(sent_at)
+            headers["X-Webhook-Signature-V2"] = sign_webhook_payload_v2(delivery.payload, plaintext_secret, sent_at)
 
         try:
             with safe_webhook_client(timeout=webhook.timeout) as http:

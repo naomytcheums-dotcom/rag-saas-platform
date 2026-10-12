@@ -394,9 +394,14 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     return TXT_CONTENT_TYPE
 
 
+class StorageNotConfiguredError(EnvironmentError):
+    """E2E finding 2026-10-12: a missing S3 setting surfaced as an unhandled OSError (HTTP 500). It is now a named error that the API maps to 503 with a message that
+    names the missing variables but never a value (api/main.py)."""
+
+
 def _client():
     if not (settings.S3_DOCUMENTS_BUCKET_NAME and settings.S3_ACCESS_KEY_ID and settings.S3_SECRET_ACCESS_KEY):
-        raise EnvironmentError(
+        raise StorageNotConfiguredError(
             "S3_DOCUMENTS_BUCKET_NAME / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY are not fully set -- "
             "see .env.example for the S3 (or Cloudflare R2) variables required for document uploads."
         )

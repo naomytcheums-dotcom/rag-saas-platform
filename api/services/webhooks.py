@@ -40,6 +40,14 @@ def sign_webhook_payload(payload: dict, secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
 
 
+def sign_webhook_payload_v2(payload: dict, secret: str, timestamp: int) -> str:
+    """E2E finding 2026-10-12 (replay): the body-only signature above cannot protect a receiver against a recorded delivery being sent again. This variant signs
+    `"<timestamp>.<canonical body>"` and is sent with `X-Webhook-Timestamp`; a receiver rejects a timestamp older than its tolerance (for example 5 minutes).
+    The original header stays unchanged so existing receivers keep working."""
+    body = json.dumps(payload, sort_keys=True, default=str)
+    return hmac.new(secret.encode("utf-8"), f"{timestamp}.{body}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 async def create_webhook(
     db: AsyncSession, organization_id: uuid.UUID, name: str, url: str, events: list[str],
     headers: dict | None = None, secret: str | None = None, created_by: uuid.UUID | None = None,

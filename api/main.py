@@ -52,6 +52,7 @@ from api.security.documents import start_embedder_warmup
 from api.security.jwt import refresh_jwt_key_cache
 from api.security.rate_limit import is_redis_reachable
 from api.services.cache_service import is_redis_reachable as is_cache_redis_reachable
+from api.services.document_storage import StorageNotConfiguredError
 from api.services.mem0_service import close_all_memories
 from api.security.rbac import init_rbac
 from api.security.logging_correlation import configure_structured_logging, request_correlation_middleware
@@ -151,6 +152,15 @@ app = FastAPI(
     title=settings.OPENAPI_TITLE, description=settings.OPENAPI_DESCRIPTION, version=settings.OPENAPI_VERSION,
     contact=_openapi_contact, license_info=_openapi_license, lifespan=lifespan,
 )
+
+
+@app.exception_handler(StorageNotConfiguredError)
+async def _storage_not_configured_handler(request, exc: StorageNotConfiguredError):
+    """A missing object-storage setting is a deployment problem, not a server bug: 503 with a message that names the missing variables (never a value)."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 
 # Required by Authlib's Starlette OAuth client (api/routers/oauth.py) to
 # hold the `state`/`nonce` between the /authorize redirect and /callback.
