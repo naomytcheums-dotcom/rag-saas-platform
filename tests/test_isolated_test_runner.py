@@ -82,3 +82,10 @@ def test_only_documented_external_dependencies_may_stay_skipped():
     ):
         assert external_category(local_reason) is None, local_reason
     assert len(EXTERNAL_SKIPS) == 5
+
+
+def test_the_model_hub_is_only_switched_off_on_request():
+    assert "HF_HUB_OFFLINE" not in build_test_environment(_parent())
+    env = build_test_environment(_parent(RAG_TEST_HF_OFFLINE="1"))
+    assert env["HF_HUB_OFFLINE"] == "1" and env["TRANSFORMERS_OFFLINE"] == "1"
+    assert "HF_HUB_OFFLINE" not in build_test_environment(_parent(RAG_TEST_HF_OFFLINE="0"))

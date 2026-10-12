@@ -71,6 +71,11 @@ def build_test_environment(parent: Mapping[str, str]) -> dict[str, str]:
     if extra_dirs:
         env["PATH"] = os.pathsep.join([*extra_dirs, env.get("PATH", "")])
     tessdata = (parent.get("RAG_TEST_TESSDATA") or "").strip()
+    if (parent.get("RAG_TEST_HF_OFFLINE") or "").strip() == "1":
+        # Models already in the local cache are loaded without any request to the hub: no network, no shared HTTP client state. A model
+        # that is NOT cached then fails loudly instead of being downloaded during a test.
+        env["HF_HUB_OFFLINE"] = "1"
+        env["TRANSFORMERS_OFFLINE"] = "1"
     if tessdata:
         if not Path(tessdata).is_dir():
             raise IsolationRefused("RAG_TEST_TESSDATA is not an existing directory")
