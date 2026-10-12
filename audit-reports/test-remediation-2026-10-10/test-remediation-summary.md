@@ -1,8 +1,19 @@
 # test-remediation-summary.md
 
-État au 2026-10-11, 07:45. Branche `bob/auto-fix-20261010-1555`, HEAD `0c4dfcf`. **Les critères d'acceptation ne sont pas atteints** : la suite complète n'a pas été rejouée de bout en bout sur l'environnement isolé. Une exécution par lots est en cours (voir §6) ; rien dans ce document n'en anticipe le résultat.
+État au 2026-10-12. Branche `bob/auto-fix-20261010-1555`, HEAD testé `c161b83` (dépôt propre hors fichiers non suivis préexistants). Rien poussé, fusionné ni déployé.
 
-## 1. Ce qui est vérifié maintenant (sortie conservée)
+## 0. Verdict
+**Atteint localement, sur PostgreSQL 17 / Redis 7 / MinIO jetables : 0 échec inexpliqué, 0 erreur, 0 test ignoré sans justification.** Suite principale sur `c161b83` : **6317 passés, 27 ignorés (tous dépendances externes documentées), 0 échec** ; 23 tests réseau passés à part ; 75 tests des 7 fichiers que la CI ignore passés (lot B8). 6367 tests au total, égal à la collecte (6348) + 19 tests ajoutés.
+**Non atteint, et non maquillé :** les 27 tests externes (Stripe, Paystack, Google Drive, OneDrive, Notion, staging hébergé) restent **NOT_RUN_EXTERNAL_DEPENDENCY**. Aucune CI GitHub ni CircleCI n'a tourné sur cette branche. Détail : `full-suite-results.md` §0.
+
+### Trois échecs trouvés pendant la reprise (tous traités, `test-failures.csv` V01-V03)
+| Test | Nature | Cause | Statut |
+|---|---|---|---|
+| `test_postgres_system_log_handler::…masked…` | **défaut applicatif** | `SystemLogHandler` dédoublonnait par `id(record)` : adresses recyclées, des lignes WARNING+ distinctes n'étaient jamais écrites (194 sur 200 dans une boucle) | corrigé (`33be591`), 4 tests de régression dont 2 échouaient avant |
+| `test_latency_metrics::…percentile…` | défaut du test | le chargement à froid du modèle d'embedding dépasse le budget de 60 s : 0 échantillon (reproduit 2 fois) | corrigé (`a4aba73`) ; l'autre symptôme vu dans le lot (client HTTP HuggingFace fermé) **non reproduit**, déclencheur inconnu |
+| `test_celery_worker_workflow::…[2]` | défaut du test | le contrôle « sans démarrer Celery » démarrait un vrai `celery beat` ; le mécanisme est **prouvé** (test déterministe), mais l'échec observé **n'a pas été reproduit** (2 rejeux verts) et sa cause exacte n'est pas démontrée | corrigé (`a4aba73`) |
+
+## 1. Ce qui est vérifié (sortie conservée)
 | Contrôle | Résultat |
 |---|---|
 | Dépôt : branche, HEAD, `0c4dfcf` présent et ancêtre de HEAD, aucune modification depuis, fichiers du lanceur / tests / liste des dépendances externes présents | oui (`git`) |
@@ -29,20 +40,23 @@ Tous les passages antérieurs (premier passage 6037/3/194/23, rejeu des 27 fichi
 9. **Couverture TLS absente** : les tests SSL exercent la tâche de renouvellement, pas une poignée de main TLS réelle (certificat invalide, connexion refusée) : manque de couverture, pas un résultat.
 10. **Docker s'est bloqué** pendant le dernier passage ; cause non établie ; mémoire libre faible observée (237 à 645 Mo sur 16 Go). Le lecteur `D:` a disparu, avec toutes les sorties brutes.
 
-## 4. Statut de chaque catégorie (état actuel)
+## 4. Statut de chaque catégorie (état final)
 | Catégorie | Nombre | Statut |
 |---|---|---|
-| Collectés | 6348 | vérifié |
-| Passés, vérifiés | 84 (+ lots en cours) | PASS_VERIFIED |
-| Passés, annoncés (anciens passages) | voir §2 | HISTORICAL_RESULT_UNVERIFIED |
-| Échecs du passage interrompu | 16 échecs + 136 erreurs | HISTORICAL ; 1 échec réel déjà corrigé (F04) ; le reste BLOCKED_INFRASTRUCTURE probable ou à réexaminer, **cause non lue** |
-| Ignorés par dépendance externe | 27 | NOT_RUN_EXTERNAL_DEPENDENCY (commande reproductible : `resume-session.md`) |
-| Désélectionnés `network_flaky` | 23 | identifiants vérifiés ; passage historique non vérifié |
-| Exclus par `--ignore` | 75 | NOT_RUN (réalisables, lot `B8`) |
-| Ignorés réalisables en local (infrastructure) | ~170 des 194 | à rejouer dans la suite par lots |
+| Collectés au départ | 6348 | vérifié |
+| Passés, suite principale sur `c161b83` | 6317 | PASS_VERIFIED (`run3`) |
+| Échecs / erreurs sur `c161b83` | 0 | PASS_VERIFIED |
+| Ignorés par dépendance externe | 27 | NOT_RUN_EXTERNAL_DEPENDENCY (commande : `resume-session.md`) |
+| `network_flaky` (désélectionnés par défaut) | 23 | PASS_VERIFIED (exécutés à part) |
+| Exclus par `--ignore` en CI | 75 | PASS_VERIFIED (lot B8) ; la CI continue de les exclure |
+| Anciens passages (6037, 194, 136 erreurs…) | voir `full-suite-results.md` §3 | HISTORICAL_RESULT_UNVERIFIED, remplacés par `run3` |
+| Ignorés réalisables en local (infrastructure) | ~170 des 194 | tous exécutés et passés (`test-skips.csv`, 18 groupes PASS_VERIFIED) |
 
-## 5. Fichiers créés ou modifiés depuis `0c4dfcf` (non commités)
-`audit-reports/test-remediation-2026-10-10/*` (rapports), `scripts/test_env/Run-IsolatedBatches.ps1`, `scripts/run_live_tests.py`, `tests/test_live_test_runner.py`. Aucun test existant modifié, aucune assertion retirée, aucune exclusion ajoutée.
+## 5. Changements de code et de test (commités en local, rien poussé)
+`0c4dfcf` lanceur isolé, mode strict, prix litellm, test des logs ; `691f950` rapports partiels ; `33be591` correctif `SystemLogHandler` ; `a4aba73` deux tests rendus indépendants de l'environnement ; `c161b83` lanceurs par lots et live ; rapports finaux non encore commités. Aucun test supprimé, aucune assertion retirée ou affaiblie, aucune exclusion ajoutée ; les deux seuls changements de test existants sont un budget de temps (`LATENCY_TIMEOUT`) et le remplacement de la vraie commande `celery` par une fonction dans l'aide du test.
 
-## 6. Exécution en cours
-`Run-IsolatedBatches.ps1` : 8 lots (B1 à B6 par ordre alphabétique des fichiers, B7 attrape-tout, B8 les 7 fichiers `--ignore`), un pytest à la fois, `--junitxml` par lot, sans nouvelle tentative automatique. Démarrée le 2026-10-11 à 07:29. Avancement : `…\run1\progress.txt`. Résultat à intégrer à `full-suite-results.md` à la fin.
+## 6. Reste à faire (hors de portée locale)
+1. Intégrer `origin/main` (44 commits d'avance, un conflit prévisible dans `api/services/evaluation_datasets.py`) **avant** tout push ; relire `ci.yml` (la version de ma branche contient l'ancien job qui visait la vraie base).
+2. Exécuter les 27 tests externes avec les accès : `resume-session.md` §4.
+3. Décision : limitation de `mask_sensitive` (`Authorization: Bearer …` non masqué) ; skips qui masquent une erreur de préparation ; deux tests live à `pytest.skip` inconditionnel.
+4. Vérifier côté hébergeur ce que les anciens passages de CI ont écrit dans la vraie base (NOT_VERIFIED).
