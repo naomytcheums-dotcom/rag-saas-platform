@@ -43,6 +43,9 @@ async def test_measure_latency_returns_a_real_percentile_distribution(monkeypatc
     monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setattr(settings, "LATENCY_WARMUP_RUNS", 1)
     monkeypatch.setattr(settings, "LATENCY_MEASUREMENT_RUNS", 2)
+    # The warm-up run also pays the one-off load of the real local embedding model (tens of seconds on a cold or loaded machine). The
+    # default 60 s LATENCY_TIMEOUT would then expire before any measured run and report sample_size 0: the budget is not what is tested here.
+    monkeypatch.setattr(settings, "LATENCY_TIMEOUT", 600.0)
     monkeypatch.setattr("api.services.evaluation_results.search_with_context", AsyncMock(return_value=[]))
     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("An answer.")))
 
