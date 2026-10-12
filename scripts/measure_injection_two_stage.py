@@ -19,7 +19,22 @@ from api.services.prompt_injection_detection import detect_prompt_injection_conf
 DATA = json.loads((Path(__file__).resolve().parents[1] / "tests" / "data" / "injection_eval_set.json").read_text(encoding="utf-8"))
 
 
+def warm_up_model() -> None:
+    """A model that is not loaded takes minutes to load on CPU, far above the second-opinion timeout: load it once and keep it for 30 minutes."""
+    import os
+
+    import httpx
+
+    model = os.environ.get("PROMPT_INJECTION_CONFIRM_MODEL")
+    base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    if os.environ.get("PROMPT_INJECTION_CONFIRM_PROVIDER") == "ollama" and model:
+        t = time.time()
+        httpx.post(f"{base}/api/generate", json={"model": model, "prompt": "ping", "stream": False, "keep_alive": "30m", "options": {"num_predict": 1}}, timeout=1800)
+        print(f"model {model} loaded in {time.time() - t:.0f}s")
+
+
 async def main() -> None:
+    warm_up_model()
     started = time.time()
     rows = []
     for kind in ("attacks", "benign"):

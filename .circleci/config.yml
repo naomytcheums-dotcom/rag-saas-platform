@@ -168,7 +168,19 @@ jobs:
             # produced by the GitHub `backend-tests` job; here coverage.xml is stored per container as an artifact.
             FILES=$(circleci tests glob "tests/**/test_*.py" | grep -v -E '^tests/test_(agent|agent_evaluation|injection_test_set|integrations|voice)\.py$' | circleci tests split --split-by=filesize)
             echo "files in this container: $(echo $FILES | wc -w)"
-            pytest -p no:cacheprovider -q -rfE --cov=api --cov-report=xml:coverage.xml $FILES
+            # Run this container's files in chunks of 20, one pytest process per chunk (run 596 of 2026-10-11: a single process per container let model memory
+            # pile up until the kernel killed the MinIO service container, and every S3 test after that failed with "Could not connect to localhost:9000").
+            printf '%s
+' $FILES | split -l 20 - /tmp/chunk_
+            set +e
+            RC=0
+            for chunk in /tmp/chunk_*; do
+              echo "--- $(basename $chunk): $(wc -l < $chunk) files ---"
+              pytest -p no:cacheprovider -q -rfE --cov=api --cov-append --cov-report=xml:coverage.xml $(cat $chunk)
+              CODE=$?
+              if [ "$CODE" -ne 0 ] && [ "$CODE" -ne 5 ]; then RC=1; fi
+            done
+            exit $RC
       - run:
           name: Show the Celery worker's log if anything failed
           command: cat celery-worker.log || true
