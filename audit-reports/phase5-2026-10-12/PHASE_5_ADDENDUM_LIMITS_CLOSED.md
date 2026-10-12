@@ -35,3 +35,13 @@ Labels: **EXÉCUTÉ** = run and observed, **ÉCRIT** = written but not run, **OW
 3. `scripts/scrub_system_logs.py` dry-run then `--apply` on the real database.
 4. Rotate every secret that CI runs #1–#194 could read (repository secret `DATABASE_URL` and others), scope the secrets to an environment, shorten Grafana/Loki retention.
 5. Decide the merge of PR #25 once the production revision is confirmed.
+
+## Résultats exécutés après l'addendum (2026-10-12)
+
+| Mesure | Résultat |
+|---|---|
+| Suite complète locale (PostgreSQL, Redis, MinIO jetables, `scripts/local_test_stack.ps1 test`) | **6 524 passés, 75 ignorés, 14 échecs** en 6 h 15. 9 échecs = `test_celery_worker_workflow` (exige Bash Linux, inapplicable sous Windows, passe sur GitHub Actions). 5 échecs = DNS transitoire (sitemaps, `/discord/send`) : **rejoués, 9 passés** |
+| **Couverture mesurée de `api/`** | **85 %** (49 442 instructions, 7 239 non couvertes) : pas 90 %. `scripts/local_test_stack.ps1` la reproduit |
+| GitHub Actions sur `1f26ec6` | `backend-tests`, `backend-security`, `build-backend`, `frontend-checks`, `build-frontend` : **succès** ; `mypy` et `bandit` (non bloquants) : succès/échec sans effet |
+| CircleCI | `rag-pipeline-regression` succès ; `api-tests` : build 606 **échoué** (`xlarge` absent du plan), 608 **échoué** (MinIO tué, exit 137, 3 conteneurs sur 4), 610 **succès** après retour à `large` + worker Celery limité à 2 processus. Cause du 137 : probable, non prouvée |
+| Vercel `erto98udjbe` | un échec transitoire sur `aa4d26f`, succès sur `1f26ec6` |
