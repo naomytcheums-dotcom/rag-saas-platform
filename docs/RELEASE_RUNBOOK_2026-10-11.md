@@ -19,7 +19,7 @@ La production est déclarée en révision 0130 (non vérifiée, `docs/audit/PROD
 |---|---|---|
 | 0131 | active la sécurité par ligne (RLS) sur 11 tables | les autres tables l'ont déjà depuis 0014 : même comportement, risque faible |
 | 0132 | description des espaces de travail | additive |
-| 0133 | révisions du corpus BM25 (déclencheurs) | écrit des déclencheurs SQL : à regarder dans la répétition |
+| 0133 | révisions du corpus BM25 (déclencheurs) | écrit des déclencheurs SQL sur `documents`, `document_chunks`, `media_assets`. **Effet mesuré en base jetable (2026-10-12)** : chaque instruction d'écriture incrémente `organizations.bm25_corpus_revision`, donc deux transactions qui écrivent pour la **même organisation** s'attendent jusqu'à la validation de la première (4 s d'attente mesurées ; 0,3 s pour une autre organisation). Une ingestion longue et concurrente d'une même organisation sera sérialisée : surveiller les verrous après la mise en service |
 | 0134 | **SSO entreprise : propriété du domaine à prouver** | une connexion SSO créée par un client doit **repasser la vérification DNS TXT** ; avant, ses utilisateurs ne passent plus par ce SSO |
 | 0135 | propriétaire des appels Twilio | colonne nullable |
 | 0136 | crée `notification_templates` | la table n'existait pas (les routes répondaient 500) |
