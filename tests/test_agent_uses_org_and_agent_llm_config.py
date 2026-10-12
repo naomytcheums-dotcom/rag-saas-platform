@@ -45,7 +45,7 @@ async def test_run_agent_uses_the_organization_llm_settings(monkeypatch, db_sess
 
     assert run.status == "completed", run.error
     kwargs = mock.call_args.kwargs
-    assert kwargs["model"].startswith("ollama/") and "qwen2.5:7b" in kwargs["model"]
+    assert kwargs["model"].startswith("ollama") and "qwen2.5:7b" in kwargs["model"]
     assert kwargs["temperature"] == 0.1
 
 
