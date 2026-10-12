@@ -363,6 +363,9 @@ def validate_document_upload(content: bytes, filename: str = "") -> str:
     JSON/XML/EPUB do not)."""
     if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
         raise ValueError(f"file exceeds the {MAX_DOCUMENT_UPLOAD_BYTES // (1024 * 1024)}MB limit")
+    if not content.strip():
+        # An empty (or whitespace-only) file used to be accepted, stored, and ended "completed" with zero chunks: a document that can never be found.
+        raise ValueError("file is empty")
     if _is_real_pdf(content):
         return "application/pdf"
     if _is_real_docx(content):
