@@ -13,13 +13,28 @@ failing later with a confusing AttributeError the first time a route uses
 one, so a misconfigured deployment is caught at process startup.
 """
 
+import ipaddress
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _is_private_or_internal_host(host: str) -> bool:
+    """True for a host that is not reachable from the public internet (see Settings._a_public_redis_must_use_tls_and_a_password)."""
+    if not host or "." not in host and ":" not in host:
+        return True  # empty, or a single-label service name (docker, Kubernetes)
+    if host.endswith((".local", ".localhost", ".internal", ".svc", ".cluster.local")):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback or address.is_link_local
 
 
 class Settings(BaseSettings):
@@ -1986,6 +2001,31 @@ class Settings(BaseSettings):
                 f"ACCOUNT_PURGE_DELAY_DAYS ({self.ACCOUNT_PURGE_DELAY_DAYS}) -- the reminder is "
                 "meant to fire partway through the grace window, not immediately."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _a_public_redis_must_use_tls_and_a_password(self) -> "Settings":
+        """Phase 5 of the 2026-10-12 security audit: Celery messages (task arguments, results), rate-limit counters and cached answers travel through Redis.
+        A broker reached over the public internet without TLS or without a password exposes every one of them, and whoever can write to the queue can run any
+        task. Refused at startup (the previous deployment keeps serving: a failed start does not take the site down). Private networks are exempt: a
+        single-label host (docker / Kubernetes service name), `.local` / `.internal` / `.svc` names and private or loopback addresses.
+        ALLOW_INSECURE_BROKER=1 overrides it on purpose."""
+        if os.environ.get("ALLOW_INSECURE_BROKER") == "1":
+            return self
+        problems = []
+        for name in ("CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "RATE_LIMIT_REDIS_URL", "CACHE_REDIS_URL"):
+            url = str(getattr(self, name, "") or "")
+            if not url.startswith(("redis://", "rediss://", "rediss+")):
+                continue
+            parsed = urlparse(url)
+            if _is_private_or_internal_host((parsed.hostname or "").lower()):
+                continue
+            if parsed.scheme != "rediss":
+                problems.append(f"{name} reaches a public Redis host without TLS (use rediss://)")
+            elif not parsed.password:
+                problems.append(f"{name} reaches a public Redis host without a password")
+        if problems:
+            raise ValueError("; ".join(problems) + ". Set ALLOW_INSECURE_BROKER=1 only if you accept that on purpose.")
         return self
 
     @model_validator(mode="after")

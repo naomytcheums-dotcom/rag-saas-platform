@@ -192,5 +192,12 @@ jobs:
 workflows:
   regression-check:
     jobs:
-      - rag-pipeline-regression
-      - api-tests
+      # The four xlarge containers of api-tests are expensive: dependency-bot branches are covered by GitHub's own checks and are not built here.
+      - rag-pipeline-regression:
+          filters:
+            branches:
+              ignore: /dependabot\/.*/
+      - api-tests:
+          filters:
+            branches:
+              ignore: /dependabot\/.*/

@@ -1,0 +1,78 @@
+file,line,model,function,verdict,worst_chain_inner_to_outer
+api/routers/conversations.py,414,ConversationMessage,get_message_edit_history_endpoint,guarded,api/routers/conversations.py::get_message_edit_history_endpoint
+api/routers/feedback.py,34,ConversationMessage,_get_owned_message,guarded,api/routers/feedback.py::_get_owned_message
+api/security/conversations.py,99,Conversation,add_message,guarded,api/security/conversations.py::add_message
+api/security/conversations.py,109,Conversation,get_conversation,guarded,api/security/conversations.py::get_conversation
+api/security/conversations.py,146,Conversation,update_conversation_title,guarded,api/security/conversations.py::update_conversation_title
+api/security/conversations.py,160,Conversation,archive_conversation,guarded,api/security/conversations.py::archive_conversation
+api/security/conversations.py,175,Conversation,delete_conversation,NO_CALLERS_FOUND,api/security/conversations.py::delete_conversation
+api/security/documents.py,803,Document,reindex_document,TASK_TRUSTS_ID,api/security/documents.py::reindex_document <- api/security/reindex_schedules.py::run_scheduled_reindexes <- api/tasks/reindex_schedule.py::_check_scheduled_reindexes_async <- api/tasks/reindex_schedule.py::check_scheduled_reindexes_task
+api/security/documents.py,1218,Document,process_url_document,TASK_TRUSTS_ID,api/security/documents.py::process_url_document <- api/tasks/url_import.py::_fetch_and_process_url_async <- api/tasks/url_import.py::fetch_and_process_url_task
+api/security/documents.py,3038,Document,import_and_process_zip_archive,guarded,api/security/documents.py::import_and_process_zip_archive
+api/security/documents.py,3132,Document,get_document_progress,guarded,api/security/documents.py::get_document_progress
+api/security/documents.py,3244,Document,process_document,TASK_TRUSTS_ID,api/security/documents.py::process_document <- api/security/documents.py::reindex_document <- api/security/reindex_schedules.py::run_scheduled_reindexes <- api/tasks/reindex_schedule.py::_check_scheduled_reindexes_async <- api/tasks/reindex_schedule.py::check_scheduled_reindexes_task
+api/security/document_versions.py,38,Document,create_document_version,guarded,api/security/document_versions.py::create_document_version
+api/security/workflows.py,88,Workflow,update_workflow,guarded,api/security/workflows.py::update_workflow
+api/security/workflows.py,165,Workflow,delete_workflow,guarded,api/security/workflows.py::delete_workflow
+api/services/benchmark_versions.py,139,EvaluationDataset,rollback_to_version,guarded,api/services/benchmark_versions.py::rollback_to_version
+api/services/citation_chunk.py,75,DocumentChunk,get_chunk_content,NO_CALLERS_FOUND,api/services/citation_chunk.py::get_chunk_content
+api/services/citation_chunk.py,87,DocumentChunk,enrich_citation_with_chunk,guarded,api/services/citation_chunk.py::enrich_citation_with_chunk
+api/services/citation_documents.py,31,Document,get_document_info,guarded,api/services/citation_documents.py::get_document_info
+api/services/citation_location.py,83,DocumentChunk,enrich_citation_with_location,guarded,api/services/citation_location.py::enrich_citation_with_location
+api/services/citation_passage.py,89,DocumentChunk,enrich_citation_with_passage,guarded,api/services/citation_passage.py::enrich_citation_with_passage
+api/services/citation_url.py,86,Document,enrich_citation_with_url,guarded,api/services/citation_url.py::enrich_citation_with_url
+api/services/conversation_management.py,191,Conversation,delete_conversation,NO_CALLERS_FOUND,api/services/conversation_management.py::delete_conversation
+api/services/conversation_management.py,201,Conversation,restore_conversation,guarded,api/services/conversation_management.py::restore_conversation
+api/services/conversation_management.py,214,Conversation,permanently_delete_conversation,guarded,api/services/conversation_management.py::permanently_delete_conversation
+api/services/conversation_sharing.py,37,Conversation,create_share_link,guarded,api/services/conversation_sharing.py::create_share_link
+api/services/conversation_sharing.py,66,Conversation,get_shared_conversation,UNGUARDED_ENDPOINT,api/services/conversation_sharing.py::get_shared_conversation <- api/routers/conversation_shares.py::get_shared_conversation_endpoint
+api/services/conversation_sharing.py,94,Conversation,list_share_links,guarded,api/services/conversation_sharing.py::list_share_links
+api/services/evaluation_datasets.py,59,EvaluationDataset,get_dataset,TASK_TRUSTS_ID,api/services/evaluation_datasets.py::get_dataset <- api/services/fine_tuning.py::submit_job <- api/tasks/fine_tuning.py::_submit_fine_tuning_job_async <- api/tasks/fine_tuning.py::submit_fine_tuning_job
+api/services/evaluation_jobs.py,87,EvaluationJob,run_evaluation_job,TASK_TRUSTS_ID,api/services/evaluation_jobs.py::run_evaluation_job <- api/services/deployment_evaluations.py::run_deployment_evaluation <- api/tasks/deployment_evaluations.py::_run_deployment_evaluation_async <- api/tasks/deployment_evaluations.py::run_deployment_evaluation_task
+api/services/evaluation_jobs.py,217,EvaluationJob,get_evaluation_job,NO_CALLERS_FOUND,api/services/evaluation_jobs.py::get_evaluation_job
+api/services/evaluation_jobs.py,277,EvaluationJob,cancel_evaluation_job,guarded,api/services/evaluation_jobs.py::cancel_evaluation_job
+api/services/evaluation_results.py,250,EvaluationQuestion,extend_evaluation_metrics,guarded,api/services/evaluation_results.py::extend_evaluation_metrics
+api/services/fine_tuning.py,288,EvaluationDataset,evaluate_model,TASK_TRUSTS_ID,api/services/fine_tuning.py::evaluate_model <- api/tasks/fine_tuning.py::_evaluate_fine_tuned_model_async <- api/tasks/fine_tuning.py::evaluate_fine_tuned_model
+api/services/ground_truth_answers.py,44,EvaluationQuestion,set_ground_truth,NO_CALLERS_FOUND,api/services/ground_truth_answers.py::set_ground_truth
+api/services/ground_truth_answers.py,68,EvaluationQuestion,get_ground_truth,NO_CALLERS_FOUND,api/services/ground_truth_answers.py::get_ground_truth <- api/services/ground_truth_answers.py::validate_answer
+api/services/ground_truth_documents.py,52,EvaluationQuestion,set_ground_truth_documents,NO_CALLERS_FOUND,api/services/ground_truth_documents.py::set_ground_truth_documents
+api/services/ground_truth_documents.py,66,EvaluationQuestion,get_ground_truth_documents,NO_CALLERS_FOUND,api/services/ground_truth_documents.py::get_ground_truth_documents <- api/services/ground_truth_documents.py::evaluate_retrieval
+api/services/latency_metrics.py,114,EvaluationQuestion,_dataset_latency_samples,NO_CALLERS_FOUND,api/services/latency_metrics.py::_dataset_latency_samples <- api/services/latency_metrics.py::get_latency_summary
+api/services/manual_evaluations.py,121,EvaluationQuestion,get_manual_evaluation_stats,guarded,api/services/manual_evaluations.py::get_manual_evaluation_stats
+api/services/message_actions.py,83,ConversationMessage,_find_preceding_user_message,guarded,api/services/message_actions.py::_find_preceding_user_message
+api/services/message_actions.py,104,ConversationMessage,_find_assistant_reply_after,NO_CALLERS_FOUND,api/services/message_actions.py::_find_assistant_reply_after <- api/services/message_actions.py::is_retryable
+api/services/message_actions.py,121,ConversationMessage,get_original_message,NO_CALLERS_FOUND,api/services/message_actions.py::get_original_message
+api/services/message_actions.py,138,ConversationMessage,save_regeneration_history,NO_CALLERS_FOUND,api/services/message_actions.py::save_regeneration_history
+api/services/message_actions.py,153,ConversationMessage,regenerate_response,guarded,api/services/message_actions.py::regenerate_response
+api/services/message_actions.py,195,ConversationMessage,edit_question,guarded,api/services/message_actions.py::edit_question
+api/services/message_actions.py,215,ConversationMessage,update_message_content,NO_CALLERS_FOUND,api/services/message_actions.py::update_message_content
+api/services/message_actions.py,266,ConversationMessage,get_retry_count,guarded,api/services/message_actions.py::get_retry_count
+api/services/message_actions.py,272,ConversationMessage,increment_retry_count,NO_CALLERS_FOUND,api/services/message_actions.py::increment_retry_count
+api/services/message_actions.py,295,ConversationMessage,retry_message,guarded,api/services/message_actions.py::retry_message
+api/services/organization_api_keys.py,126,OrganizationAPIKey,update_api_key,guarded,api/services/organization_api_keys.py::update_api_key
+api/services/organization_api_keys.py,186,OrganizationAPIKey,schedule_key_rotation,guarded,api/services/organization_api_keys.py::schedule_key_rotation
+api/services/organization_api_keys.py,198,OrganizationAPIKey,execute_scheduled_rotation,NO_CALLERS_FOUND,api/services/organization_api_keys.py::execute_scheduled_rotation
+api/services/organization_api_keys.py,235,OrganizationAPIKey,set_key_expiration,guarded,api/services/organization_api_keys.py::set_key_expiration
+api/services/organization_api_keys.py,244,OrganizationAPIKey,remove_key_expiration,guarded,api/services/organization_api_keys.py::remove_key_expiration
+api/services/organization_api_keys.py,253,OrganizationAPIKey,extend_key_expiration,NO_CALLERS_FOUND,api/services/organization_api_keys.py::extend_key_expiration
+api/services/organization_api_keys.py,300,OrganizationAPIKey,set_rate_limit,guarded,api/services/organization_api_keys.py::set_rate_limit
+api/services/organization_api_keys.py,357,OrganizationAPIKey,set_quota,guarded,api/services/organization_api_keys.py::set_quota
+api/services/organization_api_keys.py,427,OrganizationAPIKey,reset_quota,NO_CALLERS_FOUND,api/services/organization_api_keys.py::reset_quota
+api/services/rag_provenance.py,59,Document,get_response_provenance,NO_CALLERS_FOUND,api/services/rag_provenance.py::get_response_provenance
+api/services/regression_detection.py,79,EvaluationJob,detect_regressions,guarded,api/services/regression_detection.py::detect_regressions
+api/services/regression_detection.py,80,EvaluationJob,detect_regressions,guarded,api/services/regression_detection.py::detect_regressions
+api/services/regression_detection.py,111,EvaluationJob,get_regressions,guarded,api/services/regression_detection.py::get_regressions
+api/services/regression_detection.py,114,EvaluationJob,get_regressions,guarded,api/services/regression_detection.py::get_regressions
+api/services/regression_detection.py,124,EvaluationJob,get_regression_summary,guarded,api/services/regression_detection.py::get_regression_summary
+api/services/retrieval_metrics.py,109,EvaluationQuestion,get_dataset_result_metrics,NO_CALLERS_FOUND,api/services/retrieval_metrics.py::get_dataset_result_metrics <- api/services/retrieval_metrics.py::summarize_metric <- api/services/answer_quality_metrics.py::get_faithfulness_summary
+api/services/retrieval_pipeline.py,281,Document,fetch_organization_chunks,guarded,api/services/retrieval_pipeline.py::fetch_organization_chunks
+api/services/retrieval_pipeline.py,511,Document,_pgvector_rank_chunks,guarded,api/services/retrieval_pipeline.py::_pgvector_rank_chunks
+api/services/source_consistency.py,119,Document,_temporal_consistency,guarded,api/services/source_consistency.py::_temporal_consistency
+api/services/suggested_questions.py,123,ConversationMessage,generate_follow_up_questions,guarded,api/services/suggested_questions.py::generate_follow_up_questions
+api/services/workflow_engine.py,281,Workflow,execute_workflow_run,TASK_TRUSTS_ID,api/services/workflow_engine.py::execute_workflow_run <- api/tasks/workflows.py::_run_workflow_async <- api/tasks/workflows.py::run_workflow_task
+api/services/workflow_engine.py,316,Workflow,resume_workflow_run,TASK_TRUSTS_ID,api/services/workflow_engine.py::resume_workflow_run <- api/tasks/workflows.py::_resume_workflow_async <- api/tasks/workflows.py::resume_workflow_task
+api/services/workflow_versions.py,40,Workflow,create_workflow_version,guarded,api/services/workflow_versions.py::create_workflow_version
+api/services/workflow_versions.py,77,Workflow,restore_workflow_version,guarded,api/services/workflow_versions.py::restore_workflow_version
+api/tasks/document_modification_check.py,44,Document,_check_modified_documents_async,TASK_TRUSTS_ID,api/tasks/document_modification_check.py::_check_modified_documents_async <- api/tasks/document_modification_check.py::check_modified_documents_task
+api/tasks/workflows.py,58,WorkflowRun,_run_workflow_async,TASK_TRUSTS_ID,api/tasks/workflows.py::_run_workflow_async <- api/tasks/workflows.py::run_workflow_task
+api/tasks/workflows.py,95,WorkflowRun,_resume_workflow_async,TASK_TRUSTS_ID,api/tasks/workflows.py::_resume_workflow_async <- api/tasks/workflows.py::resume_workflow_task

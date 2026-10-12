@@ -110,6 +110,7 @@ SCRIPTS_THAT_TARGET_SOMETHING_ELSE = {
     "dev_isolated_server.py": "refuses to start unless everything is local (its own check, throw-away SQLite)",
     "retrieval_benchmark.py": "portable path on a temporary SQLite file",
     "retrieval_benchmark_pg.py": "has its own target rules (staging database by default, --allow-main plus emptiness check)",
+    "scrub_system_logs.py": "cleans the database the owner points it at, on purpose: dry run by default, --apply needs the exact database name",
     "staging_journeys.py": "live journeys against staging by design (--execute and .env.staging)",
 }
 _API_IMPORT = re.compile(r"^\s*(?:from|import) api(?:\.|\s)", re.MULTILINE)

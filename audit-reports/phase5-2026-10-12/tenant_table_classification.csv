@@ -1,0 +1,183 @@
+table,class,path_to_an_organization
+ab_test_assignments,INDIRECT,ab_test_assignments -> ab_tests
+ab_test_results,INDIRECT,ab_test_results -> ab_tests
+ab_tests,DIRECT,
+account_restore_tokens,USER_SCOPED,users
+acme_accounts,GLOBAL,
+agent_api_keys,INDIRECT,agent_api_keys -> agents
+agent_collaborations,INDIRECT,agent_collaborations -> autonomous_agents
+agent_long_term_memory_items,INDIRECT,agent_long_term_memory_items -> agents
+agent_memories,INDIRECT,agent_memories -> autonomous_agents
+agent_memory_items,GLOBAL,
+agent_plans,INDIRECT,agent_plans -> autonomous_agents
+agent_runs,DIRECT,
+agent_sessions,USER_SCOPED,users
+agent_steps,INDIRECT,agent_steps -> agent_plans -> autonomous_agents
+agent_traces,INDIRECT,agent_traces -> agent_runs
+agents,DIRECT,
+airbyte_connections,DIRECT,
+alert_channels,DIRECT,
+alert_history,INDIRECT,alert_history -> alert_rules
+alert_rules,DIRECT,
+analytics_aggregates,DIRECT,
+analytics_dashboards,DIRECT,
+analytics_events,DIRECT,
+audit_logs,DIRECT,
+audit_logs_archive,DIRECT,
+autonomous_agents,DIRECT,
+batch_job_items,INDIRECT,batch_job_items -> batch_jobs
+batch_jobs,DIRECT,
+benchmark_versions,INDIRECT,benchmark_versions -> evaluation_datasets
+call_records,DIRECT,
+citations,INDIRECT,citations -> documents
+comparison_jobs,INDIRECT,comparison_jobs -> evaluation_datasets
+connector_credentials,DIRECT,
+consent_reactivation_tokens,USER_SCOPED,users
+consent_records,USER_SCOPED,users
+conversation_messages,INDIRECT,conversation_messages -> conversations
+conversation_shares,INDIRECT,conversation_shares -> conversations
+conversations,DIRECT,
+coupon_redemptions,DIRECT,
+coupons,USER_SCOPED,users
+credit_transactions,DIRECT,
+credits,DIRECT,
+custom_domains,DIRECT,
+custom_roles,DIRECT,
+custom_tools,DIRECT,
+data_breaches,DIRECT,
+data_requests,USER_SCOPED,users
+deployment_evaluations,INDIRECT,deployment_evaluations -> agents
+discord_integrations,DIRECT,
+discord_messages,INDIRECT,discord_messages -> conversations
+document_audit_logs,INDIRECT,document_audit_logs -> documents
+document_chunks,DIRECT,
+document_entities,INDIRECT,document_entities -> documents
+document_images,INDIRECT,document_images -> documents
+document_keywords,INDIRECT,document_keywords -> documents
+document_tag_assignments,INDIRECT,document_tag_assignments -> document_tags
+document_tags,DIRECT,
+document_versions,INDIRECT,document_versions -> documents
+documents,DIRECT,
+email_verification_tokens,USER_SCOPED,users
+encryption_audit,USER_SCOPED,users
+encryption_key_records,GLOBAL,
+enterprise_sso_accounts,USER_SCOPED,users
+enterprise_sso_connections,USER_SCOPED,users
+escalation_notes,INDIRECT,escalation_notes -> escalations
+escalations,DIRECT,
+evaluation_datasets,DIRECT,
+evaluation_failures,INDIRECT,evaluation_failures -> evaluation_jobs -> agents
+evaluation_jobs,INDIRECT,evaluation_jobs -> agents
+evaluation_questions,INDIRECT,evaluation_questions -> evaluation_datasets
+evaluation_results,INDIRECT,evaluation_results -> agents
+external_sources,DIRECT,
+fine_tuned_models,DIRECT,
+fine_tuning_datasets,DIRECT,
+fine_tuning_evaluations,INDIRECT,fine_tuning_evaluations -> evaluation_datasets
+fine_tuning_jobs,DIRECT,
+flight_recordings,DIRECT,
+follow_up_questions,INDIRECT,follow_up_questions -> conversation_messages -> conversations
+human_approvals,DIRECT,
+incidents,DIRECT,
+integration_connections,DIRECT,
+integration_logs,INDIRECT,integration_logs -> integration_connections
+integration_mappings,INDIRECT,integration_mappings -> integration_connections
+invitations,DIRECT,
+invoice_lines,INDIRECT,invoice_lines -> invoices
+invoices,DIRECT,
+jwt_signing_keys,GLOBAL,
+key_rotation_history,INDIRECT,key_rotation_history -> organization_api_keys
+licenses,DIRECT,
+llm_fallbacks,USER_SCOPED,users
+manual_evaluations,INDIRECT,manual_evaluations -> agents
+mcp_server_configs,DIRECT,
+mcp_tool_cache,INDIRECT,mcp_tool_cache -> mcp_server_configs
+media_assets,DIRECT,
+media_frames,INDIRECT,media_frames -> media_assets
+media_transcripts,INDIRECT,media_transcripts -> media_assets
+message_edit_history,INDIRECT,message_edit_history -> conversation_messages -> conversations
+message_feedback,INDIRECT,message_feedback -> conversation_messages -> conversations
+notification_preferences,DIRECT,
+notification_templates,DIRECT,
+notifications,DIRECT,
+oauth_accounts,USER_SCOPED,users
+organization_api_keys,DIRECT,
+organization_branding,DIRECT,
+organization_llm_configs,DIRECT,
+organization_members,DIRECT,
+organization_quotas,DIRECT,
+organization_settings,DIRECT,
+organization_usage,DIRECT,
+organization_usage_details,DIRECT,
+organizations,ORG_ROOT,
+partner_commissions,INDIRECT,partner_commissions -> resellers
+password_history,USER_SCOPED,users
+password_reset_tokens,USER_SCOPED,users
+payment_customers,DIRECT,
+payment_events,GLOBAL,
+permission_groups,GLOBAL,
+permissions,GLOBAL,
+plans,GLOBAL,
+plugin_executions,DIRECT,
+plugin_installations,DIRECT,
+plugin_reviews,DIRECT,
+plugin_versions,INDIRECT,plugin_versions -> plugins
+plugins,DIRECT,
+question_set_items,INDIRECT,question_set_items -> evaluation_questions -> evaluation_datasets
+question_sets,INDIRECT,question_sets -> evaluation_datasets
+rag_experiments,DIRECT,
+regeneration_history,INDIRECT,regeneration_history -> conversation_messages -> conversations
+regression_detections,INDIRECT,regression_detections -> evaluation_jobs -> agents
+regression_thresholds,DIRECT,
+reindex_schedules,DIRECT,
+resellers,DIRECT,
+resource_permissions,DIRECT,
+responses,DIRECT,
+retrieval_diagnostics,DIRECT,
+revoked_access_tokens,USER_SCOPED,users
+role_permissions,INDIRECT,role_permissions -> custom_roles
+sandbox_environments,DIRECT,
+scim_tokens,DIRECT,
+security_alerts,DIRECT,
+security_policies,DIRECT,
+security_scans,DIRECT,
+sessions,USER_SCOPED,users
+slack_integrations,DIRECT,
+slack_messages,INDIRECT,slack_messages -> conversations
+sms_messages,DIRECT,
+ssl_certificates,INDIRECT,ssl_certificates -> custom_domains
+sub_clients,DIRECT,
+subscriptions,DIRECT,
+support_ticket_responses,INDIRECT,support_ticket_responses -> support_tickets
+support_tickets,DIRECT,
+system_logs,GLOBAL,
+task_plans,GLOBAL,
+task_steps,GLOBAL,
+team_members,INDIRECT,team_members -> teams
+teams,DIRECT,
+teams_integrations,DIRECT,
+teams_messages,INDIRECT,teams_messages -> teams_integrations
+tool_budgets,USER_SCOPED,users
+tool_fallbacks,USER_SCOPED,users
+tool_permissions,DIRECT,
+tool_timeout_overrides,USER_SCOPED,users
+two_factor_lockout_recovery_tokens,USER_SCOPED,users
+two_factor_recovery_codes,USER_SCOPED,users
+usage_alerts,DIRECT,
+user_custom_roles,INDIRECT,user_custom_roles -> custom_roles
+users,GLOBAL,
+voice_messages,INDIRECT,voice_messages -> conversations
+voice_settings,USER_SCOPED,users
+vulnerabilities,INDIRECT,vulnerabilities -> security_scans
+webauthn_credentials,USER_SCOPED,users
+webhook_deliveries,INDIRECT,webhook_deliveries -> webhooks
+webhooks,DIRECT,
+widget_configs,DIRECT,
+widget_suggested_questions,INDIRECT,widget_suggested_questions -> widget_configs
+workflow_human_inputs,INDIRECT,workflow_human_inputs -> workflow_runs -> workflows
+workflow_node_executions,INDIRECT,workflow_node_executions -> workflow_runs -> workflows
+workflow_runs,INDIRECT,workflow_runs -> workflows
+workflow_triggers,INDIRECT,workflow_triggers -> workflows
+workflow_versions,INDIRECT,workflow_versions -> workflows
+workflows,DIRECT,
+workspaces,DIRECT,

@@ -97,6 +97,43 @@ def test_a_broken_logging_call_still_behaves_as_before(masking_factory, monkeypa
     logger.info("only one placeholder %s %s", "a")
 
 
+# ---- value-based masking: the secrets this process is configured with, whatever their shape and surroundings ----
+
+
+@pytest.fixture
+def configured_secrets(monkeypatch):
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "Zq8-Unusual.Shape/Of+A=Signing~Key-12345")
+    monkeypatch.setattr(settings, "METRICS_AUTH_TOKEN", "m3trics-t0ken-without-any-prefix")
+    monkeypatch.setattr(settings, "DATABASE_URL", "postgresql+asyncpg://app:P%40ss-Strange-9@db.example.com:5432/x")
+    monkeypatch.setattr(settings, "SUPPORT_EMAIL", "support@example.com")  # not a secret: must stay readable
+    lc.reset_configured_secrets()
+    yield
+    monkeypatch.undo()
+    lc.reset_configured_secrets()
+
+
+def test_a_configured_secret_is_masked_wherever_it_appears_whatever_its_shape(configured_secrets):
+    for secret in ("Zq8-Unusual.Shape/Of+A=Signing~Key-12345", "m3trics-t0ken-without-any-prefix", "P@ss-Strange-9", "P%40ss-Strange-9"):
+        masked = lc.mask_sensitive(f"unexpected failure: {secret} was rejected")
+        assert secret not in masked and "unexpected failure" in masked
+
+
+def test_non_secret_settings_stay_readable(configured_secrets):
+    assert lc.mask_sensitive("mail from support@example.com sent") == "mail from support@example.com sent"
+
+
+def test_a_configured_secret_inside_an_exception_never_reaches_a_handler(masking_factory, configured_secrets):
+    logger, buffer = _logger_with_buffer()
+    try:
+        raise RuntimeError("bad signature for Zq8-Unusual.Shape/Of+A=Signing~Key-12345")
+    except RuntimeError:
+        logger.exception("verification failed")
+    assert "Zq8-Unusual.Shape/Of+A=Signing~Key-12345" not in buffer.getvalue()
+    assert "verification failed" in buffer.getvalue()
+
+
 def test_the_celery_worker_installs_the_masking_on_its_own(monkeypatch):
     from api.tasks import celery_app
 
