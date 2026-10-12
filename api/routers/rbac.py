@@ -171,7 +171,11 @@ async def remove_role_from_user_endpoint(
     org_id: uuid.UUID, user_id: uuid.UUID, role_id: uuid.UUID,
     _caller: OrganizationMember = Depends(require_permission("members:manage")), db: AsyncSession = Depends(get_db),
 ):
-    await remove_role_from_user(db, user_id=user_id, role_id=role_id)
+    await get_organization_member_or_404(db, org_id, user_id)
+    try:
+        await remove_role_from_user(db, user_id=user_id, role_id=role_id, organization_id=org_id)
+    except RoleNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()
 
 

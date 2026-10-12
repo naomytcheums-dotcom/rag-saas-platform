@@ -230,12 +230,16 @@ async def list_vulnerabilities(db: AsyncSession, organization_id: uuid.UUID | No
     return list((await db.scalars(query.order_by(Vulnerability.created_at.desc()))).all())
 
 
-async def get_vulnerability(db: AsyncSession, vuln_id: uuid.UUID) -> Vulnerability | None:
-    return await db.get(Vulnerability, vuln_id)
+async def get_vulnerability(db: AsyncSession, vuln_id: uuid.UUID, organization_id: uuid.UUID | None = None) -> Vulnerability | None:
+    """`organization_id`, when given, restricts the lookup to the vulnerabilities of that organization's scans (another organization's: not found)."""
+    query = select(Vulnerability).where(Vulnerability.id == vuln_id)
+    if organization_id is not None:
+        query = query.join(SecurityScan, SecurityScan.id == Vulnerability.scan_id).where(SecurityScan.organization_id == organization_id)
+    return await db.scalar(query)
 
 
-async def update_vulnerability_status(db: AsyncSession, vuln_id: uuid.UUID, status_value: VulnerabilityStatus) -> Vulnerability | None:
-    vuln = await db.get(Vulnerability, vuln_id)
+async def update_vulnerability_status(db: AsyncSession, vuln_id: uuid.UUID, status_value: VulnerabilityStatus, organization_id: uuid.UUID | None = None) -> Vulnerability | None:
+    vuln = await get_vulnerability(db, vuln_id, organization_id)
     if vuln is None:
         return None
     vuln.status = status_value
@@ -248,11 +252,11 @@ async def get_security_alerts(db: AsyncSession, organization_id: uuid.UUID | Non
     return list((await db.scalars(select(SecurityAlert).where(*filters, SecurityAlert.dismissed_at.is_(None)).order_by(SecurityAlert.created_at.desc()))).all())
 
 
-async def dismiss_alert(db: AsyncSession, alert_id: uuid.UUID, user_id: uuid.UUID) -> SecurityAlert | None:
+async def dismiss_alert(db: AsyncSession, alert_id: uuid.UUID, user_id: uuid.UUID, organization_id: uuid.UUID | None = None) -> SecurityAlert | None:
     import datetime as dt
 
     alert = await db.get(SecurityAlert, alert_id)
-    if alert is None:
+    if alert is None or (organization_id is not None and alert.organization_id != organization_id):
         return None
     alert.dismissed_at = dt.datetime.now(dt.timezone.utc)
     alert.dismissed_by = user_id

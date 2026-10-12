@@ -137,9 +137,13 @@ async def update_api_key(db: AsyncSession, key_id: uuid.UUID, *, name: str | Non
     return row
 
 
-async def revoke_api_key(db: AsyncSession, key_id: uuid.UUID) -> bool:
+async def revoke_api_key(db: AsyncSession, key_id: uuid.UUID, organization_id: uuid.UUID | None = None) -> bool:
+    """`organization_id`, when given, binds the key to that organization: a key of another organization is reported as not found (a route that authorizes the
+    caller on ONE organization must never revoke the key of ANOTHER one)."""
     row = await db.get(OrganizationAPIKey, key_id)
     if row is None or row.revoked_at is not None:
+        return False
+    if organization_id is not None and row.organization_id != organization_id:
         return False
     row.revoked_at = dt.datetime.now(dt.timezone.utc)
     await db.flush()

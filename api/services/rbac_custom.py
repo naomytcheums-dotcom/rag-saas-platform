@@ -174,7 +174,11 @@ async def assign_role_to_user(db: AsyncSession, *, user_id: uuid.UUID, role_id: 
     return assignment
 
 
-async def remove_role_from_user(db: AsyncSession, *, user_id: uuid.UUID, role_id: uuid.UUID) -> None:
+async def remove_role_from_user(db: AsyncSession, *, user_id: uuid.UUID, role_id: uuid.UUID, organization_id: uuid.UUID | None = None) -> None:
+    """`organization_id`, when given, requires the role to belong to that organization (RoleNotFoundError otherwise), like every other function of this module:
+    a route that authorizes the caller on ONE organization must not touch the role assignments of ANOTHER one."""
+    if organization_id is not None:
+        await get_custom_role_or_404(db, role_id, organization_id)
     row = await db.scalar(
         select(UserCustomRole).where(UserCustomRole.user_id == user_id, UserCustomRole.role_id == role_id)
     )
