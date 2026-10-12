@@ -1,20 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 
-type Source = "url" | "sitemap" | "github" | "notion";
+type Source = "url" | "sitemap" | "github" | "github_issues" | "google_drive" | "google_docs" | "notion" | "confluence" | "onedrive";
 
 const SOURCES: { key: Source; path: string; field: string; body: (value: string) => Record<string, unknown> }[] = [
   { key: "url", path: "documents/url", field: "https://example.com/page", body: (url) => ({ url }) },
   { key: "sitemap", path: "documents/sitemap", field: "https://example.com/sitemap.xml", body: (url) => ({ url }) },
   { key: "github", path: "documents/github/repo", field: "https://github.com/owner/repo", body: (repo_url) => ({ repo_url }) },
+  { key: "github_issues", path: "documents/github/issues", field: "https://github.com/owner/repo", body: (repo_url) => ({ repo_url }) },
+  { key: "google_drive", path: "documents/google-drive", field: "Google Drive folder or file id", body: (drive_id) => ({ drive_id }) },
+  { key: "google_docs", path: "documents/google-docs", field: "Google Docs / Sheets / Slides URL or id", body: (document_url_or_id) => ({ document_url_or_id }) },
   { key: "notion", path: "documents/notion", field: "Notion page or database URL / id", body: (url_or_id) => ({ url_or_id, kind: "page" }) },
+  { key: "confluence", path: "documents/confluence", field: "Confluence page or space URL / id", body: (url_or_id) => ({ url_or_id }) },
+  { key: "onedrive", path: "documents/onedrive", field: "OneDrive folder or file id", body: (folder_id) => ({ folder_id }) },
 ];
 
-/** Specs 2.1.10, 2.1.11, 2.1.12, 2.1.16: import documents from a web page, a sitemap, a GitHub repository or Notion. The import runs in the background; the
- * documents appear in the list below with their live status. (Google Drive, Confluence and OneDrive need an OAuth connection and are API-only for now.) */
+/** Specs 2.1.10 to 2.1.18: import documents from a web page, a sitemap, GitHub (repository or issues), Google Drive, Google Docs, Notion, Confluence
+ * or OneDrive. The import runs in the background; the documents appear in the list below with their live status. The provider credentials are
+ * platform settings (not per user), so each source only needs the address or id. */
 export default function ImportSources({ orgId, onImported }: { orgId: string; onImported: () => void }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<Source>("url");
@@ -22,12 +29,14 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsConnection, setNeedsConnection] = useState(false);
   const current = SOURCES.find((s) => s.key === source) ?? SOURCES[0];
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setNeedsConnection(false);
     setMessage(null);
     try {
       await api.post(`/organizations/${orgId}/${current.path}`, current.body(value.trim()));
@@ -35,7 +44,13 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
       setValue("");
       onImported();
     } catch (err) {
-      setError(err instanceof ApiError ? String(err.detail) : t("documents.import_error"));
+      // The server refuses (403) an organization that never connected the service: send the user to the screen where its own credentials are given.
+      if (err instanceof ApiError && err.status === 403 && String(err.detail).includes("has not connected")) {
+        setNeedsConnection(true);
+        setError(t("documents.import_not_connected"));
+      } else {
+        setError(err instanceof ApiError ? String(err.detail) : t("documents.import_error"));
+      }
     } finally {
       setBusy(false);
     }
@@ -59,7 +74,12 @@ export default function ImportSources({ orgId, onImported }: { orgId: string; on
         <button type="submit" disabled={busy || !value.trim()} className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white disabled:opacity-50">{t("documents.import_button")}</button>
       </div>
       {message && <p role="status" className="mt-2 text-xs text-foreground-muted">{message}</p>}
-      {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+          {needsConnection && <> <Link href="/dashboard/settings/connectors" className="underline">{t("documents.import_connect_link")}</Link></>}
+        </p>
+      )}
     </form>
   );
 }

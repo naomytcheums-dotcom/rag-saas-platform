@@ -4,7 +4,7 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 from api.config import settings
 from api.security.organization_settings import is_valid_timezone
@@ -33,6 +33,7 @@ class OrganizationSettingsResponse(BaseModel):
     output_guard_mask_pii: bool = True
     conversation_retention_days: int | None = None
     voice_minutes_per_month: int | None = None
+    escalation_sla_hours: dict[str, int] | None = None
     adaptive_routing_enabled: bool
     cost_budget_per_request: float | None
     # Phase 4, Étape 1 (correctif config parent_child) -- only ever read
@@ -118,6 +119,9 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     output_guard_mask_pii: bool | None = None
     voice_minutes_per_month: int | None = Field(default=None, ge=0, le=10_000_000, description="Monthly voice minutes allowed (calls and voice messages)")
     conversation_retention_days: int | None = Field(default=None, ge=1, le=3650, description="Delete conversations after this many days without activity")
+    escalation_sla_hours: dict[str, StrictInt] | None = Field(  # strict: pydantic would otherwise turn `true` into 1 hour
+        default=None, description="Answer-by delay in hours per escalation priority (critical, high, medium, low), 1 to 720; priorities left out keep the platform default",
+    )
     adaptive_routing_enabled: bool | None = None
     cost_budget_per_request: float | None = Field(default=None, ge=0.0)
     # Phase 4, Étape 1 (correctif config parent_child) -- same real
@@ -200,6 +204,19 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     # convention as every other field in this schema.
     daily_credit_limit: int | None = Field(default=None, ge=0)
     monthly_credit_limit: int | None = Field(default=None, ge=0)
+
+    @field_validator("escalation_sla_hours")
+    @classmethod
+    def _check_escalation_sla_hours(cls, value):
+        if value is None:
+            return value
+        allowed = {"critical", "high", "medium", "low"}
+        unknown = set(value) - allowed
+        if unknown:
+            raise ValueError(f"unknown priorities {sorted(unknown)}; expected some of {sorted(allowed)}")
+        if any(isinstance(hours, bool) or not 1 <= hours <= 720 for hours in value.values()):
+            raise ValueError("hours must be whole numbers from 1 to 720")
+        return value
 
     @field_validator("timezone")
     @classmethod

@@ -282,7 +282,7 @@ async def test_trigger_security_login_new_device_fires_in_app_only(client, db_se
     with patch("api.services.email._send"):
         await client.post("/auth/register", json=register_payload)
 
-    with patch("api.services.email._send"), patch("api.services.notifications._publish_realtime", new_callable=AsyncMock) as mock_publish, patch("api.tasks.notifications.send_notification_email_task.delay") as mock_delay:
+    with patch("api.services.email._send"), patch("api.services.notifications._publish_realtime", new_callable=AsyncMock), patch("api.tasks.notifications.send_notification_email_task.delay") as mock_delay:
         # A distinct User-Agent from registration's own session forces
         # is_new_device=True (api/security/sessions.py's own check
         # matches BOTH device_info and ip_address to a prior session).

@@ -1,0 +1,629 @@
+# Python modules (generated: first line of each module docstring)
+
+## api/routers/ (107 files)
+
+- `api/routers/a2a.py` (168 lines): Hardening Mission (§15) -- the real HTTP surface for A2A (Agent2Agent):
+- `api/routers/ab_tests.py` (213 lines): Partie 7.3.10 -- production A/B testing endpoints. Partie 21 adds the
+- `api/routers/account.py` (603 lines): 1.1.10 soft-delete, 1.1.11 RGPD export, 1.1.12 consent withdrawal,
+- `api/routers/admin_dashboard.py` (172 lines): Partie 11.1/11.5/11.6 -- global platform stats, system health/
+- `api/routers/admin_organizations.py` (131 lines): Partie 11.2 -- platform-admin organization management. Every
+- `api/routers/admin_subscriptions.py` (314 lines): Partie 11.4 -- platform-admin subscription/plan management. See
+- `api/routers/admin_users.py` (63 lines): Etape 1.2.1 -- Super Admin. The first genuinely superadmin-exclusive
+- `api/routers/admin_users_management.py` (167 lines): Partie 11.3 -- platform-admin user management. Kept in its own
+- `api/routers/agent_api_keys.py` (82 lines): Partie 5.3.10 -- agent API key management (Manager+) and the one real,
+- `api/routers/agent_factory.py` (104 lines): Hardening Mission (§14) -- HTTP surface of the Factory
+- `api/routers/agent_traces.py` (67 lines): Partie 5.1.14 -- reading a real agent run's own per-step traces.
+- `api/routers/agents.py` (516 lines): Partie 5.3.1 -- real agent CRUD + status transitions. Create/list are
+- `api/routers/analytics.py` (201 lines): Partie 20 -- advanced analytics endpoints.
+- `api/routers/api_versioning.py` (31 lines): Partie 9.2.8 -- API versioning. Real, public (no auth needed to ask
+- `api/routers/audit.py` (329 lines): Audit findings 19/20 -- read access to the audit log
+- `api/routers/auth.py` (409 lines): Core authentication endpoints: 1.1.1 register, 1.1.2 login/logout,
+- `api/routers/autonomous_agents.py` (202 lines): Partie 23 -- autonomous agent endpoints. Org-scoped list/create
+- `api/routers/batch_jobs.py` (127 lines): Partie 2.2.16 -- creating, listing, and controlling batch jobs. Three
+- `api/routers/benchmark_versions.py` (82 lines): Partie 7.1.6 -- real benchmark-version endpoints. `POST/GET
+- `api/routers/billing.py` (643 lines): Partie 12 -- billing. Two real deviations from the literal spec's flat
+- `api/routers/chat_integrations_discord.py` (129 lines): Partie 9.4.3 -- Discord integration endpoints.
+- `api/routers/chat_integrations_slack.py` (121 lines): Partie 9.4.1 -- Slack integration endpoints.
+- `api/routers/chat_integrations_teams.py` (95 lines): Partie 9.4.2 -- Microsoft Teams integration endpoints.
+- `api/routers/chat_stream.py` (128 lines): Partie 8.1.1 -- real-time agent response streaming (Server-Sent
+- `api/routers/citations.py` (164 lines): Partie 6.1.1 -- real citation read endpoints. None of the 3 literal
+- `api/routers/comparison_jobs.py` (184 lines): Partie 7.3.4/7.3.5/7.3.6/7.3.7 -- model/retriever/reranker/prompt
+- `api/routers/compliance.py` (160 lines): Partie 10.4 -- GDPR/CCPA rights requests, per-category consent, breach
+- `api/routers/connectors.py` (116 lines): Per-organization credentials for the importers and CRM connectors (docs/DECISIONS.md D17).
+- `api/routers/conversation_shares.py` (38 lines): Partie 8.1.15 -- the two real, top-level `/share/{token}` routes
+- `api/routers/conversations.py` (448 lines): Partie 5.1.12 -- creating, reading, and managing real, persistent
+- `api/routers/coupons.py` (145 lines): Spec 12.1.4 -- promo codes. Superadmin creates and lists them (`/admin/coupons`); an organization owner/admin redeems one
+- `api/routers/crm.py` (818 lines): CRM import endpoints -- expose the Salesforce/HubSpot/Jira/Zendesk/
+- `api/routers/custom_domains.py` (199 lines): Partie 1.4.1 -- registering, listing, deleting, and verifying an
+- `api/routers/custom_tools.py` (94 lines): Partie 5.2.10 -- real custom-tool management + execution. Create/list
+- `api/routers/deployment_evaluations.py` (68 lines): Partie 7.3.8 -- auto-eval before deployment endpoints. Manager+
+- `api/routers/documents.py` (1151 lines): Partie 2.1.1/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15 -- uploading,
+- `api/routers/documents_sync.py` (49 lines): Fire-and-forget document reindex -- no Celery worker needed.
+- `api/routers/email_domains.py` (80 lines): Partie 1.4.5 -- verifying a custom domain for email sending (DKIM +
+- `api/routers/encryption.py` (48 lines): Partie 10.3 -- encryption status/rotation/testing. Global (platform-
+- `api/routers/enterprise_sso.py` (314 lines): Audit finding 27 -- enterprise SSO via generic OIDC (Azure AD, Okta, or
+- `api/routers/escalations.py` (153 lines): Spec 15.1 -- human escalation tickets: list, filter, assign, change priority/status, resolve and annotate.
+- `api/routers/evaluation_comparisons.py` (44 lines): Partie 7.3 -- multi-model comparison and A/B-test endpoints, scoped by
+- `api/routers/evaluation_datasets.py` (165 lines): Partie 7.1.1 -- real dataset/question management endpoints. The 2
+- `api/routers/evaluation_jobs.py` (129 lines): Partie 7.3.1 -- automatic evaluation job endpoints. Every real route
+- `api/routers/evaluation_results.py` (73 lines): Partie 7.2.1 -- real evaluation-run endpoints. Every real route
+- `api/routers/external_sources.py` (140 lines): Partie 2.2.14 -- managing and triggering sync for an organization's own
+- `api/routers/feedback.py` (102 lines): Partie 8.1.9 -- 👍/👎 feedback on individual conversation messages.
+- `api/routers/fine_tuning.py` (197 lines): Partie 24 -- fine-tuning endpoints. Org-scoped list/create routes
+- `api/routers/human_approval.py` (93 lines): Partie 5.1.10 -- reviewing and deciding real human-approval requests.
+- `api/routers/i18n.py` (45 lines): Partie 8.1.19 -- Multi-langue UI (i18n) endpoints. `GET /i18n/*` are
+- `api/routers/insights.py` (90 lines): Specs 11.2.x and 15.2.x -- usage insights for the organization's staff (manager role): most asked / failed questions, question clusters,
+- `api/routers/integrations_universal.py` (273 lines): Partie 15.1/15.2/15.3 -- universal inbound integrations + Airbyte.
+- `api/routers/invitations.py` (262 lines): Partie 1.3.4 -- email-based organization invitations. See
+- `api/routers/manual_evaluations.py` (97 lines): Partie 7.3.2 -- manual (human) evaluation endpoints. Member+
+- `api/routers/mcp_server.py` (190 lines): Phase 5, Étape 9 -- this platform's own MCP SERVER role: exposes OUR
+- `api/routers/mcp_servers.py` (198 lines): Phase 5, Étape 9 -- real CRUD + discovery/call for this org's own
+- `api/routers/media.py` (224 lines): Partie 22 -- multi-modal media endpoints. Org-scoped upload/list
+- `api/routers/notification_center.py` (110 lines): Phase 5, Étape 4 -- in-app + email notifications. Flat `/notifications`
+- `api/routers/notification_templates.py` (173 lines): Real, org-scoped CRUD for NotificationTemplate + preview + test
+- `api/routers/notifications.py` (50 lines): Real Twilio SMS/WhatsApp sending, org-scoped (this codebase's
+- `api/routers/oauth.py` (278 lines): 1.1.5 / 1.1.6 -- Google and GitHub via Authlib's Starlette client, which
+- `api/routers/observability.py` (170 lines): Partie 13.1/13.3 -- metrics summary + alerting/incidents. Global
+- `api/routers/organization_branding.py` (142 lines): Partie 1.3.10 -- viewing, adjusting, and uploading assets for an
+- `api/routers/organization_members.py` (250 lines): Etape 1.2.3 -- Admin: member-management endpoints, gated by
+- `api/routers/organization_settings.py` (117 lines): Partie 1.3.9 -- viewing and adjusting an organization's configuration.
+- `api/routers/organizations.py` (154 lines): Etape 1.2.2 -- the first organization-facing endpoints. Every route here
+- `api/routers/password.py` (109 lines): 1.1.3 -- forgot/reset password. /forgot always answers the same generic
+- `api/routers/plugins.py` (277 lines): Partie 16 (ter) -- plugin marketplace.
+- `api/routers/public_api.py` (433 lines): Partie 9.1.1-9.1.9 -- the public `/v1/*` API, authenticated by a real
+- `api/routers/quality_alerts.py` (191 lines): Hardening Mission (§13) -- organization-scoped RAG-quality alerting ("Guardian").
+- `api/routers/quality_dashboard.py` (96 lines): Partie 6.2.12 -- the real quality dashboard. All 5 endpoints are
+- `api/routers/question_sets.py` (118 lines): Partie 7.1.2 -- real question-set endpoints. `POST/GET /datasets/{dataset_id}/sets`
+- `api/routers/questions.py` (81 lines): Partie 8.1.17 (Suggested questions) + 8.1.18 (Follow-up questions).
+- `api/routers/quotas.py` (76 lines): Partie 1.3.6 -- viewing and adjusting an organization's resource quotas.
+- `api/routers/rag_control_plane.py` (205 lines): Real, explicitly-triggered orchestration endpoints -- Systèmes
+- `api/routers/rbac.py` (209 lines): Partie 10.1 -- custom roles & granular permissions. Routes live under
+- `api/routers/regression_detection.py` (63 lines): Partie 7.3.3 -- regression detection endpoints.
+- `api/routers/regression_thresholds.py` (77 lines): Partie 7.3.9 -- regression threshold endpoints. Org-scoped routes
+- `api/routers/reindex_schedules.py` (106 lines): Partie 2.2.15 -- managing an organization's own `ReindexSchedule`
+- `api/routers/request_trace.py` (26 lines): GET /responses/{response_id}/trace: the whole story of one answer in a single read-only call (spec 13.5.12).
+- `api/routers/resource_permissions.py` (211 lines): Etape 1.2.8 -- management endpoints for granular resource_permissions:
+- `api/routers/retrieval_diagnostics.py` (41 lines): Phase 5, Étape 11 -- real, per-query retrieval diagnostics for an
+- `api/routers/sales.py` (229 lines): Partie 16 (bis) -- self-hosted licensing (superadmin-issued, publicly
+- `api/routers/sandbox.py` (75 lines): Sandbox Environment — isolated dev/test data CRUD.
+- `api/routers/scim.py` (234 lines): Spec 10.4.3 -- SCIM 2.0 user provisioning (RFC 7643 / 7644, Users resource only).
+- `api/routers/search.py` (71 lines): Partie 3.3.4-3.3.6 -- the real, live, multi-tenant search endpoint
+- `api/routers/security_scan.py` (134 lines): Partie 10.5 -- security scanning, org-scoped under
+- `api/routers/sessions.py` (102 lines): 1.1.9 -- list/revoke active sessions (device, IP, last_seen). Both
+- `api/routers/ssl_certificates.py` (129 lines): Partie 1.4.3 -- generating, checking, renewing, and revoking a custom
+- `api/routers/teams.py` (259 lines): Partie 1.3.3 -- Teams. Creating a team requires org Manager+
+- `api/routers/tool_config.py` (100 lines): Partie 5.1.4 (tool timeout) + 5.1.5 (per-tool budget) -- real,
+- `api/routers/tool_permissions.py` (75 lines): Partie 5.1.3 -- granting/revoking/listing per-agent/per-user tool
+- `api/routers/twilio.py` (152 lines): Partie 8.2.13 -- Twilio webhooks (real form-encoded POSTs, not
+- `api/routers/two_factor.py` (513 lines): 1.1.7 -- TOTP setup/enable/disable, plus the login-time verification step
+- `api/routers/usage.py` (146 lines): Partie 1.3.8 -- viewing an organization's usage. All three endpoints are
+- `api/routers/user_limits.py` (84 lines): Partie 1.3.7 -- viewing and adjusting a specific member's per-user
+- `api/routers/verify.py` (80 lines): 1.1.4 -- email verification via a 6-digit OTP.
+- `api/routers/voice.py` (133 lines): Partie 8.2.1 (STT) + 8.2.2/8.2.9 (TTS / ElevenLabs) -- the real
+- `api/routers/voice_messages.py` (67 lines): Partie 8.2.7 -- Audio history. Real ownership-based access, same
+- `api/routers/voice_settings.py` (40 lines): Partie 8.2.8 -- Voice settings.
+- `api/routers/webauthn.py` (258 lines): Audit finding 26 -- WebAuthn/FIDO2 as a second factor, alongside (never
+- `api/routers/webhooks.py` (115 lines): Partie 9.2.7 -- Webhooks. Real, JWT-authenticated, Admin+, same
+- `api/routers/white_label.py` (200 lines): Partie 1.4.6 -- viewing and toggling an organization's white-label
+- `api/routers/widget.py` (503 lines): Partie 9.3 -- the embeddable chat widget's real HTTP surface. See
+- `api/routers/workflows.py` (357 lines): Partie 5.4.1 -- real workflow CRUD + structural validation. Create/list
+- `api/routers/workspaces.py` (133 lines): Etape 1.2.4 -- workspace CRUD. Create/rename/delete are gated by
+
+## api/services/ (290 files)
+
+- `api/services/a2a_integration.py` (130 lines): Real A2A (Agent2Agent, donated by Google to the Linux Foundation)
+- `api/services/ab_tests.py` (525 lines): Partie 7.3.10 -- real, LIVE production A/B testing: real traffic
+- `api/services/account_restore.py` (37 lines): 1.1.10 -- mirrors password_reset.py's shape for the account-restore token.
+- `api/services/activecampaign_extraction.py` (66 lines): Extraction -- fetching contacts/deals from ActiveCampaign's real REST
+- `api/services/admin_logs.py` (54 lines): Partie 11.6 -- reads the real system_logs table (fed by
+- `api/services/admin_monitoring.py` (105 lines): Partie 11.5 -- real system health/resource monitoring. Reuses the
+- `api/services/admin_organizations.py` (113 lines): Partie 11.2 -- platform-admin organization management. Reuses the
+- `api/services/admin_stats.py` (102 lines): Partie 11.1 -- real global platform statistics, aggregated from the
+- `api/services/admin_subscriptions.py` (225 lines): Partie 11.4 -- real Plan/Subscription CRUD. Honest scope: this
+- `api/services/admin_users_management.py` (97 lines): Partie 11.3 -- platform-admin user management. Reuses real, existing
+- `api/services/agent_api_keys.py` (119 lines): Partie 5.3.10 -- real, revocable API keys, scoped to one agent, for
+- `api/services/agent_citation_required.py` (66 lines): Partie 6.2.1 -- real, opt-in refusal mode: an agent configured with
+- `api/services/agent_context_only.py` (77 lines): Partie 6.2.2 -- real, opt-in refusal mode: an agent configured with
+- `api/services/agent_factory.py` (218 lines): Hardening Mission (§14) -- Factory: turn a plain-language REQUIREMENT into a
+- `api/services/agent_guardrails.py` (246 lines): Partie 5.3.9 -- real, per-agent safety guardrails: blocked topics, a
+- `api/services/agent_idk.py` (81 lines): Partie 6.2.3 -- a real, opt-in confidence floor: below the agent's own
+- `api/services/agent_knowledge_base.py` (189 lines): Partie 5.3.4 -- selecting and validating an agent's own real knowledge
+- `api/services/agent_long_term_memory.py` (217 lines): Phase 5, Étape 6 -- real CRUD for `AgentLongTermMemoryItem`
+- `api/services/agent_memory.py` (123 lines): Partie 5.1.11 -- real, short-term, per-session agent memory. Item 2's
+- `api/services/agent_memory_config.py` (124 lines): Partie 5.3.6 -- configuring and inspecting an agent's own real memory
+- `api/services/agent_models.py` (100 lines): Partie 5.3.3 -- choosing and validating an agent's own real LLM model
+- `api/services/agent_orchestrator.py` (1158 lines): Partie 5.1.1 -- a real central orchestrator coordinating LLM-backed
+- `api/services/agent_permissions.py` (152 lines): Partie 5.3.7 -- a real, additive ACL layer on top of the existing
+- `api/services/agent_prompts.py` (101 lines): Partie 5.3.2 -- real, safe `{{variable}}` templating for an agent's own
+- `api/services/agent_tools.py` (265 lines): Partie 5.3.5 -- selecting which of this codebase's own real, already-
+- `api/services/agent_traces.py` (139 lines): Partie 5.1.14 -- item 2's own literal functions: `start_trace`/
+- `api/services/airbyte_client.py` (203 lines): Partie 15.3 -- real Airbyte integration. Airbyte itself is what
+- `api/services/airtable_extraction.py` (73 lines): Extraction -- fetching records from Airtable's real REST API v0, for
+- `api/services/alerting.py` (338 lines): Partie 13.3 -- real alert-rule evaluation against real, already-live
+- `api/services/analytics.py` (381 lines): Partie 20 -- advanced analytics. See api/models/analytics.py's own
+- `api/services/answer_quality_metrics.py` (197 lines): Parties 7.2.8/7.2.9 -- real, Evaluation-Lab-scoped faithfulness and
+- `api/services/api_versioning.py` (42 lines): Partie 9.2.8 -- API versioning helper functions.
+- `api/services/app_metrics.py` (66 lines): Partie 13.1 -- GET /monitoring/metrics's own summary (distinct from GET
+- `api/services/asana_extraction.py` (77 lines): Extraction -- fetching tasks from Asana's real REST API v1.0, for
+- `api/services/autonomous_agents.py` (634 lines): Partie 23 -- goal-driven autonomous agents: planning, multi-step
+- `api/services/azure_devops_extraction.py` (73 lines): Extraction -- fetching data from Azure DevOps's real API, for import into
+- `api/services/basecamp_extraction.py` (73 lines): Extraction -- fetching data from Basecamp's real API, for import into
+- `api/services/beeai_orchestrator.py` (203 lines): Real agent orchestration via IBM's own open source BeeAI Framework
+- `api/services/benchmark_versions.py` (153 lines): Partie 7.1.6 -- real, versioned snapshots of a dataset's own real
+- `api/services/billing_credits.py` (239 lines): Partie 12.3 -- credits (a spendable balance) and usage (read via the
+- `api/services/billing_invoices.py` (279 lines): Partie 12.4 -- invoices. PDF generation reuses the exact lazy-import
+- `api/services/billing_paystack.py` (321 lines): Phase 5, Étape 2 -- real Paystack integration, same honest-501 pattern
+- `api/services/billing_providers/base.py` (135 lines): Phase 5, Étape 2 -- the `BillingProvider` interface both real
+- `api/services/billing_providers/registry.py` (64 lines): Phase 5, Étape 2 -- the one place that decides which real billing
+- `api/services/billing_stripe.py` (552 lines): Partie 12.2 -- real Stripe integration code, honestly scoped: this
+- `api/services/billing_stripe_sync.py` (53 lines): Partie 12.2 -- sync this deployment's real Plan rows to real Stripe
+- `api/services/billing_usage.py` (208 lines): Partie 12.3 -- usage breakdown/forecast/alerts, built entirely on top of
+- `api/services/bitbucket_extraction.py` (73 lines): Extraction -- fetching data from Bitbucket's real API, for import into
+- `api/services/box_extraction.py` (61 lines): Extraction -- listing files from Box's real API, for import into a
+- `api/services/cache_service.py` (106 lines): Phase 5, Étape 13 -- Performance: a real, generic, reusable
+- `api/services/canary_rollout.py` (80 lines): Real Canary rollout evaluation -- item 20 of the internal-systems list
+- `api/services/chat_integrations/_common.py` (39 lines): Real, shared engine behind every one of Slack/Teams/Discord's own
+- `api/services/chat_integrations/cards.py` (43 lines): Partie 9.4.2.7 -- real Adaptive Card JSON generation for Teams.
+- `api/services/chat_integrations/discord.py` (142 lines): Partie 9.4.3 -- Discord integration.
+- `api/services/chat_integrations/slack.py` (134 lines): Partie 9.4.1 -- Slack integration.
+- `api/services/chat_integrations/teams.py` (148 lines): Partie 9.4.2 -- Microsoft Teams integration.
+- `api/services/chunk_config.py` (265 lines): Partie 3.3.1 (chunk size configurable) + 3.3.2 (chunk overlap
+- `api/services/chunking.py` (159 lines): Partie 3.2.2 -- real recursive text chunking: try the FIRST real
+- `api/services/citation_chunk.py` (112 lines): Partie 6.1.5 -- real chunk identification for a citation.
+- `api/services/citation_correctness.py` (147 lines): Partie 7.2.11 -- real citation correctness: are the `[n]` citation
+- `api/services/citation_documents.py` (58 lines): Partie 6.1.2 -- real, LIVE document info enrichment for a citation,
+- `api/services/citation_location.py` (109 lines): Partie 6.1.3 -- real page/section location for a citation, extracted
+- `api/services/citation_passage.py` (124 lines): Partie 6.1.7 -- the real, exact passage a citation quotes.
+- `api/services/citation_preview.py` (77 lines): Partie 6.1.8 -- citation preview / hover.
+- `api/services/citation_relevance.py` (73 lines): Partie 6.1.6 -- real, human-facing relevance labeling for a citation's
+- `api/services/citation_secondary.py` (117 lines): Partie 6.1.9 -- secondary (supporting-but-not-cited) sources.
+- `api/services/citation_url.py` (109 lines): Partie 6.1.4 -- real source URL for a citation, reusing the SAME real
+- `api/services/citations.py` (363 lines): Partie 6.1.1 -- real, structured citations attached to a real
+- `api/services/claim_extraction.py` (46 lines): Shared, real foundational utility for Parties 6.2.4/6.2.6/6.2.7/6.2.9/
+- `api/services/claim_verification.py` (115 lines): Partie 6.2.6 -- real, per-claim verification against an answer's own
+- `api/services/clamav.py` (89 lines): Optional ClamAV scan of an uploaded document, through clamd's INSTREAM command (disabled by default: CLAMAV_ENABLED).
+- `api/services/clickup_extraction.py` (67 lines): Extraction -- fetching tasks from ClickUp's real API v2, for import into
+- `api/services/coda_extraction.py` (73 lines): Extraction -- fetching data from Coda's real API, for import into
+- `api/services/code_chunking.py` (297 lines): Partie 3.2.5 -- real, code-aware chunking. `tree_sitter` (a real AST
+- `api/services/code_highlighter.py` (117 lines): Partie 8.1.3 -- real code syntax highlighting, via Pygments (already a
+- `api/services/comparison_jobs.py` (266 lines): Partie 7.3.4/7.3.5/7.3.6/7.3.7 -- ONE real, shared, persisted
+- `api/services/compliance.py` (122 lines): Partie 10.4 -- GDPR/CCPA rights-request tracking, per-category consent,
+- `api/services/confidence_estimation.py` (131 lines): Partie 6.2.4 -- a real, BROADER agent-confidence estimate, distinct
+- `api/services/confluence_extraction.py` (220 lines): Partie 2.1.17 -- fetching pages/spaces from a real, self-hosted or
+- `api/services/connector_credentials.py` (306 lines): Per-organization credentials for the importers and CRM connectors (docs/DECISIONS.md D17).
+- `api/services/consent_reactivation.py` (40 lines): 1.1.12 -- mirrors account_restore.py's shape for the consent-reactivation token.
+- `api/services/context_compression.py` (186 lines): Partie 3.4.10 -- real context compression: reducing a real list of
+- `api/services/context_relevance.py` (147 lines): Partie 7.2.10 -- real context relevance: how well the RAG context
+- `api/services/contradiction_detection.py` (134 lines): Partie 6.2.7 -- real, fast, deterministic contradiction detection: two
+- `api/services/conversation_export.py` (126 lines): Partie 8.1.14 -- real conversation export: PDF, DOCX, JSON, Markdown.
+- `api/services/conversation_management.py` (243 lines): Partie 8.1.10 (Historique) + 8.1.11 (Rename) + 8.1.12 (Search) +
+- `api/services/conversation_sharing.py` (136 lines): Partie 8.1.15 (Share) + 8.1.16 (Public/Private) -- real, tokenized
+- `api/services/cost_aware_routing.py` (77 lines): Real Cost-Aware Intelligence -- item 26 of the internal-systems list:
+- `api/services/cost_tracking.py` (105 lines): Partie 7.2.15 -- real cost-per-request tracking, derived purely from
+- `api/services/csv_extraction.py` (115 lines): Partie 2.1.6 -- CSV document import: real automatic delimiter detection
+- `api/services/custom_tools.py` (122 lines): Partie 5.2.10 -- executing a real, organization-defined custom tool
+- `api/services/data_export.py` (102 lines): Audit finding 23 -- shared data-gathering behind both RGPD export formats
+- `api/services/deepeval_validation.py` (124 lines): Real, independent SECOND validation layer via DeepEval (Apache 2.0) --
+- `api/services/deployment_evaluations.py` (169 lines): Partie 7.3.8 -- automatic evaluation before deploying a real agent
+- `api/services/display_currency.py` (121 lines): Which currency (and language) a visitor should see, from where they are in the world.
+- `api/services/docling_extraction.py` (77 lines): Optional, alternative PDF extraction engine using IBM's real, open source
+- `api/services/document_extraction.py` (244 lines): Partie 2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9, item 3 --
+- `api/services/document_storage.py` (525 lines): Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9 --
+- `api/services/docusign_extraction.py` (60 lines): Extraction -- fetching envelopes from DocuSign's real eSignature REST
+- `api/services/docx_extraction.py` (154 lines): Partie 2.1.2 -- real DOCX text/table/metadata/style extraction via
+- `api/services/dropbox_extraction.py` (74 lines): Extraction -- listing files from Dropbox's real API v2, for import into
+- `api/services/duplicate_removal.py` (145 lines): Partie 3.4.11 -- real, standalone deduplication of search results:
+- `api/services/email.py` (829 lines): Transactional email via Resend's plain REST API (no SDK dependency --
+- `api/services/email_branding.py` (338 lines): Phase 5, Étape 3 -- real email branding, closing a genuine gap the
+- `api/services/embedding_config.py` (104 lines): Partie 3.3.3 -- making `embedding_model` real, validated,
+- `api/services/embedding_providers.py` (309 lines): Partie 4.2.1 (OpenAI) + 4.2.2 (Voyage AI) + 4.2.3 (Cohere) + 4.2.4
+- `api/services/encryption_status.py` (71 lines): Partie 10.3 -- status/rotation service backing GET/POST /encryption/*.
+- `api/services/epub_extraction.py` (186 lines): Partie 2.1.9 -- EPUB document import: real parsing via `ebooklib` --
+- `api/services/evaluation_comparisons.py` (149 lines): Partie 7.3 -- multi-model comparisons and A/B testing. Not a prompt
+- `api/services/evaluation_datasets.py` (276 lines): Partie 7.1.1 -- real, multi-tenant dataset/question management, the
+- `api/services/evaluation_jobs.py` (341 lines): Partie 7.3.1 -- real, persisted, batch-run automatic evaluation:
+- `api/services/evaluation_results.py` (374 lines): Partie 7.2.1 -- real evaluation runs: actually retrieving, actually
+- `api/services/faithfulness.py` (102 lines): Partie 6.2.11 -- how faithfully an answer represents what its own
+- `api/services/fallback.py` (149 lines): Partie 5.1.7 -- real fallback chains for tools and LLM providers.
+- `api/services/fine_tuning.py` (316 lines): Partie 24 -- fine-tuning: dataset CRUD/validation, job submission/
+- `api/services/fine_tuning_providers.py` (185 lines): Partie 24 -- real provider fine-tuning REST clients (OpenAI,
+- `api/services/fine_tuning_storage.py` (151 lines): Partie 24 -- real dataset validation and S3 storage for fine-tuning
+- `api/services/flight_recorder.py` (74 lines): Real RAG Flight Recorder service -- item 24 of the internal-systems
+- `api/services/generation.py` (255 lines): Partie 6.1.1 -- the real, multi-tenant "retrieval + generation,
+- `api/services/github_extraction.py` (508 lines): Partie 2.1.12/2.1.13 -- fetching a GitHub repository's real metadata,
+- `api/services/gitlab_extraction.py` (73 lines): Extraction -- fetching data from GitLab's real API, for import into
+- `api/services/google_drive_extraction.py` (539 lines): Partie 2.1.14/2.1.15 -- fetching files from a Google Drive folder (or a
+- `api/services/graph_rag.py` (202 lines): Real GraphRAG using LightRAG (MIT, actively maintained -- 65+ releases)
+- `api/services/ground_truth_answers.py` (149 lines): Partie 7.1.3 -- ground-truth answers and 4 real validation methods.
+- `api/services/ground_truth_documents.py` (190 lines): Partie 7.1.4 -- ground-truth documents and 5 real retrieval-quality
+- `api/services/groundedness.py` (120 lines): Partie 6.2.10 -- how firmly an answer is anchored in its own real
+- `api/services/hallucination_detector.py` (142 lines): Partie 6.2.9 -- a real, NEW, api/-native hallucination detector,
+- `api/services/hallucination_rate.py` (102 lines): Partie 7.2.12 -- real hallucination rate: the proportion of a real
+- `api/services/headings_extraction.py` (278 lines): Partie 3.1.9 -- extracting a document's own real headings/sections,
+- `api/services/hive_extraction.py` (69 lines): Extraction -- fetching actions from Hive's real REST API v1, for import
+- `api/services/html_extraction.py` (185 lines): Partie 2.1.5 -- HTML document import: real main-content extraction (via
+- `api/services/hubspot_extraction.py` (86 lines): CRM extraction -- fetching records from HubSpot's real CRM API v3, for
+- `api/services/hyde.py` (131 lines): Partie 3.4.3 -- real HyDE (Hypothetical Document Embeddings, Gao et
+- `api/services/i18n.py` (107 lines): Partie 8.1.19 -- real Multi-langue UI (i18n) backend.
+- `api/services/image_extraction.py` (74 lines): Partie 3.1.5 -- extracting real, embedded images from a document.
+- `api/services/insights.py` (290 lines): Specs 11.2.5, 11.2.7-11.2.10, 11.2.14-11.2.16, 15.2.5, 15.2.6 -- what the users of an organization ask, where the knowledge base fails them, and how to fix it.
+- `api/services/integrations.py` (331 lines): Partie 15.1/15.2 -- real inbound integration connections. Reuses
+- `api/services/intercom_extraction.py` (64 lines): Extraction -- fetching conversations from Intercom's real API v1, for
+- `api/services/jira_extraction.py` (86 lines): CRM extraction -- fetching issues from Jira's real REST API v3, for
+- `api/services/json_extraction.py` (155 lines): Partie 2.1.7 -- JSON document import: real parsing and structure
+- `api/services/klaviyo_extraction.py` (72 lines): Extraction -- fetching profiles from Klaviyo's real REST API, for import
+- `api/services/language_detection.py` (92 lines): Partie 3.1.7 -- real language detection for extracted document text,
+- `api/services/latency_metrics.py` (133 lines): Partie 7.2.13 -- real latency benchmarking: `measure_latency` runs a
+- `api/services/lineage_tracking.py` (126 lines): Real OpenLineage (Apache 2.0, Linux Foundation AI & Data) emission --
+- `api/services/linear_extraction.py` (107 lines): Extraction -- fetching issues from Linear's real GraphQL API, for
+- `api/services/llm_byok.py` (92 lines): BYOK (Bring Your Own Key) -- lets an organization use its own LLM
+- `api/services/llm_config.py` (235 lines): Partie 4.3.1 (model choice) + 4.3.2 (temperature) + 4.3.3 (top_p) +
+- `api/services/llm_providers.py` (604 lines): Partie 4.1.1 (Anthropic) + 4.1.2 (OpenAI) + 4.1.3 (Gemini) + 4.1.4
+- `api/services/mailchimp_extraction.py` (61 lines): Extraction -- fetching audiences from Mailchimp's real REST API v3, for
+- `api/services/manual_evaluations.py` (134 lines): Partie 7.3.2 -- real, human evaluations: a real reviewer's own 1-5
+- `api/services/markdown_chunking.py` (206 lines): Partie 3.2.4 -- real, Markdown-aware chunking: unlike Partie 3.2.2's
+- `api/services/markdown_extraction.py` (246 lines): Partie 2.1.4 -- real Markdown text/structure/metadata/table extraction
+- `api/services/markdown_renderer.py` (159 lines): Partie 8.1.2 -- real Markdown rendering for agent responses. Reuses
+- `api/services/mcp/builtin_tools.py` (381 lines): 4 real MCP tools backing the `agents.md` contract (Factory / Autopsy / ChangeLab / benchmark).
+- `api/services/mcp/client.py` (188 lines): Phase 5, Étape 9 -- real MCP CLIENT: lets this platform's own agents
+- `api/services/mcp/discovery.py` (97 lines): Phase 5, Étape 9 -- real CRUD + tool-discovery sync for
+- `api/services/mcp/firewall.py` (81 lines): Real MCP Firewall -- item 23 of the internal-systems list: every real
+- `api/services/media.py` (547 lines): Partie 22 -- multi-modal media: upload, processing (OCR/vision
+- `api/services/mem0_service.py` (224 lines): Real, automatic conversational memory via mem0 (Apache 2.0) --
+- `api/services/message_actions.py` (408 lines): Partie 8.1.6 (Regenerate) + 8.1.7 (Edit question) + 8.1.8 (Retry) +
+- `api/services/metadata_enrichment.py` (251 lines): Partie 3.1.10 -- real, lightweight text-metadata enrichment, deliberately
+- `api/services/metadata_filtering.py` (336 lines): Partie 3.4.5 -- real, standalone metadata filtering over real search
+- `api/services/metadata_normalization.py` (157 lines): Partie 2.2.5 -- normalizing each format's own real, already-extracted
+- `api/services/miro_extraction.py` (73 lines): Extraction -- fetching data from Miro's real API, for import into
+- `api/services/mmr.py` (94 lines): Partie 3.4.12 / 3.4.16 -- real Maximal Marginal Relevance: diversifies
+- `api/services/monday_extraction.py` (73 lines): Extraction -- fetching data from Monday.com's real API, for import into
+- `api/services/multi_query.py` (171 lines): Partie 3.4.4 -- real multi-query retrieval: `generate_query_variants`/
+- `api/services/nifty_extraction.py` (64 lines): Extraction -- fetching tasks from Nifty's real REST API, for import
+- `api/services/notification_templates.py` (147 lines): Phase 5, Étape 4 -- Jinja2 templates for notifications, code-defined
+- `api/services/notifications.py` (418 lines): Phase 5, Étape 4 -- the real notification service: creation
+- `api/services/notion_extraction.py` (348 lines): Partie 2.1.16 -- fetching pages/databases/blocks from Notion's real
+- `api/services/object_detection.py` (79 lines): Partie 22 (finalization) -- real, local object detection via
+- `api/services/ocr.py` (157 lines): Partie 3.1.6 -- real OCR via Tesseract (`pytesseract`) and PDF-page
+- `api/services/onedrive_extraction.py` (309 lines): Partie 2.1.18 -- fetching files from a OneDrive folder (or a single
+- `api/services/opa_policy.py` (112 lines): Real Open Policy Agent (OPA, Apache 2.0, CNCF) integration -- item 13
+- `api/services/organization_api_keys.py` (433 lines): Partie 9.1 + 9.2.1-9.2.6 -- real, revocable, organization-scoped API
+- `api/services/outbound_http.py` (171 lines): Outbound HTTP for tenant-configured URLs (webhooks, MCP servers): SSRF-safe by construction (SEC-005).
+- `api/services/output_guard.py` (135 lines): Specs 10.2.3 (data leakage), 10.2.5 (PII masking), 10.2.6 (sensitive information), 10.2.8 (unsafe tool calls) and 10.2.10 (output validation).
+- `api/services/paragraph_chunking.py` (136 lines): Partie 3.2.7 -- real paragraph-based chunking: every chunk boundary
+- `api/services/parallel_tools.py` (114 lines): Partie 5.1.8 -- real, genuinely concurrent execution of several tool
+- `api/services/parent_child_chunking.py` (154 lines): Partie 3.2.8 -- real parent-child (hierarchical) chunking: small,
+- `api/services/password_reset.py` (35 lines): 1.1.3 -- mirrors verification.py's shape for the password-reset token.
+- `api/services/pdf_extraction.py` (102 lines): Partie 2.1.1 -- real PDF text/table/metadata/image extraction via
+- `api/services/pdf_safety.py` (24 lines): Safety rules for every PDF built from HTML with WeasyPrint.
+- `api/services/pii_detection.py` (106 lines): Real PII detection using Microsoft's real, open source Presidio
+- `api/services/pipedrive_extraction.py` (76 lines): CRM extraction -- fetching deals/persons/organizations from Pipedrive's
+- `api/services/pipefy_extraction.py` (92 lines): Extraction -- fetching cards from Pipefy's real GraphQL API, for import
+- `api/services/plugin_hooks.py` (132 lines): Partie 16 (ter) -- real hook dispatch.
+- `api/services/plugins.py` (477 lines): Partie 16 (ter) -- plugin marketplace service layer.
+- `api/services/podio_extraction.py` (67 lines): Extraction -- fetching items from Podio's real REST API, for import
+- `api/services/policy_aware_retrieval.py` (69 lines): Real Authorization Graph / Policy-Aware Retrieval -- item 22 of the
+- `api/services/process_street_extraction.py` (63 lines): Extraction -- fetching workflows/runs from Process Street's real REST
+- `api/services/prompt_injection_detection.py` (138 lines): Real prompt-injection/jailbreak detection -- closes the gap this
+- `api/services/prompt_optimization.py` (167 lines): Real automatic prompt optimization via DSPy (Apache 2.0, MIT-licensed
+- `api/services/public_api.py` (347 lines): Partie 9.1.1-9.1.9 -- the real, public `/v1/*` API handlers. Every one
+- `api/services/quality_dashboard.py` (214 lines): Partie 6.2.12 -- a real, organization-scoped quality dashboard over
+- `api/services/query_rewriting.py` (220 lines): Partie 3.4.2 -- real query rewriting: `normalize_query`/
+- `api/services/query_router.py` (68 lines): Real Query Intelligence Router / Adaptive Retrieval Router -- item 25
+- `api/services/question_difficulty.py` (131 lines): Partie 7.1.5 -- real, honest, deterministic difficulty scoring for an
+- `api/services/question_sets.py` (158 lines): Partie 7.1.2 -- real, named subsets of a dataset's own real questions,
+- `api/services/rag_control_plane.py` (79 lines): Real RAG Control Plane -- item 27, the FINAL item of the internal-
+- `api/services/rag_evolution_engine.py` (324 lines): Real RAG Evolution Engine -- item 18 of the internal-systems list,
+- `api/services/rag_genome.py` (79 lines): Real "RAG Genome" / Experiment Lab -- item 19 of the internal-systems
+- `api/services/rag_provenance.py` (74 lines): Real RAG Provenance / Data Lineage Graph -- item 21 of the internal-
+- `api/services/rbac_custom.py` (227 lines): Partie 10.1 -- custom roles and granular permissions, additive on top of
+- `api/services/regression_detection.py` (160 lines): Partie 7.3.3 -- real regression detection between two real
+- `api/services/regression_thresholds.py` (113 lines): Partie 7.3.9 -- real, per-organization, per-metric quality floors/
+- `api/services/request_trace.py` (72 lines): One end-to-end view of a single answer: the question, retrieval, generation, checks, citations and the agent's steps (spec 13.5.12).
+- `api/services/resend_domains.py` (91 lines): Partie 1.4.5 -- Resend's real Domains API (create/get/verify/delete a
+- `api/services/response_confidence.py` (129 lines): Partie 6.1.10 -- a real, global confidence score for a `Response`,
+- `api/services/response_quality.py` (69 lines): Real, shared plumbing wiring Parties 6.2.4/6.2.5/6.2.6/6.2.7/6.2.8/
+- `api/services/retrieval_config.py` (419 lines): Partie 3.3.4 (retrieval strategy) + 3.3.5 (reranker) + 3.3.6 (top-k) +
+- `api/services/retrieval_metrics.py` (173 lines): Parties 7.2.1/7.2.2/7.2.3/7.2.4/7.2.5/7.2.7 -- real, fixed-`k` retrieval
+- `api/services/retrieval_pipeline.py` (1281 lines): Partie 3.3.4/3.3.5/3.3.6 -- the real, live, multi-tenant retrieval
+- `api/services/retry.py` (113 lines): Partie 5.1.6 -- a real, generic retry mechanism with real exponential
+- `api/services/sales.py` (426 lines): Partie 16 (bis) -- license validation/activation, support tickets +
+- `api/services/salesforce_extraction.py` (103 lines): CRM extraction -- fetching records from Salesforce's real REST API,
+- `api/services/security_alerts.py` (114 lines): Audit finding 21 -- real-time alerting when failed-login attempts spike,
+- `api/services/security_scan.py` (305 lines): Partie 10.5 -- real security scanning. Three scan types actually run
+- `api/services/semantic_chunking.py` (126 lines): Partie 3.2.3 -- real semantic chunking: group real sentences into
+- `api/services/semantic_filtering.py` (82 lines): Partie 3.4.6 -- real, standalone semantic-similarity filtering/
+- `api/services/sentence_chunking.py` (201 lines): Partie 3.2.6 -- real sentence-based chunking: every chunk boundary
+- `api/services/shopify_extraction.py` (62 lines): Extraction -- fetching orders/products from Shopify's real Admin API,
+- `api/services/sitemap_extraction.py` (123 lines): Partie 2.1.11 -- fetching and parsing a sitemap.xml (or sitemap index)
+- `api/services/smartsheet_extraction.py` (73 lines): Extraction -- fetching data from Smartsheet's real API, for import into
+- `api/services/smartsuite_extraction.py` (64 lines): Extraction -- fetching records from SmartSuite's real REST API v1, for
+- `api/services/source_consistency.py` (159 lines): Partie 6.2.8 -- real consistency between an answer's own cited
+- `api/services/storage.py` (238 lines): Avatar upload (1.1.13) and organization branding assets (Partie 1.3.10 --
+- `api/services/streaming.py` (110 lines): Partie 8.1.1 -- real-time agent response streaming via Server-Sent
+- `api/services/structure_detection.py` (240 lines): Partie 3.1.8 -- a real, uniform structural outline (`DocumentStructure`)
+- `api/services/suggested_questions.py` (165 lines): Partie 8.1.17 (Suggested questions) + 8.1.18 (Follow-up questions) --
+- `api/services/table_transformation.py` (98 lines): Partie 3.1.4 -- transforming/normalizing the real `pandas.DataFrame`
+- `api/services/task_planning.py` (202 lines): Partie 5.1.13 -- real task decomposition: breaking one real objective
+- `api/services/teamwork_extraction.py` (63 lines): Extraction -- fetching tasks from Teamwork's real REST API v1, for
+- `api/services/telephony.py` (244 lines): Partie 8.2.13 -- Twilio telephony: real inbound/outbound voice calls,
+- `api/services/template_rendering.py` (66 lines): Shared, real, safe `{{variable}}` template substitution -- extracted
+- `api/services/text_cleaning.py` (99 lines): Partie 3.1.1 -- cleaning text extracted from a document, before it's
+- `api/services/text_normalization.py` (141 lines): Partie 3.1.2 -- normalizing text extracted from a document (casing,
+- `api/services/text_similarity.py` (74 lines): Shared, real, FAST text-similarity primitives for Parties 6.2.4/6.2.7/
+- `api/services/token_usage.py` (79 lines): Partie 7.2.14 -- real token-usage measurement. The real usage numbers
+- `api/services/tool_budget.py` (118 lines): Partie 5.1.5 -- real, per-tool token budget tracking, on top of
+- `api/services/tool_selection.py` (119 lines): Partie 5.1.2 -- letting an agent automatically pick which real tools
+- `api/services/tool_timeout.py` (92 lines): Partie 5.1.4 -- real, per-tool execution timeouts, on top of the
+- `api/services/tool_validation.py` (142 lines): Partie 5.1.9 -- validating a tool's real result against a real,
+- `api/services/tool_wiring.py` (152 lines): Phase 5, Étape 6 -- closes the exact, precisely-named gap
+- `api/services/tools.py` (136 lines): A real, minimal Tool abstraction -- a genuine prerequisite for Partie
+- `api/services/toxicity_filter.py` (74 lines): Spec 10.2.7 -- toxicity filtering (insults, profanity, threats) for user questions and model answers.
+- `api/services/trello_extraction.py` (76 lines): Extraction -- fetching cards from Trello's real REST API v1, for import
+- `api/services/twilio_sms.py` (84 lines): Real Twilio SMS/WhatsApp sending. Honest gate: without
+- `api/services/two_factor_lockout_recovery.py` (38 lines): 1.1.7 -- mirrors password_reset.py's shape for the 2FA lockout-recovery token.
+- `api/services/txt_extraction.py` (100 lines): Partie 2.1.3 -- real TXT reading with real automatic encoding detection,
+- `api/services/unsupported_claims.py` (80 lines): Partie 6.2.5 -- flags a `Response`'s own real claims that carry NO
+- `api/services/url_extraction.py` (49 lines): Partie 2.1.10 -- extracting real main content and metadata from an
+- `api/services/url_fetching.py` (329 lines): Partie 2.1.10 -- fetching a user-supplied URL for real, safely.
+- `api/services/verification.py` (60 lines): 1.1.4 -- issuing and sending a fresh email OTP. Shared by the register flow
+- `api/services/video_extraction.py` (88 lines): Partie 22 -- real video processing: this part's own pre-build audit
+- `api/services/visual_search.py` (141 lines): Partie 22 (3rd finalization) -- real CLIP-based visual search:
+- `api/services/voice.py` (328 lines): Partie 8.2.1 (STT) + 8.2.2/8.2.9 (TTS / ElevenLabs) -- real, server-side
+- `api/services/voice_messages.py` (67 lines): Partie 8.2.7 -- Audio history.
+- `api/services/voice_settings.py` (69 lines): Partie 8.2.8 -- Voice settings.
+- `api/services/voice_storage.py` (53 lines): Partie 8.2.7 -- real, private S3 storage for voice recordings. Same
+- `api/services/voice_usage.py` (49 lines): Spec 12.3.6 -- voice minutes per month.
+- `api/services/webhooks.py` (170 lines): Partie 9.2.7 -- real, outbound webhooks. Real HMAC-SHA256 payload
+- `api/services/white_label_middleware.py` (94 lines): Partie 19 -- real custom-domain detection middleware. The one
+- `api/services/widget.py` (588 lines): Partie 9.3 -- the embeddable chat widget's real business logic. See
+- `api/services/woocommerce_extraction.py` (59 lines): Extraction -- fetching orders/products from WooCommerce's real REST API
+- `api/services/workflow_block_calendar.py` (108 lines): Partie 5.4.11 -- real `calendar` workflow block execution.
+- `api/services/workflow_block_code.py` (227 lines): Partie 5.4.8 -- real `code` workflow block execution.
+- `api/services/workflow_block_condition.py` (116 lines): Partie 5.4.7 -- real `condition` workflow block execution.
+- `api/services/workflow_block_database.py` (84 lines): Partie 5.4.12 -- real `database` workflow block execution.
+- `api/services/workflow_block_email.py` (79 lines): Partie 5.4.10 -- real `email` workflow block execution.
+- `api/services/workflow_block_http.py` (115 lines): Partie 5.4.6 -- real `http_call` workflow block execution.
+- `api/services/workflow_block_human.py` (127 lines): Partie 5.4.9 -- real `human` workflow block: a real, persisted,
+- `api/services/workflow_block_llm.py` (75 lines): Partie 5.4.3 -- real `llm_call` workflow block execution.
+- `api/services/workflow_block_rag.py` (102 lines): Partie 5.4.4 -- real `rag_search` workflow block execution.
+- `api/services/workflow_block_search.py` (59 lines): Partie 5.4.5 -- real `web_search` workflow block execution.
+- `api/services/workflow_blocks.py` (7 lines): Shared, real, dedicated exception for every real workflow block's
+- `api/services/workflow_engine.py` (369 lines): Partie 5.4 -- the real graph executor. Every one of
+- `api/services/workflow_triggers.py` (169 lines): Partie 5.4.2 -- real ways to start a `Workflow` run: webhook, schedule,
+- `api/services/workflow_versions.py` (110 lines): Partie 5.4.13 -- real versioning for a `Workflow`'s own `nodes`/`edges`
+- `api/services/workflows.py` (106 lines): Partie 5.4.1 -- real, structural node/edge manipulation on a
+- `api/services/wrike_extraction.py` (73 lines): Extraction -- fetching data from Wrike's real API, for import into
+- `api/services/xml_extraction.py` (218 lines): Partie 2.1.8 -- XML document import: real parsing via `lxml` -- the
+- `api/services/zendesk_extraction.py` (74 lines): CRM extraction -- fetching tickets from Zendesk's real REST API v2, for
+- `api/services/zip_extraction.py` (143 lines): Partie 2.1.19 -- listing, filtering, and extracting files from a real
+- `api/services/zoho_extraction.py` (60 lines): Extraction -- fetching records from Zoho CRM's real API v2, for import
+
+## api/tasks/ (50 files)
+
+- `api/tasks/_db.py` (56 lines): Real fix (2026-09-24): shared DB helpers for Celery tasks.
+- `api/tasks/_sync_engine.py` (32 lines): Real fix (2026-09-19, found via audit): every *_tasks.py module used
+- `api/tasks/ab_tests.py` (162 lines): Partie 21 -- Celery jobs for advanced A/B testing. Same sync-engine
+- `api/tasks/account_deletion_reminder.py` (71 lines): 4.6 -- the second of two deletion warnings. DELETE /account/me
+- `api/tasks/account_purge.py` (107 lines): 1.1.10 -- the actual hard-delete, run daily by celery beat (see
+- `api/tasks/alerting.py` (47 lines): Partie 13.3 -- periodic real alert-rule evaluation. Sync engine, same
+- `api/tasks/analytics.py` (146 lines): Partie 20 -- Celery jobs for advanced analytics: periodic rollup
+- `api/tasks/api_key_maintenance.py` (120 lines): Partie 9.2.2 (scheduled rotation) + 9.2.3 (expiration reminders +
+- `api/tasks/audit.py` (60 lines): Partie 10.2 -- scheduled audit-log retention/archival, run by Celery
+- `api/tasks/autonomous_agents.py` (170 lines): Partie 23 -- real Celery jobs for autonomous agents. Same
+- `api/tasks/batch_jobs.py` (59 lines): Partie 2.2.16, items 4's own literal tasks -- both real Celery entry
+- `api/tasks/beat_scheduler.py` (59 lines): Celery beat scheduler that remembers when each periodic task last ran, in Redis (PROD-001).
+- `api/tasks/billing.py` (222 lines): Partie 12 -- Celery jobs for billing: monthly invoice generation for
+- `api/tasks/celery_app.py` (515 lines): Celery app + beat schedule. Run a worker with:
+- `api/tasks/comparison_jobs.py` (38 lines): Partie 7.3.4/7.3.5/7.3.6/7.3.7 -- the real Celery entry point for
+- `api/tasks/compliance.py` (95 lines): Partie 10.4 -- Celery jobs for GDPR/CCPA compliance. Real purge of
+- `api/tasks/confluence_import.py` (74 lines): Partie 2.1.17, items 4/5's own literal tasks -- importing a Confluence
+- `api/tasks/conversation_cleanup.py` (45 lines): Partie 8.1.13 -- real, batched, daily purge of soft-deleted
+- `api/tasks/deployment_evaluations.py` (32 lines): Partie 7.3.8 -- the real Celery entry point for
+- `api/tasks/document_batch_processing.py` (61 lines): Partie 2.2.1, items 2/3's own literal task -- uploading and processing a
+- `api/tasks/document_modification_check.py` (68 lines): Partie 2.2.13, item 4's own literal periodic task -- checks every real,
+- `api/tasks/document_processing.py` (120 lines): Partie 2.1.1/2.1.2, item 4 -- the real async document-processing task,
+- `api/tasks/domain_verification.py` (85 lines): Partie 1.4.4 -- periodic custom-domain DNS-verification polling, run by
+- `api/tasks/evaluation_jobs.py` (39 lines): Partie 7.3.1 -- the real Celery entry point for
+- `api/tasks/external_source_sync.py` (125 lines): Partie 2.2.14, items 2/3's own literal tasks -- syncing one real
+- `api/tasks/fine_tuning.py` (145 lines): Partie 24 -- real Celery jobs for fine-tuning. Same asyncio.run()
+- `api/tasks/github_import.py` (152 lines): Partie 2.1.12/2.1.13's own literal tasks -- fetching a GitHub
+- `api/tasks/google_docs_import.py` (84 lines): Partie 2.1.15, items 4/5's own literal tasks -- exporting a Google Doc/
+- `api/tasks/google_drive_import.py` (98 lines): Partie 2.1.14, items 4/5's own literal tasks -- listing a Google Drive
+- `api/tasks/integrations.py` (148 lines): Partie 15.1/15.2/15.3 -- real log retention sweep plus the three
+- `api/tasks/jwt_key_rotation.py` (90 lines): Audit finding 28 -- automatic JWT signing-key rotation, run by Celery
+- `api/tasks/media.py` (232 lines): Partie 22 -- real Celery jobs for multi-modal media. Same
+- `api/tasks/notifications.py` (110 lines): Phase 5, Étape 4 -- notification email delivery + cleanup, same
+- `api/tasks/notion_import.py` (81 lines): Partie 2.1.16, items 4/5's own literal tasks -- importing a Notion page
+- `api/tasks/onedrive_import.py` (87 lines): Partie 2.1.18, items 4/5's own literal tasks -- listing a OneDrive
+- `api/tasks/plugins.py` (177 lines): Partie 16 (ter) -- periodic plugin jobs. Same sync-engine pattern as
+- `api/tasks/reindex.py` (84 lines): Partie 2.2.9, items 2/3's own literal tasks -- manually re-triggering a
+- `api/tasks/reindex_schedule.py` (71 lines): Partie 2.2.15, items 4/5's own literal tasks -- executing one real,
+- `api/tasks/retention.py` (49 lines): Spec 10.4.5 / 10.4.6 -- per-organization data retention.
+- `api/tasks/sales.py` (178 lines): Partie 18 -- Celery jobs for the sales models: partner commission
+- `api/tasks/security_scan.py` (63 lines): Partie 10.5 -- scheduled security scans. Runs the same real
+- `api/tasks/sitemap_import.py` (94 lines): Partie 2.1.11, item 4's own literal tasks -- fetching a sitemap (or
+- `api/tasks/ssl_certificate_renewal.py` (127 lines): Partie 1.4.3 -- periodic SSL certificate renewal/expiry checks, run by
+- `api/tasks/token_blacklist_cleanup.py` (47 lines): 1.1.15 -- housekeeping for the access-token blacklist (api/models/revoked_token.py).
+- `api/tasks/url_import.py` (52 lines): Partie 2.1.10, item 4's own "asynchrone via Celery" answer (vision
+- `api/tasks/voice_message_cleanup.py` (43 lines): Partie 8.2.7 -- real, daily purge of voice messages past their real
+- `api/tasks/webhooks.py` (67 lines): Partie 9.2.7 -- real webhook delivery, with real retries (the
+- `api/tasks/workflows.py` (149 lines): Partie 5.4 -- real Celery jobs dispatching
+- `api/tasks/zip_import.py` (108 lines): Partie 2.1.19, items 4/5's own literal tasks -- importing a real,
+
+## api/tools/ (10 files)
+
+- `api/tools/calculator.py` (159 lines): Partie 5.2.5 -- a real, richer calculator tool: real math functions,
+- `api/tools/calendar_tools.py` (262 lines): Partie 5.2.7 -- letting an agent read/create/update/delete calendar
+- `api/tools/email_tools.py` (312 lines): Partie 5.2.8 -- letting an agent send/read/search/reply/forward email
+- `api/tools/github_tools.py` (118 lines): Partie 5.2.3 -- letting an agent read GitHub repos/issues/pull
+- `api/tools/human_escalation.py` (186 lines): Partie 5.2.9 -- letting an agent escalate a problem it cannot resolve
+- `api/tools/search_kb.py` (123 lines): Partie 5.2.1 -- letting an agent search its own organization's
+- `api/tools/sql_tool.py` (274 lines): Partie 5.2.4 -- letting an agent query this organization's own real
+- `api/tools/url_reader.py` (114 lines): Partie 5.2.6 -- letting an agent read a real web page's content.
+- `api/tools/web_search.py` (143 lines): Partie 5.2.2 -- letting an agent search the live web via Tavily's real
+
+## api/security/ (72 files)
+
+- `api/security/adaptive_rate_limit.py` (81 lines): Audit findings 29/30: the geo/trust-aware wrapper around
+- `api/security/agent_api_keys.py` (51 lines): Partie 5.3.10 -- the real `X-API-Key` header authentication dependency
+- `api/security/agent_runs.py` (111 lines): Fix to Partie 5.1.1 -- item 2's own literal functions: `create_run`/
+- `api/security/agents.py` (220 lines): Partie 5.3.1 -- the real, persisted `Agent` entity. See
+- `api/security/audit_log.py` (115 lines): Audit finding 18 -- writes to and verifies the tamper-evident audit log
+- `api/security/autonomous_agents.py` (62 lines): Partie 23 -- real, single-resource access dependency for
+- `api/security/batch_jobs.py` (229 lines): Partie 2.2.16 -- generic batch job orchestration. `process_batch_job`
+- `api/security/chat_integrations_signature.py` (66 lines): Partie 9.4 -- real inbound-webhook signature verification for Slack
+- `api/security/citations.py` (63 lines): Partie 6.1.1 -- real permission resolution for the 3 literal citation
+- `api/security/conversations.py` (180 lines): Partie 5.1.12 -- item 3's own literal functions: `create_conversation`/
+- `api/security/credit_packs.py` (94 lines): Partie 12.3 -- fixed credit packs. A static Python catalog, same
+- `api/security/csrf.py` (74 lines): 1.1.16 -- double-submit CSRF protection for the two endpoints that
+- `api/security/custom_domains.py` (432 lines): Partie 1.4.1 -- custom domain registration and DNS verification.
+- `api/security/custom_tools.py` (124 lines): Partie 5.2.10 -- real custom-tool CRUD. Create/list are org-scoped
+- `api/security/datadog_llmobs.py` (43 lines): Datadog LLM Observability -- real `ddtrace` SDK, `LLMObs.enable()`.
+- `api/security/document_audit.py` (78 lines): Partie 2.2.10 -- recording and retrieving a document's own real
+- `api/security/document_capacity.py` (61 lines): Specs 1.3.6 / 12.3.2 / 12.3.3 -- document count and storage limits on EVERY way of adding documents.
+- `api/security/document_tags.py` (157 lines): Partie 2.2.6 -- creating, listing, updating, and deleting an
+- `api/security/document_versions.py` (126 lines): Partie 2.2.7 -- creating, listing, and restoring a document's own real
+- `api/security/documents.py` (3790 lines): Partie 2.1.1/2.1.2/2.1.3/2.1.4/2.1.5/2.1.6/2.1.7/2.1.8/2.1.9/2.1.10/2.1.11/2.1.12/2.1.13/2.1.14/2.1.15
+- `api/security/email_domains.py` (313 lines): Partie 1.4.5 -- custom email-sending domains (e.g. contact@ma-boite.com
+- `api/security/encryption.py` (130 lines): Partie 10.3 -- a second, real encryption-at-rest primitive alongside the
+- `api/security/enterprise_oidc.py` (101 lines): Audit finding 27 -- generic OIDC client logic for enterprise SSO, used by
+- `api/security/error_tracking.py` (54 lines): Phase 5, Étape 7 -- real Sentry error tracking, disabled by default
+- `api/security/evaluation.py` (271 lines): Partie 7.1.1/7.1.2/7.1.6 -- real permission resolution shared by every
+- `api/security/external_sources.py` (286 lines): Partie 2.2.14 -- CRUD for a persistent `ExternalSource` connection, plus
+- `api/security/fine_tuning.py` (84 lines): Partie 24 -- real, single-resource access dependencies for
+- `api/security/geoip.py` (116 lines): Audit finding 29: country-tier lookup backing
+- `api/security/hashing.py` (62 lines): Two different hashing strategies for two different kinds of secret:
+- `api/security/human_approval.py` (149 lines): Partie 5.1.10 -- item 2's own literal functions:
+- `api/security/invitations.py` (119 lines): Partie 1.3.4 -- email-based organization invitations. See
+- `api/security/jwt.py` (231 lines): Short-lived access tokens (1.1.8) plus a narrowly-scoped "mfa pending"
+- `api/security/logging_correlation.py` (153 lines): Partie 13.2 -- real request correlation. `system_logs.request_id`
+- `api/security/loki_handler.py` (120 lines): Grafana Cloud Loki -- real HTTP push to Loki's own `/loki/api/v1/push`
+- `api/security/media.py` (65 lines): Partie 22 -- real, single-resource access dependency for
+- `api/security/notifications.py` (129 lines): Real security-layer service for NotificationTemplate CRUD + preview
+- `api/security/organization_branding.py` (178 lines): Partie 1.3.10 -- reading and writing an organization's branding. See
+- `api/security/organization_settings.py` (397 lines): Partie 1.3.9 -- reading and writing an organization's configuration. See
+- `api/security/organizations.py` (252 lines): Etape 1.2.2 -- organization creation and role-checking. Mirrors
+- `api/security/password_history.py` (83 lines): Audit finding 15 -- reject a new password that matches the CURRENT one or
+- `api/security/password_similarity.py` (61 lines): Audit finding 16 -- reject a password that's a trivial variation of the
+- `api/security/password_strength.py` (61 lines): 1.1-audit finding: password.min_length=8 was the only strength check
+- `api/security/permission_catalog.py` (58 lines): Partie 10.1 -- the fixed, real catalog of granular permissions
+- `api/security/permissions.py` (181 lines): Partie 10.1 -- FastAPI dependency factories that gate a route on a
+- `api/security/plugin_manifest.py` (159 lines): Partie 16 (ter) -- plugin manifest validation + static code scan.
+- `api/security/plugin_sandbox.py` (252 lines): Partie 16 (ter) -- real plugin execution sandbox.
+- `api/security/public_api_auth.py` (94 lines): Partie 9.1 -- the real `X-API-Key` header authentication dependency for
+- `api/security/quotas.py` (204 lines): Partie 1.3.6 -- per-organization resource limits
+- `api/security/rate_limit.py` (206 lines): Brute-force / spam protection for the 5 auth endpoints an attacker would
+- `api/security/rbac.py` (204 lines): Etape 1.2.7 -- RBAC policy engine (Casbin), domain-scoped: `dom` in every
+- `api/security/recovery_codes.py` (64 lines): 1.1.7 2FA recovery codes -- issued once when 2FA is enabled, so a user who
+- `api/security/redis_client.py` (53 lines): Shared logic behind every loop-aware Redis client in api/security/
+- `api/security/reindex_schedules.py` (204 lines): Partie 2.2.15 -- CRUD for a `ReindexSchedule`, plus the real scheduling
+- `api/security/resource_permissions.py` (222 lines): Etape 1.2.8 -- per-resource-instance, per-user permission overrides on
+- `api/security/secret_encryption.py` (46 lines): Shared Fernet-based encryption-at-rest for the two audit-Categorie-4
+- `api/security/sessions.py` (340 lines): Shared session issuance/rotation/revocation logic (1.1.8, 1.1.9, 1.1.15),
+- `api/security/ssl_certificates.py` (402 lines): Partie 1.4.3 -- SSL certificates via a real ACME v2 client (the same
+- `api/security/system_log_handler.py` (94 lines): Partie 11.6 -- a real `logging.Handler` capturing every WARNING+ log
+- `api/security/teams.py` (159 lines): Partie 1.3.3 -- Teams. Two independent axes combine here: a team's OWN
+- `api/security/teams_bot_auth.py` (71 lines): Authentication of the inbound Microsoft Teams (Bot Framework) webhook.
+- `api/security/tool_permissions.py` (138 lines): Partie 5.1.3 -- item 2's own literal functions: `check_tool_permission`/
+- `api/security/totp.py` (34 lines): 1.1.7 -- TOTP secret generation, enrollment QR code, and verification.
+- `api/security/tracing.py` (131 lines): Partie 13.4 -- real OpenTelemetry distributed tracing, disabled by
+- `api/security/trusted_ips.py` (68 lines): Audit finding 30: an allowlist of IPs/CIDR ranges (TRUSTED_IPS) exempted
+- `api/security/usage.py` (126 lines): Partie 1.3.8 -- recording and reading per-organization usage. See
+- `api/security/user_limits.py` (170 lines): Partie 1.3.7 -- per-member overrides on top of the organization role
+- `api/security/webauthn.py` (193 lines): Audit finding 26 -- WebAuthn/FIDO2 as a second factor, alongside (never
+- `api/security/white_label.py` (224 lines): Partie 1.4.6 -- white-label: letting an organization fully hide this
+- `api/security/widget_auth.py` (338 lines): Partie 9.3 -- real widget authentication, deliberately in TWO tiers
+- `api/security/workflows.py` (170 lines): Partie 5.4.1 -- real workflow CRUD. Create/list are org-scoped
+- `api/security/workspaces.py` (85 lines): Etape 1.2.4 -- permission checking for the two workspace endpoints that
+
+## api/models/ (90 files)
+
+- `api/models/acme_account.py` (44 lines): Partie 1.4.3 -- persists the ONE ACME account this deployment registers
+- `api/models/admin.py` (124 lines): Partie 11 -- platform-admin models. `SystemLog` is fed by a real
+- `api/models/agent.py` (118 lines): Partie 5.3.1 -- the real, persisted `Agent` entity this codebase has
+- `api/models/agent_api_key.py` (36 lines): Partie 5.3.10 -- real, revocable API keys scoped to ONE agent, so a
+- `api/models/agent_long_term_memory.py` (45 lines): Phase 5, Étape 6 -- real, long-term, CROSS-RUN agent memory, closing a
+- `api/models/agent_memory.py` (49 lines): Partie 5.1.11 -- real, short-term, session-scoped agent memory:
+- `api/models/agent_run.py` (85 lines): Fix to Partie 5.1.1 -- makes AgentOrchestrator's run registry real,
+- `api/models/agent_trace.py` (39 lines): Partie 5.1.14 -- real, granular, per-step execution tracing for an
+- `api/models/alerting.py` (117 lines): Partie 13.3 -- alerting. Consolidated: `AlertRule` carries its own
+- `api/models/analytics.py` (96 lines): Partie 20 -- advanced analytics.
+- `api/models/audit_log.py` (190 lines): Audit finding 18 -- a persistent, tamper-evident record of sensitive
+- `api/models/autonomous_agent.py` (181 lines): Partie 23 -- goal-driven autonomous agents. See this part's own
+- `api/models/batch_job.py` (110 lines): Partie 2.2.16 -- a generic, per-item-tracked batch job wrapping 5 real,
+- `api/models/billing.py` (175 lines): Partie 12 -- billing. Deliberately does NOT duplicate what already
+- `api/models/bm25_revision.py` (26 lines): SQLite equivalents of migration 0133's transactional corpus revisions.
+- `api/models/chat_integrations.py` (137 lines): Partie 9.4 -- Slack/Teams/Discord chat-platform integrations. Real,
+- `api/models/citation.py` (71 lines): Partie 6.1.1 -- the real `Citation` entity: one real, structured
+- `api/models/compliance.py` (101 lines): Partie 10.4 -- GDPR/CCPA compliance tracking, additive to the mature
+- `api/models/connector_credential.py` (25 lines): Credentials an organization gave for ONE connector (Jira, Zendesk, Notion...), encrypted at rest (docs/DECISIONS.md D17).
+- `api/models/consent_reactivation_token.py` (32 lines): 1.1.12's flip side -- lets a user who withdrew consent (POST /account/consent/withdraw)
+- `api/models/conversation.py` (82 lines): Partie 5.1.12 -- real, persistent, cross-session conversation history:
+- `api/models/conversation_share.py` (32 lines): Partie 8.1.15 -- real, tokenized public share links for one
+- `api/models/coupon.py` (41 lines): Spec 12.1.4 -- promo codes.
+- `api/models/custom_domain.py` (120 lines): Partie 1.4.1 -- custom domains (e.g. app.ma-boite.com) an organization
+- `api/models/custom_tool.py` (43 lines): Partie 5.2.10 -- real, organization-defined custom tools backed by a
+- `api/models/document.py` (471 lines): Partie 2.1.1/2.1.10 -- documents an organization imports into its
+- `api/models/document_image.py` (45 lines): Partie 3.1.5 -- one real, embedded image extracted from a document
+- `api/models/encryption_audit.py` (49 lines): Partie 10.3 -- metadata-only records for the encryption subsystem.
+- `api/models/enterprise_sso.py` (101 lines): Audit finding 27 -- enterprise SSO via generic OIDC (Azure AD, Okta, and
+- `api/models/escalation.py` (68 lines): Partie 5.2.9 -- real, persistent human-escalation records: an agent
+- `api/models/evaluation.py` (554 lines): Partie 7.1.1/7.1.2/7.1.6 -- the real, multi-tenant Evaluation Lab this
+- `api/models/external_source.py` (92 lines): Partie 2.2.14 -- a persistent, recurring connection to an external
+- `api/models/fine_tuning.py` (178 lines): Partie 24 -- fine-tuning: custom training datasets, provider
+- `api/models/flight_recording.py` (50 lines): Real RAG Flight Recorder -- item 24 of the internal-systems list: every
+- `api/models/follow_up_question.py` (24 lines): Partie 8.1.18 -- real, persisted follow-up questions generated for
+- `api/models/human_approval.py` (58 lines): Partie 5.1.10 -- real, persistent human-approval requests for sensitive
+- `api/models/integrations.py` (115 lines): Partie 15.1/15.2/15.3 -- universal inbound integrations (Zapier/Make/n8n/
+- `api/models/invitation.py` (61 lines): Partie 1.3.4 -- email-based invitations: an org Manager+ invites an
+- `api/models/jwt_signing_key.py` (40 lines): Audit finding 28 -- DB-backed signing keys behind automatic JWT rotation.
+- `api/models/lockout_recovery_token.py` (34 lines): 1.1.7's true last resort -- for a user who has lost BOTH their
+- `api/models/mcp_server.py` (84 lines): Phase 5, Étape 9 -- MCP (Model Context Protocol) client-side config:
+- `api/models/media.py` (123 lines): Partie 22 -- multi-modal media (audio/video, plus standalone image
+- `api/models/message_actions.py` (86 lines): Partie 8.1.6/8.1.7/8.1.9 -- real, persisted history and feedback for
+- `api/models/metadata_enrichment.py` (56 lines): Partie 3.1.10 -- real per-item keyword/entity extraction results,
+- `api/models/notification.py` (109 lines): Phase 5, Étape 4 -- notifications (in-app + email), genuinely built
+- `api/models/notification_template.py` (55 lines): Phase 5, Étape 23 -- DB-backed notification templates.
+- `api/models/oauth.py` (33 lines): 1.1.5 / 1.1.6 -- one row per (provider, external account) a user has linked.
+- `api/models/organization.py` (128 lines): Etape 1.2.2 -- the first slice of Partie 1.3 (multi-tenant), built now
+- `api/models/organization_api_key.py` (90 lines): Partie 9.1 + 9.2.1-9.2.6 -- real, revocable, ORGANIZATION-scoped API
+- `api/models/organization_branding.py` (83 lines): Partie 1.3.10 -- per-organization branding (logo, favicon, colors, font,
+- `api/models/organization_llm_config.py` (40 lines): BYOK (Bring Your Own Key) -- an organization's own LLM provider API key,
+- `api/models/organization_quota.py` (52 lines): Partie 1.3.6 -- per-organization resource limits. One row per
+- `api/models/organization_settings.py` (47 lines): Partie 1.3.9 -- per-organization configuration (chunk size, embedding
+- `api/models/organization_usage.py` (92 lines): Partie 1.3.8 -- per-organization usage tracking. Two tables:
+- `api/models/password_history.py` (56 lines): Audit finding 15 -- keeps a user's most recent password hashes so a new
+- `api/models/plugins.py` (190 lines): Partie 16 (ter) -- plugin marketplace. Numbering collision, same
+- `api/models/rag_experiment.py` (53 lines): Real, versioned history of every tested RAG configuration -- item 19 of
+- `api/models/rbac.py` (125 lines): Partie 10.1 -- custom roles and granular permissions, layered ON TOP of
+- `api/models/recovery_code.py` (34 lines): 1.1.7 2FA recovery codes -- see api/security/recovery_codes.py for why
+- `api/models/reindex_schedule.py` (39 lines): Partie 2.2.15 -- a named, organization-wide cron schedule for
+- `api/models/resource_permission.py` (64 lines): Etape 1.2.8 -- per-resource-instance, per-user permission overrides
+- `api/models/response.py` (109 lines): Partie 6.1.1 -- the real, persisted `Response` entity this codebase
+- `api/models/restore_token.py` (32 lines): 1.1.10's flip side -- lets a user who soft-deleted their own account
+- `api/models/retrieval_diagnostic.py` (46 lines): Phase 5, Étape 11 -- real, per-query retrieval diagnostics for LIVE
+- `api/models/revoked_token.py` (45 lines): 1.1.15 -- the access-token blacklist. Access tokens are otherwise
+- `api/models/sales.py` (179 lines): Partie 16 (bis) -- sales-model infrastructure beyond SaaS (already real
+- `api/models/sandbox.py` (24 lines): Sandbox Environment — isolated dev/test data.
+- `api/models/scim.py` (23 lines): Spec 10.4.3 -- SCIM 2.0 provisioning tokens. One token authenticates one identity provider (Okta, Entra ID...) for exactly one organization.
+- `api/models/security_scan.py` (111 lines): Partie 10.5 -- security scanning. Real, locally-runnable scanners this
+- `api/models/session.py` (55 lines): 1.1.8 / 1.1.9 -- one row per issued refresh token. Only a SHA-256 hash of
+- `api/models/sms.py` (42 lines): Real Twilio SMS/WhatsApp send log. One real, honest scope: sending
+- `api/models/ssl_certificate.py` (87 lines): Partie 1.4.3 -- SSL certificates for custom domains, issued via a real
+- `api/models/task_plan.py` (62 lines): Partie 5.1.13 -- real, persistent task decomposition: `TaskPlan` (a
+- `api/models/team.py` (64 lines): Partie 1.3.3 -- Teams: a logical grouping of users WITHIN an organization
+- `api/models/token.py` (47 lines): 1.1.3 (password reset) and 1.1.4 (email verification OTP). Same
+- `api/models/tool_config.py` (50 lines): Partie 5.1.4 (tool timeout) + 5.1.5 (per-tool token budget) -- real,
+- `api/models/tool_fallback.py` (43 lines): Partie 5.1.7 -- real, persistent fallback chains: which tool (or LLM
+- `api/models/tool_permission.py` (60 lines): Partie 5.1.3 -- per-(agent, user, tool) permission overrides, real and
+- `api/models/user.py` (193 lines): The User model backs 1.1.1-1.1.4 and 1.1.7, 1.1.10-1.1.14 directly (auth,
+- `api/models/voice.py` (80 lines): Partie 8.2.7 (Audio history) + 8.2.8 (Voice settings) + 8.2.13
+- `api/models/webauthn_credential.py` (54 lines): Audit finding 26 -- WebAuthn/FIDO2 credentials (hardware security keys
+- `api/models/webhook.py` (53 lines): Partie 9.2.7 -- real, outbound webhooks notifying external
+- `api/models/widget.py` (144 lines): Partie 9.3 -- the embeddable chat widget. Real, coherent consolidation
+- `api/models/workflow.py` (73 lines): Partie 5.4.1 -- the real, persisted `Workflow` entity: an
+- `api/models/workflow_human_input.py` (46 lines): Partie 5.4.9 -- a real, persisted, pending human-input request within
+- `api/models/workflow_node_execution.py` (37 lines): Phase 5, Étape 11 -- real, granular, per-node execution tracing for a
+- `api/models/workflow_run.py` (74 lines): Partie 5.4.2 -- `WorkflowTrigger` (a real, named way to start a
+- `api/models/workflow_version.py` (38 lines): Partie 5.4.13 -- real, immutable snapshots of a `Workflow`'s own
+- `api/models/workspace.py` (37 lines): Etape 1.2.4 -- the minimal `workspaces` table needed to make the Manager

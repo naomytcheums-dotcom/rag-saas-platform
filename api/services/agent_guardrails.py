@@ -203,13 +203,13 @@ async def validate_guardrails(
     # pre-existing scope boundary -- the model's own response isn't an
     # instruction source).
     if agent.prompt_injection_detection_enabled:
-        from api.services.prompt_injection_detection import detect_prompt_injection
+        from api.services.prompt_injection_detection import detect_prompt_injection_confirmed
 
-        result = detect_prompt_injection(input)
+        result = await detect_prompt_injection_confirmed(input)
         if result["is_injection"]:
             violations.append(f"prompt_injection:input:score={result['score']:.2f}")
         if retrieved_context:
-            context_result = detect_prompt_injection(retrieved_context)
+            context_result = await detect_prompt_injection_confirmed(retrieved_context)
             if context_result["is_injection"]:
                 violations.append(f"prompt_injection:retrieved_context:score={context_result['score']:.2f}")
 

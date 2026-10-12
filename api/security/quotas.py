@@ -145,7 +145,7 @@ async def check_quota(db: AsyncSession, organization_id: uuid.UUID, resource_typ
     limit_column, query_builder = _LIVE_COUNTERS[resource_type]
     limits = await get_quota_limits(db, organization_id)
     current_usage = await db.scalar(query_builder(organization_id))
-    return (current_usage + delta) <= limits[limit_column]
+    return ((current_usage or 0) + delta) <= limits[limit_column]
 
 
 async def increment_usage(organization_id: uuid.UUID, resource_type: str, delta: int = 1) -> None:

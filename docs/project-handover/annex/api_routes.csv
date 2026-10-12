@@ -1,0 +1,984 @@
+method,path,tag,operation_id,summary,declares_security
+POST,/a2a/{org_id},A2A,a2a_jsonrpc_a2a__org_id__post,A2A Jsonrpc,no/unknown
+GET,/a2a/{org_id}/.well-known/agent-card.json,A2A,get_agent_card_a2a__org_id___well_known_agent_card_json_get,Get Agent Card,no/unknown
+GET,/ab-tests/{test_id},ab-tests,get_ab_test_endpoint_ab_tests__test_id__get,Get Ab Test Endpoint,yes
+PATCH,/ab-tests/{test_id},ab-tests,update_ab_test_endpoint_ab_tests__test_id__patch,Update Ab Test Endpoint,yes
+DELETE,/ab-tests/{test_id},ab-tests,delete_ab_test_endpoint_ab_tests__test_id__delete,Delete Ab Test Endpoint,yes
+GET,/ab-tests/{test_id}/assignments,ab-tests,list_ab_test_assignments_endpoint_ab_tests__test_id__assignments_get,List Ab Test Assignments Endpoint,yes
+POST,/ab-tests/{test_id}/complete,ab-tests,complete_ab_test_endpoint_ab_tests__test_id__complete_post,Complete Ab Test Endpoint,yes
+POST,/ab-tests/{test_id}/decide,ab-tests,decide_ab_test_winner_endpoint_ab_tests__test_id__decide_post,Decide Ab Test Winner Endpoint,yes
+GET,/ab-tests/{test_id}/export,ab-tests,export_ab_test_endpoint_ab_tests__test_id__export_get,Export Ab Test Endpoint,yes
+POST,/ab-tests/{test_id}/pause,ab-tests,pause_ab_test_endpoint_ab_tests__test_id__pause_post,Pause Ab Test Endpoint,yes
+GET,/ab-tests/{test_id}/results,ab-tests,get_ab_test_results_endpoint_ab_tests__test_id__results_get,Get Ab Test Results Endpoint,yes
+POST,/ab-tests/{test_id}/resume,ab-tests,resume_ab_test_endpoint_ab_tests__test_id__resume_post,Resume Ab Test Endpoint,yes
+POST,/ab-tests/{test_id}/start,ab-tests,start_ab_test_endpoint_ab_tests__test_id__start_post,Start Ab Test Endpoint,yes
+GET,/ab-tests/{test_id}/statistics,ab-tests,get_ab_test_statistics_endpoint_ab_tests__test_id__statistics_get,Get Ab Test Statistics Endpoint,yes
+POST,/ab-tests/{test_id}/track,ab-tests,track_ab_test_metric_endpoint_ab_tests__test_id__track_post,Track Ab Test Metric Endpoint,yes
+POST,/ab-tests/{test_id}/variants/choose,ab-tests,choose_ab_test_winner_endpoint_ab_tests__test_id__variants_choose_post,Choose Ab Test Winner Endpoint,yes
+GET,/account/audit-logs,audit,get_my_audit_logs_account_audit_logs_get,Get My Audit Logs,yes
+POST,/account/avatar,account,upload_avatar_route_account_avatar_post,Upload Avatar Route,yes
+POST,/account/change-password,account,change_password_account_change_password_post,Change Password,yes
+POST,/account/consent/accept-updated-terms,account,accept_updated_terms_account_consent_accept_updated_terms_post,Accept Updated Terms,yes
+POST,/account/consent/reactivate/confirm,account,confirm_consent_reactivation_account_consent_reactivate_confirm_post,Confirm Consent Reactivation,no/unknown
+POST,/account/consent/reactivate/request,account,request_consent_reactivation_account_consent_reactivate_request_post,Request Consent Reactivation,no/unknown
+POST,/account/consent/withdraw,account,withdraw_consent_account_consent_withdraw_post,Withdraw Consent,yes
+GET,/account/export,account,export_account_data_account_export_get,Export Account Data,yes
+GET,/account/export-csv,account,export_account_data_csv_account_export_csv_get,Export Account Data Csv,yes
+GET,/account/me,account,get_profile_account_me_get,Get Profile,yes
+DELETE,/account/me,account,delete_account_account_me_delete,Delete Account,yes
+PATCH,/account/preferences,account,update_preferences_account_preferences_patch,Update Preferences,yes
+PATCH,/account/profile,account,update_profile_account_profile_patch,Update Profile,yes
+POST,/account/restore/confirm,account,confirm_account_restore_account_restore_confirm_post,Confirm Account Restore,no/unknown
+POST,/account/restore/request,account,request_account_restore_account_restore_request_post,Request Account Restore,no/unknown
+POST,/account/set-password,account,set_password_account_set_password_post,Set Password,yes
+GET,/admin/activity,Admin Dashboard,get_recent_activity_endpoint_admin_activity_get,Get Recent Activity Endpoint,yes
+GET,/admin/alerts,Admin Dashboard,get_admin_alerts_endpoint_admin_alerts_get,Get Admin Alerts Endpoint,yes
+GET,/admin/audit-logs,audit,get_all_audit_logs_admin_audit_logs_get,Get All Audit Logs,yes
+GET,/admin/audit-logs/verify-integrity,audit,verify_audit_logs_integrity_admin_audit_logs_verify_integrity_get,Verify Audit Logs Integrity,yes
+GET,/admin/coupons,coupons,list_coupons_admin_coupons_get,List Coupons,yes
+POST,/admin/coupons,coupons,create_coupon_admin_coupons_post,Create Coupon,yes
+PATCH,/admin/coupons/{coupon_id},coupons,update_coupon_admin_coupons__coupon_id__patch,Update Coupon,yes
+GET,/admin/failed-logins,audit,get_failed_login_stats_admin_failed_logins_get,Get Failed Login Stats,yes
+GET,/admin/jwt-keys,audit,list_jwt_signing_keys_admin_jwt_keys_get,List Jwt Signing Keys,yes
+GET,/admin/logs,Admin Dashboard,list_logs_endpoint_admin_logs_get,List Logs Endpoint,yes
+GET,/admin/logs/export,Admin Dashboard,export_logs_endpoint_admin_logs_export_get,Export Logs Endpoint,yes
+GET,/admin/logs/levels,Admin Dashboard,get_log_levels_endpoint_admin_logs_levels_get,Get Log Levels Endpoint,yes
+DELETE,/admin/logs/purge,Admin Dashboard,purge_logs_endpoint_admin_logs_purge_delete,Purge Logs Endpoint,yes
+GET,/admin/logs/sources,Admin Dashboard,get_log_sources_endpoint_admin_logs_sources_get,Get Log Sources Endpoint,yes
+GET,/admin/logs/stats,Admin Dashboard,get_logs_stats_endpoint_admin_logs_stats_get,Get Logs Stats Endpoint,yes
+GET,/admin/logs/{log_id},Admin Dashboard,get_log_endpoint_admin_logs__log_id__get,Get Log Endpoint,yes
+GET,/admin/monitoring/health,Admin Dashboard,get_monitoring_health_endpoint_admin_monitoring_health_get,Get Monitoring Health Endpoint,yes
+GET,/admin/monitoring/queues,Admin Dashboard,get_monitoring_queues_endpoint_admin_monitoring_queues_get,Get Monitoring Queues Endpoint,yes
+GET,/admin/monitoring/resources,Admin Dashboard,get_monitoring_resources_endpoint_admin_monitoring_resources_get,Get Monitoring Resources Endpoint,yes
+GET,/admin/organizations,Admin Organizations,list_organizations_endpoint_admin_organizations_get,List Organizations Endpoint,yes
+GET,/admin/organizations/{org_id},Admin Organizations,get_organization_endpoint_admin_organizations__org_id__get,Get Organization Endpoint,yes
+PATCH,/admin/organizations/{org_id},Admin Organizations,update_organization_endpoint_admin_organizations__org_id__patch,Update Organization Endpoint,yes
+DELETE,/admin/organizations/{org_id},Admin Organizations,delete_organization_endpoint_admin_organizations__org_id__delete,Delete Organization Endpoint,yes
+POST,/admin/organizations/{org_id}/activate,Admin Organizations,activate_organization_endpoint_admin_organizations__org_id__activate_post,Activate Organization Endpoint,yes
+GET,/admin/organizations/{org_id}/activity,Admin Organizations,get_organization_activity_endpoint_admin_organizations__org_id__activity_get,Get Organization Activity Endpoint,yes
+GET,/admin/organizations/{org_id}/billing,Admin Organizations,get_organization_billing_endpoint_admin_organizations__org_id__billing_get,Get Organization Billing Endpoint,yes
+POST,/admin/organizations/{org_id}/invoices/{invoice_id}/mark-paid,Admin Subscriptions,admin_mark_invoice_paid_endpoint_admin_organizations__org_id__invoices__invoice_id__mark_paid_post,Admin Mark Invoice Paid Endpoint,yes
+POST,/admin/organizations/{org_id}/invoices/{invoice_id}/void,Admin Subscriptions,admin_void_invoice_endpoint_admin_organizations__org_id__invoices__invoice_id__void_post,Admin Void Invoice Endpoint,yes
+GET,/admin/organizations/{org_id}/members,Admin Organizations,get_organization_members_endpoint_admin_organizations__org_id__members_get,Get Organization Members Endpoint,yes
+POST,/admin/organizations/{org_id}/suspend,Admin Organizations,suspend_organization_endpoint_admin_organizations__org_id__suspend_post,Suspend Organization Endpoint,yes
+GET,/admin/organizations/{org_id}/usage,Admin Organizations,get_organization_usage_endpoint_admin_organizations__org_id__usage_get,Get Organization Usage Endpoint,yes
+GET,/admin/plans,Admin Subscriptions,list_plans_endpoint_admin_plans_get,List Plans Endpoint,yes
+POST,/admin/plans,Admin Subscriptions,create_plan_endpoint_admin_plans_post,Create Plan Endpoint,yes
+POST,/admin/plans/sync/stripe-prices,Admin Subscriptions,sync_stripe_prices_endpoint_admin_plans_sync_stripe_prices_post,Sync Stripe Prices Endpoint,yes
+POST,/admin/plans/sync/stripe-products,Admin Subscriptions,sync_stripe_products_endpoint_admin_plans_sync_stripe_products_post,Sync Stripe Products Endpoint,yes
+PATCH,/admin/plans/{plan_id},Admin Subscriptions,update_plan_endpoint_admin_plans__plan_id__patch,Update Plan Endpoint,yes
+DELETE,/admin/plans/{plan_id},Admin Subscriptions,delete_plan_endpoint_admin_plans__plan_id__delete,Delete Plan Endpoint,yes
+GET,/admin/plugins/pending,Plugin marketplace,list_pending_plugins_endpoint_admin_plugins_pending_get,List Pending Plugins Endpoint,yes
+POST,/admin/plugins/{plugin_id}/approve,Plugin marketplace,approve_plugin_endpoint_admin_plugins__plugin_id__approve_post,Approve Plugin Endpoint,yes
+POST,/admin/plugins/{plugin_id}/reject,Plugin marketplace,reject_plugin_endpoint_admin_plugins__plugin_id__reject_post,Reject Plugin Endpoint,yes
+POST,/admin/plugins/{plugin_id}/suspend,Plugin marketplace,suspend_plugin_endpoint_admin_plugins__plugin_id__suspend_post,Suspend Plugin Endpoint,yes
+GET,/admin/sso/connections,auth,list_sso_connections_admin_sso_connections_get,List Sso Connections,yes
+POST,/admin/sso/connections,auth,create_sso_connection_admin_sso_connections_post,Create Sso Connection,yes
+DELETE,/admin/sso/connections/{connection_id},auth,delete_sso_connection_admin_sso_connections__connection_id__delete,Delete Sso Connection,yes
+POST,/admin/sso/connections/{connection_id}/verify-domain,auth,verify_sso_connection_domain_admin_sso_connections__connection_id__verify_domain_post,Verify Sso Connection Domain,yes
+GET,/admin/stats,Admin Dashboard,get_stats_endpoint_admin_stats_get,Get Stats Endpoint,yes
+GET,/admin/stats/api-usage,Admin Dashboard,get_api_usage_stats_endpoint_admin_stats_api_usage_get,Get Api Usage Stats Endpoint,yes
+GET,/admin/stats/conversations,Admin Dashboard,get_conversation_stats_endpoint_admin_stats_conversations_get,Get Conversation Stats Endpoint,yes
+GET,/admin/stats/documents,Admin Dashboard,get_document_stats_endpoint_admin_stats_documents_get,Get Document Stats Endpoint,yes
+GET,/admin/stats/organizations,Admin Dashboard,get_organization_stats_endpoint_admin_stats_organizations_get,Get Organization Stats Endpoint,yes
+GET,/admin/stats/revenue,Admin Dashboard,get_revenue_stats_endpoint_admin_stats_revenue_get,Get Revenue Stats Endpoint,yes
+GET,/admin/stats/users,Admin Dashboard,get_user_stats_endpoint_admin_stats_users_get,Get User Stats Endpoint,yes
+GET,/admin/subscriptions,Admin Subscriptions,list_subscriptions_endpoint_admin_subscriptions_get,List Subscriptions Endpoint,yes
+GET,/admin/subscriptions/stats,Admin Subscriptions,get_subscription_stats_endpoint_admin_subscriptions_stats_get,Get Subscription Stats Endpoint,yes
+GET,/admin/subscriptions/{sub_id},Admin Subscriptions,get_subscription_endpoint_admin_subscriptions__sub_id__get,Get Subscription Endpoint,yes
+PATCH,/admin/subscriptions/{sub_id},Admin Subscriptions,update_subscription_endpoint_admin_subscriptions__sub_id__patch,Update Subscription Endpoint,yes
+DELETE,/admin/subscriptions/{sub_id},Admin Subscriptions,delete_subscription_endpoint_admin_subscriptions__sub_id__delete,Delete Subscription Endpoint,yes
+POST,/admin/subscriptions/{sub_id}/cancel,Admin Subscriptions,cancel_subscription_endpoint_admin_subscriptions__sub_id__cancel_post,Cancel Subscription Endpoint,yes
+POST,/admin/subscriptions/{sub_id}/extend,Admin Subscriptions,extend_subscription_endpoint_admin_subscriptions__sub_id__extend_post,Extend Subscription Endpoint,yes
+POST,/admin/subscriptions/{sub_id}/refund,Admin Subscriptions,refund_subscription_endpoint_admin_subscriptions__sub_id__refund_post,Refund Subscription Endpoint,yes
+GET,/admin/tools/budget,tool-config,get_tool_budgets_admin_tools_budget_get,Get Tool Budgets,yes
+GET,/admin/tools/fallback,tool-config,get_tool_fallbacks_admin_tools_fallback_get,Get Tool Fallbacks,yes
+POST,/admin/tools/fallback,tool-config,create_tool_fallback_admin_tools_fallback_post,Create Tool Fallback,yes
+DELETE,/admin/tools/fallback/{tool_name},tool-config,remove_tool_fallback_admin_tools_fallback__tool_name__delete,Remove Tool Fallback,yes
+GET,/admin/tools/timeout,tool-config,get_tool_timeouts_admin_tools_timeout_get,Get Tool Timeouts,yes
+GET,/admin/tools/usage,tool-config,get_tool_usages_admin_tools_usage_get,Get Tool Usages,yes
+PATCH,/admin/tools/{tool_name}/budget,tool-config,update_tool_budget_admin_tools__tool_name__budget_patch,Update Tool Budget,yes
+POST,/admin/tools/{tool_name}/budget/reset,tool-config,reset_tool_budget_endpoint_admin_tools__tool_name__budget_reset_post,Reset Tool Budget Endpoint,yes
+PATCH,/admin/tools/{tool_name}/timeout,tool-config,update_tool_timeout_admin_tools__tool_name__timeout_patch,Update Tool Timeout,yes
+GET,/admin/users,Admin Users,list_users_endpoint_admin_users_get,List Users Endpoint,yes
+GET,/admin/users/{user_id},Admin Users,get_user_endpoint_admin_users__user_id__get,Get User Endpoint,yes
+PATCH,/admin/users/{user_id},Admin Users,update_user_endpoint_admin_users__user_id__patch,Update User Endpoint,yes
+POST,/admin/users/{user_id}/activate,Admin Users,activate_user_endpoint_admin_users__user_id__activate_post,Activate User Endpoint,yes
+GET,/admin/users/{user_id}/activity,Admin Users,get_user_activity_endpoint_admin_users__user_id__activity_get,Get User Activity Endpoint,yes
+POST,/admin/users/{user_id}/reset-password,Admin Users,reset_user_password_endpoint_admin_users__user_id__reset_password_post,Reset User Password Endpoint,yes
+PATCH,/admin/users/{user_id}/role,admin,update_user_role_admin_users__user_id__role_patch,Update User Role,yes
+GET,/admin/users/{user_id}/sessions,Admin Users,get_user_sessions_endpoint_admin_users__user_id__sessions_get,Get User Sessions Endpoint,yes
+DELETE,/admin/users/{user_id}/sessions/{session_id},Admin Users,terminate_user_session_endpoint_admin_users__user_id__sessions__session_id__delete,Terminate User Session Endpoint,yes
+POST,/admin/users/{user_id}/suspend,Admin Users,suspend_user_endpoint_admin_users__user_id__suspend_post,Suspend User Endpoint,yes
+POST,/admin/users/{user_id}/verify-email,Admin Users,verify_user_email_endpoint_admin_users__user_id__verify_email_post,Verify User Email Endpoint,yes
+GET,/agents/{agent_id},agents,get_agent_endpoint_agents__agent_id__get,Get Agent Endpoint,yes
+PATCH,/agents/{agent_id},agents,update_agent_endpoint_agents__agent_id__patch,Update Agent Endpoint,yes
+DELETE,/agents/{agent_id},agents,delete_agent_endpoint_agents__agent_id__delete,Delete Agent Endpoint,yes
+POST,/agents/{agent_id}/activate,agents,activate_agent_endpoint_agents__agent_id__activate_post,Activate Agent Endpoint,yes
+POST,/agents/{agent_id}/api-keys,agent-api-keys,create_agent_api_key_endpoint_agents__agent_id__api_keys_post,Create Agent Api Key Endpoint,yes
+GET,/agents/{agent_id}/api-keys,agent-api-keys,list_agent_api_keys_endpoint_agents__agent_id__api_keys_get,List Agent Api Keys Endpoint,yes
+DELETE,/agents/{agent_id}/api-keys/{key_id},agent-api-keys,revoke_agent_api_key_endpoint_agents__agent_id__api_keys__key_id__delete,Revoke Agent Api Key Endpoint,yes
+POST,/agents/{agent_id}/archive,agents,archive_agent_endpoint_agents__agent_id__archive_post,Archive Agent Endpoint,yes
+POST,/agents/{agent_id}/deploy,deployment-evaluations,deploy_agent_endpoint_agents__agent_id__deploy_post,Deploy Agent Endpoint,yes
+POST,/agents/{agent_id}/deploy/evaluate,deployment-evaluations,create_deployment_evaluation_endpoint_agents__agent_id__deploy_evaluate_post,Create Deployment Evaluation Endpoint,yes
+GET,/agents/{agent_id}/deploy/evaluations,deployment-evaluations,list_deployment_evaluations_endpoint_agents__agent_id__deploy_evaluations_get,List Deployment Evaluations Endpoint,yes
+GET,/agents/{agent_id}/guardrails,agents,get_agent_guardrails_endpoint_agents__agent_id__guardrails_get,Get Agent Guardrails Endpoint,yes
+PATCH,/agents/{agent_id}/guardrails,agents,update_agent_guardrails_endpoint_agents__agent_id__guardrails_patch,Update Agent Guardrails Endpoint,yes
+GET,/agents/{agent_id}/knowledge-base,agents,get_agent_knowledge_base_endpoint_agents__agent_id__knowledge_base_get,Get Agent Knowledge Base Endpoint,yes
+PATCH,/agents/{agent_id}/knowledge-base,agents,update_agent_knowledge_base_endpoint_agents__agent_id__knowledge_base_patch,Update Agent Knowledge Base Endpoint,yes
+GET,/agents/{agent_id}/knowledge-base/config,agents,get_agent_kb_config_endpoint_agents__agent_id__knowledge_base_config_get,Get Agent Kb Config Endpoint,yes
+GET,/agents/{agent_id}/knowledge-base/options,agents,list_agent_knowledge_base_options_endpoint_agents__agent_id__knowledge_base_options_get,List Agent Knowledge Base Options Endpoint,yes
+GET,/agents/{agent_id}/memory,agents,get_agent_long_term_memory_endpoint_agents__agent_id__memory_get,Get Agent Long Term Memory Endpoint,yes
+GET,/agents/{agent_id}/memory-config,agents,get_agent_memory_config_endpoint_agents__agent_id__memory_config_get,Get Agent Memory Config Endpoint,yes
+PATCH,/agents/{agent_id}/memory-config,agents,update_agent_memory_config_endpoint_agents__agent_id__memory_config_patch,Update Agent Memory Config Endpoint,yes
+GET,/agents/{agent_id}/memory-usage,agents,get_agent_memory_usage_endpoint_agents__agent_id__memory_usage_get,Get Agent Memory Usage Endpoint,yes
+POST,/agents/{agent_id}/memory/clear,agents,clear_agent_memory_endpoint_agents__agent_id__memory_clear_post,Clear Agent Memory Endpoint,yes
+PUT,/agents/{agent_id}/memory/{key},agents,set_agent_long_term_memory_endpoint_agents__agent_id__memory__key__put,Set Agent Long Term Memory Endpoint,yes
+DELETE,/agents/{agent_id}/memory/{key},agents,delete_agent_long_term_memory_endpoint_agents__agent_id__memory__key__delete,Delete Agent Long Term Memory Endpoint,yes
+GET,/agents/{agent_id}/model,agents,get_agent_model_endpoint_agents__agent_id__model_get,Get Agent Model Endpoint,yes
+PATCH,/agents/{agent_id}/model,agents,update_agent_model_endpoint_agents__agent_id__model_patch,Update Agent Model Endpoint,yes
+POST,/agents/{agent_id}/pause,agents,pause_agent_endpoint_agents__agent_id__pause_post,Pause Agent Endpoint,yes
+GET,/agents/{agent_id}/permissions,agents,get_agent_permissions_endpoint_agents__agent_id__permissions_get,Get Agent Permissions Endpoint,yes
+PATCH,/agents/{agent_id}/permissions,agents,update_agent_permissions_endpoint_agents__agent_id__permissions_patch,Update Agent Permissions Endpoint,yes
+POST,/agents/{agent_id}/permissions/users,agents,add_agent_allowed_user_endpoint_agents__agent_id__permissions_users_post,Add Agent Allowed User Endpoint,yes
+DELETE,/agents/{agent_id}/permissions/users/{user_id},agents,remove_agent_allowed_user_endpoint_agents__agent_id__permissions_users__user_id__delete,Remove Agent Allowed User Endpoint,yes
+PATCH,/agents/{agent_id}/system-prompt,agents,update_system_prompt_endpoint_agents__agent_id__system_prompt_patch,Update System Prompt Endpoint,yes
+GET,/agents/{agent_id}/system-prompt/preview,agents,preview_system_prompt_endpoint_agents__agent_id__system_prompt_preview_get,Preview System Prompt Endpoint,yes
+GET,/agents/{agent_id}/system-prompt/variables,agents,get_system_prompt_variables_endpoint_agents__agent_id__system_prompt_variables_get,Get System Prompt Variables Endpoint,yes
+GET,/agents/{agent_id}/tools,agents,get_agent_tools_endpoint_agents__agent_id__tools_get,Get Agent Tools Endpoint,yes
+PATCH,/agents/{agent_id}/tools,agents,update_agent_tools_endpoint_agents__agent_id__tools_patch,Update Agent Tools Endpoint,yes
+POST,/agents/{agent_id}/tools/{tool_name}/disable,agents,disable_agent_tool_endpoint_agents__agent_id__tools__tool_name__disable_post,Disable Agent Tool Endpoint,yes
+POST,/agents/{agent_id}/tools/{tool_name}/enable,agents,enable_agent_tool_endpoint_agents__agent_id__tools__tool_name__enable_post,Enable Agent Tool Endpoint,yes
+GET,/alerting/channels,Observability,list_alert_channels_endpoint_alerting_channels_get,List Alert Channels Endpoint,yes
+POST,/alerting/channels,Observability,create_alert_channel_endpoint_alerting_channels_post,Create Alert Channel Endpoint,yes
+PATCH,/alerting/channels/{channel_id},Observability,update_alert_channel_endpoint_alerting_channels__channel_id__patch,Update Alert Channel Endpoint,yes
+DELETE,/alerting/channels/{channel_id},Observability,delete_alert_channel_endpoint_alerting_channels__channel_id__delete,Delete Alert Channel Endpoint,yes
+GET,/alerting/history,Observability,get_alert_history_endpoint_alerting_history_get,Get Alert History Endpoint,yes
+GET,/alerting/incidents,Observability,list_incidents_endpoint_alerting_incidents_get,List Incidents Endpoint,yes
+POST,/alerting/incidents,Observability,create_incident_endpoint_alerting_incidents_post,Create Incident Endpoint,yes
+PATCH,/alerting/incidents/{incident_id},Observability,update_incident_endpoint_alerting_incidents__incident_id__patch,Update Incident Endpoint,yes
+POST,/alerting/incidents/{incident_id}/resolve,Observability,resolve_incident_endpoint_alerting_incidents__incident_id__resolve_post,Resolve Incident Endpoint,yes
+GET,/alerting/rules,Observability,list_alert_rules_endpoint_alerting_rules_get,List Alert Rules Endpoint,yes
+POST,/alerting/rules,Observability,create_alert_rule_endpoint_alerting_rules_post,Create Alert Rule Endpoint,yes
+PATCH,/alerting/rules/{rule_id},Observability,update_alert_rule_endpoint_alerting_rules__rule_id__patch,Update Alert Rule Endpoint,yes
+DELETE,/alerting/rules/{rule_id},Observability,delete_alert_rule_endpoint_alerting_rules__rule_id__delete,Delete Alert Rule Endpoint,yes
+POST,/alerting/rules/{rule_id}/test,Observability,test_alert_rule_endpoint_alerting_rules__rule_id__test_post,Test Alert Rule Endpoint,yes
+GET,/analytics/business/churn,analytics,business_churn_endpoint_analytics_business_churn_get,Business Churn Endpoint,yes
+GET,/analytics/business/customers,analytics,business_customers_endpoint_analytics_business_customers_get,Business Customers Endpoint,yes
+GET,/analytics/business/ltv,analytics,business_ltv_endpoint_analytics_business_ltv_get,Business Ltv Endpoint,yes
+GET,/analytics/business/retention,analytics,business_retention_endpoint_analytics_business_retention_get,Business Retention Endpoint,yes
+GET,/analytics/business/revenue,analytics,business_revenue_endpoint_analytics_business_revenue_get,Business Revenue Endpoint,yes
+GET,/analytics/business/revenue/trend,analytics,business_revenue_trend_endpoint_analytics_business_revenue_trend_get,Business Revenue Trend Endpoint,yes
+GET,/api-keys/scopes,Public API,list_available_scopes_endpoint_api_keys_scopes_get,List Available Scopes Endpoint,yes
+GET,/api-keys/{key_id},Public API,get_api_key_endpoint_api_keys__key_id__get,Get Api Key Endpoint,yes
+PATCH,/api-keys/{key_id},Public API,update_api_key_endpoint_api_keys__key_id__patch,Update Api Key Endpoint,yes
+PATCH,/api-keys/{key_id}/expiration,Public API,set_key_expiration_endpoint_api_keys__key_id__expiration_patch,Set Key Expiration Endpoint,yes
+DELETE,/api-keys/{key_id}/expiration,Public API,remove_key_expiration_endpoint_api_keys__key_id__expiration_delete,Remove Key Expiration Endpoint,yes
+GET,/api-keys/{key_id}/quota,Public API,get_quota_endpoint_api_keys__key_id__quota_get,Get Quota Endpoint,yes
+PATCH,/api-keys/{key_id}/quota,Public API,set_quota_endpoint_api_keys__key_id__quota_patch,Set Quota Endpoint,yes
+GET,/api-keys/{key_id}/quota/status,Public API,get_quota_status_endpoint_api_keys__key_id__quota_status_get,Get Quota Status Endpoint,yes
+GET,/api-keys/{key_id}/rate-limit,Public API,get_rate_limit_endpoint_api_keys__key_id__rate_limit_get,Get Rate Limit Endpoint,yes
+PATCH,/api-keys/{key_id}/rate-limit,Public API,set_rate_limit_endpoint_api_keys__key_id__rate_limit_patch,Set Rate Limit Endpoint,yes
+POST,/api-keys/{key_id}/rotate,Public API,rotate_api_key_endpoint_api_keys__key_id__rotate_post,Rotate Api Key Endpoint,yes
+GET,/api-keys/{key_id}/rotation-history,Public API,get_key_rotation_history_endpoint_api_keys__key_id__rotation_history_get,Get Key Rotation History Endpoint,yes
+POST,/api-keys/{key_id}/schedule-rotation,Public API,schedule_key_rotation_endpoint_api_keys__key_id__schedule_rotation_post,Schedule Key Rotation Endpoint,yes
+PATCH,/api-keys/{key_id}/scopes,Public API,update_key_scopes_endpoint_api_keys__key_id__scopes_patch,Update Key Scopes Endpoint,yes
+POST,/api/agents/run,agent-api-keys,run_agent_via_api_key_endpoint_api_agents_run_post,Run Agent Via Api Key Endpoint,no/unknown
+GET,/api/versions,API Versioning,list_api_versions_endpoint_api_versions_get,List Api Versions Endpoint,no/unknown
+GET,/api/versions/{version},API Versioning,get_api_version_endpoint_api_versions__version__get,Get Api Version Endpoint,no/unknown
+GET,/audit/actions,audit,get_audit_actions_endpoint_audit_actions_get,Get Audit Actions Endpoint,yes
+GET,/audit/export,audit,export_audit_logs_endpoint_audit_export_get,Export Audit Logs Endpoint,yes
+DELETE,/audit/logs/purge,audit,purge_audit_logs_endpoint_audit_logs_purge_delete,Purge Audit Logs Endpoint,yes
+GET,/audit/resource/{resource_type}/{resource_id},audit,get_resource_audit_logs_endpoint_audit_resource__resource_type___resource_id__get,Get Resource Audit Logs Endpoint,yes
+GET,/audit/stats,audit,get_audit_stats_endpoint_audit_stats_get,Get Audit Stats Endpoint,yes
+GET,/audit/user/{user_id},audit,get_user_audit_logs_endpoint_audit_user__user_id__get,Get User Audit Logs Endpoint,yes
+POST,/auth/2fa/disable,auth,disable_two_factor_auth_2fa_disable_post,Disable Two Factor,yes
+POST,/auth/2fa/enable,auth,enable_two_factor_auth_2fa_enable_post,Enable Two Factor,yes
+POST,/auth/2fa/lockout-recovery/confirm,auth,confirm_two_factor_lockout_recovery_auth_2fa_lockout_recovery_confirm_post,Confirm Two Factor Lockout Recovery,no/unknown
+POST,/auth/2fa/lockout-recovery/request,auth,request_two_factor_lockout_recovery_auth_2fa_lockout_recovery_request_post,Request Two Factor Lockout Recovery,no/unknown
+POST,/auth/2fa/recovery-codes/regenerate,auth,regenerate_recovery_codes_auth_2fa_recovery_codes_regenerate_post,Regenerate Recovery Codes,yes
+GET,/auth/2fa/recovery-codes/status,auth,recovery_codes_status_auth_2fa_recovery_codes_status_get,Recovery Codes Status,yes
+POST,/auth/2fa/setup,auth,setup_two_factor_auth_2fa_setup_post,Setup Two Factor,yes
+POST,/auth/2fa/verify-login,auth,verify_two_factor_login_auth_2fa_verify_login_post,Verify Two Factor Login,no/unknown
+POST,/auth/2fa/verify-recovery-code,auth,verify_two_factor_recovery_code_auth_2fa_verify_recovery_code_post,Verify Two Factor Recovery Code,no/unknown
+POST,/auth/login,auth,login_auth_login_post,Login,no/unknown
+POST,/auth/logout,auth,logout_auth_logout_post,Logout,no/unknown
+GET,/auth/oauth/{provider}/authorize,auth,oauth_authorize_auth_oauth__provider__authorize_get,Oauth Authorize,no/unknown
+GET,/auth/oauth/{provider}/callback,auth,oauth_callback_auth_oauth__provider__callback_get,Oauth Callback,no/unknown
+POST,/auth/password/forgot,auth,forgot_password_auth_password_forgot_post,Forgot Password,no/unknown
+POST,/auth/password/reset,auth,reset_password_auth_password_reset_post,Reset Password,no/unknown
+POST,/auth/refresh,auth,refresh_auth_refresh_post,Refresh,no/unknown
+POST,/auth/register,auth,register_auth_register_post,Register,no/unknown
+POST,/auth/sso/discover,auth,discover_sso_auth_sso_discover_post,Discover Sso,no/unknown
+GET,/auth/sso/{connection_id}/authorize,auth,sso_authorize_auth_sso__connection_id__authorize_get,Sso Authorize,no/unknown
+GET,/auth/sso/{connection_id}/callback,auth,sso_callback_auth_sso__connection_id__callback_get,Sso Callback,no/unknown
+POST,/auth/verify-email/confirm,auth,confirm_verification_code_auth_verify_email_confirm_post,Confirm Verification Code,yes
+POST,/auth/verify-email/request,auth,request_verification_code_auth_verify_email_request_post,Request Verification Code,yes
+POST,/auth/webauthn/authenticate/options,auth,webauthn_authentication_options_auth_webauthn_authenticate_options_post,Webauthn Authentication Options,no/unknown
+POST,/auth/webauthn/authenticate/verify,auth,webauthn_authentication_verify_auth_webauthn_authenticate_verify_post,Webauthn Authentication Verify,no/unknown
+GET,/auth/webauthn/credentials,auth,list_webauthn_credentials_auth_webauthn_credentials_get,List Webauthn Credentials,yes
+DELETE,/auth/webauthn/credentials/{credential_id},auth,delete_webauthn_credential_auth_webauthn_credentials__credential_id__delete,Delete Webauthn Credential,yes
+POST,/auth/webauthn/register/options,auth,webauthn_registration_options_auth_webauthn_register_options_post,Webauthn Registration Options,yes
+POST,/auth/webauthn/register/verify,auth,webauthn_registration_verify_auth_webauthn_register_verify_post,Webauthn Registration Verify,yes
+GET,/autonomous-agents/{agent_id},autonomous-agents,get_autonomous_agent_endpoint_autonomous_agents__agent_id__get,Get Autonomous Agent Endpoint,yes
+PATCH,/autonomous-agents/{agent_id},autonomous-agents,update_autonomous_agent_endpoint_autonomous_agents__agent_id__patch,Update Autonomous Agent Endpoint,yes
+DELETE,/autonomous-agents/{agent_id},autonomous-agents,delete_autonomous_agent_endpoint_autonomous_agents__agent_id__delete,Delete Autonomous Agent Endpoint,yes
+POST,/autonomous-agents/{agent_id}/collaborate,autonomous-agents,collaborate_endpoint_autonomous_agents__agent_id__collaborate_post,Collaborate Endpoint,yes
+GET,/autonomous-agents/{agent_id}/collaborations,autonomous-agents,list_collaborations_endpoint_autonomous_agents__agent_id__collaborations_get,List Collaborations Endpoint,yes
+GET,/autonomous-agents/{agent_id}/cost,autonomous-agents,get_autonomous_agent_cost_endpoint_autonomous_agents__agent_id__cost_get,Get Autonomous Agent Cost Endpoint,yes
+GET,/autonomous-agents/{agent_id}/memory,autonomous-agents,get_agent_memory_endpoint_autonomous_agents__agent_id__memory_get,Get Agent Memory Endpoint,yes
+POST,/autonomous-agents/{agent_id}/memory,autonomous-agents,add_agent_memory_endpoint_autonomous_agents__agent_id__memory_post,Add Agent Memory Endpoint,yes
+DELETE,/autonomous-agents/{agent_id}/memory/{memory_id},autonomous-agents,delete_agent_memory_endpoint_autonomous_agents__agent_id__memory__memory_id__delete,Delete Agent Memory Endpoint,yes
+POST,/autonomous-agents/{agent_id}/pause,autonomous-agents,pause_autonomous_agent_endpoint_autonomous_agents__agent_id__pause_post,Pause Autonomous Agent Endpoint,yes
+GET,/autonomous-agents/{agent_id}/plans,autonomous-agents,list_agent_plans_endpoint_autonomous_agents__agent_id__plans_get,List Agent Plans Endpoint,yes
+GET,/autonomous-agents/{agent_id}/plans/{plan_id},autonomous-agents,get_agent_plan_endpoint_autonomous_agents__agent_id__plans__plan_id__get,Get Agent Plan Endpoint,yes
+GET,/autonomous-agents/{agent_id}/plans/{plan_id}/steps,autonomous-agents,list_agent_steps_endpoint_autonomous_agents__agent_id__plans__plan_id__steps_get,List Agent Steps Endpoint,yes
+POST,/autonomous-agents/{agent_id}/resume,autonomous-agents,resume_autonomous_agent_endpoint_autonomous_agents__agent_id__resume_post,Resume Autonomous Agent Endpoint,yes
+POST,/autonomous-agents/{agent_id}/run,autonomous-agents,run_autonomous_agent_endpoint_autonomous_agents__agent_id__run_post,Run Autonomous Agent Endpoint,yes
+GET,/autonomous-agents/{agent_id}/status,autonomous-agents,get_autonomous_agent_status_endpoint_autonomous_agents__agent_id__status_get,Get Autonomous Agent Status Endpoint,yes
+POST,/autonomous-agents/{agent_id}/stop,autonomous-agents,stop_autonomous_agent_endpoint_autonomous_agents__agent_id__stop_post,Stop Autonomous Agent Endpoint,yes
+GET,/batch/jobs/{job_id},batch-jobs,get_batch_job_route_batch_jobs__job_id__get,Get Batch Job Route,yes
+POST,/batch/jobs/{job_id}/cancel,batch-jobs,cancel_batch_job_route_batch_jobs__job_id__cancel_post,Cancel Batch Job Route,yes
+GET,/batch/jobs/{job_id}/items,batch-jobs,list_batch_job_items_route_batch_jobs__job_id__items_get,List Batch Job Items Route,yes
+GET,/billing/display-currency,Billing,display_currency_endpoint_billing_display_currency_get,Display Currency Endpoint,no/unknown
+POST,/billing/paystack/webhook,Billing,paystack_webhook_endpoint_billing_paystack_webhook_post,Paystack Webhook Endpoint,no/unknown
+GET,/billing/plans,Billing,list_plans_endpoint_billing_plans_get,List Plans Endpoint,no/unknown
+GET,/billing/plans/{plan_id},Billing,get_plan_endpoint_billing_plans__plan_id__get,Get Plan Endpoint,no/unknown
+POST,/billing/stripe/webhook,Billing,stripe_webhook_endpoint_billing_stripe_webhook_post,Stripe Webhook Endpoint,no/unknown
+GET,/chat/stream,chat-stream,stream_chat_get_endpoint_chat_stream_get,Stream Chat Get Endpoint,yes
+POST,/chat/stream,chat-stream,stream_chat_post_endpoint_chat_stream_post,Stream Chat Post Endpoint,yes
+GET,/citations/{citation_id},citations,get_citation_endpoint_citations__citation_id__get,Get Citation Endpoint,yes
+GET,/citations/{citation_id}/preview,citations,get_citation_preview_endpoint_citations__citation_id__preview_get,Get Citation Preview Endpoint,yes
+GET,/comparisons/{comparison_id},comparison-jobs,get_model_comparison_endpoint_comparisons__comparison_id__get,Get Model Comparison Endpoint,yes
+GET,/comparisons/{comparison_id}/results,comparison-jobs,get_model_comparison_results_endpoint_comparisons__comparison_id__results_get,Get Model Comparison Results Endpoint,yes
+POST,/comparisons/{comparison_id}/run,comparison-jobs,run_model_comparison_endpoint_comparisons__comparison_id__run_post,Run Model Comparison Endpoint,yes
+GET,/compliance/consent,Compliance,get_consents_endpoint_compliance_consent_get,Get Consents Endpoint,yes
+POST,/compliance/consent,Compliance,record_consent_endpoint_compliance_consent_post,Record Consent Endpoint,yes
+DELETE,/compliance/consent/{consent_type},Compliance,withdraw_consent_endpoint_compliance_consent__consent_type__delete,Withdraw Consent Endpoint,yes
+POST,/compliance/data-breach,Compliance,declare_data_breach_endpoint_compliance_data_breach_post,Declare Data Breach Endpoint,yes
+POST,/compliance/data-deletion,Compliance,request_data_deletion_endpoint_compliance_data_deletion_post,Request Data Deletion Endpoint,no/unknown
+GET,/compliance/data-export,Compliance,data_export_endpoint_compliance_data_export_get,Data Export Endpoint,yes
+POST,/compliance/data-requests,Compliance,create_data_request_endpoint_compliance_data_requests_post,Create Data Request Endpoint,yes
+GET,/compliance/data-requests,Compliance,list_data_requests_endpoint_compliance_data_requests_get,List Data Requests Endpoint,yes
+GET,/compliance/data-requests/{request_id},Compliance,get_data_request_endpoint_compliance_data_requests__request_id__get,Get Data Request Endpoint,yes
+PATCH,/compliance/data-requests/{request_id},Compliance,update_data_request_endpoint_compliance_data_requests__request_id__patch,Update Data Request Endpoint,yes
+POST,/compliance/data-requests/{request_id}/process,Compliance,process_data_request_endpoint_compliance_data_requests__request_id__process_post,Process Data Request Endpoint,yes
+GET,/compliance/report,Compliance,compliance_report_endpoint_compliance_report_get,Compliance Report Endpoint,yes
+GET,/compliance/status,Compliance,compliance_status_endpoint_compliance_status_get,Compliance Status Endpoint,yes
+POST,/conversations,conversations,create_conversation_endpoint_conversations_post,Create Conversation Endpoint,yes
+GET,/conversations,conversations,list_conversations_endpoint_conversations_get,List Conversations Endpoint,yes
+GET,/conversations/deleted,conversations,list_deleted_conversations_endpoint_conversations_deleted_get,List Deleted Conversations Endpoint,yes
+GET,/conversations/public,conversations,list_public_conversations_endpoint_conversations_public_get,List Public Conversations Endpoint,yes
+GET,/conversations/search,conversations,search_conversations_endpoint_conversations_search_get,Search Conversations Endpoint,yes
+GET,/conversations/stats,conversations,get_conversation_stats_endpoint_conversations_stats_get,Get Conversation Stats Endpoint,yes
+GET,/conversations/{conversation_id},conversations,get_conversation_endpoint_conversations__conversation_id__get,Get Conversation Endpoint,yes
+PATCH,/conversations/{conversation_id},conversations,update_conversation_title_endpoint_conversations__conversation_id__patch,Update Conversation Title Endpoint,yes
+DELETE,/conversations/{conversation_id},conversations,delete_conversation_endpoint_conversations__conversation_id__delete,Delete Conversation Endpoint,yes
+POST,/conversations/{conversation_id}/archive,conversations,archive_conversation_endpoint_conversations__conversation_id__archive_post,Archive Conversation Endpoint,yes
+GET,/conversations/{conversation_id}/export/docx,conversations,export_conversation_docx_endpoint_conversations__conversation_id__export_docx_get,Export Conversation Docx Endpoint,yes
+GET,/conversations/{conversation_id}/export/json,conversations,export_conversation_json_endpoint_conversations__conversation_id__export_json_get,Export Conversation Json Endpoint,yes
+GET,/conversations/{conversation_id}/export/markdown,conversations,export_conversation_markdown_endpoint_conversations__conversation_id__export_markdown_get,Export Conversation Markdown Endpoint,yes
+GET,/conversations/{conversation_id}/export/pdf,conversations,export_conversation_pdf_endpoint_conversations__conversation_id__export_pdf_get,Export Conversation Pdf Endpoint,yes
+GET,/conversations/{conversation_id}/messages,conversations,list_conversation_messages_endpoint_conversations__conversation_id__messages_get,List Conversation Messages Endpoint,yes
+POST,/conversations/{conversation_id}/messages,conversations,add_conversation_message_endpoint_conversations__conversation_id__messages_post,Add Conversation Message Endpoint,yes
+PATCH,/conversations/{conversation_id}/messages/{message_id},conversations,update_message_endpoint_conversations__conversation_id__messages__message_id__patch,Update Message Endpoint,yes
+POST,/conversations/{conversation_id}/messages/{message_id}/edit,conversations,edit_and_regenerate_message_endpoint_conversations__conversation_id__messages__message_id__edit_post,Edit And Regenerate Message Endpoint,yes
+GET,/conversations/{conversation_id}/messages/{message_id}/edit-history,conversations,get_message_edit_history_endpoint_conversations__conversation_id__messages__message_id__edit_history_get,Get Message Edit History Endpoint,yes
+POST,/conversations/{conversation_id}/messages/{message_id}/regenerate,conversations,regenerate_message_endpoint_conversations__conversation_id__messages__message_id__regenerate_post,Regenerate Message Endpoint,yes
+POST,/conversations/{conversation_id}/messages/{message_id}/retry,conversations,retry_message_endpoint_conversations__conversation_id__messages__message_id__retry_post,Retry Message Endpoint,yes
+POST,/conversations/{conversation_id}/messages/{message_id}/revert,conversations,revert_message_endpoint_conversations__conversation_id__messages__message_id__revert_post,Revert Message Endpoint,yes
+DELETE,/conversations/{conversation_id}/permanent,conversations,permanently_delete_conversation_endpoint_conversations__conversation_id__permanent_delete,Permanently Delete Conversation Endpoint,yes
+POST,/conversations/{conversation_id}/restore,conversations,restore_conversation_endpoint_conversations__conversation_id__restore_post,Restore Conversation Endpoint,yes
+POST,/conversations/{conversation_id}/share,conversations,create_share_link_endpoint_conversations__conversation_id__share_post,Create Share Link Endpoint,yes
+GET,/conversations/{conversation_id}/shares,conversations,list_share_links_endpoint_conversations__conversation_id__shares_get,List Share Links Endpoint,yes
+PATCH,/conversations/{conversation_id}/visibility,conversations,update_conversation_visibility_endpoint_conversations__conversation_id__visibility_patch,Update Conversation Visibility Endpoint,yes
+GET,/conversations/{conversation_id}/voice-messages,voice-messages,list_voice_messages_endpoint_conversations__conversation_id__voice_messages_get,List Voice Messages Endpoint,yes
+GET,/custom-tools/{tool_id},custom-tools,get_custom_tool_endpoint_custom_tools__tool_id__get,Get Custom Tool Endpoint,yes
+PATCH,/custom-tools/{tool_id},custom-tools,update_custom_tool_endpoint_custom_tools__tool_id__patch,Update Custom Tool Endpoint,yes
+DELETE,/custom-tools/{tool_id},custom-tools,delete_custom_tool_endpoint_custom_tools__tool_id__delete,Delete Custom Tool Endpoint,yes
+POST,/custom-tools/{tool_id}/execute,custom-tools,execute_custom_tool_endpoint_custom_tools__tool_id__execute_post,Execute Custom Tool Endpoint,yes
+GET,/datasets/{dataset_id},evaluation-datasets,get_dataset_endpoint_datasets__dataset_id__get,Get Dataset Endpoint,yes
+PATCH,/datasets/{dataset_id},evaluation-datasets,update_dataset_endpoint_datasets__dataset_id__patch,Update Dataset Endpoint,yes
+DELETE,/datasets/{dataset_id},evaluation-datasets,delete_dataset_endpoint_datasets__dataset_id__delete,Delete Dataset Endpoint,yes
+POST,/datasets/{dataset_id}/compare,comparison-jobs,create_model_comparison_endpoint_datasets__dataset_id__compare_post,Create Model Comparison Endpoint,yes
+GET,/datasets/{dataset_id}/comparisons,comparison-jobs,list_model_comparisons_endpoint_datasets__dataset_id__comparisons_get,List Model Comparisons Endpoint,yes
+POST,/datasets/{dataset_id}/evaluate,evaluation-jobs,create_evaluation_job_endpoint_datasets__dataset_id__evaluate_post,Create Evaluation Job Endpoint,yes
+GET,/datasets/{dataset_id}/evaluations/stats,manual-evaluations,get_manual_evaluation_stats_endpoint_datasets__dataset_id__evaluations_stats_get,Get Manual Evaluation Stats Endpoint,yes
+GET,/datasets/{dataset_id}/jobs,evaluation-jobs,list_evaluation_jobs_endpoint_datasets__dataset_id__jobs_get,List Evaluation Jobs Endpoint,yes
+GET,/datasets/{dataset_id}/metrics/{metric},evaluation-results,get_metrics_summary_endpoint_datasets__dataset_id__metrics__metric__get,Get Metrics Summary Endpoint,yes
+POST,/datasets/{dataset_id}/prompts/compare,comparison-jobs,create_prompt_comparison_endpoint_datasets__dataset_id__prompts_compare_post,Create Prompt Comparison Endpoint,yes
+GET,/datasets/{dataset_id}/prompts/comparisons,comparison-jobs,list_prompt_comparisons_endpoint_datasets__dataset_id__prompts_comparisons_get,List Prompt Comparisons Endpoint,yes
+POST,/datasets/{dataset_id}/questions,evaluation-datasets,add_question_endpoint_datasets__dataset_id__questions_post,Add Question Endpoint,yes
+GET,/datasets/{dataset_id}/questions,evaluation-datasets,get_questions_endpoint_datasets__dataset_id__questions_get,Get Questions Endpoint,yes
+POST,/datasets/{dataset_id}/questions/assign-split,evaluation-datasets,assign_split_endpoint_datasets__dataset_id__questions_assign_split_post,Assign Split Endpoint,yes
+GET,/datasets/{dataset_id}/questions/export,evaluation-datasets,export_questions_endpoint_datasets__dataset_id__questions_export_get,Export Questions Endpoint,yes
+POST,/datasets/{dataset_id}/questions/import,evaluation-datasets,import_questions_endpoint_datasets__dataset_id__questions_import_post,Import Questions Endpoint,yes
+GET,/datasets/{dataset_id}/regressions,regression-detection,get_regressions_endpoint_datasets__dataset_id__regressions_get,Get Regressions Endpoint,yes
+POST,/datasets/{dataset_id}/regressions/detect,regression-detection,detect_regressions_endpoint_datasets__dataset_id__regressions_detect_post,Detect Regressions Endpoint,yes
+GET,/datasets/{dataset_id}/regressions/summary,regression-detection,get_regression_summary_endpoint_datasets__dataset_id__regressions_summary_get,Get Regression Summary Endpoint,yes
+POST,/datasets/{dataset_id}/rerankers/compare,comparison-jobs,create_reranker_comparison_endpoint_datasets__dataset_id__rerankers_compare_post,Create Reranker Comparison Endpoint,yes
+GET,/datasets/{dataset_id}/rerankers/comparisons,comparison-jobs,list_reranker_comparisons_endpoint_datasets__dataset_id__rerankers_comparisons_get,List Reranker Comparisons Endpoint,yes
+POST,/datasets/{dataset_id}/retrievers/compare,comparison-jobs,create_retriever_comparison_endpoint_datasets__dataset_id__retrievers_compare_post,Create Retriever Comparison Endpoint,yes
+GET,/datasets/{dataset_id}/retrievers/comparisons,comparison-jobs,list_retriever_comparisons_endpoint_datasets__dataset_id__retrievers_comparisons_get,List Retriever Comparisons Endpoint,yes
+POST,/datasets/{dataset_id}/sets,question-sets,create_question_set_endpoint_datasets__dataset_id__sets_post,Create Question Set Endpoint,yes
+GET,/datasets/{dataset_id}/sets,question-sets,list_question_sets_endpoint_datasets__dataset_id__sets_get,List Question Sets Endpoint,yes
+POST,/datasets/{dataset_id}/versions,benchmark-versions,create_benchmark_version_endpoint_datasets__dataset_id__versions_post,Create Benchmark Version Endpoint,yes
+GET,/datasets/{dataset_id}/versions,benchmark-versions,list_benchmark_versions_endpoint_datasets__dataset_id__versions_get,List Benchmark Versions Endpoint,yes
+POST,/datasets/{dataset_id}/versions/rollback,benchmark-versions,rollback_to_version_endpoint_datasets__dataset_id__versions_rollback_post,Rollback To Version Endpoint,yes
+GET,/deploy/evaluations/{evaluation_id},deployment-evaluations,get_deployment_evaluation_endpoint_deploy_evaluations__evaluation_id__get,Get Deployment Evaluation Endpoint,yes
+POST,/deploy/evaluations/{evaluation_id}/pass,deployment-evaluations,pass_deployment_evaluation_endpoint_deploy_evaluations__evaluation_id__pass_post,Pass Deployment Evaluation Endpoint,yes
+GET,/documents/outdated,documents,list_outdated_documents_route_documents_outdated_get,List Outdated Documents Route,yes
+GET,/documents/{document_id},documents,get_document_documents__document_id__get,Get Document,yes
+DELETE,/documents/{document_id},documents,delete_document_documents__document_id__delete,Delete Document,yes
+POST,/documents/{document_id}/check-modified,documents,check_document_modified_route_documents__document_id__check_modified_post,Check Document Modified Route,yes
+GET,/documents/{document_id}/citations,citations,list_citations_by_document_endpoint_documents__document_id__citations_get,List Citations By Document Endpoint,yes
+GET,/documents/{document_id}/duplicates,documents,get_document_duplicates_route_documents__document_id__duplicates_get,Get Document Duplicates Route,yes
+GET,/documents/{document_id}/history,documents,get_document_history_route_documents__document_id__history_get,Get Document History Route,yes
+GET,/documents/{document_id}/images,documents,list_document_images_route_documents__document_id__images_get,List Document Images Route,yes
+GET,/documents/{document_id}/metadata,documents,get_document_metadata_documents__document_id__metadata_get,Get Document Metadata,yes
+DELETE,/documents/{document_id}/permanent,documents,permanently_delete_document_documents__document_id__permanent_delete,Permanently Delete Document,yes
+GET,/documents/{document_id}/preview,documents,preview_document_documents__document_id__preview_get,Preview Document,yes
+GET,/documents/{document_id}/progress,documents,get_document_processing_progress_documents__document_id__progress_get,Get Document Processing Progress,yes
+GET,/documents/{document_id}/progress/stream,documents,stream_document_processing_progress_documents__document_id__progress_stream_get,Stream Document Processing Progress,yes
+POST,/documents/{document_id}/reindex,documents,reindex_document_route_documents__document_id__reindex_post,Reindex Document Route,yes
+POST,/documents/{document_id}/reindex-sync,documents-sync,reindex_document_sync_documents__document_id__reindex_sync_post,Reindex Document Sync,yes
+POST,/documents/{document_id}/replace,documents,replace_document_route_documents__document_id__replace_post,Replace Document Route,yes
+GET,/documents/{document_id}/status,documents,get_document_status_route_documents__document_id__status_get,Get Document Status Route,yes
+POST,/documents/{document_id}/tags,documents,add_tag_to_document_documents__document_id__tags_post,Add Tag To Document,yes
+GET,/documents/{document_id}/tags,documents,get_document_tags_documents__document_id__tags_get,Get Document Tags,yes
+DELETE,/documents/{document_id}/tags/{tag_id},documents,remove_tag_from_document_documents__document_id__tags__tag_id__delete,Remove Tag From Document,yes
+GET,/documents/{document_id}/versions,documents,list_document_versions_documents__document_id__versions_get,List Document Versions,yes
+POST,/documents/{document_id}/versions,documents,create_new_document_version_documents__document_id__versions_post,Create New Document Version,yes
+POST,/documents/{document_id}/versions/restore,documents,restore_document_version_route_documents__document_id__versions_restore_post,Restore Document Version Route,yes
+GET,/documents/{document_id}/versions/{version_number},documents,get_document_version_detail_documents__document_id__versions__version_number__get,Get Document Version Detail,yes
+GET,/encryption/algorithms,Encryption,encryption_algorithms_endpoint_encryption_algorithms_get,Encryption Algorithms Endpoint,yes
+POST,/encryption/rotate-keys,Encryption,rotate_keys_endpoint_encryption_rotate_keys_post,Rotate Keys Endpoint,yes
+GET,/encryption/status,Encryption,encryption_status_endpoint_encryption_status_get,Encryption Status Endpoint,yes
+POST,/encryption/test,Encryption,test_encryption_endpoint_encryption_test_post,Test Encryption Endpoint,yes
+GET,/evaluations/{evaluation_id},manual-evaluations,get_manual_evaluation_endpoint_evaluations__evaluation_id__get,Get Manual Evaluation Endpoint,yes
+PATCH,/evaluations/{evaluation_id},manual-evaluations,update_manual_evaluation_endpoint_evaluations__evaluation_id__patch,Update Manual Evaluation Endpoint,yes
+PATCH,/feedback/{feedback_id},feedback,update_feedback_endpoint_feedback__feedback_id__patch,Update Feedback Endpoint,yes
+DELETE,/feedback/{feedback_id},feedback,delete_feedback_endpoint_feedback__feedback_id__delete,Delete Feedback Endpoint,yes
+GET,/fine-tuning/datasets,fine-tuning,list_datasets_endpoint_fine_tuning_datasets_get,List Datasets Endpoint,yes
+POST,/fine-tuning/datasets,fine-tuning,create_dataset_endpoint_fine_tuning_datasets_post,Create Dataset Endpoint,yes
+GET,/fine-tuning/datasets/{dataset_id},fine-tuning,get_dataset_endpoint_fine_tuning_datasets__dataset_id__get,Get Dataset Endpoint,yes
+DELETE,/fine-tuning/datasets/{dataset_id},fine-tuning,delete_dataset_endpoint_fine_tuning_datasets__dataset_id__delete,Delete Dataset Endpoint,yes
+POST,/fine-tuning/datasets/{dataset_id}/validate,fine-tuning,validate_dataset_endpoint_fine_tuning_datasets__dataset_id__validate_post,Validate Dataset Endpoint,yes
+GET,/fine-tuning/jobs,fine-tuning,list_jobs_endpoint_fine_tuning_jobs_get,List Jobs Endpoint,yes
+POST,/fine-tuning/jobs,fine-tuning,create_job_endpoint_fine_tuning_jobs_post,Create Job Endpoint,yes
+GET,/fine-tuning/jobs/{job_id},fine-tuning,get_job_endpoint_fine_tuning_jobs__job_id__get,Get Job Endpoint,yes
+POST,/fine-tuning/jobs/{job_id}/cancel,fine-tuning,cancel_job_endpoint_fine_tuning_jobs__job_id__cancel_post,Cancel Job Endpoint,yes
+GET,/fine-tuning/jobs/{job_id}/metrics,fine-tuning,get_job_metrics_endpoint_fine_tuning_jobs__job_id__metrics_get,Get Job Metrics Endpoint,yes
+GET,/fine-tuning/models,fine-tuning,list_models_endpoint_fine_tuning_models_get,List Models Endpoint,yes
+GET,/fine-tuning/models/{model_id},fine-tuning,get_model_endpoint_fine_tuning_models__model_id__get,Get Model Endpoint,yes
+DELETE,/fine-tuning/models/{model_id},fine-tuning,delete_model_endpoint_fine_tuning_models__model_id__delete,Delete Model Endpoint,yes
+POST,/fine-tuning/models/{model_id}/deploy,fine-tuning,deploy_model_endpoint_fine_tuning_models__model_id__deploy_post,Deploy Model Endpoint,yes
+POST,/fine-tuning/models/{model_id}/evaluate,fine-tuning,evaluate_model_endpoint_fine_tuning_models__model_id__evaluate_post,Evaluate Model Endpoint,yes
+GET,/fine-tuning/models/{model_id}/evaluations,fine-tuning,list_evaluations_endpoint_fine_tuning_models__model_id__evaluations_get,List Evaluations Endpoint,yes
+POST,/fine-tuning/models/{model_id}/undeploy,fine-tuning,undeploy_model_endpoint_fine_tuning_models__model_id__undeploy_post,Undeploy Model Endpoint,yes
+GET,/health,monitoring,health_health_get,Health,no/unknown
+GET,/health/ready,monitoring,readiness_health_ready_get,Readiness,no/unknown
+GET,/i18n/detect,i18n,detect_language_endpoint_i18n_detect_get,Detect Language Endpoint,no/unknown
+POST,/i18n/language,i18n,set_language_endpoint_i18n_language_post,Set Language Endpoint,no/unknown
+GET,/i18n/languages,i18n,list_supported_languages_endpoint_i18n_languages_get,List Supported Languages Endpoint,no/unknown
+GET,/i18n/translations/{language},i18n,get_translations_endpoint_i18n_translations__language__get,Get Translations Endpoint,no/unknown
+GET,/integrations/airbyte/status,Integrations,airbyte_status_endpoint_integrations_airbyte_status_get,Airbyte Status Endpoint,yes
+POST,/integrations/discord/interactions,Discord Integration,discord_interactions_endpoint_integrations_discord_interactions_post,Discord Interactions Endpoint,no/unknown
+POST,/integrations/discord/message,Discord Integration,discord_message_webhook_endpoint_integrations_discord_message_post,Discord Message Webhook Endpoint,no/unknown
+POST,/integrations/inbound/{connection_id},Integrations,inbound_webhook_endpoint_integrations_inbound__connection_id__post,Inbound Webhook Endpoint,no/unknown
+GET,/integrations/n8n/status,Integrations,n8n_status_endpoint_integrations_n8n_status_get,N8N Status Endpoint,yes
+GET,/integrations/providers,Integrations,list_providers_endpoint_integrations_providers_get,List Providers Endpoint,no/unknown
+GET,/integrations/slack/callback,Slack Integration,slack_oauth_callback_endpoint_integrations_slack_callback_get,Slack Oauth Callback Endpoint,no/unknown
+POST,/integrations/slack/events,Slack Integration,slack_events_endpoint_integrations_slack_events_post,Slack Events Endpoint,no/unknown
+POST,/integrations/teams/webhook,Teams Integration,teams_webhook_endpoint_integrations_teams_webhook_post,Teams Webhook Endpoint,no/unknown
+POST,/invitations/accept,invitations,accept_invitation_invitations_accept_post,Accept Invitation,no/unknown
+GET,/jobs/{job_id},evaluation-jobs,get_evaluation_job_endpoint_jobs__job_id__get,Get Evaluation Job Endpoint,yes
+POST,/jobs/{job_id}/cancel,evaluation-jobs,cancel_evaluation_job_endpoint_jobs__job_id__cancel_post,Cancel Evaluation Job Endpoint,yes
+GET,/jobs/{job_id}/comparison,evaluation-jobs,compare_evaluation_jobs_endpoint_jobs__job_id__comparison_get,Compare Evaluation Jobs Endpoint,yes
+GET,/jobs/{job_id}/failures,evaluation-jobs,get_evaluation_job_failures_endpoint_jobs__job_id__failures_get,Get Evaluation Job Failures Endpoint,yes
+GET,/jobs/{job_id}/failures/categories,evaluation-jobs,get_evaluation_job_failure_categories_endpoint_jobs__job_id__failures_categories_get,Get Evaluation Job Failure Categories Endpoint,yes
+GET,/jobs/{job_id}/results,evaluation-jobs,get_evaluation_job_results_endpoint_jobs__job_id__results_get,Get Evaluation Job Results Endpoint,yes
+POST,/license/generate,Sales,generate_license_endpoint_license_generate_post,Generate License Endpoint,yes
+POST,/license/validate,Sales,validate_license_endpoint_license_validate_post,Validate License Endpoint,no/unknown
+GET,/marketplace/permissions,Plugin marketplace,list_plugin_permissions_endpoint_marketplace_permissions_get,List Plugin Permissions Endpoint,no/unknown
+GET,/marketplace/plugins,Plugin marketplace,list_marketplace_plugins_endpoint_marketplace_plugins_get,List Marketplace Plugins Endpoint,no/unknown
+GET,/marketplace/plugins/{plugin_id},Plugin marketplace,get_marketplace_plugin_endpoint_marketplace_plugins__plugin_id__get,Get Marketplace Plugin Endpoint,no/unknown
+GET,/marketplace/plugins/{plugin_id}/rating,Plugin marketplace,get_plugin_rating_endpoint_marketplace_plugins__plugin_id__rating_get,Get Plugin Rating Endpoint,no/unknown
+GET,/marketplace/plugins/{plugin_id}/reviews,Plugin marketplace,list_plugin_reviews_endpoint_marketplace_plugins__plugin_id__reviews_get,List Plugin Reviews Endpoint,no/unknown
+GET,/marketplace/plugins/{plugin_id}/versions,Plugin marketplace,list_plugin_versions_endpoint_marketplace_plugins__plugin_id__versions_get,List Plugin Versions Endpoint,no/unknown
+DELETE,/marketplace/reviews/{review_id},Plugin marketplace,delete_review_endpoint_marketplace_reviews__review_id__delete,Delete Review Endpoint,yes
+GET,/mcp/v1/tools,mcp-server,list_tools_endpoint_mcp_v1_tools_get,List Tools Endpoint,no/unknown
+POST,/mcp/v1/tools/{tool_name}/call,mcp-server,call_tool_endpoint_mcp_v1_tools__tool_name__call_post,Call Tool Endpoint,no/unknown
+POST,/media/search,media,search_media_endpoint_media_search_post,Search Media Endpoint,yes
+POST,/media/search/similar,media,search_similar_endpoint_media_search_similar_post,Search Similar Endpoint,yes
+POST,/media/search/visual,media,search_visual_endpoint_media_search_visual_post,Search Visual Endpoint,yes
+GET,/media/{media_asset_id},media,get_media_endpoint_media__media_asset_id__get,Get Media Endpoint,yes
+DELETE,/media/{media_asset_id},media,delete_media_endpoint_media__media_asset_id__delete,Delete Media Endpoint,yes
+GET,/media/{media_asset_id}/description,media,get_media_description_endpoint_media__media_asset_id__description_get,Get Media Description Endpoint,yes
+GET,/media/{media_asset_id}/file,media,get_media_file_endpoint_media__media_asset_id__file_get,Get Media File Endpoint,yes
+GET,/media/{media_asset_id}/frames,media,list_media_frames_endpoint_media__media_asset_id__frames_get,List Media Frames Endpoint,yes
+GET,/media/{media_asset_id}/frames/{frame_id}/file,media,get_media_frame_file_endpoint_media__media_asset_id__frames__frame_id__file_get,Get Media Frame File Endpoint,yes
+POST,/media/{media_asset_id}/process,media,process_media_endpoint_media__media_asset_id__process_post,Process Media Endpoint,yes
+GET,/media/{media_asset_id}/status,media,get_media_status_endpoint_media__media_asset_id__status_get,Get Media Status Endpoint,yes
+GET,/media/{media_asset_id}/transcript,media,get_media_transcript_endpoint_media__media_asset_id__transcript_get,Get Media Transcript Endpoint,yes
+POST,/messages/{message_id}/feedback,feedback,add_feedback_endpoint_messages__message_id__feedback_post,Add Feedback Endpoint,yes
+GET,/messages/{message_id}/feedback,feedback,list_feedback_endpoint_messages__message_id__feedback_get,List Feedback Endpoint,yes
+POST,/messages/{message_id}/follow-up,questions,generate_follow_up_questions_endpoint_messages__message_id__follow_up_post,Generate Follow Up Questions Endpoint,yes
+GET,/messages/{message_id}/follow-up,questions,list_follow_up_questions_endpoint_messages__message_id__follow_up_get,List Follow Up Questions Endpoint,yes
+GET,/metrics,monitoring,metrics_metrics_get,Metrics,no/unknown
+GET,/models,agents,list_all_models_endpoint_models_get,List All Models Endpoint,yes
+GET,/models/{provider},agents,list_provider_models_endpoint_models__provider__get,List Provider Models Endpoint,yes
+GET,/monitoring/datadog/status,Observability,get_datadog_status_endpoint_monitoring_datadog_status_get,Get Datadog Status Endpoint,yes
+GET,/monitoring/loki/status,Observability,get_loki_status_endpoint_monitoring_loki_status_get,Get Loki Status Endpoint,yes
+GET,/monitoring/loki/test,Observability,test_loki_endpoint_monitoring_loki_test_get,Test Loki Endpoint,yes
+GET,/monitoring/metrics,Observability,get_metrics_summary_endpoint_monitoring_metrics_get,Get Metrics Summary Endpoint,yes
+GET,/monitoring/tracing/status,Observability,get_tracing_status_endpoint_monitoring_tracing_status_get,Get Tracing Status Endpoint,yes
+GET,/notifications,Notifications,list_notifications_endpoint_notifications_get,List Notifications Endpoint,yes
+POST,/notifications/mark-all-read,Notifications,mark_all_read_endpoint_notifications_mark_all_read_post,Mark All Read Endpoint,yes
+GET,/notifications/preferences,Notifications,get_preferences_endpoint_notifications_preferences_get,Get Preferences Endpoint,yes
+PATCH,/notifications/preferences,Notifications,update_preferences_endpoint_notifications_preferences_patch,Update Preferences Endpoint,yes
+GET,/notifications/stream,Notifications,stream_notifications_endpoint_notifications_stream_get,Stream Notifications Endpoint,yes
+GET,/notifications/unread-count,Notifications,unread_count_endpoint_notifications_unread_count_get,Unread Count Endpoint,yes
+DELETE,/notifications/{notification_id},Notifications,delete_notification_endpoint_notifications__notification_id__delete,Delete Notification Endpoint,yes
+PATCH,/notifications/{notification_id}/read,Notifications,mark_read_endpoint_notifications__notification_id__read_patch,Mark Read Endpoint,yes
+GET,/organizations,organizations,list_my_organizations_organizations_get,List My Organizations,yes
+POST,/organizations,organizations,create_organization_organizations_post,Create Organization,yes
+GET,/organizations/{org_id},organizations,get_organization_organizations__org_id__get,Get Organization,yes
+PATCH,/organizations/{org_id},organizations,update_organization_organizations__org_id__patch,Update Organization,yes
+DELETE,/organizations/{org_id},organizations,delete_organization_organizations__org_id__delete,Delete Organization,yes
+POST,/organizations/{org_id}/ab-tests,ab-tests,create_ab_test_endpoint_organizations__org_id__ab_tests_post,Create Ab Test Endpoint,yes
+GET,/organizations/{org_id}/ab-tests,ab-tests,list_ab_tests_endpoint_organizations__org_id__ab_tests_get,List Ab Tests Endpoint,yes
+POST,/organizations/{org_id}/ab-tests/{test_id}/evaluate-canary,rag-control-plane,evaluate_canary_endpoint_organizations__org_id__ab_tests__test_id__evaluate_canary_post,Evaluate Canary Endpoint,yes
+POST,/organizations/{org_id}/agents,agents,create_agent_endpoint_organizations__org_id__agents_post,Create Agent Endpoint,yes
+GET,/organizations/{org_id}/agents,agents,list_agents_endpoint_organizations__org_id__agents_get,List Agents Endpoint,yes
+GET,/organizations/{org_id}/agents/runs/{run_id}/traces,agent-traces,list_agent_traces_organizations__org_id__agents_runs__run_id__traces_get,List Agent Traces,yes
+GET,/organizations/{org_id}/agents/runs/{run_id}/traces/export,agent-traces,export_agent_traces_endpoint_organizations__org_id__agents_runs__run_id__traces_export_get,Export Agent Traces Endpoint,yes
+GET,/organizations/{org_id}/agents/runs/{run_id}/traces/tree,agent-traces,get_agent_traces_tree_organizations__org_id__agents_runs__run_id__traces_tree_get,Get Agent Traces Tree,yes
+POST,/organizations/{org_id}/agents/{agent_id}/retrieval-config/apply,rag-control-plane,apply_retrieval_config_endpoint_organizations__org_id__agents__agent_id__retrieval_config_apply_post,Apply Retrieval Config Endpoint,yes
+GET,/organizations/{org_id}/agents/{agent_id}/tools/permissions,tool-permissions,list_agent_tool_permissions_organizations__org_id__agents__agent_id__tools_permissions_get,List Agent Tool Permissions,yes
+POST,/organizations/{org_id}/agents/{agent_id}/tools/{tool_name}/permissions,tool-permissions,grant_agent_tool_permission_organizations__org_id__agents__agent_id__tools__tool_name__permissions_post,Grant Agent Tool Permission,yes
+DELETE,/organizations/{org_id}/agents/{agent_id}/tools/{tool_name}/permissions/{user_id},tool-permissions,revoke_agent_tool_permission_organizations__org_id__agents__agent_id__tools__tool_name__permissions__user_id__delete,Revoke Agent Tool Permission,yes
+GET,/organizations/{org_id}/analytics/dashboards,analytics,list_dashboards_endpoint_organizations__org_id__analytics_dashboards_get,List Dashboards Endpoint,yes
+POST,/organizations/{org_id}/analytics/dashboards,analytics,create_dashboard_endpoint_organizations__org_id__analytics_dashboards_post,Create Dashboard Endpoint,yes
+GET,/organizations/{org_id}/analytics/dashboards/{dashboard_id},analytics,get_dashboard_endpoint_organizations__org_id__analytics_dashboards__dashboard_id__get,Get Dashboard Endpoint,yes
+PATCH,/organizations/{org_id}/analytics/dashboards/{dashboard_id},analytics,update_dashboard_endpoint_organizations__org_id__analytics_dashboards__dashboard_id__patch,Update Dashboard Endpoint,yes
+DELETE,/organizations/{org_id}/analytics/dashboards/{dashboard_id},analytics,delete_dashboard_endpoint_organizations__org_id__analytics_dashboards__dashboard_id__delete,Delete Dashboard Endpoint,yes
+POST,/organizations/{org_id}/analytics/events,analytics,track_event_endpoint_organizations__org_id__analytics_events_post,Track Event Endpoint,yes
+GET,/organizations/{org_id}/analytics/metrics,analytics,get_metrics_endpoint_organizations__org_id__analytics_metrics_get,Get Metrics Endpoint,yes
+GET,/organizations/{org_id}/analytics/metrics/export,analytics,export_metrics_endpoint_organizations__org_id__analytics_metrics_export_get,Export Metrics Endpoint,yes
+GET,/organizations/{org_id}/analytics/metrics/query,analytics,query_metrics_endpoint_organizations__org_id__analytics_metrics_query_get,Query Metrics Endpoint,yes
+GET,/organizations/{org_id}/analytics/metrics/{metric_name},analytics,get_single_metric_endpoint_organizations__org_id__analytics_metrics__metric_name__get,Get Single Metric Endpoint,yes
+GET,/organizations/{org_id}/analytics/product/adoption,analytics,product_adoption_endpoint_organizations__org_id__analytics_product_adoption_get,Product Adoption Endpoint,yes
+GET,/organizations/{org_id}/analytics/product/engagement,analytics,product_engagement_endpoint_organizations__org_id__analytics_product_engagement_get,Product Engagement Endpoint,yes
+GET,/organizations/{org_id}/analytics/product/funnels,analytics,product_funnels_endpoint_organizations__org_id__analytics_product_funnels_get,Product Funnels Endpoint,yes
+GET,/organizations/{org_id}/analytics/product/usage,analytics,product_usage_endpoint_organizations__org_id__analytics_product_usage_get,Product Usage Endpoint,yes
+GET,/organizations/{org_id}/analytics/technical/api-usage,analytics,technical_api_usage_endpoint_organizations__org_id__analytics_technical_api_usage_get,Technical Api Usage Endpoint,yes
+GET,/organizations/{org_id}/analytics/technical/errors,analytics,technical_errors_endpoint_organizations__org_id__analytics_technical_errors_get,Technical Errors Endpoint,yes
+GET,/organizations/{org_id}/analytics/technical/llm-usage,analytics,technical_llm_usage_endpoint_organizations__org_id__analytics_technical_llm_usage_get,Technical Llm Usage Endpoint,yes
+GET,/organizations/{org_id}/analytics/technical/performance,analytics,technical_performance_endpoint_organizations__org_id__analytics_technical_performance_get,Technical Performance Endpoint,yes
+POST,/organizations/{org_id}/api-keys,Public API,create_organization_api_key_endpoint_organizations__org_id__api_keys_post,Create Organization Api Key Endpoint,yes
+GET,/organizations/{org_id}/api-keys,Public API,list_organization_api_keys_endpoint_organizations__org_id__api_keys_get,List Organization Api Keys Endpoint,yes
+GET,/organizations/{org_id}/api-keys/expiring,Public API,get_expiring_keys_endpoint_organizations__org_id__api_keys_expiring_get,Get Expiring Keys Endpoint,yes
+DELETE,/organizations/{org_id}/api-keys/{key_id},Public API,revoke_organization_api_key_endpoint_organizations__org_id__api_keys__key_id__delete,Revoke Organization Api Key Endpoint,yes
+GET,/organizations/{org_id}/approvals/pending,human-approval,get_organization_pending_approvals_organizations__org_id__approvals_pending_get,Get Organization Pending Approvals,yes
+GET,/organizations/{org_id}/approvals/{approval_id},human-approval,get_approval_organizations__org_id__approvals__approval_id__get,Get Approval,yes
+POST,/organizations/{org_id}/approvals/{approval_id}/approve,human-approval,approve_approval_organizations__org_id__approvals__approval_id__approve_post,Approve Approval,yes
+POST,/organizations/{org_id}/approvals/{approval_id}/reject,human-approval,reject_approval_organizations__org_id__approvals__approval_id__reject_post,Reject Approval,yes
+GET,/organizations/{org_id}/audit-logs,audit,get_organization_audit_logs_organizations__org_id__audit_logs_get,Get Organization Audit Logs,yes
+GET,/organizations/{org_id}/autonomous-agents,autonomous-agents,list_autonomous_agents_endpoint_organizations__org_id__autonomous_agents_get,List Autonomous Agents Endpoint,yes
+POST,/organizations/{org_id}/autonomous-agents,autonomous-agents,create_autonomous_agent_endpoint_organizations__org_id__autonomous_agents_post,Create Autonomous Agent Endpoint,yes
+POST,/organizations/{org_id}/batch/jobs,batch-jobs,create_batch_job_route_organizations__org_id__batch_jobs_post,Create Batch Job Route,yes
+GET,/organizations/{org_id}/batch/jobs,batch-jobs,list_batch_jobs_route_organizations__org_id__batch_jobs_get,List Batch Jobs Route,yes
+POST,/organizations/{org_id}/billing/cancel,Billing,cancel_subscription_endpoint_organizations__org_id__billing_cancel_post,Cancel Subscription Endpoint,yes
+POST,/organizations/{org_id}/billing/cancel-active-subscription,Billing,cancel_unified_subscription_endpoint_organizations__org_id__billing_cancel_active_subscription_post,Cancel Unified Subscription Endpoint,yes
+POST,/organizations/{org_id}/billing/checkout,Billing,create_unified_checkout_endpoint_organizations__org_id__billing_checkout_post,Create Unified Checkout Endpoint,yes
+GET,/organizations/{org_id}/billing/country,Billing,get_billing_country_endpoint_organizations__org_id__billing_country_get,Get Billing Country Endpoint,yes
+PATCH,/organizations/{org_id}/billing/country,Billing,update_billing_country_endpoint_organizations__org_id__billing_country_patch,Update Billing Country Endpoint,yes
+POST,/organizations/{org_id}/billing/coupons/redeem,coupons,redeem_coupon_organizations__org_id__billing_coupons_redeem_post,Redeem Coupon,yes
+GET,/organizations/{org_id}/billing/credits,Billing,get_credits_endpoint_organizations__org_id__billing_credits_get,Get Credits Endpoint,yes
+POST,/organizations/{org_id}/billing/credits/checkout,Billing,credit_pack_checkout_endpoint_organizations__org_id__billing_credits_checkout_post,Credit Pack Checkout Endpoint,yes
+GET,/organizations/{org_id}/billing/credits/packs,Billing,list_credit_packs_endpoint_organizations__org_id__billing_credits_packs_get,List Credit Packs Endpoint,yes
+POST,/organizations/{org_id}/billing/credits/purchase,Billing,purchase_credits_endpoint_organizations__org_id__billing_credits_purchase_post,Purchase Credits Endpoint,yes
+GET,/organizations/{org_id}/billing/credits/transactions,Billing,list_credit_transactions_endpoint_organizations__org_id__billing_credits_transactions_get,List Credit Transactions Endpoint,yes
+POST,/organizations/{org_id}/billing/downgrade,Billing,change_plan_endpoint_organizations__org_id__billing_downgrade_post,Change Plan Endpoint,yes
+GET,/organizations/{org_id}/billing/invoices,Billing,list_invoices_endpoint_organizations__org_id__billing_invoices_get,List Invoices Endpoint,yes
+GET,/organizations/{org_id}/billing/invoices/stats,Billing,invoice_stats_endpoint_organizations__org_id__billing_invoices_stats_get,Invoice Stats Endpoint,yes
+GET,/organizations/{org_id}/billing/invoices/{invoice_id},Billing,get_invoice_endpoint_organizations__org_id__billing_invoices__invoice_id__get,Get Invoice Endpoint,yes
+POST,/organizations/{org_id}/billing/invoices/{invoice_id}/pay,Billing,mark_invoice_paid_endpoint_organizations__org_id__billing_invoices__invoice_id__pay_post,Mark Invoice Paid Endpoint,yes
+GET,/organizations/{org_id}/billing/invoices/{invoice_id}/pdf,Billing,download_invoice_pdf_endpoint_organizations__org_id__billing_invoices__invoice_id__pdf_get,Download Invoice Pdf Endpoint,yes
+POST,/organizations/{org_id}/billing/invoices/{invoice_id}/remind,Billing,remind_invoice_endpoint_organizations__org_id__billing_invoices__invoice_id__remind_post,Remind Invoice Endpoint,yes
+POST,/organizations/{org_id}/billing/invoices/{invoice_id}/send,Billing,send_invoice_endpoint_organizations__org_id__billing_invoices__invoice_id__send_post,Send Invoice Endpoint,yes
+POST,/organizations/{org_id}/billing/invoices/{invoice_id}/void,Billing,void_invoice_endpoint_organizations__org_id__billing_invoices__invoice_id__void_post,Void Invoice Endpoint,yes
+GET,/organizations/{org_id}/billing/payment-methods,Billing,list_unified_payment_methods_endpoint_organizations__org_id__billing_payment_methods_get,List Unified Payment Methods Endpoint,yes
+POST,/organizations/{org_id}/billing/portal,Billing,create_unified_portal_endpoint_organizations__org_id__billing_portal_post,Create Unified Portal Endpoint,yes
+GET,/organizations/{org_id}/billing/provider,Billing,get_billing_provider_endpoint_organizations__org_id__billing_provider_get,Get Billing Provider Endpoint,yes
+GET,/organizations/{org_id}/billing/provider-invoices,Billing,list_unified_provider_invoices_endpoint_organizations__org_id__billing_provider_invoices_get,List Unified Provider Invoices Endpoint,yes
+POST,/organizations/{org_id}/billing/reactivate,Billing,reactivate_subscription_endpoint_organizations__org_id__billing_reactivate_post,Reactivate Subscription Endpoint,yes
+POST,/organizations/{org_id}/billing/stripe/cancel,Billing,cancel_stripe_subscription_endpoint_organizations__org_id__billing_stripe_cancel_post,Cancel Stripe Subscription Endpoint,yes
+POST,/organizations/{org_id}/billing/stripe/create-checkout-session,Billing,create_checkout_session_endpoint_organizations__org_id__billing_stripe_create_checkout_session_post,Create Checkout Session Endpoint,yes
+POST,/organizations/{org_id}/billing/stripe/create-portal-session,Billing,create_portal_session_endpoint_organizations__org_id__billing_stripe_create_portal_session_post,Create Portal Session Endpoint,yes
+GET,/organizations/{org_id}/billing/stripe/invoices,Billing,list_stripe_invoices_endpoint_organizations__org_id__billing_stripe_invoices_get,List Stripe Invoices Endpoint,yes
+GET,/organizations/{org_id}/billing/stripe/payment-methods,Billing,list_payment_methods_endpoint_organizations__org_id__billing_stripe_payment_methods_get,List Payment Methods Endpoint,yes
+DELETE,/organizations/{org_id}/billing/stripe/payment-methods/{payment_method_id},Billing,remove_payment_method_endpoint_organizations__org_id__billing_stripe_payment_methods__payment_method_id__delete,Remove Payment Method Endpoint,yes
+POST,/organizations/{org_id}/billing/subscribe,Billing,subscribe_endpoint_organizations__org_id__billing_subscribe_post,Subscribe Endpoint,yes
+GET,/organizations/{org_id}/billing/subscription,Billing,get_subscription_endpoint_organizations__org_id__billing_subscription_get,Get Subscription Endpoint,yes
+POST,/organizations/{org_id}/billing/upgrade,Billing,change_plan_endpoint_organizations__org_id__billing_upgrade_post,Change Plan Endpoint,yes
+GET,/organizations/{org_id}/billing/usage,Billing,get_usage_endpoint_organizations__org_id__billing_usage_get,Get Usage Endpoint,yes
+GET,/organizations/{org_id}/billing/usage/alerts,Billing,list_usage_alerts_endpoint_organizations__org_id__billing_usage_alerts_get,List Usage Alerts Endpoint,yes
+POST,/organizations/{org_id}/billing/usage/alerts,Billing,create_usage_alert_endpoint_organizations__org_id__billing_usage_alerts_post,Create Usage Alert Endpoint,yes
+DELETE,/organizations/{org_id}/billing/usage/alerts/{alert_id},Billing,delete_usage_alert_endpoint_organizations__org_id__billing_usage_alerts__alert_id__delete,Delete Usage Alert Endpoint,yes
+GET,/organizations/{org_id}/billing/usage/breakdown,Billing,get_usage_breakdown_endpoint_organizations__org_id__billing_usage_breakdown_get,Get Usage Breakdown Endpoint,yes
+GET,/organizations/{org_id}/billing/usage/forecast,Billing,get_usage_forecast_endpoint_organizations__org_id__billing_usage_forecast_get,Get Usage Forecast Endpoint,yes
+GET,/organizations/{org_id}/branding,organization-branding,get_organization_branding_organizations__org_id__branding_get,Get Organization Branding,no/unknown
+PATCH,/organizations/{org_id}/branding,organization-branding,update_organization_branding_organizations__org_id__branding_patch,Update Organization Branding,yes
+POST,/organizations/{org_id}/branding/favicon,organization-branding,upload_organization_favicon_route_organizations__org_id__branding_favicon_post,Upload Organization Favicon Route,yes
+DELETE,/organizations/{org_id}/branding/favicon,organization-branding,delete_organization_favicon_organizations__org_id__branding_favicon_delete,Delete Organization Favicon,yes
+POST,/organizations/{org_id}/branding/logo,organization-branding,upload_organization_logo_route_organizations__org_id__branding_logo_post,Upload Organization Logo Route,yes
+DELETE,/organizations/{org_id}/branding/logo,organization-branding,delete_organization_logo_organizations__org_id__branding_logo_delete,Delete Organization Logo,yes
+GET,/organizations/{org_id}/connectors,connectors,list_connectors_organizations__org_id__connectors_get,List Connectors,yes
+PUT,/organizations/{org_id}/connectors/{provider},connectors,put_connector_organizations__org_id__connectors__provider__put,Put Connector,yes
+DELETE,/organizations/{org_id}/connectors/{provider},connectors,remove_connector_organizations__org_id__connectors__provider__delete,Remove Connector,yes
+POST,/organizations/{org_id}/crm/activecampaign/import,crm,import_activecampaign_organizations__org_id__crm_activecampaign_import_post,Import Activecampaign,yes
+POST,/organizations/{org_id}/crm/airtable/import,crm,import_airtable_organizations__org_id__crm_airtable_import_post,Import Airtable,yes
+POST,/organizations/{org_id}/crm/asana/import,crm,import_asana_organizations__org_id__crm_asana_import_post,Import Asana,yes
+POST,/organizations/{org_id}/crm/azure-devops/import,crm,import_azure_devops_organizations__org_id__crm_azure_devops_import_post,Import Azure Devops,yes
+POST,/organizations/{org_id}/crm/basecamp/import,crm,import_basecamp_organizations__org_id__crm_basecamp_import_post,Import Basecamp,yes
+POST,/organizations/{org_id}/crm/bitbucket/import,crm,import_bitbucket_organizations__org_id__crm_bitbucket_import_post,Import Bitbucket,yes
+POST,/organizations/{org_id}/crm/box/import,crm,import_box_organizations__org_id__crm_box_import_post,Import Box,yes
+POST,/organizations/{org_id}/crm/clickup/import,crm,import_clickup_organizations__org_id__crm_clickup_import_post,Import Clickup,yes
+POST,/organizations/{org_id}/crm/coda/import,crm,import_coda_organizations__org_id__crm_coda_import_post,Import Coda,yes
+POST,/organizations/{org_id}/crm/docusign/import,crm,import_docusign_organizations__org_id__crm_docusign_import_post,Import Docusign,yes
+POST,/organizations/{org_id}/crm/dropbox/import,crm,import_dropbox_organizations__org_id__crm_dropbox_import_post,Import Dropbox,yes
+POST,/organizations/{org_id}/crm/gitlab/import,crm,import_gitlab_organizations__org_id__crm_gitlab_import_post,Import Gitlab,yes
+POST,/organizations/{org_id}/crm/hive/import,crm,import_hive_organizations__org_id__crm_hive_import_post,Import Hive,yes
+POST,/organizations/{org_id}/crm/hubspot/import,crm,import_hubspot_organizations__org_id__crm_hubspot_import_post,Import Hubspot,yes
+POST,/organizations/{org_id}/crm/intercom/import,crm,import_intercom_organizations__org_id__crm_intercom_import_post,Import Intercom,yes
+POST,/organizations/{org_id}/crm/jira/import,crm,import_jira_organizations__org_id__crm_jira_import_post,Import Jira,yes
+POST,/organizations/{org_id}/crm/klaviyo/import,crm,import_klaviyo_organizations__org_id__crm_klaviyo_import_post,Import Klaviyo,yes
+POST,/organizations/{org_id}/crm/linear/import,crm,import_linear_organizations__org_id__crm_linear_import_post,Import Linear,yes
+POST,/organizations/{org_id}/crm/mailchimp/import,crm,import_mailchimp_organizations__org_id__crm_mailchimp_import_post,Import Mailchimp,yes
+POST,/organizations/{org_id}/crm/miro/import,crm,import_miro_organizations__org_id__crm_miro_import_post,Import Miro,yes
+POST,/organizations/{org_id}/crm/monday/import,crm,import_monday_organizations__org_id__crm_monday_import_post,Import Monday,yes
+POST,/organizations/{org_id}/crm/nifty/import,crm,import_nifty_organizations__org_id__crm_nifty_import_post,Import Nifty,yes
+POST,/organizations/{org_id}/crm/pipedrive/import,crm,import_pipedrive_organizations__org_id__crm_pipedrive_import_post,Import Pipedrive,yes
+POST,/organizations/{org_id}/crm/pipefy/import,crm,import_pipefy_organizations__org_id__crm_pipefy_import_post,Import Pipefy,yes
+POST,/organizations/{org_id}/crm/podio/import,crm,import_podio_organizations__org_id__crm_podio_import_post,Import Podio,yes
+POST,/organizations/{org_id}/crm/process-street/import,crm,import_process_street_organizations__org_id__crm_process_street_import_post,Import Process Street,yes
+POST,/organizations/{org_id}/crm/salesforce/import,crm,import_salesforce_organizations__org_id__crm_salesforce_import_post,Import Salesforce,yes
+POST,/organizations/{org_id}/crm/shopify/import,crm,import_shopify_organizations__org_id__crm_shopify_import_post,Import Shopify,yes
+POST,/organizations/{org_id}/crm/smartsheet/import,crm,import_smartsheet_organizations__org_id__crm_smartsheet_import_post,Import Smartsheet,yes
+POST,/organizations/{org_id}/crm/smartsuite/import,crm,import_smartsuite_organizations__org_id__crm_smartsuite_import_post,Import Smartsuite,yes
+POST,/organizations/{org_id}/crm/teamwork/import,crm,import_teamwork_organizations__org_id__crm_teamwork_import_post,Import Teamwork,yes
+POST,/organizations/{org_id}/crm/trello/import,crm,import_trello_organizations__org_id__crm_trello_import_post,Import Trello,yes
+POST,/organizations/{org_id}/crm/woocommerce/import,crm,import_woocommerce_organizations__org_id__crm_woocommerce_import_post,Import Woocommerce,yes
+POST,/organizations/{org_id}/crm/wrike/import,crm,import_wrike_organizations__org_id__crm_wrike_import_post,Import Wrike,yes
+POST,/organizations/{org_id}/crm/zendesk/import,crm,import_zendesk_organizations__org_id__crm_zendesk_import_post,Import Zendesk,yes
+POST,/organizations/{org_id}/crm/zoho/import,crm,import_zoho_organizations__org_id__crm_zoho_import_post,Import Zoho,yes
+POST,/organizations/{org_id}/custom-tools,custom-tools,create_custom_tool_endpoint_organizations__org_id__custom_tools_post,Create Custom Tool Endpoint,yes
+GET,/organizations/{org_id}/custom-tools,custom-tools,list_custom_tools_endpoint_organizations__org_id__custom_tools_get,List Custom Tools Endpoint,yes
+POST,/organizations/{org_id}/datasets,evaluation-datasets,create_dataset_endpoint_organizations__org_id__datasets_post,Create Dataset Endpoint,yes
+GET,/organizations/{org_id}/datasets,evaluation-datasets,list_datasets_endpoint_organizations__org_id__datasets_get,List Datasets Endpoint,yes
+POST,/organizations/{org_id}/documents,documents,create_document_organizations__org_id__documents_post,Create Document,yes
+GET,/organizations/{org_id}/documents,documents,list_documents_organizations__org_id__documents_get,List Documents,yes
+POST,/organizations/{org_id}/documents/batch,documents,create_documents_batch_organizations__org_id__documents_batch_post,Create Documents Batch,yes
+POST,/organizations/{org_id}/documents/confluence,documents,create_documents_from_confluence_organizations__org_id__documents_confluence_post,Create Documents From Confluence,yes
+POST,/organizations/{org_id}/documents/deduplicate,documents,deduplicate_organization_documents_route_organizations__org_id__documents_deduplicate_post,Deduplicate Organization Documents Route,yes
+POST,/organizations/{org_id}/documents/github/issues,documents,create_documents_from_github_issues_organizations__org_id__documents_github_issues_post,Create Documents From Github Issues,yes
+POST,/organizations/{org_id}/documents/github/repo,documents,create_documents_from_github_repo_organizations__org_id__documents_github_repo_post,Create Documents From Github Repo,yes
+POST,/organizations/{org_id}/documents/google-docs,documents,create_documents_from_google_docs_organizations__org_id__documents_google_docs_post,Create Documents From Google Docs,yes
+POST,/organizations/{org_id}/documents/google-drive,documents,create_documents_from_google_drive_organizations__org_id__documents_google_drive_post,Create Documents From Google Drive,yes
+POST,/organizations/{org_id}/documents/notion,documents,create_documents_from_notion_organizations__org_id__documents_notion_post,Create Documents From Notion,yes
+POST,/organizations/{org_id}/documents/onedrive,documents,create_documents_from_onedrive_organizations__org_id__documents_onedrive_post,Create Documents From Onedrive,yes
+POST,/organizations/{org_id}/documents/reindex,documents,reindex_organization_documents_route_organizations__org_id__documents_reindex_post,Reindex Organization Documents Route,yes
+POST,/organizations/{org_id}/documents/sitemap,documents,create_documents_from_sitemap_organizations__org_id__documents_sitemap_post,Create Documents From Sitemap,yes
+GET,/organizations/{org_id}/documents/status,documents,get_organization_document_status_summary_route_organizations__org_id__documents_status_get,Get Organization Document Status Summary Route,yes
+POST,/organizations/{org_id}/documents/url,documents,create_document_from_url_organizations__org_id__documents_url_post,Create Document From Url,yes
+POST,/organizations/{org_id}/domains,custom-domains,create_custom_domain_organizations__org_id__domains_post,Create Custom Domain,yes
+GET,/organizations/{org_id}/domains,custom-domains,list_custom_domains_organizations__org_id__domains_get,List Custom Domains,yes
+GET,/organizations/{org_id}/domains/verify/{token},custom-domains,verify_custom_domain_organizations__org_id__domains_verify__token__get,Verify Custom Domain,no/unknown
+DELETE,/organizations/{org_id}/domains/{domain_id},custom-domains,delete_custom_domain_organizations__org_id__domains__domain_id__delete,Delete Custom Domain,yes
+GET,/organizations/{org_id}/domains/{domain_id}/email/dns,email-domains,get_email_domain_dns_route_organizations__org_id__domains__domain_id__email_dns_get,Get Email Domain Dns Route,yes
+GET,/organizations/{org_id}/domains/{domain_id}/email/status,email-domains,get_email_domain_status_route_organizations__org_id__domains__domain_id__email_status_get,Get Email Domain Status Route,yes
+POST,/organizations/{org_id}/domains/{domain_id}/email/verify,email-domains,verify_email_domain_route_organizations__org_id__domains__domain_id__email_verify_post,Verify Email Domain Route,yes
+GET,/organizations/{org_id}/domains/{domain_id}/ssl,ssl-certificates,get_certificate_route_organizations__org_id__domains__domain_id__ssl_get,Get Certificate Route,yes
+DELETE,/organizations/{org_id}/domains/{domain_id}/ssl,ssl-certificates,delete_certificate_route_organizations__org_id__domains__domain_id__ssl_delete,Delete Certificate Route,yes
+POST,/organizations/{org_id}/domains/{domain_id}/ssl/generate,ssl-certificates,generate_certificate_route_organizations__org_id__domains__domain_id__ssl_generate_post,Generate Certificate Route,yes
+POST,/organizations/{org_id}/domains/{domain_id}/ssl/renew,ssl-certificates,renew_certificate_route_organizations__org_id__domains__domain_id__ssl_renew_post,Renew Certificate Route,yes
+GET,/organizations/{org_id}/domains/{domain_id}/status,custom-domains,get_custom_domain_status_organizations__org_id__domains__domain_id__status_get,Get Custom Domain Status,yes
+POST,/organizations/{org_id}/domains/{domain_id}/verify,custom-domains,verify_custom_domain_manual_organizations__org_id__domains__domain_id__verify_post,Verify Custom Domain Manual,yes
+GET,/organizations/{org_id}/embeddings/status,documents,get_embedding_staleness_route_organizations__org_id__embeddings_status_get,Get Embedding Staleness Route,yes
+GET,/organizations/{org_id}/escalations,escalations,list_escalations_organizations__org_id__escalations_get,List Escalations,yes
+GET,/organizations/{org_id}/escalations/stats,escalations,escalation_stats_organizations__org_id__escalations_stats_get,Escalation Stats,yes
+GET,/organizations/{org_id}/escalations/{escalation_id},escalations,get_escalation_organizations__org_id__escalations__escalation_id__get,Get Escalation,yes
+PATCH,/organizations/{org_id}/escalations/{escalation_id},escalations,update_escalation_organizations__org_id__escalations__escalation_id__patch,Update Escalation,yes
+POST,/organizations/{org_id}/escalations/{escalation_id}/assign,escalations,assign_organizations__org_id__escalations__escalation_id__assign_post,Assign,yes
+POST,/organizations/{org_id}/escalations/{escalation_id}/notes,escalations,add_note_organizations__org_id__escalations__escalation_id__notes_post,Add Note,yes
+GET,/organizations/{org_id}/escalations/{escalation_id}/notes,escalations,list_notes_organizations__org_id__escalations__escalation_id__notes_get,List Notes,yes
+POST,/organizations/{org_id}/evolution/retrieval/run,rag-control-plane,run_retrieval_evolution_endpoint_organizations__org_id__evolution_retrieval_run_post,Run Retrieval Evolution Endpoint,yes
+POST,/organizations/{org_id}/evolution/retrieval/run-multi,rag-control-plane,run_multi_dataset_evolution_endpoint_organizations__org_id__evolution_retrieval_run_multi_post,Run Multi Dataset Evolution Endpoint,yes
+POST,/organizations/{org_id}/evolution/run,rag-control-plane,run_evolution_endpoint_organizations__org_id__evolution_run_post,Run Evolution Endpoint,yes
+POST,/organizations/{org_id}/factory/blueprint,agent-factory,factory_blueprint_endpoint_organizations__org_id__factory_blueprint_post,Factory Blueprint Endpoint,yes
+POST,/organizations/{org_id}/factory/deploy,agent-factory,factory_deploy_endpoint_organizations__org_id__factory_deploy_post,Factory Deploy Endpoint,yes
+GET,/organizations/{org_id}/feedback/analysis,insights,feedback_analysis_organizations__org_id__feedback_analysis_get,Feedback Analysis,yes
+GET,/organizations/{org_id}/feedback/stats,feedback,get_feedback_stats_endpoint_organizations__org_id__feedback_stats_get,Get Feedback Stats Endpoint,yes
+POST,/organizations/{org_id}/feedback/to-evaluation,insights,feedback_to_evaluation_organizations__org_id__feedback_to_evaluation_post,Feedback To Evaluation,yes
+GET,/organizations/{org_id}/insights/cost-per-answer,insights,cost_per_answer_organizations__org_id__insights_cost_per_answer_get,Cost Per Answer,yes
+GET,/organizations/{org_id}/insights/cost-per-user,insights,cost_per_user_organizations__org_id__insights_cost_per_user_get,Cost Per User,yes
+GET,/organizations/{org_id}/insights/documentation-gaps,insights,documentation_gaps_organizations__org_id__insights_documentation_gaps_get,Documentation Gaps,yes
+GET,/organizations/{org_id}/insights/documents/top,insights,top_documents_organizations__org_id__insights_documents_top_get,Top Documents,yes
+GET,/organizations/{org_id}/insights/documents/worst,insights,worst_documents_organizations__org_id__insights_documents_worst_get,Worst Documents,yes
+GET,/organizations/{org_id}/insights/failed-questions,insights,failed_questions_organizations__org_id__insights_failed_questions_get,Failed Questions,yes
+GET,/organizations/{org_id}/insights/knowledge-gaps,insights,knowledge_gaps_organizations__org_id__insights_knowledge_gaps_get,Knowledge Gaps,yes
+GET,/organizations/{org_id}/insights/most-asked,insights,most_asked_questions_organizations__org_id__insights_most_asked_get,Most Asked Questions,yes
+GET,/organizations/{org_id}/insights/question-clusters,insights,question_clusters_organizations__org_id__insights_question_clusters_get,Question Clusters,yes
+GET,/organizations/{org_id}/insights/retrieval-success,insights,retrieval_success_organizations__org_id__insights_retrieval_success_get,Retrieval Success,yes
+GET,/organizations/{org_id}/integrations/airbyte/connections,Integrations,list_airbyte_connections_endpoint_organizations__org_id__integrations_airbyte_connections_get,List Airbyte Connections Endpoint,yes
+POST,/organizations/{org_id}/integrations/airbyte/connections,Integrations,create_airbyte_connection_endpoint_organizations__org_id__integrations_airbyte_connections_post,Create Airbyte Connection Endpoint,yes
+POST,/organizations/{org_id}/integrations/airbyte/connections/{connection_id}/sync,Integrations,trigger_airbyte_sync_endpoint_organizations__org_id__integrations_airbyte_connections__connection_id__sync_post,Trigger Airbyte Sync Endpoint,yes
+GET,/organizations/{org_id}/integrations/airbyte/source-definitions,Integrations,list_airbyte_source_definitions_endpoint_organizations__org_id__integrations_airbyte_source_definitions_get,List Airbyte Source Definitions Endpoint,yes
+POST,/organizations/{org_id}/integrations/airbyte/sources,Integrations,create_airbyte_source_endpoint_organizations__org_id__integrations_airbyte_sources_post,Create Airbyte Source Endpoint,yes
+GET,/organizations/{org_id}/integrations/airbyte/sources/{source_id}/catalog,Integrations,get_airbyte_catalog_endpoint_organizations__org_id__integrations_airbyte_sources__source_id__catalog_get,Get Airbyte Catalog Endpoint,yes
+GET,/organizations/{org_id}/integrations/connections,Integrations,list_connections_endpoint_organizations__org_id__integrations_connections_get,List Connections Endpoint,yes
+POST,/organizations/{org_id}/integrations/connections,Integrations,create_connection_endpoint_organizations__org_id__integrations_connections_post,Create Connection Endpoint,yes
+GET,/organizations/{org_id}/integrations/connections/{connection_id},Integrations,get_connection_endpoint_organizations__org_id__integrations_connections__connection_id__get,Get Connection Endpoint,yes
+PATCH,/organizations/{org_id}/integrations/connections/{connection_id},Integrations,update_connection_endpoint_organizations__org_id__integrations_connections__connection_id__patch,Update Connection Endpoint,yes
+DELETE,/organizations/{org_id}/integrations/connections/{connection_id},Integrations,delete_connection_endpoint_organizations__org_id__integrations_connections__connection_id__delete,Delete Connection Endpoint,yes
+GET,/organizations/{org_id}/integrations/connections/{connection_id}/logs,Integrations,get_connection_logs_endpoint_organizations__org_id__integrations_connections__connection_id__logs_get,Get Connection Logs Endpoint,yes
+GET,/organizations/{org_id}/integrations/connections/{connection_id}/mappings,Integrations,list_mappings_endpoint_organizations__org_id__integrations_connections__connection_id__mappings_get,List Mappings Endpoint,yes
+POST,/organizations/{org_id}/integrations/connections/{connection_id}/mappings,Integrations,create_mapping_endpoint_organizations__org_id__integrations_connections__connection_id__mappings_post,Create Mapping Endpoint,yes
+POST,/organizations/{org_id}/integrations/connections/{connection_id}/sync,Integrations,sync_connection_endpoint_organizations__org_id__integrations_connections__connection_id__sync_post,Sync Connection Endpoint,yes
+GET,/organizations/{org_id}/integrations/connections/{connection_id}/syncs,Integrations,get_connection_syncs_endpoint_organizations__org_id__integrations_connections__connection_id__syncs_get,Get Connection Syncs Endpoint,yes
+POST,/organizations/{org_id}/integrations/connections/{connection_id}/test,Integrations,test_connection_endpoint_organizations__org_id__integrations_connections__connection_id__test_post,Test Connection Endpoint,yes
+DELETE,/organizations/{org_id}/integrations/discord,Discord Integration,discord_delete_integration_endpoint_organizations__org_id__integrations_discord_delete,Discord Delete Integration Endpoint,yes
+GET,/organizations/{org_id}/integrations/discord/config,Discord Integration,discord_get_config_endpoint_organizations__org_id__integrations_discord_config_get,Discord Get Config Endpoint,yes
+POST,/organizations/{org_id}/integrations/discord/configure,Discord Integration,discord_configure_endpoint_organizations__org_id__integrations_discord_configure_post,Discord Configure Endpoint,yes
+POST,/organizations/{org_id}/integrations/discord/send,Discord Integration,discord_send_endpoint_organizations__org_id__integrations_discord_send_post,Discord Send Endpoint,yes
+PATCH,/organizations/{org_id}/integrations/mappings/{mapping_id},Integrations,update_mapping_endpoint_organizations__org_id__integrations_mappings__mapping_id__patch,Update Mapping Endpoint,yes
+DELETE,/organizations/{org_id}/integrations/mappings/{mapping_id},Integrations,delete_mapping_endpoint_organizations__org_id__integrations_mappings__mapping_id__delete,Delete Mapping Endpoint,yes
+DELETE,/organizations/{org_id}/integrations/slack,Slack Integration,slack_delete_integration_endpoint_organizations__org_id__integrations_slack_delete,Slack Delete Integration Endpoint,yes
+GET,/organizations/{org_id}/integrations/slack/auth,Slack Integration,slack_auth_url_endpoint_organizations__org_id__integrations_slack_auth_get,Slack Auth Url Endpoint,yes
+GET,/organizations/{org_id}/integrations/slack/config,Slack Integration,slack_get_config_endpoint_organizations__org_id__integrations_slack_config_get,Slack Get Config Endpoint,yes
+POST,/organizations/{org_id}/integrations/slack/configure,Slack Integration,slack_configure_endpoint_organizations__org_id__integrations_slack_configure_post,Slack Configure Endpoint,yes
+POST,/organizations/{org_id}/integrations/slack/send,Slack Integration,slack_send_endpoint_organizations__org_id__integrations_slack_send_post,Slack Send Endpoint,yes
+DELETE,/organizations/{org_id}/integrations/teams,Teams Integration,teams_delete_integration_endpoint_organizations__org_id__integrations_teams_delete,Teams Delete Integration Endpoint,yes
+GET,/organizations/{org_id}/integrations/teams/config,Teams Integration,teams_get_config_endpoint_organizations__org_id__integrations_teams_config_get,Teams Get Config Endpoint,yes
+POST,/organizations/{org_id}/integrations/teams/configure,Teams Integration,teams_configure_endpoint_organizations__org_id__integrations_teams_configure_post,Teams Configure Endpoint,yes
+POST,/organizations/{org_id}/integrations/teams/send,Teams Integration,teams_send_endpoint_organizations__org_id__integrations_teams_send_post,Teams Send Endpoint,yes
+GET,/organizations/{org_id}/invitations,invitations,list_invitations_organizations__org_id__invitations_get,List Invitations,yes
+POST,/organizations/{org_id}/invitations,invitations,create_invitation_organizations__org_id__invitations_post,Create Invitation,yes
+DELETE,/organizations/{org_id}/invitations/{invitation_id},invitations,cancel_invitation_organizations__org_id__invitations__invitation_id__delete,Cancel Invitation,yes
+POST,/organizations/{org_id}/license/activate,Sales,activate_license_endpoint_organizations__org_id__license_activate_post,Activate License Endpoint,yes
+GET,/organizations/{org_id}/license/status,Sales,license_status_endpoint_organizations__org_id__license_status_get,License Status Endpoint,yes
+GET,/organizations/{org_id}/llm-config,organization-settings,list_organization_llm_config_organizations__org_id__llm_config_get,List Organization Llm Config,yes
+POST,/organizations/{org_id}/llm-config,organization-settings,set_organization_llm_config_organizations__org_id__llm_config_post,Set Organization Llm Config,yes
+DELETE,/organizations/{org_id}/llm-config/{provider},organization-settings,delete_organization_llm_config_organizations__org_id__llm_config__provider__delete,Delete Organization Llm Config,yes
+POST,/organizations/{org_id}/mcp-servers,mcp-servers,create_mcp_server_endpoint_organizations__org_id__mcp_servers_post,Create Mcp Server Endpoint,yes
+GET,/organizations/{org_id}/mcp-servers,mcp-servers,list_mcp_servers_endpoint_organizations__org_id__mcp_servers_get,List Mcp Servers Endpoint,yes
+PATCH,/organizations/{org_id}/mcp-servers/{server_id},mcp-servers,update_mcp_server_endpoint_organizations__org_id__mcp_servers__server_id__patch,Update Mcp Server Endpoint,yes
+DELETE,/organizations/{org_id}/mcp-servers/{server_id},mcp-servers,delete_mcp_server_endpoint_organizations__org_id__mcp_servers__server_id__delete,Delete Mcp Server Endpoint,yes
+POST,/organizations/{org_id}/mcp-servers/{server_id}/sync,mcp-servers,sync_mcp_tools_endpoint_organizations__org_id__mcp_servers__server_id__sync_post,Sync Mcp Tools Endpoint,yes
+POST,/organizations/{org_id}/mcp-servers/{server_id}/test,mcp-servers,test_mcp_server_endpoint_organizations__org_id__mcp_servers__server_id__test_post,Test Mcp Server Endpoint,yes
+GET,/organizations/{org_id}/mcp-servers/{server_id}/tools,mcp-servers,list_mcp_tools_endpoint_organizations__org_id__mcp_servers__server_id__tools_get,List Mcp Tools Endpoint,yes
+POST,/organizations/{org_id}/mcp-servers/{server_id}/tools/{tool_name}/call,mcp-servers,call_mcp_tool_endpoint_organizations__org_id__mcp_servers__server_id__tools__tool_name__call_post,Call Mcp Tool Endpoint,yes
+POST,/organizations/{org_id}/media,media,upload_media_endpoint_organizations__org_id__media_post,Upload Media Endpoint,yes
+GET,/organizations/{org_id}/media,media,list_media_endpoint_organizations__org_id__media_get,List Media Endpoint,yes
+GET,/organizations/{org_id}/members,organizations,list_organization_members_organizations__org_id__members_get,List Organization Members,yes
+POST,/organizations/{org_id}/members/invite,organizations,invite_organization_member_organizations__org_id__members_invite_post,Invite Organization Member,yes
+DELETE,/organizations/{org_id}/members/{user_id},organizations,remove_organization_member_organizations__org_id__members__user_id__delete,Remove Organization Member,yes
+GET,/organizations/{org_id}/members/{user_id}/limits,user-limits,get_member_limits_organizations__org_id__members__user_id__limits_get,Get Member Limits,yes
+PATCH,/organizations/{org_id}/members/{user_id}/limits,user-limits,update_member_limits_organizations__org_id__members__user_id__limits_patch,Update Member Limits,yes
+PATCH,/organizations/{org_id}/members/{user_id}/role,organizations,update_organization_member_role_organizations__org_id__members__user_id__role_patch,Update Organization Member Role,yes
+GET,/organizations/{org_id}/notifications/sms,Notifications,list_sms_endpoint_organizations__org_id__notifications_sms_get,List Sms Endpoint,yes
+POST,/organizations/{org_id}/notifications/sms/send,Notifications,send_sms_endpoint_organizations__org_id__notifications_sms_send_post,Send Sms Endpoint,yes
+GET,/organizations/{org_id}/notifications/sms/{message_id},Notifications,get_sms_endpoint_organizations__org_id__notifications_sms__message_id__get,Get Sms Endpoint,yes
+GET,/organizations/{org_id}/notifications/templates,Notification Templates,list_templates_endpoint_organizations__org_id__notifications_templates_get,List Templates Endpoint,yes
+POST,/organizations/{org_id}/notifications/templates,Notification Templates,create_template_endpoint_organizations__org_id__notifications_templates_post,Create Template Endpoint,yes
+POST,/organizations/{org_id}/notifications/templates/preview,Notification Templates,preview_template_endpoint_organizations__org_id__notifications_templates_preview_post,Preview Template Endpoint,yes
+POST,/organizations/{org_id}/notifications/templates/test,Notification Templates,test_notification_endpoint_organizations__org_id__notifications_templates_test_post,Test Notification Endpoint,yes
+GET,/organizations/{org_id}/notifications/templates/{template_id},Notification Templates,get_template_endpoint_organizations__org_id__notifications_templates__template_id__get,Get Template Endpoint,yes
+PATCH,/organizations/{org_id}/notifications/templates/{template_id},Notification Templates,update_template_endpoint_organizations__org_id__notifications_templates__template_id__patch,Update Template Endpoint,yes
+DELETE,/organizations/{org_id}/notifications/templates/{template_id},Notification Templates,delete_template_endpoint_organizations__org_id__notifications_templates__template_id__delete,Delete Template Endpoint,yes
+POST,/organizations/{org_id}/notifications/whatsapp/send,Notifications,send_whatsapp_endpoint_organizations__org_id__notifications_whatsapp_send_post,Send Whatsapp Endpoint,yes
+GET,/organizations/{org_id}/plugins/installed,Plugin marketplace,list_installed_plugins_endpoint_organizations__org_id__plugins_installed_get,List Installed Plugins Endpoint,yes
+PATCH,/organizations/{org_id}/plugins/installed/{installation_id},Plugin marketplace,update_installation_endpoint_organizations__org_id__plugins_installed__installation_id__patch,Update Installation Endpoint,yes
+DELETE,/organizations/{org_id}/plugins/installed/{installation_id},Plugin marketplace,uninstall_plugin_endpoint_organizations__org_id__plugins_installed__installation_id__delete,Uninstall Plugin Endpoint,yes
+POST,/organizations/{org_id}/plugins/publish,Plugin marketplace,publish_plugin_endpoint_organizations__org_id__plugins_publish_post,Publish Plugin Endpoint,yes
+GET,/organizations/{org_id}/plugins/published,Plugin marketplace,list_published_plugins_endpoint_organizations__org_id__plugins_published_get,List Published Plugins Endpoint,yes
+PUT,/organizations/{org_id}/plugins/{plugin_id},Plugin marketplace,republish_plugin_endpoint_organizations__org_id__plugins__plugin_id__put,Republish Plugin Endpoint,yes
+DELETE,/organizations/{org_id}/plugins/{plugin_id},Plugin marketplace,delete_plugin_endpoint_organizations__org_id__plugins__plugin_id__delete,Delete Plugin Endpoint,yes
+POST,/organizations/{org_id}/plugins/{plugin_id}/execute,Plugin marketplace,execute_plugin_endpoint_organizations__org_id__plugins__plugin_id__execute_post,Execute Plugin Endpoint,yes
+GET,/organizations/{org_id}/plugins/{plugin_id}/executions,Plugin marketplace,list_plugin_executions_endpoint_organizations__org_id__plugins__plugin_id__executions_get,List Plugin Executions Endpoint,yes
+POST,/organizations/{org_id}/plugins/{plugin_id}/install,Plugin marketplace,install_plugin_endpoint_organizations__org_id__plugins__plugin_id__install_post,Install Plugin Endpoint,yes
+POST,/organizations/{org_id}/plugins/{plugin_id}/reviews,Plugin marketplace,submit_review_endpoint_organizations__org_id__plugins__plugin_id__reviews_post,Submit Review Endpoint,yes
+GET,/organizations/{org_id}/quality-alerts/channels,quality-alerts,list_quality_channels_endpoint_organizations__org_id__quality_alerts_channels_get,List Quality Channels Endpoint,yes
+POST,/organizations/{org_id}/quality-alerts/channels,quality-alerts,create_quality_channel_endpoint_organizations__org_id__quality_alerts_channels_post,Create Quality Channel Endpoint,yes
+DELETE,/organizations/{org_id}/quality-alerts/channels/{channel_id},quality-alerts,delete_quality_channel_endpoint_organizations__org_id__quality_alerts_channels__channel_id__delete,Delete Quality Channel Endpoint,yes
+GET,/organizations/{org_id}/quality-alerts/history,quality-alerts,quality_alert_history_endpoint_organizations__org_id__quality_alerts_history_get,Quality Alert History Endpoint,yes
+GET,/organizations/{org_id}/quality-alerts/metrics,quality-alerts,list_quality_metrics_endpoint_organizations__org_id__quality_alerts_metrics_get,List Quality Metrics Endpoint,yes
+GET,/organizations/{org_id}/quality-alerts/rules,quality-alerts,list_quality_rules_endpoint_organizations__org_id__quality_alerts_rules_get,List Quality Rules Endpoint,yes
+POST,/organizations/{org_id}/quality-alerts/rules,quality-alerts,create_quality_rule_endpoint_organizations__org_id__quality_alerts_rules_post,Create Quality Rule Endpoint,yes
+PATCH,/organizations/{org_id}/quality-alerts/rules/{rule_id},quality-alerts,update_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__patch,Update Quality Rule Endpoint,yes
+DELETE,/organizations/{org_id}/quality-alerts/rules/{rule_id},quality-alerts,delete_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__delete,Delete Quality Rule Endpoint,yes
+POST,/organizations/{org_id}/quality-alerts/rules/{rule_id}/test,quality-alerts,test_quality_rule_endpoint_organizations__org_id__quality_alerts_rules__rule_id__test_post,Test Quality Rule Endpoint,yes
+GET,/organizations/{org_id}/quality/dashboard,quality-dashboard,get_quality_dashboard_endpoint_organizations__org_id__quality_dashboard_get,Get Quality Dashboard Endpoint,yes
+GET,/organizations/{org_id}/quality/export,quality-dashboard,export_quality_metrics_endpoint_organizations__org_id__quality_export_get,Export Quality Metrics Endpoint,yes
+GET,/organizations/{org_id}/quality/metrics,quality-dashboard,get_quality_metrics_endpoint_organizations__org_id__quality_metrics_get,Get Quality Metrics Endpoint,yes
+GET,/organizations/{org_id}/quality/responses,quality-dashboard,get_quality_responses_endpoint_organizations__org_id__quality_responses_get,Get Quality Responses Endpoint,yes
+GET,/organizations/{org_id}/quality/trends,quality-dashboard,get_quality_trends_endpoint_organizations__org_id__quality_trends_get,Get Quality Trends Endpoint,yes
+GET,/organizations/{org_id}/quotas,quotas,get_organization_quotas_organizations__org_id__quotas_get,Get Organization Quotas,yes
+PATCH,/organizations/{org_id}/quotas,quotas,update_organization_quotas_organizations__org_id__quotas_patch,Update Organization Quotas,yes
+POST,/organizations/{org_id}/rag-control-plane/health-check,rag-control-plane,run_health_check_endpoint_organizations__org_id__rag_control_plane_health_check_post,Run Health Check Endpoint,yes
+GET,/organizations/{org_id}/rbac/permissions,RBAC,list_permissions_endpoint_organizations__org_id__rbac_permissions_get,List Permissions Endpoint,yes
+GET,/organizations/{org_id}/rbac/roles,RBAC,list_roles_endpoint_organizations__org_id__rbac_roles_get,List Roles Endpoint,yes
+POST,/organizations/{org_id}/rbac/roles,RBAC,create_role_endpoint_organizations__org_id__rbac_roles_post,Create Role Endpoint,yes
+GET,/organizations/{org_id}/rbac/roles/{role_id},RBAC,get_role_endpoint_organizations__org_id__rbac_roles__role_id__get,Get Role Endpoint,yes
+PATCH,/organizations/{org_id}/rbac/roles/{role_id},RBAC,update_role_endpoint_organizations__org_id__rbac_roles__role_id__patch,Update Role Endpoint,yes
+DELETE,/organizations/{org_id}/rbac/roles/{role_id},RBAC,delete_role_endpoint_organizations__org_id__rbac_roles__role_id__delete,Delete Role Endpoint,yes
+POST,/organizations/{org_id}/rbac/roles/{role_id}/permissions,RBAC,assign_permissions_endpoint_organizations__org_id__rbac_roles__role_id__permissions_post,Assign Permissions Endpoint,yes
+DELETE,/organizations/{org_id}/rbac/roles/{role_id}/permissions/{permission_id},RBAC,remove_permission_endpoint_organizations__org_id__rbac_roles__role_id__permissions__permission_id__delete,Remove Permission Endpoint,yes
+GET,/organizations/{org_id}/rbac/users/{user_id}/permissions,RBAC,get_user_permissions_endpoint_organizations__org_id__rbac_users__user_id__permissions_get,Get User Permissions Endpoint,yes
+POST,/organizations/{org_id}/rbac/users/{user_id}/roles,RBAC,assign_role_to_user_endpoint_organizations__org_id__rbac_users__user_id__roles_post,Assign Role To User Endpoint,yes
+DELETE,/organizations/{org_id}/rbac/users/{user_id}/roles/{role_id},RBAC,remove_role_from_user_endpoint_organizations__org_id__rbac_users__user_id__roles__role_id__delete,Remove Role From User Endpoint,yes
+POST,/organizations/{org_id}/reindex-schedules,reindex-schedules,create_reindex_schedule_route_organizations__org_id__reindex_schedules_post,Create Reindex Schedule Route,yes
+GET,/organizations/{org_id}/reindex-schedules,reindex-schedules,list_reindex_schedules_route_organizations__org_id__reindex_schedules_get,List Reindex Schedules Route,yes
+GET,/organizations/{org_id}/retrieval-diagnostics,retrieval-diagnostics,list_retrieval_diagnostics_endpoint_organizations__org_id__retrieval_diagnostics_get,List Retrieval Diagnostics Endpoint,yes
+GET,/organizations/{org_id}/sandbox,sandbox,list_sandboxes_organizations__org_id__sandbox_get,List Sandboxes,yes
+POST,/organizations/{org_id}/sandbox,sandbox,create_sandbox_organizations__org_id__sandbox_post,Create Sandbox,yes
+DELETE,/organizations/{org_id}/sandbox/{sandbox_id},sandbox,delete_sandbox_organizations__org_id__sandbox__sandbox_id__delete,Delete Sandbox,yes
+POST,/organizations/{org_id}/sandbox/{sandbox_id}/reset,sandbox,reset_sandbox_organizations__org_id__sandbox__sandbox_id__reset_post,Reset Sandbox,yes
+POST,/organizations/{org_id}/scim/tokens,scim,create_scim_token_organizations__org_id__scim_tokens_post,Create Scim Token,yes
+GET,/organizations/{org_id}/scim/tokens,scim,list_scim_tokens_organizations__org_id__scim_tokens_get,List Scim Tokens,yes
+DELETE,/organizations/{org_id}/scim/tokens/{token_id},scim,revoke_scim_token_organizations__org_id__scim_tokens__token_id__delete,Revoke Scim Token,yes
+POST,/organizations/{org_id}/search,search,search_organization_documents_organizations__org_id__search_post,Search Organization Documents,yes
+GET,/organizations/{org_id}/security/alerts,Security scanning,list_alerts_endpoint_organizations__org_id__security_alerts_get,List Alerts Endpoint,yes
+POST,/organizations/{org_id}/security/alerts/{alert_id}/dismiss,Security scanning,dismiss_alert_endpoint_organizations__org_id__security_alerts__alert_id__dismiss_post,Dismiss Alert Endpoint,yes
+GET,/organizations/{org_id}/security/policies,Security scanning,get_policies_endpoint_organizations__org_id__security_policies_get,Get Policies Endpoint,yes
+PATCH,/organizations/{org_id}/security/policies,Security scanning,update_policies_endpoint_organizations__org_id__security_policies_patch,Update Policies Endpoint,yes
+GET,/organizations/{org_id}/security/report,Security scanning,get_report_endpoint_organizations__org_id__security_report_get,Get Report Endpoint,yes
+POST,/organizations/{org_id}/security/scan,Security scanning,run_scan_endpoint_organizations__org_id__security_scan_post,Run Scan Endpoint,yes
+GET,/organizations/{org_id}/security/scans,Security scanning,list_scans_endpoint_organizations__org_id__security_scans_get,List Scans Endpoint,yes
+GET,/organizations/{org_id}/security/scans/{scan_id},Security scanning,get_scan_endpoint_organizations__org_id__security_scans__scan_id__get,Get Scan Endpoint,yes
+GET,/organizations/{org_id}/security/score,Security scanning,get_score_endpoint_organizations__org_id__security_score_get,Get Score Endpoint,yes
+GET,/organizations/{org_id}/security/vulnerabilities,Security scanning,list_vulnerabilities_endpoint_organizations__org_id__security_vulnerabilities_get,List Vulnerabilities Endpoint,yes
+GET,/organizations/{org_id}/security/vulnerabilities/{vuln_id},Security scanning,get_vulnerability_endpoint_organizations__org_id__security_vulnerabilities__vuln_id__get,Get Vulnerability Endpoint,yes
+PATCH,/organizations/{org_id}/security/vulnerabilities/{vuln_id},Security scanning,update_vulnerability_endpoint_organizations__org_id__security_vulnerabilities__vuln_id__patch,Update Vulnerability Endpoint,yes
+GET,/organizations/{org_id}/settings,organization-settings,get_organization_settings_organizations__org_id__settings_get,Get Organization Settings,yes
+PATCH,/organizations/{org_id}/settings,organization-settings,update_organization_settings_organizations__org_id__settings_patch,Update Organization Settings,yes
+POST,/organizations/{org_id}/sources,external-sources,create_external_source_route_organizations__org_id__sources_post,Create External Source Route,yes
+GET,/organizations/{org_id}/sources,external-sources,list_external_sources_route_organizations__org_id__sources_get,List External Sources Route,yes
+GET,/organizations/{org_id}/suggested-questions,questions,get_suggested_questions_endpoint_organizations__org_id__suggested_questions_get,Get Suggested Questions Endpoint,yes
+POST,/organizations/{org_id}/support/tickets,Sales,create_ticket_endpoint_organizations__org_id__support_tickets_post,Create Ticket Endpoint,yes
+GET,/organizations/{org_id}/support/tickets,Sales,list_tickets_endpoint_organizations__org_id__support_tickets_get,List Tickets Endpoint,yes
+POST,/organizations/{org_id}/support/tickets/{ticket_id}/respond,Sales,respond_ticket_endpoint_organizations__org_id__support_tickets__ticket_id__respond_post,Respond Ticket Endpoint,yes
+GET,/organizations/{org_id}/support/tickets/{ticket_id}/sla,Sales,ticket_sla_endpoint_organizations__org_id__support_tickets__ticket_id__sla_get,Ticket Sla Endpoint,yes
+POST,/organizations/{org_id}/tags,documents,create_organization_tag_organizations__org_id__tags_post,Create Organization Tag,yes
+GET,/organizations/{org_id}/tags,documents,list_organization_tags_organizations__org_id__tags_get,List Organization Tags,yes
+GET,/organizations/{org_id}/teams,teams,list_teams_organizations__org_id__teams_get,List Teams,yes
+POST,/organizations/{org_id}/teams,teams,create_team_organizations__org_id__teams_post,Create Team,yes
+POST,/organizations/{org_id}/thresholds,regression-thresholds,set_regression_threshold_endpoint_organizations__org_id__thresholds_post,Set Regression Threshold Endpoint,yes
+GET,/organizations/{org_id}/thresholds,regression-thresholds,list_regression_thresholds_endpoint_organizations__org_id__thresholds_get,List Regression Thresholds Endpoint,yes
+POST,/organizations/{org_id}/thresholds/check,regression-thresholds,check_regression_thresholds_endpoint_organizations__org_id__thresholds_check_post,Check Regression Thresholds Endpoint,yes
+GET,/organizations/{org_id}/twilio/calls,telephony,list_organization_calls_endpoint_organizations__org_id__twilio_calls_get,List Organization Calls Endpoint,yes
+POST,/organizations/{org_id}/twilio/calls/{call_sid}/end,telephony,end_organization_call_endpoint_organizations__org_id__twilio_calls__call_sid__end_post,End Organization Call Endpoint,yes
+POST,/organizations/{org_id}/twilio/outbound,telephony,place_organization_call_endpoint_organizations__org_id__twilio_outbound_post,Place Organization Call Endpoint,yes
+GET,/organizations/{org_id}/usage,usage,get_organization_usage_organizations__org_id__usage_get,Get Organization Usage,yes
+GET,/organizations/{org_id}/usage/details,usage,get_organization_usage_details_organizations__org_id__usage_details_get,Get Organization Usage Details,yes
+GET,/organizations/{org_id}/usage/export,usage,export_organization_usage_organizations__org_id__usage_export_get,Export Organization Usage,yes
+GET,/organizations/{org_id}/usage/voice-minutes,usage,voice_minutes_usage_organizations__org_id__usage_voice_minutes_get,Voice Minutes Usage,yes
+GET,/organizations/{org_id}/users/me/tools/permissions,tool-permissions,get_my_available_tools_organizations__org_id__users_me_tools_permissions_get,Get My Available Tools,yes
+POST,/organizations/{org_id}/webhooks,Webhooks,create_webhook_endpoint_organizations__org_id__webhooks_post,Create Webhook Endpoint,yes
+GET,/organizations/{org_id}/webhooks,Webhooks,list_webhooks_endpoint_organizations__org_id__webhooks_get,List Webhooks Endpoint,yes
+GET,/organizations/{org_id}/white-label,white-label,get_white_label_route_organizations__org_id__white_label_get,Get White Label Route,yes
+PATCH,/organizations/{org_id}/white-label,white-label,update_white_label_route_organizations__org_id__white_label_patch,Update White Label Route,yes
+GET,/organizations/{org_id}/whitelabel/config,white-label,get_whitelabel_config_route_organizations__org_id__whitelabel_config_get,Get Whitelabel Config Route,yes
+PATCH,/organizations/{org_id}/whitelabel/config,white-label,update_whitelabel_config_route_organizations__org_id__whitelabel_config_patch,Update Whitelabel Config Route,yes
+POST,/organizations/{org_id}/whitelabel/domain,white-label,set_whitelabel_domain_route_organizations__org_id__whitelabel_domain_post,Set Whitelabel Domain Route,yes
+DELETE,/organizations/{org_id}/whitelabel/domain,white-label,remove_whitelabel_domain_route_organizations__org_id__whitelabel_domain_delete,Remove Whitelabel Domain Route,yes
+POST,/organizations/{org_id}/whitelabel/domain/verify,white-label,verify_whitelabel_domain_route_organizations__org_id__whitelabel_domain_verify_post,Verify Whitelabel Domain Route,yes
+POST,/organizations/{org_id}/whitelabel/email,white-label,configure_whitelabel_email_route_organizations__org_id__whitelabel_email_post,Configure Whitelabel Email Route,yes
+DELETE,/organizations/{org_id}/whitelabel/email,white-label,remove_whitelabel_email_route_organizations__org_id__whitelabel_email_delete,Remove Whitelabel Email Route,yes
+POST,/organizations/{org_id}/whitelabel/favicon,white-label,upload_whitelabel_favicon_route_organizations__org_id__whitelabel_favicon_post,Upload Whitelabel Favicon Route,yes
+POST,/organizations/{org_id}/whitelabel/logo,white-label,upload_whitelabel_logo_route_organizations__org_id__whitelabel_logo_post,Upload Whitelabel Logo Route,yes
+DELETE,/organizations/{org_id}/whitelabel/logo,white-label,remove_whitelabel_logo_route_organizations__org_id__whitelabel_logo_delete,Remove Whitelabel Logo Route,yes
+GET,/organizations/{org_id}/whitelabel/preview,white-label,get_whitelabel_preview_route_organizations__org_id__whitelabel_preview_get,Get Whitelabel Preview Route,yes
+POST,/organizations/{org_id}/whitelabel/reset,white-label,reset_whitelabel_route_organizations__org_id__whitelabel_reset_post,Reset Whitelabel Route,yes
+PATCH,/organizations/{org_id}/widget/agent,Widget,set_widget_agent_endpoint_organizations__org_id__widget_agent_patch,Set Widget Agent Endpoint,yes
+POST,/organizations/{org_id}/widget/avatar,Widget,upload_widget_avatar_endpoint_organizations__org_id__widget_avatar_post,Upload Widget Avatar Endpoint,yes
+DELETE,/organizations/{org_id}/widget/avatar,Widget,delete_widget_avatar_endpoint_organizations__org_id__widget_avatar_delete,Delete Widget Avatar Endpoint,yes
+PATCH,/organizations/{org_id}/widget/avatar/default,Widget,reset_widget_avatar_endpoint_organizations__org_id__widget_avatar_default_patch,Reset Widget Avatar Endpoint,yes
+GET,/organizations/{org_id}/widget/config,Widget,get_widget_config_admin_endpoint_organizations__org_id__widget_config_get,Get Widget Config Admin Endpoint,yes
+PATCH,/organizations/{org_id}/widget/config,Widget,update_widget_colors_endpoint_organizations__org_id__widget_config_patch,Update Widget Colors Endpoint,yes
+PATCH,/organizations/{org_id}/widget/config/name,Widget,update_widget_name_endpoint_organizations__org_id__widget_config_name_patch,Update Widget Name Endpoint,yes
+GET,/organizations/{org_id}/widget/domains,Widget,get_widget_domains_endpoint_organizations__org_id__widget_domains_get,Get Widget Domains Endpoint,yes
+PATCH,/organizations/{org_id}/widget/domains,Widget,update_widget_domains_endpoint_organizations__org_id__widget_domains_patch,Update Widget Domains Endpoint,yes
+PATCH,/organizations/{org_id}/widget/language,Widget,update_widget_language_endpoint_organizations__org_id__widget_language_patch,Update Widget Language Endpoint,yes
+POST,/organizations/{org_id}/widget/logo,Widget,upload_widget_logo_endpoint_organizations__org_id__widget_logo_post,Upload Widget Logo Endpoint,yes
+DELETE,/organizations/{org_id}/widget/logo,Widget,delete_widget_logo_endpoint_organizations__org_id__widget_logo_delete,Delete Widget Logo Endpoint,yes
+PATCH,/organizations/{org_id}/widget/position,Widget,update_widget_position_endpoint_organizations__org_id__widget_position_patch,Update Widget Position Endpoint,yes
+POST,/organizations/{org_id}/widget/suggested-questions,Widget,add_suggested_question_endpoint_organizations__org_id__widget_suggested_questions_post,Add Suggested Question Endpoint,yes
+GET,/organizations/{org_id}/widget/suggested-questions/admin,Widget,list_suggested_questions_admin_endpoint_organizations__org_id__widget_suggested_questions_admin_get,List Suggested Questions Admin Endpoint,yes
+PATCH,/organizations/{org_id}/widget/suggested-questions/reorder,Widget,reorder_suggested_questions_endpoint_organizations__org_id__widget_suggested_questions_reorder_patch,Reorder Suggested Questions Endpoint,yes
+PATCH,/organizations/{org_id}/widget/suggested-questions/{question_id},Widget,update_suggested_question_endpoint_organizations__org_id__widget_suggested_questions__question_id__patch,Update Suggested Question Endpoint,yes
+DELETE,/organizations/{org_id}/widget/suggested-questions/{question_id},Widget,delete_suggested_question_endpoint_organizations__org_id__widget_suggested_questions__question_id__delete,Delete Suggested Question Endpoint,yes
+PATCH,/organizations/{org_id}/widget/theme,Widget,update_widget_theme_endpoint_organizations__org_id__widget_theme_patch,Update Widget Theme Endpoint,yes
+POST,/organizations/{org_id}/widget/theme/reset,Widget,reset_widget_theme_endpoint_organizations__org_id__widget_theme_reset_post,Reset Widget Theme Endpoint,yes
+PATCH,/organizations/{org_id}/widget/welcome,Widget,update_widget_welcome_endpoint_organizations__org_id__widget_welcome_patch,Update Widget Welcome Endpoint,yes
+POST,/organizations/{org_id}/widget/welcome/reset,Widget,reset_widget_welcome_endpoint_organizations__org_id__widget_welcome_reset_post,Reset Widget Welcome Endpoint,yes
+POST,/organizations/{org_id}/workflows,workflows,create_workflow_endpoint_organizations__org_id__workflows_post,Create Workflow Endpoint,yes
+GET,/organizations/{org_id}/workflows,workflows,list_workflows_endpoint_organizations__org_id__workflows_get,List Workflows Endpoint,yes
+POST,/organizations/{org_id}/workflows/import,workflows,import_workflow_endpoint_organizations__org_id__workflows_import_post,Import Workflow Endpoint,yes
+GET,/organizations/{org_id}/workspaces,workspaces,list_workspaces_organizations__org_id__workspaces_get,List Workspaces,yes
+POST,/organizations/{org_id}/workspaces,workspaces,create_workspace_organizations__org_id__workspaces_post,Create Workspace,yes
+POST,/partners/commissions/{commission_id}/pay,Sales,pay_partner_commission_endpoint_partners_commissions__commission_id__pay_post,Pay Partner Commission Endpoint,yes
+GET,/partners/me,Sales,get_my_partner_profile_endpoint_partners_me_get,Get My Partner Profile Endpoint,yes
+GET,/partners/me/clients,Sales,list_my_partner_clients_endpoint_partners_me_clients_get,List My Partner Clients Endpoint,yes
+GET,/partners/me/commissions,Sales,list_my_partner_commissions_endpoint_partners_me_commissions_get,List My Partner Commissions Endpoint,yes
+POST,/partners/register,Sales,register_partner_endpoint_partners_register_post,Register Partner Endpoint,no/unknown
+GET,/partners/{reseller_id}/commissions,Sales,list_partner_commissions_endpoint_partners__reseller_id__commissions_get,List Partner Commissions Endpoint,yes
+GET,/prompt-comparisons/{comparison_id},comparison-jobs,get_prompt_comparison_endpoint_prompt_comparisons__comparison_id__get,Get Prompt Comparison Endpoint,yes
+GET,/prompt-comparisons/{comparison_id}/results,comparison-jobs,get_prompt_comparison_results_endpoint_prompt_comparisons__comparison_id__results_get,Get Prompt Comparison Results Endpoint,yes
+PATCH,/questions/{question_id},evaluation-datasets,update_question_endpoint_questions__question_id__patch,Update Question Endpoint,yes
+DELETE,/questions/{question_id},evaluation-datasets,delete_question_endpoint_questions__question_id__delete,Delete Question Endpoint,yes
+POST,/questions/{question_id}/evaluate,manual-evaluations,create_manual_evaluation_endpoint_questions__question_id__evaluate_post,Create Manual Evaluation Endpoint,yes
+GET,/questions/{question_id}/evaluations,manual-evaluations,list_manual_evaluations_endpoint_questions__question_id__evaluations_get,List Manual Evaluations Endpoint,yes
+GET,/questions/{question_id}/evaluations/summary,manual-evaluations,get_manual_evaluation_summary_endpoint_questions__question_id__evaluations_summary_get,Get Manual Evaluation Summary Endpoint,yes
+POST,/questions/{question_id}/latency,evaluation-results,measure_latency_endpoint_questions__question_id__latency_post,Measure Latency Endpoint,yes
+GET,/questions/{question_id}/results,evaluation-results,get_evaluation_results_endpoint_questions__question_id__results_get,Get Evaluation Results Endpoint,yes
+POST,/questions/{question_id}/run,evaluation-results,run_evaluation_endpoint_questions__question_id__run_post,Run Evaluation Endpoint,yes
+GET,/r/{code},Sales,referral_redirect_endpoint_r__code__get,Referral Redirect Endpoint,no/unknown
+POST,/rbac/check,RBAC,check_permission_endpoint_rbac_check_post,Check Permission Endpoint,yes
+POST,/regressions/{regression_id}/resolve,regression-detection,resolve_regression_endpoint_regressions__regression_id__resolve_post,Resolve Regression Endpoint,yes
+PATCH,/reindex-schedules/{schedule_id},reindex-schedules,update_reindex_schedule_route_reindex_schedules__schedule_id__patch,Update Reindex Schedule Route,yes
+DELETE,/reindex-schedules/{schedule_id},reindex-schedules,delete_reindex_schedule_route_reindex_schedules__schedule_id__delete,Delete Reindex Schedule Route,yes
+GET,/reranker-comparisons/{comparison_id},comparison-jobs,get_reranker_comparison_endpoint_reranker_comparisons__comparison_id__get,Get Reranker Comparison Endpoint,yes
+GET,/reranker-comparisons/{comparison_id}/results,comparison-jobs,get_reranker_comparison_results_endpoint_reranker_comparisons__comparison_id__results_get,Get Reranker Comparison Results Endpoint,yes
+POST,/reseller/create,Sales,create_reseller_endpoint_reseller_create_post,Create Reseller Endpoint,yes
+POST,/reseller/{reseller_id}/clients,Sales,add_sub_client_endpoint_reseller__reseller_id__clients_post,Add Sub Client Endpoint,yes
+GET,/reseller/{reseller_id}/clients,Sales,list_reseller_clients_endpoint_reseller__reseller_id__clients_get,List Reseller Clients Endpoint,yes
+GET,/reseller/{reseller_id}/commission,Sales,reseller_commission_endpoint_reseller__reseller_id__commission_get,Reseller Commission Endpoint,yes
+GET,/resources/{resource_type}/{resource_id}/permissions,resource-permissions,list_resource_permissions_resources__resource_type___resource_id__permissions_get,List Resource Permissions,yes
+POST,/resources/{resource_type}/{resource_id}/permissions,resource-permissions,grant_permission_resources__resource_type___resource_id__permissions_post,Grant Permission,yes
+DELETE,/resources/{resource_type}/{resource_id}/permissions/{user_id}/{action},resource-permissions,revoke_permission_resources__resource_type___resource_id__permissions__user_id___action__delete,Revoke Permission,yes
+GET,/responses/{response_id},citations,get_response_endpoint_responses__response_id__get,Get Response Endpoint,yes
+GET,/responses/{response_id}/citations,citations,list_citations_by_response_endpoint_responses__response_id__citations_get,List Citations By Response Endpoint,yes
+GET,/responses/{response_id}/confidence,citations,get_response_confidence_endpoint_responses__response_id__confidence_get,Get Response Confidence Endpoint,yes
+GET,/responses/{response_id}/confidence/factors,citations,get_response_confidence_factors_endpoint_responses__response_id__confidence_factors_get,Get Response Confidence Factors Endpoint,yes
+GET,/responses/{response_id}/flight-recording,citations,get_response_flight_recording_endpoint_responses__response_id__flight_recording_get,Get Response Flight Recording Endpoint,yes
+GET,/responses/{response_id}/trace,request-trace,get_request_trace_responses__response_id__trace_get,Get Request Trace,yes
+GET,/retriever-comparisons/{comparison_id},comparison-jobs,get_retriever_comparison_endpoint_retriever_comparisons__comparison_id__get,Get Retriever Comparison Endpoint,yes
+GET,/retriever-comparisons/{comparison_id}/results,comparison-jobs,get_retriever_comparison_results_endpoint_retriever_comparisons__comparison_id__results_get,Get Retriever Comparison Results Endpoint,yes
+GET,/scim/v2/ServiceProviderConfig,scim,service_provider_config_scim_v2_ServiceProviderConfig_get,Service Provider Config,no/unknown
+GET,/scim/v2/Users,scim,list_users_scim_v2_Users_get,List Users,no/unknown
+POST,/scim/v2/Users,scim,create_user_scim_v2_Users_post,Create User,no/unknown
+GET,/scim/v2/Users/{user_id},scim,get_user_scim_v2_Users__user_id__get,Get User,no/unknown
+PATCH,/scim/v2/Users/{user_id},scim,patch_user_scim_v2_Users__user_id__patch,Patch User,no/unknown
+PUT,/scim/v2/Users/{user_id},scim,replace_user_scim_v2_Users__user_id__put,Replace User,no/unknown
+DELETE,/scim/v2/Users/{user_id},scim,delete_user_scim_v2_Users__user_id__delete,Delete User,no/unknown
+GET,/sessions,sessions,list_sessions_sessions_get,List Sessions,yes
+DELETE,/sessions/{session_id},sessions,revoke_session_by_id_sessions__session_id__delete,Revoke Session By Id,yes
+GET,/sets/{set_id},question-sets,get_question_set_endpoint_sets__set_id__get,Get Question Set Endpoint,yes
+PATCH,/sets/{set_id},question-sets,update_question_set_endpoint_sets__set_id__patch,Update Question Set Endpoint,yes
+DELETE,/sets/{set_id},question-sets,delete_question_set_endpoint_sets__set_id__delete,Delete Question Set Endpoint,yes
+POST,/sets/{set_id}/ab-test,evaluation-comparisons,run_ab_test_endpoint_sets__set_id__ab_test_post,Run Ab Test Endpoint,yes
+POST,/sets/{set_id}/compare,evaluation-comparisons,run_multi_model_comparison_endpoint_sets__set_id__compare_post,Run Multi Model Comparison Endpoint,yes
+POST,/sets/{set_id}/duplicate,question-sets,duplicate_question_set_endpoint_sets__set_id__duplicate_post,Duplicate Question Set Endpoint,yes
+POST,/sets/{set_id}/questions,question-sets,add_question_to_set_endpoint_sets__set_id__questions_post,Add Question To Set Endpoint,yes
+PATCH,/sets/{set_id}/questions/reorder,question-sets,reorder_questions_endpoint_sets__set_id__questions_reorder_patch,Reorder Questions Endpoint,yes
+DELETE,/sets/{set_id}/questions/{question_id},question-sets,remove_question_from_set_endpoint_sets__set_id__questions__question_id__delete,Remove Question From Set Endpoint,yes
+GET,/share/{token},conversation-sharing,get_shared_conversation_endpoint_share__token__get,Get Shared Conversation Endpoint,no/unknown
+DELETE,/share/{token},conversation-sharing,delete_share_link_endpoint_share__token__delete,Delete Share Link Endpoint,yes
+PATCH,/sources/{source_id},external-sources,update_external_source_route_sources__source_id__patch,Update External Source Route,yes
+DELETE,/sources/{source_id},external-sources,delete_external_source_route_sources__source_id__delete,Delete External Source Route,yes
+POST,/sources/{source_id}/sync,external-sources,sync_external_source_route_sources__source_id__sync_post,Sync External Source Route,yes
+PATCH,/tags/{tag_id},documents,update_document_tag_tags__tag_id__patch,Update Document Tag,yes
+DELETE,/tags/{tag_id},documents,delete_document_tag_tags__tag_id__delete,Delete Document Tag,yes
+GET,/teams/{team_id},teams,get_team_teams__team_id__get,Get Team,yes
+PATCH,/teams/{team_id},teams,update_team_teams__team_id__patch,Update Team,yes
+DELETE,/teams/{team_id},teams,delete_team_teams__team_id__delete,Delete Team,yes
+GET,/teams/{team_id}/members,teams,list_team_members_teams__team_id__members_get,List Team Members,yes
+POST,/teams/{team_id}/members,teams,add_team_member_teams__team_id__members_post,Add Team Member,yes
+PATCH,/teams/{team_id}/members/{user_id},teams,update_team_member_role_teams__team_id__members__user_id__patch,Update Team Member Role,yes
+DELETE,/teams/{team_id}/members/{user_id},teams,remove_team_member_teams__team_id__members__user_id__delete,Remove Team Member,yes
+GET,/thresholds/{threshold_id},regression-thresholds,get_regression_threshold_endpoint_thresholds__threshold_id__get,Get Regression Threshold Endpoint,yes
+PATCH,/thresholds/{threshold_id},regression-thresholds,update_regression_threshold_endpoint_thresholds__threshold_id__patch,Update Regression Threshold Endpoint,yes
+DELETE,/thresholds/{threshold_id},regression-thresholds,delete_regression_threshold_endpoint_thresholds__threshold_id__delete,Delete Regression Threshold Endpoint,yes
+GET,/tools/available,agents,list_available_tools_endpoint_tools_available_get,List Available Tools Endpoint,yes
+GET,/twilio/calls,telephony,list_calls_endpoint_twilio_calls_get,List Calls Endpoint,yes
+POST,/twilio/dtmf,telephony,twilio_dtmf_endpoint_twilio_dtmf_post,Twilio Dtmf Endpoint,no/unknown
+POST,/twilio/incoming,telephony,twilio_incoming_endpoint_twilio_incoming_post,Twilio Incoming Endpoint,no/unknown
+POST,/twilio/outbound,telephony,twilio_outbound_endpoint_twilio_outbound_post,Twilio Outbound Endpoint,yes
+POST,/twilio/speech,telephony,twilio_speech_endpoint_twilio_speech_post,Twilio Speech Endpoint,no/unknown
+POST,/twilio/status,telephony,twilio_status_endpoint_twilio_status_post,Twilio Status Endpoint,no/unknown
+POST,/twilio/{call_sid}/end,telephony,twilio_end_call_endpoint_twilio__call_sid__end_post,Twilio End Call Endpoint,yes
+GET,/users/me/limits,user-limits,get_my_limits_users_me_limits_get,Get My Limits,yes
+GET,/users/me/permissions,resource-permissions,list_my_permissions_users_me_permissions_get,List My Permissions,yes
+GET,/users/me/voice-settings,voice-settings,get_voice_settings_endpoint_users_me_voice_settings_get,Get Voice Settings Endpoint,yes
+PATCH,/users/me/voice-settings,voice-settings,update_voice_settings_endpoint_users_me_voice_settings_patch,Update Voice Settings Endpoint,yes
+POST,/users/me/voice-settings/reset,voice-settings,reset_voice_settings_endpoint_users_me_voice_settings_reset_post,Reset Voice Settings Endpoint,yes
+GET,/v1/agents,Public API,public_agents_list_endpoint_v1_agents_get,Public Agents List Endpoint,no/unknown
+POST,/v1/agents/run,Public API,public_agent_run_endpoint_v1_agents_run_post,Public Agent Run Endpoint,no/unknown
+GET,/v1/analytics,Public API,public_analytics_endpoint_v1_analytics_get,Public Analytics Endpoint,no/unknown
+POST,/v1/chat,Public API,public_chat_endpoint_v1_chat_post,Public Chat Endpoint,no/unknown
+GET,/v1/conversations,Public API,public_conversations_list_endpoint_v1_conversations_get,Public Conversations List Endpoint,no/unknown
+POST,/v1/documents,Public API,public_document_upload_endpoint_v1_documents_post,Public Document Upload Endpoint,no/unknown
+GET,/v1/documents,Public API,public_documents_list_endpoint_v1_documents_get,Public Documents List Endpoint,no/unknown
+POST,/v1/embed,Public API,public_embed_endpoint_v1_embed_post,Public Embed Endpoint,no/unknown
+POST,/v1/knowledge-bases,Public API,public_kb_creation_endpoint_v1_knowledge_bases_post,Public Kb Creation Endpoint,no/unknown
+GET,/v1/knowledge-bases,Public API,public_kb_list_endpoint_v1_knowledge_bases_get,Public Kb List Endpoint,no/unknown
+POST,/v1/search,Public API,public_search_endpoint_v1_search_post,Public Search Endpoint,no/unknown
+GET,/v1/usage,Public API,public_usage_endpoint_v1_usage_get,Public Usage Endpoint,no/unknown
+GET,/versions/{version_id},benchmark-versions,get_benchmark_version_endpoint_versions__version_id__get,Get Benchmark Version Endpoint,yes
+POST,/versions/{version_id}/compare/{other_version_id},benchmark-versions,compare_benchmark_versions_endpoint_versions__version_id__compare__other_version_id__post,Compare Benchmark Versions Endpoint,yes
+GET,/voice-messages/{message_id},voice-messages,get_voice_message_endpoint_voice_messages__message_id__get,Get Voice Message Endpoint,yes
+DELETE,/voice-messages/{message_id},voice-messages,delete_voice_message_endpoint_voice_messages__message_id__delete,Delete Voice Message Endpoint,yes
+GET,/voice-messages/{message_id}/audio,voice-messages,get_voice_message_audio_endpoint_voice_messages__message_id__audio_get,Get Voice Message Audio Endpoint,yes
+GET,/voice/elevenlabs/voices,voice,list_elevenlabs_voices_endpoint_voice_elevenlabs_voices_get,List Elevenlabs Voices Endpoint,yes
+POST,/voice/organizations/{org_id}/agent,voice,voice_agent_endpoint_voice_organizations__org_id__agent_post,Voice Agent Endpoint,yes
+POST,/voice/organizations/{org_id}/chat,voice,voice_chat_endpoint_voice_organizations__org_id__chat_post,Voice Chat Endpoint,yes
+POST,/voice/stt,voice,transcribe_speech_endpoint_voice_stt_post,Transcribe Speech Endpoint,yes
+POST,/voice/tts,voice,synthesize_speech_endpoint_voice_tts_post,Synthesize Speech Endpoint,yes
+POST,/webhooks/{trigger_id},workflows,run_workflow_via_webhook_endpoint_webhooks__trigger_id__post,Run Workflow Via Webhook Endpoint,no/unknown
+GET,/webhooks/{webhook_id},Webhooks,get_webhook_endpoint_webhooks__webhook_id__get,Get Webhook Endpoint,yes
+PATCH,/webhooks/{webhook_id},Webhooks,update_webhook_endpoint_webhooks__webhook_id__patch,Update Webhook Endpoint,yes
+DELETE,/webhooks/{webhook_id},Webhooks,delete_webhook_endpoint_webhooks__webhook_id__delete,Delete Webhook Endpoint,yes
+GET,/webhooks/{webhook_id}/deliveries,Webhooks,list_webhook_deliveries_endpoint_webhooks__webhook_id__deliveries_get,List Webhook Deliveries Endpoint,yes
+POST,/webhooks/{webhook_id}/test,Webhooks,test_webhook_endpoint_webhooks__webhook_id__test_post,Test Webhook Endpoint,yes
+GET,/widget/avatar,Widget,get_widget_avatar_endpoint_widget_avatar_get,Get Widget Avatar Endpoint,no/unknown
+POST,/widget/chat,Widget,widget_chat_endpoint_widget_chat_post,Widget Chat Endpoint,no/unknown
+GET,/widget/chat.js,Widget,get_widget_chat_js_widget_chat_js_get,Get Widget Chat Js,no/unknown
+GET,/widget/config,Widget,get_widget_config_endpoint_widget_config_get,Get Widget Config Endpoint,no/unknown
+GET,/widget/embed.js,Widget,get_widget_script_widget_embed_js_get,Get Widget Script,no/unknown
+GET,/widget/iframe,Widget,get_widget_iframe_widget_iframe_get,Get Widget Iframe,no/unknown
+GET,/widget/language,Widget,get_widget_language_endpoint_widget_language_get,Get Widget Language Endpoint,no/unknown
+GET,/widget/languages,Widget,get_widget_languages_endpoint_widget_languages_get,Get Widget Languages Endpoint,no/unknown
+GET,/widget/logo,Widget,get_widget_logo_endpoint_widget_logo_get,Get Widget Logo Endpoint,no/unknown
+GET,/widget/position,Widget,get_widget_position_public_endpoint_widget_position_get,Get Widget Position Public Endpoint,no/unknown
+GET,/widget/script.js,Widget,get_widget_script_widget_script_js_get,Get Widget Script,no/unknown
+POST,/widget/session,Widget,create_widget_session_endpoint_widget_session_post,Create Widget Session Endpoint,no/unknown
+GET,/widget/styles.css,Widget,get_widget_styles_widget_styles_css_get,Get Widget Styles,no/unknown
+GET,/widget/suggested-questions,Widget,get_suggested_questions_endpoint_widget_suggested_questions_get,Get Suggested Questions Endpoint,no/unknown
+GET,/widget/theme,Widget,get_widget_theme_endpoint_widget_theme_get,Get Widget Theme Endpoint,no/unknown
+GET,/widget/welcome,Widget,get_widget_welcome_endpoint_widget_welcome_get,Get Widget Welcome Endpoint,no/unknown
+GET,/workflows/runs/{run_id},workflows,get_workflow_run_endpoint_workflows_runs__run_id__get,Get Workflow Run Endpoint,yes
+GET,/workflows/runs/{run_id}/human-blocks,workflows,list_human_blocks_endpoint_workflows_runs__run_id__human_blocks_get,List Human Blocks Endpoint,yes
+GET,/workflows/runs/{run_id}/human-blocks/{block_id},workflows,get_human_block_endpoint_workflows_runs__run_id__human_blocks__block_id__get,Get Human Block Endpoint,yes
+POST,/workflows/runs/{run_id}/human-blocks/{block_id}/submit,workflows,submit_human_block_endpoint_workflows_runs__run_id__human_blocks__block_id__submit_post,Submit Human Block Endpoint,yes
+GET,/workflows/runs/{run_id}/stream,workflows,stream_workflow_run_endpoint_workflows_runs__run_id__stream_get,Stream Workflow Run Endpoint,yes
+GET,/workflows/runs/{run_id}/trace,workflows,get_workflow_run_trace_endpoint_workflows_runs__run_id__trace_get,Get Workflow Run Trace Endpoint,yes
+GET,/workflows/{workflow_id},workflows,get_workflow_endpoint_workflows__workflow_id__get,Get Workflow Endpoint,yes
+PATCH,/workflows/{workflow_id},workflows,update_workflow_endpoint_workflows__workflow_id__patch,Update Workflow Endpoint,yes
+DELETE,/workflows/{workflow_id},workflows,delete_workflow_endpoint_workflows__workflow_id__delete,Delete Workflow Endpoint,yes
+GET,/workflows/{workflow_id}/export,workflows,export_workflow_endpoint_workflows__workflow_id__export_get,Export Workflow Endpoint,yes
+POST,/workflows/{workflow_id}/run,workflows,run_workflow_manually_endpoint_workflows__workflow_id__run_post,Run Workflow Manually Endpoint,yes
+GET,/workflows/{workflow_id}/runs,workflows,list_workflow_runs_endpoint_workflows__workflow_id__runs_get,List Workflow Runs Endpoint,yes
+POST,/workflows/{workflow_id}/triggers,workflows,create_trigger_endpoint_workflows__workflow_id__triggers_post,Create Trigger Endpoint,yes
+GET,/workflows/{workflow_id}/triggers,workflows,list_triggers_endpoint_workflows__workflow_id__triggers_get,List Triggers Endpoint,yes
+DELETE,/workflows/{workflow_id}/triggers/{trigger_id},workflows,delete_trigger_endpoint_workflows__workflow_id__triggers__trigger_id__delete,Delete Trigger Endpoint,yes
+POST,/workflows/{workflow_id}/validate,workflows,validate_workflow_endpoint_workflows__workflow_id__validate_post,Validate Workflow Endpoint,yes
+GET,/workflows/{workflow_id}/versions,workflows,list_workflow_versions_endpoint_workflows__workflow_id__versions_get,List Workflow Versions Endpoint,yes
+POST,/workflows/{workflow_id}/versions/create,workflows,create_workflow_version_endpoint_workflows__workflow_id__versions_create_post,Create Workflow Version Endpoint,yes
+POST,/workflows/{workflow_id}/versions/diff,workflows,diff_workflow_versions_endpoint_workflows__workflow_id__versions_diff_post,Diff Workflow Versions Endpoint,yes
+POST,/workflows/{workflow_id}/versions/restore,workflows,restore_workflow_version_endpoint_workflows__workflow_id__versions_restore_post,Restore Workflow Version Endpoint,yes
+GET,/workflows/{workflow_id}/versions/{version_number},workflows,get_workflow_version_endpoint_workflows__workflow_id__versions__version_number__get,Get Workflow Version Endpoint,yes
+PATCH,/workspaces/{workspace_id},workspaces,update_workspace_workspaces__workspace_id__patch,Update Workspace,yes
+DELETE,/workspaces/{workspace_id},workspaces,delete_workspace_workspaces__workspace_id__delete,Delete Workspace,yes

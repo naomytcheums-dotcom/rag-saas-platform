@@ -1,0 +1,144 @@
+file,revision,down_revision,docstring
+0001_create_auth_tables.py,0001,None,"create auth tables (users, oauth_accounts, sessions, password_reset_tokens, email_verification_tokens)"
+0002_enable_row_level_security.py,0002,"""0001""",enable row level security on all public tables
+0003_two_factor_recovery_codes.py,0003,"""0002""",add two_factor_recovery_codes table
+0004_consent_withdrawn_at.py,0004,"""0003""",add users.consent_withdrawn_at
+0005_account_restore_tokens.py,0005,"""0004""",add account_restore_tokens table
+0006_two_factor_lockout_recovery_tokens.py,0006,"""0005""",add two_factor_lockout_recovery_tokens table
+0007_consent_reactivation_tokens.py,0007,"""0006""",add consent_reactivation_tokens table
+0008_access_token_revocation.py,0008,"""0007""",add revoked_access_tokens table and sessions.access_token_jti
+0009_deletion_reminder.py,0009,"""0008""",add users.deletion_reminder_sent_at
+0010_user_role.py,0010,"""0009""",replace users.is_superadmin with users.role (5.1 -- RBAC prep for Partie 1.2)
+0011_password_history.py,0011,"""0010""",add password_history table (audit finding 15 -- password reuse protection)
+0012_audit_log.py,0012,"""0011""",add audit_logs table (audit finding 18 -- persistent tamper-evident audit trail)
+0013_jwt_webauthn_enterprise_sso.py,0013,"""0012""","add jwt_signing_keys, webauthn_credentials, enterprise_sso_connections/accounts (audit Categorie 4, items 26/27/28)"
+0014_organizations.py,0014,"""0013""","add organizations, organization_members (Etape 1.2.2 -- first slice of Partie 1.3 multi-tenant)"
+0015_workspaces.py,0015,"""0014""",add workspaces (Etape 1.2.4 -- Manager role's workspace-management capability)
+0016_casbin_rules.py,0016,"""0015""",add casbin_rule (Etape 1.2.7 -- RBAC policy engine)
+0017_resource_permissions.py,0017,"""0016""",add resource_permissions (Etape 1.2.8 -- granular per-resource permissions)
+0018_teams.py,0018,"""0017""",add teams and team_members (Partie 1.3.3)
+0019_password_history_sequence.py,0019,"""0018""",add password_history.sequence -- fix non-deterministic history ordering
+0020_invitations.py,0020,"""0019""",add invitations (Partie 1.3.4 -- email-based org invitations)
+0021_organization_quotas.py,0021,"""0020""",add organization_quotas (Partie 1.3.6)
+0022_organization_member_limits.py,0022,"""0021""",add per-member limits to organization_members (Partie 1.3.7)
+0023_organization_usage.py,0023,"""0022""",add organization_usage and organization_usage_details (Partie 1.3.8)
+0024_organization_settings.py,0024,"""0023""",add organization_settings (Partie 1.3.9)
+0025_organization_branding.py,0025,"""0024""",add organization_branding (Partie 1.3.10)
+0026_custom_domains.py,0026,"""0025""",add custom_domains (Partie 1.4.1)
+0027_ssl_certificates.py,0027,"""0026""",add acme_accounts and ssl_certificates (Partie 1.4.3)
+0028_domain_verification_attempts.py,0028,"""0027""",add verification_attempts/last_verification_attempt_at to custom_domains (Partie 1.4.4)
+0029_email_domain_verification.py,0029,"""0028""",add custom email-domain verification columns to custom_domains (Partie 1.4.5)
+0030_hide_platform_branding.py,0030,"""0029""",add hide_platform_branding to organization_branding (Partie 1.4.6)
+0031_documents.py,0031,"""0030""",add documents and document_chunks tables (Partie 2.1.1)
+0032_documents_row_level_security.py,0032,"""0031""",enable row level security on documents/document_chunks (fixes 0031)
+0033_document_source_url.py,0033,"""0032""",add source_url to documents (Partie 2.1.10)
+0034_document_tags.py,0034,"""0033""",add document_tags and document_tag_assignments tables (Partie 2.2.6)
+0035_document_versions.py,0035,"""0034""",add document_versions table and documents.current_version_id (Partie 2.2.7)
+0036_document_soft_delete.py,0036,"""0035""",add deleted_at/deleted_by to documents (Partie 2.2.8)
+0037_document_tags_versions_row_level_security.py,0037,"""0036""",enable row level security on document_tags/document_tag_assignments/document_versions (fixes 0034/0035)
+0038_document_audit_logs.py,0038,"""0037""",add document_audit_logs table (Partie 2.2.10)
+0039_document_indexing_status.py,0039,"""0038""",add indexing_started_at/indexing_error to documents (Partie 2.2.11)
+0040_document_content_hash.py,0040,"""0039""",add content_hash to documents (Partie 2.2.12)
+0041_document_modification_tracking.py,0041,"""0040""",add last_modified/last_checked to documents (Partie 2.2.13)
+0042_external_sources.py,0042,"""0041""",add external_sources table (Partie 2.2.14)
+0043_reindex_schedules.py,0043,"""0042""",add reindex_schedules table and documents.reindex_schedule (Partie 2.2.15)
+0044_batch_jobs.py,0044,"""0043""",add batch_jobs and batch_job_items tables (Partie 2.2.16)
+0045_document_images.py,0045,"""0044""",add document_images table (Partie 3.1.5)
+0046_document_keywords_entities.py,0046,"""0045""",add document_keywords and document_entities tables (Partie 3.1.10)
+0047_document_chunks_organization_id.py,0047,"""0046""",add organization_id to document_chunks (Partie 3.3.4 -- real multi-tenant search pipeline)
+0048_agent_runs.py,0048,"""0047""","add agent_runs table (fix to Partie 5.1.1 -- persistent, shared agent run registry)"
+0049_tool_permissions.py,0049,"""0048""",add tool_permissions table (Partie 5.1.3)
+0050_tool_timeout_and_budget.py,0050,"""0049""",add tool_timeout_overrides and tool_budgets tables (Partie 5.1.4/5.1.5)
+0051_tool_and_llm_fallback.py,0051,"""0050""",add tool_fallbacks and llm_fallbacks tables (Partie 5.1.7)
+0052_human_approvals.py,0052,"""0051""",add human_approvals table (Partie 5.1.10)
+0053_agent_memory.py,0053,"""0052""",add agent_sessions and agent_memory_items tables (Partie 5.1.11)
+0054_conversations.py,0054,"""0053""",add conversations and conversation_messages tables (Partie 5.1.12)
+0055_task_planning.py,0055,"""0054""",add task_plans and task_steps tables (Partie 5.1.13)
+0056_agent_traces.py,0056,"""0055""",add agent_traces table (Partie 5.1.14)
+0057_escalations.py,0057,"""0056""",add escalations table (Partie 5.2.9)
+0058_agents.py,0058,"""0057""",add agents table (Partie 5.3.1-5.3.6)
+0059_agent_permissions.py,0059,"""0058""",add agent permission fields (Partie 5.3.7)
+0060_agent_guardrails.py,0060,"""0059""",add agent guardrail fields (Partie 5.3.9)
+0061_agent_api_keys.py,0061,"""0060""",add agent_api_keys table (Partie 5.3.10)
+0062_workflows.py,0062,"""0061""","add workflows, workflow_triggers, workflow_runs tables (Partie 5.4.1-5.4.11)"
+0063_workflow_human_inputs.py,0063,"""0062""",add workflow_human_inputs table (Partie 5.4.9)
+0064_custom_tools.py,0064,"""0063""",add custom_tools table (Partie 5.2.10)
+0065_workflow_versions.py,0065,"""0064""",add workflow_versions table (Partie 5.4.13)
+0066_responses_and_citations.py,0066,"""0065""",add responses and citations tables (Partie 6.1.1-6.1.10)
+0067_agent_runs_response_id.py,0067,"""0066""",add agent_runs.response_id (Partie 6.1.1 orchestrator integration)
+0068_document_chunks_chunk_index.py,0068,"""0067""",add document_chunks.chunk_index (Partie 6.1.5)
+0069_response_hallucination_fields.py,0069,"""0068""",add responses.* fields for Partie 6.2.4/6.2.6/6.2.7/6.2.8/6.2.9/6.2.10
+0070_agent_gates_and_response_metrics.py,0070,"""0069""",add agents.* fields for 6.2.1/6.2.2/6.2.3 and responses.* fields for 6.2.5/6.2.11
+0071_evaluation_lab.py,0071,"""0070""",add evaluation_datasets/evaluation_questions/question_sets/question_set_items/benchmark_versions (Partie 7.1.1-7.1.6)
+0072_evaluation_results.py,0072,"""0071""",add evaluation_results (Partie 7.2.1)
+0073_evaluation_jobs_and_manual_evaluations.py,0073,"""0072""","add evaluation_jobs, manual_evaluations, evaluation_results.evaluation_job_id (Partie 7.3.1/7.3.2)"
+0074_comparison_jobs.py,0074,"""0073""",add comparison_jobs (Partie 7.3.4/7.3.5/7.3.6/7.3.7)
+0075_regression_detection_and_thresholds.py,0075,"""0074""","add regression_thresholds, regression_detections (Partie 7.3.3/7.3.9)"
+0076_deployment_evaluations.py,0076,"""0075""",add deployment_evaluations (Partie 7.3.8)
+0077_ab_tests.py,0077,"""0076""",add ab_tests (Partie 7.3.10)
+0078_message_actions.py,0078,"""0077""",add retry_count + regeneration_history + message_edit_history + message_feedback (Partie 8.1.6/8.1.7/8.1.8/8.1.9)
+0079_conversation_delete_and_visibility.py,0079,"""0078""",add conversations.deleted_at + conversations.is_public (Partie 8.1.13/8.1.16)
+0080_conversation_shares.py,0080,"""0079""",add conversation_shares (Partie 8.1.15)
+0081_follow_up_questions.py,0081,"""0080""",add follow_up_questions (Partie 8.1.18)
+0082_voice.py,0082,"""0081""","add voice_messages, voice_settings, call_records (Partie 8.2.7/8.2.8/8.2.13)"
+0083_organization_api_keys.py,0083,"""0082""",add organization_api_keys (Partie 9.1)
+0084_key_management_and_webhooks.py,0084,"""0083""",extend organization_api_keys (9.2.1/9.2.5/9.2.6) + key_rotation_history (9.2.2) + webhooks (9.2.7)
+0085_widget.py,0085,"""0084""",widget_configs + widget_suggested_questions (9.3)
+0086_chat_integrations.py,0086,"""0085""",slack/teams/discord chat-platform integrations (9.4)
+0087_enable_row_level_security_remaining_tables.py,0087,"""0086""",enable row level security on every table still missing it
+0088_partie_10_security_rbac_compliance_scanning.py,0088,"""0087""","Partie 10.1-10.5 -- custom RBAC, encryption metadata, GDPR/CCPA"
+0089_partie_11_admin_dashboard.py,0089,"""0088""","Partie 11 -- admin dashboard: organization/user suspension fields,"
+0090_partie_12_billing.py,0090,"""0089""","Partie 12 -- billing: plan pricing/feature/Stripe columns,"
+0091_partie_13_alerting.py,0091,"""0090""","Partie 13.3 -- alert_channels, alert_rules, alert_history, incidents."
+0092_partie_15_integrations.py,0092,"""0091""","Partie 15 -- integration_connections, integration_mappings,"
+0093_sms_messages.py,0093,"""0092""",Real Twilio SMS/WhatsApp send log.
+0094_partie_16_sales_models.py,0094,"""0093""","Partie 16 (bis) -- sales models: Subscription.trial_ends_at,"
+0095_partie_16_ter_plugin_marketplace.py,0095,"""0094""","Partie 16 (ter) -- plugin marketplace: plugins, plugin_installations,"
+0096_plugin_versions_category_execution.py,0096,"""0095""","Partie 16 (ter), extended -- real plugin versioning + execution:"
+0097_plugin_pricing.py,0097,"""0096""","Partie 16 (ter), extended -- plugins.pricing, plugins.price."
+0098_rls_coverage_gap.py,0098,"""0097""","Real, pre-existing gap found via test_postgres_integration.py's own"
+0099_partner_commissions.py,0099,"""0098""","Partie 18 -- partner_commissions: the real, persisted commission"
+0100_partner_referral_code.py,0100,"""0099""","Partie 18 (referral link) -- resellers.referral_code, a real, random,"
+0101_whitelabel_extended_branding.py,0101,"""0100""",Partie 19 -- white-label extended config: the fields organization_branding
+0102_analytics.py,0102,"""0101""","Partie 20 -- advanced analytics: analytics_events, analytics_aggregates,"
+0103_ab_testing_advanced.py,0103,"""0102""",Partie 21 -- advanced A/B testing: real gaps found in the already
+0104_multimodal_media.py,0104,"""0103""","Partie 22 -- multi-modal media (images, audio, video). See"
+0105_clip_visual_search.py,0105,"""0104""","Partie 22, 3rd finalization -- CLIP-based visual search: adds"
+0106_autonomous_agents.py,0106,"""0105""",Partie 23 -- autonomous agents. See api/models/autonomous_agent.py's
+0107_autonomous_agent_cost_tracking.py,0107,"""0106""","Partie 23 (cost tracking finalization) -- real, per-step and"
+0108_fine_tuning.py,0108,"""0107""","Partie 24 -- fine-tuning: datasets, jobs, fine-tuned models, and"
+0109_ai_credits_and_byok.py,0109,"""0108""",AI credits pack (monthly included credits per plan) + BYOK (per-org
+0110_organization_llm_configs_rls.py,0110,"""0109""",Enable RLS on organization_llm_configs -- migration 0109 created this
+0111_workflow_run_execution_state.py,0111,"""0110""","Partie 5.4 -- real execution state on `WorkflowRun`, needed by the"
+0112_document_chunk_parent_child.py,0112,"""0111""","Phase 4, Étape 1 (correctif) -- the real persisted parent/child"
+0113_document_chunk_embedding_null_backfill.py,0113,"""0112""","Phase 4, Étape 1 (correctif parent_child) -- one-time data backfill"
+0114_widget_allowed_domains.py,0114,"""0113""","Phase 4, Étape 5 (Domain Allowlist Widget) -- real, minimal, additive"
+0115_paystack_billing_support.py,0115,"""0114""","Phase 5, Étape 2 -- Paystack + Stripe multi-provider billing."
+0116_notifications.py,0116,"""0115""","Phase 5, Étape 4 -- notifications (in-app + email): two new,"
+0117_workflow_variables.py,0117,"""0116""","Phase 5, Étape 5 -- real, minimal, additive column:"
+0118_agent_long_term_memory.py,0118,"""0117""","Phase 5, Étape 6 -- real, additive table: `agent_long_term_memory_items`,"
+0119_mcp_servers.py,0119,"""0118""","Phase 5, Étape 9 -- real, additive tables for MCP client config:"
+0120_workflow_node_executions.py,0120,"""0119""","Phase 5, Étape 11 -- real, additive table: `workflow_node_executions`,"
+0121_retrieval_diagnostics.py,0121,"""0120""","Phase 5, Étape 11 -- real, additive table: `retrieval_diagnostics`,"
+0122_performance_indexes.py,0122,"""0121""","Phase 5, Étape 13 -- Performance: 5 real, measured index gaps found"
+0123_evaluation_failures.py,0123,"""0122""","Phase 5, Étape 14 -- real, additive table: `evaluation_failures`,"
+0124_sandbox_environments.py,0124,"""0123""",sandbox_environments
+0125_prompt_injection_detection.py,0125,"""0124""","Bricks open source, item 7 -- real, additive column:"
+0126_rag_experiments.py,0126,"""0125""","Systèmes internes, item 19 -- real, additive table: `rag_experiments`"
+0127_flight_recordings.py,0127,"""0126""","Systèmes internes, item 24 -- real, additive table: `flight_recordings`"
+0128_pgvector_embeddings.py,0128,"""0127""","Hardening Mission, Phase 1 -- real pgvector support for"
+0129_account_lockout.py,0129,"""0128""","Hardening Mission, Phase 2 -- real, DB-persistent account lockout."
+0130_response_provenance.py,0130,"""0129""","Hardening Mission, Phase 7 -- real response provenance. Closes a"
+0131_enable_rls_on_remaining_tables.py,0131,"""0130""",Enable RLS on the 11 tables created by migrations 0116-0127 without the
+0132_workspace_description.py,0132,"""0131""",Persist optional workspace and public knowledge-base descriptions.
+0133_bm25_corpus_revision.py,0133,"""0132""","Transactional BM25 corpus revisions, including writes from other processes."
+0134_enterprise_sso_domain_verification.py,0134,"""0133""",Require proven domain ownership before an enterprise SSO connection routes logins.
+0135_call_records_organization.py,0135,"""0134""",Tenant ownership of Twilio call records (SEC-004).
+0136_notification_templates.py,0136,"""0135""",Create `notification_templates` (TEN-006).
+0137_evaluation_split.py,0137,"""0136""",Add the tuning / held-out split to the Eval Lab (spec 7.1.7).
+0138_escalation_sla_and_notes.py,0138,"""0137""",Escalation tickets: SLA deadline and internal notes (spec 15.1.4 and 15.1.6).
+0139_feedback_correction.py,0139,"""0138""","Add `message_feedback.correction` (spec 15.2.4: the answer the user proposes). Nullable, additive, reversible."
+0140_coupons.py,0140,"""0139""",Promo codes: `coupons` and `coupon_redemptions` (spec 12.1.4). Additive and reversible; row level security enabled like every table since 0131.
+0141_scim_tokens.py,0141,"""0140""",SCIM 2.0 provisioning tokens (spec 10.4.3). Additive and reversible; row level security enabled like every table since 0131.
+0142_user_job_title.py,0142,"""0141""","Add `users.job_title` (spec 1.1.13: profile with company and role). Nullable, additive, reversible."
+0143_connector_credentials.py,0143,"""0142""",Per-organization connector credentials (docs/DECISIONS.md D17). Additive and reversible; row level security enabled like every table since 0131.

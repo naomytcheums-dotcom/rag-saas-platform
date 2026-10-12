@@ -102,12 +102,17 @@ def _deduplicate_documents(chunks: list[dict]) -> list[dict]:
 
 async def run_evaluation(
     db: AsyncSession, question_id: uuid.UUID, agent_id: uuid.UUID | None = None, model_config: dict | None = None,
-    retrieval_overrides: dict | None = None, retrieval_config: dict | None = None,
+    retrieval_overrides: dict | None = None, retrieval_config: dict | None = None, compute_metrics: bool = True,
 ) -> EvaluationResult | None:
     """Item 2's own literal function -- real retrieval, real
     generation, real timing, then real metric computation via
     `extend_evaluation_metrics`. Honestly `None` for an unknown
     question or one whose dataset no longer real-ily exists.
+
+    `compute_metrics=False` skips that last step: `extend_evaluation_metrics` recomputes the quality metrics (faithfulness,
+    hallucination, semantic similarity, cost) of EVERY stored result of the question, so a caller that only needs the timing
+    (`latency_metrics.measure_latency`, which runs the same question 4 to 8 times) would pay for them again on each run, which grows
+    quadratically and loads an embedding model inside the latency time budget.
 
     `retrieval_overrides` -- a real, additive parameter beyond this
     item's own literal 7.2.1 signature: `search_with_context` already
@@ -231,7 +236,8 @@ async def run_evaluation(
     await db.flush()
     print(f'[RAG_TRACE_AFTER_FLUSH] result.id={result.id} retrieved_docs={len(result.retrieved_documents or [])} retrieved_chunks={len(result.retrieved_chunks or [])}', flush=True)
 
-    await extend_evaluation_metrics(db, question_id)
+    if compute_metrics:
+        await extend_evaluation_metrics(db, question_id)
     await db.refresh(result)
     return result
 

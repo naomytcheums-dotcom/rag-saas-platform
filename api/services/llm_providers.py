@@ -95,6 +95,22 @@ class LLMAuthenticationError(LLMError):
     pass
 
 
+def _transient_server_errors(litellm) -> tuple:
+    """Connection failures and 5xx answers (server down, restarting, overloaded): retried like a rate limit, then surfaced as an LLMProviderError.
+    They do not inherit from `litellm.exceptions.APIError`, so they used to escape every `except LLMError` (notably the provider fallback)."""
+    return (litellm.exceptions.APIConnectionError, litellm.exceptions.ServiceUnavailableError, litellm.exceptions.InternalServerError)
+
+
+def _stream_error(exc: Exception, litellm) -> LLMError:
+    if isinstance(exc, litellm.exceptions.AuthenticationError):
+        return LLMAuthenticationError(str(exc))
+    if isinstance(exc, litellm.exceptions.RateLimitError):
+        return LLMRateLimitError(str(exc))
+    if isinstance(exc, litellm.exceptions.Timeout):
+        return LLMTimeoutError(str(exc))
+    return LLMProviderError(str(exc))
+
+
 # Item 4's own literal per-provider config (4.1.1-4.1.6's own literal
 # settings, all real, all in api/config.py) -- one real, small lookup
 # table rather than a long if/elif chain repeated across every
@@ -154,12 +170,17 @@ def get_default_provider(org_settings: dict | None = None) -> str:
 
 
 # LiteLLM only infers the provider from bare names for OpenAI/Anthropic; the catalog offers bare names for these providers too.
-LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama/"}
+LITELLM_PROVIDER_PREFIXES: dict[str, str] = {"gemini": "gemini/", "mistral": "mistral/", "ollama": "ollama_chat/"}
+# `ollama/` sends the request to /api/generate, where a streamed tool call comes back as plain text; `ollama_chat/` uses /api/chat, which returns real tool calls
+# in both modes (checked against a real server). Names stored with the old prefix are routed to the chat endpoint too.
+_LEGACY_OLLAMA_PREFIX = "ollama/"
 
 
 def to_litellm_model(provider: str, model: str) -> str:
     """The model string actually sent to LiteLLM: `gemini-2.5-pro` becomes `gemini/gemini-2.5-pro`; already-prefixed names are kept."""
     prefix = LITELLM_PROVIDER_PREFIXES.get(provider)
+    if provider == "ollama" and model.startswith(_LEGACY_OLLAMA_PREFIX):
+        model = model[len(_LEGACY_OLLAMA_PREFIX):]
     if prefix and not model.startswith(prefix):
         return f"{prefix}{model}"
     return model
@@ -185,6 +206,8 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
     kwargs: dict = {"model": resolved_model}
     if api_key:
         kwargs["api_key"] = api_key
+    elif provider == "openai_compatible":
+        kwargs["api_key"] = "not-needed"  # the OpenAI client refuses to start without one; a keyless server (Ollama, vLLM) ignores it
     if provider == "ollama":
         kwargs["api_base"] = settings.OLLAMA_BASE_URL
     elif provider == "openai_compatible":
@@ -217,6 +240,7 @@ async def _chat_completion_raw(
     `LLMAuthenticationError` (a real bad/missing key that retrying can
     never fix) or a generic `LLMProviderError`."""
     import litellm  # local: costs ~190MB RSS to import (its own bundled per-model cost map, dozens of provider SDKs) -- every module that imports this one at load time pays that cost at process boot, before a single real LLM call has happened. Deferred to first real use instead.
+    import openai
 
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
@@ -261,7 +285,10 @@ async def _chat_completion_raw(
             except litellm.exceptions.Timeout as exc:
                 last_error = LLMTimeoutError(str(exc))
                 last_error.__cause__ = exc
-            except litellm.exceptions.APIError as exc:
+            except _transient_server_errors(litellm) as exc:
+                last_error = LLMProviderError(str(exc))
+                last_error.__cause__ = exc
+            except (litellm.exceptions.APIError, openai.APIError) as exc:
                 span.record_exception(exc)
                 raise LLMProviderError(str(exc)) from exc
 
@@ -372,6 +399,7 @@ async def chat_completion_stream(messages: list[dict], provider: str | None = No
     the same as "no usage available," skipping the credit debit rather
     than guessing at a cost."""
     import litellm  # local: see _chat_completion_raw's own note on this import
+    import openai
 
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
@@ -380,16 +408,19 @@ async def chat_completion_stream(messages: list[dict], provider: str | None = No
     if usage_sink is not None:
         call_kwargs["stream_options"] = {"include_usage": True}
 
-    stream = await litellm.acompletion(messages=messages, **call_kwargs)
-    async for chunk in stream:
-        if usage_sink is not None and getattr(chunk, "usage", None) is not None:
-            usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
-            usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
-        if not chunk.choices:
-            continue  # the real, final usage-only chunk litellm emits has no real choices to read a delta from
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield delta
+    try:
+        stream = await litellm.acompletion(messages=messages, **call_kwargs)
+        async for chunk in stream:
+            if usage_sink is not None and getattr(chunk, "usage", None) is not None:
+                usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
+                usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
+            if not chunk.choices:
+                continue  # the real, final usage-only chunk litellm emits has no real choices to read a delta from
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+    except openai.APIError as exc:
+        raise _stream_error(exc, litellm) from exc
 
 
 async def chat_completion_stream_with_tools(
@@ -431,6 +462,7 @@ async def chat_completion_stream_with_tools(
     """
     import json as _json
     import litellm
+    import openai
 
     provider = provider or get_default_provider()
     call_kwargs = _provider_kwargs(provider, model)
@@ -439,33 +471,34 @@ async def chat_completion_stream_with_tools(
     if usage_sink is not None:
         call_kwargs["stream_options"] = {"include_usage": True}
 
-    stream = await litellm.acompletion(messages=messages, **call_kwargs)
     tool_call_accum: dict[int, dict] = {}
-
-    async for chunk in stream:
-        if usage_sink is not None and getattr(chunk, "usage", None) is not None:
-            usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
-            usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
-        if not chunk.choices:
-            continue
-        delta_obj = chunk.choices[0].delta
-        content = getattr(delta_obj, "content", None)
-        if content:
-            yield content
-        raw_tool_calls = getattr(delta_obj, "tool_calls", None)
-        if raw_tool_calls:
-            for tc in raw_tool_calls:
-                idx = getattr(tc, "index", 0) or 0
-                accum = tool_call_accum.setdefault(idx, {"id": None, "name": None, "arguments": ""})
-                if getattr(tc, "id", None):
-                    accum["id"] = tc.id
-                fn = getattr(tc, "function", None)
-                if fn is not None:
-                    if getattr(fn, "name", None):
-                        accum["name"] = fn.name
-                    if getattr(fn, "arguments", None):
-                        accum["arguments"] += fn.arguments
-
+    try:
+        stream = await litellm.acompletion(messages=messages, **call_kwargs)
+        async for chunk in stream:
+            if usage_sink is not None and getattr(chunk, "usage", None) is not None:
+                usage_sink["prompt_tokens"] = getattr(chunk.usage, "prompt_tokens", None)
+                usage_sink["completion_tokens"] = getattr(chunk.usage, "completion_tokens", None)
+            if not chunk.choices:
+                continue
+            delta_obj = chunk.choices[0].delta
+            content = getattr(delta_obj, "content", None)
+            if content:
+                yield content
+            raw_tool_calls = getattr(delta_obj, "tool_calls", None)
+            if raw_tool_calls:
+                for tc in raw_tool_calls:
+                    idx = getattr(tc, "index", 0) or 0
+                    accum = tool_call_accum.setdefault(idx, {"id": None, "name": None, "arguments": ""})
+                    if getattr(tc, "id", None):
+                        accum["id"] = tc.id
+                    fn = getattr(tc, "function", None)
+                    if fn is not None:
+                        if getattr(fn, "name", None):
+                            accum["name"] = fn.name
+                        if getattr(fn, "arguments", None):
+                            accum["arguments"] += fn.arguments
+    except openai.APIError as exc:
+        raise _stream_error(exc, litellm) from exc
     if tool_call_accum:
         calls = []
         for idx in sorted(tool_call_accum):

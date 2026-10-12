@@ -1,0 +1,14 @@
+== part 13
+.........................................s.............................. [ 50%]
+........................................................................ [100%]Running teardown with pytest sessionfinish...
+
+Test tests/test_postgres_integration.py::test_rls_policies_exist_on_staging was
+skipped. Reason: 
+('C:\\Users\\NITROV15\\rag-work\\wt-gaps\\tests\\test_postgres_integration.py',
+146, 'Skipped: Staging-only tenant policies are not provisioned in every 
+PostgreSQL profile')
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_postgres_integration.py:146: Staging-only tenant policies are not provisioned in every PostgreSQL profile
+143 passed, 1 skipped in 474.57s (0:07:54)
+
+exit:0

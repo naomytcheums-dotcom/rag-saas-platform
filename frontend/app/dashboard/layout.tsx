@@ -55,6 +55,7 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
       items: [
         { href: "/dashboard/settings/widget", label: t("nav.widget") },
         { href: "/dashboard/settings/integrations", label: t("nav.integrations") },
+        { href: "/dashboard/settings/connectors", label: t("nav.connectors") },
         { href: "/dashboard/marketplace", label: t("nav.marketplace") },
       ],
     },

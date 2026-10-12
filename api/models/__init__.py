@@ -51,6 +51,7 @@ from api.models.encryption_audit import EncryptionAudit, EncryptionKeyRecord
 from api.models.enterprise_sso import EnterpriseSSOAccount, EnterpriseSSOConnection
 from api.models.coupon import Coupon, CouponRedemption
 from api.models.scim import ScimToken
+from api.models.connector_credential import ConnectorCredential
 from api.models.escalation import Escalation, EscalationNote
 from api.models.evaluation import (
     ABTest, ABTestAssignment, ABTestResult, BenchmarkVersion, ComparisonJob, DeploymentEvaluation, EvaluationDataset,

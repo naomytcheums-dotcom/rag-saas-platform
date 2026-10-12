@@ -34,14 +34,14 @@ from api.routers import (
     benchmark_versions, billing,
     chat_integrations_discord, chat_integrations_slack, chat_integrations_teams,
     admin_dashboard, admin_organizations, admin_subscriptions, admin_users_management,
-    chat_stream, citations, compliance, conversations, conversation_shares,
+    chat_stream, citations, request_trace, compliance, conversations, conversation_shares,
     crm, custom_domains, custom_tools, documents, documents_sync, encryption, feedback, i18n, integrations_universal, mcp_server, mcp_servers, media, notification_center, notification_templates, notifications, observability,
     plugins,
     sales,
     sandbox,
     analytics,
     comparison_jobs, deployment_evaluations, email_domains, enterprise_sso, evaluation_comparisons, evaluation_datasets,
-    escalations, coupons, scim, insights, evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
+    escalations, coupons, scim, connectors, insights, evaluation_jobs, evaluation_results, external_sources, fine_tuning, human_approval, invitations, manual_evaluations, oauth,
     organization_branding, organization_members, organization_settings, organizations, password, public_api, quality_dashboard,
     question_sets, questions, quotas, rag_control_plane, rbac, reindex_schedules, regression_detection, regression_thresholds,
     resource_permissions, retrieval_diagnostics, search, security_scan, sessions, ssl_certificates, teams, tool_config, tool_permissions, twilio, two_factor,
@@ -354,6 +354,7 @@ app.include_router(external_sources.router)
 app.include_router(reindex_schedules.router)
 app.include_router(batch_jobs.router)
 app.include_router(citations.router)
+app.include_router(request_trace.router)
 app.include_router(chat_stream.router)
 app.include_router(search.router)
 app.include_router(rag_control_plane.router)
@@ -364,6 +365,7 @@ app.include_router(escalations.router)
 app.include_router(insights.router)
 app.include_router(coupons.router)
 app.include_router(scim.router)
+app.include_router(connectors.router)
 app.include_router(conversations.router)
 app.include_router(conversation_shares.router)
 app.include_router(feedback.router)

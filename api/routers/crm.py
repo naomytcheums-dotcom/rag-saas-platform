@@ -22,6 +22,7 @@ from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.security.organizations import require_org_member
 from api.security.permissions import require_permission
+from api.services.connector_credentials import connector_scope
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ async def import_salesforce(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("salesforce")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -90,6 +92,7 @@ async def import_hubspot(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("hubspot")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -109,6 +112,7 @@ async def import_jira(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("jira")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -128,6 +132,7 @@ async def import_zendesk(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("zendesk")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -147,6 +152,7 @@ async def import_pipedrive(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("pipedrive")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -170,6 +176,7 @@ async def import_linear(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("linear")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -189,6 +196,7 @@ async def import_asana(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("asana")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -208,6 +216,7 @@ async def import_trello(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("trello")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -229,6 +238,7 @@ async def import_airtable(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("airtable")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -253,6 +263,7 @@ async def import_dropbox(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("dropbox")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -272,6 +283,7 @@ async def import_box(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("box")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -291,6 +303,7 @@ async def import_clickup(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("clickup")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -312,6 +325,7 @@ async def import_intercom(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("intercom")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -331,6 +345,7 @@ async def import_zoho(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("zoho")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -350,6 +365,7 @@ async def import_shopify(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("shopify")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -369,6 +385,7 @@ async def import_woocommerce(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("woocommerce")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -388,6 +405,7 @@ async def import_docusign(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("docusign")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -411,6 +429,7 @@ async def import_monday(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("monday")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -430,6 +449,7 @@ async def import_gitlab(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("gitlab")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -449,6 +469,7 @@ async def import_bitbucket(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("bitbucket")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -468,6 +489,7 @@ async def import_azure_devops(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("azure_devops")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -487,6 +509,7 @@ async def import_basecamp(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("basecamp")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -506,6 +529,7 @@ async def import_wrike(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("wrike")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -525,6 +549,7 @@ async def import_smartsheet(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("smartsheet")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -544,6 +569,7 @@ async def import_coda(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("coda")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -563,6 +589,7 @@ async def import_miro(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("miro")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -586,6 +613,7 @@ async def import_podio(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("podio")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -607,6 +635,7 @@ async def import_pipefy(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("pipefy")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -628,6 +657,7 @@ async def import_hive(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("hive")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -649,6 +679,7 @@ async def import_teamwork(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("teamwork")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -668,6 +699,7 @@ async def import_nifty(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("nifty")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -689,6 +721,7 @@ async def import_smartsuite(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("smartsuite")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -710,6 +743,7 @@ async def import_process_street(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("process_street")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -729,6 +763,7 @@ async def import_activecampaign(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("activecampaign")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -748,6 +783,7 @@ async def import_mailchimp(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("mailchimp")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -767,6 +803,7 @@ async def import_klaviyo(
     org_id: uuid.UUID,
     payload: CRMImportRequest,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("klaviyo")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

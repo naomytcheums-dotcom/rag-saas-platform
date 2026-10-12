@@ -20,7 +20,7 @@ from datetime import timedelta
 
 from celery import Celery, Task
 from celery.schedules import crontab
-from celery.signals import task_failure, task_success, worker_process_init, worker_ready
+from celery.signals import task_failure, task_success, worker_init, worker_process_init, worker_ready
 
 from api.config import settings
 
@@ -147,6 +147,17 @@ def _warm_embedder() -> None:
 @worker_process_init.connect
 def _warm_embedder_in_pool_process(**_kwargs) -> None:
     _warm_embedder()
+
+
+def _mask_secrets_in_worker_logs(**_kwargs) -> None:
+    # The worker never runs the API startup, so the masking of secrets in log lines (record factory) is installed here, in the main process and in every child.
+    from api.security.logging_correlation import install_log_masking
+
+    install_log_masking()
+
+
+worker_init.connect(_mask_secrets_in_worker_logs)
+worker_process_init.connect(_mask_secrets_in_worker_logs)
 
 
 @worker_ready.connect

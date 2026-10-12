@@ -46,6 +46,12 @@ def get_log_context() -> dict:
 _SENSITIVE_PATTERN = re.compile(
     r'("?(?:password|token|secret|api[_-]?key|authorization)"?\s*[:=]\s*")[^"]*(")', re.IGNORECASE
 )
+_EXTRA_PATTERNS = (
+    (re.compile(r"\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE), r"\1 ***"),
+    (re.compile(r"\b((?:password|passwd|pwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*)(?!\*\*\*)[^\s,;&\"']{3,}", re.IGNORECASE), r"\1***"),
+    (re.compile(r"\b([a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s/@]+@", re.IGNORECASE), r"\1***@"),
+    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{10,}|\bsk-[A-Za-z0-9]{20,}|\bAKIA[0-9A-Z]{16}\b|\bre_[A-Za-z0-9]{20,}|\bxox[abp]-[A-Za-z0-9-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"), "***"),
+)
 
 
 def get_request_id() -> str | None:
@@ -72,10 +78,35 @@ def _install_record_factory() -> None:
         context = _log_context_var.get() or {}
         for key in LOG_CONTEXT_KEYS:
             setattr(record, key, context.get(key))
+        _mask_record(record)
         return record
 
     logging.setLogRecordFactory(factory)
     _record_factory_installed = True
+
+
+def _mask_record(record: logging.LogRecord) -> None:
+    """Replace a secret that reached a log line (message or exception text) BEFORE any handler sees it: console, system_logs, Loki (hosted), Sentry.
+    The record is only touched when something matched, so lazy formatting and Sentry's message grouping are unchanged for every other line.
+    Never raises: a logging call must not break the code that makes it."""
+    try:
+        message = record.getMessage()
+        masked = mask_sensitive(message)
+        if masked != message:
+            record.msg, record.args = masked, ()
+        if record.exc_info and not record.exc_text and record.exc_info[0] is not None:
+            text = logging.Formatter().formatException(record.exc_info)
+            masked_text = mask_sensitive(text)
+            if masked_text != text:
+                record.exc_text = masked_text
+    except Exception:  # noqa: BLE001 -- masking must never break the logging call
+        pass
+
+
+def install_log_masking() -> None:
+    """For processes that do not run the API startup (the Celery worker): install the record factory, hence the masking, on its own."""
+    _install_record_factory()
+    reset_configured_secrets()
 
 
 def configure_structured_logging(log_format: str) -> None:
@@ -86,6 +117,7 @@ def configure_structured_logging(log_format: str) -> None:
     attached so request_id is available to system_log_handler.py
     regardless of console format."""
     _install_record_factory()
+    reset_configured_secrets()
     root = logging.getLogger()
     if not any(isinstance(f, RequestIdFilter) for f in root.filters):
         root.addFilter(RequestIdFilter())
@@ -123,8 +155,57 @@ def mask_sensitive(message: str) -> str:
     every log line regardless of format. Not perfect (a determined
     developer can still log a raw secret some other way), but catches
     the common "logged the request body" mistake this codebase's own
-    audit log already guards against via AUDIT_SENSITIVE_FIELDS."""
-    return _SENSITIVE_PATTERN.sub(r"\1***\2", message)
+    audit log already guards against via AUDIT_SENSITIVE_FIELDS.
+
+    Phase 5 of the 2026-10-12 audit: the quoted form above was the only one covered. Also masked: `Bearer`/`Basic` credentials, unquoted
+    `password=...` / `token: ...` pairs, credentials inside a URL (`postgresql://user:password@host`) and well-known provider key shapes."""
+    message = _SENSITIVE_PATTERN.sub(r"\1***\2", message)
+    for pattern, replacement in _EXTRA_PATTERNS:
+        message = pattern.sub(replacement, message)
+    configured = _configured_secret_pattern()
+    if configured is not None:
+        message = configured.sub("***", message)
+    return message
+
+
+_SECRET_SETTING_NAME = re.compile(r"(?:_KEY|_KEYS|_SECRET|_TOKEN|_PASSWORD|_DSN|_PASSPHRASE)$")
+_NOT_A_SECRET = {"true", "false", "none", "null", "development", "production", "staging", "disabled", "enabled"}
+_configured_secrets: list = []  # one cell: [compiled pattern or None], built on first use
+
+
+def reset_configured_secrets() -> None:
+    """Forget the cached set of configured secrets (tests that change settings, or a process that reloads them)."""
+    _configured_secrets.clear()
+
+
+def _configured_secret_pattern():
+    """Value-based masking: the actual secrets this process is configured with (signing and encryption keys, provider and service tokens, passwords inside
+    connection URLs) are masked wherever they appear, whatever their shape and whatever words surround them. Built once, lazily, from the settings."""
+    if not _configured_secrets:
+        values: set[str] = set()
+        try:
+            from urllib.parse import unquote, urlparse
+
+            from api.config import settings
+
+            for name in type(settings).model_fields:
+                value = getattr(settings, name, None)
+                if not isinstance(value, str) or not value:
+                    continue
+                if _SECRET_SETTING_NAME.search(name):
+                    for part in value.split(","):  # JWT_PREVIOUS_SECRET_KEYS holds a comma-separated list
+                        part = part.strip()
+                        if len(part) >= 8 and part.lower() not in _NOT_A_SECRET:
+                            values.add(part)
+                if "://" in value:
+                    password = urlparse(value).password
+                    if password and len(password) >= 6:
+                        values.update({password, unquote(password)})
+        except Exception:  # noqa: BLE001 -- masking must never break logging; fall back to the pattern-based masking only
+            values = set()
+        pattern = re.compile("|".join(re.escape(v) for v in sorted(values, key=len, reverse=True))) if values else None
+        _configured_secrets.append(pattern)
+    return _configured_secrets[0]
 
 
 class JSONLogFormatter(logging.Formatter):

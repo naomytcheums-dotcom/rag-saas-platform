@@ -33,10 +33,16 @@ fabricated capability. `SUPPORTED_LANGUAGES` is real and honest:
 
 import ast
 import operator
+import string
 
 from api.services.workflow_blocks import WorkflowBlockError
 
 SUPPORTED_LANGUAGES = ("python",)
+
+# Resource limits. The whitelist stops code execution; these stop denial of service: an unbounded `"x" * 10**10`, or a `replace`
+# amplifying 1 MB into 1 GB, would exhaust the memory of the worker that evaluates the block.
+MAX_CODE_LENGTH = 5000
+MAX_RESULT_SIZE = 1_000_000  # characters of a string, items of a list/tuple/dict/set/bytes, for any intermediate or final value
 
 _SAFE_BINOPS = {
     ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
@@ -51,6 +57,62 @@ _SAFE_CALLS = {"contains": lambda a, b: b in a, "is_empty": lambda a: not a, "le
 # str/list/dict method. A dunder name (`__class__`, ...) is ALWAYS
 # rejected below regardless of this list.
 _SAFE_METHODS = {"upper", "lower", "strip", "replace", "split", "join", "format", "title", "capitalize", "get", "keys", "values"}
+
+
+def _too_large():
+    return WorkflowBlockError(f"The code would produce a value larger than {MAX_RESULT_SIZE} items or characters")
+
+
+def _check_size(value):
+    if isinstance(value, (str, bytes, list, tuple, dict, set)) and len(value) > MAX_RESULT_SIZE:
+        raise _too_large()
+    return value
+
+
+def _check_repeat(left, right):
+    """`sequence * n` allocates len(sequence) * n before any size check could see it, so the product is bounded first."""
+    for sequence, count in ((left, right), (right, left)):
+        if isinstance(sequence, (str, bytes, list, tuple)) and isinstance(count, int) and not isinstance(count, bool):
+            if count > 0 and len(sequence) * count > MAX_RESULT_SIZE:
+                raise _too_large()
+
+
+def _check_format_string(template):
+    """`str.format` resolves `{0.__class__}` and `{d[key]}` inside the format string, reading attributes and items without going through
+    the attribute whitelist. Only plain `{}` / `{0}` / `{name}` replacement fields are accepted."""
+    if not isinstance(template, str):
+        raise WorkflowBlockError("format() needs a string")
+    try:
+        parsed = list(string.Formatter().parse(template))
+    except ValueError as exc:
+        raise WorkflowBlockError(f"Invalid format string: {exc}") from exc
+    fields = 0
+    for _literal, field_name, format_spec, _conversion in parsed:
+        if field_name is None:
+            continue
+        fields += 1
+        if "." in field_name or "[" in field_name or (format_spec and "{" in format_spec):
+            raise WorkflowBlockError("Attribute or item access inside a format string is not allowed")
+    return fields
+
+
+def _size_of(value) -> int:
+    return len(value) if isinstance(value, (str, bytes, list, tuple, dict, set)) else 20
+
+
+def _check_method_growth(name: str, target, args: list):
+    """Methods that can make their result larger than their inputs are bounded BEFORE they run (the result check alone would come after
+    the allocation): replace multiplies, join concatenates every item and the separator, format repeats its arguments once per field."""
+    if name == "replace" and isinstance(target, str) and len(args) >= 2 and isinstance(args[1], str):
+        if len(target) * max(1, len(args[1])) > MAX_RESULT_SIZE:
+            raise _too_large()
+    elif name == "join" and isinstance(target, str) and args and isinstance(args[0], (list, tuple)):
+        if sum(_size_of(item) for item in args[0]) + len(target) * len(args[0]) > MAX_RESULT_SIZE:
+            raise _too_large()
+    elif name == "format" and isinstance(target, str):
+        fields = _check_format_string(target)
+        if len(target) + max(1, fields) * max([_size_of(a) for a in args] or [0]) > MAX_RESULT_SIZE:
+            raise _too_large()
 
 
 def _eval_node(node, variables: dict):
@@ -75,7 +137,10 @@ def _eval_node(node, variables: dict):
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         return -_eval_node(node.operand, variables)
     if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
-        return _SAFE_BINOPS[type(node.op)](_eval_node(node.left, variables), _eval_node(node.right, variables))
+        left, right = _eval_node(node.left, variables), _eval_node(node.right, variables)
+        if isinstance(node.op, ast.Mult):
+            _check_repeat(left, right)
+        return _check_size(_SAFE_BINOPS[type(node.op)](left, right))
     if isinstance(node, ast.BoolOp):
         values = [_eval_node(v, variables) for v in node.values]
         return all(values) if isinstance(node.op, ast.And) else any(values)
@@ -96,10 +161,11 @@ def _eval_node(node, variables: dict):
     if isinstance(node, ast.Call):
         args = [_eval_node(a, variables) for a in node.args]
         if not node.keywords and isinstance(node.func, ast.Name) and node.func.id in _SAFE_CALLS:
-            return _SAFE_CALLS[node.func.id](*args)
+            return _check_size(_SAFE_CALLS[node.func.id](*args))
         if not node.keywords and isinstance(node.func, ast.Attribute):
             method = _eval_node(node.func, variables)
-            return method(*args)
+            _check_method_growth(node.func.attr, _eval_node(node.func.value, variables), args)
+            return _check_size(method(*args))
         raise WorkflowBlockError("This function call is not allowed")
     raise WorkflowBlockError(f"Unsupported code expression: {ast.dump(node)}")
 
@@ -114,10 +180,15 @@ def validate_code(code: str, language: str) -> None:
         )
     if not code or not code.strip():
         raise WorkflowBlockError("code block requires real, non-empty code")
+    if len(code) > MAX_CODE_LENGTH:
+        raise WorkflowBlockError(f"The code is longer than {MAX_CODE_LENGTH} characters")
     try:
         ast.parse(code, mode="eval")
     except SyntaxError as exc:
         raise WorkflowBlockError(f"Invalid code syntax: {exc}") from exc
+    except (MemoryError, RecursionError, ValueError) as exc:
+        # Very deeply nested source overflows the parser (MemoryError / RecursionError); a NUL byte raises ValueError.
+        raise WorkflowBlockError("The code is too complex to parse") from exc
 
 
 def sanitize_code(code: str) -> str:
@@ -144,7 +215,13 @@ def execute_code_block(block_config: dict, context: dict) -> dict:
     clean_code = sanitize_code(code)
 
     variables = {**(block_config.get("input_variables") or {}), **context}
-    tree = ast.parse(clean_code, mode="eval")
-    result = _eval_node(tree, variables)
+    try:
+        tree = ast.parse(clean_code, mode="eval")
+        result = _eval_node(tree, variables)
+    except WorkflowBlockError:
+        raise
+    except (ArithmeticError, TypeError, ValueError, KeyError, IndexError, AttributeError, MemoryError, RecursionError) as exc:
+        # A runtime error of the user's expression (1 / 0, "a" + 1, a missing key...) is a failed block, not a crashed worker.
+        raise WorkflowBlockError(f"The code failed: {type(exc).__name__}") from exc
 
     return {block_config.get("output_key", "output"): format_code_result(result)}

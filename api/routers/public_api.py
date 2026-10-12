@@ -93,7 +93,7 @@ async def list_organization_api_keys_endpoint(
 async def revoke_organization_api_key_endpoint(
     org_id: uuid.UUID, key_id: uuid.UUID, request: Request, caller: OrganizationMember = Depends(require_permission("settings:manage")), db: AsyncSession = Depends(get_db),
 ):
-    revoked = await revoke_api_key(db, key_id)
+    revoked = await revoke_api_key(db, key_id, organization_id=org_id)
     if not revoked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await log_audit_action(

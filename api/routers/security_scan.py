@@ -79,7 +79,7 @@ async def list_vulnerabilities_endpoint(org_id: uuid.UUID, status_filter: Vulner
 
 @router.get("/organizations/{org_id}/security/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
 async def get_vulnerability_endpoint(org_id: uuid.UUID, vuln_id: uuid.UUID, _caller: OrganizationMember = Depends(require_permission("security:manage")), db: AsyncSession = Depends(get_db)):
-    vuln = await get_vulnerability(db, vuln_id)
+    vuln = await get_vulnerability(db, vuln_id, organization_id=org_id)
     if vuln is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return VulnerabilityResponse.model_validate(vuln)
@@ -87,7 +87,7 @@ async def get_vulnerability_endpoint(org_id: uuid.UUID, vuln_id: uuid.UUID, _cal
 
 @router.patch("/organizations/{org_id}/security/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
 async def update_vulnerability_endpoint(org_id: uuid.UUID, vuln_id: uuid.UUID, payload: VulnerabilityStatusUpdate, _caller: OrganizationMember = Depends(require_permission("security:manage")), db: AsyncSession = Depends(get_db)):
-    vuln = await update_vulnerability_status(db, vuln_id, payload.status)
+    vuln = await update_vulnerability_status(db, vuln_id, payload.status, organization_id=org_id)
     if vuln is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()
@@ -101,7 +101,7 @@ async def list_alerts_endpoint(org_id: uuid.UUID, _caller: OrganizationMember = 
 
 @router.post("/organizations/{org_id}/security/alerts/{alert_id}/dismiss", response_model=SecurityAlertResponse)
 async def dismiss_alert_endpoint(org_id: uuid.UUID, alert_id: uuid.UUID, caller: OrganizationMember = Depends(require_permission("security:manage")), db: AsyncSession = Depends(get_db)):
-    alert = await dismiss_alert(db, alert_id, caller.user_id)
+    alert = await dismiss_alert(db, alert_id, caller.user_id, organization_id=org_id)
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await db.commit()

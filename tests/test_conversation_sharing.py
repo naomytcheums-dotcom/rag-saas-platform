@@ -151,7 +151,7 @@ async def test_list_public_conversations_scoped_to_organization(db_session):
 
     user_id = uuid.uuid4()
     public_conv = await create_conversation(db_session, "agent-1", user_id, "Public", organization_id=org.id)
-    private_conv = await create_conversation(db_session, "agent-1", user_id, "Private", organization_id=org.id)
+    await create_conversation(db_session, "agent-1", user_id, "Private", organization_id=org.id)
     await db_session.commit()
     await set_conversation_visibility(db_session, public_conv.id, user_id, True)
     await db_session.commit()

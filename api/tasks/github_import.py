@@ -45,6 +45,7 @@ from api.security.documents import (
     process_github_issues,
     process_github_repo,
 )
+from api.services.connector_credentials import run_in_scope
 from api.tasks.celery_app import celery_app
 from api.tasks._db import make_async_engine
 
@@ -83,7 +84,7 @@ def process_github_file_task(file_url: str, organization_id: str, workspace_id: 
     """Item 5's literal task -- import d'un fichier, réutilisant le
     pipeline partagé (voir api/security/documents.py's
     import_and_process_github_file)."""
-    return asyncio.run(_import_and_process_github_file_async(file_url, organization_id, workspace_id, created_by))
+    return asyncio.run(run_in_scope("github", organization_id, lambda: _import_and_process_github_file_async(file_url, organization_id, workspace_id, created_by)))
 
 
 @celery_app.task(name="api.tasks.github_import.process_github_repo_task")
@@ -95,10 +96,10 @@ def process_github_repo_task(
     filtre, dispatch (see api/security/documents.py's process_github_repo
     for the real logic, and this module's own docstring for why this
     bridge needs no database session)."""
-    return asyncio.run(process_github_repo(
+    return asyncio.run(run_in_scope("github", organization_id, lambda: process_github_repo(
         uuid.UUID(organization_id), uuid.UUID(workspace_id) if workspace_id else None,
         repo_url, file_patterns, max_files, uuid.UUID(created_by),
-    ))
+    )))
 
 
 async def _import_and_process_github_issue_async(
@@ -133,7 +134,7 @@ def process_github_issue_task(issue_data: dict, organization_id: str, workspace_
     """Item 5's literal task -- import d'une issue (déjà formatée en
     document), réutilisant le pipeline partagé (voir
     api/security/documents.py's import_and_process_github_issue)."""
-    return asyncio.run(_import_and_process_github_issue_async(issue_data, organization_id, workspace_id, created_by))
+    return asyncio.run(run_in_scope("github", organization_id, lambda: _import_and_process_github_issue_async(issue_data, organization_id, workspace_id, created_by)))
 
 
 @celery_app.task(name="api.tasks.github_import.process_github_issues_task")
@@ -145,7 +146,7 @@ def process_github_issues_task(
     labels), filtre, dispatch (see api/security/documents.py's
     process_github_issues for the real logic, and this module's own
     docstring for why this bridge needs no database session)."""
-    return asyncio.run(process_github_issues(
+    return asyncio.run(run_in_scope("github", organization_id, lambda: process_github_issues(
         uuid.UUID(organization_id), uuid.UUID(workspace_id) if workspace_id else None,
         repo_url, state, since, labels, max_issues, uuid.UUID(created_by),
-    ))
+    )))

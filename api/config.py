@@ -13,13 +13,28 @@ failing later with a confusing AttributeError the first time a route uses
 one, so a misconfigured deployment is caught at process startup.
 """
 
+import ipaddress
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _is_private_or_internal_host(host: str) -> bool:
+    """True for a host that is not reachable from the public internet (see Settings._a_public_redis_must_use_tls_and_a_password)."""
+    if not host or "." not in host and ":" not in host:
+        return True  # empty, or a single-label service name (docker, Kubernetes)
+    if host.endswith((".local", ".localhost", ".internal", ".svc", ".cluster.local")):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback or address.is_link_local
 
 
 class Settings(BaseSettings):
@@ -422,6 +437,7 @@ class Settings(BaseSettings):
     BITBUCKET_USERNAME: str | None = None
     BITBUCKET_APP_PASSWORD: str | None = None
     BITBUCKET_WORKSPACE: str | None = None
+    BITBUCKET_API_TOKEN: str | None = None  # the importer (api/services/bitbucket_extraction.py) reads this one; it was missing, so the connector could never run
 
     AZURE_DEVOPS_ENABLED: bool = False
     AZURE_DEVOPS_API_TOKEN: str | None = None
@@ -466,6 +482,7 @@ class Settings(BaseSettings):
 
     SMARTSUITE_ENABLED: bool = False
     SMARTSUITE_API_TOKEN: str | None = None
+    SMARTSUITE_ACCOUNT_ID: str | None = None  # read by api/services/smartsuite_extraction.py; it was missing, so the connector could never run
 
     PROCESS_STREET_ENABLED: bool = False
     PROCESS_STREET_API_TOKEN: str | None = None
@@ -896,6 +913,10 @@ class Settings(BaseSettings):
     TASK_PLANNING_ENABLED: bool = True
     TASK_PLANNING_MAX_STEPS: int = 20
     TASK_PLANNING_TIMEOUT: int = 300
+    # Spec 5.1.13: when True (and the caller asked for plan_first), the plan is EXECUTED step by step (api/services/task_planning.execute_plan, one model call per
+    # step, dependencies respected) and the results are handed to the final answer. Off by default because it multiplies the model calls (cost and latency).
+    TASK_PLAN_EXECUTE_STEPS: bool = False
+    TASK_PLAN_STEP_RESULT_MAX_CHARS: int = 1500
 
     # -- Agent traces (Partie 5.1.14) --------------------------------------------
     AGENT_TRACES_ENABLED: bool = True
@@ -1983,6 +2004,31 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _a_public_redis_must_use_tls_and_a_password(self) -> "Settings":
+        """Phase 5 of the 2026-10-12 security audit: Celery messages (task arguments, results), rate-limit counters and cached answers travel through Redis.
+        A broker reached over the public internet without TLS or without a password exposes every one of them, and whoever can write to the queue can run any
+        task. Refused at startup (the previous deployment keeps serving: a failed start does not take the site down). Private networks are exempt: a
+        single-label host (docker / Kubernetes service name), `.local` / `.internal` / `.svc` names and private or loopback addresses.
+        ALLOW_INSECURE_BROKER=1 overrides it on purpose."""
+        if os.environ.get("ALLOW_INSECURE_BROKER") == "1":
+            return self
+        problems = []
+        for name in ("CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "RATE_LIMIT_REDIS_URL", "CACHE_REDIS_URL"):
+            url = str(getattr(self, name, "") or "")
+            if not url.startswith(("redis://", "rediss://", "rediss+")):
+                continue
+            parsed = urlparse(url)
+            if _is_private_or_internal_host((parsed.hostname or "").lower()):
+                continue
+            if parsed.scheme != "rediss":
+                problems.append(f"{name} reaches a public Redis host without TLS (use rediss://)")
+            elif not parsed.password:
+                problems.append(f"{name} reaches a public Redis host without a password")
+        if problems:
+            raise ValueError("; ".join(problems) + ". Set ALLOW_INSECURE_BROKER=1 only if you accept that on purpose.")
+        return self
+
+    @model_validator(mode="after")
     def _restore_token_must_expire_before_the_purge(self) -> "Settings":
         """5.7 audit finding: api/routers/account.py's confirm_account_restore
         checks the restore TOKEN's own expiry, not deletion_scheduled_at,
@@ -2237,6 +2283,10 @@ class Settings(BaseSettings):
     BILLING_CURRENCY: str = "EUR"
     BILLING_DEFAULT_PLAN: str = "free"
     BILLING_TRIAL_DAYS: int = 14
+    # Spec 12.1.5: a real paid-plan trial is a Stripe trial on the subscription checkout (the card is still collected; Stripe converts the subscription
+    # when the trial ends and our webhooks record `trialing` -> active/past_due/canceled). 0 = no trial, which is the default: no paid plan is free
+    # unless the owner chooses so. BILLING_TRIAL_DAYS above is only the informational free-plan counter.
+    STRIPE_CHECKOUT_TRIAL_DAYS: int = 0
     BILLING_GRACE_PERIOD_DAYS: int = 7
 
     # -- Partie 12.2: Stripe -- honestly absent in this environment (no
@@ -2347,6 +2397,20 @@ class Settings(BaseSettings):
     ALERTING_ENABLED: bool = True
     ALERTING_CHECK_INTERVAL_SECONDS: int = 60
     ALERTING_SILENCE_MINUTES: int = 5
+
+    # -- Connectors (docs/DECISIONS.md D17) --------------------------------------
+    # False (default): an importer or CRM connector uses only the credentials the organization itself stored (PUT /organizations/{id}/connectors/{provider}); an organization
+    # without credentials is refused. True: the old shared mode, where the server-wide token of the *_API_TOKEN settings is used for EVERY organization. Only for a
+    # single-tenant installation whose operator is the only user: in a multi-tenant deployment it hands the operator's account to every customer.
+    CONNECTORS_ALLOW_PLATFORM_CREDENTIALS: bool = False
+
+    # -- Prompt injection: second opinion (docs/DECISIONS.md D15) ----------------
+    # The classifier flags 12 % of legitimate requests in the measured set (French ones too). When True, a message the classifier flags is re-read by a language model, which
+    # may CLEAR it (never block it on its own); no answer or an unclear answer keeps the classifier's verdict. Costs one short LLM call per flagged message only.
+    PROMPT_INJECTION_LLM_CONFIRM: bool = True
+    PROMPT_INJECTION_CONFIRM_PROVIDER: str = ""  # "" = the platform's default provider
+    PROMPT_INJECTION_CONFIRM_MODEL: str = ""     # "" = that provider's default model
+    PROMPT_INJECTION_CONFIRM_TIMEOUT_SECONDS: float = 15.0
 
     # -- Partie 13.4: Distributed tracing (OpenTelemetry) ------------------------
     OTEL_ENABLED: bool = False

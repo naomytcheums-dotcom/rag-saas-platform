@@ -24,7 +24,7 @@ resource "aws_cloudwatch_log_group" "api" {
 resource "aws_iam_role" "task_execution" {
   name = "rag-saas-task-execution"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -42,12 +42,12 @@ resource "aws_ecs_task_definition" "api" {
   memory                   = 4096
   execution_role_arn       = aws_iam_role.task_execution.arn
   container_definitions = jsonencode([{
-    name         = "api"
-    image        = var.image
-    essential    = true
-    portMappings = [{ containerPort = 8000 }]
-    secrets      = [for name, arn in var.secret_arns : { name = name, valueFrom = arn }]
-    environment  = [{ name = "COOKIE_SECURE", value = "true" }, { name = "CREDITS_ALLOW_UNPAID_TOPUP", value = "false" }]
+    name             = "api"
+    image            = var.image
+    essential        = true
+    portMappings     = [{ containerPort = 8000 }]
+    secrets          = [for name, arn in var.secret_arns : { name = name, valueFrom = arn }]
+    environment      = [{ name = "COOKIE_SECURE", value = "true" }, { name = "CREDITS_ALLOW_UNPAID_TOPUP", value = "false" }]
     logConfiguration = { logDriver = "awslogs", options = { awslogs-group = aws_cloudwatch_log_group.api.name, awslogs-region = var.region, awslogs-stream-prefix = "api" } }
   }])
 }

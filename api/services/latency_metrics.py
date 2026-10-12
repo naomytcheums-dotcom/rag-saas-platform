@@ -90,13 +90,14 @@ async def measure_latency(
     for _ in range(settings.LATENCY_WARMUP_RUNS):
         if time.perf_counter() >= deadline:
             break
-        await run_evaluation(db, question_id, agent_id=agent_id, model_config=model_config)
+        await run_evaluation(db, question_id, agent_id=agent_id, model_config=model_config, compute_metrics=False)
 
     samples = []
     for _ in range(settings.LATENCY_MEASUREMENT_RUNS):
         if time.perf_counter() >= deadline:
             break
-        result = await run_evaluation(db, question_id, agent_id=agent_id, model_config=model_config)
+        # Only the timing is wanted here: the quality metrics of every stored result would otherwise be recomputed on each run.
+        result = await run_evaluation(db, question_id, agent_id=agent_id, model_config=model_config, compute_metrics=False)
         if result is not None and result.actual_answer:
             samples.append(float(result.latency_ms))
 

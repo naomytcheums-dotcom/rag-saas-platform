@@ -8,7 +8,7 @@ import logging
 
 import httpx
 
-from api.config import settings
+from api.services.connector_credentials import connector_settings as settings
 
 logger = logging.getLogger(__name__)
 

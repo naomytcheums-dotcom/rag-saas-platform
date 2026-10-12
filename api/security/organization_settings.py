@@ -178,6 +178,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "conversation_retention_days": None,
     # Spec 12.3.6 -- monthly voice minutes allowed (None = unlimited), normally set from the plan. See api/services/voice_usage.py.
     "voice_minutes_per_month": None,
+    # Spec 10.4.12 (custom SLA) -- answer-by delay in hours per escalation priority, overriding settings.ESCALATION_SLA_HOURS for this organization only
+    # (None = the platform default). Applied by api/tools/human_escalation.py when a ticket is created.
+    "escalation_sla_hours": None,
     # Systèmes internes, item 25 -- gate for
     # api.services.query_router.suggest_retrieval_strategy, wired into
     # search() -- default False, same rétrocompatibilité discipline.

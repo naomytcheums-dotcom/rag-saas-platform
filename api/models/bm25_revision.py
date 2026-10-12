@@ -18,7 +18,7 @@ for model in (Document, DocumentChunk, MediaAsset):
             table,
             "after_create",
             DDL(
-                f"CREATE TRIGGER bm25_revision_{table.name}_{operation} "
+                f"CREATE TRIGGER bm25_revision_{table.name}_{operation} "  # nosec B608 - table names and operations are code constants
                 f"AFTER {operation.upper()} ON {table.name} BEGIN "
                 "UPDATE organizations SET bm25_corpus_revision = bm25_corpus_revision + 1 "
                 f"WHERE {organizations}; END"

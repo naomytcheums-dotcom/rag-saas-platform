@@ -94,7 +94,7 @@ from api.services.llm_config import resolve_llm_config
 from api.services.llm_providers import LLMError, chat_completion, chat_completion_stream, chat_completion_stream_with_tools, chat_completion_with_usage
 from api.services.response_confidence import enrich_response_with_confidence
 from api.services.response_quality import enrich_response_with_quality_metrics
-from api.services.task_planning import get_plan_steps, plan_task
+from api.services.task_planning import execute_plan, get_plan_steps, plan_task
 from api.services.fallback import run_tool_fallbacks
 from api.services.output_guard import detect_unsafe_tool_call
 from api.services.tool_budget import cap_tool_output
@@ -144,6 +144,13 @@ def _redact_secrets(value):
     if isinstance(value, list):
         return [_redact_secrets(v) for v in value]
     return value
+
+
+_ANSWER_FROM_TOOL_RESULTS = "You already have the result of this tool call above. Do not call any tool again: answer the user now, using the tool results already provided."
+
+
+def _tool_call_signature(tool_call: dict) -> str:
+    return json.dumps([tool_call["name"], tool_call["arguments"]], sort_keys=True, default=str)
 
 
 class AgentOrchestrator:
@@ -363,6 +370,20 @@ class AgentOrchestrator:
             if len(plan_steps) > 1:
                 steps_text = "\n".join(f"{i + 1}. {s.description}" for i, s in enumerate(plan_steps))
                 system_prompt = f"{system_prompt}\n\nSuggested plan for this task:\n{steps_text}"
+                if settings.TASK_PLAN_EXECUTE_STEPS:
+                    # Spec 5.1.13: really run the plan, step by step (one call each, dependencies respected, a failed step skips its dependants), then give the
+                    # outcomes to the final answer. execute_plan never raises: a failed step is recorded as data.
+                    async with self._db_lock:
+                        executed = await execute_plan(db, plan.id)
+                        executed_steps = await get_plan_steps(db, plan.id)
+                        await db.commit()
+                    limit = settings.TASK_PLAN_STEP_RESULT_MAX_CHARS
+                    outcomes = "\n".join(
+                        f"{i + 1}. {s.description} -> " + (str(s.result)[:limit] if s.status == "completed" else f"[{s.status}]")
+                        for i, s in enumerate(executed_steps)
+                    )
+                    trace.append(self._trace_event("plan_executed", {"plan_id": str(plan.id), "status": executed.status, "completed": sum(1 for s in executed_steps if s.status == "completed")}))
+                    system_prompt = f"{system_prompt}\n\nResults of the planned steps (use them, and say so when a step failed):\n{outcomes}"
 
         selected_tools: list[ToolSpec] = []
         if tools:
@@ -539,8 +560,10 @@ class AgentOrchestrator:
 
             try:
                 result = None
+                seen_tool_calls: set[str] = set()
+                answer_now = False
                 for iteration in range(1, settings.AGENT_MAX_TOOL_ITERATIONS + 1):
-                    call_kwargs = {"tools": function_schemas, "tool_choice": "auto"} if function_schemas else {}
+                    call_kwargs = {"tools": function_schemas, "tool_choice": "auto"} if function_schemas and not answer_now else {}
                     completion = await chat_completion_with_usage(
                         messages, provider=llm_cfg["provider"], model=llm_cfg["model"], max_retries=max_retries,
                         temperature=llm_cfg["temperature"], top_p=llm_cfg["top_p"], max_tokens=llm_cfg["max_tokens"],
@@ -554,6 +577,16 @@ class AgentOrchestrator:
                         break
                     if credits_exhausted:
                         raise LLMError("Insufficient AI credits -- the run was stopped before another LLM call (add a credit pack or configure your own provider key (BYOK))")
+                    signatures = {_tool_call_signature(tc) for tc in tool_calls}
+                    if answer_now:
+                        raise LLMError(f"Agent did not reach a final answer within {settings.AGENT_MAX_TOOL_ITERATIONS} tool-calling iterations (it kept requesting tools after being told to answer)")
+                    if signatures <= seen_tool_calls:
+                        # The model asked again for a call it already got the result of: running it again changes nothing and used to burn every iteration.
+                        trace.append(self._trace_event("repeated_tool_call_stopped", {"tools": [tc["name"] for tc in tool_calls], "iteration": iteration}))
+                        messages.append({"role": "user", "content": _ANSWER_FROM_TOOL_RESULTS})
+                        answer_now = True
+                        continue
+                    seen_tool_calls |= signatures
                     trace.append(self._trace_event("tool_calls_requested", {"tools": [tc["name"] for tc in tool_calls], "iteration": iteration}))
                     messages.append({
                         "role": "assistant", "content": completion["content"],
@@ -944,8 +977,10 @@ class AgentOrchestrator:
                 return tool_call, None, str(exc)
 
         try:
+            seen_stream_calls: set[str] = set()
+            stream_answer_now = False
             for stream_iteration in range(1, settings.AGENT_MAX_TOOL_ITERATIONS + 1):
-                stream_call_kwargs = {"tools": stream_function_schemas, "tool_choice": "auto"} if stream_function_schemas else {}
+                stream_call_kwargs = {"tools": stream_function_schemas, "tool_choice": "auto"} if stream_function_schemas and not stream_answer_now else {}
                 pending_tool_calls: list[dict] = []
 
                 async for event in chat_completion_stream_with_tools(
@@ -967,6 +1002,16 @@ class AgentOrchestrator:
                 if not pending_tool_calls:
                     # Real final answer reached -- no more tool calls, exit loop.
                     break
+
+                stream_signatures = {_tool_call_signature(tc) for tc in pending_tool_calls}
+                if stream_answer_now:
+                    raise LLMError(f"stream_response did not reach a final answer within {settings.AGENT_MAX_TOOL_ITERATIONS} tool-calling iterations (it kept requesting tools after being told to answer)")
+                if stream_signatures <= seen_stream_calls:
+                    # Same reasoning as run_agent: a repeated identical call is not run again, the model must answer from the results it has.
+                    messages.append({"role": "user", "content": _ANSWER_FROM_TOOL_RESULTS})
+                    stream_answer_now = True
+                    continue
+                seen_stream_calls |= stream_signatures
 
                 # Real, honest client signal: a tool call is about to happen.
                 yield {"type": "tool_call", "tools": [tc["name"] for tc in pending_tool_calls], "iteration": stream_iteration}

@@ -47,7 +47,7 @@ async def _real_consumed_since(db: AsyncSession, organization_id: uuid.UUID, sin
             CreditTransaction.created_at >= since,
         )
     )
-    return -int(total)  # consume amounts are stored negative; a spend total should read positive
+    return -int(total or 0)  # consume amounts are stored negative; a spend total should read positive
 
 
 async def enforce_spend_caps(db: AsyncSession, organization_id: uuid.UUID, org_settings: dict) -> None:
@@ -167,14 +167,15 @@ async def deduct_credits_up_to(
     credit = await get_or_create_credit(db, organization_id)
     if amount <= 0:
         return credit, 0, 0
-    credit = await db.scalar(
+    locked_credit = await db.scalar(
         select(Credit)
         .where(Credit.organization_id == organization_id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    if credit is None:
+    if locked_credit is None:
         raise InsufficientCreditsError(f"organization {organization_id} has no credit account")
+    credit = locked_credit
     charged = min(max(credit.balance, 0), amount)
     shortfall = amount - charged
     credit.balance -= charged

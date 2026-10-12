@@ -39,7 +39,7 @@ def configure_environment(db_path: str, env: dict[str, str] | None = None) -> di
         target[name] = ""
     target["RATE_LIMIT_ENABLED"] = "false"
     target["APP_CACHE_ENABLED"] = "false"
-    target["FRONTEND_URL"] = "http://localhost:3001"
+    target["FRONTEND_URL"] = target.get("PREVIEW_FRONTEND_URL") or "http://localhost:3001"  # also the CORS origin: it must be the port the browser uses
     target.setdefault("JWT_SECRET_KEY", "local-preview-only-secret-0123456789abcdef")
     target.setdefault("COOKIE_SECURE", "false")
     assert_local_environment(target)

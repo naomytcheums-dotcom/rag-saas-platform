@@ -9,11 +9,11 @@ terraform {
 
 variable "project" { type = string }
 variable "region" {
-  type = string
+  type    = string
   default = "europe-west1"
 }
 variable "image" {
-  type = string
+  type        = string
   description = "Image from Dockerfile.api pushed to Artifact Registry"
 }
 variable "secret_ids" {

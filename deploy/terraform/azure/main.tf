@@ -1,4 +1,4 @@
-# Azure Container Apps for the API image. NOT validated (terraform is not installed on the authoring machine).
+# Azure Container Apps for the API image. `terraform validate` passes (hashicorp/terraform 1.9, azurerm ~> 3.100); never applied to a real subscription.
 terraform {
   required_version = ">= 1.6"
   required_providers {
@@ -11,16 +11,16 @@ provider "azurerm" {
 }
 
 variable "location" {
-  type = string
+  type    = string
   default = "westeurope"
 }
 variable "image" {
-  type = string
+  type        = string
   description = "Image from Dockerfile.api pushed to ACR"
 }
 variable "secrets" {
-  type      = map(string)
-  sensitive = true
+  type        = map(string)
+  sensitive   = true
   description = "env var name => value (DATABASE_URL, REDIS_URL, JWT_SECRET_KEY, ...)"
 }
 
@@ -49,11 +49,12 @@ resource "azurerm_container_app" "api" {
   resource_group_name          = azurerm_resource_group.this.name
   revision_mode                = "Single"
 
+  # Iterate over the variable NAMES only (not secret); the values stay sensitive and are looked up by key.
   dynamic "secret" {
-    for_each = var.secrets
+    for_each = nonsensitive(toset(keys(var.secrets)))
     content {
-      name  = lower(replace(secret.key, "_", "-"))
-      value = secret.value
+      name  = lower(replace(secret.value, "_", "-"))
+      value = var.secrets[secret.value]
     }
   }
 
@@ -66,10 +67,10 @@ resource "azurerm_container_app" "api" {
       cpu    = 2
       memory = "4Gi"
       dynamic "env" {
-        for_each = var.secrets
+        for_each = nonsensitive(toset(keys(var.secrets)))
         content {
-          name        = env.key
-          secret_name = lower(replace(env.key, "_", "-"))
+          name        = env.value
+          secret_name = lower(replace(env.value, "_", "-"))
         }
       }
       liveness_probe {

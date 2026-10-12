@@ -1,0 +1,19 @@
+file,enqueuing_function,verdict,worst_chain_inner_to_outer
+api/security/batch_jobs.py,schedule_batch_job_processing,guarded,api/security/batch_jobs.py::schedule_batch_job_processing
+api/security/custom_domains.py,schedule_domain_verification,guarded,api/security/custom_domains.py::schedule_domain_verification
+api/security/documents.py,schedule_document_reindex,guarded,api/security/documents.py::schedule_document_reindex
+api/security/documents.py,schedule_document_processing,guarded,api/security/documents.py::schedule_document_processing
+api/security/documents.py,schedule_url_import,guarded,api/security/documents.py::schedule_url_import
+api/security/documents.py,reindex_documents,guarded,api/security/documents.py::reindex_documents
+api/services/comparison_jobs.py,schedule_comparison_job_processing,guarded,api/services/comparison_jobs.py::schedule_comparison_job_processing
+api/services/deployment_evaluations.py,schedule_deployment_evaluation_processing,guarded,api/services/deployment_evaluations.py::schedule_deployment_evaluation_processing
+api/services/evaluation_jobs.py,schedule_evaluation_job_processing,guarded,api/services/evaluation_jobs.py::schedule_evaluation_job_processing
+api/services/webhooks.py,send_test_delivery,guarded,api/services/webhooks.py::send_test_delivery
+api/tasks/autonomous_agents.py,schedule_autonomous_agent_run,guarded,api/tasks/autonomous_agents.py::schedule_autonomous_agent_run
+api/tasks/celery_app.py,apply_async,guarded,api/tasks/celery_app.py::apply_async
+api/tasks/document_processing.py,_requeue_stale_pending_async,TASK_OR_SCHEDULER,api/tasks/document_processing.py::_requeue_stale_pending_async <- api/tasks/document_processing.py::requeue_stale_pending_documents_task
+api/tasks/fine_tuning.py,schedule_fine_tuning_job_submission,guarded,api/tasks/fine_tuning.py::schedule_fine_tuning_job_submission
+api/tasks/media.py,schedule_media_processing,guarded,api/tasks/media.py::schedule_media_processing
+api/tasks/notifications.py,_retry_failed_notifications_async,TASK_OR_SCHEDULER,api/tasks/notifications.py::_retry_failed_notifications_async <- api/tasks/notifications.py::retry_failed_notifications_task
+api/tasks/workflows.py,schedule_workflow_run,UNGUARDED_ENDPOINT,api/tasks/workflows.py::schedule_workflow_run <- api/routers/workflows.py::run_workflow_via_webhook_endpoint
+api/tasks/workflows.py,schedule_workflow_resume,guarded,api/tasks/workflows.py::schedule_workflow_resume

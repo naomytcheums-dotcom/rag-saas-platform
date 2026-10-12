@@ -297,6 +297,27 @@ async def test_run_agent_with_plan_first_creates_and_surfaces_a_real_plan(monkey
     assert "research" in system_message and "write" in system_message
 
 
+async def test_run_agent_executes_the_plan_step_by_step_when_asked(monkeypatch, db_session):
+    """Spec 5.1.13 -- with TASK_PLAN_EXECUTE_STEPS the plan is really run and its results reach the final answer."""
+    import json
+
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "TASK_PLAN_EXECUTE_STEPS", True)
+    plan_json = json.dumps([{"description": "research", "depends_on": []}, {"description": "write", "depends_on": [0]}])
+    mock_acompletion = AsyncMock(side_effect=[_real_response(plan_json), _real_response("RESEARCH-OUTCOME"), _real_response("WRITE-OUTCOME"), _real_response("final answer")])
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+
+    run = await AgentOrchestrator().run_agent("agent-1", "write a report", db=db_session, plan_first=True)
+
+    assert run.status == "completed"
+    executed = [e for e in run.trace if e["event"] == "plan_executed"]
+    assert executed and executed[0]["completed"] == 2
+    assert mock_acompletion.call_count == 4
+    system_message = mock_acompletion.call_args.kwargs["messages"][0]["content"]
+    assert "RESEARCH-OUTCOME" in system_message and "WRITE-OUTCOME" in system_message
+
+
 async def test_run_agent_without_plan_first_never_plans(monkeypatch, db_session):
     mock_acompletion = AsyncMock(return_value=_real_response("ok"))
     monkeypatch.setattr(litellm, "acompletion", mock_acompletion)

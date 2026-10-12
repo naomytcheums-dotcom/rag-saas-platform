@@ -1,0 +1,16 @@
+== rerun of the failing tests of parts 10 and 11 (2026-10-11), after migrating the test database to 0142 and removing the repeated metric recomputation from measure_latency
+============================= test session starts =============================
+collecting ... collected 8 items
+
+tests/test_latency_metrics.py::test_measure_latency_returns_a_real_percentile_distribution PASSED [ 12%]
+tests/test_oauth_logic_integration.py::test_brand_new_oauth_user_is_created_and_pre_verified PASSED [ 25%]
+tests/test_oauth_logic_integration.py::test_oauth_callback_issues_a_session_directly_when_2fa_is_not_enabled PASSED [ 37%]
+tests/test_oauth_logic_integration.py::test_oauth_callback_requires_2fa_when_the_account_has_it_enabled PASSED [ 50%]
+tests/test_oauth_logic_integration.py::test_oauth_does_not_unverify_an_already_verified_account PASSED [ 62%]
+tests/test_oauth_logic_integration.py::test_oauth_linking_does_not_overwrite_an_existing_consent_record PASSED [ 75%]
+tests/test_oauth_logic_integration.py::test_oauth_links_to_existing_unverified_account_and_verifies_it PASSED [ 87%]
+tests/test_oauth_logic_integration.py::test_returning_oauth_user_reuses_the_same_account_no_duplicate_link PASSED [100%]Running teardown with pytest sessionfinish...
+
+
+============================== 8 passed in 9.16s ==============================
+exit:0

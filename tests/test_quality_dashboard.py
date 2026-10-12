@@ -66,7 +66,7 @@ async def test_get_quality_metrics_aggregates_real_averages_and_rates(db_session
     """Validation criterion: les métriques sont calculées."""
     org = await _make_org(db_session, "Quality Metrics Org")
     r1 = await _make_response(db_session, org.id, confidence=0.9, has_contradictions=True)
-    r2 = await _make_response(db_session, org.id, confidence=0.7, has_unsupported_claims=True)
+    await _make_response(db_session, org.id, confidence=0.7, has_unsupported_claims=True)
     document = await _make_document(db_session, org.id)
     db_session.add(Citation(response_id=r1.id, document_id=document.id, text="t", relevance_score=0.9, citation_number=1))
     await db_session.commit()

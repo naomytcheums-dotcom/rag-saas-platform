@@ -199,7 +199,7 @@ async def _seconds_until_oldest_entry_expires(key: str, window_seconds: int, now
     try:
         oldest = await _get_redis().zrange(key, 0, 0, withscores=True)
         if oldest:
-            oldest_timestamp = oldest[0][1]
+            oldest_timestamp = float(oldest[0][1])
             return max(int(window_seconds - (now - oldest_timestamp)), 1)
     except Exception:  # noqa: BLE001
         pass

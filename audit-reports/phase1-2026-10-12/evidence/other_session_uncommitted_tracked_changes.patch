@@ -1,0 +1,198 @@
+diff --git a/api/security/system_log_handler.py b/api/security/system_log_handler.py
+index c7152bb..50404d4 100644
+--- a/api/security/system_log_handler.py
++++ b/api/security/system_log_handler.py
+@@ -12,7 +12,6 @@ raises a SECOND error).
+ """
+ 
+ import logging
+-import time
+ 
+ from sqlalchemy import create_engine
+ from sqlalchemy.orm import Session as SyncSession
+@@ -22,8 +21,6 @@ from api.database_url import synchronous_database_url
+ from api.models.admin import SystemLog
+ from api.security.logging_correlation import get_request_id, mask_sensitive
+ 
+-_sync_engine = None
+-
+ # Root-cause note (2026-09-16): this handler is attached to the ROOT
+ # logger (see install_system_log_handler below), and Python loggers
+ # propagate to their ancestors by default. That means ANY child logger
+@@ -34,12 +31,18 @@ _sync_engine = None
+ # tests/test_admin_dashboard.py: a test attaching its own handler to a
+ # named logger, on a process where this root handler was already
+ # installed by an earlier test's app lifespan). Rather than requiring
+-# every future caller to remember `propagate = False`, this handler
+-# dedupes identical records emitted within a short window -- the
+-# general fix, at the point that actually writes the row, instead of a
+-# special case at every logger that might double-propagate into it.
+-_DEDUPE_WINDOW_SECONDS = 2.0
+-_recent_records: dict[tuple, float] = {}
++# every future caller to remember `propagate = False`, the record that was
++# written is marked, so a second handler recognises it -- the general fix, at
++# the point that actually writes the row, instead of a special case at every
++# logger that might double-propagate into it.
++#
++# 2026-10-11: the first version remembered `id(record)` for two seconds. A
++# freed record's address is recycled by the next record, so DISTINCT records
++# emitted back to back were taken for duplicates and never written (194 of 200
++# in a tight loop). The marker below lives and dies with the record itself.
++_WRITTEN_MARKER = "_system_log_written"
++
++_sync_engine = None
+ 
+ 
+ def _get_sync_engine():
+@@ -51,21 +54,14 @@ def _get_sync_engine():
+ 
+ class SystemLogHandler(logging.Handler):
+     def _is_duplicate(self, record: logging.LogRecord) -> bool:
+-        """True if THIS EXACT record object already reached another
+-        SystemLogHandler instance in the same propagation chain --
+-        logging delivers one shared LogRecord to every handler a
+-        record propagates through, so `id(record)` is a precise (not
+-        content-guessed) key for "already written," scoped to a short
+-        window so the id-reuse-after-GC edge case can't wrongly
+-        dedupe an unrelated, later record."""
+-        now = time.monotonic()
+-        for seen_id, seen_at in list(_recent_records.items()):
+-            if now - seen_at > _DEDUPE_WINDOW_SECONDS:
+-                del _recent_records[seen_id]
+-        key = id(record)
+-        if key in _recent_records:
++        """True if THIS EXACT record object already reached a
++        SystemLogHandler in the same propagation chain -- logging
++        delivers one shared LogRecord to every handler a record
++        propagates through, so a marker on the record is an exact (not
++        content-guessed, not address-based) "already written"."""
++        if getattr(record, _WRITTEN_MARKER, False):
+             return True
+-        _recent_records[key] = now
++        setattr(record, _WRITTEN_MARKER, True)
+         return False
+ 
+     def emit(self, record: logging.LogRecord) -> None:
+diff --git a/scripts/run_isolated_tests.py b/scripts/run_isolated_tests.py
+index a94263e..150f5f0 100644
+--- a/scripts/run_isolated_tests.py
++++ b/scripts/run_isolated_tests.py
+@@ -71,6 +71,11 @@ def build_test_environment(parent: Mapping[str, str]) -> dict[str, str]:
+     if extra_dirs:
+         env["PATH"] = os.pathsep.join([*extra_dirs, env.get("PATH", "")])
+     tessdata = (parent.get("RAG_TEST_TESSDATA") or "").strip()
++    if (parent.get("RAG_TEST_HF_OFFLINE") or "").strip() == "1":
++        # Models already in the local cache are loaded without any request to the hub: no network, no shared HTTP client state. A model
++        # that is NOT cached then fails loudly instead of being downloaded during a test.
++        env["HF_HUB_OFFLINE"] = "1"
++        env["TRANSFORMERS_OFFLINE"] = "1"
+     if tessdata:
+         if not Path(tessdata).is_dir():
+             raise IsolationRefused("RAG_TEST_TESSDATA is not an existing directory")
+diff --git a/tests/test_celery_worker_workflow.py b/tests/test_celery_worker_workflow.py
+index 842c903..e0a06da 100644
+--- a/tests/test_celery_worker_workflow.py
++++ b/tests/test_celery_worker_workflow.py
+@@ -1,5 +1,6 @@
+ """Exercise the scheduled worker's shell exit handling without starting Celery."""
+ 
++import os
+ import shutil
+ import subprocess
+ import sys
+@@ -11,8 +12,7 @@ import yaml
+ ROOT = Path(__file__).resolve().parent.parent
+ 
+ 
+-@pytest.mark.parametrize("worker_status", [0, 1, 2, 124, 125, 126, 127, 137, 143])
+-def test_worker_workflow_propagates_failures(worker_status):
++def _bash() -> str:
+     if sys.platform == "win32":
+         git = shutil.which("git")
+         git_bash = (
+@@ -24,21 +24,52 @@ def test_worker_workflow_propagates_failures(worker_status):
+         bash = shutil.which("bash")
+     if bash is None:
+         pytest.fail("Bash is required to validate the Linux worker workflow.")
++    return bash
++
++
++def _step() -> dict:
+     workflow = yaml.safe_load(
+         (ROOT / ".github" / "workflows" / "celery-worker.yml").read_text(encoding="utf-8")
+     )
+-    step = next(
++    return next(
+         step for step in workflow["jobs"]["drain-queue"]["steps"]
+         if step.get("name") == "Run Celery worker for a bounded window"
+     )
+-    stub = f'timeout() {{ return {worker_status}; }}\n'
+-    result = subprocess.run(
+-        [bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", stub + step["run"]],
++
++
++def _run_step(worker_status: int, env: dict | None = None, prelude: str = "") -> subprocess.CompletedProcess:
++    # The script also starts `celery ... beat` in the background: a function shadows any real celery executable, so nothing is started.
++    stub = f'timeout() {{ return {worker_status}; }}\ncelery() {{ return 0; }}\n'
++    return subprocess.run(
++        [_bash(), "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prelude + stub + _step()["run"]],
+         capture_output=True,
+         text=True,
+         check=False,
+         timeout=10,
++        env=env,
+     )
++
++
++def test_the_exit_handling_check_never_starts_a_celery_process(tmp_path):
++    """The workflow also starts `celery ... beat` in the background (PROD-001) and the check only stubs `timeout`: a real beat was
++    started against whatever broker the environment names. The script kills it right away, so it normally dies before doing
++    anything, but when it survives (it keeps the output pipes open past the 10 s limit) the check fails intermittently. `kill` is
++    delayed here so that a process that really is started has the time to leave its trace."""
++    marker = tmp_path / "celery-was-called.txt"
++    shim_dir = tmp_path / "bin"
++    shim_dir.mkdir()
++    shim = shim_dir / "celery"
++    shim.write_text('#!/bin/sh\necho "$@" >> "$SHIM_MARKER"\nexit 0\n', encoding="utf-8")
++    shim.chmod(0o755)
++    env = {**os.environ, "PATH": str(shim_dir) + os.pathsep + os.environ.get("PATH", ""), "SHIM_MARKER": str(marker)}
++    _run_step(0, env=env, prelude='kill() { sleep 2; builtin kill "$@"; }\n')
++    assert not marker.exists(), f"the exit-handling check started celery: {marker.read_text(encoding='utf-8')}"
++
++
++@pytest.mark.parametrize("worker_status", [0, 1, 2, 124, 125, 126, 127, 137, 143])
++def test_worker_workflow_propagates_failures(worker_status):
++    step = _step()
++    result = _run_step(worker_status)
+     assert result.returncode == (0 if worker_status in {0, 124} else worker_status), result.stderr
+     assert ("::error::" in result.stdout) == (worker_status not in {0, 124})
+     assert "--signal=TERM --kill-after=60" in step["run"]
+diff --git a/tests/test_isolated_test_runner.py b/tests/test_isolated_test_runner.py
+index fcc00b9..2e8e5a9 100644
+--- a/tests/test_isolated_test_runner.py
++++ b/tests/test_isolated_test_runner.py
+@@ -82,3 +82,10 @@ def test_only_documented_external_dependencies_may_stay_skipped():
+     ):
+         assert external_category(local_reason) is None, local_reason
+     assert len(EXTERNAL_SKIPS) == 5
++
++
++def test_the_model_hub_is_only_switched_off_on_request():
++    assert "HF_HUB_OFFLINE" not in build_test_environment(_parent())
++    env = build_test_environment(_parent(RAG_TEST_HF_OFFLINE="1"))
++    assert env["HF_HUB_OFFLINE"] == "1" and env["TRANSFORMERS_OFFLINE"] == "1"
++    assert "HF_HUB_OFFLINE" not in build_test_environment(_parent(RAG_TEST_HF_OFFLINE="0"))
+diff --git a/tests/test_latency_metrics.py b/tests/test_latency_metrics.py
+index e825b8b..e316f8a 100644
+--- a/tests/test_latency_metrics.py
++++ b/tests/test_latency_metrics.py
+@@ -43,6 +43,9 @@ async def test_measure_latency_returns_a_real_percentile_distribution(monkeypatc
+     monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+     monkeypatch.setattr(settings, "LATENCY_WARMUP_RUNS", 1)
+     monkeypatch.setattr(settings, "LATENCY_MEASUREMENT_RUNS", 2)
++    # The warm-up run also pays the one-off load of the real local embedding model (tens of seconds on a cold or loaded machine). The
++    # default 60 s LATENCY_TIMEOUT would then expire before any measured run and report sample_size 0: the budget is not what is tested here.
++    monkeypatch.setattr(settings, "LATENCY_TIMEOUT", 600.0)
+     monkeypatch.setattr("api.services.evaluation_results.search_with_context", AsyncMock(return_value=[]))
+     monkeypatch.setattr(litellm, "acompletion", AsyncMock(return_value=_real_response("An answer.")))
+ 

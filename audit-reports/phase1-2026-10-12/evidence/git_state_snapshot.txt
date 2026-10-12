@@ -1,0 +1,100 @@
+# Git snapshot 2026-10-12 07:01:59 +01:00 (read-only)
+
+## C:\Users\NITROV15\rag-work\wt-gaps
+branch: bob/auto-fix-20261010-gaps
+HEAD: c04100efa2be804693a9582d2cca2bf372ee9c93
+status:
+  ?? audit-reports/phase0-2026-10-12/
+  ?? audit-reports/phase1-2026-10-12/
+  ?? backups/
+  ?? rag-saas-project-handover.zip
+
+## C:\Users\NITROV15\Downloads\rag-saas-platform
+branch: bob/auto-fix-20261010-1555
+HEAD: 691f9501f2fe51916004bf1f9832385623bd4ac2
+status:
+   M api/security/system_log_handler.py
+   M scripts/run_isolated_tests.py
+   M tests/test_celery_worker_workflow.py
+   M tests/test_isolated_test_runner.py
+   M tests/test_latency_metrics.py
+  ?? FGbmsPryLaJXqu5hfC24RTZe
+  ?? audit-reports/functional-audit-2026-10-10/
+  ?? scripts/pending/
+  ?? scripts/run_live_tests.py
+  ?? scripts/test_env/Run-IsolatedBatches.ps1
+  ?? tests/test_live_test_runner.py
+  ?? tests/test_system_log_handler_dedupe.py
+
+## worktrees
+C:/Users/NITROV15/Downloads/rag-saas-platform                                            691f950 [bob/auto-fix-20261010-1555]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a0701ae782b6e6258  2e7bfaa [worktree-agent-a0701ae782b6e6258]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a2a11bdc3c13b2abc  2e7bfaa [worktree-agent-a2a11bdc3c13b2abc]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a57265392c1e48c50  2e7bfaa [worktree-agent-a57265392c1e48c50]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-aa5d4b012de7274a7  2e7bfaa [worktree-agent-aa5d4b012de7274a7]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-aaea7cf1c3b134b1e  2e7bfaa [worktree-agent-aaea7cf1c3b134b1e]
+C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/magical-dewdney-8084a4   2e7bfaa [claude/magical-dewdney-8084a4]
+C:/Users/NITROV15/rag-work/wt-20                                                         166ac74 [ten003b]
+C:/Users/NITROV15/rag-work/wt-ci                                                         d1684e3 [ci-lock-fix]
+C:/Users/NITROV15/rag-work/wt-gaps                                                       c04100e [bob/auto-fix-20261010-gaps]
+C:/Users/NITROV15/rag-work/wt-sec                                                        69f65ac [pr18]
+
+## local branches (vv)
+  backup/pre-redaction-20261005        dae7b2d wip(landing): maquette Figma, demande utilisateur non retrouvée - à confirmer
+  bob/auto-fix-20261003-1518           2e7bfaa docs(bob): global GUARDIAN metrics on Bob's real documents
+  bob/auto-fix-20261003-191324         ad11af0 [origin/bob/auto-fix-20261003-191324] fix(frontend): restore the hero avatar circles, roomier pricing grid
+  bob/auto-fix-20261008-circleci-minio e1e2369 [origin/bob/auto-fix-20261008-circleci-minio: behind 3] ci(circleci): replace the MinIO image that can no longer be pulled
+  bob/auto-fix-20261009-0358           4a70e84 [origin/bob/auto-fix-20261009-0358: behind 6] docs: log the audit P0 fixes in ROADMAP
+  bob/auto-fix-20261009-0610           e10fd0a fix(security): block SSRF through outbound webhooks and MCP servers (SEC-005)
+  bob/auto-fix-20261009-0610-stack     112edb7 [origin/bob/auto-fix-20261009-0610] Merge remote-tracking branch 'origin/main' into bob/auto-fix-20261009-0610-stack
+  bob/auto-fix-20261009-0715           59d5ec9 Merge pull request #20 from naomytcheums-dotcom/bob/auto-fix-20261009-0715
++ bob/auto-fix-20261010-1555           691f950 (C:/Users/NITROV15/Downloads/rag-saas-platform) docs(tests): partial test-remediation reports with explicit evidence status
+  bob/auto-fix-20261010-audit-reports  f632567 [origin/bob/auto-fix-20261010-audit-reports] docs: audit Copilot, prompt et resume
+  bob/auto-fix-20261010-cdc-liste      b7a4a32 [origin/bob/auto-fix-20261010-cdc-liste] docs: list of the 514 original specification items with declared status and code citations
+* bob/auto-fix-20261010-gaps           c04100e [origin/bob/auto-fix-20261010-gaps] docs(handover): exhaustive project handover dossier (history, spec, architecture, RAG, agents, security, DB, API, billing, CI, issues, catalog, glossary, AI context) with generated inventories
++ ci-lock-fix                          d1684e3 (C:/Users/NITROV15/rag-work/wt-ci) [origin/bob/auto-fix-20261008-circleci-minio] fix(frontend): regenerate package-lock.json with the Docker image's own npm (10.9.9)
++ claude/magical-dewdney-8084a4        2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/magical-dewdney-8084a4) docs(bob): global GUARDIAN metrics on Bob's real documents
+  main                                 6619bc5 [origin/main: behind 44] Merge pull request #22 from naomytcheums-dotcom/bob/auto-fix-20261010-audit-reports
++ pr18                                 69f65ac (C:/Users/NITROV15/rag-work/wt-sec) [origin/bob/auto-fix-20261009-0358] Merge remote-tracking branch 'origin/main' into pr18
++ ten003b                              166ac74 (C:/Users/NITROV15/rag-work/wt-20) [origin/bob/auto-fix-20261010-ten003] fix(documents): every async importer writes to S3 off the event loop (TEN-003, rest)
++ worktree-agent-a0701ae782b6e6258     2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a0701ae782b6e6258) docs(bob): global GUARDIAN metrics on Bob's real documents
++ worktree-agent-a2a11bdc3c13b2abc     2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a2a11bdc3c13b2abc) docs(bob): global GUARDIAN metrics on Bob's real documents
++ worktree-agent-a57265392c1e48c50     2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-a57265392c1e48c50) docs(bob): global GUARDIAN metrics on Bob's real documents
++ worktree-agent-aa5d4b012de7274a7     2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-aa5d4b012de7274a7) docs(bob): global GUARDIAN metrics on Bob's real documents
++ worktree-agent-aaea7cf1c3b134b1e     2e7bfaa (C:/Users/NITROV15/Downloads/rag-saas-platform/.claude/worktrees/agent-aaea7cf1c3b134b1e) docs(bob): global GUARDIAN metrics on Bob's real documents
+  wt20                                 eb2e8e5 [origin/bob/auto-fix-20261009-0715] fix(security): a read-only viewer can no longer run a workflow (TEN-012)
+
+## remote-tracking refs already fetched
+  origin/HEAD -> origin/main
+  origin/bob/auto-fix-20261003-191324
+  origin/bob/auto-fix-20261008-circleci-minio
+  origin/bob/auto-fix-20261009-0358
+  origin/bob/auto-fix-20261009-0610
+  origin/bob/auto-fix-20261009-0715
+  origin/bob/auto-fix-20261010-audit-reports
+  origin/bob/auto-fix-20261010-cdc-liste
+  origin/bob/auto-fix-20261010-gaps
+  origin/bob/auto-fix-20261010-ten003
+  origin/dependabot/github_actions/actions/checkout-7
+  origin/dependabot/github_actions/actions/setup-node-6
+  origin/dependabot/github_actions/actions/setup-python-7
+  origin/dependabot/github_actions/docker/build-push-action-7
+  origin/dependabot/github_actions/docker/setup-buildx-action-4
+  origin/dependabot/npm_and_yarn/frontend/jsdom-30.1.2
+  origin/dependabot/npm_and_yarn/frontend/multi-7f19880bf6
+  origin/dependabot/npm_and_yarn/frontend/typescript-7.0.2
+  origin/dependabot/npm_and_yarn/frontend/vitejs/plugin-react-6.1.2
+  origin/dependabot/npm_and_yarn/frontend/vitest-5.0.3
+  origin/dependabot/pip/a2a-sdk-1.2.2
+  origin/dependabot/pip/boto3-1.43.108
+  origin/dependabot/pip/litellm-1.104.0
+  origin/dependabot/pip/sqlalchemy-2.1.3
+  origin/dependabot/pip/stripe-16.0.0
+  origin/flyio-new-files
+  origin/main
+
+## divergences
+origin/main ... bob/auto-fix-20261010-gaps : left-only/right-only = 1	43
+origin/main ... bob/auto-fix-20261010-1555 : left-only/right-only = 44	12
+bob/auto-fix-20261010-1555 ... bob/auto-fix-20261010-gaps : left-only/right-only = 12	86
+main ... origin/main : left-only/right-only = 0	44

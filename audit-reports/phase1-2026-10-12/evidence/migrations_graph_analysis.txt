@@ -1,0 +1,10 @@
+# Alembic revision graph analysis (read-only, no database involved)
+[wt-gaps working tree] files=143 heads=['0143'] roots=['0001'] duplicate_ids=none missing_parents=none
+[bob/auto-fix-20261010-1555] files=137 heads=['0137'] roots=['0001'] duplicate_ids=none missing_parents=none
+[origin/main] files=142 heads=['0142'] roots=['0001'] duplicate_ids=none missing_parents=none
+only in 1555 vs gaps: ['0137_tenant_rls_policies_pilot.py']
+only in gaps vs 1555: ['0137_evaluation_split.py', '0138_escalation_sla_and_notes.py', '0139_feedback_correction.py', '0140_coupons.py', '0141_scim_tokens.py', '0142_user_job_title.py', '0143_connector_credentials.py']
+only in gaps vs origin/main: ['0143_connector_credentials.py']
+0137 file in gaps : 0137_evaluation_split.py parents ['0136']
+0137 file in 1555 : 0137_tenant_rls_policies_pilot.py parents ['0136']
+=> same revision id and same parent on two branches: merging them yields a duplicate revision id / two heads.

@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => {
   return { api: { post: (...a: unknown[]) => post(...a) }, ApiError };
 });
 
+import { ApiError } from "@/lib/api";
 import ImportSources from "./ImportSources";
 
 beforeEach(() => post.mockReset());
@@ -46,6 +47,31 @@ describe("ImportSources", () => {
     await userEvent.type(screen.getByLabelText("documents.import_target"), typed);
     await userEvent.click(screen.getByRole("button", { name: "documents.import_button" }));
     await waitFor(() => expect(post).toHaveBeenCalledWith(`/organizations/org-1/${path}`, body));
+  });
+
+  it.each([
+    ["github_issues", "documents/github/issues", { repo_url: "https://github.com/o/r" }, "https://github.com/o/r"],
+    ["google_drive", "documents/google-drive", { drive_id: "1AbC" }, "1AbC"],
+    ["google_docs", "documents/google-docs", { document_url_or_id: "1DoC" }, "1DoC"],
+    ["confluence", "documents/confluence", { url_or_id: "12345" }, "12345"],
+    ["onedrive", "documents/onedrive", { folder_id: "01ABC" }, "01ABC"],
+  ])("sends the right route and body for %s (specs 2.1.13 to 2.1.18)", async (source, path, body, typed) => {
+    post.mockResolvedValue({});
+    render(<ImportSources orgId="org-1" onImported={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText("documents.import_source"), source);
+    await userEvent.type(screen.getByLabelText("documents.import_target"), typed);
+    await userEvent.click(screen.getByRole("button", { name: "documents.import_button" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith(`/organizations/org-1/${path}`, body));
+  });
+
+  it("sends the user to Connected accounts when the organization has not connected the service", async () => {
+    post.mockImplementationOnce(() => Promise.reject(new ApiError(403, "This organization has not connected notion. Add its credentials first")));
+    render(<ImportSources orgId="org-1" onImported={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("documents.import_target"), "abc");
+    await userEvent.click(screen.getByRole("button", { name: "documents.import_button" }));
+    const link = await screen.findByRole("link", { name: "documents.import_connect_link" });
+    expect(link).toHaveAttribute("href", "/dashboard/settings/connectors");
+    expect(screen.getByRole("alert")).toHaveTextContent("documents.import_not_connected");
   });
 
   it("disables the button while the field is empty", () => {

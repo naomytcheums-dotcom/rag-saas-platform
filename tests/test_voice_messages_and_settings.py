@@ -22,7 +22,7 @@ async def test_save_and_get_voice_messages(db_session):
     conversation = await create_conversation(db_session, "agent-1", user_id, "Voice chat")
     await db_session.commit()
 
-    message = await save_voice_message(db_session, conversation.id, user_id, "user", "voice/abc/def", "hello", 1200, "en-US")
+    await save_voice_message(db_session, conversation.id, user_id, "user", "voice/abc/def", "hello", 1200, "en-US")
     await db_session.commit()
 
     messages = await get_voice_messages(db_session, conversation.id)

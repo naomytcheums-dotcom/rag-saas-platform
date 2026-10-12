@@ -25,6 +25,9 @@ def main() -> int:
     args = parser.parse_args()
 
     sys.path.insert(0, str(ROOT))
+    from local_only_guard import require_local_services  # noqa: E402
+
+    require_local_services()
     from api.main import app  # noqa: E402
 
     live = app.openapi()

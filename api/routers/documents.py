@@ -122,6 +122,7 @@ from api.security.document_versions import (
 )
 from api.security.organizations import ensure_organization_active, require_org_admin, require_org_member, require_org_member_excluding_viewer
 from api.security.permissions import require_permission
+from api.services.connector_credentials import connector_scope
 from api.security.document_capacity import require_batch_capacity, require_document_capacity, require_storage_available
 from api.security.rate_limit import enforce_rate_limit
 from api.services.document_storage import stream_document_file
@@ -351,6 +352,7 @@ async def create_documents_from_sitemap(
 async def create_documents_from_github_repo(
     org_id: uuid.UUID, payload: GitHubRepoImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("github")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.12, item 1's own literal route. 202 Accepted, same
@@ -375,6 +377,7 @@ async def create_documents_from_github_repo(
 async def create_documents_from_github_issues(
     org_id: uuid.UUID, payload: GitHubIssuesImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("github")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.13, item 1's own literal route. 202 Accepted, same
@@ -401,6 +404,7 @@ async def create_documents_from_github_issues(
 async def create_documents_from_google_drive(
     org_id: uuid.UUID, payload: GoogleDriveImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("google_drive")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.14, item 1's own literal route. 202 Accepted, same
@@ -425,6 +429,7 @@ async def create_documents_from_google_drive(
 async def create_documents_from_google_docs(
     org_id: uuid.UUID, payload: GoogleDocImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("google_drive")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.15, item 1's own literal route. 202 Accepted, same
@@ -450,6 +455,7 @@ async def create_documents_from_google_docs(
 async def create_documents_from_notion(
     org_id: uuid.UUID, payload: NotionImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("notion")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.16, item 1's own literal route. 202 Accepted, same
@@ -473,6 +479,7 @@ async def create_documents_from_notion(
 async def create_documents_from_confluence(
     org_id: uuid.UUID, payload: ConfluenceImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("confluence")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.17, item 1's own literal route. 202 Accepted, same
@@ -496,6 +503,7 @@ async def create_documents_from_confluence(
 async def create_documents_from_onedrive(
     org_id: uuid.UUID, payload: OneDriveImportRequest, workspace_id: uuid.UUID | None = None,
     _caller: OrganizationMember = Depends(require_permission("documents:write")),
+    _scope: None = Depends(connector_scope("onedrive")),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     """Partie 2.1.18, item 1's own literal route. 202 Accepted, same

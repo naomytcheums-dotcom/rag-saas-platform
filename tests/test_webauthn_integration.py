@@ -285,7 +285,7 @@ async def test_authenticate_verify_is_rate_limited_per_mfa_token(monkeypatch, cl
         pytest.skip(f"Redis is not reachable -- skipping ({exc})")
 
     access_token = await _register_and_login(client, register_payload)
-    authenticator = await _add_webauthn_credential(client, access_token)
+    await _add_webauthn_credential(client, access_token)
 
     login = await client.post("/auth/login", json={"email": register_payload["email"], "password": register_payload["password"]})
     mfa_token = login.json()["mfa_token"]

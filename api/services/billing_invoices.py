@@ -7,8 +7,10 @@ import asyncio
 import datetime as dt
 import logging
 import uuid
+from typing import cast
 
 from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -218,7 +220,7 @@ async def mark_overdue_invoices(db: AsyncSession) -> int:
         update(Invoice).where(Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.pending]), Invoice.due_date < today).values(status=InvoiceStatus.overdue)
     )
     await db.flush()
-    return result.rowcount or 0
+    return cast(CursorResult, result).rowcount or 0
 
 
 async def get_invoice_stats(db: AsyncSession, organization_id: uuid.UUID) -> dict:

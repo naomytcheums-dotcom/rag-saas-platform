@@ -1,8 +1,11 @@
-name: End-to-end browser tests (manual)
+name: End-to-end browser tests
 
 # Playwright smoke tests (e2e/). They start the API on a throw-away SQLite file with every external service blanked, and the Next.js dev server.
+# Nightly (no secret, no real service involved) and on demand; it builds the frontend, so it is not run on every push.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read

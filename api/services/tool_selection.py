@@ -70,7 +70,7 @@ async def _select_tools_via_llm(query: str, available_tools: list[ToolSpec], top
     empty selection the LLM might legitimately return."""
     catalog = "\n".join(f"- {t.name}: {t.description}" for t in available_tools)
     prompt = (
-        f"Given this user query, select up to {top_k} of the most relevant tools from the list below.\n"
+        f"Given this user query, select up to {top_k} of the most relevant tools from the list below.\n"  # nosec B608 - an LLM prompt, not SQL
         f"Respond with ONLY a JSON array of tool names, e.g. [\"tool_a\", \"tool_b\"]. If none are relevant, respond with [].\n\n"
         f"Query: {query}\n\nAvailable tools:\n{catalog}"
     )
