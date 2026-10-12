@@ -12,7 +12,6 @@ raises a SECOND error).
 """
 
 import logging
-import time
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SyncSession
@@ -21,8 +20,6 @@ from api.config import settings
 from api.database_url import synchronous_database_url
 from api.models.admin import SystemLog
 from api.security.logging_correlation import get_request_id, mask_sensitive
-
-_sync_engine = None
 
 # Root-cause note (2026-09-16): this handler is attached to the ROOT
 # logger (see install_system_log_handler below), and Python loggers
@@ -34,12 +31,18 @@ _sync_engine = None
 # tests/test_admin_dashboard.py: a test attaching its own handler to a
 # named logger, on a process where this root handler was already
 # installed by an earlier test's app lifespan). Rather than requiring
-# every future caller to remember `propagate = False`, this handler
-# dedupes identical records emitted within a short window -- the
-# general fix, at the point that actually writes the row, instead of a
-# special case at every logger that might double-propagate into it.
-_DEDUPE_WINDOW_SECONDS = 2.0
-_recent_records: dict[tuple, float] = {}
+# every future caller to remember `propagate = False`, the record that was
+# written is marked, so a second handler recognises it -- the general fix, at
+# the point that actually writes the row, instead of a special case at every
+# logger that might double-propagate into it.
+#
+# 2026-10-11: the first version remembered `id(record)` for two seconds. A
+# freed record's address is recycled by the next record, so DISTINCT records
+# emitted back to back were taken for duplicates and never written (194 of 200
+# in a tight loop). The marker below lives and dies with the record itself.
+_WRITTEN_MARKER = "_system_log_written"
+
+_sync_engine = None
 
 
 def _get_sync_engine():
@@ -51,21 +54,14 @@ def _get_sync_engine():
 
 class SystemLogHandler(logging.Handler):
     def _is_duplicate(self, record: logging.LogRecord) -> bool:
-        """True if THIS EXACT record object already reached another
-        SystemLogHandler instance in the same propagation chain --
-        logging delivers one shared LogRecord to every handler a
-        record propagates through, so `id(record)` is a precise (not
-        content-guessed) key for "already written," scoped to a short
-        window so the id-reuse-after-GC edge case can't wrongly
-        dedupe an unrelated, later record."""
-        now = time.monotonic()
-        for seen_id, seen_at in list(_recent_records.items()):
-            if now - seen_at > _DEDUPE_WINDOW_SECONDS:
-                del _recent_records[seen_id]
-        key = id(record)
-        if key in _recent_records:
+        """True if THIS EXACT record object already reached a
+        SystemLogHandler in the same propagation chain -- logging
+        delivers one shared LogRecord to every handler a record
+        propagates through, so a marker on the record is an exact (not
+        content-guessed, not address-based) "already written"."""
+        if getattr(record, _WRITTEN_MARKER, False):
             return True
-        _recent_records[key] = now
+        setattr(record, _WRITTEN_MARKER, True)
         return False
 
     def emit(self, record: logging.LogRecord) -> None:
