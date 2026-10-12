@@ -170,8 +170,7 @@ jobs:
             echo "files in this container: $(echo $FILES | wc -w)"
             # Run this container's files in chunks of 20, one pytest process per chunk (run 596 of 2026-10-11: a single process per container let model memory
             # pile up until the kernel killed the MinIO service container, and every S3 test after that failed with "Could not connect to localhost:9000").
-            printf '%s
-' $FILES | split -l 20 - /tmp/chunk_
+            printf '%s\n' $FILES | split -l 20 - /tmp/chunk_
             set +e
             RC=0
             for chunk in /tmp/chunk_*; do
