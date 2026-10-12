@@ -126,6 +126,7 @@ async def _call_litellm_embedding(model: str, texts: list[str], api_key: str | N
     becoming a real `EmbeddingProviderError`. Fixed by catching
     `RateLimitError` explicitly, confirmed by a real regression test."""
     import litellm
+    import openai
 
     timeout = timeout if timeout is not None else settings.LLM_TIMEOUT
     try:
@@ -136,7 +137,9 @@ async def _call_litellm_embedding(model: str, texts: list[str], api_key: str | N
         raise EmbeddingTimeoutError(str(exc)) from exc
     except litellm.exceptions.RateLimitError as exc:
         raise EmbeddingProviderError(str(exc)) from exc
-    except litellm.exceptions.APIError as exc:
+    except (litellm.exceptions.APIError, openai.APIError) as exc:
+        # Connection errors, 5xx and 404/400 answers do not inherit from litellm's APIError: without openai.APIError here they escaped as raw
+        # exceptions and the provider fallback (which only catches EmbeddingError) never moved on.
         raise EmbeddingProviderError(str(exc)) from exc
     ordered = sorted(response.data, key=lambda item: item.index)
     return [item.embedding for item in ordered]
