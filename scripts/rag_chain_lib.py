@@ -174,10 +174,37 @@ def make_zip(files: dict[str, bytes]) -> bytes:
 
 
 # ------------------------------------------------------------------ API client
+class _Relogin(httpx.Auth):
+    """A long run outlives the access token: on a 401 log the test account in again and replay the request once."""
+
+    def __init__(self, api: "Api"):
+        self.api = api
+
+    def auth_flow(self, request):
+        response = yield request
+        if response.status_code == 401:
+            token = request.headers.get("authorization", "").removeprefix("Bearer ")
+            user = self.api.users_by_token.get(token)
+            if user is not None:
+                request.headers["Authorization"] = "Bearer " + self.api.relogin(user)
+                yield request
+
+
 class Api:
     def __init__(self, base: str):
         require_local(base)
-        self.http = httpx.Client(base_url=base, timeout=httpx.Timeout(900.0, connect=15.0))
+        self.users_by_token: dict[str, dict] = {}
+        self._login_http = httpx.Client(base_url=base, timeout=httpx.Timeout(60.0, connect=15.0))
+        self.http = httpx.Client(base_url=base, timeout=httpx.Timeout(900.0, connect=15.0), auth=_Relogin(self))
+
+    def relogin(self, user) -> str:
+        r = self._login_http.post("/auth/login", json={"email": user["email"], "password": user["password"]})
+        if r.status_code != 200:
+            raise RuntimeError(f"re-login failed {r.status_code}")
+        token = r.json()["access_token"]
+        self.users_by_token[token] = user
+        user["headers"]["Authorization"] = "Bearer " + token
+        return token
 
     def user(self, label: str, org_name: str | None = None, with_org: bool = True):
         email, pw = f"rag-{label}-{uuid.uuid4().hex[:8]}@example.com", f"Rag-{uuid.uuid4().hex}-Aa1!"
@@ -186,6 +213,7 @@ class Api:
             raise RuntimeError(f"register failed {r.status_code} {r.text[:200]}")
         headers = {"Authorization": "Bearer " + r.json()["access_token"]}
         out = {"email": email, "password": pw, "headers": headers, "user_id": r.json().get("user", {}).get("id")}
+        self.users_by_token[r.json()["access_token"]] = out
         if with_org:
             org = self.http.post("/organizations", json={"name": org_name or f"RAG {label} {uuid.uuid4().hex[:6]}"}, headers=headers).json()
             out["org_id"] = org["id"]

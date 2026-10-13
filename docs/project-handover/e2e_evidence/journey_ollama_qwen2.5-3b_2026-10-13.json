@@ -1,0 +1,638 @@
+{
+ "results": [
+  {
+   "phase": "0-env",
+   "name": "API health",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "0-env",
+   "name": "two users and two organizations created",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "0-env",
+   "name": "login with the new account",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "0-env",
+   "name": "wrong password is refused",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "phase": "0-env",
+   "name": "unauthenticated request is refused",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "phase": "0-env",
+   "name": "organization configured for the local Ollama model",
+   "status": "PASS",
+   "detail": "200 model=qwen2.5:3b"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload zorblax_handbook.txt",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload refund_policy.md",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload plans_2026.csv",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload security_policy.html",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload sensor_specs.json",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload finance_report.pdf",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload onboarding.docx",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed zorblax_handbook.txt",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed refund_policy.md",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed plans_2026.csv",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed security_policy.html",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed sensor_specs.json",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed finance_report.pdf",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed onboarding.docx",
+   "status": "PASS",
+   "detail": "status=completed",
+   "error": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid file refused: garbage.pdf",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid file refused: empty.txt",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid file refused: script.exe",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "file over the 50 MB limit refused",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "duplicate upload returns the existing document",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "strategy hybrid: search endpoint works on all 10 questions",
+   "status": "PASS",
+   "detail": "{\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 1.2}"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "strategy vector_only: search endpoint works on all 10 questions",
+   "status": "PASS",
+   "detail": "{\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 1.0}"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "strategy bm25_only: search endpoint works on all 10 questions",
+   "status": "PASS",
+   "detail": "{\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 0.5}"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "strategy hybrid_reranked: search endpoint works on all 10 questions",
+   "status": "PASS",
+   "detail": "{\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 4.9}"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "measured retrieval metrics on the 10-question controlled set (NOT a general quality claim)",
+   "status": "PASS",
+   "detail": "{\"hybrid\": {\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 1.2}, \"vector_only\": {\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 1.0}, \"bm25_only\": {\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 0.5}, \"hybrid_reranked\": {\"recall@1\": 1.0, \"recall@3\": 1.0, \"recall@5\": 1.0, \"mrr\": 1.0, \"seconds\": 4.9}}",
+   "metrics": {
+    "hybrid": {
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "mrr": 1.0,
+     "seconds": 1.2
+    },
+    "vector_only": {
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "mrr": 1.0,
+     "seconds": 1.0
+    },
+    "bm25_only": {
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "mrr": 1.0,
+     "seconds": 0.5
+    },
+    "hybrid_reranked": {
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "mrr": 1.0,
+     "seconds": 4.9
+    }
+   }
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "default settings (threshold 0.5, top_k 5) still return the right source",
+   "status": "PASS",
+   "detail": "200, 8 results"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "default threshold shrinks the result list (observation)",
+   "status": "PASS",
+   "detail": "results per question with default threshold 0.5 and top_k 5: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5]",
+   "sizes": [
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+   ]
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "absent-topic query returns candidates anyway (relative threshold observation)",
+   "status": "PASS",
+   "detail": "5 results for an unrelated question",
+   "count": 5
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "top_k is honoured",
+   "status": "PASS",
+   "detail": "3 results for top_k=3"
+  },
+  {
+   "phase": "B-retrieval",
+   "name": "high threshold filters candidates",
+   "status": "PASS",
+   "detail": "1 results at threshold 0.99"
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "agent created",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer When does the Zorblax support line open and what...",
+   "status": "PASS",
+   "detail": "47.8s fact_in_answer=True citations=2 err=None",
+   "answer_excerpt": "The Zorblax support line opens every Tuesday at 14:30 Douala time. The escalation code is PELICAN-7421."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer Within how many days can a purchase be refunded?...",
+   "status": "PASS",
+   "detail": "3.8s fact_in_answer=True citations=3 err=None",
+   "answer_excerpt": "A purchase can be refunded within 14 days of purchase when the invoice number is provided."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer What handling fee applies to card refunds?...",
+   "status": "PASS",
+   "detail": "3.2s fact_in_answer=True citations=3 err=None",
+   "answer_excerpt": "A handling fee of 3 percent applies to every card refund."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer What is the monthly price of the Cumulus plan?...",
+   "status": "PASS",
+   "detail": "3.7s fact_in_answer=True citations=2 err=None",
+   "answer_excerpt": "The monthly price of the Cumulus plan is $199."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer How many characters must a password contain and ...",
+   "status": "PASS",
+   "detail": "4.4s fact_in_answer=True citations=3 err=None",
+   "answer_excerpt": "A password must contain at least 14 characters and is rotated every 90 days."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer What is the battery capacity of the QX-77 sensor...",
+   "status": "PASS",
+   "detail": "4.1s fact_in_answer=True citations=2 err=None",
+   "answer_excerpt": "The battery capacity of the QX-77 sensor is 5200 mAh."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer What was the third quarter revenue?...",
+   "status": "FAIL",
+   "detail": "3.0s fact_in_answer=False citations=2 err=None",
+   "answer_excerpt": "The third quarter revenue reached 4. 2 million XAF in Yaounde."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer Who is the mentor of new hires in the Kribi offi...",
+   "status": "PASS",
+   "detail": "4.4s fact_in_answer=True citations=1 err=None",
+   "answer_excerpt": "Oumarou is the mentor for new hires in the Kribi office."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer Where do new hires receive their badge?...",
+   "status": "PASS",
+   "detail": "3.4s fact_in_answer=True citations=3 err=None",
+   "answer_excerpt": "New hires receive their badge from building C on the second day."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "answer When does the vault key ceremony take place?...",
+   "status": "PASS",
+   "detail": "3.5s fact_in_answer=True citations=3 err=None",
+   "answer_excerpt": "The vault key ceremony takes place on the first Monday of March."
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "grounded answers (fact present) on the controlled question set",
+   "status": "PASS",
+   "detail": "9/10 answers contain the expected fact; 10/10 carry citations"
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "absent answer declined: What is the salary of the chief executive offi...",
+   "status": "PASS",
+   "detail": "2.5s declined=True excerpt='Could not find in the documents'"
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "absent answer declined: Which airline does the company use for busines...",
+   "status": "PASS",
+   "detail": "2.1s declined=True excerpt='Could not find in the documents'"
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "absent answer declined: What is the capital of Australia?...",
+   "status": "PASS",
+   "detail": "2.2s declined=True excerpt='Could not find it in the documents.'"
+  },
+  {
+   "phase": "C-chat-ollama",
+   "name": "prompt-injection attempt in the question (observation)",
+   "status": "PASS",
+   "detail": "error=None excerpt='I could not find the answer in the provided context.'"
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "reindex accepted",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "document still searchable after reindex",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "document replaced",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "search reflects the replaced content",
+   "status": "PASS",
+   "detail": "top content has '21 days': True"
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "document deleted",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "deleted document no longer returned by search",
+   "status": "PASS",
+   "detail": "6 results"
+  },
+  {
+   "phase": "D-lifecycle",
+   "name": "chat no longer cites the deleted document",
+   "status": "PASS",
+   "detail": "excerpt='Not provided in the given context.'"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B cannot read A's document by id",
+   "status": "PASS",
+   "detail": "404"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B cannot delete A's document",
+   "status": "PASS",
+   "detail": "404"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B cannot search inside A's organization",
+   "status": "PASS",
+   "detail": "404"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B cannot list A's documents",
+   "status": "PASS",
+   "detail": "404"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B's own search returns none of A's content",
+   "status": "PASS",
+   "detail": "200 results=0"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "B cannot chat through A's agent",
+   "status": "PASS",
+   "detail": "HTTP 404 error=None"
+  },
+  {
+   "phase": "E-isolation",
+   "name": "A's search never returns B's document",
+   "status": "PASS",
+   "detail": "200, 6 results"
+  }
+ ],
+ "chat": [
+  {
+   "q": "When does the Zorblax support line open and what is the escalation code?",
+   "expected_doc": "zorblax_handbook.txt",
+   "answer_has_fact": true,
+   "citations": 2,
+   "seconds": 47.8,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "Within how many days can a purchase be refunded?",
+   "expected_doc": "refund_policy.md",
+   "answer_has_fact": true,
+   "citations": 3,
+   "seconds": 3.8,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "What handling fee applies to card refunds?",
+   "expected_doc": "refund_policy.md",
+   "answer_has_fact": true,
+   "citations": 3,
+   "seconds": 3.2,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "What is the monthly price of the Cumulus plan?",
+   "expected_doc": "plans_2026.csv",
+   "answer_has_fact": true,
+   "citations": 2,
+   "seconds": 3.7,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "How many characters must a password contain and how often is it rotated?",
+   "expected_doc": "security_policy.html",
+   "answer_has_fact": true,
+   "citations": 3,
+   "seconds": 4.4,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "What is the battery capacity of the QX-77 sensor?",
+   "expected_doc": "sensor_specs.json",
+   "answer_has_fact": true,
+   "citations": 2,
+   "seconds": 4.1,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "What was the third quarter revenue?",
+   "expected_doc": "finance_report.pdf",
+   "answer_has_fact": false,
+   "citations": 2,
+   "seconds": 3.0,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "Who is the mentor of new hires in the Kribi office?",
+   "expected_doc": "onboarding.docx",
+   "answer_has_fact": true,
+   "citations": 1,
+   "seconds": 4.4,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "Where do new hires receive their badge?",
+   "expected_doc": "onboarding.docx",
+   "answer_has_fact": true,
+   "citations": 3,
+   "seconds": 3.4,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  },
+  {
+   "q": "When does the vault key ceremony take place?",
+   "expected_doc": "security_policy.html",
+   "answer_has_fact": true,
+   "citations": 3,
+   "seconds": 3.5,
+   "error": null,
+   "events": [
+    "citation",
+    "done",
+    "start",
+    "thinking",
+    "token"
+   ]
+  }
+ ],
+ "retrieval": {
+  "hybrid": {
+   "recall@1": 1.0,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 1.0,
+   "seconds": 1.2
+  },
+  "vector_only": {
+   "recall@1": 1.0,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 1.0,
+   "seconds": 1.0
+  },
+  "bm25_only": {
+   "recall@1": 1.0,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 1.0,
+   "seconds": 0.5
+  },
+  "hybrid_reranked": {
+   "recall@1": 1.0,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 1.0,
+   "seconds": 4.9
+  }
+ },
+ "model": "qwen2.5:3b",
+ "generated": "2026-10-13 11:42:27"
+}
