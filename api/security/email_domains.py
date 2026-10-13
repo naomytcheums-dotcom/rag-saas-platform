@@ -42,7 +42,6 @@ import datetime as dt
 import logging
 import secrets
 
-import dns.asyncresolver
 import dns.exception
 import dns.resolver
 from cryptography.hazmat.primitives import serialization
@@ -50,6 +49,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.security.dns_resolver import make_txt_resolver
 from api.models.custom_domain import CustomDomain
 from api.security.secret_encryption import encrypt_secret
 from api.services.resend_domains import create_resend_domain, get_resend_domain, trigger_resend_domain_verification
@@ -117,9 +117,7 @@ async def _lookup_txt_records(hostname: str) -> list[str]:
     _lookup_txt_records for why every "nothing there" outcome (NXDOMAIN,
     no TXT record, no reachable nameserver, timeout) collapses to []
     rather than being distinguished."""
-    resolver = dns.asyncresolver.Resolver()
-    resolver.timeout = settings.CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS
-    resolver.lifetime = settings.CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS
+    resolver = make_txt_resolver()
     try:
         answer = await resolver.resolve(hostname, "TXT")
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):

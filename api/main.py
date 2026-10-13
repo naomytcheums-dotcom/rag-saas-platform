@@ -148,6 +148,7 @@ _openapi_license = None
 if settings.OPENAPI_LICENSE_NAME:
     _openapi_license = {"name": settings.OPENAPI_LICENSE_NAME, "url": settings.OPENAPI_LICENSE_URL}
 
+from api.security.organization_branding import InvalidSenderError  # noqa: E402
 from api.services.billing_usage import DocumentLimitExceededError  # noqa: E402
 
 app = FastAPI(
@@ -170,6 +171,13 @@ async def _document_limit_handler(request, exc: DocumentLimitExceededError):
     from fastapi.responses import JSONResponse
 
     return JSONResponse(status_code=402, content={"detail": str(exc), "limit": exc.limit, "current": exc.count})
+
+
+@app.exception_handler(InvalidSenderError)
+async def _invalid_sender_handler(request, exc: InvalidSenderError):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 # Required by Authlib's Starlette OAuth client (api/routers/oauth.py) to
