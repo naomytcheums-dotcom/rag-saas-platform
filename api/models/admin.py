@@ -60,6 +60,8 @@ class Plan(Base):
     max_api_keys: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_webhooks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_requests_per_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Questions an organization may ask per UTC day (Free 10, Starter 500; NULL = unlimited, as for Pro/Business/Enterprise).
+    max_questions_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # AI Pack -- credits (api/models/billing.py's own Credit/CreditTransaction,
     # already real, already spent per real LLM call -- see
     # api/services/billing_credits.py) granted to every subscribed

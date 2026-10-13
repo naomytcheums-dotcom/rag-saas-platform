@@ -10,7 +10,7 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
-from api.models.agent import Agent
+from api.models.agent import Agent, AgentStatus
 from api.models.agent_api_key import AgentAPIKey
 from api.services.agent_api_keys import verify_api_key
 
@@ -35,6 +35,9 @@ async def require_agent_api_key(
     if agent is None or agent.deleted_at is not None:
         raise _INVALID_KEY
 
+    if agent.status != AgentStatus.active.value:
+        # 5.3.10 -- a key of a paused or archived agent opens nothing: the agent is not deployed.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"This agent is not deployed (status: {agent.status})")
     return agent, key_row
 
 

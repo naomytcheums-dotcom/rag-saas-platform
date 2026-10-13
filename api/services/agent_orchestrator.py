@@ -65,7 +65,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
-from api.models.agent import Agent
+from api.models.agent import Agent, AgentStatus
 from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.models.response import Response
 from api.models.tool_permission import ToolPermissionValue
@@ -299,6 +299,16 @@ class AgentOrchestrator:
                 agent_row = await db.get(Agent, real_agent_id)
                 if agent_row is not None and agent_row.deleted_at is not None:
                     agent_row = None
+                if agent_row is not None and agent_row.status != AgentStatus.active.value:
+                    # 5.3.10: only a deployed (active) agent answers. A paused agent (also what the factory leaves behind when a blueprint fails its quality gate)
+                    # or an archived one is not in production, whichever door (dashboard, API key, public API, widget, telephony) the question came through.
+                    trace.append(self._trace_event("agent_not_deployed", {"status": agent_row.status}))
+                    await update_run_status(
+                        db, run.id, AgentRunStatus.failed.value, error=f"Agent not deployed: its status is '{agent_row.status}' (activate it to answer)", trace=list(trace),
+                    )
+                    await db.commit()
+                    await db.refresh(run)
+                    return run
                 if created_by is not None:
                     allowed = True
                     if agent_row is not None:
@@ -375,6 +385,22 @@ class AgentOrchestrator:
                         await db.commit()
                         await db.refresh(run)
                         return run
+
+        # Plan limit (spec 12.2.1/12.2.2): questions per UTC day. Applies to BYOK organizations too (it is a plan limit, not a credit matter) and comes after the
+        # credit refusals so that a refused question does not use up the day's quota.
+        if organization_id is not None:
+            from api.services.billing_usage import QuestionLimitExceededError, reserve_daily_question
+
+            async with self._db_lock:
+                try:
+                    await reserve_daily_question(db, organization_id, user_id=created_by)
+                except QuestionLimitExceededError as exc:
+                    trace.append(self._trace_event("question_limit_exceeded", {"limit": exc.limit}))
+                    await update_run_status(db, run.id, AgentRunStatus.failed.value, error=str(exc), trace=list(trace))
+                    await db.commit()
+                    await db.refresh(run)
+                    return run
+                await db.commit()  # the reserved question is kept even if the run later fails: the provider call is what the quota meters
 
         if plan_first and settings.TASK_PLANNING_ENABLED:
             # Partie 5.1.13 -- real, OPT-IN planning (default `False`,
@@ -882,6 +908,13 @@ class AgentOrchestrator:
                 agent_row = await db.get(Agent, real_agent_id)
         if agent_row is not None and agent_row.deleted_at is not None:
             agent_row = None
+        if agent_row is not None and agent_row.status != AgentStatus.active.value:
+            message = f"Agent not deployed: its status is '{agent_row.status}' (activate it to answer)"
+            async with self._db_lock:
+                await update_run_status(db, run.id, AgentRunStatus.failed.value, error=message)
+                await db.commit()
+            yield {"type": "error", "error": message}
+            return
 
         org_settings, llm_overrides = await self._resolve_llm_inputs(db, organization_id, agent_row, org_settings, llm_overrides)
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
@@ -931,6 +964,20 @@ class AgentOrchestrator:
                         await db.commit()
                         yield {"type": "error", "error": f"Spend cap exceeded: {exc}"}
                         return
+
+        # Plan limit on questions per UTC day (same rule and position as in run_agent above).
+        if organization_id is not None:
+            from api.services.billing_usage import QuestionLimitExceededError, reserve_daily_question
+
+            async with self._db_lock:
+                try:
+                    await reserve_daily_question(db, organization_id, user_id=created_by)
+                except QuestionLimitExceededError as exc:
+                    await update_run_status(db, run.id, AgentRunStatus.failed.value, error=str(exc))
+                    await db.commit()
+                    yield {"type": "error", "error": str(exc)}
+                    return
+                await db.commit()
 
         selected_tools: list[ToolSpec] = []
         if tools:

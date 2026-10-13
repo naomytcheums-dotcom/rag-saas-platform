@@ -144,6 +144,20 @@ async def _enforce_no_free_paid_plan(db: AsyncSession, sub, body: SubscribeReque
     )
 
 
+async def _require_direction(db: AsyncSession, sub, body: SubscribeRequest, *, upgrade: bool) -> None:
+    """`/upgrade` moves to a plan that costs at least as much as the current one, `/downgrade` to one that costs at most as much: a call that goes the other way
+    is the caller's mistake (400), not something to apply silently under a misleading name."""
+    target = await admin_subscriptions.get_plan(db, body.plan_id)
+    current = await db.get(Plan, sub.plan_id) if sub.plan_id else None
+    if current is None:
+        return
+    target_cost, current_cost = _monthly_equivalent_cents(target), _monthly_equivalent_cents(current)
+    if upgrade and target_cost < current_cost:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan is cheaper than the current one: use /downgrade")
+    if not upgrade and target_cost > current_cost:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan is more expensive than the current one: use /upgrade (a paid plan is activated through a checkout)")
+
+
 @org_router.post("/subscribe", response_model=SubscriptionResponse)
 async def subscribe_endpoint(org_id: uuid.UUID, body: SubscribeRequest, request: Request, caller: OrganizationMember = Depends(require_permission("billing:manage")), db: AsyncSession = Depends(get_db)):
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
@@ -167,12 +181,13 @@ async def change_plan_endpoint(org_id: uuid.UUID, body: SubscribeRequest, reques
     sub = await admin_subscriptions.get_or_create_subscription(db, org_id)
     before = {"plan_id": str(sub.plan_id), "billing_period": sub.billing_period}
     await _require_selectable_plan(db, sub, body.plan_id)
+    await _require_direction(db, sub, body, upgrade=request.url.path.endswith("/upgrade"))
     await _enforce_no_free_paid_plan(db, sub, body)
     try:
         result = await admin_subscriptions.update_subscription(db, sub.id, plan_id=body.plan_id, billing_period=body.billing_period)
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
-    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_PLAN_CHANGED, operation="change", before=before, after={"plan_id": str(result.plan_id), "billing_period": result.billing_period})
+    await _audit_billing(db, request, caller, org_id, AuditAction.BILLING_PLAN_CHANGED, operation="upgrade" if request.url.path.endswith("/upgrade") else "downgrade", before=before, after={"plan_id": str(result.plan_id), "billing_period": result.billing_period})
     await db.commit()
     return result
 

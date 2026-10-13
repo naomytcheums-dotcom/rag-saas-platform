@@ -148,6 +148,8 @@ _openapi_license = None
 if settings.OPENAPI_LICENSE_NAME:
     _openapi_license = {"name": settings.OPENAPI_LICENSE_NAME, "url": settings.OPENAPI_LICENSE_URL}
 
+from api.services.billing_usage import DocumentLimitExceededError  # noqa: E402
+
 app = FastAPI(
     title=settings.OPENAPI_TITLE, description=settings.OPENAPI_DESCRIPTION, version=settings.OPENAPI_VERSION,
     contact=_openapi_contact, license_info=_openapi_license, lifespan=lifespan,
@@ -160,6 +162,14 @@ async def _storage_not_configured_handler(request, exc: StorageNotConfiguredErro
     from fastapi.responses import JSONResponse
 
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(DocumentLimitExceededError)
+async def _document_limit_handler(request, exc: DocumentLimitExceededError):
+    """Whatever path was adding a document (upload, import, public API, integration, CRM...), the plan's document limit answers 402, like the upload route."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=402, content={"detail": str(exc), "limit": exc.limit, "current": exc.count})
 
 
 # Required by Authlib's Starlette OAuth client (api/routers/oauth.py) to

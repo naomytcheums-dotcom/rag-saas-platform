@@ -53,7 +53,10 @@ router = APIRouter(tags=["Public API"])
 
 
 def _to_http_error(exc: PublicAPIError) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from api.services.public_api import PublicAPIPaymentRequired
+
+    code = status.HTTP_402_PAYMENT_REQUIRED if isinstance(exc, PublicAPIPaymentRequired) else status.HTTP_400_BAD_REQUEST
+    return HTTPException(status_code=code, detail=str(exc))
 
 
 # --------------------------------------------------------- API key management (JWT)
