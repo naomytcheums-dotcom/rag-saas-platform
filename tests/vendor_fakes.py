@@ -46,8 +46,43 @@ class Resp:
     drop: bool = False  # close the connection without answering
 
 
+def make_self_signed_certificate(directory: str, hostnames=("localhost", "127.0.0.1")) -> tuple[str, str]:
+    """A throw-away self-signed server certificate for tests (`cert.pem`, `key.pem`); the certificate doubles as its own CA file for clients."""
+    import datetime
+    import ipaddress
+    import os
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostnames[0])])
+    sans = []
+    for host in hostnames:
+        try:
+            sans.append(x509.IPAddress(ipaddress.ip_address(host)))
+        except ValueError:
+            sans.append(x509.DNSName(host))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key()).serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=30))
+        .add_extension(x509.SubjectAlternativeName(sans), critical=False).add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    cert_path, key_path = os.path.join(directory, "cert.pem"), os.path.join(directory, "key.pem")
+    with open(cert_path, "wb") as handle:
+        handle.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(key_path, "wb") as handle:
+        handle.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+    return cert_path, key_path
+
+
 class FakeVendor:
-    def __init__(self, host: str = "127.0.0.1"):
+    def __init__(self, host: str = "127.0.0.1", tls_directory: str | None = None):
+        """`tls_directory`: serve HTTPS with a fresh self-signed certificate written there; `ca_file` is what a verifying client must trust."""
         self._routes: list[tuple[str, str, object]] = []
         self._cursor: dict[int, int] = {}
         self.requests: list[Req] = []
@@ -90,6 +125,16 @@ class FakeVendor:
 
         self._server = ThreadingHTTPServer((host, 0), Handler)
         self._server.daemon_threads = True
+        self.ca_file = None
+        self._scheme = "http"
+        if tls_directory:
+            import ssl
+
+            self.ca_file, key_file = make_self_signed_certificate(tls_directory)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(self.ca_file, key_file)
+            self._server.socket = context.wrap_socket(self._server.socket, server_side=True)
+            self._scheme = "https"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
     # -- configuration -------------------------------------------------------------------------------------------------------------------
@@ -120,7 +165,7 @@ class FakeVendor:
     # -- life cycle ----------------------------------------------------------------------------------------------------------------------
     @property
     def url(self) -> str:
-        return f"http://{self._server.server_address[0]}:{self._server.server_address[1]}"
+        return f"{self._scheme}://{self._server.server_address[0]}:{self._server.server_address[1]}"
 
     def start(self):
         self._thread.start()
