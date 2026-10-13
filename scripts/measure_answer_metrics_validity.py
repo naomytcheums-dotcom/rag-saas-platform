@@ -18,6 +18,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from local_only_guard import require_local_services  # noqa: E402
+
+require_local_services()
 
 SWAPS = [("POST", "DELETE"), ("GET", "PUT"), ("PUT", "GET"), ("DELETE", "POST"), ("True", "False"), ("False", "True"), ("200", "404"), ("201", "500")]
 
