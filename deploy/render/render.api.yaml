@@ -1,5 +1,5 @@
 # Render blueprint for the real API (the repository's root render.yaml still describes the old Streamlit prototype).
-# NOT applied by this repository change: use it as `render blueprint launch --file deploy/render/render.api.yaml` on a staging account first.
+# Environment contract: deploy/README.md (the app ignores a bare REDIS_URL). NOT applied by this repository change: use it as `render blueprint launch --file deploy/render/render.api.yaml` on a staging account first.
 services:
   - type: web
     name: rag-saas-api
@@ -9,8 +9,15 @@ services:
     healthCheckPath: /health
     envVars:
       - { key: DATABASE_URL, sync: false }
-      - { key: REDIS_URL, sync: false }
+      - { key: CELERY_BROKER_URL, sync: false }
+      - { key: CELERY_RESULT_BACKEND, sync: false }
+      - { key: RATE_LIMIT_REDIS_URL, sync: false }
       - { key: JWT_SECRET_KEY, sync: false }
+      - { key: SESSION_MIDDLEWARE_SECRET, sync: false }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, sync: false }
+      - { key: ENCRYPTION_MASTER_KEY, sync: false }
+      - { key: SECRET_ENCRYPTION_KEY, sync: false }
+      - { key: SUPPORT_EMAIL, sync: false }
       - { key: METRICS_AUTH_TOKEN, sync: false }
       - { key: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
       - { key: COOKIE_SECURE, value: "true" }
@@ -22,8 +29,15 @@ services:
     dockerCommand: celery -A api.tasks.celery_app worker --loglevel=info
     envVars:
       - { key: DATABASE_URL, sync: false }
-      - { key: REDIS_URL, sync: false }
+      - { key: CELERY_BROKER_URL, sync: false }
+      - { key: CELERY_RESULT_BACKEND, sync: false }
+      - { key: RATE_LIMIT_REDIS_URL, sync: false }
       - { key: JWT_SECRET_KEY, sync: false }
+      - { key: SESSION_MIDDLEWARE_SECRET, sync: false }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, sync: false }
+      - { key: ENCRYPTION_MASTER_KEY, sync: false }
+      - { key: SECRET_ENCRYPTION_KEY, sync: false }
+      - { key: SUPPORT_EMAIL, sync: false }
   - type: worker
     name: rag-saas-beat
     runtime: docker
@@ -32,8 +46,15 @@ services:
     dockerCommand: celery -A api.tasks.celery_app beat --loglevel=info
     envVars:
       - { key: DATABASE_URL, sync: false }
-      - { key: REDIS_URL, sync: false }
+      - { key: CELERY_BROKER_URL, sync: false }
+      - { key: CELERY_RESULT_BACKEND, sync: false }
+      - { key: RATE_LIMIT_REDIS_URL, sync: false }
       - { key: JWT_SECRET_KEY, sync: false }
+      - { key: SESSION_MIDDLEWARE_SECRET, sync: false }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, sync: false }
+      - { key: ENCRYPTION_MASTER_KEY, sync: false }
+      - { key: SECRET_ENCRYPTION_KEY, sync: false }
+      - { key: SUPPORT_EMAIL, sync: false }
   # Cheaper alternative to the worker + beat pair above for the account purge and the other daily clean-ups (spec 1.1.10): one cron job that
   # runs scripts/run_maintenance_tasks.py once a day. Keep it OR the beat worker, not both (the tasks are idempotent, so running both is only wasteful).
   - type: cron
@@ -45,5 +66,12 @@ services:
     dockerCommand: python scripts/run_maintenance_tasks.py
     envVars:
       - { key: DATABASE_URL, sync: false }
-      - { key: REDIS_URL, sync: false }
+      - { key: CELERY_BROKER_URL, sync: false }
+      - { key: CELERY_RESULT_BACKEND, sync: false }
+      - { key: RATE_LIMIT_REDIS_URL, sync: false }
       - { key: JWT_SECRET_KEY, sync: false }
+      - { key: SESSION_MIDDLEWARE_SECRET, sync: false }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, sync: false }
+      - { key: ENCRYPTION_MASTER_KEY, sync: false }
+      - { key: SECRET_ENCRYPTION_KEY, sync: false }
+      - { key: SUPPORT_EMAIL, sync: false }

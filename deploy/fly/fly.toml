@@ -1,4 +1,11 @@
-# Fly.io (not deployed by the authoring session). `fly launch --no-deploy --copy-config`, then `fly secrets set DATABASE_URL=... REDIS_URL=... JWT_SECRET_KEY=...`
+# Fly.io, three process groups from one image (app = gunicorn, worker = Celery worker, beat = the single Celery beat).
+# Not deployed (no Fly account): the file parses and is checked against the keys flyctl documents by tests/test_deploy_artifacts.py;
+# `flyctl config validate` itself needs an access token. The one command that validates it for real, from the repository root:
+#   fly launch --no-deploy --copy-config --config deploy/fly/fly.toml && fly config validate --config deploy/fly/fly.toml
+# Then the secrets of the environment contract (deploy/README.md), staged so nothing restarts before they are all set:
+#   fly secrets set --stage DATABASE_URL=... CELERY_BROKER_URL=rediss://... CELERY_RESULT_BACKEND=rediss://... RATE_LIMIT_REDIS_URL=rediss://... \
+#     JWT_SECRET_KEY=... SESSION_MIDDLEWARE_SECRET=... AUDIT_LOG_HMAC_SECRET_KEY=... SUPPORT_EMAIL=... ENCRYPTION_MASTER_KEY=... SECRET_ENCRYPTION_KEY=...
+# A Redis reached over the public internet must use rediss:// with a password (the API refuses to start otherwise); a private Upstash/Fly Redis address is exempt.
 app = "rag-saas-api"
 primary_region = "cdg"
 
@@ -9,12 +16,14 @@ primary_region = "cdg"
   COOKIE_SECURE = "true"
   CREDITS_ALLOW_UNPAID_TOPUP = "false"
 
+# Only the app group listens on HTTP: without `processes` Fly would also health-check the worker and the beat on port 8000 and restart them forever.
 [http_service]
   internal_port = 8000
   force_https = true
   auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
+  processes = ["app"]
 
   [[http_service.checks]]
     grace_period = "30s"
@@ -26,9 +35,23 @@ primary_region = "cdg"
 [processes]
   app = "gunicorn -c gunicorn.conf.py api.main:app"
   worker = "celery -A api.tasks.celery_app worker --loglevel=info"
-  beat = "celery -A api.tasks.celery_app beat --loglevel=info"
+  beat = "celery -A api.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule"
 
+# `fly scale count app=2 worker=1 beat=1` after the first deploy: beat must stay at exactly 1.
 [[vm]]
+  processes = ["app"]
   memory = "2gb"
   cpu_kind = "shared"
   cpus = 2
+
+[[vm]]
+  processes = ["worker"]
+  memory = "4gb"
+  cpu_kind = "shared"
+  cpus = 2
+
+[[vm]]
+  processes = ["beat"]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

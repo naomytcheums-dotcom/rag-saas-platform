@@ -1,4 +1,7 @@
-# DigitalOcean App Platform spec (not deployed by the authoring session): `doctl apps create --spec deploy/terraform/digitalocean/app.yaml`
+# DigitalOcean App Platform spec: API + Celery worker + the single Celery beat from Dockerfile.api. Not deployed (no DigitalOcean account); checked against the keys of
+# the documented App Spec by tests/test_deploy_artifacts.py. The one command that validates it for real:  doctl apps spec validate deploy/terraform/digitalocean/app.yaml
+# then  doctl apps create --spec deploy/terraform/digitalocean/app.yaml  and fill the SECRET values in the console (environment contract: deploy/README.md).
+# SUPPORT_EMAIL is not a secret. Redis must be a DigitalOcean Managed Redis/Valkey reached over rediss:// with its password. Run `alembic upgrade head` once, by hand, after a backup.
 name: rag-saas
 region: fra
 services:
@@ -12,9 +15,16 @@ services:
     envs:
       - { key: COOKIE_SECURE, value: "true" }
       - { key: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
+      - { key: SUPPORT_EMAIL, value: "support@example.com" }
       - { key: DATABASE_URL, type: SECRET }
-      - { key: REDIS_URL, type: SECRET }
+      - { key: CELERY_BROKER_URL, type: SECRET }
+      - { key: CELERY_RESULT_BACKEND, type: SECRET }
+      - { key: RATE_LIMIT_REDIS_URL, type: SECRET }
       - { key: JWT_SECRET_KEY, type: SECRET }
+      - { key: SESSION_MIDDLEWARE_SECRET, type: SECRET }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, type: SECRET }
+      - { key: ENCRYPTION_MASTER_KEY, type: SECRET }
+      - { key: SECRET_ENCRYPTION_KEY, type: SECRET }
 workers:
   - name: celery-worker
     dockerfile_path: Dockerfile.api
@@ -23,16 +33,34 @@ workers:
     instance_count: 1
     instance_size_slug: apps-d-2vcpu-4gb
     envs:
+      - { key: COOKIE_SECURE, value: "true" }
+      - { key: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
+      - { key: SUPPORT_EMAIL, value: "support@example.com" }
       - { key: DATABASE_URL, type: SECRET }
-      - { key: REDIS_URL, type: SECRET }
+      - { key: CELERY_BROKER_URL, type: SECRET }
+      - { key: CELERY_RESULT_BACKEND, type: SECRET }
+      - { key: RATE_LIMIT_REDIS_URL, type: SECRET }
       - { key: JWT_SECRET_KEY, type: SECRET }
+      - { key: SESSION_MIDDLEWARE_SECRET, type: SECRET }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, type: SECRET }
+      - { key: ENCRYPTION_MASTER_KEY, type: SECRET }
+      - { key: SECRET_ENCRYPTION_KEY, type: SECRET }
   - name: celery-beat
     dockerfile_path: Dockerfile.api
     github: { repo: naomytcheums-dotcom/rag-saas-platform, branch: main }
-    run_command: celery -A api.tasks.celery_app beat --loglevel=info
+    run_command: celery -A api.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb
     envs:
+      - { key: COOKIE_SECURE, value: "true" }
+      - { key: CREDITS_ALLOW_UNPAID_TOPUP, value: "false" }
+      - { key: SUPPORT_EMAIL, value: "support@example.com" }
       - { key: DATABASE_URL, type: SECRET }
-      - { key: REDIS_URL, type: SECRET }
+      - { key: CELERY_BROKER_URL, type: SECRET }
+      - { key: CELERY_RESULT_BACKEND, type: SECRET }
+      - { key: RATE_LIMIT_REDIS_URL, type: SECRET }
       - { key: JWT_SECRET_KEY, type: SECRET }
+      - { key: SESSION_MIDDLEWARE_SECRET, type: SECRET }
+      - { key: AUDIT_LOG_HMAC_SECRET_KEY, type: SECRET }
+      - { key: ENCRYPTION_MASTER_KEY, type: SECRET }
+      - { key: SECRET_ENCRYPTION_KEY, type: SECRET }
