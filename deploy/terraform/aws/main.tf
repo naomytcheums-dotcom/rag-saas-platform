@@ -62,7 +62,8 @@ resource "aws_ecs_task_definition" "api" {
 resource "aws_lb" "api" {
   name               = "rag-saas-api"
   load_balancer_type = "application"
-  subnets            = var.public_subnet_ids
+  internal           = var.internal_load_balancer
+  subnets            = var.internal_load_balancer ? var.private_subnet_ids : var.public_subnet_ids
   security_groups    = [var.alb_security_group_id]
 }
 

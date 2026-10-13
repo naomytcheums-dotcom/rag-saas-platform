@@ -3,7 +3,7 @@
 # Generates every secret once (kept in .env.<tenant>, mode 600, never committed), starts the stack, creates the three storage buckets and applies the migrations.
 # Optional (written to .env.<tenant> on first run, edit it afterwards):
 #   SUPPORT_EMAIL, FRONTEND_URL, COOKIE_SECURE (false only for a plain-http trial), BIND_ADDRESS (default 127.0.0.1; 0.0.0.0 behind your own TLS proxy),
-#   IMAGE (a pre-built image: skips the build), MODELS_DIR (a directory holding the Hugging Face cache for an offline start), HF_HUB_OFFLINE (default 1),
+#   IMAGE (a pre-built image: skips the build), WEB_CONCURRENCY (gunicorn workers, default 4), MODELS_DIR (a directory holding the Hugging Face cache for an offline start), HF_HUB_OFFLINE (default 0; the air-gapped overlay forces 1),
 #   AIRGAPPED=1 (adds docker-compose.airgapped.yml: no route to the internet), COMPOSE_PROFILES=llm (starts Ollama on the private network).
 # The compose project is rag-saas-<tenant>: its containers, network and volumes are not shared with any other tenant.
 set -eu
@@ -27,7 +27,7 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "S3_SECRET_ACCESS_KEY=$(secret)"
     echo "SUPPORT_EMAIL=${SUPPORT_EMAIL:-support@$TENANT.invalid}"
     echo "API_PORT=${API_PORT:-8000}"
-    for name in FRONTEND_URL COOKIE_SECURE BIND_ADDRESS IMAGE MODELS_DIR HF_HUB_OFFLINE AIRGAPPED COMPOSE_PROFILES MINIO_IMAGE EDGE_IMAGE; do
+    for name in FRONTEND_URL COOKIE_SECURE BIND_ADDRESS IMAGE MODELS_DIR HF_HUB_OFFLINE WEB_CONCURRENCY AIRGAPPED COMPOSE_PROFILES MINIO_IMAGE EDGE_IMAGE; do
       eval "value=\${$name:-}"
       [ -z "$value" ] || echo "$name=$value"
     done

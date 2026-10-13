@@ -24,6 +24,8 @@ x-api-environment: &env
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
   CREDITS_ALLOW_UNPAID_TOPUP: "false"
+  # gunicorn workers of the API (each loads the ML dependencies: about 1 GB resident); 4 is the image default, lower it on a small host
+  WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
   S3_ENDPOINT_URL: http://minio:9000
   S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
   S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
