@@ -986,6 +986,8 @@ class Settings(BaseSettings):
     AGENT_SMTP_USERNAME: str = ""
     AGENT_SMTP_PASSWORD: str = ""
     AGENT_SMTP_FROM_EMAIL: str = ""
+    # Optional PEM file of an extra certificate authority to trust for the SMTP server (a private relay). The server certificate is ALWAYS verified.
+    AGENT_SMTP_CA_FILE: str = ""
 
     # -- Human escalation tool (Partie 5.2.9) ---------------------------------------
     HUMAN_ESCALATION_ENABLED: bool = True

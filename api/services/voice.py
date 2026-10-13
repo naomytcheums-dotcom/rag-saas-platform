@@ -115,8 +115,38 @@ def _transcribe_local_sync(audio_bytes: bytes, language: str | None) -> str:
     model = _load_local_whisper()
     # faster-whisper takes a language code ("fr"), not a locale ("fr-FR").
     code = language.split("-")[0].lower() if language else None
-    segments, _info = model.transcribe(io.BytesIO(audio_bytes), language=code, vad_filter=True)
+    # E2E finding 2026-10-12: faster-whisper 1.2.1 decodes any container through PyAV and calls `av.open(..., metadata_errors=...)`, an argument PyAV 19 removed
+    # (TypeError on EVERY input). A PCM WAV file (what browsers' recorders and the voice widget produce) is decoded here with the standard library, which also avoids the
+    # dependency for the common case; any other container still goes through PyAV.
+    samples = _decode_pcm_wav(audio_bytes)
+    segments, _info = model.transcribe(samples if samples is not None else io.BytesIO(audio_bytes), language=code, vad_filter=True)
     return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+def _decode_pcm_wav(audio_bytes: bytes):
+    """Mono float32 samples at 16 kHz from a PCM WAV file, or None when the bytes are not such a file."""
+    import wave
+
+    if audio_bytes[:4] != b"RIFF" or audio_bytes[8:12] != b"WAVE":
+        return None
+    import numpy as np
+
+    try:
+        with wave.open(io.BytesIO(audio_bytes)) as wav:
+            channels, width, rate, frames = wav.getnchannels(), wav.getsampwidth(), wav.getframerate(), wav.readframes(wav.getnframes())
+    except (wave.Error, EOFError):
+        return None
+    if width not in (1, 2, 4):
+        return None
+    dtype = {1: np.uint8, 2: np.int16, 4: np.int32}[width]
+    data = np.frombuffer(frames, dtype=dtype).astype(np.float32)
+    data = (data - 128.0) / 128.0 if width == 1 else data / float(2 ** (8 * width - 1))
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    if rate != 16000 and len(data):
+        target = int(len(data) * 16000 / rate)
+        data = np.interp(np.linspace(0, len(data) - 1, target), np.arange(len(data)), data).astype(np.float32)
+    return data
 
 
 async def transcribe_local_whisper(audio_bytes: bytes, *, language: str | None = None) -> str:

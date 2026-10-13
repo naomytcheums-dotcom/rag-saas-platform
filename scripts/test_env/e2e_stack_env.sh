@@ -1,6 +1,6 @@
 # Local disposable E2E environment (no production service). Sourced by the E2E launchers.
 PGPW=$(docker inspect rag-test-pg --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
-export DATABASE_URL="postgresql+asyncpg://rag_test:${PGPW}@127.0.0.1:25432/rag_e2e_claude"
+export DATABASE_URL="postgresql+asyncpg://rag_test:${PGPW}@127.0.0.1:25432/rag_test_e2e_claude"
 export DATABASE_URL_TRANSACTION=""
 R=redis://127.0.0.1:26390
 export CELERY_BROKER_URL="$R/0" CELERY_RESULT_BACKEND="$R/1" RATE_LIMIT_REDIS_URL="$R/2" CACHE_REDIS_URL="" REDIS_URL="$R/3"

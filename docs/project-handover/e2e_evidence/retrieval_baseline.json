@@ -1,0 +1,337 @@
+{
+ "corpus": "FastAPI docs",
+ "questions": 50,
+ "report": {
+  "hybrid | default (threshold 0.5, top_k 5)": {
+   "seconds": 21,
+   "all": {
+    "recall@1": 0.49,
+    "recall@3": 0.68,
+    "recall@5": 0.7,
+    "recall@10": 0.7,
+    "mrr": 0.598,
+    "ndcg@10": 0.618,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.486,
+    "recall@3": 0.643,
+    "recall@5": 0.671,
+    "recall@10": 0.671,
+    "mrr": 0.574,
+    "ndcg@10": 0.597,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.5,
+    "recall@3": 0.767,
+    "recall@5": 0.767,
+    "recall@10": 0.767,
+    "mrr": 0.656,
+    "ndcg@10": 0.667,
+    "n": 15
+   }
+  },
+  "hybrid | no threshold, top_k 10": {
+   "seconds": 4,
+   "all": {
+    "recall@1": 0.51,
+    "recall@3": 0.8,
+    "recall@5": 0.91,
+    "recall@10": 1.0,
+    "mrr": 0.69,
+    "ndcg@10": 0.763,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.514,
+    "recall@3": 0.786,
+    "recall@5": 0.914,
+    "recall@10": 1.0,
+    "mrr": 0.683,
+    "ndcg@10": 0.762,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.5,
+    "recall@3": 0.833,
+    "recall@5": 0.9,
+    "recall@10": 1.0,
+    "mrr": 0.706,
+    "ndcg@10": 0.766,
+    "n": 15
+   }
+  },
+  "vector_only | default (threshold 0.5, top_k 5)": {
+   "seconds": 2,
+   "all": {
+    "recall@1": 0.49,
+    "recall@3": 0.74,
+    "recall@5": 0.74,
+    "recall@10": 0.74,
+    "mrr": 0.623,
+    "ndcg@10": 0.646,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.471,
+    "recall@3": 0.7,
+    "recall@5": 0.7,
+    "recall@10": 0.7,
+    "mrr": 0.59,
+    "ndcg@10": 0.611,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.533,
+    "recall@3": 0.833,
+    "recall@5": 0.833,
+    "recall@10": 0.833,
+    "mrr": 0.7,
+    "ndcg@10": 0.727,
+    "n": 15
+   }
+  },
+  "vector_only | no threshold, top_k 10": {
+   "seconds": 2,
+   "all": {
+    "recall@1": 0.49,
+    "recall@3": 0.82,
+    "recall@5": 0.9,
+    "recall@10": 0.95,
+    "mrr": 0.68,
+    "ndcg@10": 0.741,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.471,
+    "recall@3": 0.757,
+    "recall@5": 0.871,
+    "recall@10": 0.943,
+    "mrr": 0.648,
+    "ndcg@10": 0.715,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.533,
+    "recall@3": 0.967,
+    "recall@5": 0.967,
+    "recall@10": 0.967,
+    "mrr": 0.756,
+    "ndcg@10": 0.803,
+    "n": 15
+   }
+  },
+  "bm25_only | default (threshold 0.5, top_k 5)": {
+   "seconds": 0,
+   "all": {
+    "recall@1": 0.35,
+    "recall@3": 0.42,
+    "recall@5": 0.42,
+    "recall@10": 0.42,
+    "mrr": 0.397,
+    "ndcg@10": 0.396,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.357,
+    "recall@3": 0.414,
+    "recall@5": 0.414,
+    "recall@10": 0.414,
+    "mrr": 0.4,
+    "ndcg@10": 0.396,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.333,
+    "recall@3": 0.433,
+    "recall@5": 0.433,
+    "recall@10": 0.433,
+    "mrr": 0.389,
+    "ndcg@10": 0.396,
+    "n": 15
+   }
+  },
+  "bm25_only | no threshold, top_k 10": {
+   "seconds": 0,
+   "all": {
+    "recall@1": 0.35,
+    "recall@3": 0.62,
+    "recall@5": 0.72,
+    "recall@10": 0.84,
+    "mrr": 0.516,
+    "ndcg@10": 0.588,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.357,
+    "recall@3": 0.614,
+    "recall@5": 0.729,
+    "recall@10": 0.814,
+    "mrr": 0.522,
+    "ndcg@10": 0.585,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.333,
+    "recall@3": 0.633,
+    "recall@5": 0.7,
+    "recall@10": 0.9,
+    "mrr": 0.504,
+    "ndcg@10": 0.594,
+    "n": 15
+   }
+  },
+  "hybrid_reranked | default (threshold 0.5, top_k 5)": {
+   "seconds": 87,
+   "all": {
+    "recall@1": 0.56,
+    "recall@3": 0.68,
+    "recall@5": 0.68,
+    "recall@10": 0.68,
+    "mrr": 0.613,
+    "ndcg@10": 0.63,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.657,
+    "recall@3": 0.743,
+    "recall@5": 0.743,
+    "recall@10": 0.743,
+    "mrr": 0.695,
+    "ndcg@10": 0.707,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.333,
+    "recall@3": 0.533,
+    "recall@5": 0.533,
+    "recall@10": 0.533,
+    "mrr": 0.422,
+    "ndcg@10": 0.451,
+    "n": 15
+   }
+  },
+  "hybrid_reranked | no threshold, top_k 10": {
+   "seconds": 158,
+   "all": {
+    "recall@1": 0.56,
+    "recall@3": 0.82,
+    "recall@5": 0.9,
+    "recall@10": 0.93,
+    "mrr": 0.712,
+    "ndcg@10": 0.764,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.657,
+    "recall@3": 0.814,
+    "recall@5": 0.929,
+    "recall@10": 0.971,
+    "mrr": 0.769,
+    "ndcg@10": 0.819,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.333,
+    "recall@3": 0.833,
+    "recall@5": 0.833,
+    "recall@10": 0.833,
+    "mrr": 0.578,
+    "ndcg@10": 0.636,
+    "n": 15
+   }
+  },
+  "hybrid + HyDE | no threshold, top_k 10": {
+   "seconds": 1540,
+   "all": {
+    "recall@1": 0.53,
+    "recall@3": 0.79,
+    "recall@5": 0.94,
+    "recall@10": 0.99,
+    "mrr": 0.704,
+    "ndcg@10": 0.77,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.571,
+    "recall@3": 0.771,
+    "recall@5": 0.957,
+    "recall@10": 1.0,
+    "mrr": 0.716,
+    "ndcg@10": 0.787,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.433,
+    "recall@3": 0.833,
+    "recall@5": 0.9,
+    "recall@10": 0.967,
+    "mrr": 0.676,
+    "ndcg@10": 0.73,
+    "n": 15
+   }
+  },
+  "hybrid + multi-query | no threshold, top_k 10": {
+   "seconds": 319,
+   "all": {
+    "recall@1": 0.6,
+    "recall@3": 0.86,
+    "recall@5": 0.94,
+    "recall@10": 0.98,
+    "mrr": 0.748,
+    "ndcg@10": 0.806,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.514,
+    "recall@3": 0.843,
+    "recall@5": 0.943,
+    "recall@10": 1.0,
+    "mrr": 0.698,
+    "ndcg@10": 0.773,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.8,
+    "recall@3": 0.9,
+    "recall@5": 0.933,
+    "recall@10": 0.933,
+    "mrr": 0.867,
+    "ndcg@10": 0.884,
+    "n": 15
+   }
+  },
+  "hybrid + MMR | no threshold, top_k 10": {
+   "seconds": 14,
+   "all": {
+    "recall@1": 0.48,
+    "recall@3": 0.81,
+    "recall@5": 0.94,
+    "recall@10": 1.0,
+    "mrr": 0.663,
+    "ndcg@10": 0.746,
+    "n": 50
+   },
+   "tuning": {
+    "recall@1": 0.457,
+    "recall@3": 0.771,
+    "recall@5": 0.929,
+    "recall@10": 1.0,
+    "mrr": 0.635,
+    "ndcg@10": 0.725,
+    "n": 35
+   },
+   "held_out": {
+    "recall@1": 0.533,
+    "recall@3": 0.9,
+    "recall@5": 0.967,
+    "recall@10": 1.0,
+    "mrr": 0.728,
+    "ndcg@10": 0.794,
+    "n": 15
+   }
+  }
+ },
+ "generated": "2026-10-13 00:33:55"
+}

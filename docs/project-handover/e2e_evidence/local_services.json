@@ -1,0 +1,45 @@
+{
+ "results": [
+  {
+   "name": "e-mail tool refuses an SMTP server with an untrusted certificate",
+   "status": "PASS",
+   "detail": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)"
+  },
+  {
+   "name": "e-mail tool sends through real SMTP with STARTTLS (Mailpit)",
+   "status": "PASS",
+   "detail": "delivered=True to=['person@example.test']"
+  },
+  {
+   "name": "GitHub tools read the real public API (repo + issues)",
+   "status": "PASS",
+   "detail": "fastapi/fastapi stars>0=True open issues returned=1"
+  },
+  {
+   "name": "local Whisper speech-to-text on a synthesized sentence",
+   "status": "PASS",
+   "detail": "transcript='The maintenance code is here in 5508.'"
+  },
+  {
+   "name": "account deletion request accepted (two-stage deletion)",
+   "status": "PASS",
+   "detail": "200 {\"message\":\"Account deactivated. It will be permanently deleted in 30 days.\"}"
+  },
+  {
+   "name": "a pending-deletion account is flagged at login",
+   "status": "FAIL",
+   "detail": "401"
+  },
+  {
+   "name": "purge task erases the user, its organization and documents",
+   "status": "FAIL",
+   "detail": "purged=0 users=1 documents=1 organizations=1"
+  },
+  {
+   "name": "post-deploy smoke script against the local stack",
+   "status": "PASS",
+   "detail": "[ok] public plans endpoint answers: HTTP 200 | [ok] a protected route refuses anonymous calls: HTTP 401 | [ok] frontend /: HTTP 200 in 8.9s | [ok] frontend /login: HTTP 200 in 2.4s | [ok] frontend /register: HTTP 200 in 0.1s | 9/9 checks passed"
+  }
+ ],
+ "generated": "2026-10-13 00:47:23"
+}

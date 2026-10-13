@@ -31,7 +31,7 @@ class _FakeSMTP:
     def __exit__(self, *args):
         return False
 
-    def starttls(self):
+    def starttls(self, context=None):
         pass
 
     def login(self, username, password):

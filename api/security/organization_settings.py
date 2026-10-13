@@ -226,7 +226,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # see that module's own top docstring for the real, necessary
     # normalization this requires to make one single 0-1 threshold
     # meaningful across all of them).
-    "score_threshold": 0.5,
+    # MEASURED 2026-10-12 (scripts/measure_retrieval_baseline.py, 155 real FastAPI pages, 50 questions): the normalized threshold is RELATIVE to the best
+    # candidate, so 0.5 always discards about the lower half of the list; with the old default of 0.5 hybrid reached Recall@5 0.70, with no threshold 0.91.
+    # The default is therefore 0.0 (keep everything `top_k` selects); an organization can still set a higher value.
+    "score_threshold": 0.0,
     # Partie 3.4.7 -- real, applied by
     # api/services/retrieval_pipeline.py's own hybrid_search (Reciprocal
     # Rank Fusion's own smoothing constant) -- 60 is the same real,
