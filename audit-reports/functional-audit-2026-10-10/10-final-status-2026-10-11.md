@@ -7,11 +7,11 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 126 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| FIXED_AND_TESTED | 138 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 11 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 45 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| DECISION_OR_CORRECTION | 46 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | WRITTEN_NOT_EXECUTED | 10 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 17 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| IMPLEMENTED_UNVERIFIED | 4 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 22 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
 
@@ -113,22 +113,9 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 ## AMBIGUOUS_REQUIREMENT (0)
 
 
-## IMPLEMENTED_UNVERIFIED (17)
+## IMPLEMENTED_UNVERIFIED (4)
 
-- **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
-- **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
-- **1.4.9** Email sender personnalisable [LOW] - real sending not exercised
-- **5.3.10** Déploiement [LOW] - meaning of 'deploy to production' not precisely defined in the spec
 - **8.2.3** Streaming voice [LOW] - real-time streaming playback not exercised
 - **8.2.5** Voice activity detection [LOW] - only on the demo page; real VAD accuracy not tested
-- **12.1.2** Subscriptions [HIGH] - never run against a real provider sandbox; live tests are skipped (audit R-05); recurring renewal events not observed
-- **12.1.6** Upgrade [MEDIUM] - never run against a real provider sandbox; live tests are skipped (audit R-05); proration not verified
-- **12.1.7** Downgrade [MEDIUM] - never run against a real provider sandbox; live tests are skipped (audit R-05); effect on existing data over new limits not verified
-- **12.1.8** Cancellation [MEDIUM] - never run against a real provider sandbox; live tests are skipped (audit R-05)
 - **12.1.10** Credits [HIGH] - Paystack credit purchase not supported; currency inconsistency (BILL-018); never run against a real provider sandbox; live tests are skipped
-- **12.2.1** Free [MEDIUM] - production plan rows and limits (3 documents, 10 questions/day) not verified; plan data is not in code
-- **12.2.2** Starter [LOW] - production values unverified
-- **12.2.3** Pro [LOW] - production values unverified
-- **12.2.4** Business [MEDIUM] - a Business plan may not exist
 - **12.2.5** Enterprise [LOW] - on-premise not delivered as a product
-- **12.3.1** AI credits [HIGH] - never run against a real provider sandbox; live tests are skipped (audit R-05)

@@ -10,6 +10,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
@@ -203,7 +204,7 @@ async def test_requests_arriving_on_an_active_custom_domain_are_attributed_to_it
 
     seen: dict[str, object] = {}
 
-    async def probe(request):
+    async def probe(request: Request):
         seen["org"] = request.state.white_label_organization_id
         return {"ok": True}
 
