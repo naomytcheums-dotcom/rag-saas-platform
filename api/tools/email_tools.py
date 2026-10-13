@@ -29,6 +29,7 @@ pretending to support something SMTP cannot do.
 import asyncio
 import base64
 import smtplib
+import ssl
 import time
 from email.message import EmailMessage
 
@@ -122,7 +123,9 @@ def _send_via_smtp(to: list[str], subject: str, body: str, cc: list[str] | None,
 
     all_recipients = to + (cc or []) + (bcc or [])
     with smtplib.SMTP(settings.AGENT_SMTP_HOST, settings.AGENT_SMTP_PORT, timeout=_TIMEOUT_SECONDS) as server:
-        server.starttls()
+        # E2E finding 2026-10-12: `starttls()` without a context used Python's UNVERIFIED default (any certificate accepted: a man in the middle could read the
+        # message and the SMTP password). The certificate and host name are now verified.
+        server.starttls(context=ssl.create_default_context(cafile=settings.AGENT_SMTP_CA_FILE or None))
         if settings.AGENT_SMTP_USERNAME:
             server.login(settings.AGENT_SMTP_USERNAME, settings.AGENT_SMTP_PASSWORD)
         server.send_message(message, to_addrs=all_recipients)

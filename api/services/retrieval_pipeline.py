@@ -201,8 +201,18 @@ def _get_reranker(model_name: str):
     return _RERANKER_CACHE[model_name]
 
 
+def _embedding_model_filter(embedding_model: str | None) -> list:
+    """E2E finding 2026-10-12: ranking only compared vector LENGTHS, so two different models with the same dimension (MiniLM-L6, multi-qa-MiniLM, bge-small, all 384)
+    were silently compared in different vector spaces after an organization changed `embedding_model` without re-indexing. A chunk stamped with another model is
+    excluded; a legacy chunk with no stamp (`embedding_model IS NULL`) stays comparable because its origin is unknown. `None` = no filtering (old callers)."""
+    if not embedding_model:
+        return []
+    return [or_(DocumentChunk.embedding_model.is_(None), DocumentChunk.embedding_model == embedding_model)]
+
+
 async def fetch_organization_chunks(
     db: AsyncSession, organization_id, metadata_filters: dict | None = None, document_ids: list | None = None, with_embeddings: bool = True,
+    embedding_model: str | None = None,
 ) -> list[dict]:
     """A real, shared, multi-tenant-isolated fetch -- every real search
     function below calls this, never a raw query of its own, so the
@@ -248,6 +258,7 @@ async def fetch_organization_chunks(
         DocumentChunk.organization_id == organization_id,
         or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
         DocumentChunk.embedding.is_not(None),
+        *_embedding_model_filter(embedding_model),
     ]
     if document_ids:
         filters.append(DocumentChunk.document_id.in_(document_ids))
@@ -418,8 +429,8 @@ async def vector_search(
     real caller keeps embedding `query` itself, byte-identical
     behavior."""
     top_k = top_k if top_k is not None else resolve_top_k(org_settings)
+    model_name = resolve_embedding_model(org_settings)
     if query_embedding is None:
-        model_name = resolve_embedding_model(org_settings)
         # Real bug found (2026-09-18), same class as hybrid_reranked_search's
         # own cross_encoder.predict below: generate_embeddings runs a
         # synchronous, CPU-bound sentence-transformers .encode() call, which
@@ -429,7 +440,9 @@ async def vector_search(
         # the reranked strategy.
         loop = asyncio.get_running_loop()
         query_embedding = (await loop.run_in_executor(None, generate_embeddings, [query], model_name))[0]
-    return await rank_chunks_by_embedding(db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
+    return await rank_chunks_by_embedding(
+        db, organization_id, query_embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids, embedding_model=model_name,
+    )
 
 
 async def _enable_iterative_hnsw_scan(db: AsyncSession) -> None:
@@ -449,7 +462,7 @@ async def _enable_iterative_hnsw_scan(db: AsyncSession) -> None:
 
 async def _pgvector_rank_chunks(
     db: AsyncSession, organization_id, embedding: list[float], top_k: int,
-    metadata_filters: dict | None = None, document_ids: list | None = None,
+    metadata_filters: dict | None = None, document_ids: list | None = None, embedding_model: str | None = None,
 ) -> list[dict] | None:
     """Hardening Mission, Phase 1 -- the real native-index path this
     module's own top docstring named as "the natural next step". Returns
@@ -494,6 +507,7 @@ async def _pgvector_rank_chunks(
         DocumentChunk.organization_id == organization_id,
         or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
         DocumentChunk.embedding_vector.is_not(None),
+        *_embedding_model_filter(embedding_model),
     ]
     if document_ids:
         filters.append(DocumentChunk.document_id.in_(document_ids))
@@ -543,6 +557,7 @@ async def _pgvector_rank_chunks(
             or_(DocumentChunk.document_id.is_(None), Document.deleted_at.is_(None)),
             DocumentChunk.embedding.is_not(None),
             DocumentChunk.embedding_vector.is_(None),
+            *_embedding_model_filter(embedding_model),
         ]
         if document_ids:
             orphan_filters.append(DocumentChunk.document_id.in_(document_ids))
@@ -568,6 +583,7 @@ async def _pgvector_rank_chunks(
 
 async def rank_chunks_by_embedding(
     db: AsyncSession, organization_id, embedding: list[float], top_k: int, metadata_filters: dict | None = None, document_ids: list | None = None,
+    embedding_model: str | None = None,
 ) -> list[dict]:
     """A real, shared building block, made public specifically so
     Partie 3.4.3's own `api.services.hyde` can rank this organization's
@@ -605,11 +621,13 @@ async def rank_chunks_by_embedding(
     `_pgvector_rank_chunks`'s own docstring for why it reuses the exact
     same filters as `fetch_organization_chunks` below, never a second,
     divergent copy."""
-    native_results = await _pgvector_rank_chunks(db, organization_id, embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids)
+    native_results = await _pgvector_rank_chunks(
+        db, organization_id, embedding, top_k, metadata_filters=metadata_filters, document_ids=document_ids, embedding_model=embedding_model,
+    )
     if native_results is not None:
         return native_results
 
-    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids)
+    chunks = await fetch_organization_chunks(db, organization_id, metadata_filters=metadata_filters, document_ids=document_ids, embedding_model=embedding_model)
     if not chunks:
         return []
     comparable, _excluded = _split_chunks_by_dimension(embedding, chunks)

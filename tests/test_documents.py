@@ -752,16 +752,16 @@ async def test_upload_accepts_a_latin1_encoded_txt_file(client, db_session, regi
     assert response.status_code == 201
 
 
-async def test_upload_accepts_a_genuinely_empty_txt_file(client, db_session, register_payload, monkeypatch):
-    """Vision critique Q4 -- an empty file is a real, valid edge case,
-    not an error."""
+async def test_upload_refuses_a_genuinely_empty_txt_file(client, db_session, register_payload, monkeypatch):
+    """E2E finding 2026-10-12 (reverses the earlier Vision critique Q4 decision): an empty file was stored and ended 'completed' with zero chunks, a
+    document nobody can ever find, so it is refused with 400."""
     _stub_s3(monkeypatch)
     owner_token, owner = await _register(client, db_session, register_payload["email"], register_payload["password"])
     org = await _create_org(client, owner_token, "Acme")
 
     response = await _upload(client, org["id"], owner_token, filename="empty.txt", content=b"", declared_content_type="text/plain")
-    assert response.status_code == 201
-    assert response.json()["file_type"] == "text/plain"
+    assert response.status_code == 400
+    assert "empty" in response.text.lower()
 
 
 async def test_viewer_cannot_upload_a_txt_document(client, db_session, register_payload, monkeypatch):

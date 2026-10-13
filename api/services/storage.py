@@ -18,6 +18,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image, UnidentifiedImageError
 
 from api.config import settings
+from api.services.document_storage import StorageNotConfiguredError
 
 MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_AVATAR_CONTENT_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
@@ -61,7 +62,7 @@ def _client():
     since avatar uploads are infrequent enough that the connection-setup
     cost doesn't matter, and it keeps this module free of global state."""
     if not (settings.S3_BUCKET_NAME and settings.S3_ACCESS_KEY_ID and settings.S3_SECRET_ACCESS_KEY):
-        raise EnvironmentError(
+        raise StorageNotConfiguredError(
             "S3_BUCKET_NAME / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY are not fully set -- "
             "see .env.example for the S3 (or Cloudflare R2) variables required for avatar uploads."
         )

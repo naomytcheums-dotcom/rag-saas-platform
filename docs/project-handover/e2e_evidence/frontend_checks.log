@@ -1,0 +1,35 @@
+== typegen
+Generating route types...
+✓ Types generated successfully
+== tsc
+
+> frontend@0.1.0 type-check
+> tsc --noEmit
+
+== lint
+
+> frontend@0.1.0 lint
+> eslint
+
+== vitest
+
+> frontend@0.1.0 test
+> vitest run
+
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.0 C:/Users/NITROV15/rag-work/wt-e2e/frontend
+
+
+ Test Files  42 passed (42)
+      Tests  240 passed (240)
+   Start at  20:09:49
+   Duration  126.81s (environment 53%, import 16%, setup 15%, tests 11%, transform 3%)
+
+Environment  jsdom was created 42 times · 797.06s total, 53% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+== DONE

@@ -19,6 +19,8 @@ Start with `14_AI_HANDOVER_CONTEXT.md` (self-contained) or `00_EXECUTIVE_OVERVIE
 | 12_COMPLETE_FEATURE_CATALOG.md | 514 features (generated from the audit CSV) |
 | 13_GLOSSARY_AND_DEVELOPER_GUIDE.md | vocabulary, conventions, commands, diagnostics |
 | 14_AI_HANDOVER_CONTEXT.md | single-file context for another AI assistant |
+| 15_END_TO_END_VALIDATION_REPORT.md | real end-to-end validation with Ollama, defects fixed, dashboard |
+| e2e_evidence/ | JSON/log evidence of that validation |
 | annex/ | generated inventories (routes, tables, migrations, pages, modules, tests) and the generator scripts |
 
 Evidence tags: **[V]** verified in code that day, **[R]** run in project sessions, **[D]** documented only, **[U]** unknown. No secret values appear in this dossier.

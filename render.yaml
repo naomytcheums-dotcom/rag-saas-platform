@@ -1,3 +1,7 @@
+# LEGACY: this blueprint describes the original Streamlit prototype ("nova"), NOT the SaaS API. The real blueprint (web + Celery worker + beat +
+# maintenance cron) is deploy/render/render.api.yaml. It is kept here unchanged on purpose: replacing it would make a linked Blueprint create paid
+# services (plan "standard") on the next sync. Decide deliberately which one your Render account links to (docs/TROUBLESHOOTING.md, docs/RELEASE_RUNBOOK).
+#
 # Render Blueprint -- render.com reads this automatically when the repo
 # is connected as a Blueprint, and builds/deploys the Dockerfile above
 # instead of needing the service configured by hand in Render's UI.

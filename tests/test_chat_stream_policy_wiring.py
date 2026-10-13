@@ -69,3 +69,25 @@ async def test_stream_response_passes_a_real_user_context_to_search_with_context
 async def _empty_async_gen():
     return
     yield  # pragma: no cover -- makes this a real async generator
+
+
+async def test_stream_response_leaves_top_k_to_the_organization_settings(db_session, register_payload):
+    """E2E finding 2026-10-12: the chat route passed top_k=5 explicitly, so an organization's own `top_k` never applied to chat."""
+    from api.models.user import User
+
+    user = User(email=register_payload["email"], hashed_password="x", full_name="Test User", is_email_verified=True)
+    db_session.add(user)
+    await db_session.flush()
+    org, agent = await _make_org_agent_and_member(db_session)
+    db_session.add(OrganizationMember(organization_id=org.id, user_id=user.id, role=OrganizationRole.manager))
+    await db_session.commit()
+
+    fake_search = AsyncMock(return_value=[])
+    with (
+        patch("api.routers.chat_stream.search_with_context", fake_search),
+        patch("api.routers.chat_stream.stream_agent_response", lambda *a, **k: _empty_async_gen()),
+    ):
+        await _stream_response(agent.id, "hello", None, user, db_session)
+
+    _, kwargs = fake_search.await_args
+    assert "top_k" not in kwargs

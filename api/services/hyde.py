@@ -107,7 +107,9 @@ async def search_with_hyde(
     if not embedding:
         return await vector_search(db, organization_id, query, top_k=top_k, org_settings=org_settings)
 
-    return await rank_chunks_by_embedding(db, organization_id, embedding, top_k)
+    from api.services.embedding_config import resolve_embedding_model
+
+    return await rank_chunks_by_embedding(db, organization_id, embedding, top_k, embedding_model=resolve_embedding_model(org_settings))
 
 
 def hyde_rerank(query: str, candidates: list[dict], model_name: str | None = None, org_settings: dict | None = None) -> list[dict]:

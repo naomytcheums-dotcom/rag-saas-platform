@@ -75,6 +75,7 @@ async def test_stream_executes_tool_and_resumes():
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
          patch.object(ao, "resolve_org_api_key", AsyncMock(return_value=None)), \
+         patch.object(ao, "get_org_settings", AsyncMock(return_value={})), \
          patch.object(ao, "validate_guardrails", AsyncMock(return_value={"passed": True, "violations": []})):
 
         db = AsyncMock()
@@ -115,6 +116,7 @@ async def test_stream_without_tools_does_not_call_tool_loop():
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
          patch.object(ao, "resolve_org_api_key", AsyncMock(return_value=None)), \
+         patch.object(ao, "get_org_settings", AsyncMock(return_value={})), \
          patch.object(ao, "validate_guardrails", AsyncMock(return_value={"passed": True, "violations": []})):
 
         db = AsyncMock()
@@ -164,6 +166,7 @@ async def test_stream_tool_failure_is_reported_not_crashing():
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
          patch.object(ao, "resolve_org_api_key", AsyncMock(return_value=None)), \
+         patch.object(ao, "get_org_settings", AsyncMock(return_value={})), \
          patch.object(ao, "validate_guardrails", AsyncMock(return_value={"passed": True, "violations": []})):
 
         db = AsyncMock()

@@ -94,8 +94,11 @@ async def test_email_send_smtp_uses_a_real_smtplib_connection(monkeypatch):
         def __exit__(self, *args):
             return False
 
-        def starttls(self):
-            sent["starttls"] = True
+        def starttls(self, context=None):
+            # the platform must pass a context that verifies the certificate and the host name
+            import ssl
+
+            sent["starttls"] = context is not None and context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
 
         def login(self, username, password):
             sent["login"] = (username, password)

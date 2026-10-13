@@ -35,14 +35,18 @@ export default function RenameConversation({ conversation, onRenamed }: RenameCo
 
   if (!editing) {
     return (
-      <button
-        type="button"
+      // A <span>, not a <button>: this title sits inside the row's own select button (ConversationItem), and a button inside a button is invalid HTML
+      // (React hydration error). The rename gesture is the double-click, as specified; keyboard users can use F2.
+      <span
         onDoubleClick={() => setEditing(true)}
-        className="truncate text-left text-sm font-medium text-foreground"
+        onKeyDown={(event) => {
+          if (event.key === "F2") setEditing(true);
+        }}
+        className="block truncate text-left text-sm font-medium text-foreground"
         title={t("double_click_to_rename")}
       >
         {conversation.title}
-      </button>
+      </span>
     );
   }
 

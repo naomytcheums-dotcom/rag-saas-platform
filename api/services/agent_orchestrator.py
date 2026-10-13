@@ -70,6 +70,8 @@ from api.models.agent_run import AgentRunRecord, AgentRunStatus
 from api.models.response import Response
 from api.models.tool_permission import ToolPermissionValue
 from api.security.agent_runs import create_run, get_run, get_runs, stop_run, update_run_status
+from api.security.organization_settings import get_org_settings
+from api.services.agent_prompts import render_system_prompt
 from api.security.conversations import add_message, get_conversation_messages
 from api.security.tool_permissions import check_tool_permission
 from api.services.agent_citation_required import (
@@ -146,6 +148,9 @@ def _redact_secrets(value):
     return value
 
 
+_DEFAULT_AGENT_PROMPT = "You are a helpful assistant."
+_AGENT_MODEL_KEYS = ("provider", "model", "temperature", "top_p", "max_tokens")
+
 _ANSWER_FROM_TOOL_RESULTS = "You already have the result of this tool call above. Do not call any tool again: answer the user now, using the tool results already provided."
 
 
@@ -175,6 +180,28 @@ class AgentOrchestrator:
     @staticmethod
     def _trace_event(event: str, data: dict | None = None) -> dict:
         return {"event": event, "timestamp": time.time(), **(data or {})}
+
+    async def _resolve_llm_inputs(
+        self, db: AsyncSession, organization_id: uuid.UUID | None, agent_row: Agent | None, org_settings: dict | None, llm_overrides: dict | None,
+    ) -> tuple[dict | None, dict | None]:
+        """E2E finding 2026-10-12: neither run_agent nor stream_response ever read the organization's settings or the agent's own configuration, so
+        `resolve_llm_config(None)` always fell back to the global defaults (provider "anthropic"): an organization that chose Ollama, a model, a
+        temperature or a system prompt, and an agent with its own model_config / system_prompt, were all ignored in chat, the public API, the widget
+        and the bots. Precedence (most specific wins): explicit caller overrides > the agent's own model_config / prompt > the organization's
+        settings > global defaults. An agent whose prompt is still the creation default does not hide the organization's prompt."""
+        if org_settings is None and organization_id is not None:
+            async with self._db_lock:
+                org_settings = await get_org_settings(db, organization_id)
+        merged: dict = {}
+        if agent_row is not None:
+            config = agent_row.model_config_json or {}
+            for key in _AGENT_MODEL_KEYS:
+                if config.get(key) is not None:
+                    merged[key] = config[key]
+            if agent_row.system_prompt_template or (agent_row.system_prompt and agent_row.system_prompt.strip() != _DEFAULT_AGENT_PROMPT):
+                merged["system_prompt"] = render_system_prompt(agent_row)
+        merged.update({k: v for k, v in (llm_overrides or {}).items() if v is not None})
+        return org_settings, (merged or None)
 
     async def run_agent(
         self, agent_id: str, input: str, *, db: AsyncSession, context: str | None = None,
@@ -297,6 +324,7 @@ class AgentOrchestrator:
             async with self._db_lock:
                 tools = await resolve_agent_tools(db, agent_row, organization_id)
 
+        org_settings, llm_overrides = await self._resolve_llm_inputs(db, organization_id, agent_row, org_settings, llm_overrides)
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
 
@@ -833,6 +861,7 @@ class AgentOrchestrator:
         except ValueError:
             real_agent_id = None
 
+        agent_row = None
         if created_by is not None and real_agent_id is not None:
             async with self._db_lock:
                 agent_row = await db.get(Agent, real_agent_id)
@@ -848,8 +877,30 @@ class AgentOrchestrator:
 
         yield {"type": "thinking", "message": "Preparing context"}
 
+        if agent_row is None and real_agent_id is not None:
+            async with self._db_lock:
+                agent_row = await db.get(Agent, real_agent_id)
+        if agent_row is not None and agent_row.deleted_at is not None:
+            agent_row = None
+
+        org_settings, llm_overrides = await self._resolve_llm_inputs(db, organization_id, agent_row, org_settings, llm_overrides)
         llm_cfg = resolve_llm_config(org_settings, overrides=llm_overrides)
         system_prompt = llm_cfg["system_prompt"]
+
+        # E2E finding 2026-10-12: the guardrails of a streamed answer ran only AFTER the last token (the stream cannot take tokens back), so with the
+        # injection detector on, a planted secret had already reached the client when the violation was recorded. The question and the retrieved
+        # context are input-side checks: they run BEFORE any generation here. The post-generation check below stays for the output-side rules.
+        if real_agent_id is not None:
+            async with self._db_lock:
+                input_check = await validate_guardrails(db, real_agent_id, input, "", retrieved_context=context)
+                if not input_check["passed"]:
+                    await update_run_status(
+                        db, run.id, AgentRunStatus.failed.value, error=f"Guardrail violation: {', '.join(input_check['violations'])}",
+                    )
+                    await db.commit()
+            if not input_check["passed"]:
+                yield {"type": "error", "error": f"Guardrail violation: {', '.join(input_check['violations'])}"}
+                return
 
         # Hardening Mission, Phase 13 -- same real, pre-flight credit
         # guard as `run_agent` above (see that one's own comment for the

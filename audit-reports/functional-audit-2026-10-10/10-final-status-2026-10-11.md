@@ -7,12 +7,12 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 114 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
-| VALIDATED_NOT_DEPLOYED | 13 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
-| DECISION_OR_CORRECTION | 25 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
-| WRITTEN_NOT_EXECUTED | 19 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 34 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
-| BLOCKED_EXTERNAL | 26 | cannot be proven without an account, key or service that is not available here |
+| FIXED_AND_TESTED | 126 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| VALIDATED_NOT_DEPLOYED | 11 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
+| DECISION_OR_CORRECTION | 45 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| WRITTEN_NOT_EXECUTED | 10 | code or documents exist; nothing proves them yet |
+| IMPLEMENTED_UNVERIFIED | 17 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| BLOCKED_EXTERNAL | 22 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
 
 Rule: a feature is VERIFIED_COMPLETE only if the code review judged it complete AND the targeted tests of its Part ran green. The unit of proof is the Part, not the sentence of each requirement.
@@ -58,37 +58,26 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **Product name (14.4.1) and logo (14.4.2)**, **custom SLA (10.4.12)**.
 - **Real provider sandboxes**: Stripe / Paystack (12.x), LLM / embedding providers (4.x), Slack / Teams / Discord (9.4.x), Twilio / STT / TTS (8.2.x), ClamAV (10.1.12), tracing and error tracking (10.3 / 13.5).
 
-## WRITTEN_NOT_EXECUTED (19)
+## WRITTEN_NOT_EXECUTED (10)
 
-- **1.1.10** Suppression du compte - written; runner tests pass; the cron job is not applied on Render
-- **1.3.5** Isolation des données - CI now runs the PostgreSQL integration files; RLS not enabled
 - **10.1.14** Encryption at rest - documented; provider settings not verified
 - **13.1.6** Coverage > 90% - target not reached
-- **13.2.7** LLM tests - written; not run (no paid key)
-- **13.2.8** RAG tests - written; not run (no paid key)
-- **13.2.10** Database tests - CI now runs the PostgreSQL integration files; RLS not enabled
-- **13.4.3** Render - written, not executed on a real platform
 - **13.4.4** Railway - written, not executed on a real platform
 - **13.4.5** Fly.io - written, not executed on a real platform
 - **13.4.9** DigitalOcean - written, not executed on a real platform
-- **14.1.11** Troubleshooting - written
 - **14.2.7** Demo video - built
 - **14.3.2** Demo - written; typecheck and lint pass; not viewed in a browser
-- **14.3.4** Architecture - written; typecheck and lint pass; not viewed in a browser
-- **14.3.8** Documentation - written; typecheck and lint pass; not viewed in a browser
 - **14.4.2** Logo - owner decision pending
 - **14.4.4** Charte graphique - written
 - **15.2.7** Benchmark → amélioration - mechanism exists; not run on real data
 
-## VALIDATED_NOT_DEPLOYED (13)
+## VALIDATED_NOT_DEPLOYED (11)
 
 - **10.4.7** Dedicated tenant - validated with the official tool; not applied to a real account or cluster
 - **10.4.8** Dedicated database - validated with the official tool; not applied to a real account or cluster
 - **10.4.9** Private deployment - validated with the official tool; not applied to a real account or cluster
 - **10.4.10** On-premise deployment - validated with the official tool; not applied to a real account or cluster
 - **10.4.11** VPC deployment - validated with the official tool; not applied to a real account or cluster
-- **13.2.11** Deployment tests - validated with actionlint; workflows not run on GitHub
-- **13.3.8** Deploy - validated with actionlint; workflows not run on GitHub
 - **13.4.6** AWS - validated with the official tool; not applied to a real account or cluster
 - **13.4.7** GCP - validated with the official tool; not applied to a real account or cluster
 - **13.4.8** Azure - validated with the official tool; not applied to a real account or cluster
@@ -96,24 +85,20 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **13.4.11** Helm - validated with the official tool; not applied to a real account or cluster
 - **13.4.12** Terraform - validated with the official tool; not applied to a real account or cluster
 
-## BLOCKED_EXTERNAL (26)
+## BLOCKED_EXTERNAL (22)
 
 - **1.4.3** SSL automatique (Let's Encrypt) - real issuance needs a public DNS name and reachable host; Render/Vercel terminate TLS themselves so this path may be unused in production
 - **4.1.1** Anthropic Claude - no real Anthropic call in the audit
 - **4.1.2** OpenAI GPT - no real call
 - **4.1.3** Google Gemini - no real call
 - **4.1.4** Mistral - no real call
-- **4.1.5** Ollama (local) - no local Ollama server exercised
 - **4.2.1** OpenAI embeddings - no real call
 - **4.2.2** Voyage AI - no real call
 - **4.2.3** Cohere - no real call
 - **5.2.2** Web Search - no real search call
-- **5.2.3** GitHub (issues, repos) - no real GitHub call
 - **5.2.7** Calendar (Google, Outlook) - no real calendar call
 - **5.2.8** Email (Gmail, Outlook, SMTP) - no real mailbox call
-- **5.4.10** Bloc Email - no real send
 - **5.4.11** Bloc Calendar - no real calendar call
-- **8.2.1** Speech-to-text (STT) - no real STT call
 - **8.2.2** Text-to-speech (TTS) - no real TTS call
 - **9.4.1** Slack - no real Slack workspace exercised
 - **9.4.2** Microsoft Teams - no real Teams tenant exercised
@@ -128,29 +113,12 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 ## AMBIGUOUS_REQUIREMENT (0)
 
 
-## IMPLEMENTED_UNVERIFIED (34)
+## IMPLEMENTED_UNVERIFIED (17)
 
 - **1.4.1** Custom domains (app.client.com) [MEDIUM] - real host routing (Vercel/Render custom domain) not exercised
 - **1.4.5** Custom email domain [MEDIUM] - real Resend domain verification not exercised
 - **1.4.9** Email sender personnalisable [LOW] - real sending not exercised
-- **3.4.7** HyDE [LOW] - quality benefit never measured
-- **3.4.8** Multi-query retrieval [LOW] - quality benefit never measured
-- **4.1.6** OpenAI-compatible APIs [MEDIUM] - guard application not confirmed in this pass
 - **5.3.10** Déploiement [LOW] - meaning of 'deploy to production' not precisely defined in the spec
-- **5.4.3** Bloc LLM [LOW] - LLM real call not exercised
-- **6.2.5** Unsupported claim detection [MEDIUM] - detection accuracy never measured on real data
-- **6.2.6** Claim verification [MEDIUM] - accuracy not measured
-- **6.2.7** Contradiction detection [LOW] - accuracy not measured
-- **6.2.8** Source consistency check [LOW] - accuracy not measured
-- **6.2.9** Hallucination detector [MEDIUM] - accuracy not measured
-- **6.2.10** Groundedness score [LOW] - score meaning not validated
-- **6.2.11** Faithfulness score [LOW] - score meaning not validated
-- **7.2.8** Faithfulness [MEDIUM] - score validity not measured against human labels; no run on a real dataset has produced a baseline (audit R-06)
-- **7.2.9** Answer relevance [MEDIUM] - no run on a real dataset has produced a baseline (audit R-06)
-- **7.2.10** Context relevance [LOW] - no run on a real dataset has produced a baseline (audit R-06)
-- **7.2.11** Citation correctness [LOW] - no run on a real dataset has produced a baseline (audit R-06)
-- **7.2.12** Hallucination rate [MEDIUM] - no run on a real dataset has produced a baseline (audit R-06)
-- **7.3.1** Automatic evaluation [MEDIUM] - jobs run in Celery (no production worker, audit R-02); never run on real data
 - **8.2.3** Streaming voice [LOW] - real-time streaming playback not exercised
 - **8.2.5** Voice activity detection [LOW] - only on the demo page; real VAD accuracy not tested
 - **12.1.2** Subscriptions [HIGH] - never run against a real provider sandbox; live tests are skipped (audit R-05); recurring renewal events not observed

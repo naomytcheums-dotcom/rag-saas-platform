@@ -21,12 +21,24 @@ export default function ConversationItem({ conversation, active, onSelect, onRen
         active ? "bg-accent-soft" : "hover:bg-surface-muted"
       }`}
     >
-      <button type="button" onClick={() => onSelect(conversation.id)} className="min-w-0 flex-1 text-left">
+      {/* A div with role="button", not a <button>: it contains the rename title/input, and interactive elements nested in a <button> are invalid HTML. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect(conversation.id)}
+        onKeyDown={(event) => {
+          if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onSelect(conversation.id);
+          }
+        }}
+        className="min-w-0 flex-1 cursor-pointer text-left"
+      >
         <RenameConversation conversation={conversation} onRenamed={onRenamed} />
         <p className="text-xs text-foreground-muted">
           {new Date(conversation.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
         </p>
-      </button>
+      </div>
       <div className="opacity-0 group-hover:opacity-100">
         <DeleteConversation conversationId={conversation.id} onDeleted={() => onDeleted(conversation.id)} />
       </div>

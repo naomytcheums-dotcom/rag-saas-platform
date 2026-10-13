@@ -91,7 +91,7 @@ async def _stream_response(
         "user_id": str(current_user.id), "organization_id": str(agent.organization_id), "role": membership.role.value,
     }
     citation_chunks = await search_with_context(
-        db, agent.organization_id, message, top_k=5, org_settings=org_settings, user_context=user_context,
+        db, agent.organization_id, message, org_settings=org_settings, user_context=user_context,
     )
     context = build_llm_context(citation_chunks, org_settings)
     refusal = await _no_context_refusal(db, agent, citation_chunks)

@@ -1,0 +1,39 @@
+{
+ "labels": "constructed (not human)",
+ "report": {
+  "faithfulness": {
+   "mean_positive": 0.309,
+   "mean_easy_negative": 0.275,
+   "auroc_vs_easy_negative": 0.929,
+   "mean_hard_negative": 0.316,
+   "auroc_vs_hard_negative": 0.408,
+   "n_positive": 50,
+   "n_easy": 50,
+   "n_hard": 7
+  },
+  "answer_relevance": {
+   "mean_positive": 0.654,
+   "mean_easy_negative": 0.437,
+   "auroc_vs_easy_negative": 0.899,
+   "mean_hard_negative": 0.643,
+   "auroc_vs_hard_negative": 0.776,
+   "n_positive": 50,
+   "n_easy": 50,
+   "n_hard": 7
+  },
+  "context_relevance": {
+   "mean_positive": 0.536,
+   "mean_easy_negative": 0.405,
+   "auroc_vs_easy_negative": 0.873,
+   "mean_hard_negative": null,
+   "auroc_vs_hard_negative": null,
+   "n_positive": 50,
+   "n_easy": 50,
+   "n_hard": 0
+  },
+  "contradiction_detection": {
+   "hard_negatives_flagged": "0/7",
+   "positives_flagged_wrongly": "0/50"
+  }
+ }
+}

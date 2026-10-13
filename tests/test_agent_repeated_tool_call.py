@@ -97,6 +97,7 @@ async def test_the_streaming_loop_does_the_same():
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
          patch.object(ao, "resolve_org_api_key", AsyncMock(return_value=None)), \
+         patch.object(ao, "get_org_settings", AsyncMock(return_value={})), \
          patch.object(ao, "validate_guardrails", AsyncMock(return_value={"passed": True, "violations": []})), \
          patch("api.services.billing_credits.get_or_create_credit", AsyncMock(return_value=MagicMock(balance=1000))), \
          patch("api.services.billing_credits.enforce_spend_caps", AsyncMock(return_value=None)):

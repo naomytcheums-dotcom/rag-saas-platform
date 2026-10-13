@@ -146,7 +146,21 @@ def _client() -> httpx.AsyncClient:
     transport) to exercise this module's real HTTP logic with no real
     network call. Same "one small factory function, easy to monkeypatch"
     shape as api/services/url_fetching.py's own `_client()`."""
-    return httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
+    return httpx.AsyncClient(
+        timeout=_TIMEOUT_SECONDS, follow_redirects=True, max_redirects=3, event_hooks={"request": [_refuse_request_outside_github]},
+    )
+
+
+async def _refuse_request_outside_github(request: httpx.Request) -> None:
+    """E2E finding 2026-10-12: GitHub answers a renamed or transferred repository with a 301 to `/repositories/<id>`; the client did not follow it, so
+    importing e.g. `tiangolo/fastapi` (now `fastapi/fastapi`) failed with a raw HTTPError. Redirects are followed, but only within GitHub itself
+    (and the configured API host for GitHub Enterprise): a redirect to any other host is refused so it can never become a server-side request
+    to an internal address."""
+    host = (request.url.host or "").lower()
+    api_host = (urlsplit(settings.GITHUB_API_BASE_URL).hostname or "").lower()
+    if host == api_host or host == "github.com" or host.endswith(".github.com") or host.endswith(".githubusercontent.com"):
+        return
+    raise httpx.RequestError(f"refused: request to '{host}' is outside GitHub", request=request)
 
 
 def _headers(token: str | None) -> dict[str, str]:

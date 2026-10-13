@@ -1,0 +1,372 @@
+{
+ "results": [
+  {
+   "family": "setup",
+   "name": "document processed",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "family": "auth-sessions",
+   "name": "login returns access token and sets a refresh cookie",
+   "status": "PASS",
+   "detail": "200 cookie=True"
+  },
+  {
+   "family": "auth-sessions",
+   "name": "tampered token refused",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "family": "auth-sessions",
+   "name": "malformed token refused",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "family": "auth-sessions",
+   "name": "duplicate registration refused",
+   "status": "PASS",
+   "detail": "409"
+  },
+  {
+   "family": "auth-sessions",
+   "name": "weak password refused",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "family": "auth-sessions",
+   "name": "access token no longer works after logout (revocation)",
+   "status": "PASS",
+   "detail": "logout=200 reuse=401"
+  },
+  {
+   "family": "cors-headers",
+   "name": "allowed origin gets CORS headers",
+   "status": "PASS",
+   "detail": "200 ACAO=http://localhost:3000"
+  },
+  {
+   "family": "cors-headers",
+   "name": "foreign origin gets no CORS allow header",
+   "status": "PASS",
+   "detail": "ACAO=None"
+  },
+  {
+   "family": "cors-headers",
+   "name": "security headers present",
+   "status": "PASS",
+   "detail": "missing=[]"
+  },
+  {
+   "family": "roles",
+   "name": "viewer can read documents",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "family": "roles",
+   "name": "viewer cannot upload",
+   "status": "PASS",
+   "detail": "403"
+  },
+  {
+   "family": "roles",
+   "name": "viewer cannot delete",
+   "status": "PASS",
+   "detail": "403"
+  },
+  {
+   "family": "roles",
+   "name": "viewer cannot change settings",
+   "status": "PASS",
+   "detail": "403"
+  },
+  {
+   "family": "roles",
+   "name": "viewer can search",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "family": "guardrails",
+   "name": "agent accepts prompt_injection_detection_enabled",
+   "status": "PASS",
+   "detail": "200 flag_in_response=True"
+  },
+  {
+   "family": "guardrails",
+   "name": "the flag really persisted (GET /agents/{id})",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "family": "guardrails",
+   "name": "injection attempt is BLOCKED before generation when detection is on (error event, no token streamed)",
+   "status": "PASS",
+   "detail": "error=Guardrail violation: prompt_injection:input:score=1.00 streamed=''"
+  },
+  {
+   "family": "guardrails",
+   "name": "legitimate question still answered with detection on",
+   "status": "PASS",
+   "detail": "answer='The maintenance code is HERON-5508, and the Quillon gateway restarts every Sunday at 02:15 UTC.'"
+  },
+  {
+   "family": "guardrails",
+   "name": "blocked topics configurable",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "family": "eval-lab",
+   "name": "dataset created",
+   "status": "PASS",
+   "detail": "201"
+  },
+  {
+   "family": "eval-lab",
+   "name": "question added: When does the Quillon gateway ",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "family": "eval-lab",
+   "name": "question added: What is the maintenance code?",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "family": "eval-lab",
+   "name": "evaluation job started",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "family": "eval-lab",
+   "name": "evaluation job completes with the local model",
+   "status": "PASS",
+   "detail": "status=completed"
+  },
+  {
+   "family": "eval-lab",
+   "name": "per-question results with metrics are stored",
+   "status": "PASS",
+   "detail": "200 2 results"
+  },
+  {
+   "family": "eval-lab",
+   "name": "metric sample (controlled 2-question dataset, not a quality claim)",
+   "status": "PASS",
+   "detail": "{\"token_usage\": {\"prompt_tokens\": 92, \"completion_tokens\": 15, \"total_tokens\": 107, \"model\": \"ollama_chat/qwen2.5:7b\", \"estimated\": false}, \"total_tokens\": 107, \"recall_at_1\": 1.0, \"recall_at_3\": 1.0, \"recall_at_5\": 1.0, \"recall_at_10\": 1.0, \"mrr\": 1.0, \"ndcg_at_5\": 1.0}"
+  },
+  {
+   "family": "eval-lab",
+   "name": "dataset metric endpoint recall_at_5",
+   "status": "PASS",
+   "detail": "200 {\"metric\":\"recall_at_5\",\"count\":2,\"average\":1.0,\"min\":1.0,\"max\":1.0}"
+  },
+  {
+   "family": "eval-lab",
+   "name": "dataset metric endpoint mrr",
+   "status": "PASS",
+   "detail": "200 {\"metric\":\"mrr\",\"count\":2,\"average\":1.0,\"min\":1.0,\"max\":1.0}"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "API key created",
+   "status": "PASS",
+   "detail": "200 scopes=14"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "/v1/search with API key",
+   "status": "PASS",
+   "detail": "200 "
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "/v1/search with an invalid key refused",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "/v1/chat answers through the local model",
+   "status": "PASS",
+   "detail": "200 {\"message_id\": \"95873c56-dc75-4b39-8269-cc4d7175598c\", \"conversation_id\": \"a042b256-b059-4c08-88f2-1e7d2cf4a618\", \"response\": \"The maintenance code is HERON-550"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "the same injection is refused on the public API (/v1/chat) with the detector on",
+   "status": "PASS",
+   "detail": "400 {\"detail\":\"Guardrail violation: prompt_injection:input:score=1.00\"}"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "MCP server lists the 4 built-in tools",
+   "status": "PASS",
+   "detail": "200 ['calculator', 'word_count', 'github_get_repo', 'github_list_issues', 'calendar_list_events', 'calendar_create_event', 'email_read', 'http_request', 'execute_sql_query', 'create_rag_agent', 'get_failure_report', 'update_retrieval_config', 'run_eval_benchmark']"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "MCP create_rag_agent works",
+   "status": "PASS",
+   "detail": "200 {\"content\":[{\"type\":\"text\",\"text\":\"{\\\"agent_id\\\": \\\"3085582e-6e76-4b95-a49e-c5aff8944894\\\", \\\"status\\\": \\\"created\\\"}\"}],\"is_error\":false}"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "MCP call for a foreign organization is refused",
+   "status": "PASS",
+   "detail": "403 {\"detail\":\"organization_id does not match this API key's organization\"}"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "A2A agent card requires an API key",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "family": "public-api-mcp",
+   "name": "A2A agent card served with the a2a:call scope",
+   "status": "PASS",
+   "detail": "200 {\"name\":\"Plat de7edd RAG Agent\",\"description\":\"A real, retrieval-augmented question-answering agent.\",\"version\":\"1.0.0\",\"capabilities\":{\"str"
+  },
+  {
+   "family": "workflows",
+   "name": "workflow created",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "family": "workflows",
+   "name": "workflow validates",
+   "status": "PASS",
+   "detail": "200 {\"valid\":true,\"errors\":[]}"
+  },
+  {
+   "family": "workflows",
+   "name": "workflow run accepted",
+   "status": "PASS",
+   "detail": "200 "
+  },
+  {
+   "family": "workflows",
+   "name": "workflow executes (worker + RAG block + local LLM block)",
+   "status": "PASS",
+   "detail": "status=completed {\"id\": \"b2201515-c27d-46c7-bcc9-c62dbd7f77be\", \"workflow_id\": \"3250da60-8e3b-476c-821f-9449dc1be89e\", \"trigger_id\": null, \"status\": \"completed\", \"input\": {}, \"output\": {\"output\": \"pong\"}, \"error\": nul"
+  },
+  {
+   "family": "workflows",
+   "name": "code block refuses the format-string dunder read",
+   "status": "PASS",
+   "detail": "status=failed"
+  },
+  {
+   "family": "autonomous-agent",
+   "name": "autonomous agent created",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "family": "autonomous-agent",
+   "name": "autonomous agent run endpoints available",
+   "status": "PASS",
+   "detail": "/autonomous-agents/{agent_id}, /autonomous-agents/{agent_id}/collaborate, /autonomous-agents/{agent_id}/collaborations, /autonomous-agents/{agent_id}/cost, /autonomous-agents/{agent_id}/memory, /autonomous-agents/{agent_id}/memory/{memory_id}, /autonomous-agents/{agent_id}/pause, /autonomous-agents/{agent_id}/plans"
+  },
+  {
+   "family": "connectors",
+   "name": "connector catalogue lists the providers, none connected",
+   "status": "PASS",
+   "detail": "200 41"
+  },
+  {
+   "family": "connectors",
+   "name": "GitHub import without stored credentials (public data allowed)",
+   "status": "PASS",
+   "detail": "202 {\"owner\":\"tiangolo\",\"repo\":\"fastapi\",\"status\":\"scheduled\"}"
+  },
+  {
+   "family": "connectors",
+   "name": "Notion import without credentials is refused (default deny)",
+   "status": "PASS",
+   "detail": "403 {\"detail\":\"This organization has not connected notion. Add its credentials first (PUT /organizations/{org_id}/connectors"
+  },
+  {
+   "family": "connectors",
+   "name": "unsafe credential host refused",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "family": "connectors",
+   "name": "credentials stored (encrypted) and never echoed back",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "family": "connectors",
+   "name": "connector shown as connected, secret hidden",
+   "status": "PASS",
+   "detail": "{\"connected\": true, \"fields_set\": [\"NOTION_API_TOKEN\"]}"
+  },
+  {
+   "family": "connectors",
+   "name": "another organization does not inherit the stored credentials",
+   "status": "PASS",
+   "detail": "403"
+  },
+  {
+   "family": "billing",
+   "name": "plans listed",
+   "status": "PASS",
+   "detail": "200 ['free', 'starter', 'pro', 'enterprise']"
+  },
+  {
+   "family": "billing",
+   "name": "paid plan cannot be taken without a confirmed payment",
+   "status": "PASS",
+   "detail": "402"
+  },
+  {
+   "family": "billing",
+   "name": "credits cannot be created without payment",
+   "status": "PASS",
+   "detail": "403"
+  },
+  {
+   "family": "billing",
+   "name": "checkout without any payment provider fails closed",
+   "status": "PASS",
+   "detail": "501 {\"detail\":\"Resolved billing provider 'stripe' for this organization is not configured on this deployment -- set its secr"
+  },
+  {
+   "family": "billing",
+   "name": "credit balance readable",
+   "status": "PASS",
+   "detail": "200 {\"organization_id\":\"dafab2b0-34a9-444e-bdbd-89b8b1974736\",\"balance\":993}"
+  },
+  {
+   "family": "billing",
+   "name": "Stripe webhook with a bad signature refused (501 = provider not configured, fails closed)",
+   "status": "PASS",
+   "detail": "501"
+  },
+  {
+   "family": "billing",
+   "name": "Paystack webhook with a bad signature refused (501 = provider not configured, fails closed)",
+   "status": "PASS",
+   "detail": "501"
+  },
+  {
+   "family": "webhooks",
+   "name": "outbound webhook to a loopback address",
+   "status": "PASS",
+   "detail": "422 (expected refusal by SSRF validation) {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"url\"],\"msg\":\"Value error, url must point to a public host\",\"input\":\"http://127.0.0.1:9/hook\""
+  }
+ ],
+ "model": "qwen2.5:7b",
+ "generated": "2026-10-12 21:35:44"
+}
