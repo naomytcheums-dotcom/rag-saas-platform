@@ -222,6 +222,10 @@ def _provider_kwargs(provider: str, model: str | None) -> dict:
     # Some current models refuse sampling params (claude-sonnet-5-5 accepts only temperature=1): LiteLLM drops them
     # for those models only, instead of failing every chat answer with UnsupportedParamsError.
     kwargs["drop_params"] = True
+    # One retry layer only: this module's own loop (_chat_completion_raw) owns retries and back-off. The OpenAI SDK that LiteLLM uses for
+    # OpenAI/Mistral/Ollama/compatible endpoints silently retried 429/5xx twice more on its own, so one rate-limited user request became
+    # (max_retries+1) x 3 vendor calls (measured against a fake vendor, 2026-10-13: 6 calls instead of 2).
+    kwargs["max_retries"] = 0
     return kwargs
 
 
