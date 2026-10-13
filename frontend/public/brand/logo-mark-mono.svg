@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t" color="#1c1d1d">
+  <title id="t">RAG SaaS Platform</title>
+  <circle cx="29" cy="29" r="13" fill="none" stroke="currentColor" stroke-width="5"/>
+  <path d="M38.8 38.8 50 50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M29 21.5 31.2 26.8 36.5 29 31.2 31.2 29 36.5 26.8 31.2 21.5 29 26.8 26.8Z" fill="currentColor"/>
+</svg>
