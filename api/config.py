@@ -2373,6 +2373,9 @@ class Settings(BaseSettings):
     VOICE_AGENT_TURN_CREDIT_COST: int = 10
     VOICE_AGENT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
     VOICE_AGENT_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # POST /voice/tts: hosted synthesis is billed per character, so each user gets a bounded number of calls.
+    VOICE_TTS_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    VOICE_TTS_RATE_LIMIT_WINDOW_SECONDS: int = 60
     CREDITS_CURRENCY: str = "EUR"
     CREDITS_ALERT_THRESHOLDS: str = "50,80,95"
     CREDITS_AUTO_REFILL: bool = False

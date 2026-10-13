@@ -32,8 +32,13 @@ def envelopes(fake: FakeVendor) -> list[list[dict]]:
     parsed = []
     for request in fake.calls("POST"):
         body = request.body
-        if request.headers.get("content-encoding") == "gzip":
+        encoding = request.headers.get("content-encoding")
+        if encoding == "gzip":
             body = gzip.decompress(body)
+        elif encoding == "br":
+            import brotli  # sentry-sdk compresses envelopes with brotli when the package is present
+
+            body = brotli.decompress(body)
         lines = body.split(b"\n")
         items, i = [], 1
         while i + 1 < len(lines):
@@ -64,6 +69,19 @@ def sentry(monkeypatch):
         sentry_sdk.flush(timeout=5)
         sentry_sdk.get_global_scope().set_client(None)
         error_tracking._initialized = False
+
+
+@pytest.fixture(autouse=True)
+def _app_database(db_session):
+    """The white-label middleware looks the host up in the database on every request: give the app the in-memory test database, not a server."""
+    from api.database import get_db
+
+    async def override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture

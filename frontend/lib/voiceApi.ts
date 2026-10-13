@@ -10,12 +10,12 @@ function getAccessToken(): string | null {
   return window.localStorage.getItem("access_token");
 }
 
-export async function synthesizeSpeech(text: string, voiceId?: string): Promise<Blob> {
+export async function synthesizeSpeech(text: string, voiceId?: string, provider?: "elevenlabs" | "google_cloud"): Promise<Blob> {
   const token = getAccessToken();
   const response = await fetch(fileUrl("/voice/tts"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ text, voice_id: voiceId }),
+    body: JSON.stringify({ text, voice_id: voiceId, provider }),
   });
   if (!response.ok) throw new Error(`TTS request failed (${response.status})`);
   return response.blob();

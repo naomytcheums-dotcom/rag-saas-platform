@@ -17,26 +17,29 @@ interface VoiceOutputProps {
 
 type PlaybackState = "idle" | "speaking" | "paused";
 
-// Partie 8.2.2 (Text-to-speech) + 8.2.3 (Streaming voice). Real
-// web_speech playback (free, no key) via speechSynthesis, chunk by
-// chunk when `streaming` is set (real sentence-by-sentence highlight
-// + progress, see lib/voiceQueue.ts). Non-web_speech providers
-// (ElevenLabs/Google Cloud) go through this app's own real
-// /voice/tts endpoint instead and play as one real <audio> clip --
-// real, honest scope: true incremental TTS streaming only applies to
-// the free web_speech provider here; a paid provider's own real
-// per-sentence synthesis would need real, separate work this étape's
-// literal ask doesn't actually require (it only asks to "read chunk
-// by chunk as generated", which real web_speech already does).
+// Partie 8.2.2 (Text-to-speech) + 8.2.3 (Streaming voice). web_speech playback
+// (free, no key) goes through speechSynthesis, sentence by sentence when
+// `streaming` is set (highlight + progress, see lib/voiceQueue.ts). The hosted
+// providers (ElevenLabs / Google Cloud) go through this app's /voice/tts
+// endpoint; when `streaming` is set the text is cut into the same sentence
+// chunks, each chunk is synthesized separately and the NEXT chunk is already
+// being synthesized while the current one plays, so the first words are heard
+// after one short synthesis instead of after the whole answer, and playback
+// has no gap between sentences.
 export default function VoiceOutput({ text, streaming = false, provider = "web_speech", voiceId }: VoiceOutputProps) {
   const [state, setState] = useState<PlaybackState>("idle");
   const [chunkIndex, setChunkIndex] = useState(0);
   const [error, setError] = useState<VoiceErrorType | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackId = useRef(0); // bumped by stop()/play(): a hosted playback loop that sees another id ends silently
 
   const chunks = streaming ? chunkTextForVoice(text, settings.STREAMING_VOICE_CHUNK_SIZE) : [text];
 
-  useEffect(() => () => getSpeechSynthesis()?.cancel(), []);
+  useEffect(() => () => {
+    playbackId.current++;
+    audioRef.current?.pause();
+    getSpeechSynthesis()?.cancel();
+  }, []);
 
   function speakChunk(index: number) {
     const synth = getSpeechSynthesis();
@@ -60,18 +63,48 @@ export default function VoiceOutput({ text, streaming = false, provider = "web_s
     synth.speak(utterance);
   }
 
+  function playBlob(blob: Blob): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      const done = () => URL.revokeObjectURL(url);
+      audio.onended = () => {
+        done();
+        resolve();
+      };
+      audio.onerror = () => {
+        done();
+        reject(new Error("audio playback failed"));
+      };
+      audio.play().catch((err) => {
+        done();
+        reject(err);
+      });
+    });
+  }
+
   async function play() {
     setError(null);
     if (provider !== "web_speech") {
+      if (chunks.length === 0) return;
+      const id = ++playbackId.current;
       try {
         setState("speaking");
-        const blob = await synthesizeSpeech(text, voiceId);
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => setState("idle");
-        await audio.play();
+        setChunkIndex(0);
+        let next: Promise<Blob> | null = synthesizeSpeech(chunks[0], voiceId, provider);
+        for (let i = 0; i < chunks.length; i++) {
+          const blob = await (next as Promise<Blob>);
+          if (playbackId.current !== id) return;
+          next = i + 1 < chunks.length ? synthesizeSpeech(chunks[i + 1], voiceId, provider) : null; // prefetch the next sentence while this one plays
+          next?.catch(() => undefined); // a failure is reported when that chunk's turn comes, not as an unhandled rejection now
+          setChunkIndex(i);
+          await playBlob(blob);
+          if (playbackId.current !== id) return;
+        }
+        setState("idle");
       } catch (err) {
+        if (playbackId.current !== id) return;
         logVoiceError(err, "VoiceOutput");
         setError(classifyVoiceError(err));
         setState("idle");
@@ -102,6 +135,7 @@ export default function VoiceOutput({ text, streaming = false, provider = "web_s
   }
 
   function stop() {
+    playbackId.current++; // ends a hosted playback loop at its next step
     if (provider === "web_speech") getSpeechSynthesis()?.cancel();
     else audioRef.current?.pause();
     setState("idle");

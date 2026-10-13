@@ -107,9 +107,12 @@ def parse_teams_webhook(payload: dict) -> dict:
         # In a channel the user "@mentions" the bot: "<at>Bot</at> question" -> "question"
         "text": re.sub(r"<at>.*?</at>", "", payload.get("text") or "").strip(),
         "reply_to_id": payload.get("replyToId"),
-        "service_url": payload.get("serviceUrl") or "",
-        "bot_account_id": (payload.get("recipient") or {}).get("id", ""),
     }
+
+
+def parse_teams_routing(payload: dict) -> dict:
+    """Where the reply goes: the Connector `serviceUrl` of the activity and the bot's own account id in that conversation."""
+    return {"service_url": payload.get("serviceUrl") or "", "bot_account_id": (payload.get("recipient") or {}).get("id", "")}
 
 
 async def process_teams_message(db: AsyncSession, integration: TeamsIntegration, event: dict) -> TeamsMessage:

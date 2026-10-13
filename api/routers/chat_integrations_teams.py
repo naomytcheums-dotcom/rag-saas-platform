@@ -18,7 +18,7 @@ from api.config import settings
 from api.security.teams_bot_auth import TeamsAuthError, verify_teams_bearer
 from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.teams import (
-    TeamsIntegrationError, deliver_teams_reply, parse_teams_webhook, process_teams_message, save_teams_integration, send_teams_response,
+    TeamsIntegrationError, deliver_teams_reply, parse_teams_routing, parse_teams_webhook, process_teams_message, save_teams_integration, send_teams_response,
 )
 
 router = APIRouter(tags=["Teams Integration"])
@@ -93,7 +93,7 @@ async def teams_webhook_endpoint(request: Request, db: AsyncSession = Depends(ge
     if payload.get("type") != "message":
         return {"ok": True}
 
-    event = parse_teams_webhook(payload)
+    event = {**parse_teams_webhook(payload), **parse_teams_routing(payload)}
     if integration is not None and integration.is_active and event["text"] and event["id"]:
         message = await process_teams_message(db, integration, event)
         if not message.is_duplicate:
