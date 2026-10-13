@@ -336,7 +336,8 @@ def _get_progress_redis() -> redis_asyncio.Redis:
 # given model downloads its weights from HuggingFace Hub if not
 # already cached), far too slow to repeat per document.
 _EMBEDDER_CACHE: dict[str, object] = {}
-_EMBEDDER_LOCK = threading.Lock()
+from api.services.transformers_import import EMBEDDER_LOCK as _EMBEDDER_LOCK  # noqa: E402 -- shared with the tokenizer import, see that module
+
 
 
 def get_embedder(model_name: str):
@@ -3281,10 +3282,9 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             settings_dict = await get_org_settings(db, document.organization_id)
             extracted = extract_document_content(tmp_path, document.file_type, pdf_engine=settings_dict["pdf_extraction_engine"])
 
-            os.environ.setdefault("USE_TF", "0")
-            from transformers import AutoTokenizer
+            from api.services.transformers_import import import_auto_tokenizer
 
-            tokenizer = AutoTokenizer.from_pretrained(settings_dict["embedding_model"])
+            tokenizer = import_auto_tokenizer().from_pretrained(settings_dict["embedding_model"])
 
             # Phase 4, Étape 1 -- real dispatch among the 7 real
             # chunking strategies (`api/services/chunk_config.py`'s own

@@ -108,7 +108,7 @@ def worker_ctl(action: str) -> None:
                         "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'celery' -and $_.CommandLine -match 'rag14@' } | "
                         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"], check=False)
     elif action == "start":
-        subprocess.Popen(["bash", "-c", f"cd '{ROOT.as_posix()}' && export PATH=\"/c/Users/NITROV15/Downloads/rag-saas-platform/.venv/Scripts:$PATH\" && "
+        subprocess.Popen(["C:/Program Files/Git/bin/bash.exe", "-c", f"cd '{ROOT.as_posix()}' && export PATH=\"/c/Users/NITROV15/Downloads/rag-saas-platform/.venv/Scripts:$PATH\" && "
                           f"source scripts/test_env/rag_stack_env.sh && nohup python -m celery -A api.tasks.celery_app worker -P solo -l info -n rag14@%h "
                           f">> '{(log_dir / 'rag_worker.log').as_posix()}' 2>&1 &"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _ = pid_file
@@ -218,6 +218,18 @@ class Api:
             if len(final) < len(ids):
                 time.sleep(poll)
         return final
+
+    def wait_reprocessed(self, user, doc_id, before_started, timeout: int = 600, poll: float = 2.0) -> dict:
+        """Wait until the document has been (re)processed AFTER `before_started` (its previous indexing_started_at): reindex / replace flip the status
+        asynchronously, so a plain wait on a terminal status returns at once with the old state."""
+        deadline = time.time() + timeout
+        st = {}
+        while time.time() < deadline:
+            st = self.status_of(doc_id, user)
+            if st.get("indexing_started_at") != before_started and st.get("status") in ("completed", "failed", "error"):
+                return st
+            time.sleep(poll)
+        return st
 
     def status_of(self, doc_id, user) -> dict:
         r = self.http.get(f"/documents/{doc_id}/status", headers=user["headers"])
