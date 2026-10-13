@@ -23,6 +23,8 @@ body (`api_key`/`query`/`search_depth`/`max_results`/
 "raw_content", "score"}], ...}`.
 """
 
+import asyncio
+
 import httpx
 
 from api.config import settings
@@ -30,6 +32,15 @@ from api.services.tools import ToolSpec
 
 _TAVILY_URL = "https://api.tavily.com/search"
 _TIMEOUT_SECONDS = 20.0
+_MAX_ATTEMPTS = 3  # first try + 2 retries, only for rate limits and transient 5xx
+_RETRYABLE_STATUS = {429, 502, 503, 504}
+
+
+def _retry_delay(response: httpx.Response) -> float:
+    try:
+        return min(max(float(response.headers.get("retry-after", "1")), 0.0), 5.0)
+    except ValueError:
+        return 1.0
 
 
 def _client() -> httpx.AsyncClient:
@@ -72,18 +83,28 @@ async def _call_tavily(
     elif settings.TAVILY_EXCLUDE_DOMAINS:
         body["exclude_domains"] = settings.TAVILY_EXCLUDE_DOMAINS
 
+    headers = {"Authorization": f"Bearer {settings.TAVILY_API_KEY}"}  # Tavily's current auth scheme; the body field above is its legacy one
+    response = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            async with _client() as client:
+                response = await client.post(_TAVILY_URL, json=body, headers=headers)
+        except httpx.TimeoutException as exc:
+            raise WebSearchError(f"Tavily request timed out after {_TIMEOUT_SECONDS}s") from exc
+        except httpx.RequestError as exc:
+            raise WebSearchError("Could not reach Tavily -- check network connectivity") from exc
+        if response.status_code in _RETRYABLE_STATUS and attempt + 1 < _MAX_ATTEMPTS:
+            await asyncio.sleep(_retry_delay(response))
+            continue
+        break
     try:
-        async with _client() as client:
-            response = await client.post(_TAVILY_URL, json=body)
         response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise WebSearchError(f"Tavily request timed out after {_TIMEOUT_SECONDS}s") from exc
     except httpx.HTTPStatusError as exc:
         raise WebSearchError(f"Tavily returned an error (status {exc.response.status_code}): {exc.response.text}") from exc
-    except httpx.RequestError as exc:
-        raise WebSearchError("Could not reach Tavily -- check network connectivity") from exc
-
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise WebSearchError("Tavily returned a body that is not JSON") from exc
 
 
 async def web_search(

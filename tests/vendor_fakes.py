@@ -138,3 +138,13 @@ class FakeVendor:
 
     def calls(self, method: str | None = None, path: str | None = None) -> list[Req]:
         return [r for r in self.requests if (method is None or r.method == method) and (path is None or r.path == path)]
+
+
+def closed_url() -> str:
+    """http URL of a loopback port nothing listens on (the vendor is 'down': connection refused)."""
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    return f"http://127.0.0.1:{port}"
