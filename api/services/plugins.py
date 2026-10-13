@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.s3_encryption import object_encryption_args
 from api.models.plugins import (
     Plugin, PluginExecution, PluginExecutionStatus, PluginInstallation, PluginReview, PluginStatus, PluginVersion,
 )
@@ -466,7 +467,7 @@ def upload_plugin_code(plugin_id: uuid.UUID, version: str, content: bytes) -> st
     from api.config import settings
 
     key = f"plugins/{plugin_id}/{version}/code"
-    _s3_client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType="text/plain")
+    _s3_client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType="text/plain", **object_encryption_args())
     return key
 
 

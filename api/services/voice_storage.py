@@ -11,6 +11,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from api.config import settings
+from api.services.s3_encryption import object_encryption_args
 
 
 def _client():
@@ -30,7 +31,7 @@ def upload_voice_recording(conversation_id: uuid.UUID, message_id: uuid.UUID, co
     not a URL, matching `upload_document_file`'s own real convention."""
     key = f"voice/{conversation_id}/{message_id}"
     try:
-        _client().put_object(Bucket=settings.S3_VOICE_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
+        _client().put_object(Bucket=settings.S3_VOICE_BUCKET_NAME, Key=key, Body=content, ContentType=content_type, **object_encryption_args())
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"voice recording upload failed: {exc}") from exc
     return key

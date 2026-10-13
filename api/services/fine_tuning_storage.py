@@ -19,6 +19,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from api.config import settings
+from api.services.s3_encryption import object_encryption_args
 
 _REQUIRED_MESSAGE_ROLES = {"system", "user", "assistant"}
 
@@ -125,7 +126,7 @@ def upload_finetuning_dataset_file(organization_id: uuid.UUID, dataset_id: uuid.
     key scheme, under a real, separate `fine-tuning/` prefix."""
     key = f"fine-tuning/{organization_id}/{dataset_id}/{filename}"
     try:
-        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType="application/jsonl")
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType="application/jsonl", **object_encryption_args())
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"fine-tuning dataset upload failed: {exc}") from exc
     return key
