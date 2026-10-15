@@ -5,7 +5,7 @@
 # Same multi-stage/non-root pattern as that other Dockerfile, applied
 # to the real app this platform actually is today.
 
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN case "$INSTALL_OPTIONAL_RAG_DEPS" in \
       *) echo "INSTALL_OPTIONAL_RAG_DEPS must be 0 or 1" >&2; exit 1 ;; \
     esac
 
-FROM python:3.13-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 WORKDIR /app
 

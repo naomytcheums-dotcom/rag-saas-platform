@@ -43,7 +43,7 @@
 # would freeze this image at today's patch level and work AGAINST that,
 # which is the opposite of what fixing vulnerabilities should do).
 
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -71,7 +71,7 @@ COPY requirements.txt .
 RUN grep -v '^agentfixture$' requirements.txt > requirements-runtime.txt \
     && pip install --no-cache-dir -r requirements-runtime.txt
 
-FROM python:3.13-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 WORKDIR /app
 
