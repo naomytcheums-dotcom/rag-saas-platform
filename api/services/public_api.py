@@ -22,6 +22,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.billing_usage import PAYMENT_REQUIRED_RUN_ERRORS
 from api.config import settings
 from api.models.citation import Citation
 from api.models.conversation import Conversation, ConversationMessage
@@ -35,6 +36,17 @@ from api.security.usage import get_usage_summary
 
 class PublicAPIError(ValueError):
     """Real, honest failure -- the router turns this into a 4xx."""
+
+
+class PublicAPIPaymentRequired(PublicAPIError):
+    """The organization is out of AI credits, over a spend cap or over its plan's daily question quota: 402, so that a client can tell it from a bad request."""
+
+
+
+
+def _failed_run_error(run, fallback: str) -> PublicAPIError:
+    message = run.error or fallback
+    return PublicAPIPaymentRequired(message) if message.startswith(PAYMENT_REQUIRED_RUN_ERRORS) else PublicAPIError(message)
 
 
 def require_owner(key_row: OrganizationAPIKey) -> uuid.UUID:
@@ -136,7 +148,7 @@ async def handle_public_chat(db: AsyncSession, organization_id: uuid.UUID, creat
         conversation_id=conversation.id, citation_chunks=citation_chunks,
     )
     if run.status != "completed":
-        raise PublicAPIError(run.error or f"Chat generation failed with status '{run.status}'")
+        raise _failed_run_error(run, f"Chat generation failed with status '{run.status}'")
 
     citations = []
     if run.response_id is not None:
@@ -254,7 +266,7 @@ async def handle_public_agent_run(db: AsyncSession, key_row: OrganizationAPIKey,
         agent_id, input, db=db, organization_id=key_row.organization_id, created_by=key_row.created_by, conversation_id=conversation_id,
     )
     if run.status != "completed":
-        raise PublicAPIError(run.error or f"Agent run failed with status '{run.status}'")
+        raise _failed_run_error(run, f"Agent run failed with status '{run.status}'")
     return {"run_id": run.id, "output": run.result, "conversation_id": conversation_id, "metadata": {"status": run.status}}
 
 

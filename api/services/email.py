@@ -60,7 +60,7 @@ def _send(to_email: str, subject: str, html: str, from_address: str | None = Non
     )
     try:
         response = httpx.post(
-            RESEND_API_URL,
+            f"{settings.RESEND_API_BASE_URL.rstrip('/')}/emails",
             headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
             json={"from": from_address or settings.EMAIL_FROM_ADDRESS, "to": [to_email], "subject": subject, "html": body_with_footer},
             timeout=EMAIL_TIMEOUT_SECONDS,

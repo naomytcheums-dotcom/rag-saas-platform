@@ -100,3 +100,9 @@ Decisions the audit left open, with the safest choice for each. Each one can be 
 - **Measured (`scripts/measure_retrieval_baseline.py`, evidence `docs/project-handover/e2e_evidence/retrieval_baseline.json`):** hybrid with threshold 0 and top_k 10: Recall@5 0.91, Recall@10 1.00, MRR 0.69, NDCG@10 0.763. Multi-query is best (Recall@1 0.60, MRR 0.748, NDCG@10 0.806); HyDE and MMR do not beat plain hybrid on MRR; BM25 alone is weakest (Recall@10 0.84).
 - **Decision:** default `score_threshold` is 0.0; `chat_stream.py` and `public_api.py` no longer pass `top_k=5`. An organization can still raise either value.
 - **Limit:** 50 questions written by the maintainers on one English technical corpus; not a promise for other corpora, languages or embedding models.
+
+## D19 - What "deploy an agent to production" means (5.3.10, 2026-10-13)
+- **Finding:** the specification line "Deployer l'agent en production" had no precise meaning (audit gap on 5.3.10).
+- **Decision:** an agent is deployed when it is `active` AND reachable through its own agent API key (scoped to its agent and organization, revocable). A `paused` agent answers on no door (orchestrator, API key, widget): it is the "undeploy" switch. There is no separate release pipeline per agent.
+- **Proof:** `tests/test_billing_plans_limits_postgres.py::test_only_an_active_agent_answers_through_its_api_key`, `::test_a_paused_agent_does_not_answer_through_the_orchestrator_whatever_the_door`, `::test_agent_keys_are_scoped_to_their_agent_and_organization_and_revocable` (real PostgreSQL).
+- **Limit:** no staging/production promotion of an agent version; if the product needs versioned releases, that is a new feature.
