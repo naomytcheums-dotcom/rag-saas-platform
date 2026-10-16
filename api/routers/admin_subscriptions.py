@@ -247,7 +247,8 @@ async def update_plan_endpoint(plan_id: uuid.UUID, payload: PlanUpdateRequest, r
     try:
         existing = await db.get(Plan, plan_id)
         before = {"monthly_price_cents": existing.monthly_price_cents, "yearly_price_cents": existing.yearly_price_cents, "name": existing.name} if existing else None
-        plan = await update_plan(db, plan_id, **payload.model_dump())
+        unlimited = {name for name in payload.model_fields_set if name.startswith("max_") and getattr(payload, name) is None}
+        plan = await update_plan(db, plan_id, unlimited=unlimited, **payload.model_dump())
     except PlanNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await _audit_plan_change(db, request, admin, plan_id, "update", before, {k: v for k, v in payload.model_dump().items() if v is not None})

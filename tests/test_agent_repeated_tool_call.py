@@ -66,6 +66,7 @@ async def test_a_model_that_keeps_asking_after_being_told_to_answer_still_fails_
     assert mock.await_count == 3
 
 
+@patch("api.services.billing_usage.reserve_daily_question", new=AsyncMock())
 async def test_the_streaming_loop_does_the_same():
     orch = AgentOrchestrator()
     orch._db_lock = AsyncMock()

@@ -9,13 +9,13 @@ for why that would duplicate real, already-working machinery.
 import datetime as dt
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.models.admin import Plan, Subscription, SubscriptionStatus
 from api.models.billing import UsageAlert
-from api.security.usage import get_usage, get_usage_summary
+from api.security.usage import get_usage, get_usage_summary, record_usage
 
 
 def _aware(moment: dt.datetime) -> dt.datetime:
@@ -41,10 +41,18 @@ def subscription_grants_paid_access(sub: Subscription, now: dt.datetime | None =
 
 
 async def get_effective_plan(db: AsyncSession, organization_id: uuid.UUID) -> Plan | None:
-    """The plan whose limits and features apply to the organization right now (None when it has no subscription at all)."""
+    """The plan whose limits and features apply to the organization right now.
+
+    An organization that has no subscription row yet (a subscription is created the first time its billing page is read, not when the organization is created) is
+    on the deployment's default plan (`BILLING_DEFAULT_PLAN`, "free" unless a self-hosted deployment chooses otherwise): before this rule such an organization had
+    NO limit at all, which let any new account upload documents and ask questions past the Free plan until someone opened the billing page."""
     sub = await db.scalar(select(Subscription).where(Subscription.organization_id == organization_id))
     if sub is None:
-        return None
+        from api.services.admin_subscriptions import ensure_free_plan_seeded
+
+        key = (settings.BILLING_DEFAULT_PLAN or "free").strip() or "free"
+        default_plan = await db.scalar(select(Plan).where(Plan.key == key)) if key != "free" else None
+        return default_plan or await ensure_free_plan_seeded(db)
     plan = await db.get(Plan, sub.plan_id)
     if plan is None or ((plan.monthly_price_cents or 0) <= 0 and (plan.yearly_price_cents or 0) <= 0):
         return plan
@@ -146,10 +154,10 @@ async def check_plan_resource_limit(db: AsyncSession, organization_id: uuid.UUID
 
     if resource_type == "documents":
         limit = plan.max_documents
-        count = await db.scalar(select(func.count()).select_from(Document).where(Document.organization_id == organization_id))
+        count = await _live_document_count(db, organization_id)
     elif resource_type == "agents":
         limit = plan.max_agents
-        count = await db.scalar(select(func.count()).select_from(Agent).where(Agent.organization_id == organization_id))
+        count = await db.scalar(select(func.count()).select_from(Agent).where(Agent.organization_id == organization_id, Agent.deleted_at.is_(None)))
     elif resource_type == "members":
         limit = plan.max_members
         count = await db.scalar(select(func.count()).select_from(OrganizationMember).where(OrganizationMember.organization_id == organization_id))
@@ -182,6 +190,95 @@ async def check_plan_resource_limit(db: AsyncSession, organization_id: uuid.UUID
         )
 
     return count < limit, count, limit
+
+
+async def _live_document_count(db: AsyncSession, organization_id: uuid.UUID) -> int:
+    """Documents that count against the plan: a document in the trash (`deleted_at` set) frees its slot, exactly as it frees its storage."""
+    from api.models.document import Document
+
+    return int(await db.scalar(select(func.count()).select_from(Document).where(Document.organization_id == organization_id, Document.deleted_at.is_(None))) or 0)
+
+
+class DocumentLimitExceededError(Exception):
+    """The organization's plan allows no further document. Deliberately NOT a ValueError: the routes map ValueError to 400 (bad input), this is a 402 (plan limit),
+    answered by one application-wide handler (api/main.py)."""
+
+    def __init__(self, limit: int, count: int) -> None:
+        super().__init__(f"This organization's plan allows {limit} documents (currently {count}). Upgrade the plan to add more.")
+        self.limit = limit
+        self.count = count
+
+
+async def _serialize_per_organization(db: AsyncSession, organization_id: uuid.UUID, scope: str) -> None:
+    """On PostgreSQL, a transaction-scoped advisory lock keyed on (scope, organization): two concurrent requests that both check "is there a free slot?" are
+    executed one after the other, so the last slot cannot be handed out twice. The lock is released at commit/rollback. No-op elsewhere (SQLite is single-writer)."""
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": f"{scope}:{organization_id}"})
+
+
+async def ensure_document_slot(db: AsyncSession, organization_id: uuid.UUID, additional: int = 1) -> None:
+    """Call right before a `Document` row is created, on EVERY path that creates one (upload, batch, URL/sitemap/GitHub/Drive/Notion/Confluence/OneDrive/ZIP import,
+    public API, integrations, CRM, batch jobs): raises `DocumentLimitExceededError` when the effective plan has no room for `additional` more documents.
+    Unlimited plans (`max_documents IS NULL`) and organizations without any subscription are never refused."""
+    plan = await get_effective_plan(db, organization_id)
+    if plan is None or plan.max_documents is None:
+        return
+    await _serialize_per_organization(db, organization_id, "documents")
+    count = await _live_document_count(db, organization_id)
+    if count + additional > plan.max_documents:
+        raise DocumentLimitExceededError(plan.max_documents, count)
+
+
+QUESTION_LIMIT_ERROR_PREFIX = "Daily question limit reached"
+# Error text of a run refused because the organization cannot pay for it (credits, spend cap) or exhausted its plan: the HTTP layers answer 402 for these.
+PAYMENT_REQUIRED_RUN_ERRORS = ("Insufficient AI credits", "Spend cap exceeded", QUESTION_LIMIT_ERROR_PREFIX)
+
+
+class QuestionLimitExceededError(Exception):
+    """The plan's number of questions per UTC day is used up."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"{QUESTION_LIMIT_ERROR_PREFIX}: this organization's plan allows {limit} questions per day and today's quota is used up. It resets at 00:00 UTC; upgrade the plan for more.")
+        self.limit = limit
+
+
+QUESTIONS_METRIC = "questions"
+
+
+async def reserve_daily_question(db: AsyncSession, organization_id: uuid.UUID, *, user_id: uuid.UUID | None = None) -> None:
+    """Counts one question against the effective plan's `max_questions_per_day` (UTC day) and raises `QuestionLimitExceededError` when the day's quota is used up.
+
+    The counter is the usage ledger's own daily row (`organization_usage`, metric "questions", the number the usage page shows). The increment is a single atomic
+    `INSERT ... ON CONFLICT DO UPDATE ... WHERE value < limit`, so two concurrent questions cannot both take the last slot. The counting is part of the caller's
+    transaction (not committed here); callers invoke it AFTER the cheaper refusals (insufficient credits), so a refused question does not use the quota.
+    `max_questions_per_day IS NULL` (Pro, Business, Enterprise) means unlimited: the question is still recorded for the usage page."""
+    from api.models.organization_usage import OrganizationUsage, OrganizationUsageDetail
+
+    plan = await get_effective_plan(db, organization_id)
+    limit = plan.max_questions_per_day if plan is not None else None
+    if limit is None:
+        await record_usage(db, organization_id, QUESTIONS_METRIC, 1, user_id=user_id)
+        return
+
+    if limit <= 0:
+        raise QuestionLimitExceededError(limit)
+    today = dt.datetime.now(dt.timezone.utc).date()
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+    statement = dialect_insert(OrganizationUsage).values(id=uuid.uuid4(), organization_id=organization_id, date=today, metric=QUESTIONS_METRIC, value=1)
+    statement = statement.on_conflict_do_update(
+        index_elements=[OrganizationUsage.organization_id, OrganizationUsage.date, OrganizationUsage.metric],
+        set_={"value": OrganizationUsage.value + 1}, where=OrganizationUsage.value < limit,
+    ).returning(OrganizationUsage.value)
+    taken = (await db.execute(statement)).scalar_one_or_none()
+    if taken is None:
+        raise QuestionLimitExceededError(limit)
+    db.add(OrganizationUsageDetail(organization_id=organization_id, user_id=user_id, metric=QUESTIONS_METRIC, value=1))
+    await db.flush()
 
 
 async def check_usage_alerts(db: AsyncSession, organization_id: uuid.UUID) -> list[dict]:
