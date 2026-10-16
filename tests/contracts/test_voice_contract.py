@@ -225,13 +225,20 @@ DEEPGRAM_BODY = {"metadata": {"request_id": "r", "duration": 1.2, "channels": 1}
     "words": [{"word": "hello", "punctuated_word": "Hello", "start": 0.0, "end": 0.4, "speaker": 0}, {"word": "there", "punctuated_word": "there", "start": 0.5, "end": 0.9, "speaker": 1}]}]}]}}
 
 
+DEEPGRAM_PLAIN_BODY = {"metadata": {"request_id": "r", "duration": 1.2, "channels": 1}, "results": {"channels": [{"alternatives": [{
+    "transcript": "hello there", "confidence": 0.99,
+    "words": [{"word": "hello", "punctuated_word": "Hello", "start": 0.0, "end": 0.4}, {"word": "there", "punctuated_word": "there", "start": 0.5, "end": 0.9}]}]}]}}
+
+
 async def test_deepgram_request_shape_text_and_diarization(stt_vendor, monkeypatch):
     monkeypatch.setattr(settings, "DEEPGRAM_API_KEY", "dg-contract-key")
-    stt_vendor.on("POST", "/listen", Resp(200, DEEPGRAM_BODY))
+    # Deepgram only labels speakers when diarize=true is asked for, so the plain request gets a body without speaker labels.
+    stt_vendor.on("POST", "/listen", Resp(200, DEEPGRAM_PLAIN_BODY))
     assert await transcribe_audio(b"RIFFxxxxWAVE", provider="deepgram", language="fr", api_base=stt_vendor.url) == "hello there"
     request = stt_vendor.requests[0]
     assert request.headers["authorization"] == "Token dg-contract-key" and request.body == b"RIFFxxxxWAVE"
     assert request.query["model"] == ["nova-2"] and request.query.get("language") == ["fr"], request.query  # the language the user chose must reach Deepgram
+    stt_vendor.on("POST", "/listen", Resp(200, DEEPGRAM_BODY))
     text, segments = await voice.transcribe_audio_with_diarization(b"RIFFxxxxWAVE", api_base=stt_vendor.url)
     assert stt_vendor.requests[1].query["diarize"] == ["true"]
     assert text and (segments is None or {s["speaker"] for s in segments} == {0, 1})

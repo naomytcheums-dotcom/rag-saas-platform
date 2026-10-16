@@ -70,6 +70,45 @@ class VoiceError(Exception):
 # --------------------------------------------------------------- STT (Partie 8.2.1)
 
 _STT_MODELS = {"whisper": "whisper-1", "deepgram": "deepgram/nova-2"}
+_DEEPGRAM_BASE_URL = "https://api.deepgram.com/v1"
+
+
+async def _deepgram_rest(audio_bytes: bytes, *, language: str, diarize: bool, api_base: str | None) -> dict:
+    """Deepgram's /listen endpoint called directly, for a request that names a language.
+
+    LiteLLM (1.x) lists `language` as an OpenAI-compatible parameter and then only puts *provider-specific* parameters on the Deepgram query string, so the
+    language a user chose never reached the vendor (found by tests/contracts/test_voice_contract.py: the request carried `model=nova-2` and nothing else).
+    Failures become VoiceError with the same wording as `_litellm_transcribe`."""
+    import httpx
+
+    params = {"model": "nova-2", "language": language}
+    if diarize:
+        params["diarize"] = "true"
+    headers = {"Authorization": f"Token {settings.DEEPGRAM_API_KEY}", "Content-Type": "application/octet-stream", "Accept": "*/*"}
+    try:
+        async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:
+            response = await client.post(f"{(api_base or _DEEPGRAM_BASE_URL).rstrip('/')}/listen", params=params, content=audio_bytes, headers=headers)
+    except httpx.TimeoutException as exc:
+        raise VoiceError("Deepgram did not answer in time") from exc
+    except httpx.HTTPError as exc:
+        raise VoiceError(f"Deepgram transcription failed: {type(exc).__name__}") from exc
+    if response.status_code in (401, 403):
+        raise VoiceError("Deepgram rejected the API key")
+    if response.status_code == 429:
+        raise VoiceError("Deepgram is rate limiting this account; retry later")
+    if response.status_code >= 400:
+        raise VoiceError(f"Deepgram transcription failed: HTTP {response.status_code}")
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise VoiceError("Deepgram transcription failed: the answer was not JSON") from exc
+
+
+def _deepgram_alternative(body: dict) -> dict:
+    try:
+        return body["results"]["channels"][0]["alternatives"][0]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise VoiceError("Deepgram transcription failed: unexpected response shape") from exc
 
 
 async def _litellm_transcribe(vendor: str, model: str, audio_bytes: bytes, filename: str, language: str | None, **kwargs):
@@ -109,6 +148,9 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
         raise VoiceError("OPENAI_API_KEY is not configured -- required for the 'whisper' STT provider")
     if resolved_provider == "deepgram" and not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for the 'deepgram' STT provider")
+
+    if resolved_provider == "deepgram" and language:
+        return _deepgram_alternative(await _deepgram_rest(audio_bytes, language=language, diarize=False, api_base=api_base)).get("transcript", "")
 
     # The key goes in explicitly: LiteLLM would look for it in os.environ, where a key that only lives in the .env file read by `settings` is not.
     extra = {"api_key": settings.OPENAI_API_KEY if resolved_provider == "whisper" else settings.DEEPGRAM_API_KEY}
@@ -233,6 +275,13 @@ async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str
     speaker list."""
     if not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for diarization (Deepgram-only)")
+    if language:
+        from types import SimpleNamespace
+
+        alternative = _deepgram_alternative(await _deepgram_rest(audio_bytes, language=language, diarize=True, api_base=api_base))
+        words = alternative.get("words") or []
+        segments = _parse_diarization_segments(SimpleNamespace(words=words)) if words else None
+        return alternative.get("transcript", ""), segments
     extra = {"api_key": settings.DEEPGRAM_API_KEY}
     if api_base:
         extra["api_base"] = api_base
