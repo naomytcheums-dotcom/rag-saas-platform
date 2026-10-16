@@ -117,9 +117,12 @@ def site(tmp_path_factory):
 
 def drive(site, mic: str, scenario: str, query: str = "", timeout: int = 240, **extra) -> dict:
     options = {"url": f"{site['web']}/index.html?{query}", "micWav": mic, "scenario": scenario, "token": site["token"], "playwrightFrom": PLAYWRIGHT, "timeoutMs": 120000, **extra}
-    done = subprocess.run(["node", DRIVER, json.dumps(options)], capture_output=True, text=True, timeout=timeout)
-    assert done.returncode == 0, done.stderr[-1500:]
-    result = json.loads(done.stdout.strip().splitlines()[-1])
+    result = {}
+    for attempt in range(2):  # a browser that stalls at launch (watchdog) is retried once; a real failure is not
+        done = subprocess.run(["node", DRIVER, json.dumps(options)], capture_output=True, text=True, timeout=timeout)
+        result = json.loads(done.stdout.strip().splitlines()[-1]) if done.stdout.strip() else {"ok": False, "error": done.stderr[-800:]}
+        if result.get("error") != "watchdog":
+            break
     assert result["ok"], result
     return result
 

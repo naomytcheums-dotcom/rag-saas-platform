@@ -97,6 +97,7 @@ def boom_route():
     app.include_router(router)
     yield "/__contract_boom"
     app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != "/__contract_boom"]
+    app.openapi_schema = None  # FastAPI caches the schema: without this the removed route leaks into docs/api/openapi.json checks
 
 
 async def test_an_unhandled_error_reaches_sentry_with_context_but_without_secrets(sentry, boom_route):

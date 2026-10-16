@@ -7,6 +7,9 @@ const options = JSON.parse(process.argv[2]);
 const require = createRequire(options.playwrightFrom);
 const { chromium } = require("playwright");
 
+// Chromium with a fake capture device occasionally stalls at launch: never let it hold the test suite.
+setTimeout(() => { console.log(JSON.stringify({ ok: false, error: "watchdog" })); process.exit(3); }, options.watchdogMs ?? 150000).unref();
+
 const browser = await chromium.launch({
   headless: true,
   args: [
