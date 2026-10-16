@@ -126,6 +126,8 @@ async def create_checkout_session(db: AsyncSession, organization_id: uuid.UUID, 
 async def create_credit_pack_checkout_session(db: AsyncSession, organization_id: uuid.UUID, *, pack: dict, email: str, org_name: str) -> str:
     """A ONE-OFF Paystack transaction (no `plan`) for a fixed credit pack, priced in `CREDIT_PACK_CURRENCY` (minor units, like Stripe). The organization, the
     pack and a server-generated reference travel in the metadata set here; the credits are granted ONLY by the signed `charge.success` webhook."""
+    if not settings.PAYSTACK_SECRET_KEY:  # before any database access or network call
+        raise PaystackNotConfiguredError("Paystack is not configured on this deployment -- set PAYSTACK_SECRET_KEY in .env to enable real payments.")
     await create_paystack_customer(db, organization_id, email=email, name=org_name)
     reference = f"credits-{uuid.uuid4().hex}"
     async with _client() as client:
