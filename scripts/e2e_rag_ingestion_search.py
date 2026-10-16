@@ -334,7 +334,8 @@ def phase_b(api: Api, skip_corpus: bool, limit_q: int) -> None:
     observe(B, "mpnet (768 dimensions) selection", f"{r.status_code}")
     r2 = api.upload(u, "mpnet_probe.txt", b"Probe for a 768 dimension model: the Larix tunnel is 4100 metres long.")
     if r2.status_code in (200, 201):
-        d = api.wait(u, [r2.json()["id"]], 400).get(r2.json()["id"], {})
+        d = dict(api.wait(u, [r2.json()["id"]], 400).get(r2.json()["id"], {}))
+        d["indexing_error"] = api.status_of(r2.json()["id"], u).get("indexing_error")  # the error is exposed by GET /documents/{id}/status, not by the list
         st = chunk_stats(r2.json()["id"])
         observe(B, "768-dimension model ingestion (offline weights likely missing)", f"status={d.get('status')} chunks={st['n']} dim={st['dmin']} vectors={st['vec']} err={str(d.get('indexing_error'))[:200]}")
         if d.get("status") == "completed":

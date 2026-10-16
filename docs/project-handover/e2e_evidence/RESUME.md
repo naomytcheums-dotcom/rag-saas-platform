@@ -5,7 +5,7 @@ Dernière mise à jour : parcours Ollama exécuté, 3 défauts/limites trouvés,
 ## Exécuté et prouvé (cette session)
 | Quoi | Résultat | Preuve |
 |---|---|---|
-| Pile locale : Docker, `rag-test-pg`, Redis 26390, MinIO 9000, Mailpit, Ollama (qwen2.5:3b/7b, nomic-embed-text), API 8030 + worker Celery, base `rag_test_rag` à la révision 0145 | démarrée | `docker ps`, `/health` = ok |
+| Pile locale : Docker, `rag-test-pg`, Redis 26390, MinIO 9000, Mailpit, Ollama (qwen2.5:3b/7b, nomic-embed-text), API 8030 + worker Celery, base `rag_test_rag` à la révision 0144 (tête de cette branche ; la branche billing a une tête 0145) | démarrée | `docker ps`, `/health` = ok |
 | Parcours complet `scripts/e2e_full_journey.py --base http://127.0.0.1:8030 --model qwen2.5:3b` (inscription → organisation → import de 7 formats → traitement asynchrone → recherche 4 stratégies → chat Ollama cité → réindexation → remplacement → suppression → isolation entre 2 organisations) | **64 réussis, 1 échec** | `journey_ollama_qwen2.5-3b_2026-10-13.json` |
 | L'échec : « What was the third quarter revenue? » : la réponse est juste (« 4.2 million XAF ») mais le modèle 3B émet un jeton espace (« 4. 2 »), la vérification textuelle de « 4.2 » échoue | limite du modèle 3B, pas un défaut du code (jetons SSE capturés : `['4','.',' ','2']` émis par Ollama) | script de reproduction dans la session |
 
