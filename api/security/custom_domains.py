@@ -28,14 +28,15 @@ import re
 import secrets
 import uuid
 
-import dns.asyncresolver
 import dns.exception
 import dns.resolver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.security.dns_resolver import make_txt_resolver
 from api.models.custom_domain import CustomDomain, CustomDomainStatus
+from api.services.resend_domains import delete_resend_domain
 from api.utils import as_aware_utc
 
 logger = logging.getLogger(__name__)
@@ -159,9 +160,7 @@ async def _lookup_txt_records(hostname: str) -> list[str]:
     reachable nameserver, or a timeout) rather than distinguishing them,
     since check_domain_dns_txt_record() below only ever needs
     yes/no-the-token-is-there."""
-    resolver = dns.asyncresolver.Resolver()
-    resolver.timeout = settings.CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS
-    resolver.lifetime = settings.CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS
+    resolver = make_txt_resolver()
     try:
         answer = await resolver.resolve(hostname, "TXT")
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):
@@ -203,9 +202,20 @@ async def add_custom_domain(db: AsyncSession, organization_id: uuid.UUID, domain
     if _is_reserved_platform_domain(normalized):
         raise ValueError(f"'{domain}' is this platform's own domain (or a subdomain of it) and cannot be registered as a custom domain")
 
-    existing = await db.scalar(select(CustomDomain.id).where(CustomDomain.domain == normalized))
+    existing = await db.scalar(select(CustomDomain).where(CustomDomain.domain == normalized))
     if existing is not None:
-        raise ValueError(f"'{domain}' is already registered")
+        if existing.status != CustomDomainStatus.failed.value:
+            raise ValueError(f"'{domain}' is already registered")
+        # A claim whose DNS proof never arrived (`failed`) does not hold the hostname hostage: anyone could otherwise register a domain they do not own, let the
+        # check fail, and keep its real owner from ever registering it. The new claim replaces it (its token starts the proof again); a pending or live claim is
+        # never displaced, only the owner of the DNS zone can supersede those by deleting them.
+        if existing.resend_domain_id is not None:
+            try:
+                delete_resend_domain(existing.resend_domain_id)
+            except (RuntimeError, EnvironmentError) as exc:
+                logger.warning("add_custom_domain: could not delete the Resend domain of the replaced claim on '%s': %s", normalized, exc)
+        await db.delete(existing)
+        await db.flush()
 
     record = CustomDomain(
         organization_id=organization_id, domain=normalized, status=CustomDomainStatus.pending.value,
@@ -239,6 +249,10 @@ async def verify_domain(db: AsyncSession, domain: str, token: str) -> CustomDoma
     )
     if record is None:
         raise ValueError("no matching domain verification request found")
+    if record.status == CustomDomainStatus.active.value:
+        # This check is reachable with the token alone (public link). A domain that already went live must not be knocked back to `failed` by a later call,
+        # whether the TXT record was removed afterwards or a DNS lookup merely timed out: the live domain would stop being recognized for every visitor.
+        return record
 
     dns_verified = await check_domain_dns_txt_record(normalized, token)
     record.status = CustomDomainStatus.verified.value if dns_verified else CustomDomainStatus.failed.value
@@ -285,9 +299,11 @@ async def trigger_manual_verification(db: AsyncSession, domain_row: CustomDomain
     returned unchanged rather than re-checked -- nothing meaningful to
     re-verify once its own status has already been decided.
     """
-    if domain_row.status != CustomDomainStatus.pending.value:
-        return domain_row
+    if domain_row.status not in (CustomDomainStatus.pending.value, CustomDomainStatus.failed.value):
+        return domain_row  # active: nothing to re-verify (and a later DNS hiccup must never knock a live domain back)
 
+    # A `failed` domain IS re-checked: the automatic polling gave up after its attempts/time budget, but the owner who has since fixed the DNS record must
+    # be able to say "check now" without deleting the domain and starting again with a new token.
     dns_verified = await check_domain_dns_txt_record(domain_row.domain, domain_row.verification_token)
     domain_row.status = CustomDomainStatus.verified.value if dns_verified else CustomDomainStatus.failed.value
     await db.flush()

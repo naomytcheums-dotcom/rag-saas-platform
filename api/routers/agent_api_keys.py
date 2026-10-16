@@ -23,6 +23,7 @@ from api.schemas.agent_api_keys import (
 )
 from api.security.agent_api_keys import require_api_key_scope
 from api.security.agents import require_agent_manager
+from api.services.billing_usage import PAYMENT_REQUIRED_RUN_ERRORS
 from api.services.agent_api_keys import AgentAPIKeyError, generate_api_key, list_api_keys, revoke_api_key
 from api.services.agent_orchestrator import AgentOrchestrator
 
@@ -79,4 +80,6 @@ async def run_agent_via_api_key_endpoint(
         str(agent.id), payload.input, db=db, context=payload.context,
         organization_id=agent.organization_id, created_by=key_row.created_by,
     )
+    if run.status == "failed" and (run.error or "").startswith(PAYMENT_REQUIRED_RUN_ERRORS):
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=run.error)
     return AgentRunViaAPIKeyResponse(run_id=run.id, status=run.status, result=run.result, error=run.error)

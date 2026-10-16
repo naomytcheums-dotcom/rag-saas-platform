@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     # the worst case for GET .../domains/verify/{token} (a real,
     # non-blocking network call, see api/security/custom_domains.py).
     CUSTOM_DOMAIN_DNS_LOOKUP_TIMEOUT_SECONDS: int = 5
+    # Nameservers used by the domain-ownership checks ("1.1.1.1,8.8.8.8", "host:port" accepted); empty = the machine's own resolver configuration.
+    CUSTOM_DOMAIN_DNS_NAMESERVERS: str = ""
 
     # -- Partie 1.4.3: SSL auto (Let's Encrypt) ----------------------------
     # Defaults to Let's Encrypt's STAGING directory, deliberately -- NOT
@@ -218,6 +220,8 @@ class Settings(BaseSettings):
 
     # -- Transactional email (Resend) --------------------------------------
     RESEND_API_KEY: str | None = None
+    # Base URL of the Resend REST API. Only ever changed to point the integration at a local contract-test server; production keeps the default.
+    RESEND_API_BASE_URL: str = "https://api.resend.com"
     EMAIL_FROM_ADDRESS: str = "no-reply@example.com"
     # RGPD Art. 12: a data subject must be able to easily reach the
     # controller to exercise their rights or ask questions. Required (no

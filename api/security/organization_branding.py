@@ -18,6 +18,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
+from api.models.organization_branding import OrganizationBranding
 from api.services import cache_service
 
 # Étape 15 (Branding frontend) -- get_org_branding is now a real
@@ -33,7 +35,6 @@ _ORG_BRANDING_CACHE_TTL_SECONDS = 60
 def _cache_key(organization_id: uuid.UUID) -> str:
     return f"org_branding:{organization_id}"
 
-from api.models.organization_branding import OrganizationBranding
 
 DEFAULT_BRANDING: dict[str, Any] = {
     "logo_url": None,
@@ -91,6 +92,68 @@ MAX_CUSTOM_JS_LENGTH = 20_000
 def validate_custom_js(js: str) -> None:
     if len(js) > MAX_CUSTOM_JS_LENGTH:
         raise ValueError(f"custom_js exceeds the maximum length of {MAX_CUSTOM_JS_LENGTH} characters")
+
+
+class InvalidSenderError(ValueError):
+    """The e-mail sender identity an organization asked for may not be used (answered 400 by the application-wide handler in api/main.py)."""
+
+
+_FORBIDDEN_SENDER_NAME_CHARACTERS = frozenset(chr(c) for c in (60, 62, 34, 13, 10, 9))  # < > " CR LF TAB
+
+
+async def validate_email_sender(db: AsyncSession, organization_id: uuid.UUID, *, name: str | None, email: str | None) -> None:
+    """1.4.9 -- who an organization's e-mails may claim to come from.
+
+    The sender address is used verbatim as the `From` of the e-mails sent through the platform's mail provider account. Accepting any address would let an
+    organization impersonate anyone, including the platform itself or any domain that account has verified. An address is therefore accepted only at a
+    domain the organization has registered (1.4.1) AND proven it controls for e-mail (1.4.5, `email_verified`). The display name may not carry the characters
+    that let it pose as a second address ("Boss <ceo@bank.com>") or break the header."""
+    if name is not None and (not name.strip() or any(ch in _FORBIDDEN_SENDER_NAME_CHARACTERS for ch in name)):
+        raise InvalidSenderError('The sender name must not be empty or contain < > " or line breaks')
+    if email is None:
+        return
+    from api.models.custom_domain import CustomDomain
+
+    if email.count("@") != 1:
+        raise InvalidSenderError("The sender address is not a valid e-mail address")
+    domain = email.rsplit("@", 1)[1].strip().lower()
+    row = await db.scalar(select(CustomDomain).where(
+        CustomDomain.organization_id == organization_id, CustomDomain.domain == domain, CustomDomain.email_verified.is_(True),
+    ))
+    if row is not None and row.resend_domain_id and settings.RESEND_API_KEY:
+        # Ownership is proven; the mail provider must also accept the domain, otherwise every e-mail of the organization (invitations, notices) would be refused
+        # at send time. Checked against the provider's own status, not assumed.
+        import asyncio
+
+        from api.services.resend_domains import get_resend_domain
+
+        try:
+            provider_status = (await asyncio.to_thread(get_resend_domain, row.resend_domain_id)).get("status")
+        except (RuntimeError, EnvironmentError) as exc:
+            raise InvalidSenderError(f"The mail provider could not confirm the domain '{domain}' right now ({type(exc).__name__}); try again in a moment") from exc
+        if provider_status != "verified":
+            raise InvalidSenderError(
+                f"The mail provider has not verified '{domain}' yet (status: {provider_status}): publish the DNS records listed by "
+                "GET .../domains/{domain_id}/email/dns, request the verification again, then choose the sender address"
+            )
+    if row is None:
+        raise InvalidSenderError(
+            f"'{domain}' is not a domain of this organization with a verified e-mail setup: register it (POST /organizations/{{org_id}}/domains) "
+            "and verify it for e-mail (POST .../domains/{domain_id}/email/verify) before using it as the sender address"
+        )
+
+
+async def clear_sender_for_domain(db: AsyncSession, organization_id: uuid.UUID, domain: str) -> bool:
+    """A domain is being removed: a sender address at that domain can no longer be vouched for, so the sender identity is cleared (the platform default applies
+    again) rather than left pointing at a domain the organization no longer holds. Returns whether it was cleared."""
+    row = await db.scalar(select(OrganizationBranding).where(OrganizationBranding.organization_id == organization_id))
+    if row is None or not row.email_sender_email or row.email_sender_email.rsplit("@", 1)[-1].strip().lower() != domain.strip().lower():
+        return False
+    row.email_sender_email = None
+    row.email_sender_name = None
+    await db.flush()
+    await cache_service.invalidate(_cache_key(organization_id))
+    return True
 
 
 def get_default_branding() -> dict[str, Any]:
@@ -167,6 +230,8 @@ async def update_org_branding(db: AsyncSession, organization_id: uuid.UUID, upda
         db.add(row)
         await db.flush()
 
+    if updates.get("email_sender_email") is not None or updates.get("email_sender_name") is not None:
+        await validate_email_sender(db, organization_id, name=updates.get("email_sender_name"), email=updates.get("email_sender_email"))
     for field, value in updates.items():
         setattr(row, field, value)
     await db.flush()

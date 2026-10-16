@@ -33,10 +33,16 @@ class SubscriptionNotFoundError(AdminSubscriptionError):
     pass
 
 
+# The tier list of the product specification (12.2.1 - 12.2.5): Free 3 documents / 10 questions a day, Starter 100 / 500, Pro 1 000 / unlimited,
+# Business 10 000 / unlimited (API + white label), Enterprise unlimited. These rows are only the seed of a NEW database: an existing plan row is never overwritten
+# (the owner edits plans through /admin/plans). The prices are catalogue defaults, not a commitment.
+_FREE_PLAN = {"max_documents": 3, "max_questions_per_day": 10, "max_agents": 3, "max_members": 5, "monthly_credits_included": 1000}
+
+
 async def ensure_free_plan_seeded(db: AsyncSession) -> Plan:
     plan = await db.scalar(select(Plan).where(Plan.key == "free"))
     if plan is None:
-        plan = Plan(key="free", name="Free", monthly_price_cents=0, max_documents=50, max_agents=3, max_members=5, monthly_credits_included=1000)
+        plan = Plan(key="free", name="Free", monthly_price_cents=0, **_FREE_PLAN)
         db.add(plan)
         await db.flush()
     return plan
@@ -45,9 +51,10 @@ async def ensure_free_plan_seeded(db: AsyncSession) -> Plan:
 # Partie 16 (bis) -- the real, literal SaaS tier list, seeded once
 # (idempotent, same key-existence check as ensure_free_plan_seeded).
 _DEFAULT_PLANS = [
-    {"key": "starter", "name": "Starter", "monthly_price_cents": 4900, "yearly_price_cents": 49000, "max_documents": 100, "max_agents": 3, "max_members": 5, "monthly_credits_included": 10_000},
-    {"key": "pro", "name": "Pro", "monthly_price_cents": 19900, "yearly_price_cents": 199000, "max_documents": 1000, "max_agents": 10, "max_members": 20, "priority_support": True, "advanced_features": True, "monthly_credits_included": 50_000},
-    {"key": "enterprise", "name": "Enterprise", "monthly_price_cents": 99900, "yearly_price_cents": 999000, "max_documents": None, "max_agents": None, "max_members": None, "priority_support": True, "advanced_features": True, "sla": True, "monthly_credits_included": 200_000},
+    {"key": "starter", "name": "Starter", "monthly_price_cents": 4900, "yearly_price_cents": 49000, "max_documents": 100, "max_questions_per_day": 500, "max_agents": 3, "max_members": 5, "monthly_credits_included": 10_000},
+    {"key": "pro", "name": "Pro", "monthly_price_cents": 19900, "yearly_price_cents": 199000, "max_documents": 1000, "max_questions_per_day": None, "max_agents": 10, "max_members": 20, "priority_support": True, "advanced_features": True, "monthly_credits_included": 50_000},
+    {"key": "business", "name": "Business", "monthly_price_cents": 49900, "yearly_price_cents": 499000, "max_documents": 10_000, "max_questions_per_day": None, "max_agents": 50, "max_members": 100, "max_api_keys": 50, "priority_support": True, "advanced_features": True, "monthly_credits_included": 120_000},
+    {"key": "enterprise", "name": "Enterprise", "monthly_price_cents": 99900, "yearly_price_cents": 999000, "max_documents": None, "max_questions_per_day": None, "max_agents": None, "max_members": None, "priority_support": True, "advanced_features": True, "sla": True, "monthly_credits_included": 200_000},
 ]
 
 
@@ -71,7 +78,7 @@ async def get_or_create_subscription(db: AsyncSession, organization_id: uuid.UUI
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
     sub = await db.scalar(stmt)
     if sub is None:
-        free_plan = await ensure_free_plan_seeded(db)
+        free_plan = await db.scalar(select(Plan).where(Plan.key == (settings.BILLING_DEFAULT_PLAN or "free"))) or await ensure_free_plan_seeded(db)
         # Partie 16 (bis) -- a real 14-day trial starts the moment an
         # organization's subscription is first created, same "always
         # real, never a promotional lie" reasoning as everything else
@@ -111,14 +118,14 @@ async def get_plan_by_key(db: AsyncSession, key: str) -> Plan | None:
 async def create_plan(
     db: AsyncSession, *, key: str, name: str, monthly_price_cents: int, yearly_price_cents: int = 0,
     max_documents: int | None = None, max_agents: int | None = None, max_members: int | None = None,
-    max_api_keys: int | None = None, max_webhooks: int | None = None, max_requests_per_month: int | None = None,
+    max_api_keys: int | None = None, max_webhooks: int | None = None, max_requests_per_month: int | None = None, max_questions_per_day: int | None = None,
     priority_support: bool = False, advanced_features: bool = False, sla: bool = False,
     paystack_plan_code_monthly: str | None = None, paystack_plan_code_yearly: str | None = None,
 ) -> Plan:
     plan = Plan(
         key=key, name=name, monthly_price_cents=monthly_price_cents, yearly_price_cents=yearly_price_cents,
         max_documents=max_documents, max_agents=max_agents, max_members=max_members,
-        max_api_keys=max_api_keys, max_webhooks=max_webhooks, max_requests_per_month=max_requests_per_month,
+        max_api_keys=max_api_keys, max_webhooks=max_webhooks, max_requests_per_month=max_requests_per_month, max_questions_per_day=max_questions_per_day,
         priority_support=priority_support, advanced_features=advanced_features, sla=sla,
         paystack_plan_code_monthly=paystack_plan_code_monthly, paystack_plan_code_yearly=paystack_plan_code_yearly,
     )
@@ -127,13 +134,20 @@ async def create_plan(
     return plan
 
 
-async def update_plan(db: AsyncSession, plan_id: uuid.UUID, **fields) -> Plan:
+PLAN_LIMIT_FIELDS = ("max_documents", "max_agents", "max_members", "max_api_keys", "max_webhooks", "max_requests_per_month", "max_questions_per_day")
+
+
+async def update_plan(db: AsyncSession, plan_id: uuid.UUID, *, unlimited: frozenset[str] | set[str] = frozenset(), **fields) -> Plan:
+    """`unlimited`: names of limit columns explicitly sent as null, i.e. "remove this cap" (a null otherwise means "field not sent" and is ignored)."""
     plan = await db.get(Plan, plan_id)
     if plan is None:
         raise PlanNotFoundError(str(plan_id))
     for key, value in fields.items():
         if value is not None and hasattr(plan, key):
             setattr(plan, key, value)
+    for key in unlimited:
+        if key in PLAN_LIMIT_FIELDS:
+            setattr(plan, key, None)
     await db.flush()
     return plan
 
