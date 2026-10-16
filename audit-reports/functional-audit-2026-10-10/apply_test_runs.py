@@ -68,10 +68,13 @@ def _final_status(status_after_tests: str, fix_status: str) -> str:
     VALIDATED_NOT_DEPLOYED checked with the official tool (terraform validate, helm lint, actionlint...) but never applied to a real account, cluster or workflow run
     WRITTEN_NOT_EXECUTED   code or documents exist; nothing proves them yet
     DECISION_OR_CORRECTION an owner decision was recorded, or the first assessment was wrong; nothing left to build for this item
+    IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED  the adapter is finished and proven against a LOCAL FAKE that speaks the vendor's protocol; a real account still has to run scripts/validate_<vendor>_live.py
     otherwise              the status after the test runs is kept (IMPLEMENTED_UNVERIFIED, BLOCKED_EXTERNAL, ...)"""
     fix = fix_status.strip().lower()
     if not fix:
         return status_after_tests
+    if fix.startswith("external validation required"):
+        return "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED"
     if fix.startswith("tests pass") or "built and viewed" in fix:
         return "FIXED_AND_TESTED"
     if fix.startswith("validated"):

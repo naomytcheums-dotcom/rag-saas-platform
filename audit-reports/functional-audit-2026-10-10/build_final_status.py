@@ -14,12 +14,13 @@ by = collections.defaultdict(list)
 for row in rows:
     by[row["status_final"]].append(row)
 
-ORDER = ["VERIFIED_COMPLETE", "FIXED_AND_TESTED", "VALIDATED_NOT_DEPLOYED", "DECISION_OR_CORRECTION", "WRITTEN_NOT_EXECUTED", "IMPLEMENTED_UNVERIFIED", "BLOCKED_EXTERNAL", "AMBIGUOUS_REQUIREMENT"]
+ORDER = ["VERIFIED_COMPLETE", "FIXED_AND_TESTED", "VALIDATED_NOT_DEPLOYED", "DECISION_OR_CORRECTION", "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED", "WRITTEN_NOT_EXECUTED", "IMPLEMENTED_UNVERIFIED", "BLOCKED_EXTERNAL", "AMBIGUOUS_REQUIREMENT"]
 MEANING = {
     "VERIFIED_COMPLETE": "reviewed as complete and its Part test run is green; no fix was needed",
     "FIXED_AND_TESTED": "a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider)",
     "VALIDATED_NOT_DEPLOYED": "checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run",
     "DECISION_OR_CORRECTION": "an owner decision is recorded, or the first assessment was wrong; nothing left to build",
+    "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED": "the adapter is complete and its contract tests pass against a LOCAL FAKE of the vendor (a fake, not the service); one command with a real account (scripts/validate_<vendor>_live.py) is still required",
     "WRITTEN_NOT_EXECUTED": "code or documents exist; nothing proves them yet",
     "IMPLEMENTED_UNVERIFIED": "implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item)",
     "BLOCKED_EXTERNAL": "cannot be proven without an account, key or service that is not available here",
@@ -67,7 +68,7 @@ out += [
     "- **Real provider sandboxes**: Stripe / Paystack (12.x), LLM / embedding providers (4.x), Slack / Teams / Discord (9.4.x), Twilio / STT / TTS (8.2.x), ClamAV (10.1.12), tracing and error tracking (10.3 / 13.5).",
     "",
 ]
-for status in ("WRITTEN_NOT_EXECUTED", "VALIDATED_NOT_DEPLOYED", "BLOCKED_EXTERNAL", "AMBIGUOUS_REQUIREMENT"):
+for status in ("IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED", "WRITTEN_NOT_EXECUTED", "VALIDATED_NOT_DEPLOYED", "BLOCKED_EXTERNAL", "AMBIGUOUS_REQUIREMENT"):
     out += [f"## {status} ({len(by[status])})", ""]
     for row in by[status]:
         out.append(f"- **{row['feature_id']}** {row['feature_name']} - {(row['fix_status'] or row['known_gaps'])[:150]}")
