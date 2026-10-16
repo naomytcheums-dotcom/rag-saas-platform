@@ -235,7 +235,7 @@ weasyprint==70.0
 # settings.STRIPE_SECRET_KEY first and raises a real, honest
 # StripeNotConfiguredError (-> 501) when it's unset, which it is in
 # this environment (no real Stripe account exists here).
-stripe==11.4.1
+stripe==16.0.0
 
 # Partie 13.4 -- OpenTelemetry, real but OFF by default (OTEL_ENABLED=False)
 # -- see api/security/tracing.py's own docstring for why (no real OTLP
