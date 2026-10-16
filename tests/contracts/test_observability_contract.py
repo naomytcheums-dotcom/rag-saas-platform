@@ -88,6 +88,7 @@ def _app_database(db_session):
 def boom_route():
     from fastapi import APIRouter
 
+    routes_before = list(app.router.routes)
     router = APIRouter()
 
     @router.post("/__contract_boom")
@@ -96,7 +97,8 @@ def boom_route():
 
     app.include_router(router)
     yield "/__contract_boom"
-    app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != "/__contract_boom"]
+    # FastAPI wraps an included router in one lazy route object with no `path`: restore the exact list instead of filtering by path.
+    app.router.routes[:] = routes_before
     app.openapi_schema = None  # FastAPI caches the schema: without this the removed route leaks into docs/api/openapi.json checks
 
 

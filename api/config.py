@@ -2319,6 +2319,7 @@ class Settings(BaseSettings):
     # and api/services/billing_providers/registry.py.
     PAYSTACK_SECRET_KEY: str | None = None
     PAYSTACK_PUBLIC_KEY: str | None = None
+    PAYSTACK_API_BASE_URL: str = "https://api.paystack.co"  # overridable only to point contract tests at a local fake
     PAYSTACK_CALLBACK_URL: str = "http://localhost:3000/dashboard/billing?checkout=success"
     # Comma-separated ISO 3166-1 alpha-2 country codes that resolve to
     # Paystack instead of Stripe (api/services/billing_providers/registry.py).
