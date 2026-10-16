@@ -30,8 +30,11 @@ import httpx
 
 from api.config import settings
 
-RESEND_DOMAINS_URL = "https://api.resend.com/domains"
 RESEND_TIMEOUT_SECONDS = 10.0
+
+
+def _domains_url() -> str:
+    return f"{settings.RESEND_API_BASE_URL.rstrip('/')}/domains"
 
 
 def _headers() -> dict[str, str]:
@@ -64,14 +67,14 @@ def create_resend_domain(domain: str) -> dict:
     normal Resend error (surfaced here as RuntimeError), which the
     caller treats as "already set up" rather than a fresh failure -- see
     api/security/email_domains.py's ensure_email_domain_setup."""
-    return _request("POST", RESEND_DOMAINS_URL, json={"name": domain})
+    return _request("POST", _domains_url(), json={"name": domain})
 
 
 def get_resend_domain(resend_domain_id: str) -> dict:
     """Fetches the domain's current, live state from Resend -- the
     `records[*].status` values reflect Resend's own DNS checks, updated
     as its background verification progresses."""
-    return _request("GET", f"{RESEND_DOMAINS_URL}/{resend_domain_id}")
+    return _request("GET", f"{_domains_url()}/{resend_domain_id}")
 
 
 def trigger_resend_domain_verification(resend_domain_id: str) -> dict:
@@ -80,7 +83,7 @@ def trigger_resend_domain_verification(resend_domain_id: str) -> dict:
     immediately (`{"object": "domain", "id": "..."}`), it does NOT
     return the final verified/not-verified outcome. Callers must poll
     get_resend_domain afterward to see the real result."""
-    return _request("POST", f"{RESEND_DOMAINS_URL}/{resend_domain_id}/verify")
+    return _request("POST", f"{_domains_url()}/{resend_domain_id}/verify")
 
 
 def delete_resend_domain(resend_domain_id: str) -> dict:
@@ -88,4 +91,4 @@ def delete_resend_domain(resend_domain_id: str) -> dict:
     effort cleanup so removing a CustomDomain doesn't leave an orphaned
     Resend domain behind) and by this project's own integration tests,
     which must never leave junk domains in a real Resend account."""
-    return _request("DELETE", f"{RESEND_DOMAINS_URL}/{resend_domain_id}")
+    return _request("DELETE", f"{_domains_url()}/{resend_domain_id}")

@@ -117,6 +117,9 @@ async def delete_custom_domain(
         except RuntimeError as exc:
             logger.warning("delete_custom_domain: could not delete Resend domain '%s': %s", domain.resend_domain_id, exc)
 
+    from api.security.organization_branding import clear_sender_for_domain
+
+    await clear_sender_for_domain(db, org_id, domain.domain)
     await db.execute(delete(CustomDomain).where(CustomDomain.id == domain.id))
     await db.commit()
     return {"message": "Domain deleted"}

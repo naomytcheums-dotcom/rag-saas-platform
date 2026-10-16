@@ -25,6 +25,7 @@ class PlanResponse(BaseModel):
     max_api_keys: int | None
     max_webhooks: int | None
     max_requests_per_month: int | None
+    max_questions_per_day: int | None = None
     monthly_credits_included: int | None
     priority_support: bool
     advanced_features: bool
@@ -49,6 +50,7 @@ class PlanCreateRequest(BaseModel):
     max_api_keys: int | None = None
     max_webhooks: int | None = None
     max_requests_per_month: int | None = None
+    max_questions_per_day: int | None = None
     priority_support: bool = False
     advanced_features: bool = False
     sla: bool = False
@@ -66,6 +68,7 @@ class PlanUpdateRequest(BaseModel):
     max_api_keys: int | None = None
     max_webhooks: int | None = None
     max_requests_per_month: int | None = None
+    max_questions_per_day: int | None = None
     priority_support: bool | None = None
     advanced_features: bool | None = None
     sla: bool | None = None

@@ -157,6 +157,7 @@ import redis.asyncio as redis_asyncio
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.billing_usage import ensure_document_slot
 from api.models.document import Document, DocumentChunk, DocumentStatus
 from api.models.document_image import DocumentImage
 from api.models.metadata_enrichment import DocumentEntity, DocumentKeyword
@@ -646,6 +647,7 @@ async def upload_document(
     if duplicate is not None:
         return duplicate, True
 
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
         file_key="", file_size=len(content), file_type=content_type,
@@ -1093,6 +1095,7 @@ async def process_upload_batch(
             if await check_duplicate(db, organization_id, content_hash, file_info["content_type"]):
                 logger.info("process_upload_batch: skipping duplicate file '%s' (content already exists)", file_info["filename"])
                 continue
+            await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
             document = Document(
                 organization_id=organization_id, workspace_id=workspace_id, name=file_info["filename"],
                 file_key="", file_size=len(file_info["content"]), file_type=file_info["content_type"],
@@ -1178,6 +1181,7 @@ async def import_document_from_url(
         if workspace is None:
             raise ValueError("workspace_id does not belong to this organization")
 
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=normalized_url, source_url=normalized_url,
         file_key="", file_size=0, file_type=HTML_CONTENT_TYPE,
@@ -1622,6 +1626,7 @@ async def import_and_process_github_file(
         if workspace is None:
             raise ValueError("workspace_id does not belong to this organization")
 
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=path,
         source_url=build_github_blob_url(owner, repo, ref or "HEAD", path),
@@ -1855,6 +1860,7 @@ async def import_and_process_github_issue(
         if workspace is None:
             raise ValueError("workspace_id does not belong to this organization")
 
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=issue["title"],
         source_url=issue.get("html_url"), file_key="", file_size=0, file_type=MARKDOWN_CONTENT_TYPE,
@@ -2057,6 +2063,7 @@ async def import_and_process_google_drive_file(
             raise ValueError("workspace_id does not belong to this organization")
 
     filename = metadata["name"] or file_id
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
         source_url=metadata["web_view_link"], file_key="", file_size=0, file_type=TXT_CONTENT_TYPE,
@@ -2137,6 +2144,7 @@ async def import_and_process_google_doc(
             raise ValueError("workspace_id does not belong to this organization")
 
     filename = (metadata["name"] or document_id) + _EXPORT_FORMAT_FILE_EXTENSIONS.get(export_format, "")
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=metadata["name"] or document_id,
         source_url=metadata["web_view_link"], file_key="", file_size=0, file_type=TXT_CONTENT_TYPE,
@@ -2306,6 +2314,7 @@ async def import_and_process_notion_page(
 
     name = metadata["title"] or page_id
     filename = f"{name}.md"
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=name,
         source_url=metadata["url"], file_key="", file_size=0, file_type=MARKDOWN_CONTENT_TYPE,
@@ -2498,6 +2507,7 @@ async def import_and_process_confluence_page(
 
     name = metadata["title"] or page_id
     filename = f"{name}.html"
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=name,
         source_url=(f"{base_url}{metadata['web_url']}" if metadata.get("web_url") else None),
@@ -2692,6 +2702,7 @@ async def import_and_process_onedrive_file(
             raise ValueError("workspace_id does not belong to this organization")
 
     filename = metadata["name"] or file_id
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
         source_url=metadata["web_url"], file_key="", file_size=0, file_type=TXT_CONTENT_TYPE,
@@ -2888,6 +2899,7 @@ async def import_and_process_zip_entry(
             raise ValueError("workspace_id does not belong to this organization")
 
     filename = entry_name.rsplit("/", 1)[-1] or entry_name
+    await ensure_document_slot(db, organization_id)  # plan document limit, on every path that creates a document
     document = Document(
         organization_id=organization_id, workspace_id=workspace_id, name=filename,
         file_key="", file_size=0, file_type=TXT_CONTENT_TYPE,

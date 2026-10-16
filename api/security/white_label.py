@@ -141,6 +141,9 @@ async def remove_custom_domain(db: AsyncSession, organization_id: uuid.UUID, use
     domain_row = await _get_latest_domain(db, organization_id)
     if domain_row is None:
         raise DomainNotFoundError("This organization has no domain configured")
+    from api.security.organization_branding import clear_sender_for_domain
+
+    await clear_sender_for_domain(db, organization_id, domain_row.domain)
     await db.delete(domain_row)
     await db.flush()
     return await get_whitelabel_config(db, organization_id)

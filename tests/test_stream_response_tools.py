@@ -37,6 +37,7 @@ def _make_orchestrator():
 
 
 @pytest.mark.asyncio
+@patch("api.services.billing_usage.reserve_daily_question", new=AsyncMock())
 async def test_stream_executes_tool_and_resumes():
     """The core new behavior: LLM asks for a tool, we run it, feed the
     result back, and get a final answer -- all in one stream_response
@@ -132,6 +133,7 @@ async def test_stream_without_tools_does_not_call_tool_loop():
 
 
 @pytest.mark.asyncio
+@patch("api.services.billing_usage.reserve_daily_question", new=AsyncMock())
 async def test_stream_tool_failure_is_reported_not_crashing():
     """A tool that raises must be reported as a tool_result with error,
     then the loop must resume -- not crash the whole stream."""
