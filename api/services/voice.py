@@ -411,15 +411,127 @@ async def synthesize_with_google_cloud(text: str, voice_id: str | None = None, s
     return audio
 
 
+# ---- Local text-to-speech: no key, no network, no per-character bill ----------------------------------------------------------------------------------
+# Three self-hosted engines, tried in this order when LOCAL_TTS_ENGINE=auto: Windows SAPI (the speech engine of the OS, through pywin32), piper
+# (open-source neural voices, `LOCAL_TTS_PIPER_BINARY` + `LOCAL_TTS_PIPER_MODEL`) and espeak-ng (open source, Linux/macOS/Windows). All return 16-bit PCM WAV.
+# The voice quality is that of the engine installed on the SERVER; it is the offline / on-premise option, not a clone of ElevenLabs.
+
+_LOCAL_TTS_MAX_SECONDS = 60.0
+
+
+def local_tts_engine() -> str | None:
+    """The local engine that would be used now ('sapi' | 'piper' | 'espeak'), or None when this host has none of them."""
+    import os
+    import shutil
+
+    wanted = (settings.LOCAL_TTS_ENGINE or "auto").lower()
+    candidates = ["sapi", "piper", "espeak"] if wanted == "auto" else [wanted]
+    for engine in candidates:
+        if engine == "sapi" and os.name == "nt":
+            try:
+                import win32com.client  # noqa: F401
+                return "sapi"
+            except ImportError:
+                continue
+        if engine == "piper" and settings.LOCAL_TTS_PIPER_MODEL and shutil.which(settings.LOCAL_TTS_PIPER_BINARY):
+            return "piper"
+        if engine == "espeak" and shutil.which(settings.LOCAL_TTS_ESPEAK_BINARY):
+            return "espeak"
+    return None
+
+
+def _synthesize_sapi_sync(text: str, voice_id: str | None, speed: float | None, path: str) -> None:
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()  # COM is per thread: this runs in a worker thread
+    try:
+        voice = win32com.client.Dispatch("SAPI.SpVoice")
+        voices = voice.GetVoices()
+        if voice_id:
+            wanted = voice_id.lower()
+            matches = [i for i in range(voices.Count) if wanted in voices.Item(i).GetDescription().lower() or wanted == str(i)]
+            if not matches:
+                raise VoiceError(f"no installed Windows voice matches '{voice_id}'")
+            voice.Voice = voices.Item(matches[0])
+        if speed:
+            voice.Rate = max(-10, min(10, round((speed - 1.0) * 10)))  # SAPI rate -10..10, 0 = normal; 1.0 here = normal
+        stream = win32com.client.Dispatch("SAPI.SpFileStream")
+        audio_format = win32com.client.Dispatch("SAPI.SpAudioFormat")
+        audio_format.Type = 22  # 22.05 kHz, 16-bit, mono
+        stream.Format = audio_format
+        stream.Open(path, 3)
+        try:
+            voice.AudioOutputStream = stream
+            voice.Speak(text)
+        finally:
+            stream.Close()
+    finally:
+        pythoncom.CoUninitialize()
+
+
+async def synthesize_with_local_engine(text: str, voice_id: str | None = None, speed: float | None = None, pitch: float | None = None) -> bytes:
+    """Speech synthesized on this server by an installed open-source / OS engine. `pitch` is not honoured by these engines and is ignored."""
+    import os
+    import tempfile
+
+    engine = local_tts_engine()
+    if engine is None:
+        raise VoiceError("no local text-to-speech engine is available on this server (Windows SAPI, piper with LOCAL_TTS_PIPER_MODEL, or espeak-ng)")
+    handle, path = tempfile.mkstemp(suffix=".wav")
+    os.close(handle)
+    try:
+        if engine == "sapi":
+            try:
+                await asyncio.wait_for(asyncio.to_thread(_synthesize_sapi_sync, text, voice_id, speed, path), timeout=_LOCAL_TTS_MAX_SECONDS)
+            except asyncio.TimeoutError as exc:
+                raise VoiceError("local text-to-speech timed out") from exc
+            except VoiceError:
+                raise
+            except Exception as exc:  # COM errors carry nothing useful to a caller
+                raise VoiceError(f"local text-to-speech (Windows SAPI) failed: {type(exc).__name__}") from exc
+        else:
+            if engine == "piper":
+                command = [settings.LOCAL_TTS_PIPER_BINARY, "--model", settings.LOCAL_TTS_PIPER_MODEL, "--output_file", path]
+                if speed:
+                    command += ["--length_scale", str(round(1.0 / max(speed, 0.25), 3))]
+            else:
+                command = [settings.LOCAL_TTS_ESPEAK_BINARY, "-w", path, "-s", str(int(175 * (speed or 1.0)))] + (["-v", voice_id] if voice_id else []) + ["--stdin"]
+            process = None
+            try:
+                process = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+                await asyncio.wait_for(process.communicate(text.encode("utf-8")), timeout=_LOCAL_TTS_MAX_SECONDS)
+            except asyncio.TimeoutError as exc:
+                if process is not None:
+                    process.kill()
+                raise VoiceError("local text-to-speech timed out") from exc
+            except OSError as exc:
+                raise VoiceError(f"local text-to-speech engine could not start: {type(exc).__name__}") from exc
+            if process.returncode != 0:
+                raise VoiceError(f"local text-to-speech ({engine}) exited with code {process.returncode}")
+        with open(path, "rb") as produced:
+            audio = produced.read()
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    if len(audio) < 100 or audio[:4] != b"RIFF":
+        raise VoiceError("the local text-to-speech engine produced no audio")
+    return audio
+
+
 async def synthesize_speech(text: str, provider: str | None = None, voice_id: str | None = None, speed: float | None = None, pitch: float | None = None) -> bytes:
-    """Server-side TTS through the hosted provider the organization/operator chose (`TTS_PROVIDER`: elevenlabs | google_cloud). `web_speech` is the
+    """Server-side TTS through the provider the organization/operator chose (`TTS_PROVIDER`: elevenlabs | google_cloud | local). `web_speech` is the
     browser's own synthesizer and has no server side."""
-    chosen = provider or (settings.TTS_PROVIDER if settings.TTS_PROVIDER in ("elevenlabs", "google_cloud") else "elevenlabs")
+    chosen = provider or (settings.TTS_PROVIDER if settings.TTS_PROVIDER in ("elevenlabs", "google_cloud", "local") else "elevenlabs")
     if chosen == "elevenlabs":
         return await synthesize_with_elevenlabs(text, voice_id=voice_id, speed=speed, pitch=pitch)
     if chosen == "google_cloud":
         return await synthesize_with_google_cloud(text, voice_id=voice_id, speed=speed, pitch=pitch)
-    raise VoiceError(f"'{chosen}' has no server-side synthesis (web_speech runs in the browser); use 'elevenlabs' or 'google_cloud'")
+    if chosen == "local":
+        return await synthesize_with_local_engine(text, voice_id=voice_id, speed=speed, pitch=pitch)
+    raise VoiceError(f"'{chosen}' has no server-side synthesis (web_speech runs in the browser); use 'elevenlabs', 'google_cloud' or 'local'")
 
 
 # -------------------------------------------------- Voice chat round-trip (item 17)

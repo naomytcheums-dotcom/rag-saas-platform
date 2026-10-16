@@ -160,7 +160,8 @@ def test_security_headers_and_the_api_behind_the_proxy(stack):
         health = client.get(f"{base}/api/health")
         assert health.status_code == 200
         assert health.headers["strict-transport-security"].startswith("max-age=")  # set by nginx and by the API (COOKIE_SECURE=true)
-        assert health.headers["x-content-type-options"] == "nosniff"
+        assert health.headers["x-content-type-options"] == "nosniff"  # exactly once: the proxy hides the upstream copy
+        assert health.headers.get_list("strict-transport-security") == [health.headers["strict-transport-security"]] and "," not in health.headers["strict-transport-security"].split("includeSubDomains")[-1]
         home = client.get(f"{base}/")
         assert home.status_code == 200 and "frontend" in home.text and "strict-transport-security" in home.headers
 

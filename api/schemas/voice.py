@@ -20,7 +20,7 @@ class TranscribeResponse(BaseModel):
 
 class SynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)  # hosted TTS is billed per character
-    provider: str | None = Field(default=None, pattern="^(elevenlabs|google_cloud)$")
+    provider: str | None = Field(default=None, pattern="^(elevenlabs|google_cloud|local)$")
     voice_id: str | None = None
     speed: float | None = None
     pitch: float | None = None

@@ -50,7 +50,7 @@ async def synthesize_speech_endpoint(payload: SynthesizeRequest, current_user: U
         audio = await synthesize_speech(payload.text, provider=payload.provider, voice_id=payload.voice_id, speed=payload.speed, pitch=payload.pitch)
     except VoiceError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return Response(content=audio, media_type="audio/mpeg")
+    return Response(content=audio, media_type="audio/wav" if audio[:4] == b"RIFF" else "audio/mpeg")
 
 
 @router.post("/stt", response_model=TranscribeResponse)

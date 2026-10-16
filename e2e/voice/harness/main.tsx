@@ -23,6 +23,17 @@ window.Audio = function (this: unknown, src?: string) {
   return audio;
 } as unknown as typeof Audio;
 
+// Mark every /voice/tts request and response on the same clock as the audio events (to prove the next sentence is requested while the current one plays).
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const isTts = url.includes("/voice/tts");
+  if (isTts) mark("tts-request");
+  const response = await nativeFetch(input, init);
+  if (isTts) mark(`tts-response:${response.status}`);
+  return response;
+};
+
 const params = new URLSearchParams(location.search);
 const threshold = params.get("threshold");
 
@@ -35,7 +46,7 @@ createRoot(document.getElementById("root")!).render(
       <VoiceOutput
         text={params.get("text") ?? "The invoice is due on the fifteenth. Please pay by Friday. Thank you."}
         streaming
-        provider={(params.get("provider") as "elevenlabs" | "google_cloud" | null) ?? "elevenlabs"}
+        provider={(params.get("provider") as "elevenlabs" | "google_cloud" | "local" | null) ?? "elevenlabs"}
       />
     </section>
   </div>,

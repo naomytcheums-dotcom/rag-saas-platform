@@ -11,7 +11,7 @@ import VoiceError from "./VoiceError";
 interface VoiceOutputProps {
   text: string;
   streaming?: boolean;
-  provider?: "web_speech" | "elevenlabs" | "google_cloud";
+  provider?: "web_speech" | "elevenlabs" | "google_cloud" | "local";
   voiceId?: string;
 }
 

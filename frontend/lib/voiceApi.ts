@@ -10,7 +10,7 @@ function getAccessToken(): string | null {
   return window.localStorage.getItem("access_token");
 }
 
-export async function synthesizeSpeech(text: string, voiceId?: string, provider?: "elevenlabs" | "google_cloud"): Promise<Blob> {
+export async function synthesizeSpeech(text: string, voiceId?: string, provider?: "elevenlabs" | "google_cloud" | "local"): Promise<Blob> {
   const token = getAccessToken();
   const response = await fetch(fileUrl("/voice/tts"), {
     method: "POST",
