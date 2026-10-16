@@ -93,6 +93,7 @@ async def test_the_streaming_loop_does_the_same():
          patch.object(ao, "execute_tool_with_timeout", execute), \
          patch.object(ao, "create_run", AsyncMock(return_value=MagicMock(id=uuid.uuid4()))), \
          patch.object(ao, "update_run_status", AsyncMock()), \
+         patch("api.services.billing_usage.reserve_daily_question", AsyncMock()), \
          patch.object(ao, "get_conversation_messages", AsyncMock(return_value=[])), \
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \

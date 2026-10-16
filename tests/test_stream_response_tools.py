@@ -71,6 +71,7 @@ async def test_stream_executes_tool_and_resumes():
          patch.object(ao, "execute_tool_with_timeout", AsyncMock(return_value="sunny, 22C")), \
          patch.object(ao, "create_run", AsyncMock(return_value=MagicMock(id=uuid.uuid4()))), \
          patch.object(ao, "update_run_status", AsyncMock()), \
+         patch("api.services.billing_usage.reserve_daily_question", AsyncMock()), \
          patch.object(ao, "get_conversation_messages", AsyncMock(return_value=[])), \
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
@@ -112,6 +113,7 @@ async def test_stream_without_tools_does_not_call_tool_loop():
     with patch.object(ao, "chat_completion_stream_with_tools", fake_stream), \
          patch.object(ao, "create_run", AsyncMock(return_value=MagicMock(id=uuid.uuid4()))), \
          patch.object(ao, "update_run_status", AsyncMock()), \
+         patch("api.services.billing_usage.reserve_daily_question", AsyncMock()), \
          patch.object(ao, "get_conversation_messages", AsyncMock(return_value=[])), \
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \
@@ -162,6 +164,7 @@ async def test_stream_tool_failure_is_reported_not_crashing():
          patch.object(ao, "execute_tool_with_timeout", AsyncMock(side_effect=RuntimeError("boom"))), \
          patch.object(ao, "create_run", AsyncMock(return_value=MagicMock(id=uuid.uuid4()))), \
          patch.object(ao, "update_run_status", AsyncMock()), \
+         patch("api.services.billing_usage.reserve_daily_question", AsyncMock()), \
          patch.object(ao, "get_conversation_messages", AsyncMock(return_value=[])), \
          patch.object(ao, "add_message", AsyncMock()), \
          patch.object(ao, "_fire_message_hook", AsyncMock()), \

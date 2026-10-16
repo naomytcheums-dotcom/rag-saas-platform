@@ -155,7 +155,7 @@ async def _require_direction(db: AsyncSession, sub, body: SubscribeRequest, *, u
     if upgrade and target_cost < current_cost:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan is cheaper than the current one: use /downgrade")
     if not upgrade and target_cost > current_cost:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan is more expensive than the current one: use /upgrade (a paid plan is activated through a checkout)")
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="This plan is more expensive than the current one: use /upgrade (a paid plan is activated through a checkout)")
 
 
 @org_router.post("/subscribe", response_model=SubscriptionResponse)
