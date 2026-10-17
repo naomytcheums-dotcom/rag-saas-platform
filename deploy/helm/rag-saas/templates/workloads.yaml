@@ -70,7 +70,7 @@ spec:
       containers:
         - name: beat
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command: ["celery", "-A", "api.tasks.celery_app", "beat", "--loglevel=info"]
+          command: ["celery", "-A", "api.tasks.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
           envFrom: [{ secretRef: { name: {{ .Values.existingSecret }} } }]
 {{- end }}
 {{- if .Values.ingress.enabled }}

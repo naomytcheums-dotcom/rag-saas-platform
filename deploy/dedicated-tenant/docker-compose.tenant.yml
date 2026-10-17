@@ -1,6 +1,45 @@
-# One isolated stack per customer (spec 10.4.7 "dedicated tenant" and 10.4.8 "dedicated database"): its own API, worker, beat, PostgreSQL (pgvector) and Redis,
-# on its own network and volumes. Provision with:  TENANT=acme ./provision.sh   (see provision.sh). Not run by the authoring session.
+# One isolated stack per customer (spec 10.4.7 "dedicated tenant" and 10.4.8 "dedicated database"): its own API, worker, beat, PostgreSQL (pgvector), Redis and
+# S3-compatible object storage (MinIO), on its own network and volumes; no port of the database, Redis or MinIO is published. The same file serves the private /
+# on-premise / VPC profiles (10.4.9 - 10.4.11), see docs/deployment/PRIVATE_ONPREM_VPC.md:
+#   * normal:      TENANT=acme ./provision.sh
+#   * air-gapped:  add  -f docker-compose.airgapped.yml  (the network becomes `internal`: no route to the internet, models are loaded from the local volumes)
+#   * local LLM:   COMPOSE_PROFILES=llm starts an Ollama service on the same private network (pull the model on a connected machine, or copy the volume)
+# Executed locally (docker compose up, migrations, health checks, isolation between two tenants, air-gapped start, a real LLM answer through the private network):
+# tests/test_deploy_dedicated_tenant_e2e.py.
 name: rag-saas-${TENANT:?set TENANT}
+
+x-api-environment: &env
+  DATABASE_URL: postgresql+asyncpg://ragsaas:${DB_PASSWORD}@db:5432/ragsaas
+  # single-label host names (db, redis, minio) are private networks for the "public Redis needs TLS" startup rule
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  RATE_LIMIT_REDIS_URL: redis://redis:6379/2
+  CACHE_REDIS_URL: redis://redis:6379/3
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+  SESSION_MIDDLEWARE_SECRET: ${SESSION_MIDDLEWARE_SECRET:?set SESSION_MIDDLEWARE_SECRET}
+  AUDIT_LOG_HMAC_SECRET_KEY: ${AUDIT_LOG_HMAC_SECRET_KEY:?set AUDIT_LOG_HMAC_SECRET_KEY}
+  ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:?set ENCRYPTION_MASTER_KEY}
+  SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY}
+  SUPPORT_EMAIL: ${SUPPORT_EMAIL:?set SUPPORT_EMAIL}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  CREDITS_ALLOW_UNPAID_TOPUP: "false"
+  # gunicorn workers of the API (each loads the ML dependencies: about 1 GB resident); 4 is the image default, lower it on a small host
+  WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+  S3_REGION: us-east-1
+  S3_BUCKET_NAME: avatars
+  S3_DOCUMENTS_BUCKET_NAME: documents
+  S3_VOICE_BUCKET_NAME: voice
+  # models are cached in the `models` volume (or MODELS_DIR); set HF_HUB_OFFLINE=1, or use the air-gapped overlay, so that nothing is downloaded at runtime
+  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-0}
+  TRANSFORMERS_OFFLINE: ${HF_HUB_OFFLINE:-0}
+  OLLAMA_BASE_URL: http://ollama:11434
+  # no telemetry or hosted observability leaves the private network
+  SENTRY_DSN: ""
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
 
 services:
   db:
@@ -10,35 +49,68 @@ services:
       POSTGRES_USER: ragsaas
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
     volumes: [dbdata:/var/lib/postgresql/data]
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ragsaas"], interval: 10s, timeout: 5s, retries: 10 }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ragsaas -d ragsaas"], interval: 5s, timeout: 5s, retries: 20 }
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
+    restart: unless-stopped
+
+  minio:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:2025.7.23-debian-12-r5}
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+    volumes: [miniodata:/bitnami/minio/data]
+    healthcheck: { test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live"], interval: 5s, timeout: 3s, retries: 30 }
+    restart: unless-stopped
 
   api:
     build: { context: ../.., dockerfile: Dockerfile.api }
-    environment: &env
-      DATABASE_URL: postgresql+asyncpg://ragsaas:${DB_PASSWORD}@db:5432/ragsaas
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
-      COOKIE_SECURE: "true"
-      CREDITS_ALLOW_UNPAID_TOPUP: "false"
-    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
-    ports: ["${API_PORT:-8000}:8000"]
+    image: ${IMAGE:-rag-saas-api:dedicated}
+    environment: *env
+    volumes: ["${MODELS_DIR:-models}:/home/appuser/.cache/huggingface"]
+    depends_on: { db: { condition: service_healthy }, redis: { condition: service_healthy }, minio: { condition: service_healthy } }
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
 
   worker:
-    build: { context: ../.., dockerfile: Dockerfile.api }
+    image: ${IMAGE:-rag-saas-api:dedicated}
     command: celery -A api.tasks.celery_app worker --loglevel=info
     environment: *env
-    depends_on: [api]
+    # the image's HEALTHCHECK probes the API port, which a worker does not open: replace it with a real broker round trip
+    healthcheck: { test: ["CMD-SHELL", "celery -A api.tasks.celery_app inspect ping -d celery@$$HOSTNAME --timeout 15"], interval: 30s, timeout: 30s, retries: 5, start_period: 60s }
+    volumes: ["${MODELS_DIR:-models}:/home/appuser/.cache/huggingface"]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
 
   beat:
-    build: { context: ../.., dockerfile: Dockerfile.api }
-    command: celery -A api.tasks.celery_app beat --loglevel=info
+    image: ${IMAGE:-rag-saas-api:dedicated}
+    command: celery -A api.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     environment: *env
-    depends_on: [api]
+    # same reason: beat has no HTTP port; it writes its schedule file once it is running
+    healthcheck: { test: ["CMD-SHELL", "test -s /tmp/celerybeat-schedule || test -f /tmp/celerybeat-schedule.db"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
+
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    volumes: [ollamadata:/root/.ollama]
+    restart: unless-stopped
 
 volumes:
   dbdata: {}
   redisdata: {}
+  miniodata: {}
+  ollamadata: {}
+  models: {}

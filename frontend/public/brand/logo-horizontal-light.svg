@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" width="280" height="64" role="img" aria-labelledby="t">
+  <title id="t">RAG SaaS Platform</title>
+  <defs>
+    <linearGradient id="g" x1="6" y1="4" x2="60" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff541f"/>
+      <stop offset="0.55" stop-color="#ff7044"/>
+      <stop offset="1" stop-color="#ff9777"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <circle cx="29" cy="29" r="13" fill="none" stroke="#fff" stroke-width="5"/>
+  <path d="M38.8 38.8 50 50" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M29 21.5 31.2 26.8 36.5 29 31.2 31.2 29 36.5 26.8 31.2 21.5 29 26.8 26.8Z" fill="#fff"/>
+  <text x="80" y="29" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#1c1d1d">RAG SaaS</text>
+  <text x="80" y="52" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="22" font-weight="500" fill="#1c1d1d">Platform</text>
+</svg>

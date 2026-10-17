@@ -1078,5 +1078,18 @@
   "quality_scores.unsupported": "unsupported claim",
   "quality_scores.export": "Export CSV",
   "quality_scores.error_load": "Could not load the quality scores.",
-  "nav.quality_scores": "Quality scores"
+  "nav.quality_scores": "Quality scores",
+  "demo.title": "See it work",
+  "demo.subtitle": "A real recording of the running product: sign up, upload documents, let them be indexed, ask a question and read the cited answer. Nothing on this page is a mock-up.",
+  "demo.video_title": "Product tour (video)",
+  "demo.steps_title": "Walk through it step by step",
+  "demo.prev": "Previous",
+  "demo.next": "Next",
+  "demo.step_of": "Step {current} of {total}",
+  "demo.recorded_note": "Recorded on {date} from the product running on a local test stack with a local language model, so the waiting times are real. The documents and the question are sample data.",
+  "demo.cta": "Create your account",
+  "demo.error": "The demo recording could not be loaded.",
+  "demo.loading": "Loading the demo…",
+  "demo.novideo": "Your browser cannot play this video.",
+  "demo.keyboard": "Tip: use the left and right arrow keys to move between steps."
 }
