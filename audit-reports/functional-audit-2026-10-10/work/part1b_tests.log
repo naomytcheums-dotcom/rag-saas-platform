@@ -1,0 +1,19 @@
+== tests/test_auth_api.py tests/test_auth_security.py tests/test_oauth_logic_integration.py
+tegration.py', 435, 'Skipped: DATABASE_URL is not reachable -- skipping OAuth 
+logic integration tests ([WinError 1225] The remote computer refused the 
+network connection)')
+195 passed, 8 skipped in 437.43s (0:07:17)
+rc:0
+== tests/test_organization_members.py tests/test_invitations.py tests/test_organization_settings.py tests/test_quotas.py tests/test_user_limits.py tests/test_usage.py tests/test_resource_permissions.py tests/test_teams.py
+........................................................................ [ 94%]
+.........                                                                [100%]Running teardown with pytest sessionfinish...
+
+153 passed in 449.51s (0:07:29)
+rc:0
+== tests/test_organization_branding.py tests/test_custom_domains.py tests/test_domain_verification.py tests/test_email_domains.py tests/test_ssl_certificates.py tests/test_white_label.py tests/test_widget.py tests/test_email_branding.py
+........................................................................ [ 76%]
+............................................                             [100%]Running teardown with pytest sessionfinish...
+
+188 passed in 356.73s (0:05:56)
+rc:0
+exit:done

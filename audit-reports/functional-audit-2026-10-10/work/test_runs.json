@@ -1,0 +1,26 @@
+{
+ "2": {
+  "command": "pytest 32 Part-2 files (extractors, url/sitemap/github/drive/docs/notion/confluence/onedrive/zip, documents, progress, reindex, duplicates, modification check, batch jobs, metadata filtering) -q",
+  "result": "passed"
+ },
+ "1": {
+  "command": "pytest 19 Part-1 files in 3 batches (auth, security, oauth logic, members, invitations, settings, quotas, user limits, usage, resource permissions, teams, branding, custom domains, domain verification, email domains, ssl, white label, widget, email branding)",
+  "result": "passed"
+ },
+ "3": {
+  "command": "pytest 41 Part-3/4 files (ingestion, chunking strategies and wiring, retrieval pipeline, bm25 cache, pgvector scan mock, query rewriting, hyde, multi-query, filters, compression, dedup, mmr, llm providers/config/sampling, fallback, embedding providers/config) -q",
+  "result": "passed"
+ },
+ "4": {
+  "command": "pytest 41 Part-3/4 files (ingestion, chunking strategies and wiring, retrieval pipeline, bm25 cache, pgvector scan mock, query rewriting, hyde, multi-query, filters, compression, dedup, mmr, llm providers/config/sampling, fallback, embedding providers/config) -q",
+  "result": "passed"
+ },
+ "5": {
+  "command": "pytest Part-5/6 suites (agents, tools, orchestrator, workflows, escalation, approval, custom tools, citations, quality detectors, quality dashboard) -q",
+  "result": "passed"
+ },
+ "6": {
+  "command": "pytest Part-5/6 suites (agents, tools, orchestrator, workflows, escalation, approval, custom tools, citations, quality detectors, quality dashboard) -q",
+  "result": "passed"
+ }
+}

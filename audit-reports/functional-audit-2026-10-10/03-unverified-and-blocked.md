@@ -1,0 +1,411 @@
+# 03 - Unverified, blocked, partial or broken items
+
+## BLOCKED_EXTERNAL (30)
+
+- **1.4.3** SSL automatique (Let's Encrypt) - gaps: real issuance needs a public DNS name and reachable host; Render/Vercel terminate TLS themselves so this path may be unused in production; blockers: Let's Encrypt, public domain, Celery worker for renewal; action: decide: rely on host-managed TLS, or run ACME on staging
+- **4.1.1** Anthropic Claude - gaps: no real Anthropic call in the audit; blockers: Anthropic API key; action: run a live smoke test with a funded key
+- **4.1.2** OpenAI GPT - gaps: no real call; blockers: OpenAI API key; action: live smoke test
+- **4.1.3** Google Gemini - gaps: no real call; blockers: Gemini API key; action: live smoke test
+- **4.1.4** Mistral - gaps: no real call; blockers: Mistral API key; action: live smoke test
+- **4.1.5** Ollama (local) - gaps: no local Ollama server exercised; blockers: Ollama server; action: test against a local Ollama
+- **4.2.1** OpenAI embeddings - gaps: no real call; blockers: OpenAI key; action: live smoke test
+- **4.2.2** Voyage AI - gaps: no real call; blockers: Voyage key; action: live smoke test
+- **4.2.3** Cohere - gaps: no real call; blockers: Cohere key; action: live smoke test
+- **5.2.2** Web Search - gaps: no real search call; blockers: Tavily/Google API key; action: live smoke test
+- **5.2.3** GitHub (issues, repos) - gaps: no real GitHub call; blockers: GitHub token; action: live smoke test
+- **5.2.7** Calendar (Google, Outlook) - gaps: no real calendar call; blockers: Google/Microsoft OAuth; action: sandbox test
+- **5.2.8** Email (Gmail, Outlook, SMTP) - gaps: no real mailbox call; blockers: mail provider; action: sandbox test
+- **5.4.10** Bloc Email - gaps: no real send; blockers: mail provider; action: sandbox test
+- **5.4.11** Bloc Calendar - gaps: no real calendar call; blockers: calendar provider; action: sandbox test
+- **8.2.1** Speech-to-text (STT) - gaps: no real STT call; blockers: Whisper/Deepgram key; action: live smoke test with a funded key
+- **8.2.2** Text-to-speech (TTS) - gaps: no real TTS call; blockers: ElevenLabs/Google key; action: live smoke test
+- **8.2.13** Téléphonie - gaps: no real call or SMS; Telephony.tsx unused; blockers: Twilio account; action: Twilio test credentials; wire UI
+- **9.4.1** Slack - gaps: no real Slack workspace exercised; blockers: Slack app; action: sandbox workspace test
+- **9.4.2** Microsoft Teams - gaps: no real Teams tenant exercised; blockers: Microsoft Bot registration; action: sandbox test; set TEAMS_BOT_ID
+- **9.4.3** Discord - gaps: no real Discord server exercised; blockers: Discord application; action: sandbox test; set secret
+- **10.1.12** Malware scanning - gaps: scanner not running in production (audit); blockers: ClamAV daemon; action: run ClamAV or document the risk
+- **10.1.15** Encryption in transit - gaps: not verified against the live deployment; blockers: live deployment; action: check with a TLS scanner
+- **10.3.5** Distributed tracing - gaps: no collector/backend in the deployment; blockers: OTel collector; action: deploy a collector or document as optional
+- **10.3.6** LLM traces - gaps: Datadog not configured; blockers: Datadog; action: optional
+- **10.3.9** Error tracking - gaps: Sentry DSN not verified in production; blockers: Sentry; action: verify DSN
+- **11.3.4** Uptime monitoring - gaps: no uptime monitor configured to the audit's knowledge; blockers: uptime service; action: configure UptimeRobot or similar
+- **13.5.4** Distributed tracing - gaps: no collector; blockers: OTel collector; action: optional
+- **13.5.5** LLM traces - gaps: Datadog not configured; blockers: Datadog; action: optional
+- **13.5.8** Error tracking - gaps: Sentry DSN unverified; blockers: Sentry; action: verify DSN
+
+## IMPLEMENTED_UNVERIFIED (217)
+
+- **1.3.8** Usage par organisation - gaps: a usage dashboard for a normal org admin not confirmed; blockers: none; action: confirm UI
+- **1.4.1** Custom domains (app.client.com) - gaps: real host routing (Vercel/Render custom domain) not exercised; blockers: DNS, hosting provider; action: staging test with a real domain
+- **1.4.5** Custom email domain - gaps: real Resend domain verification not exercised; blockers: Resend; action: staging test with Resend
+- **1.4.9** Email sender personnalisable - gaps: real sending not exercised; blockers: Resend; action: staging test
+- **2.1.12** GitHub repositories - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes - no GitHub import form; blockers: GitHub API / token; action: sandbox test with a real read-only token; add UI
+- **2.1.13** GitHub issues - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: GitHub API / token; action: same as 2.1.12
+- **2.1.14** Google Drive - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: Google OAuth / Drive API; action: sandbox test; add UI
+- **2.1.15** Google Docs - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: Google OAuth / Docs API; action: same as 2.1.14
+- **2.1.16** Notion - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: Notion API / token; action: sandbox test; add UI
+- **2.1.17** Confluence - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: Confluence API / token; action: sandbox test; add UI
+- **2.1.18** OneDrive - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes; blockers: Microsoft Graph / token; action: sandbox test; add UI
+- **2.2.13** Détection de documents modifiés - gaps: periodic run needs Celery beat (audit R-02); no UI; blockers: Celery beat, remote URLs; action: stage test with worker/beat
+- **2.2.14** Synchronisation automatique - gaps: depends on Celery beat; connectors external; blockers: Celery beat, external APIs; action: stage test
+- **2.2.15** Auto-reindexation programmée - gaps: needs Celery beat; no UI; blockers: Celery beat; action: stage test with beat
+- **2.2.16** Batch Processing - gaps: needs a Celery worker; no UI; blockers: Celery worker; action: stage test with worker
+- **3.1.6** OCR optionnel - gaps: cannot run on this machine without the binaries; blockers: Tesseract, poppler; action: run the OCR test in CI
+- **3.4.2** Vector Search - gaps: which branch production takes is unproven; blockers: PostgreSQL + pgvector; action: PostgreSQL integration test in CI (audit P1-4)
+- **3.4.4** Cross-encoder reranking - gaps: real model load/latency/memory not measured; blockers: model download; action: measure on the real host
+- **3.4.7** HyDE - gaps: quality benefit never measured; blockers: LLM provider; action: evaluate with Eval Lab
+- **3.4.8** Multi-query retrieval - gaps: quality benefit never measured; blockers: LLM provider; action: evaluate with Eval Lab
+- **4.1.6** OpenAI-compatible APIs - gaps: guard application not confirmed in this pass; blockers: compatible endpoint; action: verify SSRF guard on custom base URLs
+- **5.3.10** Déploiement - gaps: meaning of 'deploy to production' not precisely defined in the spec; blockers: none; action: clarify requirement
+- **5.4.3** Bloc LLM - gaps: LLM real call not exercised; blockers: LLM provider needed to prove real behaviour; action: smoke test
+- **5.4.8** Bloc Code - gaps: sandbox isolation (process/container) not verified; blockers: sandbox runtime; action: security review of the sandbox
+- **6.2.5** Unsupported claim detection - gaps: detection accuracy never measured on real data; blockers: LLM provider; action: evaluate on a labelled set
+- **6.2.6** Claim verification - gaps: accuracy not measured; blockers: LLM provider; action: evaluate
+- **6.2.7** Contradiction detection - gaps: accuracy not measured; blockers: LLM provider; action: evaluate
+- **6.2.8** Source consistency check - gaps: accuracy not measured; blockers: none; action: evaluate
+- **6.2.9** Hallucination detector - gaps: accuracy not measured; blockers: LLM provider; action: evaluate with SQuAD 2.0 and a hallucination set
+- **6.2.10** Groundedness score - gaps: score meaning not validated; blockers: none; action: validate
+- **6.2.11** Faithfulness score - gaps: score meaning not validated; blockers: none; action: validate
+- **7.1.1** Dataset manager - gaps: none found; blockers: none; action: none
+- **7.1.2** Question sets - gaps: none found; blockers: none; action: none
+- **7.1.3** Ground-truth answers - gaps: none found; blockers: none; action: none
+- **7.1.4** Ground-truth documents - gaps: none found; blockers: none; action: none
+- **7.1.5** Easy / Medium / Hard - gaps: none found; blockers: none; action: none
+- **7.1.6** Benchmark versions - gaps: none found; blockers: none; action: none
+- **7.2.1** Recall@1 - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.2** Recall@3 - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.3** Recall@5 - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.4** Recall@10 - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.5** MRR - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.6** NDCG - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.7** Precision - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: produce a baseline
+- **7.2.8** Faithfulness - gaps: score validity not measured against human labels; no run on a real dataset has produced a baseline (audit R-06); blockers: LLM provider; action: validate on a labelled set
+- **7.2.9** Answer relevance - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: LLM provider; action: validate
+- **7.2.10** Context relevance - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: LLM provider; action: validate
+- **7.2.11** Citation correctness - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: none; action: validate
+- **7.2.12** Hallucination rate - gaps: no run on a real dataset has produced a baseline (audit R-06); blockers: LLM provider; action: validate with unanswerable questions
+- **7.2.13** Latency - gaps: none found; blockers: none; action: none
+- **7.2.14** Token usage - gaps: none found; blockers: none; action: none
+- **7.2.15** Cost/request - gaps: price tables may be stale (provider prices change); blockers: none; action: review prices periodically
+- **7.3.1** Automatic evaluation - gaps: jobs run in Celery (no production worker, audit R-02); never run on real data; blockers: Celery worker, LLM provider; action: run a real job locally and in staging
+- **7.3.2** Manual evaluation - gaps: no UI page found for manual scoring; blockers: none; action: confirm UI
+- **7.3.3** Regression detection - gaps: none found; blockers: none; action: none
+- **7.3.4** Model comparison - gaps: none found; blockers: none; action: none
+- **7.3.5** Retriever comparison - gaps: retriever-specific test not isolated; blockers: none; action: add retriever comparison test
+- **7.3.6** Reranker comparison - gaps: reranker-specific test not isolated; blockers: none; action: add reranker comparison test
+- **7.3.7** Prompt comparison - gaps: prompt-specific test not isolated; blockers: none; action: add prompt comparison test
+- **7.3.8** Automatic evaluation before deployment - gaps: whether a deployment is actually blocked by the gate in the deploy path is not confirmed; blockers: none; action: trace the gate into agent deployment
+- **7.3.9** Seuils de régression - gaps: default value (spec: 5%) not confirmed by this audit; blockers: none; action: confirm default threshold
+- **7.3.10** A/B testing - gaps: none found; blockers: none; action: none
+- **8.1.1** Streaming - gaps: no browser end-to-end run; blockers: LLM provider for a real stream; action: none
+- **8.1.2** Markdown - gaps: none found; blockers: none; action: none
+- **8.1.3** Code highlighting - gaps: none found; blockers: none; action: none
+- **8.1.4** Citations - gaps: none found; blockers: none; action: none
+- **8.1.5** Copy - gaps: none found; blockers: none; action: none
+- **8.1.6** Regenerate - gaps: standalone RegenerateButton.tsx is unused; blockers: none; action: none
+- **8.1.7** Edit question - gaps: standalone EditQuestion.tsx is unused; blockers: none; action: none
+- **8.1.9** Feedback (👍/👎 + reason + comment) - gaps: reason and comment fields in the UI not confirmed; blockers: none; action: confirm reason/comment capture
+- **8.1.10** Conversation history - gaps: none found; blockers: none; action: none
+- **8.1.11** Rename conversation - gaps: none found; blockers: none; action: none
+- **8.1.12** Search conversations - gaps: none found; blockers: none; action: none
+- **8.1.13** Delete conversation - gaps: none found; blockers: none; action: none
+- **8.1.19** Multi-langue - gaps: profile page note mentions a 2-language backend scope; coverage of every string across 6 languages is not proven; blockers: none; action: run a missing-key check per locale
+- **8.2.3** Streaming voice - gaps: real-time streaming playback not exercised; blockers: TTS provider; action: manual test
+- **8.2.4** Push-to-talk - gaps: browser microphone behaviour not run; blockers: none; action: manual test
+- **8.2.5** Voice activity detection - gaps: only on the demo page; real VAD accuracy not tested; blockers: none; action: manual test
+- **8.2.6** Multi-language - gaps: VoiceSettings.tsx the UI component exists but no page imports it; blockers: STT/TTS providers; action: wire VoiceSettings
+- **8.2.10** Microphone test - gaps: only reachable on /voice-demo; blockers: none; action: link from settings
+- **8.2.12** Voice error handling - gaps: none found; blockers: none; action: none
+- **9.1.1** POST /v1/chat - gaps: real LLM answer not exercised; blockers: LLM provider; action: smoke test
+- **9.1.2** POST /v1/documents - gaps: none found; blockers: none; action: none
+- **9.1.3** POST /v1/knowledge-bases - gaps: none found; blockers: none; action: none
+- **9.1.4** GET /v1/conversations - gaps: none found; blockers: none; action: none
+- **9.1.5** POST /v1/search - gaps: none found; blockers: none; action: none
+- **9.1.6** POST /v1/agents/run - gaps: agent run needs an LLM for a real result; blockers: LLM provider; action: smoke test
+- **9.1.7** GET /v1/usage - gaps: none found; blockers: none; action: none
+- **9.1.8** GET /v1/analytics - gaps: none found; blockers: none; action: none
+- **9.1.9** POST /v1/embed - gaps: none found; blockers: none; action: none
+- **9.2.1** API keys - gaps: none found; blockers: none; action: none
+- **9.2.2** Key rotation - gaps: scheduled rotation needs Celery beat (audit R-02); blockers: Celery beat; action: stage test
+- **9.2.3** Key expiration - gaps: none found; blockers: none; action: confirm expired-key rejection test
+- **9.2.4** Scopes - gaps: none found; blockers: none; action: none
+- **9.2.5** Rate limits - gaps: per-process only in production without Redis; blockers: Redis; action: provision Redis for production
+- **9.2.6** Quotas - gaps: none found; blockers: none; action: none
+- **9.2.7** Webhooks - gaps: delivery retries need Celery; blockers: Celery worker; action: stage test
+- **9.2.8** API versioning - gaps: none found; blockers: none; action: none
+- **9.2.9** OpenAPI / Swagger - gaps: docs endpoints may be public; blockers: none; action: decide whether to hide docs in production
+- **9.2.10** SDK Python - gaps: SDK tests not executed here; compatibility with the live API not proven; blockers: none; action: run SDK tests in CI
+- **9.2.11** SDK JavaScript/TypeScript - gaps: SDK tests not executed here; blockers: none; action: run SDK tests in CI
+- **9.3.1** Script tag - gaps: none found; blockers: none; action: none
+- **9.3.2** Logo personnalisable - gaps: none found; blockers: none; action: none
+- **9.3.3** Couleur personnalisable - gaps: none found; blockers: none; action: none
+- **9.3.4** Nom personnalisable - gaps: none found; blockers: none; action: none
+- **9.3.5** Avatar personnalisable - gaps: none found; blockers: none; action: none
+- **9.3.6** Welcome message - gaps: none found; blockers: none; action: none
+- **9.3.7** Suggested questions - gaps: none found; blockers: none; action: none
+- **9.3.8** Position - gaps: none found; blockers: none; action: none
+- **9.3.9** Language - gaps: none found; blockers: none; action: none
+- **9.3.10** Theme - gaps: none found; blockers: none; action: none
+- **9.3.11** React component - gaps: tests not executed here; blockers: none; action: run in CI
+- **9.3.12** Vue component - gaps: tests not executed here; blockers: none; action: run in CI
+- **9.3.13** iframe - gaps: none found; blockers: none; action: none
+- **9.3.14** JavaScript SDK - gaps: tests not executed here; blockers: none; action: run in CI
+- **10.1.1** JWT - gaps: none found; blockers: none; action: none
+- **10.1.2** Refresh tokens - gaps: none found; blockers: none; action: none
+- **10.1.5** Rate limiting - gaps: per-process in production without Redis; blockers: Redis; action: provision Redis
+- **10.1.6** Request validation - gaps: none found; blockers: none; action: none
+- **10.1.7** Input sanitization - gaps: server-side HTML sanitisation of stored user content not exhaustively reviewed; blockers: none; action: XSS review of stored fields
+- **10.1.8** Prompt injection protection - gaps: detection effectiveness never measured on attack sets; blockers: none; action: red-team evaluation
+- **10.1.9** SSRF protection - gaps: any direct httpx/requests call outside the guard would bypass it; blockers: none; action: static check that forbids unguarded HTTP clients
+- **10.1.10** File validation - gaps: none found; blockers: none; action: none
+- **10.1.11** MIME validation - gaps: none found; blockers: none; action: confirm magic-byte sniffing
+- **10.1.13** Secret management - gaps: none found; blockers: none; action: none
+- **10.2.1** Prompt injection detection - gaps: effectiveness not measured; blockers: none; action: red-team evaluation
+- **10.2.2** Jailbreak detection - gaps: effectiveness not measured; blockers: none; action: red-team evaluation
+- **10.2.4** PII detection - gaps: applied at ingestion; not on chat input; blockers: none; action: confirm scope
+- **10.2.9** Tool permission boundaries - gaps: none found; blockers: none; action: none
+- **10.3.1** Audit log - gaps: none found; blockers: none; action: none
+- **10.3.2** Structured logging - gaps: log shipping to Loki/Datadog not exercised; blockers: log backend; action: none
+- **10.3.3** Request IDs - gaps: none found; blockers: none; action: none
+- **10.3.4** Trace IDs - gaps: none found; blockers: none; action: none
+- **10.3.7** Retrieval traces - gaps: none found; blockers: none; action: none
+- **10.3.8** Tool traces - gaps: none found; blockers: none; action: none
+- **10.3.10** Performance monitoring - gaps: production token not verified; blockers: Render env; action: set METRICS_AUTH_TOKEN
+- **10.3.11** Cost monitoring - gaps: none found; blockers: none; action: none
+- **10.3.12** Token monitoring - gaps: none found; blockers: none; action: none
+- **10.4.1** SSO - gaps: tested with mocked IdP; blockers: IdP; action: test with a real IdP
+- **11.1.1** Organizations - gaps: none found; blockers: none; action: none
+- **11.1.2** Users - gaps: none found; blockers: none; action: none
+- **11.1.3** Requests - gaps: none found; blockers: none; action: none
+- **11.1.4** Tokens - gaps: none found; blockers: none; action: none
+- **11.1.5** Cost - gaps: none found; blockers: none; action: none
+- **11.1.6** Revenue - gaps: revenue is only as true as recorded invoices; manual proof-of-payment is unverified against a bank (audit R-05); blockers: none; action: reconcile with provider payouts
+- **11.1.7** Errors - gaps: none found; blockers: none; action: none
+- **11.1.8** Latency - gaps: none found; blockers: none; action: none
+- **11.2.1** Requests/day - gaps: none found; blockers: none; action: none
+- **11.2.2** Active users - gaps: none found; blockers: none; action: none
+- **11.2.3** Questions/day - gaps: none found; blockers: none; action: none
+- **11.2.4** Documents - gaps: none found; blockers: none; action: none
+- **11.2.11** Cost per organization - gaps: none found; blockers: none; action: none
+- **11.3.1** GET /health - gaps: none found; blockers: none; action: none
+- **11.3.2** GET /ready - gaps: path differs from the spec (/ready); blockers: none; action: none
+- **11.3.3** GET /metrics - gaps: production token not verified; blockers: Render env; action: set METRICS_AUTH_TOKEN
+- **11.3.5** Queue monitoring - gaps: reports Celery queue state; no worker exists in production (audit R-02); blockers: Celery worker; action: see audit P0-2
+- **11.3.6** Database health - gaps: none found; blockers: none; action: none
+- **11.3.9** API latency - gaps: none found; blockers: none; action: none
+- **11.3.10** Error rate - gaps: none found; blockers: none; action: none
+- **12.1.2** Subscriptions - gaps: never run against a real provider sandbox; live tests are skipped (audit R-05); recurring renewal events not observed; blockers: Stripe/Paystack; action: sandbox renewal scenario
+- **12.1.3** Invoices - gaps: refunded state not handled (BILL-016); manual proof not verified against a bank; blockers: none; action: decide refund policy
+- **12.1.6** Upgrade - gaps: never run against a real provider sandbox; live tests are skipped (audit R-05); proration not verified; blockers: Stripe/Paystack; action: sandbox upgrade
+- **12.1.7** Downgrade - gaps: never run against a real provider sandbox; live tests are skipped (audit R-05); effect on existing data over new limits not verified; blockers: Stripe/Paystack; action: sandbox downgrade and limit enforcement
+- **12.1.8** Cancellation - gaps: never run against a real provider sandbox; live tests are skipped (audit R-05); blockers: Stripe/Paystack; action: sandbox cancellation
+- **12.1.10** Credits - gaps: Paystack credit purchase not supported; currency inconsistency (BILL-018); never run against a real provider sandbox; live tests are skipped (audit R-05); blockers: Stripe/Paystack; action: sandbox credit purchase; set the flag
+- **12.1.11** Payment history - gaps: none found; blockers: none; action: none
+- **12.2.1** Free - gaps: production plan rows and limits (3 documents, 10 questions/day) not verified; plan data is not in code; blockers: production database; action: read-only check of the plans table
+- **12.2.2** Starter - gaps: production values unverified; blockers: production database; action: read-only check
+- **12.2.3** Pro - gaps: production values unverified; blockers: production database; action: read-only check
+- **12.2.4** Business - gaps: a Business plan may not exist; blockers: production database; action: confirm plan catalogue
+- **12.2.5** Enterprise - gaps: on-premise not delivered as a product; blockers: production database; action: confirm
+- **12.3.1** AI credits - gaps: never run against a real provider sandbox; live tests are skipped (audit R-05); blockers: Stripe/Paystack; action: see 12.1.10
+- **12.3.2** Document limits - gaps: plan-to-quota linkage in production not verified; blockers: none; action: verify linkage
+- **12.3.4** Requests/month - gaps: none found; blockers: none; action: none
+- **12.3.5** Tokens/month - gaps: none found; blockers: none; action: none
+- **12.3.7** Dashboard usage - gaps: none found; blockers: none; action: none
+- **13.1.2** Ruff - gaps: none found; blockers: none; action: none
+- **13.1.5** Pytest - gaps: tests mostly on SQLite; blockers: none; action: none
+- **13.1.7** Pre-commit hooks - gaps: hook installation is per developer; blockers: none; action: none
+- **13.1.8** Dependabot - gaps: none found; blockers: none; action: none
+- **13.1.9** Security scanning - gaps: bandit reports 11 medium findings and is non-blocking; blockers: none; action: triage bandit findings
+- **13.2.1** Unit tests - gaps: none found; blockers: none; action: none
+- **13.2.2** Integration tests - gaps: most 'integration' tests use mocks and SQLite; blockers: none; action: add real-service integration
+- **13.2.3** API tests - gaps: 183 of 943 operations have no test referencing their path (Copilot heuristic); blockers: none; action: cover the untested routes
+- **13.2.5** Security tests - gaps: no RLS test on PostgreSQL in CI; blockers: none; action: audit P1-4
+- **13.2.6** Regression tests - gaps: none found; blockers: none; action: none
+- **13.2.9** Agent tests - gaps: LLM mocked; blockers: none; action: none
+- **13.3.1** Lint - gaps: none found; blockers: none; action: none
+- **13.3.3** Unit tests - gaps: job takes about 60 minutes (limit 75); blockers: none; action: split or speed up tests
+- **13.3.4** Integration tests - gaps: mocked providers; blockers: none; action: none
+- **13.3.5** Security scan - gaps: bandit non-blocking; blockers: none; action: none
+- **13.3.6** Docker build - gaps: none found; blockers: none; action: none
+- **13.4.1** Docker - gaps: none found; blockers: none; action: none
+- **13.4.2** Docker Compose - gaps: compose stacks not run in this audit; blockers: Docker host; action: test a clean up
+- **13.5.1** Structured logging - gaps: duplicate of 10.3.2 in the spec; blockers: log backend; action: none
+- **13.5.2** Request IDs - gaps: duplicate of 10.3.3; blockers: none; action: none
+- **13.5.3** Trace IDs - gaps: duplicate of 10.3.4; blockers: none; action: none
+- **13.5.6** Retrieval traces - gaps: duplicate of 10.3.7; blockers: none; action: none
+- **13.5.7** Tool traces - gaps: duplicate of 10.3.8; blockers: none; action: none
+- **13.5.9** Performance monitoring - gaps: see /metrics exposure; blockers: none; action: set METRICS_AUTH_TOKEN
+- **13.5.10** Cost monitoring - gaps: duplicate of 10.3.11; blockers: none; action: none
+- **13.5.11** Token monitoring - gaps: duplicate of 10.3.12; blockers: none; action: none
+- **14.1.1** README - gaps: accuracy of every statement not re-read; blockers: none; action: none
+- **14.1.3** Installation guide - gaps: not executed on a clean machine; blockers: none; action: run the guide on a clean machine
+- **14.1.4** API documentation - gaps: none found; blockers: none; action: none
+- **14.1.5** Deployment guide - gaps: render.yaml and the worker doc may not match what actually runs on Render; blockers: none; action: align with reality
+- **14.1.6** Security guide - gaps: none found; blockers: none; action: none
+- **14.1.7** Admin guide - gaps: none found; blockers: none; action: none
+- **14.1.8** User guide - gaps: none found; blockers: none; action: none
+- **14.1.9** White-label guide - gaps: none found; blockers: none; action: none
+- **14.1.10** Customization guide - gaps: none found; blockers: none; action: none
+- **14.1.12** FAQ - gaps: none found; blockers: none; action: none
+- **14.2.8** Setup guide - gaps: none found; blockers: none; action: none
+- **14.3.1** Hero - gaps: none found; blockers: none; action: none
+- **14.3.3** Features - gaps: none found; blockers: none; action: none
+- **14.3.5** Integrations - gaps: logos only; integration status not verified; blockers: none; action: none
+- **14.4.3** Couleurs - gaps: none found; blockers: none; action: none
+
+## BROKEN (0)
+
+
+## PARTIALLY_IMPLEMENTED (100)
+
+- **1.1.4** Vérification email - gaps: NO frontend screen calls /verify/request or /verify/confirm (grep of frontend/app, components, lib finds none); profile page only shows verified/unverified; blockers: Resend for real delivery; action: add a verification screen (code entry + resend) and a test
+- **1.1.5** OAuth Google - gaps: login page has no Google button (grep of frontend/app/login/page.tsx finds no oauth link), users cannot start the flow from the UI; blockers: Google client id/secret; no real round-trip done; action: add buttons on login/register pages; test with a real sandbox client
+- **1.1.6** OAuth GitHub - gaps: same missing login button as 1.1.5; blockers: GitHub OAuth app credentials; action: same as 1.1.5
+- **1.1.10** Suppression du compte - gaps: permanent deletion depends on a Celery purge job; no worker in the production image (audit R-02), so deletion may never become permanent; blockers: Celery worker in production; action: run worker/beat and verify the purge on staging
+- **1.1.11** Export des données utilisateur (RGPD) - gaps: no frontend button found (no export call in frontend/app); blockers: none; action: add an export button on the security/profile page
+- **1.1.13** Gestion du profil (avatar, nom, entreprise, rôle) - gaps: job-role field requested by the spec: only company found in models/user.py; avatar storage needs S3/MinIO; blockers: S3 storage for avatars; action: confirm whether a job-title field is required
+- **1.2.6** Viewer - gaps: no exhaustive route-by-role matrix exists; blockers: none; action: add a route x role contract test
+- **1.2.7** RBAC complet - gaps: route classification pending; blockers: none; action: classify the 84 routes (audit P1-3)
+- **1.2.8** Permissions granulaires par ressource - gaps: which resource types honour these grants is not established; blockers: none; action: list the resource types that call the check and test each
+- **1.3.3** Teams - gaps: no team-management page found in frontend/app; blockers: none; action: add team UI or document as API-only
+- **1.3.5** Isolation des données - gaps: one forgotten filter exposes another tenant; opt-in PostgreSQL tests are not in CI; blockers: PostgreSQL; action: decide the RLS strategy (audit P0-1) and add a contract test per route
+- **1.3.6** Quotas par organisation - gaps: not every creation path (documents, members, requests) re-verified to call the quota check; blockers: none; action: list enforcement points and test each
+- **1.3.7** Limites par utilisateur - gaps: thin test coverage; no frontend; enforcement on the chat path not confirmed; blockers: none; action: confirm enforcement in chat and add tests
+- **1.4.6** White-label complet - gaps: removal of every brand mention across all pages and emails is not proven; blockers: none; action: visual audit of leftover brand strings
+- **1.4.8** Couleurs, polices, thème personnalisables - gaps: widget theming is proven; dashboard-wide font/theme application is not distinguished; blockers: none; action: confirm the dashboard applies fonts and theme
+- **2.1.11** Sitemap - gaps: no screen: frontend/app/dashboard/documents/page.tsx (103 lines) only lists, uploads one file and deletes - no sitemap form; blockers: none; action: add UI
+- **2.2.1** Upload multiple - gaps: UI input accepts one file at a time (documents/page.tsx:54 calls postFile once); no multi-select; blockers: none; action: allow multiple files in the UI
+- **2.2.3** Progression d'import - gaps: UI shows only a text status (documents/page.tsx:93); no progress bar or stream consumer; blockers: none; action: consume the SSE stream in the UI
+- **2.2.4** File preview - gaps: no preview component in the documents page; blockers: none; action: add preview panel
+- **2.2.6** Tags et catégories - gaps: no tag UI; 'categories' from the spec not found as a separate concept; blockers: none; action: add tag UI; clarify categories
+- **2.2.7** Versioning - gaps: thin test coverage; no UI; blockers: none; action: add tests for restore and replace; add UI
+- **2.2.8** Suppression / Remplacement - gaps: replace has no UI; blockers: S3 for stored files; action: add replace action
+- **2.2.9** Réindexation manuelle - gaps: no UI; task needs a Celery worker (audit R-02); blockers: Celery worker; action: add button; ensure worker
+- **2.2.10** Historique des modifications - gaps: no UI; blockers: none; action: add history view
+- **2.2.12** Détection de doublons - gaps: no UI; blockers: none; action: add UI
+- **3.1.5** Extraction des images - gaps: spec says extract captions and descriptions; image description by a vision model was not found in image_extraction.py (not fully read); blockers: vision model if required; action: confirm whether descriptions are generated
+- **3.4.5** Query expansion - gaps: spec says synonyms; none implemented; blockers: none; action: implement synonym or LLM expansion or amend the spec
+- **5.1.5** Per-tool budget (tokens) - gaps: no call to tool_budget found in agent_orchestrator.py or the tool dispatch path (grep of imports): the limit may never be enforced at run time; blockers: none; action: wire the budget check into tool execution and add an orchestrator test
+- **5.1.7** Fallback - gaps: tool-level fallback: the 'fallback' module is imported only by tool_config.py; no use inside the orchestrator found; blockers: none; action: wire tool fallback into execution and test
+- **5.1.13** Task planning - gaps: plans are advisory text, not executed step by step (comment at ~349-353); default off; blockers: LLM provider needed to prove real behaviour; action: decide whether to execute plans
+- **6.1.8** Citation preview - gaps: the preview service is dead code from the app's point of view; the tooltip uses data already in the citation; blockers: none; action: wire or remove citation_preview
+- **6.2.12** Dashboard qualité - gaps: page shown manages alert rules; display of per-answer scores (groundedness/faithfulness) in a dashboard not confirmed; blockers: none; action: confirm scores are visualised
+- **8.1.8** Retry - gaps: no retry action in the chat UI (regenerate is separate); blockers: none; action: wire RetryButton or document regenerate as the retry
+- **8.1.14** Export conversation - gaps: no export control in the chat UI; PDF needs weasyprint system libraries on the host; blockers: weasyprint libraries; action: add export menu; confirm weasyprint in the Docker image
+- **8.1.15** Share conversation - gaps: no share control in the chat UI; blockers: none; action: wire ShareConversation
+- **8.1.16** Public / Private conversations - gaps: no visibility toggle in the chat UI; blockers: none; action: add toggle
+- **8.1.17** Suggested questions - gaps: UI does not call the backend suggestions; blockers: none; action: wire dynamic suggestions
+- **8.1.18** Follow-up questions - gaps: no follow-up questions displayed after answers; blockers: none; action: wire FollowUpQuestions
+- **8.2.7** Audio history - gaps: no audio history screen; blockers: none; action: wire VoiceMessageList
+- **8.2.8** Voice settings - gaps: no voice settings screen; blockers: none; action: wire VoiceSettings
+- **8.2.9** Voice selection - gaps: no reachable voice selection screen; blockers: ElevenLabs key; action: wire VoiceSettings
+- **8.2.11** Audio permissions - gaps: permission handling only inside individual voice components; blockers: none; action: wire AudioPermission
+- **10.1.3** OAuth - gaps: login screen has no OAuth buttons; blockers: OAuth credentials; action: see 1.1.5
+- **10.1.4** RBAC - gaps: no route x role matrix; blockers: none; action: audit P1-3
+- **10.1.14** Encryption at rest - gaps: at-rest encryption of content depends on Supabase/S3 settings (not verified); blockers: Supabase/S3 settings; action: document provider encryption settings
+- **10.2.3** Data leakage protection - gaps: no systematic data-leakage filter on model output found; blockers: none; action: define the requirement and implement or document
+- **10.2.5** PII masking - gaps: no masking of PII in model output or logs generally; blockers: none; action: decide scope and wire
+- **10.2.6** Sensitive information filtering - gaps: requirement unclear versus 10.2.4/10.2.5; blockers: none; action: clarify requirement
+- **10.2.8** Unsafe tool-call detection - gaps: detection of dangerous tool calls beyond permissions and validation not found; blockers: none; action: clarify and implement
+- **10.2.10** Output validation - gaps: requirement unclear; only quality scoring found; blockers: none; action: clarify requirement
+- **10.4.2** SAML - gaps: customers requiring SAML cannot be served; blockers: none; action: decide: accept OIDC only or add SAML
+- **10.4.4** Enterprise roles - gaps: meaning of 'enterprise roles' not defined in the spec; blockers: none; action: clarify
+- **10.4.5** Data retention policies - gaps: policies are platform-wide environment settings, not per-organization policies; tasks need Celery; blockers: Celery worker; action: per-organization policy
+- **10.4.9** Private deployment - gaps: self-hosted stack never run in this audit; blockers: Docker host; action: test a clean install
+- **10.4.10** On-premise deployment - gaps: not executed; no air-gapped LLM path verified beyond Ollama support; blockers: Docker host; action: test a clean install
+- **10.4.11** VPC deployment - gaps: documentation only; blockers: cloud account; action: write a VPC reference deployment
+- **11.2.5** Retrieval success rate - gaps: aggregate metric not located; blockers: none; action: expose the aggregate on the analytics page
+- **11.2.6** Answer quality score - gaps: scores depend on the unvalidated quality detectors (Part 6.2); blockers: none; action: validate detectors
+- **11.2.8** Failed questions - gaps: evaluation-only; blockers: none; action: implement from conversation feedback
+- **11.2.12** Cost per user - gaps: not located; blockers: none; action: confirm or implement
+- **11.2.13** Cost per answer - gaps: not confirmed; blockers: none; action: confirm
+- **11.3.7** Vector DB health - gaps: pgvector extension availability not part of the readiness check (not confirmed); blockers: none; action: add extension check
+- **11.3.8** LLM availability - gaps: no availability probe; blockers: LLM providers; action: add a lightweight probe
+- **12.1.1** Checkout - gaps: Flutterwave named in the spec is absent; never run against a real provider sandbox; live tests are skipped (audit R-05); blockers: Stripe/Paystack test keys; action: run sandbox end to end; decide on Flutterwave
+- **12.1.5** Trials - gaps: trial end behaviour (conversion/expiry) not verified; provider trial settings not exercised; blockers: Stripe/Paystack; action: verify trial lifecycle
+- **12.1.9** Usage billing - gaps: spend caps not atomic (BILL-012, unverified); usage is paid through credits, not invoiced after use; blockers: none; action: clarify requirement
+- **12.3.3** Storage limits - gaps: enforcement on upload not confirmed; blockers: none; action: confirm and test enforcement
+- **13.1.1** Python type hints - gaps: 'everywhere' is not enforced or measured; blockers: none; action: measure with mypy/pyright
+- **13.1.3** Black - gaps: Black itself is not configured: a functionally equivalent formatter is used; blockers: none; action: accept ruff-format as the formatter
+- **13.1.6** Coverage > 90% - gaps: spec asks for more than 90%; measured about 77% on the CircleCI test subset; blockers: none; action: raise coverage or revise the target
+- **13.2.4** E2E tests - gaps: no browser-driven end-to-end test; blockers: none; action: add Playwright smoke tests
+- **13.2.7** LLM tests - gaps: no test with a real LLM runs in CI; blockers: LLM key; action: scheduled live smoke job
+- **13.2.8** RAG tests - gaps: no quality baseline on real data (audit R-06); blockers: dataset; action: SQuAD run
+- **13.2.10** Database tests - gaps: database behaviour proven on SQLite in CI only; blockers: PostgreSQL service; action: audit P1-4
+- **13.2.11** Deployment tests - gaps: no post-deploy smoke test against a running service; blockers: deployed service; action: add post-deploy health check
+- **13.3.2** Type check - gaps: Python type check missing; blockers: none; action: see 13.1.4
+- **13.3.8** Deploy - gaps: no automated migration step; deployment is not a pipeline stage; blockers: Render/Vercel; action: add a controlled migration step
+- **13.4.3** Render - gaps: blueprint out of date; blockers: Render; action: update render.yaml
+- **13.5.12** Traçabilité complète d'une requête - gaps: no single trace view joining all stages; blockers: none; action: add a request trace view
+- **14.1.2** Architecture (diagrammes) - gaps: docs/architecture/LEGACY.md and agents.md describe obsolete or nonexistent routes (audit R-07); blockers: none; action: reconcile documentation with code
+- **14.1.11** Troubleshooting - gaps: dedicated guide not found; blockers: none; action: write TROUBLESHOOTING.md
+- **14.3.2** Demo - gaps: no landing demo confirmed; blockers: none; action: add demo
+- **14.3.4** Architecture - gaps: not confirmed; blockers: none; action: confirm
+- **14.3.6** Pricing - gaps: plan catalogue in production unverified (12.2.x); blockers: none; action: confirm
+- **14.3.7** Security - gaps: not confirmed; blockers: none; action: confirm
+- **14.3.8** Documentation - gaps: not confirmed; blockers: none; action: confirm
+- **14.3.9** FAQ - gaps: not confirmed; blockers: none; action: confirm
+- **14.4.2** Logo - gaps: not verified; blockers: none; action: confirm
+- **14.4.4** Charte graphique - gaps: not located; blockers: none; action: write a short brand guide
+- **15.1.1** Ticket ID - gaps: no API route or screen lets a human list, assign or resolve tickets; blockers: none; action: add ticket API
+- **15.1.2** Priority - gaps: no API route or screen lets a human list, assign or resolve tickets; blockers: none; action: add ticket API
+- **15.1.3** Assignment - gaps: no API route or screen lets a human list, assign or resolve tickets; no assignment action; blockers: none; action: add assignment endpoint
+- **15.1.5** Status - gaps: no API route or screen lets a human list, assign or resolve tickets; blockers: none; action: add ticket API
+- **15.1.7** Conversation context - gaps: no API route or screen lets a human list, assign or resolve tickets; blockers: none; action: expose in the ticket view
+- **15.1.8** Resolution - gaps: no API route or screen lets a human list, assign or resolve tickets; blockers: none; action: add resolve endpoint
+- **15.2.1** Feedback (👍/👎) - gaps: thumbs up/down works in the chat UI; see 8.1.9 for field coverage; blockers: none; action: none
+- **15.2.2** Raison - gaps: UI capture of reason categories not confirmed; blockers: none; action: confirm UI
+- **15.2.3** Commentaire libre - gaps: UI capture not confirmed; blockers: none; action: confirm UI
+- **15.2.5** Analyse de l'échec - gaps: not connected to user feedback; blockers: none; action: connect feedback to failure analysis
+- **15.2.7** Benchmark → amélioration - gaps: never executed on real data; blockers: LLM provider, dataset; action: run once with SQuAD
+
+## NOT_IMPLEMENTED (39)
+
+- **2.2.2** Drag & drop - gaps: documents page has no drop zone (inspected documents/page.tsx and dashboard page); blockers: none; action: add a drop zone to the documents page
+- **7.1.7** Tuning / Held-out split - gaps: no tuning versus held-out separation: tuning on a benchmark would leak into the reported score; blockers: none; action: add a split attribute on questions and enforce held-out use in evaluation runs
+- **7.1.8** Datasets verticaux - gaps: verticals absent; blockers: none; action: build datasets, e.g. from open corpora
+- **10.2.7** Toxicity filtering - gaps: no toxicity filter; blockers: none; action: implement (moderation API or classifier)
+- **10.4.3** SCIM - gaps: no SCIM provisioning; blockers: none; action: implement or drop from the offer
+- **10.4.6** Custom retention - gaps: custom retention per customer absent; blockers: none; action: implement
+- **10.4.7** Dedicated tenant - gaps: absent; blockers: none; action: treat as a commercial offer to define
+- **10.4.8** Dedicated database - gaps: absent; blockers: none; action: commercial offer to define
+- **11.2.7** Most asked questions - gaps: absent; blockers: none; action: implement
+- **11.2.9** Top documents - gaps: absent; blockers: none; action: implement from citation counts
+- **11.2.10** Worst documents - gaps: absent; blockers: none; action: implement
+- **11.2.14** Question clusters - gaps: absent; blockers: none; action: implement
+- **11.2.15** Knowledge gap detection - gaps: absent; blockers: none; action: implement
+- **11.2.16** Documentation gap reports - gaps: absent; blockers: none; action: implement
+- **12.1.4** Coupons - gaps: promo codes absent; blockers: none; action: implement or drop from the offer
+- **12.3.6** Voice minutes - gaps: voice usage is not metered per plan; blockers: none; action: implement
+- **13.1.4** MyPy - gaps: no static type checking for Python; blockers: none; action: add mypy or pyright
+- **13.3.7** E2E tests - gaps: absent; blockers: none; action: add Playwright job
+- **13.4.4** Railway - gaps: absent; blockers: none; action: document or drop
+- **13.4.5** Fly.io - gaps: absent; blockers: none; action: document or drop
+- **13.4.6** AWS - gaps: absent (generic Docker only); blockers: none; action: document or drop
+- **13.4.7** GCP - gaps: absent; blockers: none; action: document or drop
+- **13.4.8** Azure - gaps: absent; blockers: none; action: document or drop
+- **13.4.9** DigitalOcean - gaps: absent; blockers: none; action: document or drop
+- **13.4.10** Kubernetes - gaps: absent; blockers: none; action: document or drop
+- **13.4.11** Helm - gaps: absent; blockers: none; action: document or drop
+- **13.4.12** Terraform - gaps: absent; blockers: none; action: document or drop
+- **14.2.1** Architecture PDF - gaps: no architecture PDF; Markdown source exists; blockers: none; action: export from Markdown
+- **14.2.2** Feature list PDF - gaps: no feature-list PDF; blockers: none; action: export from the verified feature CSV
+- **14.2.3** Deployment guide PDF - gaps: no deployment PDF; blockers: none; action: export from docs
+- **14.2.4** API documentation PDF - gaps: no API PDF; blockers: none; action: export from docs
+- **14.2.5** Security audit PDF - gaps: no security-audit PDF; blockers: none; action: export
+- **14.2.6** Benchmark report PDF - gaps: no benchmark PDF; no real benchmark data (audit R-06); blockers: none; action: run benchmarks first
+- **14.2.7** Demo video - gaps: no demo video; blockers: none; action: record a demo
+- **15.1.4** SLA - gaps: SLA absent; blockers: none; action: add SLA field and timers
+- **15.1.6** Internal notes - gaps: internal notes absent; blockers: none; action: add notes
+- **15.1.9** Dashboard humain - gaps: no human-agent dashboard; blockers: none; action: build the dashboard
+- **15.2.4** Correction proposée - gaps: absent; blockers: none; action: add field
+- **15.2.6** Création automatique de cas d'évaluation - gaps: absent; blockers: none; action: implement feedback-to-dataset
+
+## AMBIGUOUS_REQUIREMENT (2)
+
+- **10.4.12** Custom SLA - gaps: no technical acceptance criterion; blockers: none; action: clarify as contractual
+- **14.4.1** Nom produit - gaps: no decided brand name found; blockers: none; action: owner decision
+
+## NOT_ASSESSED (0)
+
+See 01-feature-verification.csv (verified_status = NOT_ASSESSED).

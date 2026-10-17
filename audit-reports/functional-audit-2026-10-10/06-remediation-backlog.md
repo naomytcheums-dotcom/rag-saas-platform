@@ -1,0 +1,302 @@
+# 06 - Remediation backlog (ordered by severity)
+
+- REM-001 [CRITICAL] feature 1.3.5 (Isolation des données): decide the RLS strategy (audit P0-1) and add a contract test per route
+- REM-002 [HIGH] feature 1.1.10 (Suppression du compte): run worker/beat and verify the purge on staging
+- REM-003 [HIGH] feature 10.1.12 (Malware scanning): run ClamAV or document the risk
+- REM-004 [HIGH] feature 12.1.1 (Checkout): run sandbox end to end; decide on Flutterwave
+- REM-005 [HIGH] feature 12.1.10 (Credits): sandbox credit purchase; set the flag
+- REM-006 [HIGH] feature 12.1.2 (Subscriptions): sandbox renewal scenario
+- REM-007 [HIGH] feature 12.3.1 (AI credits): see 12.1.10
+- REM-008 [HIGH] feature 13.2.10 (Database tests): audit P1-4
+- REM-009 [HIGH] feature 13.3.8 (Deploy): add a controlled migration step
+- REM-010 [HIGH] feature 5.4.8 (Bloc Code): security review of the sandbox
+- REM-011 [MEDIUM] feature 1.1.4 (Vérification email): add a verification screen (code entry + resend) and a test
+- REM-012 [MEDIUM] feature 1.1.5 (OAuth Google): add buttons on login/register pages; test with a real sandbox client
+- REM-013 [MEDIUM] feature 1.1.6 (OAuth GitHub): same as 1.1.5
+- REM-014 [MEDIUM] feature 1.2.6 (Viewer): add a route x role contract test
+- REM-015 [MEDIUM] feature 1.2.7 (RBAC complet): classify the 84 routes (audit P1-3)
+- REM-016 [MEDIUM] feature 1.2.8 (Permissions granulaires par ressource): list the resource types that call the check and test each
+- REM-017 [MEDIUM] feature 1.3.6 (Quotas par organisation): list enforcement points and test each
+- REM-018 [MEDIUM] feature 1.3.7 (Limites par utilisateur): confirm enforcement in chat and add tests
+- REM-019 [MEDIUM] feature 1.4.1 (Custom domains (app.client.com)): staging test with a real domain
+- REM-020 [MEDIUM] feature 1.4.3 (SSL automatique (Let's Encrypt)): decide: rely on host-managed TLS, or run ACME on staging
+- REM-021 [MEDIUM] feature 1.4.5 (Custom email domain): staging test with Resend
+- REM-022 [MEDIUM] feature 10.1.14 (Encryption at rest): document provider encryption settings
+- REM-023 [MEDIUM] feature 10.1.3 (OAuth): see 1.1.5
+- REM-024 [MEDIUM] feature 10.1.4 (RBAC): audit P1-3
+- REM-025 [MEDIUM] feature 10.1.5 (Rate limiting): provision Redis
+- REM-026 [MEDIUM] feature 10.1.8 (Prompt injection protection): red-team evaluation
+- REM-027 [MEDIUM] feature 10.1.9 (SSRF protection): static check that forbids unguarded HTTP clients
+- REM-028 [MEDIUM] feature 10.2.1 (Prompt injection detection): red-team evaluation
+- REM-029 [MEDIUM] feature 10.2.2 (Jailbreak detection): red-team evaluation
+- REM-030 [MEDIUM] feature 10.2.3 (Data leakage protection): define the requirement and implement or document
+- REM-031 [MEDIUM] feature 10.2.5 (PII masking): decide scope and wire
+- REM-032 [MEDIUM] feature 10.2.7 (Toxicity filtering): implement (moderation API or classifier)
+- REM-033 [MEDIUM] feature 10.2.8 (Unsafe tool-call detection): clarify and implement
+- REM-034 [MEDIUM] feature 10.3.10 (Performance monitoring): set METRICS_AUTH_TOKEN
+- REM-035 [MEDIUM] feature 10.4.2 (SAML): decide: accept OIDC only or add SAML
+- REM-036 [MEDIUM] feature 10.4.3 (SCIM): implement or drop from the offer
+- REM-037 [MEDIUM] feature 10.4.5 (Data retention policies): per-organization policy
+- REM-038 [MEDIUM] feature 10.4.6 (Custom retention): implement
+- REM-039 [MEDIUM] feature 11.1.6 (Revenue): reconcile with provider payouts
+- REM-040 [MEDIUM] feature 11.3.3 (GET /metrics): set METRICS_AUTH_TOKEN
+- REM-041 [MEDIUM] feature 11.3.5 (Queue monitoring): see audit P0-2
+- REM-042 [MEDIUM] feature 12.1.3 (Invoices): decide refund policy
+- REM-043 [MEDIUM] feature 12.1.4 (Coupons): implement or drop from the offer
+- REM-044 [MEDIUM] feature 12.1.5 (Trials): verify trial lifecycle
+- REM-045 [MEDIUM] feature 12.1.6 (Upgrade): sandbox upgrade
+- REM-046 [MEDIUM] feature 12.1.7 (Downgrade): sandbox downgrade and limit enforcement
+- REM-047 [MEDIUM] feature 12.1.8 (Cancellation): sandbox cancellation
+- REM-048 [MEDIUM] feature 12.1.9 (Usage billing): clarify requirement
+- REM-049 [MEDIUM] feature 12.2.1 (Free): read-only check of the plans table
+- REM-050 [MEDIUM] feature 12.2.4 (Business): confirm plan catalogue
+- REM-051 [MEDIUM] feature 12.3.3 (Storage limits): confirm and test enforcement
+- REM-052 [MEDIUM] feature 13.1.6 (Coverage > 90%): raise coverage or revise the target
+- REM-053 [MEDIUM] feature 13.1.9 (Security scanning): triage bandit findings
+- REM-054 [MEDIUM] feature 13.2.3 (API tests): cover the untested routes
+- REM-055 [MEDIUM] feature 13.2.4 (E2E tests): add Playwright smoke tests
+- REM-056 [MEDIUM] feature 13.2.5 (Security tests): audit P1-4
+- REM-057 [MEDIUM] feature 13.2.7 (LLM tests): scheduled live smoke job
+- REM-058 [MEDIUM] feature 13.2.8 (RAG tests): SQuAD run
+- REM-059 [MEDIUM] feature 13.3.3 (Unit tests): split or speed up tests
+- REM-060 [MEDIUM] feature 13.3.7 (E2E tests): add Playwright job
+- REM-061 [MEDIUM] feature 13.4.3 (Render): update render.yaml
+- REM-062 [MEDIUM] feature 13.5.9 (Performance monitoring): set METRICS_AUTH_TOKEN
+- REM-063 [MEDIUM] feature 14.1.5 (Deployment guide): align with reality
+- REM-064 [MEDIUM] feature 15.1.1 (Ticket ID): add ticket API
+- REM-065 [MEDIUM] feature 15.1.2 (Priority): add ticket API
+- REM-066 [MEDIUM] feature 15.1.3 (Assignment): add assignment endpoint
+- REM-067 [MEDIUM] feature 15.1.4 (SLA): add SLA field and timers
+- REM-068 [MEDIUM] feature 15.1.5 (Status): add ticket API
+- REM-069 [MEDIUM] feature 15.1.8 (Resolution): add resolve endpoint
+- REM-070 [MEDIUM] feature 15.1.9 (Dashboard humain): build the dashboard
+- REM-071 [MEDIUM] feature 15.2.6 (Création automatique de cas d'évaluation): implement feedback-to-dataset
+- REM-072 [MEDIUM] feature 2.1.12 (GitHub repositories): sandbox test with a real read-only token; add UI
+- REM-073 [MEDIUM] feature 2.1.13 (GitHub issues): same as 2.1.12
+- REM-074 [MEDIUM] feature 2.1.14 (Google Drive): sandbox test; add UI
+- REM-075 [MEDIUM] feature 2.1.15 (Google Docs): same as 2.1.14
+- REM-076 [MEDIUM] feature 2.1.16 (Notion): sandbox test; add UI
+- REM-077 [MEDIUM] feature 2.1.17 (Confluence): sandbox test; add UI
+- REM-078 [MEDIUM] feature 2.1.18 (OneDrive): sandbox test; add UI
+- REM-079 [MEDIUM] feature 2.2.13 (Détection de documents modifiés): stage test with worker/beat
+- REM-080 [MEDIUM] feature 2.2.14 (Synchronisation automatique): stage test
+- REM-081 [MEDIUM] feature 2.2.15 (Auto-reindexation programmée): stage test with beat
+- REM-082 [MEDIUM] feature 2.2.16 (Batch Processing): stage test with worker
+- REM-083 [MEDIUM] feature 2.2.7 (Versioning): add tests for restore and replace; add UI
+- REM-084 [MEDIUM] feature 2.2.9 (Réindexation manuelle): add button; ensure worker
+- REM-085 [MEDIUM] feature 3.4.1 (BM25): benchmark large organizations
+- REM-086 [MEDIUM] feature 3.4.2 (Vector Search): PostgreSQL integration test in CI (audit P1-4)
+- REM-087 [MEDIUM] feature 3.4.4 (Cross-encoder reranking): measure on the real host
+- REM-088 [MEDIUM] feature 4.1.1 (Anthropic Claude): run a live smoke test with a funded key
+- REM-089 [MEDIUM] feature 4.1.2 (OpenAI GPT): live smoke test
+- REM-090 [MEDIUM] feature 4.1.3 (Google Gemini): live smoke test
+- REM-091 [MEDIUM] feature 4.1.4 (Mistral): live smoke test
+- REM-092 [MEDIUM] feature 4.1.6 (OpenAI-compatible APIs): verify SSRF guard on custom base URLs
+- REM-093 [MEDIUM] feature 5.1.5 (Per-tool budget (tokens)): wire the budget check into tool execution and add an orchestrator test
+- REM-094 [MEDIUM] feature 5.1.7 (Fallback): wire tool fallback into execution and test
+- REM-095 [MEDIUM] feature 5.2.4 (Database (SQL)): keep the bypass test in CI
+- REM-096 [MEDIUM] feature 5.4.12 (Bloc Database): add a tenant-bypass test like P0 for the SQL tool
+- REM-097 [MEDIUM] feature 5.4.2 (Bloc Trigger): stage test
+- REM-098 [MEDIUM] feature 6.2.5 (Unsupported claim detection): evaluate on a labelled set
+- REM-099 [MEDIUM] feature 6.2.6 (Claim verification): evaluate
+- REM-100 [MEDIUM] feature 6.2.9 (Hallucination detector): evaluate with SQuAD 2.0 and a hallucination set
+- REM-101 [MEDIUM] feature 7.1.7 (Tuning / Held-out split): add a split attribute on questions and enforce held-out use in evaluation runs
+- REM-102 [MEDIUM] feature 7.2.12 (Hallucination rate): validate with unanswerable questions
+- REM-103 [MEDIUM] feature 7.2.8 (Faithfulness): validate on a labelled set
+- REM-104 [MEDIUM] feature 7.2.9 (Answer relevance): validate
+- REM-105 [MEDIUM] feature 7.3.1 (Automatic evaluation): run a real job locally and in staging
+- REM-106 [MEDIUM] feature 7.3.8 (Automatic evaluation before deployment): trace the gate into agent deployment
+- REM-107 [MEDIUM] feature 8.2.1 (Speech-to-text (STT)): live smoke test with a funded key
+- REM-108 [MEDIUM] feature 8.2.13 (Téléphonie): Twilio test credentials; wire UI
+- REM-109 [MEDIUM] feature 8.2.2 (Text-to-speech (TTS)): live smoke test
+- REM-110 [MEDIUM] feature 9.2.5 (Rate limits): provision Redis for production
+- REM-111 [MEDIUM] feature 9.2.7 (Webhooks): stage test
+- REM-112 [MEDIUM] feature 9.4.1 (Slack): sandbox workspace test
+- REM-113 [MEDIUM] feature 9.4.2 (Microsoft Teams): sandbox test; set TEAMS_BOT_ID
+- REM-114 [MEDIUM] feature 9.4.3 (Discord): sandbox test; set secret
+- REM-115 [LOW] feature 1.1.11 (Export des données utilisateur (RGPD)): add an export button on the security/profile page
+- REM-116 [LOW] feature 1.1.13 (Gestion du profil (avatar, nom, entreprise, rôle)): confirm whether a job-title field is required
+- REM-117 [LOW] feature 1.1.3 (Mot de passe oublié / Réinitialisation): verify email delivery in staging
+- REM-118 [LOW] feature 1.3.2 (Workspaces): confirm whether UI is needed
+- REM-119 [LOW] feature 1.3.3 (Teams): add team UI or document as API-only
+- REM-120 [LOW] feature 1.3.8 (Usage par organisation): confirm UI
+- REM-121 [LOW] feature 1.4.6 (White-label complet): visual audit of leftover brand strings
+- REM-122 [LOW] feature 1.4.8 (Couleurs, polices, thème personnalisables): confirm the dashboard applies fonts and theme
+- REM-123 [LOW] feature 1.4.9 (Email sender personnalisable): staging test
+- REM-124 [LOW] feature 10.1.11 (MIME validation): confirm magic-byte sniffing
+- REM-125 [LOW] feature 10.1.15 (Encryption in transit): check with a TLS scanner
+- REM-126 [LOW] feature 10.1.7 (Input sanitization): XSS review of stored fields
+- REM-127 [LOW] feature 10.2.10 (Output validation): clarify requirement
+- REM-128 [LOW] feature 10.2.4 (PII detection): confirm scope
+- REM-129 [LOW] feature 10.2.6 (Sensitive information filtering): clarify requirement
+- REM-130 [LOW] feature 10.3.5 (Distributed tracing): deploy a collector or document as optional
+- REM-131 [LOW] feature 10.3.6 (LLM traces): optional
+- REM-132 [LOW] feature 10.3.9 (Error tracking): verify DSN
+- REM-133 [LOW] feature 10.4.1 (SSO): test with a real IdP
+- REM-134 [LOW] feature 10.4.10 (On-premise deployment): test a clean install
+- REM-135 [LOW] feature 10.4.11 (VPC deployment): write a VPC reference deployment
+- REM-136 [LOW] feature 10.4.4 (Enterprise roles): clarify
+- REM-137 [LOW] feature 10.4.7 (Dedicated tenant): treat as a commercial offer to define
+- REM-138 [LOW] feature 10.4.8 (Dedicated database): commercial offer to define
+- REM-139 [LOW] feature 10.4.9 (Private deployment): test a clean install
+- REM-140 [LOW] feature 11.2.10 (Worst documents): implement
+- REM-141 [LOW] feature 11.2.12 (Cost per user): confirm or implement
+- REM-142 [LOW] feature 11.2.13 (Cost per answer): confirm
+- REM-143 [LOW] feature 11.2.14 (Question clusters): implement
+- REM-144 [LOW] feature 11.2.15 (Knowledge gap detection): implement
+- REM-145 [LOW] feature 11.2.16 (Documentation gap reports): implement
+- REM-146 [LOW] feature 11.2.5 (Retrieval success rate): expose the aggregate on the analytics page
+- REM-147 [LOW] feature 11.2.6 (Answer quality score): validate detectors
+- REM-148 [LOW] feature 11.2.7 (Most asked questions): implement
+- REM-149 [LOW] feature 11.2.8 (Failed questions): implement from conversation feedback
+- REM-150 [LOW] feature 11.2.9 (Top documents): implement from citation counts
+- REM-151 [LOW] feature 11.3.4 (Uptime monitoring): configure UptimeRobot or similar
+- REM-152 [LOW] feature 11.3.7 (Vector DB health): add extension check
+- REM-153 [LOW] feature 11.3.8 (LLM availability): add a lightweight probe
+- REM-154 [LOW] feature 12.2.2 (Starter): read-only check
+- REM-155 [LOW] feature 12.2.3 (Pro): read-only check
+- REM-156 [LOW] feature 12.2.5 (Enterprise): confirm
+- REM-157 [LOW] feature 12.3.2 (Document limits): verify linkage
+- REM-158 [LOW] feature 12.3.6 (Voice minutes): implement
+- REM-159 [LOW] feature 13.1.1 (Python type hints): measure with mypy/pyright
+- REM-160 [LOW] feature 13.1.4 (MyPy): add mypy or pyright
+- REM-161 [LOW] feature 13.2.11 (Deployment tests): add post-deploy health check
+- REM-162 [LOW] feature 13.2.2 (Integration tests): add real-service integration
+- REM-163 [LOW] feature 13.3.2 (Type check): see 13.1.4
+- REM-164 [LOW] feature 13.4.10 (Kubernetes): document or drop
+- REM-165 [LOW] feature 13.4.11 (Helm): document or drop
+- REM-166 [LOW] feature 13.4.12 (Terraform): document or drop
+- REM-167 [LOW] feature 13.4.2 (Docker Compose): test a clean up
+- REM-168 [LOW] feature 13.4.4 (Railway): document or drop
+- REM-169 [LOW] feature 13.4.5 (Fly.io): document or drop
+- REM-170 [LOW] feature 13.4.6 (AWS): document or drop
+- REM-171 [LOW] feature 13.4.7 (GCP): document or drop
+- REM-172 [LOW] feature 13.4.8 (Azure): document or drop
+- REM-173 [LOW] feature 13.4.9 (DigitalOcean): document or drop
+- REM-174 [LOW] feature 13.5.12 (Traçabilité complète d'une requête): add a request trace view
+- REM-175 [LOW] feature 13.5.4 (Distributed tracing): optional
+- REM-176 [LOW] feature 13.5.5 (LLM traces): optional
+- REM-177 [LOW] feature 13.5.8 (Error tracking): verify DSN
+- REM-178 [LOW] feature 14.1.11 (Troubleshooting): write TROUBLESHOOTING.md
+- REM-179 [LOW] feature 14.1.2 (Architecture (diagrammes)): reconcile documentation with code
+- REM-180 [LOW] feature 14.1.3 (Installation guide): run the guide on a clean machine
+- REM-181 [LOW] feature 14.2.1 (Architecture PDF): export from Markdown
+- REM-182 [LOW] feature 14.2.2 (Feature list PDF): export from the verified feature CSV
+- REM-183 [LOW] feature 14.2.3 (Deployment guide PDF): export from docs
+- REM-184 [LOW] feature 14.2.4 (API documentation PDF): export from docs
+- REM-185 [LOW] feature 14.2.5 (Security audit PDF): export
+- REM-186 [LOW] feature 14.2.6 (Benchmark report PDF): run benchmarks first
+- REM-187 [LOW] feature 14.2.7 (Demo video): record a demo
+- REM-188 [LOW] feature 14.3.2 (Demo): add demo
+- REM-189 [LOW] feature 14.3.4 (Architecture): confirm
+- REM-190 [LOW] feature 14.3.6 (Pricing): confirm
+- REM-191 [LOW] feature 14.3.7 (Security): confirm
+- REM-192 [LOW] feature 14.3.8 (Documentation): confirm
+- REM-193 [LOW] feature 14.3.9 (FAQ): confirm
+- REM-194 [LOW] feature 14.4.1 (Nom produit): owner decision
+- REM-195 [LOW] feature 14.4.2 (Logo): confirm
+- REM-196 [LOW] feature 14.4.4 (Charte graphique): write a short brand guide
+- REM-197 [LOW] feature 15.1.6 (Internal notes): add notes
+- REM-198 [LOW] feature 15.1.7 (Conversation context): expose in the ticket view
+- REM-199 [LOW] feature 15.2.2 (Raison): confirm UI
+- REM-200 [LOW] feature 15.2.3 (Commentaire libre): confirm UI
+- REM-201 [LOW] feature 15.2.4 (Correction proposée): add field
+- REM-202 [LOW] feature 15.2.5 (Analyse de l'échec): connect feedback to failure analysis
+- REM-203 [LOW] feature 15.2.7 (Benchmark → amélioration): run once with SQuAD
+- REM-204 [LOW] feature 2.1.10 (URLs / pages web): add an 'Import from URL' form
+- REM-205 [LOW] feature 2.1.11 (Sitemap): add UI
+- REM-206 [LOW] feature 2.1.19 (Fichiers ZIP): confirm zip-bomb limits in zip_extraction.py
+- REM-207 [LOW] feature 2.1.8 (XML): confirm defusedxml or equivalent in xml_extraction.py
+- REM-208 [LOW] feature 2.2.1 (Upload multiple): allow multiple files in the UI
+- REM-209 [LOW] feature 2.2.10 (Historique des modifications): add history view
+- REM-210 [LOW] feature 2.2.12 (Détection de doublons): add UI
+- REM-211 [LOW] feature 2.2.2 (Drag & drop): add a drop zone to the documents page
+- REM-212 [LOW] feature 2.2.3 (Progression d'import): consume the SSE stream in the UI
+- REM-213 [LOW] feature 2.2.4 (File preview): add preview panel
+- REM-214 [LOW] feature 2.2.6 (Tags et catégories): add tag UI; clarify categories
+- REM-215 [LOW] feature 2.2.8 (Suppression / Remplacement): add replace action
+- REM-216 [LOW] feature 3.1.5 (Extraction des images): confirm whether descriptions are generated
+- REM-217 [LOW] feature 3.1.6 (OCR optionnel): run the OCR test in CI
+- REM-218 [LOW] feature 3.2.3 (Semantic chunking): measure ingestion cost
+- REM-219 [LOW] feature 3.2.8 (Parent-child chunks): confirm parent expansion at query time
+- REM-220 [LOW] feature 3.3.5 (Reranker): measure memory
+- REM-221 [LOW] feature 3.4.5 (Query expansion): implement synonym or LLM expansion or amend the spec
+- REM-222 [LOW] feature 3.4.7 (HyDE): evaluate with Eval Lab
+- REM-223 [LOW] feature 3.4.8 (Multi-query retrieval): evaluate with Eval Lab
+- REM-224 [LOW] feature 4.1.5 (Ollama (local)): test against a local Ollama
+- REM-225 [LOW] feature 4.2.1 (OpenAI embeddings): live smoke test
+- REM-226 [LOW] feature 4.2.2 (Voyage AI): live smoke test
+- REM-227 [LOW] feature 4.2.3 (Cohere): live smoke test
+- REM-228 [LOW] feature 4.2.4 (Sentence Transformers): measure memory
+- REM-229 [LOW] feature 5.1.1 (Orchestrateur central): document the default path
+- REM-230 [LOW] feature 5.1.10 (Human approval): confirm approval inbox UI
+- REM-231 [LOW] feature 5.1.11 (Agent memory (short-term)): confirm chat path writes memory
+- REM-232 [LOW] feature 5.1.13 (Task planning): decide whether to execute plans
+- REM-233 [LOW] feature 5.2.2 (Web Search): live smoke test
+- REM-234 [LOW] feature 5.2.3 (GitHub (issues, repos)): live smoke test
+- REM-235 [LOW] feature 5.2.7 (Calendar (Google, Outlook)): sandbox test
+- REM-236 [LOW] feature 5.2.8 (Email (Gmail, Outlook, SMTP)): sandbox test
+- REM-237 [LOW] feature 5.2.9 (Human Escalation): see Part 15
+- REM-238 [LOW] feature 5.3.10 (Déploiement): clarify requirement
+- REM-239 [LOW] feature 5.3.9 (Guardrails): red-team test set
+- REM-240 [LOW] feature 5.4.1 (Interface visuelle): manual UI check
+- REM-241 [LOW] feature 5.4.10 (Bloc Email): sandbox test
+- REM-242 [LOW] feature 5.4.11 (Bloc Calendar): sandbox test
+- REM-243 [LOW] feature 5.4.3 (Bloc LLM): smoke test
+- REM-244 [LOW] feature 5.4.7 (Bloc Condition): confirm no eval()
+- REM-245 [LOW] feature 6.1.10 (Confidence score): calibrate with Eval Lab
+- REM-246 [LOW] feature 6.1.4 (URL source): check link sanitisation in CitationList.tsx
+- REM-247 [LOW] feature 6.1.8 (Citation preview): wire or remove citation_preview
+- REM-248 [LOW] feature 6.2.10 (Groundedness score): validate
+- REM-249 [LOW] feature 6.2.11 (Faithfulness score): validate
+- REM-250 [LOW] feature 6.2.12 (Dashboard qualité): confirm scores are visualised
+- REM-251 [LOW] feature 6.2.2 (Answer only from retrieved context): measure with SQuAD-style unanswerable set
+- REM-252 [LOW] feature 6.2.3 ("I don't know" threshold): calibrate
+- REM-253 [LOW] feature 6.2.4 (Confidence estimation): calibrate
+- REM-254 [LOW] feature 6.2.7 (Contradiction detection): evaluate
+- REM-255 [LOW] feature 6.2.8 (Source consistency check): evaluate
+- REM-256 [LOW] feature 7.1.8 (Datasets verticaux): build datasets, e.g. from open corpora
+- REM-257 [LOW] feature 7.2.1 (Recall@1): produce a baseline
+- REM-258 [LOW] feature 7.2.10 (Context relevance): validate
+- REM-259 [LOW] feature 7.2.11 (Citation correctness): validate
+- REM-260 [LOW] feature 7.2.15 (Cost/request): review prices periodically
+- REM-261 [LOW] feature 7.2.2 (Recall@3): produce a baseline
+- REM-262 [LOW] feature 7.2.3 (Recall@5): produce a baseline
+- REM-263 [LOW] feature 7.2.4 (Recall@10): produce a baseline
+- REM-264 [LOW] feature 7.2.5 (MRR): produce a baseline
+- REM-265 [LOW] feature 7.2.6 (NDCG): produce a baseline
+- REM-266 [LOW] feature 7.2.7 (Precision): produce a baseline
+- REM-267 [LOW] feature 7.3.2 (Manual evaluation): confirm UI
+- REM-268 [LOW] feature 7.3.5 (Retriever comparison): add retriever comparison test
+- REM-269 [LOW] feature 7.3.6 (Reranker comparison): add reranker comparison test
+- REM-270 [LOW] feature 7.3.7 (Prompt comparison): add prompt comparison test
+- REM-271 [LOW] feature 7.3.9 (Seuils de régression): confirm default threshold
+- REM-272 [LOW] feature 8.1.14 (Export conversation): add export menu; confirm weasyprint in the Docker image
+- REM-273 [LOW] feature 8.1.15 (Share conversation): wire ShareConversation
+- REM-274 [LOW] feature 8.1.16 (Public / Private conversations): add toggle
+- REM-275 [LOW] feature 8.1.17 (Suggested questions): wire dynamic suggestions
+- REM-276 [LOW] feature 8.1.18 (Follow-up questions): wire FollowUpQuestions
+- REM-277 [LOW] feature 8.1.19 (Multi-langue): run a missing-key check per locale
+- REM-278 [LOW] feature 8.1.8 (Retry): wire RetryButton or document regenerate as the retry
+- REM-279 [LOW] feature 8.1.9 (Feedback (👍/👎 + reason + comment)): confirm reason/comment capture
+- REM-280 [LOW] feature 8.2.10 (Microphone test): link from settings
+- REM-281 [LOW] feature 8.2.11 (Audio permissions): wire AudioPermission
+- REM-282 [LOW] feature 8.2.3 (Streaming voice): manual test
+- REM-283 [LOW] feature 8.2.4 (Push-to-talk): manual test
+- REM-284 [LOW] feature 8.2.5 (Voice activity detection): manual test
+- REM-285 [LOW] feature 8.2.6 (Multi-language): wire VoiceSettings
+- REM-286 [LOW] feature 8.2.7 (Audio history): wire VoiceMessageList
+- REM-287 [LOW] feature 8.2.8 (Voice settings): wire VoiceSettings
+- REM-288 [LOW] feature 8.2.9 (Voice selection): wire VoiceSettings
+- REM-289 [LOW] feature 9.1.1 (POST /v1/chat): smoke test
+- REM-290 [LOW] feature 9.1.6 (POST /v1/agents/run): smoke test
+- REM-291 [LOW] feature 9.2.10 (SDK Python): run SDK tests in CI
+- REM-292 [LOW] feature 9.2.11 (SDK JavaScript/TypeScript): run SDK tests in CI
+- REM-293 [LOW] feature 9.2.2 (Key rotation): stage test
+- REM-294 [LOW] feature 9.2.3 (Key expiration): confirm expired-key rejection test
+- REM-295 [LOW] feature 9.2.9 (OpenAPI / Swagger): decide whether to hide docs in production
+- REM-296 [LOW] feature 9.3.11 (React component): run in CI
+- REM-297 [LOW] feature 9.3.12 (Vue component): run in CI
+- REM-298 [LOW] feature 9.3.14 (JavaScript SDK): run in CI
+- REM-299 [INFO] feature 10.4.12 (Custom SLA): clarify as contractual
+- REM-300 [INFO] feature 13.1.3 (Black): accept ruff-format as the formatter

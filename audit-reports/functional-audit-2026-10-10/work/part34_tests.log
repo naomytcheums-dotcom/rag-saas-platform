@@ -1,0 +1,24 @@
+......................................................................ss [  9%]
+........................................................................ [ 18%]
+........................................................................ [ 27%]
+........................................................................ [ 37%]
+........................................................................ [ 46%]
+........................................................................ [ 55%]
+........................................................................ [ 64%]
+........................................................................ [ 74%]
+........................................................................ [ 83%]
+........................................................................ [ 92%]
+.........................................................                [100%]Running teardown with pytest sessionfinish...
+
+Test 
+tests/test_ocr.py::test_ocr_image_works_for_real_against_the_real_tesseract_bin
+ary was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_ocr.py', 199, 
+'Skipped: real Tesseract binary not installed on this machine')
+Test 
+tests/test_ocr.py::test_detect_scanned_pdf_and_ocr_pdf_scanned_work_for_real_en
+d_to_end was skipped. Reason: 
+('C:\\Users\\NITROV15\\Downloads\\rag-saas-platform\\tests\\test_ocr.py', 217, 
+'Skipped: real Tesseract/poppler binaries not installed on this machine')
+775 passed, 2 skipped in 386.12s (0:06:26)
+exit:0
