@@ -235,7 +235,7 @@ jobs:
       - name: PostgreSQL tests (RLS, row locks, concurrency, migration chain)
         env:
           # The application's own URL is a DIFFERENT database name: the guard refuses a target equal to it.
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_app
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_app_test
           RAG_DISPOSABLE_PG_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_scratch
           RAG_DISPOSABLE_PG_CONFIRM: rag_ci_scratch
         run: pytest -q -rfEs tests/test_postgres_bm25_revision.py tests/test_postgres_subscription_concurrency.py tests/test_postgres_credits_concurrency.py tests/test_postgres_invoice_concurrency.py tests/test_postgres_system_log_handler.py tests/test_disposable_pg_guard.py
