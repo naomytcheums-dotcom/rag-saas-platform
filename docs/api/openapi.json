@@ -31431,6 +31431,18 @@
               "default": "json",
               "title": "Format"
             }
+          },
+          {
+            "name": "verify_documents",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Reject rows whose expected_documents do not exist in this organization",
+              "default": false,
+              "title": "Verify Documents"
+            },
+            "description": "Reject rows whose expected_documents do not exist in this organization"
           }
         ],
         "requestBody": {

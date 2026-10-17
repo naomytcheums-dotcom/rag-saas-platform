@@ -49,6 +49,8 @@ interface CreditPack {
   name: string;
   credits: number;
   price_cents: number;
+  /** The currency the pack is charged in (CREDIT_PACK_CURRENCY); EUR only for an older API that does not send it. */
+  currency?: string;
 }
 
 interface Invoice {
@@ -423,7 +425,7 @@ function CreditsTab({ orgId, onError }: { orgId: string; onError: (e: string) =>
             <div key={pack.id} className="rounded-xl border border-border bg-surface p-4">
               <p className="text-sm font-semibold text-foreground">{pack.name}</p>
               <p className="mt-1 text-xs text-foreground-muted">{pack.credits.toLocaleString()} {t("billing.credits_count")}</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{money(pack.price_cents)}</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{money(pack.price_cents, pack.currency ?? "EUR")}</p>
               <button type="button" onClick={() => void purchase(pack.id)} className="mt-3 w-full rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">{t("billing.buy")}</button>
             </div>
           ))}

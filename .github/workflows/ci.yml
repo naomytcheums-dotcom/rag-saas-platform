@@ -184,6 +184,62 @@ jobs:
       - name: pip-audit
         run: pip-audit -r requirements-api.txt -r requirements-optional.txt --desc off --ignore-vuln PYSEC-2026-2447
 
+  # PostgreSQL-specific proof (Lot G): the main suite runs on SQLite, which ignores row locks, RLS, foreign keys and pgvector. This job builds
+  # a throw-away PostgreSQL (pgvector image, database named *scratch*), applies the whole Alembic chain and a 0137 round trip, then runs the
+  # opt-in PostgreSQL tests behind tests/disposable_pg_guard.py. Placeholders only: no real credential, no real service.
+  backend-postgres-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_ci_scratch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      COOKIE_SECURE: "False"
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-never-used-outside-ci-32c
+      SESSION_MIDDLEWARE_SECRET: ci-only-session-secret-never-used-outside-ci-32c
+      AUDIT_LOG_HMAC_SECRET_KEY: ci-only-audit-log-hmac-key-never-used-outside-ci-32c
+      ENCRYPTION_MASTER_KEY: gBZ-pfccwD20XSBiesnRCAo9e7_y7E0LOAAvsXGJXyg=
+      SUPPORT_EMAIL: support@ci-test.invalid
+      CELERY_BROKER_URL: memory://
+      CELERY_RESULT_BACKEND: cache+memory://
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-api.txt
+
+      - name: Apply the whole Alembic chain on the empty scratch database, then a 0137 round trip
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_scratch
+        run: |
+          python -m alembic upgrade head
+          python -m alembic downgrade -1
+          python -m alembic upgrade head
+
+      - name: PostgreSQL tests (RLS, row locks, concurrency, migration chain)
+        env:
+          # The application's own URL is a DIFFERENT database name: the guard refuses a target equal to it.
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_app_test
+          RAG_DISPOSABLE_PG_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/rag_ci_scratch
+          RAG_DISPOSABLE_PG_CONFIRM: rag_ci_scratch
+        run: pytest -q -rfEs tests/test_postgres_bm25_revision.py tests/test_postgres_subscription_concurrency.py tests/test_postgres_credits_concurrency.py tests/test_postgres_invoice_concurrency.py tests/test_postgres_system_log_handler.py tests/test_disposable_pg_guard.py
+
   build-backend:
     # Phase 5, Étape 10 -- real Docker build verification (P0, carried
     # over from Étapes 7/9: local builds in this session's own dev

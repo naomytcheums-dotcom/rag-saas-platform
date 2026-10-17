@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # Real, optional: Supabase's TRANSACTION-mode pooler (port 6543).
     # Falls back to DATABASE_URL if unset. See .env's own comment.
     DATABASE_URL_TRANSACTION: str | None = None
+    # "preview" = local interface preview: start-up is refused if any data store is not local or any external credential is set
+    # (api/security/runtime_guard.py). Anything else (default) leaves the behaviour unchanged.
+    RAG_RUN_MODE: str = ""
 
 
     # -- JWT ------------------------------------------------------------
@@ -1005,6 +1008,13 @@ class Settings(BaseSettings):
     # -- Celery -------------------------------------------------------------
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    # Bounds for EVERY task (none had any before: a stuck task kept its worker slot forever). Seconds; 0 disables a limit. The soft limit raises
+    # SoftTimeLimitExceeded inside the task (it can clean up), the hard limit kills the worker process. Hard limits are not enforced by the
+    # `solo` pool. Raise them (or set 0) for a deployment that legitimately runs longer jobs.
+    CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = Field(default=3300, ge=0)
+    CELERY_TASK_TIME_LIMIT_SECONDS: int = Field(default=3600, ge=0)
+    # 1 = a worker process reserves one task at a time (fair between tenants; Celery's default of 4 lets one long job hold three queued ones).
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = Field(default=1, ge=1)
 
     # -- Rate limiting (brute-force / spam protection) --------------------
     # Uses its own Redis DB number (2) so its keys never collide with
@@ -1072,6 +1082,9 @@ class Settings(BaseSettings):
     # When set, GET /metrics requires `Authorization: Bearer <token>` (Prometheus `authorization` / `bearer_token` scrape option).
     # Unset keeps it open for a scraper inside a private network; set it on any deployment reachable from the Internet.
     METRICS_AUTH_TOKEN: str | None = None
+    # True = FAIL CLOSED: if no METRICS_AUTH_TOKEN is configured, /metrics answers 503 instead of being public. Default False keeps the
+    # historical "open inside a private network" behaviour; set it (with the token) on any deployment reachable from the Internet.
+    METRICS_REQUIRE_AUTH: bool = False
     REGISTER_RATE_LIMIT_MAX_ATTEMPTS: int = 3
     REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 3600
     PASSWORD_FORGOT_RATE_LIMIT_MAX_ATTEMPTS: int = 3
@@ -2221,6 +2234,17 @@ class Settings(BaseSettings):
                 f"Regression thresholds must be strictly ordered LOW < MEDIUM < HIGH < CRITICAL, got "
                 f"{low} < {medium} < {high} < {critical}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _preview_mode_must_be_isolated(self) -> "Settings":
+        """RAG_RUN_MODE=preview (local interface preview): refuse to start if any data store is not local or any external-service
+        credential is set (api/security/runtime_guard.py). Unset or any other value = unchanged behaviour (production, tests)."""
+        from api.security.runtime_guard import assert_preview_is_isolated, is_preview
+
+        values = {name: getattr(self, name, None) for name in type(self).model_fields}
+        if is_preview(values):
+            assert_preview_is_isolated(values)
         return self
 
 

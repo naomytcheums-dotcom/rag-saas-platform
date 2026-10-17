@@ -110,6 +110,8 @@ SCRIPTS_THAT_TARGET_SOMETHING_ELSE = {
     "dev_isolated_server.py": "refuses to start unless everything is local (its own check, throw-away SQLite)",
     "retrieval_benchmark.py": "portable path on a temporary SQLite file",
     "retrieval_benchmark_pg.py": "has its own target rules (staging database by default, --allow-main plus emptiness check)",
+    "run_isolated_tests.py": "is itself the guard: refuses any non-local database, Redis or S3 and runs pytest in a sanitized environment that never inherits .env",
+    "run_local_preview.py": "is itself the guard: builds a sanitized allow-listed environment for a local throwaway database and refuses to start otherwise (RAG_RUN_MODE=preview)",
     "scrub_system_logs.py": "cleans the database the owner points it at, on purpose: dry run by default, --apply needs the exact database name",
     "validate_paystack_live.py": "opt-in live check of the vendor sandbox (RUN_LIVE_VENDOR_VALIDATION=1, test key only, refuses live keys); opens no database",
     "staging_journeys.py": "live journeys against staging by design (--execute and .env.staging)",

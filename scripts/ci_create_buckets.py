@@ -7,11 +7,17 @@ CircleCI 2.1 YAML token (merge key), which broke the pipeline with
 class of bug entirely rather than just escaping it, same real fix
 recommended in CircleCI's own docs for exactly this situation."""
 
+import os
+
 import boto3
 
+# The endpoint and keys come from the environment so a local disposable MinIO on another port works; the defaults are CI's.
+_endpoint = os.environ.get("S3_ENDPOINT_URL", "http://localhost:9000")
+if _endpoint.split("//", 1)[-1].split(":", 1)[0] not in ("localhost", "127.0.0.1"):
+    raise SystemExit("refused: this helper only creates buckets on a local, throwaway S3 endpoint")
 client = boto3.client(
-    "s3", endpoint_url="http://localhost:9000",
-    aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
+    "s3", endpoint_url=_endpoint,
+    aws_access_key_id=os.environ.get("S3_ACCESS_KEY_ID", "minioadmin"), aws_secret_access_key=os.environ.get("S3_SECRET_ACCESS_KEY", "minioadmin"),
     region_name="us-east-1",
 )
 client.create_bucket(Bucket="avatars")

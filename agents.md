@@ -29,7 +29,7 @@ Bob agit de manière autonome mais disciplinée :
 
 ### 1.2 Stack technique
 
-- Backend : FastAPI, Python 3.11
+- Backend : FastAPI, Python 3.13 (Dockerfile.api, CI)
 - Base de données : PostgreSQL (Supabase) + pgvector
 - ORM : SQLAlchemy 2.0 async
 - Migrations : Alembic
@@ -64,35 +64,35 @@ rag-saas-platform/
 
 ### 1.4 Eval Lab
 
-Localisation : /api/eval/
+Localisation : `api/routers/evaluation_*.py`, `api/services/evaluation_*.py`, `api/services/retrieval_metrics.py` (il n'existe PAS de dossier `api/eval/` ni de chemin `/api/eval/*` : vérifié sur les 943 opérations OpenAPI du 2026-10-10).
 
 Rôle : Mesurer objectivement la qualité du RAG.
 
 Métriques : Recall@1/3/5/10, MRR, NDCG, Precision, Hit Rate, Latence, Tokens, Coût, Taux d'hallucination.
 
-Endpoints :
-- GET/POST /api/eval/datasets
-- GET/POST /api/eval/runs
-- GET /api/eval/runs/{id}/metrics
-- GET /api/eval/runs/{id}/failures
-- GET /api/eval/runs/{id}/failures/categories
+Endpoints réels (les « runs » de l'ancienne rédaction sont les « jobs » d'évaluation) :
+- GET/POST /organizations/{org_id}/datasets ; GET/PATCH/DELETE /datasets/{id}
+- GET/POST /datasets/{id}/questions ; POST /datasets/{id}/questions/import (option `verify_documents`) ; GET /datasets/{id}/questions/export
+- POST /datasets/{id}/evaluate ; GET /datasets/{id}/jobs ; GET /jobs/{job_id} ; POST /jobs/{job_id}/cancel
+- GET /datasets/{id}/metrics/{metric} ; GET /jobs/{job_id}/results ; GET /jobs/{job_id}/comparison
+- GET /jobs/{job_id}/failures ; GET /jobs/{job_id}/failures/categories
 
 ### 1.5 MCP (Model Context Protocol)
 
-Localisation : /mcp/v1/
+Localisation : `/mcp/v1/` (serveur : tools internes) et `/organizations/{org_id}/mcp-servers` (client : serveurs externes de l'organisation).
 
 Rôle : Interopérabilité bidirectionnelle (client + serveur).
 
-Client MCP : se connecte à des serveurs MCP externes, découvre leurs tools, les appelle.
+Client MCP : se connecte à des serveurs MCP externes, découvre leurs tools, les appelle. Le transport `stdio` est désactivé par défaut (`MCP_STDIO_ENABLED`) et réservé au superadmin.
 
 Serveur MCP : expose nos tools internes, authentifié par API key.
 
-Endpoints :
-- GET/POST /mcp/v1/servers
-- GET /mcp/v1/servers/{id}/tools
-- POST /mcp/v1/servers/{id}/tools/{name}/call
+Endpoints réels :
+- GET/POST /organizations/{org_id}/mcp-servers ; PATCH/DELETE /organizations/{org_id}/mcp-servers/{server_id}
+- POST …/mcp-servers/{server_id}/sync et /test ; GET …/mcp-servers/{server_id}/tools
+- POST …/mcp-servers/{server_id}/tools/{tool_name}/call
 - GET /mcp/v1/tools
-- POST /mcp/v1/tools/{name}/call
+- POST /mcp/v1/tools/{tool_name}/call
 
 ---
 
@@ -347,7 +347,7 @@ curl -X POST http://localhost:8000/mcp/v1/tools/run_eval_benchmark/call \
 
 ### 8.2 Corriger une régression
 
-curl http://localhost:8000/api/eval/runs/{run_id}/metrics -H "X-API-Key: $API_KEY"
+curl http://localhost:8000/datasets/{dataset_id}/metrics/recall_at_5 -H "X-API-Key: $API_KEY"   # métriques d'un dataset ; résultats par job : GET /jobs/{job_id}/results
 curl -X POST http://localhost:8000/mcp/v1/tools/get_failure_report/call -H "X-API-Key: $API_KEY"
 git checkout -b bob/auto-fix-$(date +%Y%m%d-%H%M)
 pytest tests/eval/ -x

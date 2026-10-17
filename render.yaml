@@ -5,6 +5,11 @@
 # Render Blueprint -- render.com reads this automatically when the repo
 # is connected as a Blueprint, and builds/deploys the Dockerfile above
 # instead of needing the service configured by hand in Render's UI.
+#
+# WARNING (audit 2026-10-10): this blueprint describes ONLY the legacy Streamlit prototype (./Dockerfile, dashboard/). The FastAPI API
+# (Dockerfile.api, gunicorn.conf.py, health /health and /health/ready) is documented in docs/deployment/RENDER.md and configured in the
+# provider's dashboard, not here. Celery worker and beat are not described here either: see docs/devops/CELERY_WORKERS.md and
+# deploy/render.worker.example.yaml (an example, nothing is created by it).
 services:
   - type: web
     name: nova-fastapi-assistant

@@ -300,7 +300,10 @@ async def list_credit_transactions_endpoint(org_id: uuid.UUID, limit: int = Quer
 
 @org_router.get("/credits/packs")
 async def list_credit_packs_endpoint(_caller: OrganizationMember = Depends(require_permission("billing:read"))):
-    return CREDIT_PACKS
+    # BILL-018: the pack is CHARGED in CREDIT_PACK_CURRENCY (Stripe checkout), so that is the currency the interface must show; the
+    # prices in CREDIT_PACKS are minor units of that currency, never of the plans' currency.
+    currency = settings.CREDIT_PACK_CURRENCY.upper()
+    return [{**pack, "currency": currency} for pack in CREDIT_PACKS]
 
 
 @org_router.post("/credits/purchase", response_model=CreditResponse)
