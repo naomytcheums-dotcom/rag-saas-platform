@@ -166,6 +166,9 @@ add(["10.1.15"], T + " (self-signed certificate)", "tests/contracts/test_tls_rev
 add(["10.3.6", "13.5.5"], T + " (local Jaeger as the OTLP backend; hosted Langfuse/Tempo not run)", "tests/contracts/test_observability_contract.py: LLM spans with gen_ai.* attributes read back from Jaeger's query API, no key in a span, backend down does not break the call; scripts/validate_tracing_live.py for the hosted service")
 add(["11.3.4"], T, "tests/contracts/test_uptime_probe.py and scripts/uptime_probe.py run against the local API")
 add(["12.2.5"], T + " (SSO against a real local OIDC IdP; on-premise is documentation and deploy artefacts, not a product)", "tests/test_enterprise_sso_integration.py (full login, wrong audience, nonce and state refused) and tests/test_billing_plans_limits_postgres.py (Enterprise has no document or question cap)")
+add(["14.4.2", "14.4.4"], "tests pass", "tests/test_brand_assets.py (executed 2026-10-17): SVG logo set is valid and safe, colours are brand tokens, the guide lists every file, stated contrast ratios are true (white on accent documented as not AA for small text)")
+add(["15.2.7"], "tests pass", "tests/test_continuous_improvement_cycle.py (executed 2026-10-17): the cycle judges a measurement by the Guardian thresholds, accepts a candidate only if it wins MRR without losing recall on the held-out split, refuses a non-local API; weekly workflow checked. Not run on a live stack in this session")
+add(["13.4.4", "13.4.5", "13.4.9"], "validated", "tests/test_deploy_artifacts.py (executed 2026-10-17): Railway, Fly.io and DigitalOcean files provide the whole environment contract and validate against the published schemas (a wrong value is rejected). Not deployed: needs the provider account")
 
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
