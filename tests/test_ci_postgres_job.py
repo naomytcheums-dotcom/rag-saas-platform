@@ -29,7 +29,7 @@ def test_the_target_the_job_gives_the_tests_is_accepted_by_the_guard_and_differs
 
 def test_the_job_names_every_postgres_test_file():
     run = next(step["run"] for name, step in STEPS.items() if name.startswith("PostgreSQL tests"))
-    for name in ("test_postgres_tenant_rls", "test_postgres_subscription_concurrency", "test_postgres_credits_concurrency", "test_postgres_invoice_concurrency"):
+    for name in ("test_postgres_bm25_revision", "test_postgres_subscription_concurrency", "test_postgres_credits_concurrency", "test_postgres_invoice_concurrency"):
         assert name in run
     on_disk = {path.stem for path in (Path(__file__).parent).glob("test_postgres_*.py")}
     assert {name for name in on_disk if name not in run} <= {"test_postgres_integration"}, "a test_postgres_* file is not run by the job"
