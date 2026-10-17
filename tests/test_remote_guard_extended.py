@@ -111,6 +111,7 @@ SCRIPTS_THAT_TARGET_SOMETHING_ELSE = {
     "retrieval_benchmark.py": "portable path on a temporary SQLite file",
     "retrieval_benchmark_pg.py": "has its own target rules (staging database by default, --allow-main plus emptiness check)",
     "scrub_system_logs.py": "cleans the database the owner points it at, on purpose: dry run by default, --apply needs the exact database name",
+    "validate_paystack_live.py": "opt-in live check of the vendor sandbox (RUN_LIVE_VENDOR_VALIDATION=1, test key only, refuses live keys); opens no database",
     "staging_journeys.py": "live journeys against staging by design (--execute and .env.staging)",
 }
 _API_IMPORT = re.compile(r"^\s*(?:from|import) api(?:\.|\s)", re.MULTILINE)
