@@ -1,0 +1,995 @@
+{
+ "results": [
+  {
+   "phase": "0-env",
+   "name": "API health",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "org setup",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_plain.txt",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "asynchronous processing: upload returns before indexing finished",
+   "status": "PASS",
+   "detail": "status in response=pending"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_notes.md",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_table.csv",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_page.html",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_data.json",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_doc.xml",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_report.pdf",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_guide.docx",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_book.epub",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "upload accepted: f_archive.zip",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_plain.txt",
+   "status": "PASS",
+   "detail": "status=completed file_type=text/plain chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_notes.md",
+   "status": "PASS",
+   "detail": "status=completed file_type=text/markdown chunks=2 vectors=2 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_table.csv",
+   "status": "PASS",
+   "detail": "status=completed file_type=text/csv chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_page.html",
+   "status": "PASS",
+   "detail": "status=completed file_type=text/html chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_data.json",
+   "status": "PASS",
+   "detail": "status=completed file_type=application/json chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_doc.xml",
+   "status": "PASS",
+   "detail": "status=completed file_type=application/xml chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_report.pdf",
+   "status": "PASS",
+   "detail": "status=completed file_type=application/pdf chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_guide.docx",
+   "status": "PASS",
+   "detail": "status=completed file_type=application/vnd.openxmlformats-officedocument.wordprocessingml.document chunks=1 vectors=1 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "processed to chunks+embeddings: f_book.epub",
+   "status": "PASS",
+   "detail": "status=completed file_type=application/epub+zip chunks=2 vectors=2 dim=384 model=sentence-transformers/all-MiniLM-L6-v2 err="
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "zip container completed (members become their own documents, container holds no chunks)",
+   "status": "PASS",
+   "detail": "status=completed"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: seconds for the 10 formats",
+   "status": "PASS",
+   "detail": "55s"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "zip archive expanded into one completed document per member",
+   "status": "PASS",
+   "detail": "[('inner_b.md', 'completed'), ('inner_a.txt', 'completed')]"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of f_plain.txt is searchable",
+   "status": "PASS",
+   "detail": "200 top=['f_plain.txt', 'f_notes.md', 'f_page.html']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of inner_a.txt (from the zip) is searchable",
+   "status": "PASS",
+   "detail": "200 top=['inner_a.txt', 'inner_b.md', 'f_guide.docx']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of f_book.epub is searchable",
+   "status": "PASS",
+   "detail": "200 top=['f_book.epub', 'f_book.epub', 'f_table.csv']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of f_report.pdf is searchable",
+   "status": "PASS",
+   "detail": "200 top=['f_report.pdf', 'f_page.html', 'f_guide.docx']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of f_doc.xml is searchable",
+   "status": "PASS",
+   "detail": "200 top=['f_doc.xml', 'f_book.epub', 'f_notes.md']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "content of f_guide.docx is searchable",
+   "status": "PASS",
+   "detail": "200 top=['f_guide.docx', 'f_book.epub', 'f_notes.md']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "a batch above the per-call limit (10 files) is refused with a clear message",
+   "status": "PASS",
+   "detail": "400 {\"detail\":\"a batch may contain at most 10 files (got 15)\"}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "15 documents imported in two batch operations (10 + 5), all accepted",
+   "status": "PASS",
+   "detail": "scheduled=15"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "batch: all 15 reach 'completed' via the worker",
+   "status": "PASS",
+   "detail": "15/15 in 77s"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "batch: a specific member is found (lexical identifier)",
+   "status": "PASS",
+   "detail": "top=['batch_07.txt', 'batch_14.txt', 'batch_11.txt']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: mixed batch (one valid, one empty)",
+   "status": "PASS",
+   "detail": "202 {\"results\": [{\"filename\": \"ok_in_batch.txt\", \"accepted\": true, \"error\": null}, {\"filename\": \"empty_in_batch.txt\", \"accepted\": false, \"error\": \"file is empty\"}], \"scheduled\": 1}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "mixed batch: per-file outcome, empty member rejected without sinking the valid one",
+   "status": "PASS",
+   "detail": "202"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "tiny file (2 bytes) ends in a terminal state",
+   "status": "PASS",
+   "detail": "status=completed err=None"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "huge text file accepted (3.5 MB)",
+   "status": "PASS",
+   "detail": "201 "
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "huge file: upload returns while processing is pending (async)",
+   "status": "PASS",
+   "detail": "status=pending"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "huge file indexed fully",
+   "status": "PASS",
+   "detail": "status=completed chunks=1652 in 214s err=None"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "marker at the very end of the huge file is retrievable",
+   "status": "PASS",
+   "detail": "200 5"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "file above the size limit is refused",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid input refused with a clear 4xx: empty.txt",
+   "status": "PASS",
+   "detail": "400 file is empty"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid input refused with a clear 4xx: blank.txt",
+   "status": "PASS",
+   "detail": "400 file is empty"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid input refused with a clear 4xx: fake.pdf",
+   "status": "PASS",
+   "detail": "400 file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, EPUB, or ZIP (checked by its act"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid input refused with a clear 4xx: bad_zip.docx",
+   "status": "PASS",
+   "detail": "400 file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, EPUB, or ZIP (checked by its act"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "invalid input refused with a clear 4xx: program.exe",
+   "status": "PASS",
+   "detail": "400 file is not a valid PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, XML, EPUB, or ZIP (checked by its act"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted then failed cleanly (error recorded, no half-indexed chunks): truncated.pdf",
+   "status": "PASS",
+   "detail": "err=Unable to get page count.\nSyntax Error: Couldn't find trailer dictionary\r\nSyntax Error: Couldn't find trailer dictionary\r\nSyntax Error: Coul chunks=0"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted then failed cleanly (error recorded, no half-indexed chunks): pdf_header_garbage.pdf",
+   "status": "PASS",
+   "detail": "err='C:\\Users\\NITROV15\\AppData\\Local\\Temp\\tmp25p6b2jc.pdf' could not be opened as a valid PDF: Failed to open file 'C:\\\\Users\\\\NITROV15\\\\AppData chunks=0"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted file reached a terminal state: nul_bytes.txt",
+   "status": "PASS",
+   "detail": "status=completed chunks=1"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted file reached a terminal state: bad.xml",
+   "status": "PASS",
+   "detail": "status=completed chunks=1"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted file reached a terminal state: billion_laughs.xml",
+   "status": "PASS",
+   "detail": "status=completed chunks=0"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "accepted file reached a terminal state: zipbomb_like.zip",
+   "status": "PASS",
+   "detail": "status=completed chunks=0"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "no document is stuck in pending/processing after the invalid-input series",
+   "status": "PASS",
+   "detail": "stuck=[]"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "same content under another name is flagged as duplicate (existing document returned)",
+   "status": "PASS",
+   "detail": "200 dup=True"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: duplicates endpoint",
+   "status": "PASS",
+   "detail": "200 []"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "soft delete of a document",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: re-import of identical content after a soft delete",
+   "status": "PASS",
+   "detail": "201 dup=False same_id=False status=pending"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "re-import after soft delete yields a usable document (new or restored)",
+   "status": "PASS",
+   "detail": "201"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "re-imported document is searchable again (vector_only top 10)",
+   "status": "PASS",
+   "detail": "status=completed top=[('f_plain.txt', 0.796), ('f_notes.md', 0.569), ('f_doc.xml', 0.458), ('f_book.epub', 0.431), ('f_notes.md', 0.422), ('f_page.html', 0.384), ('f_data.json', 0.312), ('f_report.pdf', 0.305), ('f_table.csv', 0.302), ('huge_log.txt', 0.294)]"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "document metadata endpoint answers",
+   "status": "PASS",
+   "detail": "200 {\"document_id\":\"b9baea65-8a9f-4a64-9f89-d8a8640f03ee\",\"title\":\"\",\"author\":\"\",\"created_date\":null,\"keywords\":[],\"raw\":{\"format\":\"PDF 1.4\",\"title\":\"\",\"a"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: chunk metadata keys of a markdown document",
+   "status": "PASS",
+   "detail": "[\"chunking_strategy\", \"heading\", \"language\", \"level\"]"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "metadata filter language='en' keeps matching chunks",
+   "status": "PASS",
+   "detail": "200 20"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "metadata filter language with an unknown value returns nothing",
+   "status": "PASS",
+   "detail": "200 0"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "malformed filter key is rejected (422)",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "tag assigned to a document",
+   "status": "PASS",
+   "detail": "201 {\"message\":\"Tag assigned\"}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "tag listed on the document",
+   "status": "PASS",
+   "detail": "[{\"id\":\"4aa774ff-000f-46a3-b472-acfd2852ea7c\",\"organization_id\":\"d1f71f9b-44fd-4e1e-a0a0-e1e744efc703\",\"name\":\"quarzo-op"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "worker stopped: documents wait in 'pending' (accepted, not lost)",
+   "status": "PASS",
+   "detail": "['pending', 'pending']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "worker restarted: the queued documents are processed (resume)",
+   "status": "PASS",
+   "detail": "['completed', 'completed']"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "org embedding model set to a nonexistent model",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "ingestion failure is reported (status failed + indexing_error), not silent",
+   "status": "PASS",
+   "detail": "status=failed err=We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.\nCheck your internet connection or see how to run the library in offline mode at 'https://"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "failed document leaves no half-indexed chunks",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "restoring the embedding model",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "reindex after failure accepted",
+   "status": "PASS",
+   "detail": "200 {\"message\":\"Reindex scheduled\"}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "resume after failure: document completed with chunks",
+   "status": "PASS",
+   "detail": "status=completed err=None"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "reindex accepted",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "reindex rebuilds chunks without duplicating them",
+   "status": "PASS",
+   "detail": "before=2 after=2 ids_changed=True"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "document replaced",
+   "status": "PASS",
+   "detail": "201 {\"id\":\"7e3b9efd-dde7-41f9-a3b5-4656eb4d1746\",\"document_id\":\"2a774f28-221a-4dde-8ce9-4ab66c0e0fc7\",\"version_number\":1,\"fi"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "after replacement the old chunks are gone and only the new content is indexed",
+   "status": "PASS",
+   "detail": "has crimson=True stale teal=False"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "search returns the new content, not the old one",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "version history records the replacement (the original upload is not a numbered version by design)",
+   "status": "PASS",
+   "detail": "200 versions=1"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "before deletion: the PDF has chunks and its file is in object storage",
+   "status": "PASS",
+   "detail": "{'document_chunks': 1, 'document_keywords': 3, 'document_entities': 0, 'document_images': 0, 'document_versions': 0, 'document_tag_assignments': 0} s3=True"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "soft delete",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "soft-deleted document is excluded from search",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "OBSERVATION: derived rows right after soft delete (kept for restore)",
+   "status": "PASS",
+   "detail": "{\"document_chunks\": 1, \"document_keywords\": 3, \"document_entities\": 0, \"document_images\": 0, \"document_versions\": 0, \"document_tag_assignments\": 0}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "permanent delete",
+   "status": "PASS",
+   "detail": "200 {\"message\":\"Document permanently deleted\"}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "permanent delete removed chunks, embeddings, keywords, entities, images, versions, tags in PostgreSQL",
+   "status": "PASS",
+   "detail": "{\"document_chunks\": 0, \"document_keywords\": 0, \"document_entities\": 0, \"document_images\": 0, \"document_versions\": 0, \"document_tag_assignments\": 0}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "permanent delete removed the file from object storage",
+   "status": "PASS",
+   "detail": "s3 exists=False"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "other documents were not touched by the deletion",
+   "status": "PASS",
+   "detail": "{'document_chunks': 1, 'document_keywords': 4, 'document_entities': 0, 'document_images': 0, 'document_versions': 0, 'document_tag_assignments': 0} vs {'document_chunks': 1, 'document_keywords': 4, 'document_entities': 0, 'document_images': 0, 'document_versions': 0, 'document_tag_assignments': 0}"
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "deleted document absent from search results",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "A-ingestion",
+   "name": "no orphan chunk remains in the organization",
+   "status": "PASS",
+   "detail": "orphans=0"
+  },
+  {
+   "phase": "B-search",
+   "name": "default embedding model is the local MiniLM (384 dimensions)",
+   "status": "PASS",
+   "detail": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  {
+   "phase": "B-search",
+   "name": "unavailable API embedding model refused for ingestion: openai/text-embedding-ada-002",
+   "status": "FAIL",
+   "detail": "200 {\"organization_id\":\"e9393c5b-5b8d-4848-a857-59af3e207694\",\"chunk_size\":512,\"chunk_overlap\":50,\"chunking_strategy\":\"fixed\",\"pdf_extraction_en"
+  },
+  {
+   "phase": "B-search",
+   "name": "unavailable API embedding model refused for ingestion: cohere/embed-english-v3.0",
+   "status": "FAIL",
+   "detail": "200 {\"organization_id\":\"e9393c5b-5b8d-4848-a857-59af3e207694\",\"chunk_size\":512,\"chunk_overlap\":50,\"chunking_strategy\":\"fixed\",\"pdf_extraction_en"
+  },
+  {
+   "phase": "B-search",
+   "name": "organization embedding model set: sentence-transformers/all-MiniLM-L6-v2",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "B-search",
+   "name": "chunks carry the model identity and dimension (sentence-transformers/all-MiniLM-L6-v2)",
+   "status": "PASS",
+   "detail": "{\"n\": 1, \"vec\": 1, \"js\": 1, \"dmin\": 384, \"dmax\": 384, \"m1\": \"sentence-transformers/all-MiniLM-L6-v2\", \"m2\": \"sentence-transformers/all-MiniLM-L6-v2\"}"
+  },
+  {
+   "phase": "B-search",
+   "name": "chunks carry the model identity and dimension (sentence-transformers/all-MiniLM-L6-v2)",
+   "status": "PASS",
+   "detail": "{\"n\": 1, \"vec\": 1, \"js\": 1, \"dmin\": 384, \"dmax\": 384, \"m1\": \"sentence-transformers/all-MiniLM-L6-v2\", \"m2\": \"sentence-transformers/all-MiniLM-L6-v2\"}"
+  },
+  {
+   "phase": "B-search",
+   "name": "vector search with sentence-transformers/all-MiniLM-L6-v2 finds the cat text first",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "B-search",
+   "name": "organization embedding model set: sentence-transformers/multi-qa-MiniLM-L6-cos-v1",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "B-search",
+   "name": "chunks carry the model identity and dimension (sentence-transformers/multi-qa-MiniLM-L6-cos-v1)",
+   "status": "PASS",
+   "detail": "{\"n\": 1, \"vec\": 1, \"js\": 1, \"dmin\": 384, \"dmax\": 384, \"m1\": \"sentence-transformers/multi-qa-MiniLM-L6-cos-v1\", \"m2\": \"sentence-transformers/multi-qa-MiniLM-L6-cos-v1\"}"
+  },
+  {
+   "phase": "B-search",
+   "name": "chunks carry the model identity and dimension (sentence-transformers/multi-qa-MiniLM-L6-cos-v1)",
+   "status": "PASS",
+   "detail": "{\"n\": 1, \"vec\": 1, \"js\": 1, \"dmin\": 384, \"dmax\": 384, \"m1\": \"sentence-transformers/multi-qa-MiniLM-L6-cos-v1\", \"m2\": \"sentence-transformers/multi-qa-MiniLM-L6-cos-v1\"}"
+  },
+  {
+   "phase": "B-search",
+   "name": "vector search with sentence-transformers/multi-qa-MiniLM-L6-cos-v1 finds the cat text first",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: mixed embedding models in one org: search keeps vector spaces apart",
+   "status": "PASS",
+   "detail": "results=2 models_in_results={None}"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: mpnet (768 dimensions) selection",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: 768-dimension model ingestion (offline weights likely missing)",
+   "status": "PASS",
+   "detail": "status=failed chunks=0 dim=None vectors=0 err=None"
+  },
+  {
+   "phase": "B-search",
+   "name": "768-dim model that cannot load fails visibly (failed + error), never silently",
+   "status": "FAIL",
+   "detail": "failed"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: strategy hybrid: rank of the expected document",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "strategy hybrid: answers 200 and ranks the expected document first for the exact-fact query",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: strategy vector_only: rank of the expected document",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "strategy vector_only: answers 200 and ranks the expected document first for the exact-fact query",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: strategy bm25_only: rank of the expected document",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 2, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "strategy bm25_only: answers 200 and ranks the expected document first for the exact-fact query",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 2, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: strategy hybrid_reranked: rank of the expected document",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "strategy hybrid_reranked: answers 200 and ranks the expected document first for the exact-fact query",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: strategy semantic: rank of the expected document",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "strategy semantic: answers 200 and ranks the expected document first for the exact-fact query",
+   "status": "PASS",
+   "detail": "{\"relevant (exact fact)\": 1, \"relevant (paraphrase)\": 1, \"relevant (lexical id)\": 1}"
+  },
+  {
+   "phase": "B-search",
+   "name": "top_k honoured",
+   "status": "PASS",
+   "detail": "2"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: partially relevant query",
+   "status": "PASS",
+   "detail": "top=['s_gloss.txt', 's_gauge.txt', 'rails-all-MiniLM-L6-v2.txt']"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: irrelevant query with default threshold",
+   "status": "PASS",
+   "detail": "4 results, scores=[0.033, 0.032, 0.031, 0.031]"
+  },
+  {
+   "phase": "B-search",
+   "name": "lexical search with no matching term returns an empty list (no-result case)",
+   "status": "FAIL",
+   "detail": "200 4"
+  },
+  {
+   "phase": "B-search",
+   "name": "score_threshold=1.0 keeps only the best candidate",
+   "status": "PASS",
+   "detail": "1"
+  },
+  {
+   "phase": "B-search",
+   "name": "invalid search parameter refused: {'top_k': 0}",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "B-search",
+   "name": "invalid search parameter refused: {'top_k': 101}",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "B-search",
+   "name": "invalid search parameter refused: {'score_threshold': 1.5}",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "B-search",
+   "name": "invalid search parameter refused: {'strategy': 'nonsense'}",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "B-search",
+   "name": "empty query refused",
+   "status": "PASS",
+   "detail": "422"
+  },
+  {
+   "phase": "B-search",
+   "name": "org-level retrieval parameters accepted",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "phase": "B-search",
+   "name": "request without overrides uses the organization's strategy and top_k",
+   "status": "PASS",
+   "detail": "strategy=bm25_only n=2"
+  },
+  {
+   "phase": "B-search",
+   "name": "request-level parameters override the organization's",
+   "status": "PASS",
+   "detail": "strategy=vector_only"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: embedding staleness endpoint",
+   "status": "PASS",
+   "detail": "200 {\"organization_id\":\"e9393c5b-5b8d-4848-a857-59af3e207694\",\"current_embedding_model\":\"sentence-transformers/all-MiniLM-L6-v2\",\"total_embedded_chunks\":8,\"current_model_chunks\":6,\"stale_chunks\":2,\"legacy"
+  },
+  {
+   "phase": "B-search",
+   "name": "FastAPI corpus ingested (155 pages)",
+   "status": "PASS",
+   "detail": "155/155 completed in 672s"
+  },
+  {
+   "phase": "B-search",
+   "name": "OBSERVATION: corpus size",
+   "status": "PASS",
+   "detail": "1536 chunks"
+  },
+  {
+   "phase": "B-search",
+   "name": "ranking quality: hybrid default threshold top_k=5",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.5, \"recall@3\": 0.8, \"recall@5\": 0.92, \"recall@10\": 0.92, \"mrr\": 0.662, \"ndcg@10\": 0.715, \"seconds\": 32.6}",
+   "metrics": {
+    "all": {
+     "n": 50,
+     "recall@1": 0.5,
+     "recall@3": 0.8,
+     "recall@5": 0.92,
+     "recall@10": 0.92,
+     "mrr": 0.662,
+     "ndcg@10": 0.715,
+     "seconds": 32.6
+    },
+    "tuning": {
+     "n": 35,
+     "recall@1": 0.486,
+     "recall@3": 0.771,
+     "recall@5": 0.914,
+     "recall@10": 0.914,
+     "mrr": 0.649,
+     "ndcg@10": 0.71
+    },
+    "held_out": {
+     "n": 15,
+     "recall@1": 0.533,
+     "recall@3": 0.867,
+     "recall@5": 0.933,
+     "recall@10": 0.933,
+     "mrr": 0.694,
+     "ndcg@10": 0.729
+    }
+   }
+  },
+  {
+   "phase": "B-search",
+   "name": "ranking quality: hybrid top_k=10 no threshold",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.52, \"recall@3\": 0.82, \"recall@5\": 0.92, \"recall@10\": 1.0, \"mrr\": 0.69, \"ndcg@10\": 0.763, \"seconds\": 28.9}",
+   "metrics": {
+    "all": {
+     "n": 50,
+     "recall@1": 0.52,
+     "recall@3": 0.82,
+     "recall@5": 0.92,
+     "recall@10": 1.0,
+     "mrr": 0.69,
+     "ndcg@10": 0.763,
+     "seconds": 28.9
+    },
+    "tuning": {
+     "n": 35,
+     "recall@1": 0.514,
+     "recall@3": 0.8,
+     "recall@5": 0.914,
+     "recall@10": 1.0,
+     "mrr": 0.683,
+     "ndcg@10": 0.762
+    },
+    "held_out": {
+     "n": 15,
+     "recall@1": 0.533,
+     "recall@3": 0.867,
+     "recall@5": 0.933,
+     "recall@10": 1.0,
+     "mrr": 0.706,
+     "ndcg@10": 0.766
+    }
+   }
+  },
+  {
+   "phase": "B-search",
+   "name": "ranking quality: vector_only top_k=10",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.5, \"recall@3\": 0.84, \"recall@5\": 0.92, \"recall@10\": 0.96, \"mrr\": 0.68, \"ndcg@10\": 0.741, \"seconds\": 11.7}",
+   "metrics": {
+    "all": {
+     "n": 50,
+     "recall@1": 0.5,
+     "recall@3": 0.84,
+     "recall@5": 0.92,
+     "recall@10": 0.96,
+     "mrr": 0.68,
+     "ndcg@10": 0.741,
+     "seconds": 11.7
+    },
+    "tuning": {
+     "n": 35,
+     "recall@1": 0.486,
+     "recall@3": 0.771,
+     "recall@5": 0.886,
+     "recall@10": 0.943,
+     "mrr": 0.648,
+     "ndcg@10": 0.715
+    },
+    "held_out": {
+     "n": 15,
+     "recall@1": 0.533,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "recall@10": 1.0,
+     "mrr": 0.756,
+     "ndcg@10": 0.803
+    }
+   }
+  },
+  {
+   "phase": "B-search",
+   "name": "ranking quality: bm25_only top_k=10",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.36, \"recall@3\": 0.64, \"recall@5\": 0.74, \"recall@10\": 0.86, \"mrr\": 0.516, \"ndcg@10\": 0.588, \"seconds\": 17.1}",
+   "metrics": {
+    "all": {
+     "n": 50,
+     "recall@1": 0.36,
+     "recall@3": 0.64,
+     "recall@5": 0.74,
+     "recall@10": 0.86,
+     "mrr": 0.516,
+     "ndcg@10": 0.588,
+     "seconds": 17.1
+    },
+    "tuning": {
+     "n": 35,
+     "recall@1": 0.371,
+     "recall@3": 0.629,
+     "recall@5": 0.743,
+     "recall@10": 0.829,
+     "mrr": 0.522,
+     "ndcg@10": 0.585
+    },
+    "held_out": {
+     "n": 15,
+     "recall@1": 0.333,
+     "recall@3": 0.667,
+     "recall@5": 0.733,
+     "recall@10": 0.933,
+     "mrr": 0.504,
+     "ndcg@10": 0.594
+    }
+   }
+  },
+  {
+   "phase": "B-search",
+   "name": "ranking quality: hybrid_reranked top_k=10",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.56, \"recall@3\": 0.84, \"recall@5\": 0.92, \"recall@10\": 0.94, \"mrr\": 0.712, \"ndcg@10\": 0.764, \"seconds\": 632.1}",
+   "metrics": {
+    "all": {
+     "n": 50,
+     "recall@1": 0.56,
+     "recall@3": 0.84,
+     "recall@5": 0.92,
+     "recall@10": 0.94,
+     "mrr": 0.712,
+     "ndcg@10": 0.764,
+     "seconds": 632.1
+    },
+    "tuning": {
+     "n": 35,
+     "recall@1": 0.657,
+     "recall@3": 0.829,
+     "recall@5": 0.943,
+     "recall@10": 0.971,
+     "mrr": 0.769,
+     "ndcg@10": 0.819
+    },
+    "held_out": {
+     "n": 15,
+     "recall@1": 0.333,
+     "recall@3": 0.867,
+     "recall@5": 0.867,
+     "recall@10": 0.867,
+     "mrr": 0.578,
+     "ndcg@10": 0.636
+    }
+   }
+  },
+  {
+   "phase": "B-search",
+   "name": "sanity floor: hybrid Recall@10 on the 50 questions is at least 0.80 (earlier measured baseline 1.00)",
+   "status": "PASS",
+   "detail": "{\"n\": 50, \"recall@1\": 0.52, \"recall@3\": 0.82, \"recall@5\": 0.92, \"recall@10\": 1.0, \"mrr\": 0.69, \"ndcg@10\": 0.763, \"seconds\": 28.9}"
+  },
+  {
+   "phase": "B-search",
+   "name": "no query crashed the search (all strategies answered 200 for every question)",
+   "status": "PASS",
+   "detail": ""
+  }
+ ],
+ "generated": "2026-10-16 22:14:55"
+}

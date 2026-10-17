@@ -695,7 +695,15 @@ async def bm25_search(
 
     def _score(index: BM25Okapi) -> list[tuple[int, float]]:
         scores = index.get_scores(query_tokens)
-        order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        # A chunk that shares a term with the query always ranks ahead of one that does not: in a very small corpus an Okapi score of a real match can be
+        # negative and used to rank behind a non-match whose score is 0.0 (found on a real stack). Non-matching chunks are still returned after the matches
+        # (up to top_k), which keeps the long-standing contract of this function.
+        doc_freqs = getattr(index, "doc_freqs", None)
+        if doc_freqs is None:
+            matching = set(range(len(scores)))
+        else:
+            matching = {i for i in range(len(scores)) if any(token in doc_freqs[i] for token in query_tokens)}
+        order = sorted(range(len(scores)), key=lambda i: (i in matching, scores[i]), reverse=True)[:top_k]
         return [(i, float(scores[i])) for i in order]
 
     loop = asyncio.get_running_loop()

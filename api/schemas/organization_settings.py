@@ -205,6 +205,18 @@ class OrganizationSettingsUpdateRequest(BaseModel):
     daily_credit_limit: int | None = Field(default=None, ge=0)
     monthly_credit_limit: int | None = Field(default=None, ge=0)
 
+    @field_validator("embedding_model")
+    @classmethod
+    def _check_embedding_model(cls, value: str | None) -> str | None:
+        # A catalogued model this pipeline cannot load (the hosted OpenAI / Cohere models: ingestion loads this field through SentenceTransformer,
+        # a provider key does not change that) is refused now, not later as a document stuck in "failed". Any other name stays accepted: whether
+        # a Hugging Face model loads is only knowable by loading it.
+        if value is not None:
+            from api.services.embedding_config import resolve_embedding_model
+
+            resolve_embedding_model(override=value)
+        return value
+
     @field_validator("escalation_sla_hours")
     @classmethod
     def _check_escalation_sla_hours(cls, value):
