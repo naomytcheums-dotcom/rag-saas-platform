@@ -62,6 +62,15 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s.strip()]
 
 
+# Bounds that match the storage columns (`document_keywords.keyword` is VARCHAR(200), `document_entities.entity_value` VARCHAR(500)). A text with a long run of
+# non-stopwords and no punctuation (a word list, a table header, code identifiers, a NUL-separated blob) used to produce one absurdly long "phrase", the INSERT failed
+# at commit time and the whole indexing task was lost with the document stuck in 'pending' (found by the RAG value-chain validation, 2026-10-13).
+MAX_KEYWORD_WORDS = 6
+MAX_KEYWORD_WORD_CHARS = 40
+MAX_KEYWORD_CHARS = 200
+MAX_ENTITY_VALUE_CHARS = 500
+
+
 def extract_keywords(text: str, max_keywords: int = 10) -> list[dict]:
     """Item 2's own literal function -- a real, hand-implemented RAKE
     (Rapid Automatic Keyword Extraction): candidate phrases are real
@@ -85,12 +94,16 @@ def extract_keywords(text: str, max_keywords: int = 10) -> list[dict]:
     for segment in segments:
         current: list[str] = []
         for word in [w.lower() for w in _WORD_RE.findall(segment)]:
-            if word in STOPWORDS:
+            if word in STOPWORDS or len(word) > MAX_KEYWORD_WORD_CHARS:
+                # an over-long "word" (a blob of letters) is not a keyword; like a stopword it ends the current phrase
                 if current:
                     phrases.append(current)
                     current = []
             else:
                 current.append(word)
+                if len(current) >= MAX_KEYWORD_WORDS:
+                    phrases.append(current)
+                    current = []
         if current:
             phrases.append(current)
     if not phrases:
@@ -112,7 +125,7 @@ def extract_keywords(text: str, max_keywords: int = 10) -> list[dict]:
         phrase_scores[key] = phrase_scores.get(key, 0.0) + sum(word_scores[w] for w in phrase)
 
     ranked = sorted(phrase_scores.items(), key=lambda item: item[1], reverse=True)
-    return [{"keyword": keyword, "score": round(score, 2)} for keyword, score in ranked[:max_keywords]]
+    return [{"keyword": keyword[:MAX_KEYWORD_CHARS], "score": round(score, 2)} for keyword, score in ranked[:max_keywords]]
 
 
 _ENTITY_PATTERNS: list[tuple[str, re.Pattern, float]] = [
@@ -143,6 +156,8 @@ def extract_entities(text: str) -> list[dict]:
     entities = []
     for entity_type, pattern, confidence in _ENTITY_PATTERNS:
         for match in pattern.finditer(text):
+            if len(match.group()) > MAX_ENTITY_VALUE_CHARS:
+                continue  # e.g. a data: URL or a very long tracking URL: it does not fit the column and carries no entity value
             entities.append({"entity_type": entity_type, "entity_value": match.group(), "confidence": confidence, "position": match.start()})
     entities.sort(key=lambda e: e["position"])
     return entities

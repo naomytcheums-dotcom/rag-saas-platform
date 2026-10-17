@@ -160,6 +160,22 @@ worker_init.connect(_mask_secrets_in_worker_logs)
 worker_process_init.connect(_mask_secrets_in_worker_logs)
 
 
+def _init_observability_in_worker(**_kwargs) -> None:
+    """The worker never runs the API lifespan either, so error tracking, LLM observability and tracing were never started here: a crashing import or
+    ingestion task reached the worker log and nothing else. Every setup is idempotent and a no-op without its DSN / key / OTEL_ENABLED."""
+    from api.security.datadog_llmobs import setup_llm_observability
+    from api.security.error_tracking import setup_error_tracking
+    from api.security.tracing import setup_tracing
+
+    setup_error_tracking()
+    setup_llm_observability()
+    setup_tracing(None)
+
+
+worker_init.connect(_init_observability_in_worker)
+worker_process_init.connect(_init_observability_in_worker)  # prefork children: threads (Sentry's transport) do not survive the fork
+
+
 @worker_ready.connect
 def _warm_embedder_in_inline_worker(sender=None, **_kwargs) -> None:
     pool = getattr(sender, "pool", None)

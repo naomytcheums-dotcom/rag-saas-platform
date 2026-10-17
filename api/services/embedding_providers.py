@@ -47,7 +47,8 @@ class EmbeddingError(Exception):
 
 
 class EmbeddingProviderError(EmbeddingError):
-    pass
+    #: True for a failure worth retrying (rate limit, 5xx, connection error); set where the error is raised.
+    transient: bool = False
 
 
 class EmbeddingTimeoutError(EmbeddingError):
@@ -111,7 +112,37 @@ def get_embedding_dimensions(provider: str, model: str | None = None) -> int:
     return models[model]
 
 
+def _underlying_http_status(exc: BaseException) -> int | None:
+    """The status code of the vendor's real HTTP answer, found in the exception chain (None for a connection failure)."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+        if isinstance(code, int):
+            return code
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
 async def _call_litellm_embedding(model: str, texts: list[str], api_key: str | None = None, timeout: float | None = None, **kwargs) -> list[list[float]]:
+    """One retry layer per vendor. OpenAI is called through the OpenAI SDK, which already retries 429/5xx/connection errors twice with back-off
+    (LiteLLM turns `max_retries=0` back into that default, so it cannot be switched off): adding a loop here would multiply the attempts.
+    Voyage and Cohere go through plain httpx with no retry at all -- before 2026-10-13 their first 429 aborted a whole ingestion batch -- so
+    they get a bounded exponential back-off here (`max_retries`, default LLM_MAX_RETRIES)."""
+    import asyncio
+
+    retries = kwargs.pop("max_retries", settings.LLM_MAX_RETRIES) if model.startswith(("voyage/", "cohere/")) else 0
+    for attempt in range(retries + 1):
+        try:
+            return await _call_litellm_embedding_once(model, texts, api_key=api_key, timeout=timeout, **kwargs)
+        except EmbeddingProviderError as exc:
+            if not exc.transient or attempt >= retries:
+                raise
+            await asyncio.sleep(min(0.5 * 2**attempt, 8.0))
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+async def _call_litellm_embedding_once(model: str, texts: list[str], api_key: str | None = None, timeout: float | None = None, **kwargs) -> list[list[float]]:
     """A real, shared call site for every real, remote provider below
     -- real error mapping (the same real exception hierarchy idea
     `api.services.llm_providers.chat_completion` already established).
@@ -136,11 +167,21 @@ async def _call_litellm_embedding(model: str, texts: list[str], api_key: str | N
     except litellm.exceptions.Timeout as exc:
         raise EmbeddingTimeoutError(str(exc)) from exc
     except litellm.exceptions.RateLimitError as exc:
-        raise EmbeddingProviderError(str(exc)) from exc
+        error = EmbeddingProviderError(str(exc))
+        error.transient = True
+        raise error from exc
     except (litellm.exceptions.APIError, openai.APIError) as exc:
         # Connection errors, 5xx and 404/400 answers do not inherit from litellm's APIError: without openai.APIError here they escaped as raw
         # exceptions and the provider fallback (which only catches EmbeddingError) never moved on.
-        raise EmbeddingProviderError(str(exc)) from exc
+        # LiteLLM turns a 401 from Voyage/Cohere into a generic APIConnectionError (status 500): read the vendor's real HTTP answer underneath.
+        status = _underlying_http_status(exc)
+        if status in (401, 403):
+            raise EmbeddingAuthenticationError(str(exc)) from exc
+        if status in (408, 504):
+            raise EmbeddingTimeoutError(str(exc)) from exc
+        error = EmbeddingProviderError(str(exc))
+        error.transient = status is None or status in (429, 500, 502, 503, 504)
+        raise error from exc
     # Providers such as Ollama come back as plain dicts, OpenAI-style providers as objects.
     def field(item, name: str):
         return item[name] if isinstance(item, dict) else getattr(item, name)
@@ -200,6 +241,8 @@ async def get_cohere_embeddings(texts: list[str], model: str | None = None, inpu
     if not settings.COHERE_API_KEY:
         raise EmbeddingAuthenticationError("No API key configured for Cohere embeddings (set COHERE_API_KEY)")
     litellm_model = model if model.startswith("cohere/") else f"cohere/{model}"
+    # Cohere's /v2/embed (the endpoint LiteLLM targets) requires `embedding_types`; LiteLLM only sends it when asked for an encoding_format.
+    kwargs.setdefault("encoding_format", "float")
     return await _call_litellm_embedding(litellm_model, texts, api_key=settings.COHERE_API_KEY, input_type=input_type, **kwargs)
 
 

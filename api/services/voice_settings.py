@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.voice import VoiceSettings
 
-_VALID_TTS_PROVIDERS = ("web_speech", "elevenlabs", "google_cloud")
+_VALID_TTS_PROVIDERS = ("web_speech", "elevenlabs", "google_cloud", "local")
 _VALID_STT_PROVIDERS = ("web_speech", "whisper", "deepgram")
 
 
@@ -22,7 +22,7 @@ def get_default_voice_settings() -> dict:
     return {
         "language": "fr-FR", "tts_provider": "web_speech", "tts_voice": None, "tts_speed": 1.0, "tts_pitch": 1.0,
         "tts_volume": 1.0, "stt_provider": "web_speech", "stt_language": None, "vad_enabled": True,
-        "vad_threshold": 0.5, "audio_history_enabled": True, "push_to_talk_enabled": True,
+        "vad_threshold": 0.05, "audio_history_enabled": True, "push_to_talk_enabled": True,
     }
 
 

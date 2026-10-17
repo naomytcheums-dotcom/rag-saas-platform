@@ -67,7 +67,7 @@ def _client() -> httpx.AsyncClient:
             "Paystack is not configured on this deployment -- set PAYSTACK_SECRET_KEY in .env to enable real payments."
         )
     return httpx.AsyncClient(
-        base_url=PAYSTACK_BASE_URL,
+        base_url=settings.PAYSTACK_API_BASE_URL or PAYSTACK_BASE_URL,
         headers={"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}", "Content-Type": "application/json"},
         timeout=15.0,
     )
@@ -121,6 +121,66 @@ async def create_checkout_session(db: AsyncSession, organization_id: uuid.UUID, 
         )
         body = _raise_for_paystack_error(response)
     return body["data"]["authorization_url"]
+
+
+async def create_credit_pack_checkout_session(db: AsyncSession, organization_id: uuid.UUID, *, pack: dict, email: str, org_name: str) -> str:
+    """A ONE-OFF Paystack transaction (no `plan`) for a fixed credit pack, priced in `CREDIT_PACK_CURRENCY` (minor units, like Stripe). The organization, the
+    pack and a server-generated reference travel in the metadata set here; the credits are granted ONLY by the signed `charge.success` webhook."""
+    if not settings.PAYSTACK_SECRET_KEY:  # before any database access or network call
+        raise PaystackNotConfiguredError("Paystack is not configured on this deployment -- set PAYSTACK_SECRET_KEY in .env to enable real payments.")
+    await create_paystack_customer(db, organization_id, email=email, name=org_name)
+    reference = f"credits-{uuid.uuid4().hex}"
+    async with _client() as client:
+        response = await client.post(
+            "/transaction/initialize",
+            json={
+                "email": email,
+                "amount": pack["price_cents"],
+                "currency": settings.CREDIT_PACK_CURRENCY.upper(),
+                "reference": reference,
+                "callback_url": settings.PAYSTACK_CALLBACK_URL,
+                "metadata": {"organization_id": str(organization_id), "kind": "credit_pack", "pack_id": pack["id"]},
+            },
+        )
+        body = _raise_for_paystack_error(response)
+    return body["data"]["authorization_url"]
+
+
+async def _grant_paid_credit_pack(db: AsyncSession, event_id: str, data: dict) -> None:
+    """Grants the credits of a PAID credit-pack charge. Anything that does not match what `create_credit_pack_checkout_session` created (not `success`,
+    unknown pack, amount or currency not the pack's, malformed or unknown organization, no reference) grants NOTHING and is logged. Idempotent twice over:
+    the event claim made by the caller and one grant per Paystack reference made here."""
+    from api.models.organization import Organization
+    from api.security.credit_packs import get_credit_pack
+    from api.services.billing_credits import add_credits
+
+    metadata = data.get("metadata") or {}
+    pack = get_credit_pack(metadata.get("pack_id", ""))
+    reference = data.get("reference")
+    if data.get("status") != "success":
+        logger.warning("paystack credit pack charge %s not successful (%s): nothing granted", event_id, data.get("status"))
+        return
+    if pack is None or data.get("amount") != pack["price_cents"]:
+        logger.error("paystack credit pack charge %s does not match a known pack/price (pack=%s, amount=%s): nothing granted", event_id, metadata.get("pack_id"), data.get("amount"))
+        return
+    if str(data.get("currency", "")).upper() != settings.CREDIT_PACK_CURRENCY.upper():
+        logger.error("paystack credit pack charge %s was paid in %s, the pack is priced in %s: nothing granted", event_id, data.get("currency"), settings.CREDIT_PACK_CURRENCY)
+        return
+    if not reference:
+        logger.error("paystack credit pack charge %s has no reference: nothing granted", event_id)
+        return
+    try:
+        organization_id = uuid.UUID(str(metadata.get("organization_id", "")))
+    except ValueError:
+        logger.error("paystack credit pack charge %s has no valid organization id: nothing granted", event_id)
+        return
+    if await db.get(Organization, organization_id) is None:
+        logger.error("paystack credit pack charge %s is for an organization that does not exist: nothing granted", event_id)
+        return
+    if not await claim_payment_event(db, PaymentProvider.paystack, f"credit_pack_reference:{reference}", "credit_pack_grant", str(reference)):
+        logger.warning("paystack credit pack reference %s was already granted: nothing more granted", reference)
+        return
+    await add_credits(db, organization_id, pack["credits"], source=f"Paystack payment {reference} ({pack['name']} pack)")
 
 
 async def create_portal_session(db: AsyncSession, organization_id: uuid.UUID) -> str:
@@ -212,6 +272,11 @@ async def handle_paystack_webhook(db: AsyncSession, event: dict) -> bool:
     if not await claim_payment_event(db, PaymentProvider.paystack, event_id, event_type, object_id):
         return False
 
+    if event_type == "charge.success" and (data.get("metadata") or {}).get("kind") == "credit_pack":
+        # A credit-pack payment is not a subscription payment: it must never touch the organization's subscription status.
+        await _grant_paid_credit_pack(db, event_id, data)
+        return True
+
     org_id = (data.get("metadata") or {}).get("organization_id")
     customer_code = (data.get("customer") or {}).get("customer_code")
 
@@ -288,8 +353,7 @@ async def _apply_paystack_plan(db: AsyncSession, sub: Subscription, data: dict) 
 class PaystackProvider(BillingProvider):
     """Thin `BillingProvider` adapter over the module-level functions
     above -- registered as `PaymentProvider.paystack` in
-    api/services/billing_providers/registry.py. Credit packs are not sold through Paystack (BILL-013): it inherits the base
-    class's honest `NotImplementedError` (HTTP 501)."""
+    api/services/billing_providers/registry.py. Credit packs are sold through a one-off transaction granted by the signed `charge.success` webhook."""
 
     name = "paystack"
 
@@ -301,6 +365,9 @@ class PaystackProvider(BillingProvider):
         if not plan_code:
             raise ValueError(f"Plan {plan.key!r} has no paystack_plan_code_{billing_period} set -- create it on Paystack first.")
         return await create_checkout_session(db, organization_id, plan_code=plan_code, email=email, org_name=org_name)
+
+    async def create_credit_pack_checkout(self, db: AsyncSession, organization_id: uuid.UUID, *, pack: dict, email: str, org_name: str) -> str:
+        return await create_credit_pack_checkout_session(db, organization_id, pack=pack, email=email, org_name=org_name)
 
     async def create_portal_session(self, db: AsyncSession, organization_id: uuid.UUID) -> str:
         return await create_portal_session(db, organization_id)

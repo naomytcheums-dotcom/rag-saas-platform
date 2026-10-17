@@ -22,7 +22,10 @@ export const settings = {
 
   PUSH_TO_TALK_TIMEOUT_MS: 30_000,
 
-  VAD_THRESHOLD: 0.5,
+  // RMS of the microphone waveform on a -1..1 scale. Measured on real speech (Windows SAPI voice, 10 ms windows): median 0.01, 75th percentile 0.10, 90th 0.15; a
+  // quiet room is about 0.004. 0.5 would be near clipping and never fires; 0.05 sits well above room noise and well below speech.
+  VAD_THRESHOLD: 0.05,
+  VAD_HANGOVER_MS: 250,
   VAD_SILENCE_TIMEOUT_MS: 2000,
   VAD_MIN_SPEECH_DURATION_MS: 500,
 

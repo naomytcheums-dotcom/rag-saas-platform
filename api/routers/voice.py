@@ -26,7 +26,7 @@ from api.models.organization import OrganizationMember
 from api.models.user import User
 from api.schemas.voice import ElevenLabsVoiceResponse, SynthesizeRequest, TranscribeResponse, VoiceAgentResponse, VoiceChatResponse
 from api.security.permissions import require_permission
-from api.services.voice import VoiceError, get_elevenlabs_voices, synthesize_with_elevenlabs, transcribe_audio, voice_agent_turn, voice_chat
+from api.services.voice import VoiceError, get_elevenlabs_voices, synthesize_speech, transcribe_audio, voice_agent_turn, voice_chat
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -41,11 +41,16 @@ async def list_elevenlabs_voices_endpoint(current_user: User = Depends(get_curre
 
 @router.post("/tts")
 async def synthesize_speech_endpoint(payload: SynthesizeRequest, current_user: User = Depends(get_current_user)):
+    from api.config import settings
+    from api.security.rate_limit import enforce_rate_limit
+
+    # Hosted synthesis is billed per character: bounded text (schema) and a per-user rate limit.
+    await enforce_rate_limit(f"ratelimit:voice_tts:user:{current_user.id}", settings.VOICE_TTS_RATE_LIMIT_MAX_ATTEMPTS, settings.VOICE_TTS_RATE_LIMIT_WINDOW_SECONDS)
     try:
-        audio = await synthesize_with_elevenlabs(payload.text, voice_id=payload.voice_id, speed=payload.speed, pitch=payload.pitch)
+        audio = await synthesize_speech(payload.text, provider=payload.provider, voice_id=payload.voice_id, speed=payload.speed, pitch=payload.pitch)
     except VoiceError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return Response(content=audio, media_type="audio/mpeg")
+    return Response(content=audio, media_type="audio/wav" if audio[:4] == b"RIFF" else "audio/mpeg")
 
 
 @router.post("/stt", response_model=TranscribeResponse)

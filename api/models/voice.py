@@ -47,7 +47,7 @@ class VoiceSettings(Base):
     stt_provider: Mapped[str] = mapped_column(String(20), nullable=False, default="web_speech", server_default="web_speech")
     stt_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     vad_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-    vad_threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    vad_threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.05, server_default="0.5")
     audio_history_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     push_to_talk_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

@@ -45,6 +45,7 @@ REVIEWED_DIRECT_CALLS = {
     "api/services/box_extraction.py",
     "api/services/chat_integrations/discord.py",
     "api/services/chat_integrations/slack.py",
+    "api/services/chat_integrations/teams.py",
     "api/services/clickup_extraction.py",
     "api/services/coda_extraction.py",
     "api/services/confluence_extraction.py",

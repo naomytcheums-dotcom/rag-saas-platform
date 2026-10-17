@@ -18,7 +18,7 @@ from api.config import settings
 from api.security.teams_bot_auth import TeamsAuthError, verify_teams_bearer
 from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.teams import (
-    TeamsIntegrationError, parse_teams_webhook, process_teams_message, save_teams_integration, send_teams_response,
+    TeamsIntegrationError, deliver_teams_reply, parse_teams_routing, parse_teams_webhook, process_teams_message, save_teams_integration, send_teams_response,
 )
 
 router = APIRouter(tags=["Teams Integration"])
@@ -82,14 +82,21 @@ async def teams_webhook_endpoint(request: Request, db: AsyncSession = Depends(ge
     integration = await db.scalar(select(TeamsIntegration).where(TeamsIntegration.tenant_id == tenant_id)) if tenant_id else None
     audiences = [settings.TEAMS_BOT_ID, integration.bot_id if integration is not None else None]
     try:
-        await verify_teams_bearer(authorization, audiences)
+        claims = await verify_teams_bearer(authorization, audiences)
     except TeamsAuthError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing Bot Framework token") from exc
+    # Bot Framework rule: the token vouches for the serviceUrl of the activity. A valid token carrying someone else's serviceUrl must not make
+    # this server POST its reply (with the bot's credentials) to an address the attacker chose.
+    token_service_url = claims.get("serviceurl")
+    if token_service_url and str(token_service_url).rstrip("/") != str(payload.get("serviceUrl", "")).rstrip("/"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="serviceUrl does not match the token")
     if payload.get("type") != "message":
         return {"ok": True}
 
-    event = parse_teams_webhook(payload)
-    if integration is not None and integration.is_active:
-        await process_teams_message(db, integration, event)
+    event = {**parse_teams_webhook(payload), **parse_teams_routing(payload)}
+    if integration is not None and integration.is_active and event["text"] and event["id"]:
+        message = await process_teams_message(db, integration, event)
+        if not message.is_duplicate:
+            await deliver_teams_reply(integration, event, message)
         await db.commit()
     return {"ok": True}

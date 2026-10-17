@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 _instrumented = False
 
 
-def setup_tracing(app) -> None:
+def setup_tracing(app=None) -> None:
+    """`app` is the FastAPI application (API process); the Celery worker has none and gets the Celery/SQLAlchemy/Redis/httpx instrumentation only."""
     global _instrumented
     if not settings.OTEL_ENABLED or _instrumented:
         return
@@ -92,7 +93,8 @@ def setup_tracing(app) -> None:
         provider.add_span_processor(BatchSpanProcessor(exporter))
         trace.set_tracer_provider(provider)
 
-        FastAPIInstrumentor.instrument_app(app)
+        if app is not None:
+            FastAPIInstrumentor.instrument_app(app)
         SQLAlchemyInstrumentor().instrument()
         RedisInstrumentor().instrument()
         HTTPXClientInstrumentor().instrument()
