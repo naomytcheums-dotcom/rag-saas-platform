@@ -38,6 +38,10 @@ FILES="-f docker-compose.tenant.yml"
 if grep -q '^AIRGAPPED=1' "$ENV_FILE"; then FILES="$FILES -f docker-compose.airgapped.yml"; fi
 COMPOSE="docker compose --env-file $ENV_FILE $FILES"
 if grep -q '^IMAGE=' "$ENV_FILE"; then BUILD="--no-build"; else BUILD="--build"; fi
+# The API refuses to start on an empty database (it loads the RBAC policy table at boot), so the schema is created BEFORE the API is started:
+# found 2026-10-16 by running this script on a fresh tenant (the API container exited with "relation casbin_rule does not exist" and `up --wait` failed).
+$COMPOSE up -d $BUILD --wait db redis minio
+$COMPOSE run --rm --no-deps api python -m alembic upgrade head
 $COMPOSE up -d $BUILD --wait
 # the three buckets the API expects (idempotent), created with the API's own S3 client and credentials
 $COMPOSE exec -T api python - <<'PY'
@@ -52,5 +56,5 @@ for bucket in (os.environ["S3_BUCKET_NAME"], os.environ["S3_DOCUMENTS_BUCKET_NAM
         s3.create_bucket(Bucket=bucket)
         print("created bucket", bucket)
 PY
-$COMPOSE exec -T api python -m alembic upgrade head
+$COMPOSE exec -T api python -m alembic upgrade head   # idempotent: already at head (kept for an update of an existing tenant)
 echo "tenant $TENANT is up on port $(grep '^API_PORT=' "$ENV_FILE" | cut -d= -f2)"

@@ -87,6 +87,8 @@ services:
     image: ${IMAGE:-rag-saas-api:dedicated}
     command: celery -A api.tasks.celery_app worker --loglevel=info
     environment: *env
+    # the image's HEALTHCHECK probes the API port, which a worker does not open: replace it with a real broker round trip
+    healthcheck: { test: ["CMD-SHELL", "celery -A api.tasks.celery_app inspect ping -d celery@$$HOSTNAME --timeout 15"], interval: 30s, timeout: 30s, retries: 5, start_period: 60s }
     volumes: ["${MODELS_DIR:-models}:/home/appuser/.cache/huggingface"]
     depends_on: { api: { condition: service_healthy } }
     restart: unless-stopped
@@ -95,6 +97,8 @@ services:
     image: ${IMAGE:-rag-saas-api:dedicated}
     command: celery -A api.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     environment: *env
+    # same reason: beat has no HTTP port; it writes its schedule file once it is running
+    healthcheck: { test: ["CMD-SHELL", "test -s /tmp/celerybeat-schedule || test -f /tmp/celerybeat-schedule.db"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
     depends_on: { api: { condition: service_healthy } }
     restart: unless-stopped
 
