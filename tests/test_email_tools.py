@@ -187,7 +187,9 @@ async def test_email_reply_gmail_uses_the_real_thread_id(monkeypatch):
     def api_response(request):
         calls.append(request)
         if request.method == "GET":
-            return httpx.Response(200, json={"threadId": "thread-1"})
+            # a real Gmail "metadata" answer carries the headers; a reply needs the original's sender to be addressed (2026-10-13: the old mock had none
+            # and the product sent a reply without any recipient)
+            return httpx.Response(200, json={"threadId": "thread-1", "payload": {"headers": [{"name": "From", "value": "sender@example.com"}, {"name": "Subject", "value": "Hello"}]}})
         import json
         payload = json.loads(request.read())
         assert payload["threadId"] == "thread-1"

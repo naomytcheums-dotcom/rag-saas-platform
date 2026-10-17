@@ -31,10 +31,13 @@ verified end-to-end against a live account.
 import time
 import uuid
 
+from urllib.parse import quote
+
 import httpx
 
 from api.config import settings
 from api.services.tools import ToolSpec
+from api.tools.oauth_api import oauth_request, token_refresh_error
 
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_CALENDAR_BASE_URL = "https://www.googleapis.com/calendar/v3"
@@ -65,15 +68,16 @@ async def _authenticate(cache_key: str, token_url: str, refresh_token: str, clie
     if extra_data:
         data.update(extra_data)
 
-    async with _client() as client:
-        response = await client.post(token_url, data=data)
+    try:
+        async with _client() as client:
+            response = await client.post(token_url, data=data)
+    except httpx.TimeoutException as exc:
+        raise CalendarError("OAuth token endpoint did not answer in time") from exc
+    except httpx.RequestError as exc:
+        raise CalendarError(f"could not reach the OAuth token endpoint: {type(exc).__name__}") from exc
 
     if response.status_code != 200:
-        try:
-            body = response.json()
-        except ValueError:
-            body = {}
-        raise CalendarError(f"OAuth token refresh failed ({body.get('error', 'unknown_error')}): {body.get('error_description', response.text)}")
+        raise CalendarError(f"OAuth token refresh failed ({token_refresh_error(response)}")
 
     body = response.json()
     access_token = body["access_token"]
@@ -105,38 +109,61 @@ def _require_provider(provider: str) -> None:
         raise CalendarError(f"Unknown calendar provider: {provider!r} (expected 'google' or 'outlook')")
 
 
+async def _call(provider: str, method: str, url: str, **kwargs) -> httpx.Response:
+    """One authenticated call to Google Calendar or Microsoft Graph (token refresh on 401, bounded retries, typed errors): api/tools/oauth_api.py."""
+    key, authenticate, label = ("google_calendar", _authenticate_google, "Google Calendar") if provider == "google" else ("outlook_calendar", _authenticate_outlook, "Microsoft Graph")
+    return await oauth_request(
+        lambda: _client(), method, url, authenticate=authenticate, invalidate=lambda: _access_token_cache.pop(key, None), error_cls=CalendarError, label=label, **kwargs,
+    )
+
+
+def _event_url(provider: str, event_id: str) -> str:
+    base = f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events" if provider == "google" else f"{_MS_GRAPH_BASE_URL}/me/events"
+    return f"{base}/{quote(event_id, safe='')}"
+
+
+def _graph_datetime(value: dict | None) -> str | None:
+    """Graph returns a naive `dateTime` ("2026-10-14T09:00:00.0000000") next to a separate `timeZone` (UTC unless asked otherwise): make it explicit."""
+    if not value or not value.get("dateTime"):
+        return None
+    text = value["dateTime"]
+    if value.get("timeZone", "UTC") == "UTC" and not text.endswith("Z") and "+" not in text[10:]:
+        return text.split(".")[0] + "Z"
+    return text
+
+
 async def calendar_list_events(provider: str, start_date: str, end_date: str, max_results: int = 50) -> list[dict]:
     """Item 2's own literal function -- real, provider-specific calls,
     each real result reshaped into the SAME real, unified shape
     (`id`/`title`/`start`/`end`/`description`) so a caller doesn't need
-    to know which real provider answered."""
+    to know which real provider answered. Follows the vendors' pagination
+    (Google `nextPageToken`, Graph `@odata.nextLink`) up to `max_results`."""
     _require_provider(provider)
+    events: list[dict] = []
     if provider == "google":
-        token = await _authenticate_google()
-        async with _client() as client:
-            response = await client.get(
-                f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"timeMin": start_date, "timeMax": end_date, "maxResults": max_results, "singleEvents": "true"},
-            )
-        response.raise_for_status()
-        return [
-            {"id": e["id"], "title": e.get("summary", ""), "start": e.get("start", {}).get("dateTime"), "end": e.get("end", {}).get("dateTime"), "description": e.get("description", "")}
-            for e in response.json().get("items", [])
-        ]
+        params = {"timeMin": start_date, "timeMax": end_date, "maxResults": min(max_results, 250), "singleEvents": "true", "orderBy": "startTime"}
+        while len(events) < max_results:
+            data = (await _call("google", "GET", f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events", params=params)).json()
+            events += [
+                {"id": e["id"], "title": e.get("summary", ""), "start": e.get("start", {}).get("dateTime"), "end": e.get("end", {}).get("dateTime"), "description": e.get("description", "")}
+                for e in data.get("items", [])
+            ]
+            if not data.get("nextPageToken"):
+                break
+            params = {**params, "pageToken": data["nextPageToken"]}
+        return events[:max_results]
 
-    token = await _authenticate_outlook()
-    async with _client() as client:
-        response = await client.get(
-            f"{_MS_GRAPH_BASE_URL}/me/calendarView",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"startDateTime": start_date, "endDateTime": end_date, "$top": max_results},
-        )
-    response.raise_for_status()
-    return [
-        {"id": e["id"], "title": e.get("subject", ""), "start": e.get("start", {}).get("dateTime"), "end": e.get("end", {}).get("dateTime"), "description": e.get("bodyPreview", "")}
-        for e in response.json().get("value", [])
-    ]
+    url, params = f"{_MS_GRAPH_BASE_URL}/me/calendarView", {"startDateTime": start_date, "endDateTime": end_date, "$top": min(max_results, 250), "$orderby": "start/dateTime"}
+    while len(events) < max_results:
+        data = (await _call("outlook", "GET", url, params=params)).json()
+        events += [
+            {"id": e["id"], "title": e.get("subject", ""), "start": _graph_datetime(e.get("start")), "end": _graph_datetime(e.get("end")), "description": e.get("bodyPreview", "")}
+            for e in data.get("value", [])
+        ]
+        if not data.get("@odata.nextLink"):
+            break
+        url, params = data["@odata.nextLink"], None  # the next link already carries the query
+    return events[:max_results]
 
 
 async def calendar_create_event(provider: str, title: str, start_time: str, end_time: str, description: str | None = None, attendees: list[str] | None = None) -> dict:
@@ -144,26 +171,18 @@ async def calendar_create_event(provider: str, title: str, start_time: str, end_
     _require_provider(provider)
     attendees = attendees or []
     if provider == "google":
-        token = await _authenticate_google()
         body = {
             "summary": title, "start": {"dateTime": start_time}, "end": {"dateTime": end_time},
             "description": description or "", "attendees": [{"email": a} for a in attendees],
         }
-        async with _client() as client:
-            response = await client.post(f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events", headers={"Authorization": f"Bearer {token}"}, json=body)
-        response.raise_for_status()
-        event = response.json()
+        event = (await _call("google", "POST", f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events", json=body)).json()
         return {"id": event["id"], "title": event.get("summary", ""), "start": start_time, "end": end_time}
 
-    token = await _authenticate_outlook()
     body = {
         "subject": title, "start": {"dateTime": start_time, "timeZone": "UTC"}, "end": {"dateTime": end_time, "timeZone": "UTC"},
         "body": {"contentType": "text", "content": description or ""}, "attendees": [{"emailAddress": {"address": a}} for a in attendees],
     }
-    async with _client() as client:
-        response = await client.post(f"{_MS_GRAPH_BASE_URL}/me/events", headers={"Authorization": f"Bearer {token}"}, json=body)
-    response.raise_for_status()
-    event = response.json()
+    event = (await _call("outlook", "POST", f"{_MS_GRAPH_BASE_URL}/me/events", json=body)).json()
     return {"id": event["id"], "title": event.get("subject", ""), "start": start_time, "end": end_time}
 
 
@@ -171,9 +190,8 @@ async def calendar_update_event(provider: str, event_id: str, title: str | None 
     """Item 2's own literal function -- real, partial update (only the
     real, given fields are sent)."""
     _require_provider(provider)
+    body: dict = {}
     if provider == "google":
-        token = await _authenticate_google()
-        body = {}
         if title is not None:
             body["summary"] = title
         if start_time is not None:
@@ -182,57 +200,29 @@ async def calendar_update_event(provider: str, event_id: str, title: str | None 
             body["end"] = {"dateTime": end_time}
         if description is not None:
             body["description"] = description
-        async with _client() as client:
-            response = await client.patch(f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events/{event_id}", headers={"Authorization": f"Bearer {token}"}, json=body)
-        response.raise_for_status()
-        return response.json()
-
-    token = await _authenticate_outlook()
-    body = {}
-    if title is not None:
-        body["subject"] = title
-    if start_time is not None:
-        body["start"] = {"dateTime": start_time, "timeZone": "UTC"}
-    if end_time is not None:
-        body["end"] = {"dateTime": end_time, "timeZone": "UTC"}
-    if description is not None:
-        body["body"] = {"contentType": "text", "content": description}
-    async with _client() as client:
-        response = await client.patch(f"{_MS_GRAPH_BASE_URL}/me/events/{event_id}", headers={"Authorization": f"Bearer {token}"}, json=body)
-    response.raise_for_status()
-    return response.json()
+    else:
+        if title is not None:
+            body["subject"] = title
+        if start_time is not None:
+            body["start"] = {"dateTime": start_time, "timeZone": "UTC"}
+        if end_time is not None:
+            body["end"] = {"dateTime": end_time, "timeZone": "UTC"}
+        if description is not None:
+            body["body"] = {"contentType": "text", "content": description}
+    return (await _call(provider, "PATCH", _event_url(provider, event_id), json=body)).json()
 
 
 async def calendar_delete_event(provider: str, event_id: str) -> bool:
     """Item 2's own literal function -- real `True` on real success."""
     _require_provider(provider)
-    if provider == "google":
-        token = await _authenticate_google()
-        url = f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events/{event_id}"
-    else:
-        token = await _authenticate_outlook()
-        url = f"{_MS_GRAPH_BASE_URL}/me/events/{event_id}"
-
-    async with _client() as client:
-        response = await client.delete(url, headers={"Authorization": f"Bearer {token}"})
-    response.raise_for_status()
+    await _call(provider, "DELETE", _event_url(provider, event_id))
     return True
 
 
 async def calendar_get_event(provider: str, event_id: str) -> dict:
     """Item 2's own literal function."""
     _require_provider(provider)
-    if provider == "google":
-        token = await _authenticate_google()
-        url = f"{_GOOGLE_CALENDAR_BASE_URL}/calendars/primary/events/{event_id}"
-    else:
-        token = await _authenticate_outlook()
-        url = f"{_MS_GRAPH_BASE_URL}/me/events/{event_id}"
-
-    async with _client() as client:
-        response = await client.get(url, headers={"Authorization": f"Bearer {token}"})
-    response.raise_for_status()
-    return response.json()
+    return (await _call(provider, "GET", _event_url(provider, event_id))).json()
 
 
 async def calendar_find_available_slots(provider: str, start_date: str, end_date: str, duration: int) -> list[dict]:

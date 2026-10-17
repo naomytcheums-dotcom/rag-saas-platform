@@ -1,5 +1,6 @@
 """Partie 9.4.1 -- Slack integration endpoints."""
 
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -17,7 +18,7 @@ from api.security.chat_integrations_signature import verify_slack_signature
 from api.security.organizations import require_org_admin
 from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.slack import (
-    SlackIntegrationError, get_oauth_url, handle_oauth_callback, process_slack_message, save_integration,
+    SlackDeliveryError, SlackIntegrationError, deliver_slack_reply, get_oauth_url, handle_oauth_callback, process_slack_message, save_integration,
     send_slack_response, validate_slack_config,
 )
 
@@ -44,6 +45,8 @@ async def slack_auth_url_endpoint(org_id: uuid.UUID, caller: OrganizationMember 
 async def slack_oauth_callback_endpoint(code: str, state: str, db: AsyncSession = Depends(get_db)):
     try:
         integration = await handle_oauth_callback(db, code, state, None)
+    except SlackDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     except SlackIntegrationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await db.commit()
@@ -88,7 +91,10 @@ async def slack_delete_integration_endpoint(org_id: uuid.UUID, request: Request,
 @router.post("/organizations/{org_id}/integrations/slack/send")
 async def slack_send_endpoint(org_id: uuid.UUID, payload: SlackSendMessageRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
-    return await send_slack_response(integration, payload.channel, payload.text, payload.thread_ts)
+    try:
+        return await send_slack_response(integration, payload.channel, payload.text, payload.thread_ts)
+    except SlackDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
 @router.post("/integrations/slack/events")
@@ -110,12 +116,16 @@ async def slack_events_endpoint(
         return {"challenge": payload.get("challenge")}
 
     event = payload.get("event") or {}
-    if payload.get("type") == "event_callback" and event.get("type") in ("message", "app_mention") and not event.get("bot_id"):
+    # Messages edited/deleted/posted by integrations carry a `subtype` (and bots a `bot_id`): only plain user posts are questions.
+    if payload.get("type") == "event_callback" and event.get("type") in ("message", "app_mention") and not event.get("bot_id") and event.get("subtype") in (None, "thread_broadcast"):
+        question = re.sub(r"<@[A-Z0-9]+>", "", event.get("text", "")).strip()  # "<@UBOT> what is X" -> "what is X"
         integration = await db.scalar(select(SlackIntegration).where(SlackIntegration.team_id == payload.get("team_id")))
-        if integration is not None and integration.is_active:
-            await process_slack_message(db, integration, {
+        if question and integration is not None and integration.is_active and event.get("ts") and event.get("channel"):
+            message = await process_slack_message(db, integration, {
                 "ts": event["ts"], "channel": event["channel"], "user": event.get("user", ""),
-                "user_name": None, "text": event.get("text", ""), "thread_ts": event.get("thread_ts"),
+                "user_name": None, "text": question, "thread_ts": event.get("thread_ts"),
             })
+            if not message.is_duplicate:  # a retry / the app_mention twin of a message event is acknowledged, not answered twice
+                await deliver_slack_reply(integration, message)
             await db.commit()
     return {"ok": True}

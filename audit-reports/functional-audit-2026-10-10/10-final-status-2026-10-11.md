@@ -7,12 +7,13 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 138 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| FIXED_AND_TESTED | 146 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 11 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
 | DECISION_OR_CORRECTION | 46 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
+| IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED | 18 | the adapter is complete and its contract tests pass against a LOCAL FAKE of the vendor (a fake, not the service); one command with a real account (scripts/validate_<vendor>_live.py) is still required |
 | WRITTEN_NOT_EXECUTED | 10 | code or documents exist; nothing proves them yet |
-| IMPLEMENTED_UNVERIFIED | 4 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
-| BLOCKED_EXTERNAL | 22 | cannot be proven without an account, key or service that is not available here |
+| IMPLEMENTED_UNVERIFIED | 0 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
+| BLOCKED_EXTERNAL | 0 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
 
 Rule: a feature is VERIFIED_COMPLETE only if the code review judged it complete AND the targeted tests of its Part ran green. The unit of proof is the Part, not the sentence of each requirement.
@@ -58,6 +59,27 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **Product name (14.4.1) and logo (14.4.2)**, **custom SLA (10.4.12)**.
 - **Real provider sandboxes**: Stripe / Paystack (12.x), LLM / embedding providers (4.x), Slack / Teams / Discord (9.4.x), Twilio / STT / TTS (8.2.x), ClamAV (10.1.12), tracing and error tracking (10.3 / 13.5).
 
+## IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED (18)
+
+- **1.4.3** SSL automatique (Let's Encrypt) - external validation required (local fake only); Let's Encrypt issuance not run
+- **4.1.1** Anthropic Claude - external validation required (local fake only)
+- **4.1.2** OpenAI GPT - external validation required (local fake only)
+- **4.1.3** Google Gemini - external validation required (local fake only)
+- **4.1.4** Mistral - external validation required (local fake only)
+- **4.2.1** OpenAI embeddings - external validation required (local fake only)
+- **4.2.2** Voyage AI - external validation required (local fake only)
+- **4.2.3** Cohere - external validation required (local fake only)
+- **5.2.2** Web Search - external validation required (local fake only)
+- **5.2.7** Calendar (Google, Outlook) - external validation required (local fake only)
+- **5.2.8** Email (Gmail, Outlook, SMTP) - external validation required (local fake only)
+- **5.4.11** Bloc Calendar - external validation required (local fake only)
+- **9.4.1** Slack - external validation required (local fake only)
+- **9.4.2** Microsoft Teams - external validation required (local fake only)
+- **9.4.3** Discord - external validation required (local fake only)
+- **10.3.9** Error tracking - external validation required (local fake only)
+- **12.1.10** Credits - external validation required (local fake only); CinetPay not implemented
+- **13.5.8** Error tracking - external validation required (local fake only)
+
 ## WRITTEN_NOT_EXECUTED (10)
 
 - **10.1.14** Encryption at rest - documented; provider settings not verified
@@ -85,37 +107,11 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **13.4.11** Helm - validated with the official tool; not applied to a real account or cluster
 - **13.4.12** Terraform - validated with the official tool; not applied to a real account or cluster
 
-## BLOCKED_EXTERNAL (22)
+## BLOCKED_EXTERNAL (0)
 
-- **1.4.3** SSL automatique (Let's Encrypt) - real issuance needs a public DNS name and reachable host; Render/Vercel terminate TLS themselves so this path may be unused in production
-- **4.1.1** Anthropic Claude - no real Anthropic call in the audit
-- **4.1.2** OpenAI GPT - no real call
-- **4.1.3** Google Gemini - no real call
-- **4.1.4** Mistral - no real call
-- **4.2.1** OpenAI embeddings - no real call
-- **4.2.2** Voyage AI - no real call
-- **4.2.3** Cohere - no real call
-- **5.2.2** Web Search - no real search call
-- **5.2.7** Calendar (Google, Outlook) - no real calendar call
-- **5.2.8** Email (Gmail, Outlook, SMTP) - no real mailbox call
-- **5.4.11** Bloc Calendar - no real calendar call
-- **8.2.2** Text-to-speech (TTS) - no real TTS call
-- **9.4.1** Slack - no real Slack workspace exercised
-- **9.4.2** Microsoft Teams - no real Teams tenant exercised
-- **9.4.3** Discord - no real Discord server exercised
-- **10.1.15** Encryption in transit - not verified against the live deployment
-- **10.3.6** LLM traces - Datadog not configured
-- **10.3.9** Error tracking - Sentry DSN not verified in production
-- **11.3.4** Uptime monitoring - no uptime monitor configured to the audit's knowledge
-- **13.5.5** LLM traces - Datadog not configured
-- **13.5.8** Error tracking - Sentry DSN unverified
 
 ## AMBIGUOUS_REQUIREMENT (0)
 
 
-## IMPLEMENTED_UNVERIFIED (4)
+## IMPLEMENTED_UNVERIFIED (0)
 
-- **8.2.3** Streaming voice [LOW] - real-time streaming playback not exercised
-- **8.2.5** Voice activity detection [LOW] - only on the demo page; real VAD accuracy not tested
-- **12.1.10** Credits [HIGH] - Paystack credit purchase not supported; currency inconsistency (BILL-018); never run against a real provider sandbox; live tests are skipped
-- **12.2.5** Enterprise [LOW] - on-premise not delivered as a product

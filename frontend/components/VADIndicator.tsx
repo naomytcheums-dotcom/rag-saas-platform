@@ -24,6 +24,7 @@ export default function VADIndicator({ onSpeechStart, onSpeechStop, threshold = 
   const speechStartRef = useRef<number | null>(null);
   const silenceStartRef = useRef<number | null>(null);
   const speakingRef = useRef(false);
+  const lastAboveRef = useRef(0);
 
   async function start() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -49,6 +50,7 @@ export default function VADIndicator({ onSpeechStart, onSpeechStop, threshold = 
 
       const now = performance.now();
       if (rms >= threshold) {
+        lastAboveRef.current = now;
         silenceStartRef.current = null;
         if (speechStartRef.current === null) speechStartRef.current = now;
         else if (!speakingRef.current && now - speechStartRef.current >= settings.VAD_MIN_SPEECH_DURATION_MS) {
@@ -57,13 +59,18 @@ export default function VADIndicator({ onSpeechStart, onSpeechStop, threshold = 
           onSpeechStart?.();
         }
       } else {
-        speechStartRef.current = null;
-        if (speakingRef.current) {
-          if (silenceStartRef.current === null) silenceStartRef.current = now;
-          else if (now - silenceStartRef.current >= settings.VAD_SILENCE_TIMEOUT_MS) {
-            speakingRef.current = false;
-            setState("silence");
-            onSpeechStop?.();
+        // Speech is made of short dips (between words and syllables): a dip shorter than the hangover neither cancels an onset in progress nor starts the
+        // end-of-speech timer. Only a quiet stretch longer than the hangover does.
+        const quietFor = now - lastAboveRef.current;
+        if (quietFor >= settings.VAD_HANGOVER_MS) {
+          speechStartRef.current = null;
+          if (speakingRef.current) {
+            if (silenceStartRef.current === null) silenceStartRef.current = now;
+            else if (now - silenceStartRef.current >= settings.VAD_SILENCE_TIMEOUT_MS) {
+              speakingRef.current = false;
+              setState("silence");
+              onSpeechStop?.();
+            }
           }
         }
       }

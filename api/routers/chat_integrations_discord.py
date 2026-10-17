@@ -17,8 +17,8 @@ from api.security.chat_integrations_signature import verify_discord_gateway_secr
 from api.security.organizations import require_org_admin
 from api.utils import client_ip, read_json_object
 from api.services.chat_integrations.discord import (
-    DiscordIntegrationError, handle_command, process_discord_message, save_discord_integration,
-    send_discord_response,
+    DiscordDeliveryError, DiscordIntegrationError, handle_command, process_discord_message, save_discord_integration,
+    send_discord_response, start_deferred_command,
 )
 
 router = APIRouter(tags=["Discord Integration"])
@@ -66,7 +66,10 @@ async def discord_delete_integration_endpoint(org_id: uuid.UUID, request: Reques
 @router.post("/organizations/{org_id}/integrations/discord/send")
 async def discord_send_endpoint(org_id: uuid.UUID, payload: DiscordSendMessageRequest, caller: OrganizationMember = Depends(require_permission("integrations:manage")), db: AsyncSession = Depends(get_db)):
     integration = await _get_integration(db, org_id)
-    return await send_discord_response(integration, payload.channel_id, payload.text, payload.message_id)
+    try:
+        return await send_discord_response(integration, payload.channel_id, payload.text, payload.message_id)
+    except DiscordDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
 @router.post("/integrations/discord/interactions")
@@ -94,6 +97,11 @@ async def discord_interactions_endpoint(
         integration = await db.scalar(select(DiscordIntegration).where(DiscordIntegration.guild_id == guild_id))
         if integration is None or not integration.is_active:
             return {"type": 4, "data": {"content": "This server has no active RAG SaaS integration."}}
+
+        if command == "ask" and options.get("question", "").strip() and integration.agent_id is not None and payload.get("token") and payload.get("application_id"):
+            # Slow path: acknowledge within Discord's 3 s window ("thinking..."), answer by editing the interaction response.
+            start_deferred_command(integration.id, command, options["question"], str(payload["application_id"]), str(payload["token"]))
+            return {"type": 5}
 
         reply = await handle_command(db, integration, command, options.get("question", ""), {
             "conversation_id": None,
@@ -126,4 +134,4 @@ async def discord_message_webhook_endpoint(
         raise _NOT_FOUND
     message = await process_discord_message(db, integration, event)
     await db.commit()
-    return {"status": message.status, "response": message.response}
+    return {"status": message.status, "response": message.response, "duplicate": message.is_duplicate}

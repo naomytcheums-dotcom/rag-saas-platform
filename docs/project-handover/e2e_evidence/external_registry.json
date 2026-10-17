@@ -1,0 +1,158 @@
+[
+ {
+  "id": "4.1.1",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_llm_vendor_contract.py; live: RUN_LIVE_VENDOR_VALIDATION=1 ANTHROPIC_API_KEY=... python scripts/validate_llm_live.py",
+  "observed_result": "contract tests pass against a LOCAL FAKE speaking each vendor's protocol (retries, 401/429/5xx mapping, key never logged); no real account run"
+ },
+ {
+  "id": "4.1.2",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_llm_vendor_contract.py; live: RUN_LIVE_VENDOR_VALIDATION=1 ANTHROPIC_API_KEY=... python scripts/validate_llm_live.py",
+  "observed_result": "contract tests pass against a LOCAL FAKE speaking each vendor's protocol (retries, 401/429/5xx mapping, key never logged); no real account run"
+ },
+ {
+  "id": "4.1.3",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_llm_vendor_contract.py; live: RUN_LIVE_VENDOR_VALIDATION=1 ANTHROPIC_API_KEY=... python scripts/validate_llm_live.py",
+  "observed_result": "contract tests pass against a LOCAL FAKE speaking each vendor's protocol (retries, 401/429/5xx mapping, key never logged); no real account run"
+ },
+ {
+  "id": "4.1.4",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_llm_vendor_contract.py; live: RUN_LIVE_VENDOR_VALIDATION=1 ANTHROPIC_API_KEY=... python scripts/validate_llm_live.py",
+  "observed_result": "contract tests pass against a LOCAL FAKE speaking each vendor's protocol (retries, 401/429/5xx mapping, key never logged); no real account run"
+ },
+ {
+  "id": "4.2.1",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_embedding_vendor_contract.py; live: scripts/validate_embeddings_live.py",
+  "observed_result": "contract tests pass against a local fake; an API embedding model without key is refused with a clear error; no real account run"
+ },
+ {
+  "id": "4.2.2",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_embedding_vendor_contract.py; live: scripts/validate_embeddings_live.py",
+  "observed_result": "contract tests pass against a local fake; an API embedding model without key is refused with a clear error; no real account run"
+ },
+ {
+  "id": "4.2.3",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_embedding_vendor_contract.py; live: scripts/validate_embeddings_live.py",
+  "observed_result": "contract tests pass against a local fake; an API embedding model without key is refused with a clear error; no real account run"
+ },
+ {
+  "id": "5.2.2",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_web_search_contract.py; live: scripts/validate_tavily_live.py",
+  "observed_result": "Tavily adapter contract tests pass against a local fake; real Tavily not run"
+ },
+ {
+  "id": "5.2.7",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_calendar_email_contract.py tests/test_email_tools.py; live: scripts/validate_google_microsoft_live.py",
+  "observed_result": "Google/Microsoft Calendar and Gmail/Outlook adapters pass contract tests against a local fake (OAuth refresh on 401, bounded retries); SMTP proven earlier on Mailpit; real Google/Microsoft not run"
+ },
+ {
+  "id": "5.4.11",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_calendar_email_contract.py tests/test_email_tools.py; live: scripts/validate_google_microsoft_live.py",
+  "observed_result": "Google/Microsoft Calendar and Gmail/Outlook adapters pass contract tests against a local fake (OAuth refresh on 401, bounded retries); SMTP proven earlier on Mailpit; real Google/Microsoft not run"
+ },
+ {
+  "id": "5.2.8",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_calendar_email_contract.py tests/test_email_tools.py; live: scripts/validate_google_microsoft_live.py",
+  "observed_result": "Google/Microsoft Calendar and Gmail/Outlook adapters pass contract tests against a local fake (OAuth refresh on 401, bounded retries); SMTP proven earlier on Mailpit; real Google/Microsoft not run"
+ },
+ {
+  "id": "9.4.1",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_chat_integrations_contract.py; live: scripts/validate_chat_platforms_live.py",
+  "observed_result": "34 Slack/Teams/Discord tests pass against local fakes (signatures, idempotent intake, token refresh, SSRF-safe URLs); real workspaces not run"
+ },
+ {
+  "id": "9.4.2",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_chat_integrations_contract.py; live: scripts/validate_chat_platforms_live.py",
+  "observed_result": "34 Slack/Teams/Discord tests pass against local fakes (signatures, idempotent intake, token refresh, SSRF-safe URLs); real workspaces not run"
+ },
+ {
+  "id": "9.4.3",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_chat_integrations_contract.py; live: scripts/validate_chat_platforms_live.py",
+  "observed_result": "34 Slack/Teams/Discord tests pass against local fakes (signatures, idempotent intake, token refresh, SSRF-safe URLs); real workspaces not run"
+ },
+ {
+  "id": "8.2.2",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_browser_voice.py tests/contracts/test_voice_contract.py",
+  "observed_result": "local TTS provider 'local' (Windows SAPI, piper, espeak-ng): real speech synthesized and played by real Chromium (audio/wav, decoded duration >300 ms); ElevenLabs/Google remain fake-contract only (scripts/validate_voice_live.py)"
+ },
+ {
+  "id": "8.2.3",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_browser_voice.py",
+  "observed_result": "real Chromium + real FastAPI: next sentence requested before the current audio ends, gap <1.5 s, first audio before half of total playback; stop works; server refusal (401) is displayed"
+ },
+ {
+  "id": "8.2.5",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_browser_voice.py tests/contracts/test_voice_contract.py",
+  "observed_result": "real speech through Chromium's fake microphone: speech-start then speech-stop, silent in a quiet room; DEFECT FOUND AND FIXED: default threshold 0.5 never fired on speech (now 0.05 + 250 ms hangover); server-side Silero VAD + local Whisper tests pass"
+ },
+ {
+  "id": "1.4.3",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_tls_reverse_proxy.py; live: scripts/validate_tls_live.py",
+  "observed_result": "repo nginx template run in a real nginx container with a self-signed cert: HTTPS, HSTS, TLS1.2/1.3 only, redirect; Let's Encrypt issuance itself not run"
+ },
+ {
+  "id": "10.1.15",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_tls_reverse_proxy.py",
+  "observed_result": "real nginx container, self-signed cert: HTTPS + HSTS once (duplicate security headers FIXED), TLS<1.2 refused, secure cookies behind the proxy"
+ },
+ {
+  "id": "10.3.6",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_observability_contract.py (local Jaeger container on 4318)",
+  "observed_result": "LLM spans with gen_ai.* attributes arrive in a real OTLP backend (Jaeger); no key in a span; backend down does not break the call. Hosted Langfuse/Tempo not run (scripts/validate_tracing_live.py)"
+ },
+ {
+  "id": "13.5.5",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_observability_contract.py (local Jaeger container on 4318)",
+  "observed_result": "LLM spans with gen_ai.* attributes arrive in a real OTLP backend (Jaeger); no key in a span; backend down does not break the call. Hosted Langfuse/Tempo not run (scripts/validate_tracing_live.py)"
+ },
+ {
+  "id": "10.3.9",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_observability_contract.py; live: scripts/validate_sentry_live.py",
+  "observed_result": "Sentry envelope protocol tested against a local Sentry-compatible FAKE receiver; real Sentry not run"
+ },
+ {
+  "id": "13.5.8",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_observability_contract.py; live: scripts/validate_sentry_live.py",
+  "observed_result": "Sentry envelope protocol tested against a local Sentry-compatible FAKE receiver; real Sentry not run"
+ },
+ {
+  "id": "11.3.4",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_uptime_probe.py; python scripts/uptime_probe.py http://127.0.0.1:<api>",
+  "observed_result": "probe tested against local servers (up, 5xx, slow, down, TLS expiry, state-change alerts only) and against the real local API"
+ },
+ {
+  "id": "12.1.10",
+  "status": "IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED",
+  "command": "sh scripts/run_tests_local.sh tests/contracts/test_paystack_credits.py tests/test_p2_bill013_paystack_credit_pack.py; live: scripts/validate_paystack_live.py",
+  "observed_result": "Paystack credit pack purchase implemented (one-off transaction, signed charge.success, idempotent by reference, amount/currency/pack/org checks, outage=502) and tested against a LOCAL FAKE Paystack; CinetPay is NOT implemented (no code in the repo)"
+ },
+ {
+  "id": "12.2.5",
+  "status": "IMPLEMENTED_AND_TESTED",
+  "command": "sh scripts/run_tests_local.sh tests/test_enterprise_sso_integration.py tests/test_billing_plans_limits_postgres.py -k 'sso or enterprise'",
+  "observed_result": "SSO proven against a real local OIDC IdP (full login, wrong audience/nonce/state refused); Enterprise plan has no document/question caps (billing PR #28); on-premise is documentation/deploy artefacts, not a product"
+ }
+]

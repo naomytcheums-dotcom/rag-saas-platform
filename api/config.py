@@ -1788,6 +1788,11 @@ class Settings(BaseSettings):
     TTS_PITCH: float = 1.0
     TTS_VOLUME: float = 1.0
     GOOGLE_CLOUD_TTS_API_KEY: str | None = None
+    # Local (self-hosted, keyless) TTS, provider "local": auto | sapi | piper | espeak (see api/services/voice.py).
+    LOCAL_TTS_ENGINE: str = "auto"
+    LOCAL_TTS_PIPER_BINARY: str = "piper"
+    LOCAL_TTS_PIPER_MODEL: str = ""
+    LOCAL_TTS_ESPEAK_BINARY: str = "espeak-ng"
 
     # -- Streaming voice (Partie 8.2.3) ----------------------------------------------
     STREAMING_VOICE_CHUNK_SIZE: int = 100
@@ -1801,7 +1806,7 @@ class Settings(BaseSettings):
 
     # -- Voice activity detection (Partie 8.2.5) --------------------------------------
     VAD_ENABLED: bool = True
-    VAD_THRESHOLD: float = 0.5
+    VAD_THRESHOLD: float = 0.05  # RMS on a -1..1 waveform: measured room noise ~0.004, real speech 0.1-0.2 (0.5 never fires; see frontend/lib/voiceConfig.ts)
     VAD_SILENCE_TIMEOUT: float = 2.0
     VAD_MIN_SPEECH_DURATION: float = 0.5
 
@@ -2314,6 +2319,7 @@ class Settings(BaseSettings):
     # and api/services/billing_providers/registry.py.
     PAYSTACK_SECRET_KEY: str | None = None
     PAYSTACK_PUBLIC_KEY: str | None = None
+    PAYSTACK_API_BASE_URL: str = "https://api.paystack.co"  # overridable only to point contract tests at a local fake
     PAYSTACK_CALLBACK_URL: str = "http://localhost:3000/dashboard/billing?checkout=success"
     # Comma-separated ISO 3166-1 alpha-2 country codes that resolve to
     # Paystack instead of Stripe (api/services/billing_providers/registry.py).
@@ -2377,6 +2383,9 @@ class Settings(BaseSettings):
     VOICE_AGENT_TURN_CREDIT_COST: int = 10
     VOICE_AGENT_RATE_LIMIT_MAX_ATTEMPTS: int = 30
     VOICE_AGENT_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # POST /voice/tts: hosted synthesis is billed per character, so each user gets a bounded number of calls.
+    VOICE_TTS_RATE_LIMIT_MAX_ATTEMPTS: int = 30
+    VOICE_TTS_RATE_LIMIT_WINDOW_SECONDS: int = 60
     CREDITS_CURRENCY: str = "EUR"
     CREDITS_ALERT_THRESHOLDS: str = "50,80,95"
     CREDITS_AUTO_REFILL: bool = False

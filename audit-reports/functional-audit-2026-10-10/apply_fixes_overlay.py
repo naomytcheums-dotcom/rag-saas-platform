@@ -149,6 +149,24 @@ add(["12.1.2", "12.1.6", "12.1.7", "12.1.8"], T + " (signed Stripe/Paystack-styl
 add(["12.2.1", "12.2.2", "12.2.3", "12.2.4"], T + " (catalogue defaults and limits); production plan rows unverified", "tests/test_billing_plans_limits_postgres.py: free 3 documents (4th refused, deleted frees a slot, batch all-or-nothing, URL import, public API, concurrency) and 10 questions a day (11th refused with 402), starter 100/500, pro 1000/unlimited, business 10000")
 add(["12.3.1"], T + " (local signed events; no provider sandbox)", "tests/test_billing_plans_limits_postgres.py: credits consumed per answer and ledger equals balance, empty balance refuses before any LLM call and recovers after a top-up, BYOK spends nothing, credit pack granted exactly once, tenant isolation, never negative under concurrency")
 
+# ---- EXTERNAL chantier (branch bob/auto-fix-20261013-external): proofs run locally on 2026-10-16; "external validation required" = adapter finished, proven only against a LOCAL FAKE
+EXT = "external validation required (local fake only)"
+add(["4.1.1", "4.1.2", "4.1.3", "4.1.4"], EXT, "tests/contracts/test_llm_vendor_contract.py against a local fake speaking each vendor protocol; real account: RUN_LIVE_VENDOR_VALIDATION=1 python scripts/validate_llm_live.py")
+add(["4.2.1", "4.2.2", "4.2.3"], EXT, "tests/contracts/test_embedding_vendor_contract.py (local fake); an API embedding model with no key is refused with a clear error; real account: scripts/validate_embeddings_live.py")
+add(["5.2.2"], EXT, "tests/contracts/test_web_search_contract.py (local Tavily fake); real: scripts/validate_tavily_live.py")
+add(["5.2.7", "5.4.11", "5.2.8"], EXT, "tests/contracts/test_calendar_email_contract.py (local Google/Microsoft fake: OAuth refresh on 401, bounded retries); SMTP already proven on Mailpit; real: scripts/validate_google_microsoft_live.py")
+add(["9.4.1", "9.4.2", "9.4.3"], EXT, "tests/contracts/test_chat_integrations_contract.py (34 tests, local Slack/Teams/Discord fakes: signatures, idempotent intake, token refresh); real: scripts/validate_chat_platforms_live.py")
+add(["1.4.3"], EXT + "; Let's Encrypt issuance not run", "tests/contracts/test_tls_reverse_proxy.py: the repository nginx template in a real nginx container with a self-signed certificate; real: scripts/validate_tls_live.py")
+add(["10.3.9", "13.5.8"], EXT, "tests/contracts/test_observability_contract.py (Sentry envelope against a local Sentry-compatible fake); real: scripts/validate_sentry_live.py")
+add(["12.1.10"], EXT + "; CinetPay not implemented", "Paystack credit packs: tests/contracts/test_paystack_credits.py (12 tests, local Paystack fake, real PostgreSQL: server-set amount/currency/metadata, signed charge.success, idempotent by event AND reference, tampering grants nothing, never touches the subscription, outage 502); real: scripts/validate_paystack_live.py")
+add(["8.2.2"], T + " (local engine real; ElevenLabs/Google fake-contract only)", "api/services/voice.py provider 'local' (Windows SAPI, piper, espeak-ng): tests/contracts/test_browser_voice.py plays the real synthesized WAV in a real Chromium")
+add(["8.2.3"], T, "tests/contracts/test_browser_voice.py: real Chromium + real FastAPI; next sentence requested before the current one ends, gap under 1.5 s, stop works, 401 shown to the user")
+add(["8.2.5"], T + " (defect fixed)", "tests/contracts/test_browser_voice.py: real speech through a fake microphone device gives speech-start then speech-stop, quiet room gives none; default threshold 0.5 never fired on speech and was set to 0.05 with a 250 ms hangover; server-side Silero VAD + local Whisper in tests/contracts/test_voice_contract.py")
+add(["10.1.15"], T + " (self-signed certificate)", "tests/contracts/test_tls_reverse_proxy.py: HTTPS, HSTS, TLS 1.2/1.3 only, secure cookies behind the proxy; defect fixed: nginx and the API both set the security headers (each twice), the proxy now hides the upstream copies")
+add(["10.3.6", "13.5.5"], T + " (local Jaeger as the OTLP backend; hosted Langfuse/Tempo not run)", "tests/contracts/test_observability_contract.py: LLM spans with gen_ai.* attributes read back from Jaeger's query API, no key in a span, backend down does not break the call; scripts/validate_tracing_live.py for the hosted service")
+add(["11.3.4"], T, "tests/contracts/test_uptime_probe.py and scripts/uptime_probe.py run against the local API")
+add(["12.2.5"], T + " (SSO against a real local OIDC IdP; on-premise is documentation and deploy artefacts, not a product)", "tests/test_enterprise_sso_integration.py (full login, wrong audience, nonce and state refused) and tests/test_billing_plans_limits_postgres.py (Enterprise has no document or question cap)")
+
 with open(os.path.join(HERE, "01-feature-verification.csv"), encoding="utf-8-sig", newline="") as fh:
     rows = list(csv.DictReader(fh))
 fields = list(rows[0].keys()) + ["fix_status", "fix_evidence"]

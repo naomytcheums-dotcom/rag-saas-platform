@@ -27,6 +27,7 @@ read-only, for the same reason GET /billing/plans is public.
 
 import datetime as dt
 import logging
+import httpx
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -347,6 +348,9 @@ async def credit_pack_checkout_endpoint(
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except (RuntimeError, httpx.HTTPError) as exc:  # the provider refused or is down: a bad gateway, with nothing granted and no internals leaked
+        logger.warning("credit pack checkout: payment provider failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The payment provider is unavailable, try again later")
     await db.commit()  # the checkout may INSERT a PaymentCustomer row
     return CheckoutSessionResponse(url=url)
 

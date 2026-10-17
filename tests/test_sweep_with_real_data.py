@@ -78,6 +78,11 @@ async def client(tmp_path, monkeypatch):
     # let a Celery dispatch wait on a broker. (Finding, measured: with the broker unreachable `.delay()` blocks the event loop for ~64 s,
     # see docs/FINAL_STATUS.md.)
     monkeypatch.setattr(settings, "RESEND_API_KEY", None)
+    # Nor reach the real Discord API with the sweep's placeholder bot token (it answers 401, which the router turns into a 502).
+    async def _no_discord_delivery(*args, **kwargs):
+        return {"status": "sent"}
+
+    monkeypatch.setattr("api.routers.chat_integrations_discord.send_discord_response", _no_discord_delivery)
 
     from celery.app.task import Task
 

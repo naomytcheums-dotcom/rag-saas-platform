@@ -29,8 +29,12 @@ isn't configured -- fully implemented, real code, simply INACTIVE
 until a real key is added later. `web_speech` (STT default) needs
 none at all."""
 
+import asyncio
+import base64
 import io
 import uuid
+
+from urllib.parse import quote
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +42,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import settings
 
 _ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
+_GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
+_TTS_TIMEOUT_SECONDS = 30.0
 
 # Real, well-documented ElevenLabs premade voice IDs (verify against a
 # real GET /v1/voices call if these ever drift -- ElevenLabs' own
@@ -64,9 +70,68 @@ class VoiceError(Exception):
 # --------------------------------------------------------------- STT (Partie 8.2.1)
 
 _STT_MODELS = {"whisper": "whisper-1", "deepgram": "deepgram/nova-2"}
+_DEEPGRAM_BASE_URL = "https://api.deepgram.com/v1"
 
 
-async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", provider: str | None = None, language: str | None = None) -> str:
+async def _deepgram_rest(audio_bytes: bytes, *, language: str, diarize: bool, api_base: str | None) -> dict:
+    """Deepgram's /listen endpoint called directly, for a request that names a language.
+
+    LiteLLM (1.x) lists `language` as an OpenAI-compatible parameter and then only puts *provider-specific* parameters on the Deepgram query string, so the
+    language a user chose never reached the vendor (found by tests/contracts/test_voice_contract.py: the request carried `model=nova-2` and nothing else).
+    Failures become VoiceError with the same wording as `_litellm_transcribe`."""
+    import httpx
+
+    params = {"model": "nova-2", "language": language}
+    if diarize:
+        params["diarize"] = "true"
+    headers = {"Authorization": f"Token {settings.DEEPGRAM_API_KEY}", "Content-Type": "application/octet-stream", "Accept": "*/*"}
+    try:
+        async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:
+            response = await client.post(f"{(api_base or _DEEPGRAM_BASE_URL).rstrip('/')}/listen", params=params, content=audio_bytes, headers=headers)
+    except httpx.TimeoutException as exc:
+        raise VoiceError("Deepgram did not answer in time") from exc
+    except httpx.HTTPError as exc:
+        raise VoiceError(f"Deepgram transcription failed: {type(exc).__name__}") from exc
+    if response.status_code in (401, 403):
+        raise VoiceError("Deepgram rejected the API key")
+    if response.status_code == 429:
+        raise VoiceError("Deepgram is rate limiting this account; retry later")
+    if response.status_code >= 400:
+        raise VoiceError(f"Deepgram transcription failed: HTTP {response.status_code}")
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise VoiceError("Deepgram transcription failed: the answer was not JSON") from exc
+
+
+def _deepgram_alternative(body: dict) -> dict:
+    try:
+        return body["results"]["channels"][0]["alternatives"][0]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise VoiceError("Deepgram transcription failed: unexpected response shape") from exc
+
+
+async def _litellm_transcribe(vendor: str, model: str, audio_bytes: bytes, filename: str, language: str | None, **kwargs):
+    """`litellm.atranscription` with the failures turned into VoiceError: a bad key, a rate limit or a vendor outage used to escape as raw LiteLLM
+    exceptions (HTTP 500 from the voice endpoints)."""
+    import litellm  # local: see api/services/llm_providers.py's own note on this import's real memory cost
+    import openai
+
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename
+    try:
+        return await litellm.atranscription(model=model, file=audio_file, language=language, **kwargs)
+    except litellm.exceptions.AuthenticationError as exc:
+        raise VoiceError(f"{vendor} rejected the API key") from exc
+    except litellm.exceptions.RateLimitError as exc:
+        raise VoiceError(f"{vendor} is rate limiting this account; retry later") from exc
+    except litellm.exceptions.Timeout as exc:
+        raise VoiceError(f"{vendor} did not answer in time") from exc
+    except (litellm.exceptions.APIError, openai.APIError) as exc:
+        raise VoiceError(f"{vendor} transcription failed: {str(exc)[:200]}") from exc
+
+
+async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", provider: str | None = None, language: str | None = None, api_base: str | None = None) -> str:
     """Item 3's own literal `get_transcript`-equivalent, server-side:
     real transcription of already-recorded audio (used by 8.2.7's own
     audio history and 8.2.13's own call transcription), via litellm's
@@ -84,11 +149,14 @@ async def transcribe_audio(audio_bytes: bytes, *, filename: str = "audio.wav", p
     if resolved_provider == "deepgram" and not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for the 'deepgram' STT provider")
 
-    import litellm  # local: see api/services/llm_providers.py's own note on this import's real memory cost
+    if resolved_provider == "deepgram" and language:
+        return _deepgram_alternative(await _deepgram_rest(audio_bytes, language=language, diarize=False, api_base=api_base)).get("transcript", "")
 
-    audio_file = io.BytesIO(audio_bytes)
-    audio_file.name = filename
-    response = await litellm.atranscription(model=model, file=audio_file, language=language)
+    # The key goes in explicitly: LiteLLM would look for it in os.environ, where a key that only lives in the .env file read by `settings` is not.
+    extra = {"api_key": settings.OPENAI_API_KEY if resolved_provider == "whisper" else settings.DEEPGRAM_API_KEY}
+    if api_base:
+        extra["api_base"] = api_base
+    response = await _litellm_transcribe("Whisper" if resolved_provider == "whisper" else "Deepgram", model, audio_bytes, filename, language, **extra)
     return response.text
 
 
@@ -194,7 +262,7 @@ def _parse_diarization_segments(response) -> list[dict] | None:
     return segments or None
 
 
-async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str = "audio.wav", language: str | None = None) -> tuple[str, list[dict] | None]:
+async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str = "audio.wav", language: str | None = None, api_base: str | None = None) -> tuple[str, list[dict] | None]:
     """Partie 22 (finalization) -- real, additive diarization attempt,
     Deepgram-only (the only STT provider this codebase integrates whose
     real API supports it -- Whisper's own API has no diarization
@@ -205,13 +273,19 @@ async def transcribe_audio_with_diarization(audio_bytes: bytes, *, filename: str
     key, an unparseable response) returns `(text, None)` -- a real
     transcript with no segments, never a crash and never a fabricated
     speaker list."""
-    import litellm  # local: see api/services/llm_providers.py's own note on this import's real memory cost
-
     if not settings.DEEPGRAM_API_KEY:
         raise VoiceError("DEEPGRAM_API_KEY is not configured -- required for diarization (Deepgram-only)")
-    audio_file = io.BytesIO(audio_bytes)
-    audio_file.name = filename
-    response = await litellm.atranscription(model=_STT_MODELS["deepgram"], file=audio_file, language=language, diarize=True)
+    if language:
+        from types import SimpleNamespace
+
+        alternative = _deepgram_alternative(await _deepgram_rest(audio_bytes, language=language, diarize=True, api_base=api_base))
+        words = alternative.get("words") or []
+        segments = _parse_diarization_segments(SimpleNamespace(words=words)) if words else None
+        return alternative.get("transcript", ""), segments
+    extra = {"api_key": settings.DEEPGRAM_API_KEY}
+    if api_base:
+        extra["api_base"] = api_base
+    response = await _litellm_transcribe("Deepgram", _STT_MODELS["deepgram"], audio_bytes, filename, language, diarize=True, **extra)
     return response.text, _parse_diarization_segments(response)
 
 
@@ -259,18 +333,205 @@ async def synthesize_with_elevenlabs(text: str, voice_id: str | None = None, spe
         raise VoiceError("ELEVENLABS_API_KEY is not configured")
     resolved_voice_id = voice_id or _KNOWN_ELEVENLABS_VOICES[settings.ELEVENLABS_DEFAULT_VOICE]["voice_id"]
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{_ELEVENLABS_BASE_URL}/text-to-speech/{resolved_voice_id}",
-            headers={"xi-api-key": settings.ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-            json={
-                "text": text, "model_id": settings.ELEVENLABS_MODEL,
-                "voice_settings": {"stability": min(max(pitch or 0.5, 0.0), 1.0), "similarity_boost": min(max(speed or 0.75, 0.0), 1.0)},
-            },
-        )
-    if response.status_code >= 400:
-        raise VoiceError(f"ElevenLabs synthesis failed ({response.status_code}): {response.text}")
+    response = await _post_tts(
+        "ElevenLabs", f"{_ELEVENLABS_BASE_URL}/text-to-speech/{quote(resolved_voice_id, safe='')}",
+        headers={"xi-api-key": settings.ELEVENLABS_API_KEY, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+        json={
+            "text": text, "model_id": settings.ELEVENLABS_MODEL,
+            "voice_settings": {"stability": min(max(pitch or 0.5, 0.0), 1.0), "similarity_boost": min(max(speed or 0.75, 0.0), 1.0)},
+        },
+    )
+    if not response.content:
+        raise VoiceError("ElevenLabs returned an empty audio body")
     return response.content
+
+
+def _tts_error_detail(response: httpx.Response) -> str:
+    """The vendor's own explanation (ElevenLabs `detail.message`/`detail.status`, Google `error.message`), without echoing a whole body."""
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text[:200]
+    if isinstance(body, dict):
+        detail = body.get("detail", body.get("error"))
+        if isinstance(detail, dict):
+            return str(detail.get("message") or detail.get("status") or detail)[:200]
+        if detail:
+            return str(detail)[:200]
+    return response.text[:200]
+
+
+async def _post_tts(vendor: str, url: str, *, headers: dict, json: dict) -> httpx.Response:
+    """POST to a hosted TTS vendor: one retry after a 429 (concurrency limit; honours Retry-After, at most 5 s), typed errors for everything else.
+    Nothing is retried after a 5xx or a timeout: a synthesis is billed per character."""
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=_TTS_TIMEOUT_SECONDS) as client:
+                response = await client.post(url, headers=headers, json=json)
+        except httpx.TimeoutException as exc:
+            raise VoiceError(f"{vendor} did not answer within {_TTS_TIMEOUT_SECONDS:g}s") from exc
+        except httpx.RequestError as exc:
+            raise VoiceError(f"{vendor} could not be reached ({type(exc).__name__})") from exc
+        if response.status_code == 429 and attempt == 0:
+            try:
+                delay = min(max(float(response.headers.get("retry-after", "1")), 0.0), 5.0)
+            except ValueError:
+                delay = 1.0
+            await asyncio.sleep(delay)
+            continue
+        break
+    if response.status_code >= 400:
+        raise VoiceError(f"{vendor} synthesis failed ({response.status_code}): {_tts_error_detail(response)}")
+    return response
+
+
+async def synthesize_with_google_cloud(text: str, voice_id: str | None = None, speed: float | None = None, pitch: float | None = None, language_code: str = "en-US") -> bytes:
+    """Google Cloud Text-to-Speech (REST `text:synthesize`, API-key auth): returns MP3 bytes. `voice_id` is a Google voice name such as
+    `fr-FR-Neural2-A` (its language prefix sets the language); `speed` is the speaking rate (0.25-4.0), `pitch` in semitones (-20..20)."""
+    if not settings.GOOGLE_CLOUD_TTS_API_KEY:
+        raise VoiceError("GOOGLE_CLOUD_TTS_API_KEY is not configured")
+    voice: dict = {"languageCode": language_code}
+    if voice_id:
+        voice = {"name": voice_id, "languageCode": "-".join(voice_id.split("-")[:2]) or language_code}
+    audio_config: dict = {"audioEncoding": "MP3"}
+    if speed is not None:
+        audio_config["speakingRate"] = min(max(speed, 0.25), 4.0)
+    if pitch is not None:
+        audio_config["pitch"] = min(max(pitch, -20.0), 20.0)
+    response = await _post_tts(
+        "Google Cloud TTS", _GOOGLE_TTS_URL, headers={"X-Goog-Api-Key": settings.GOOGLE_CLOUD_TTS_API_KEY, "Content-Type": "application/json"},
+        json={"input": {"text": text}, "voice": voice, "audioConfig": audio_config},
+    )
+    try:
+        audio = base64.b64decode(response.json()["audioContent"], validate=True)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise VoiceError("Google Cloud TTS returned no audioContent") from exc
+    if not audio:
+        raise VoiceError("Google Cloud TTS returned an empty audio body")
+    return audio
+
+
+# ---- Local text-to-speech: no key, no network, no per-character bill ----------------------------------------------------------------------------------
+# Three self-hosted engines, tried in this order when LOCAL_TTS_ENGINE=auto: Windows SAPI (the speech engine of the OS, through pywin32), piper
+# (open-source neural voices, `LOCAL_TTS_PIPER_BINARY` + `LOCAL_TTS_PIPER_MODEL`) and espeak-ng (open source, Linux/macOS/Windows). All return 16-bit PCM WAV.
+# The voice quality is that of the engine installed on the SERVER; it is the offline / on-premise option, not a clone of ElevenLabs.
+
+_LOCAL_TTS_MAX_SECONDS = 60.0
+
+
+def local_tts_engine() -> str | None:
+    """The local engine that would be used now ('sapi' | 'piper' | 'espeak'), or None when this host has none of them."""
+    import os
+    import shutil
+
+    wanted = (settings.LOCAL_TTS_ENGINE or "auto").lower()
+    candidates = ["sapi", "piper", "espeak"] if wanted == "auto" else [wanted]
+    for engine in candidates:
+        if engine == "sapi" and os.name == "nt":
+            try:
+                import win32com.client  # noqa: F401
+                return "sapi"
+            except ImportError:
+                continue
+        if engine == "piper" and settings.LOCAL_TTS_PIPER_MODEL and shutil.which(settings.LOCAL_TTS_PIPER_BINARY):
+            return "piper"
+        if engine == "espeak" and shutil.which(settings.LOCAL_TTS_ESPEAK_BINARY):
+            return "espeak"
+    return None
+
+
+def _synthesize_sapi_sync(text: str, voice_id: str | None, speed: float | None, path: str) -> None:
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()  # COM is per thread: this runs in a worker thread
+    try:
+        voice = win32com.client.Dispatch("SAPI.SpVoice")
+        voices = voice.GetVoices()
+        if voice_id:
+            wanted = voice_id.lower()
+            matches = [i for i in range(voices.Count) if wanted in voices.Item(i).GetDescription().lower() or wanted == str(i)]
+            if not matches:
+                raise VoiceError(f"no installed Windows voice matches '{voice_id}'")
+            voice.Voice = voices.Item(matches[0])
+        if speed:
+            voice.Rate = max(-10, min(10, round((speed - 1.0) * 10)))  # SAPI rate -10..10, 0 = normal; 1.0 here = normal
+        stream = win32com.client.Dispatch("SAPI.SpFileStream")
+        audio_format = win32com.client.Dispatch("SAPI.SpAudioFormat")
+        audio_format.Type = 22  # 22.05 kHz, 16-bit, mono
+        stream.Format = audio_format
+        stream.Open(path, 3)
+        try:
+            voice.AudioOutputStream = stream
+            voice.Speak(text)
+        finally:
+            stream.Close()
+    finally:
+        pythoncom.CoUninitialize()
+
+
+async def synthesize_with_local_engine(text: str, voice_id: str | None = None, speed: float | None = None, pitch: float | None = None) -> bytes:
+    """Speech synthesized on this server by an installed open-source / OS engine. `pitch` is not honoured by these engines and is ignored."""
+    import os
+    import tempfile
+
+    engine = local_tts_engine()
+    if engine is None:
+        raise VoiceError("no local text-to-speech engine is available on this server (Windows SAPI, piper with LOCAL_TTS_PIPER_MODEL, or espeak-ng)")
+    handle, path = tempfile.mkstemp(suffix=".wav")
+    os.close(handle)
+    try:
+        if engine == "sapi":
+            try:
+                await asyncio.wait_for(asyncio.to_thread(_synthesize_sapi_sync, text, voice_id, speed, path), timeout=_LOCAL_TTS_MAX_SECONDS)
+            except asyncio.TimeoutError as exc:
+                raise VoiceError("local text-to-speech timed out") from exc
+            except VoiceError:
+                raise
+            except Exception as exc:  # COM errors carry nothing useful to a caller
+                raise VoiceError(f"local text-to-speech (Windows SAPI) failed: {type(exc).__name__}") from exc
+        else:
+            if engine == "piper":
+                command = [settings.LOCAL_TTS_PIPER_BINARY, "--model", settings.LOCAL_TTS_PIPER_MODEL, "--output_file", path]
+                if speed:
+                    command += ["--length_scale", str(round(1.0 / max(speed, 0.25), 3))]
+            else:
+                command = [settings.LOCAL_TTS_ESPEAK_BINARY, "-w", path, "-s", str(int(175 * (speed or 1.0)))] + (["-v", voice_id] if voice_id else []) + ["--stdin"]
+            process = None
+            try:
+                process = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+                await asyncio.wait_for(process.communicate(text.encode("utf-8")), timeout=_LOCAL_TTS_MAX_SECONDS)
+            except asyncio.TimeoutError as exc:
+                if process is not None:
+                    process.kill()
+                raise VoiceError("local text-to-speech timed out") from exc
+            except OSError as exc:
+                raise VoiceError(f"local text-to-speech engine could not start: {type(exc).__name__}") from exc
+            if process.returncode != 0:
+                raise VoiceError(f"local text-to-speech ({engine}) exited with code {process.returncode}")
+        with open(path, "rb") as produced:
+            audio = produced.read()
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    if len(audio) < 100 or audio[:4] != b"RIFF":
+        raise VoiceError("the local text-to-speech engine produced no audio")
+    return audio
+
+
+async def synthesize_speech(text: str, provider: str | None = None, voice_id: str | None = None, speed: float | None = None, pitch: float | None = None) -> bytes:
+    """Server-side TTS through the provider the organization/operator chose (`TTS_PROVIDER`: elevenlabs | google_cloud | local). `web_speech` is the
+    browser's own synthesizer and has no server side."""
+    chosen = provider or (settings.TTS_PROVIDER if settings.TTS_PROVIDER in ("elevenlabs", "google_cloud", "local") else "elevenlabs")
+    if chosen == "elevenlabs":
+        return await synthesize_with_elevenlabs(text, voice_id=voice_id, speed=speed, pitch=pitch)
+    if chosen == "google_cloud":
+        return await synthesize_with_google_cloud(text, voice_id=voice_id, speed=speed, pitch=pitch)
+    if chosen == "local":
+        return await synthesize_with_local_engine(text, voice_id=voice_id, speed=speed, pitch=pitch)
+    raise VoiceError(f"'{chosen}' has no server-side synthesis (web_speech runs in the browser); use 'elevenlabs', 'google_cloud' or 'local'")
 
 
 # -------------------------------------------------- Voice chat round-trip (item 17)

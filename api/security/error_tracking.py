@@ -42,6 +42,10 @@ def setup_error_tracking() -> None:
             # `_redact_secrets`: request bodies/headers can carry API keys,
             # passwords, or tokens (login/API-key endpoints) -- never sent as-is.
             send_default_pii=False,
+            # send_default_pii=False does not cover the LOCAL VARIABLES of the stack frames, which the SDK attaches by default: the ASGI `scope`
+            # (every request header, Authorization and Cookie included) and any `api_key`/`password` variable travelled to Sentry inside the
+            # frames of an exception (measured 2026-10-13 against a local Sentry-compatible ingest).
+            include_local_variables=False,
         )
         _initialized = True
     except Exception:  # noqa: BLE001 -- error tracking failing to initialize must never crash the app it's meant to observe

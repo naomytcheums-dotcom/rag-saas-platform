@@ -37,7 +37,7 @@ def verify_slack_signature(timestamp: str | None, body: bytes, signature: str | 
     except ValueError:
         return False
 
-    basestring = f"v0:{timestamp}:{body.decode('utf-8')}".encode("utf-8")
+    basestring = b"v0:" + timestamp.encode("utf-8") + b":" + body  # bytes as received: a body that is not UTF-8 is just a signature mismatch
     computed = "v0=" + hmac.new(settings.SLACK_SIGNING_SECRET.encode("utf-8"), basestring, hashlib.sha256).hexdigest()
     return hmac.compare_digest(computed, signature)
 
