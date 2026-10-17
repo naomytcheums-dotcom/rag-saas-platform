@@ -337,7 +337,8 @@ def _get_progress_redis() -> redis_asyncio.Redis:
 # given model downloads its weights from HuggingFace Hub if not
 # already cached), far too slow to repeat per document.
 _EMBEDDER_CACHE: dict[str, object] = {}
-_EMBEDDER_LOCK = threading.Lock()
+from api.services.transformers_import import EMBEDDER_LOCK as _EMBEDDER_LOCK  # noqa: E402 -- shared with the tokenizer import, see that module
+
 
 
 def get_embedder(model_name: str):
@@ -3293,10 +3294,9 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             settings_dict = await get_org_settings(db, document.organization_id)
             extracted = extract_document_content(tmp_path, document.file_type, pdf_engine=settings_dict["pdf_extraction_engine"])
 
-            os.environ.setdefault("USE_TF", "0")
-            from transformers import AutoTokenizer
+            from api.services.transformers_import import import_auto_tokenizer
 
-            tokenizer = AutoTokenizer.from_pretrained(settings_dict["embedding_model"])
+            tokenizer = import_auto_tokenizer().from_pretrained(settings_dict["embedding_model"])
 
             # Phase 4, Étape 1 -- real dispatch among the 7 real
             # chunking strategies (`api/services/chunk_config.py`'s own
@@ -3732,15 +3732,22 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             # dominant terms/summary are already well-represented by a
             # real, substantial sample, not the entire text.
             full_text = "\n\n".join(s["text"] for s in extracted["sections"])[:_MAX_ENRICHMENT_INPUT_CHARS]
-            await db.execute(delete(DocumentKeyword).where(DocumentKeyword.document_id == document.id))
-            await db.execute(delete(DocumentEntity).where(DocumentEntity.document_id == document.id))
-            for keyword in extract_keywords(full_text):
-                db.add(DocumentKeyword(document_id=document.id, keyword=keyword["keyword"], score=keyword["score"]))
-            for entity in extract_entities(full_text):
-                db.add(DocumentEntity(
-                    document_id=document.id, entity_type=entity["entity_type"], entity_value=entity["entity_value"],
-                    confidence=entity["confidence"], position=entity["position"],
-                ))
+            # Keywords and entities are an enrichment: a failure to store them (flushed inside a SAVEPOINT so the chunks of this transaction survive) must
+            # never lose the document -- it used to raise at commit time and leave the document in 'pending' forever (E2E finding 2026-10-13).
+            try:
+                async with db.begin_nested():
+                    await db.execute(delete(DocumentKeyword).where(DocumentKeyword.document_id == document.id))
+                    await db.execute(delete(DocumentEntity).where(DocumentEntity.document_id == document.id))
+                    for keyword in extract_keywords(full_text):
+                        db.add(DocumentKeyword(document_id=document.id, keyword=keyword["keyword"][:200], score=keyword["score"]))
+                    for entity in extract_entities(full_text):
+                        db.add(DocumentEntity(
+                            document_id=document.id, entity_type=entity["entity_type"], entity_value=entity["entity_value"][:500],
+                            confidence=entity["confidence"], position=entity["position"],
+                        ))
+                    await db.flush()
+            except Exception as exc:  # noqa: BLE001 -- enrichment is best effort
+                logger.warning("process_document: keyword/entity enrichment skipped for document '%s': %s", document_id, exc)
 
             document.metadata_json = {
                 **extracted["metadata"], "table_count": len(extracted["tables"]), "tables": tables_for_metadata,
@@ -3774,7 +3781,12 @@ async def process_document(db: AsyncSession, document_id: uuid.UUID) -> Document
             document.status = DocumentStatus.completed.value
             document.processed_at = dt.datetime.now(dt.timezone.utc)
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError as unlink_exc:
+                # Windows: a PDF/ZIP library can still hold the temp file after a parse failure (WinError 32). That must not replace the real
+                # extraction error recorded for the document.
+                logger.warning("process_document: could not remove temporary file '%s': %s", tmp_path, unlink_exc)
     except Exception as exc:
         logger.warning("process_document: processing failed for document '%s': %s", document_id, exc)
         document.status = DocumentStatus.failed.value

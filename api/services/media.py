@@ -416,12 +416,9 @@ async def index_media_in_rag(db: AsyncSession, asset: MediaAsset) -> int:
         return 0
 
     org_settings = await get_org_settings(db, asset.organization_id)
-    import os
+    from api.services.transformers_import import import_auto_tokenizer
 
-    os.environ.setdefault("USE_TF", "0")
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(org_settings["embedding_model"])
+    tokenizer = import_auto_tokenizer().from_pretrained(org_settings["embedding_model"])
 
     chunk_records = []
     for text, source in texts_and_sources:

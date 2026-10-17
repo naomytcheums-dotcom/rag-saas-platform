@@ -63,12 +63,9 @@ def get_tokenizer(model_name: str | None = None):
     operation, far too slow to repeat per real sentence/chunk."""
     model_name = model_name or DEFAULT_SETTINGS["embedding_model"]
     if model_name not in _TOKENIZER_CACHE:
-        import os
+        from api.services.transformers_import import import_auto_tokenizer
 
-        os.environ.setdefault("USE_TF", "0")
-        from transformers import AutoTokenizer
-
-        _TOKENIZER_CACHE[model_name] = AutoTokenizer.from_pretrained(model_name)
+        _TOKENIZER_CACHE[model_name] = import_auto_tokenizer().from_pretrained(model_name)
     return _TOKENIZER_CACHE[model_name]
 
 
