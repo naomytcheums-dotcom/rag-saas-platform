@@ -217,7 +217,20 @@ class Api:
         if with_org:
             org = self.http.post("/organizations", json={"name": org_name or f"RAG {label} {uuid.uuid4().hex[:6]}"}, headers=headers).json()
             out["org_id"] = org["id"]
+            self.set_plan(out, os.environ.get("RAG_E2E_PLAN", "enterprise"))
         return out
+
+    def set_plan(self, user, key: str) -> None:
+        """Assign a catalogue plan the way the payment-provider webhook / back office does (the self-service route refuses paid plans). The
+        plan limits (3 documents on `free`, ...) are enforced by the API since migration 0145; the value-chain scripts import dozens of documents,
+        so their organizations run on `enterprise` unless RAG_E2E_PLAN says otherwise or a scenario asks for `free` explicitly."""
+        self.http.get("/billing/plans", headers=user["headers"])  # seeds the catalogue
+        rows = sql("select id from plans where key = $1", key)
+        assert rows, f"plan {key} is not in the catalogue"
+        n = sql_exec("update subscriptions set plan_id = $1, status = 'active' where organization_id = $2::uuid", rows[0]["id"], user["org_id"])
+        if n.endswith(" 0"):
+            sql_exec("insert into subscriptions (id, organization_id, plan_id, status, billing_period, created_at, updated_at) "
+                     "values (gen_random_uuid(), $1::uuid, $2, 'active', 'monthly', now(), now())", user["org_id"], rows[0]["id"])
 
     def settings(self, user, **kw):
         return self.http.patch(f"/organizations/{user['org_id']}/settings", headers=user["headers"], json=kw)
