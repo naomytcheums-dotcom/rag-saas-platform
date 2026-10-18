@@ -14,7 +14,7 @@
 # capabilities the CONTAINER is started with, which live in Python
 # code, not here.
 
-FROM python:3.13-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl gnupg \
