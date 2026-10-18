@@ -16,6 +16,7 @@ one, so a misconfigured deployment is caught at process startup.
 import ipaddress
 import os
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
@@ -235,6 +236,10 @@ class Settings(BaseSettings):
 
     # -- Object storage (S3 or Cloudflare R2, both S3-compatible) -------
     S3_ENDPOINT_URL: str | None = None  # leave unset for real AWS S3
+    # Server-side encryption requested on every write of private content (documents, voice, fine-tuning, plugins): "AES256" (SSE-S3) or "aws:kms" (+ S3_SSE_KMS_KEY_ID).
+    # Unset = the store's own default. See api/services/s3_encryption.py.
+    S3_SERVER_SIDE_ENCRYPTION: Literal["", "AES256", "aws:kms"] | None = None
+    S3_SSE_KMS_KEY_ID: str | None = None
     S3_BUCKET_NAME: str | None = None
     S3_ACCESS_KEY_ID: str | None = None
     S3_SECRET_ACCESS_KEY: str | None = None

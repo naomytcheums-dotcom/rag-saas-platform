@@ -1,0 +1,45 @@
+# Air-gapped / on-premise overlay (spec 10.4.10, 10.4.11): every service of the stack sits on an `internal` network, which Docker gives no route to the outside.
+# Use together with the base file:   docker compose -f docker-compose.tenant.yml -f docker-compose.airgapped.yml up -d --wait
+# Docker cannot publish a port of a container that is only on an internal network, so a minimal reverse proxy (`edge`, nginx) is the only container that also
+# joins a normal network and publishes the API port; the API, worker, beat, database, Redis, MinIO (and Ollama) stay without any route out.
+# Consequences, all intended: the API cannot call any hosted LLM, e-mail, billing or telemetry service (use a local LLM: Ollama or any OpenAI-compatible server on
+# the private network), and nothing is downloaded at runtime (models come from the MODELS_DIR volume, HF_HUB_OFFLINE=1). TLS is the operator's: put the edge
+# behind your own certificate (or replace it by your ingress).
+networks:
+  default:
+    internal: true
+  edge: {}
+
+configs:
+  edge_nginx:
+    content: |
+      server {
+        listen 80;
+        client_max_body_size 60m;
+        location / {
+          proxy_pass http://api:8000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Forwarded-For $$remote_addr;
+          proxy_set_header X-Forwarded-Proto $$scheme;
+          proxy_read_timeout 300s;
+        }
+      }
+
+services:
+  api:
+    ports: !reset []
+    environment: &offline { HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1" }
+  worker:
+    environment: *offline
+  beat:
+    environment: *offline
+
+  edge:
+    image: ${EDGE_IMAGE:-nginx:1.29-alpine}
+    configs:
+      - source: edge_nginx
+        target: /etc/nginx/conf.d/default.conf
+    networks: [default, edge]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:80"]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped

@@ -1,6 +1,9 @@
-# Kubernetes manifests (not applied by the authoring session; validate with `kubectl apply --dry-run=server -f` on a staging cluster).
-# Secrets: create `rag-saas-secrets` first, e.g.
-#   kubectl -n rag-saas create secret generic rag-saas-secrets --from-literal=DATABASE_URL=... --from-literal=REDIS_URL=... --from-literal=JWT_SECRET_KEY=...
+# Kubernetes manifests: API (2 replicas + HPA), Celery worker, the single Celery beat, Service and Ingress. `kubeconform -strict` (Kubernetes 1.30 schemas) passes;
+# applied to no cluster. Secrets: create `rag-saas-secrets` first with every variable of the environment contract (deploy/README.md), for example:
+#   kubectl -n rag-saas create secret generic rag-saas-secrets
+#     --from-literal=DATABASE_URL=... --from-literal=CELERY_BROKER_URL=... --from-literal=CELERY_RESULT_BACKEND=... --from-literal=RATE_LIMIT_REDIS_URL=...
+#     --from-literal=JWT_SECRET_KEY=... --from-literal=SESSION_MIDDLEWARE_SECRET=... --from-literal=AUDIT_LOG_HMAC_SECRET_KEY=... --from-literal=SUPPORT_EMAIL=...
+#     --from-literal=ENCRYPTION_MASTER_KEY=... --from-literal=SECRET_ENCRYPTION_KEY=...   (one command, the lines above are joined)
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -81,7 +84,7 @@ spec:
       containers:
         - name: beat
           image: ghcr.io/naomytcheums-dotcom/rag-saas-api:latest
-          command: ["celery", "-A", "api.tasks.celery_app", "beat", "--loglevel=info"]
+          command: ["celery", "-A", "api.tasks.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
           envFrom: [{ secretRef: { name: rag-saas-secrets } }]
           resources:
             requests: { cpu: 100m, memory: 512Mi }

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: rag-saas
-description: RAG SaaS Platform API with its Celery worker and beat (not linted by the authoring session - run `helm lint` and `helm template` first)
+description: RAG SaaS Platform API with its Celery worker and the single Celery beat (helm lint, helm template and kubeconform pass; installed on no cluster)
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

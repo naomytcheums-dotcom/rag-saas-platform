@@ -6,7 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models.connector_credential import ConnectorCredential
 from api.models.encryption_audit import EncryptionAudit
+from api.models.mcp_server import MCPServerConfig
 from api.models.webhook import Webhook
 from api.security.encryption import EncryptionNotConfiguredError, decrypt_data, encrypt_data, hash_data, verify_hash
 
@@ -23,7 +25,7 @@ async def get_encryption_status(db: AsyncSession) -> dict:
         "enabled": bool(settings.ENCRYPTION_MASTER_KEY),
         "algorithm": settings.ENCRYPTION_ALGORITHM,
         "key_storage": settings.ENCRYPTION_KEY_STORAGE,
-        "encrypted_fields": ["Webhook.secret", "SlackIntegration.bot_token", "SlackIntegration.user_token", "TeamsIntegration.bot_token", "DiscordIntegration.bot_token", "JWTSigningKey.secret (Fernet)", "EnterpriseSSOConnection.client_secret (Fernet)"],
+        "encrypted_fields": ["Webhook.secret", "ConnectorCredential.encrypted_payload", "MCPServerConfig.auth_credential_encrypted", "OrganizationLLMConfig.encrypted_api_key (Fernet)", "SlackIntegration.bot_token", "SlackIntegration.user_token", "TeamsIntegration.bot_token", "DiscordIntegration.bot_token", "JWTSigningKey.secret (Fernet)", "EnterpriseSSOConnection.client_secret (Fernet)"],
         "encrypted_row_count": encrypted_webhook_secrets,
         "previous_key_configured": bool(settings.ENCRYPTION_MASTER_KEY_PREVIOUS),
         "last_rotation_at": last_rotation.created_at if last_rotation else None,
@@ -31,8 +33,9 @@ async def get_encryption_status(db: AsyncSession) -> dict:
 
 
 async def rotate_encryption_keys(db: AsyncSession, *, performed_by: uuid.UUID) -> dict:
-    """Real re-encryption pass: walks every Webhook.secret and re-writes
-    it under the CURRENT ENCRYPTION_MASTER_KEY. Meaningful specifically
+    """Real re-encryption pass: walks every AES-256-GCM store (Webhook.secret, ConnectorCredential.encrypted_payload,
+    MCPServerConfig.auth_credential_encrypted) and re-writes it under the CURRENT ENCRYPTION_MASTER_KEY. (The Fernet stores use
+    SECRET_ENCRYPTION_KEY, a separate key with its own rotation.) Meaningful specifically
     when an operator has just rotated the env var (set a new
     ENCRYPTION_MASTER_KEY, moved the old one to
     ENCRYPTION_MASTER_KEY_PREVIOUS, and restarted) -- this finishes that
@@ -51,7 +54,17 @@ async def rotate_encryption_keys(db: AsyncSession, *, performed_by: uuid.UUID) -
         webhook.secret = encrypt_data(plaintext)
         rotated += 1
 
-    audit = EncryptionAudit(operation="rotate_keys", rows_affected=rotated, success=True, detail=f"Re-encrypted {rotated} webhook secret(s)", performed_by=performed_by)
+    webhooks = rotated
+    connectors = list((await db.scalars(select(ConnectorCredential))).all())
+    for credential in connectors:
+        credential.encrypted_payload = encrypt_data(decrypt_data(credential.encrypted_payload))
+    mcp_servers = list((await db.scalars(select(MCPServerConfig).where(MCPServerConfig.auth_credential_encrypted.is_not(None)))).all())
+    for server in mcp_servers:
+        server.auth_credential_encrypted = encrypt_data(decrypt_data(server.auth_credential_encrypted))
+    rotated = webhooks + len(connectors) + len(mcp_servers)
+
+    audit = EncryptionAudit(operation="rotate_keys", rows_affected=rotated, success=True,
+                            detail=f"Re-encrypted {webhooks} webhook secret(s), {len(connectors)} connector credential(s), {len(mcp_servers)} MCP credential(s)", performed_by=performed_by)
     db.add(audit)
     await db.flush()
     return {"rotated_rows": rotated, "rotated_at": audit.created_at}

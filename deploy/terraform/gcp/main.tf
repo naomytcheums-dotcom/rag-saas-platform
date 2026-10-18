@@ -1,5 +1,6 @@
-# Google Cloud Run service for the API image. NOT validated (terraform is not installed on the authoring machine).
-# Background work needs a Celery worker/beat: run them as Cloud Run jobs / a small GCE VM or GKE (see deploy/kubernetes).
+# Google Cloud Run service for the API image. `terraform init -backend=false && terraform validate` passes (hashicorp/terraform 1.9, google ~> 5.0);
+# never planned or applied against a real project. Known limit: a Celery worker does not listen on HTTP, so it cannot be a Cloud Run service; run the
+# worker and the single beat on GKE (deploy/kubernetes, deploy/helm) or a small GCE VM with the same image. Environment contract: deploy/README.md.
 terraform {
   required_version = ">= 1.6"
   required_providers {

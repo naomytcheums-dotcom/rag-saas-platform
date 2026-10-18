@@ -212,7 +212,7 @@ export default function HeroStage() {
             <Link href="/register" className="contents"><div className="bg-[#ff541f] content-stretch flex items-center justify-center overflow-clip px-[35px] py-[15px] relative rounded-[10px] shrink-0" data-node-id="1:110" data-name="Link">
               <div className="[word-break:break-word] flex flex-col font-bold justify-center leading-[0] not-italic relative shrink-0 text-[20px] text-white whitespace-nowrap" data-node-id="1:111"><p className="leading-[19.2px]">{t("landing.cta.start")}</p></div>
             </div></Link>
-            <Link href="/chat" className="contents"><div className="border border-[rgba(252,252,252,0.23)] border-solid content-stretch flex items-center justify-center overflow-clip px-[35px] py-[15px] relative rounded-[10px] shrink-0" data-node-id="1:112" data-name="Link">
+            <Link href="/demo" className="contents"><div className="border border-[rgba(252,252,252,0.23)] border-solid content-stretch flex items-center justify-center overflow-clip px-[35px] py-[15px] relative rounded-[10px] shrink-0" data-node-id="1:112" data-name="Link">
               <div className="[word-break:break-word] flex flex-col font-normal justify-center leading-[0] not-italic relative shrink-0 text-[20px] text-white whitespace-nowrap" data-node-id="1:113"><p className="leading-[19.2px]">{t("landing.cta.demo")}</p></div>
             </div></Link>
           </div>

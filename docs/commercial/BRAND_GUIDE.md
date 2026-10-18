@@ -10,8 +10,27 @@ early working name, not the product. Remaining places to check when publishing: 
 Every customer-facing string comes from `locales/*/common.json`, so a later rename is a text change, not a code change.
 
 ## 2. Logo
-No final logo file is committed: the header uses a text wordmark (`frontend/components/figma/SiteHeader.tsx`). Provide an SVG (square and horizontal versions) and
-place it in `frontend/public/brand/`. Organizations can replace it per customer through white-label settings (logo, favicon, name).
+The mark is a magnifying glass (retrieval) holding a four-point spark (the generated answer), on a rounded square in the brand gradient. Files, all vector, in
+`frontend/public/brand/` (served at `/brand/...`):
+
+| File | Use |
+|---|---|
+| `logo-mark.svg` | the square mark in the brand gradient: app icon, avatar, social profile, the site header (`SiteHeader.tsx`) |
+| `logo-mark-mono.svg` | one-colour mark (`currentColor`, default `#1c1d1d`): stamps, fax / print in black, embossing, watermarks |
+| `logo-horizontal-light.svg` | mark + "RAG SaaS / Platform" for light backgrounds (documents, e-mail footers, slides) |
+| `logo-horizontal-dark.svg` | same with white text for dark backgrounds (`--ink`, `--ink-deep`, the authentication screens) |
+| `favicon.svg` | simplified solid-accent mark, thicker strokes so it stays readable at 16 px (declared in `frontend/app/layout.tsx`, next to the legacy `favicon.ico`) |
+
+Rules:
+- **Clear space**: keep at least one quarter of the mark's width free on every side (16 px around a 64 px mark).
+- **Minimum size**: mark 16 px (use `favicon.svg` below 24 px); horizontal logo 120 px wide.
+- **Do not**: recolour the gradient, rotate or skew, add shadows or outlines, put the gradient mark on the accent orange or on a photo (use the mono mark in white),
+  stretch it, or redraw the spark.
+- **Text in the horizontal logos** is live SVG text (Inter, then Segoe UI / Arial) so the files stay small and editable; before sending them to a printer or a
+  sign-maker, open the SVG in a vector editor and "convert text to outlines". The wordmark is not a registered trademark: a trademark search and filing is an owner decision.
+- **Customers** replace the logo, favicon and name through white-label settings; the files above are the platform's own identity, not the customers'.
+
+The geometry is checked by `tests/test_brand_assets.py` (valid SVG, no script or external reference, colours taken from the tokens below, every file listed here exists).
 
 ## 3. Colours (tokens)
 | Role | Token | Value |
@@ -30,6 +49,20 @@ place it in `frontend/public/brand/`. Organizations can replace it per customer 
 | Success / danger / warning | `--success`, `--danger`, `--warning` | `#2f9e5e`, `#d8482f`, `#b8791a` |
 
 Dark mode and customer branding override these tokens at runtime (`frontend/components/BrandingApplier.tsx`).
+
+Measured contrast (WCAG 2.x relative luminance, computed by `tests/test_brand_assets.py`, not estimated):
+
+| Pair | Ratio | Meets |
+|---|---|---|
+| `#1c1d1d` text on `#ffffff` | 16.9 : 1 | AA and AAA, all sizes |
+| `#727272` secondary text on `#ffffff` | 4.8 : 1 | AA for normal text |
+| white on `#ff4b00` accent | 3.36 : 1 | AA for **large text** (18.66 px bold / 24 px regular) and for graphics only; **not** AA for normal-size text |
+| white on `#e04300` accent hover | 4.22 : 1 | AA for large text; still below 4.5 for small text |
+| `#ff4b00` on `#1b1b1c` ink | 5.13 : 1 | AA for normal text |
+| `#1c1d1d` on `#fff0ea` accent soft | 15.2 : 1 | AA and AAA |
+
+Consequence, stated plainly: text on an orange button must be large and bold (the landing buttons use 18 px bold, which is just under the WCAG "large text" threshold of
+18.66 px: a known gap to fix by raising the button text to 19 px or darkening the accent for small buttons), small text on orange must be `#1c1d1d`, never white.
 
 ## 4. Typography
 Inter (variable), with the system sans-serif stack as fallback (`--app-font`). Titles are medium or semibold, body 14-16 px, small print 12 px.

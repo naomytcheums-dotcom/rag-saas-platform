@@ -7,6 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "RAG SaaS Platform",
   description: "Multi-tenant RAG SaaS chat interface",
+  icons: { icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }, { url: "/favicon.ico" }] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
