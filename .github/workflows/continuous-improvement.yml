@@ -1,0 +1,119 @@
+name: Continuous improvement cycle (weekly)
+
+# Spec 15.2.7 (benchmark -> improvement). Once a week, and on demand, one full turn of scripts/continuous_improvement_cycle.py on a THROW-AWAY stack:
+# disposable PostgreSQL (pgvector) and Redis service containers, the API and a Celery worker started on the runner, the 155-page FastAPI documentation corpus indexed
+# with the local embedding model, retrieval measured with the production code (no paid service, no LLM: --no-llm), then compared with the committed baseline.
+# Nothing here touches production data or secrets. The result is a dated report (artifact) and, when the guardian thresholds or the baseline are violated, a
+# GitHub issue that proposes the improvement: this workflow never changes the code or the defaults; a human applies a proposal on a bob/auto-fix-* branch.
+# Process and decision rules: docs/operations/CONTINUOUS_IMPROVEMENT.md.
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"   # Mondays 04:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: continuous-improvement
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_saas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # throw-away values, valid for this run only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rag_saas_test
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      RATE_LIMIT_REDIS_URL: redis://localhost:6379/2
+      JWT_SECRET_KEY: cycle-only-jwt-secret-key-never-used-elsewhere-32c
+      SESSION_MIDDLEWARE_SECRET: cycle-only-session-secret-never-used-elsewhere-32c
+      AUDIT_LOG_HMAC_SECRET_KEY: cycle-only-audit-log-hmac-key-never-used-elsewhere-32c
+      SECRET_ENCRYPTION_KEY: t9aZv8_TY9hGq8Q0yZMkBjYAah-UwN1M6cDVkimg9AY=
+      ENCRYPTION_MASTER_KEY: gBZ-pfccwD20XSBiesnRCAo9e7_y7E0LOAAvsXGJXyg=
+      SUPPORT_EMAIL: support@cycle.invalid
+      RESEND_API_KEY: re_cycle_placeholder_never_a_real_key
+      EMAIL_FROM_ADDRESS: onboarding@resend.dev
+      COOKIE_SECURE: "False"
+      RATE_LIMIT_ENABLED: "false"
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_BUCKET_NAME: avatars
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_DOCUMENTS_BUCKET_NAME: documents
+      S3_VOICE_BUCKET_NAME: voice
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-api.txt -r requirements-optional.txt
+
+      - name: Start a disposable MinIO and create the buckets
+        run: |
+          docker run -d --name cycle-minio -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin bitnamilegacy/minio:2025.7.23-debian-12-r5
+          for _ in $(seq 1 40); do curl -sf http://localhost:9000/minio/health/live && break; sleep 1; done
+          python scripts/ci_create_buckets.py
+
+      - name: Apply the migrations and start the API and the worker
+        run: |
+          python -m alembic upgrade head
+          nohup python -m uvicorn api.main:app --host 127.0.0.1 --port 8010 > api.log 2>&1 &
+          nohup python -m celery -A api.tasks.celery_app worker --pool=solo --loglevel=info > worker.log 2>&1 &
+          for _ in $(seq 1 60); do curl -sf http://127.0.0.1:8010/health && exit 0; sleep 2; done
+          cat api.log; exit 1
+
+      - name: Run the cycle (index the corpus, measure retrieval)
+        run: python scripts/continuous_improvement_cycle.py run --base http://127.0.0.1:8010 --run-out retrieval_run.json --no-llm --index-timeout 3000
+
+      - name: Compare with the baseline and write the report
+        id: compare
+        run: |
+          set +e
+          python scripts/continuous_improvement_cycle.py compare --current retrieval_run.json --report-dir cycle-report --label "$(date -u +%Y-%m-%d)" > cycle-report.txt
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat cycle-report.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: improvement-cycle
+          path: |
+            retrieval_run.json
+            cycle-report/
+            cycle-report.txt
+            api.log
+            worker.log
+
+      - name: Open an issue when the guardian thresholds or the baseline are violated
+        if: steps.compare.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.compare.outputs.code }}
+        run: |
+          level="warning or regression"
+          [ "$CODE" = "2" ] && level="CRITICAL"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "Retrieval quality cycle $(date -u +%Y-%m-%d): $level" --body-file cycle-report.txt

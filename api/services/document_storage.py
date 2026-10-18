@@ -146,6 +146,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from lxml import etree
 
 from api.config import settings
+from api.services.s3_encryption import object_encryption_args
 from api.services.txt_extraction import is_valid_text
 from api.services.xml_extraction import SAFE_XML_PARSER
 
@@ -445,7 +446,7 @@ def upload_document_file(organization_id: uuid.UUID, document_id: uuid.UUID, fil
     key = f"documents/{organization_id}/{document_id}/{safe_object_name(filename)}"
 
     try:
-        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type, **object_encryption_args())
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"document upload failed: {exc}") from exc
 
@@ -465,7 +466,7 @@ def save_image(organization_id: uuid.UUID, document_id: uuid.UUID, image_index: 
     key = f"documents/{organization_id}/{document_id}/images/{image_index}"
 
     try:
-        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=image_data, ContentType=content_type or "application/octet-stream")
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=image_data, ContentType=content_type or "application/octet-stream", **object_encryption_args())
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"image upload failed: {exc}") from exc
 
@@ -481,7 +482,7 @@ def upload_media_file(organization_id: uuid.UUID, media_asset_id: uuid.UUID, fil
     media specifically was not justified)."""
     key = f"media/{organization_id}/{media_asset_id}/{safe_object_name(filename)}"
     try:
-        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type)
+        _client().put_object(Bucket=settings.S3_DOCUMENTS_BUCKET_NAME, Key=key, Body=content, ContentType=content_type, **object_encryption_args())
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"media upload failed: {exc}") from exc
     return key

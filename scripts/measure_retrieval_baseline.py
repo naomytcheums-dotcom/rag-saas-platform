@@ -61,9 +61,10 @@ async def main_async(args) -> int:
         for strategy in ("hybrid", "vector_only", "bm25_only", "hybrid_reranked"):
             configs.append((f"{strategy} | default (threshold 0.5, top_k 5)", {"strategy": strategy}, {}))
             configs.append((f"{strategy} | no threshold, top_k 10", {"strategy": strategy, "top_k": 10, "score_threshold": 0.0}, {}))
-        configs.append(("hybrid + HyDE | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"hyde_enabled": True}))
-        configs.append(("hybrid + multi-query | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"multi_query_enabled": True}))
-        configs.append(("hybrid + MMR | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"mmr_enabled": True}))
+        if not args.no_llm:  # HyDE and multi-query call the local LLM (MMR does not, but is kept with them: the three are the "advanced" family)
+            configs.append(("hybrid + HyDE | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"hyde_enabled": True}))
+            configs.append(("hybrid + multi-query | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"multi_query_enabled": True}))
+            configs.append(("hybrid + MMR | no threshold, top_k 10", {"strategy": "hybrid", "top_k": 10, "score_threshold": 0.0}, {"mmr_enabled": True}))
         report = {}
         usable = [q for q in questions if all(f"{p.replace('/', '__')}" in by_name for p in q["documents"])]
         print(f"documents in the organization: {len(by_name)}; usable questions: {len(usable)}/{len(questions)}", flush=True)
@@ -93,6 +94,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--org", required=True)
     ap.add_argument("--out", default="retrieval_baseline.json")
+    ap.add_argument("--no-llm", action="store_true", help="skip the configurations that call an LLM (HyDE, multi-query, MMR): for a machine without a local model, e.g. CI")
     return asyncio.run(main_async(ap.parse_args()))
 
 

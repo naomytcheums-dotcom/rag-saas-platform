@@ -47,3 +47,7 @@ backups/
 
 # Owner evidence kept outside the repository by convention (logs, database answers).
 rag-secure-evidence/
+.cov/
+
+# Terraform working directories (the .terraform.lock.hcl files stay committed: they pin the provider versions)
+**/.terraform/
