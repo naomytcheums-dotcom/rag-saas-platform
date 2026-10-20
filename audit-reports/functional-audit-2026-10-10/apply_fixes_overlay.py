@@ -76,7 +76,7 @@ add(["1.4.6", "1.4.8"], T + " (components)", "organization brand name in the cha
 add(["3.1.5"], "assessment corrected", "describe_embedded_image_if_enabled already calls a vision model per embedded image (off by default, MULTIMODAL_DESCRIBE_DOCUMENT_IMAGES); tested with a fake provider (tests/backend/media/test_media_finalization.py); no real vision call run")
 add(["5.1.13"], T + " (opt-in TASK_PLAN_EXECUTE_STEPS)", "the plan can be executed step by step and its results reach the final answer (tests/test_agent_orchestrator.py); default stays advisory")
 add(["6.2.12", "11.2.6"], T + " (page tests)", "frontend/app/dashboard/quality-scores: averages, trend, per-answer scores, CSV export")
-add(["10.1.14"], "documented; provider settings not verified", "docs/DECISIONS.md D12: what the application encrypts and what depends on Supabase")
+add(["10.1.14"], T + " (application layer only; the managed PostgreSQL's own disk encryption is a Supabase setting, not verifiable here)", "2026-10-20: tests/test_encryption_at_rest_e2e.py, tests/test_encryption.py (AES-GCM, key rotation) and tests/test_s3_encryption_e2e.py (real MinIO: without the setting the marker is readable on the store's disk, with AES256 it is not and the application still reads the file): 18 passed; docs/DECISIONS.md D12 lists what depends on Supabase")
 add(["10.4.2"], "decision recorded; not built", "docs/DECISIONS.md D9: python3-saml behind a flag after a security review")
 add(["10.4.4"], "decision recorded", "docs/DECISIONS.md D10: built-in roles plus custom roles, SCIM-provisioned")
 add(["12.1.5"], T + " (opt-in STRIPE_CHECKOUT_TRIAL_DAYS); no sandbox run", "Stripe trial_period_days on the subscription checkout (tests/test_p1_bill003_005_006_stripe_chain.py)")

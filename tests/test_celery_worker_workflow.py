@@ -38,14 +38,6 @@ def _find_bash():
     return None
 
 
-@pytest.mark.parametrize("worker_status", [0, 1, 2, 124, 125, 126, 127, 137, 143])
-def test_worker_workflow_propagates_failures(worker_status):
-    bash = _find_bash()
-    if bash is None:
-        pytest.fail("Bash is required to validate the Linux worker workflow.")
-    return bash
-
-
 def _step() -> dict:
     workflow = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "celery-worker.yml").read_text(encoding="utf-8")
@@ -57,10 +49,13 @@ def _step() -> dict:
 
 
 def _run_step(worker_status: int, env: dict | None = None, prelude: str = "") -> subprocess.CompletedProcess:
+    bash = _find_bash()
+    if bash is None:
+        pytest.fail("Bash is required to validate the Linux worker workflow.")
     # The script also starts `celery ... beat` in the background: a function shadows any real celery executable, so nothing is started.
     stub = f'timeout() {{ return {worker_status}; }}\ncelery() {{ return 0; }}\n'
     return subprocess.run(
-        [_find_bash(), "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prelude + stub + _step()["run"]],
+        [bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prelude + stub + _step()["run"]],
         capture_output=True,
         text=True,
         check=False,

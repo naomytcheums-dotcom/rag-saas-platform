@@ -7,11 +7,11 @@ Built by `build_final_status.py` from `01c-feature-verification-after-test-runs.
 | Status | Count | Meaning |
 |---|---:|---|
 | VERIFIED_COMPLETE | 283 | reviewed as complete and its Part test run is green; no fix was needed |
-| FIXED_AND_TESTED | 149 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
+| FIXED_AND_TESTED | 150 | a gap was found, fixed, and the fix is covered by tests that ran green (the fix_evidence column says what was not run against a real provider) |
 | VALIDATED_NOT_DEPLOYED | 14 | checked with the official tool (terraform validate, helm lint, kubeconform, shellcheck, actionlint, docker compose config) but never applied to a real account, cluster or workflow run |
 | DECISION_OR_CORRECTION | 46 | an owner decision is recorded, or the first assessment was wrong; nothing left to build |
 | IMPLEMENTED_EXTERNAL_VALIDATION_REQUIRED | 18 | the adapter is complete and its contract tests pass against a LOCAL FAKE of the vendor (a fake, not the service); one command with a real account (scripts/validate_<vendor>_live.py) is still required |
-| WRITTEN_NOT_EXECUTED | 4 | code or documents exist; nothing proves them yet |
+| WRITTEN_NOT_EXECUTED | 3 | code or documents exist; nothing proves them yet |
 | IMPLEMENTED_UNVERIFIED | 0 | implemented, but the reviewer could not call it complete from the code and its Part tests alone (gap listed per item) |
 | BLOCKED_EXTERNAL | 0 | cannot be proven without an account, key or service that is not available here |
 | AMBIGUOUS_REQUIREMENT | 0 | the requirement has no testable acceptance criterion |
@@ -80,9 +80,8 @@ Also executed outside the Part runs: 24 PostgreSQL concurrency tests (credits, i
 - **12.1.10** Credits - external validation required (local fake only); CinetPay not implemented
 - **13.5.8** Error tracking - external validation required (local fake only)
 
-## WRITTEN_NOT_EXECUTED (4)
+## WRITTEN_NOT_EXECUTED (3)
 
-- **10.1.14** Encryption at rest - documented; provider settings not verified
 - **13.1.6** Coverage > 90% - target not reached
 - **14.2.7** Demo video - built
 - **14.3.2** Demo - written; typecheck and lint pass; not viewed in a browser
