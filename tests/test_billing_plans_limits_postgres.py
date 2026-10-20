@@ -493,7 +493,7 @@ async def test_downgrade_with_usage_above_the_new_limits_keeps_the_data_and_bloc
 
 
 async def test_local_cancel_then_reactivate_and_audit(client):
-    plans = await seed_catalogue(client)
+    await seed_catalogue(client)
     owner = await new_user(client)
     org = await new_org(client, owner)
     base = f"/organizations/{org}/billing"
@@ -508,7 +508,7 @@ async def test_cancel_of_a_paid_subscription_keeps_access_until_the_period_end_t
     from api.services.billing_usage import get_effective_plan
     import datetime as dt
 
-    plans = await seed_catalogue(client)
+    await seed_catalogue(client)
     owner = await new_user(client)
     org = await new_org(client, owner)
     await client.get(f"/organizations/{org}/billing/subscription", headers=_h(owner["token"]))
@@ -816,8 +816,7 @@ async def test_concurrent_answers_never_drive_the_balance_negative(client, _fake
     await set_balance(org, 3 * CALL_COST)
     await set_plan(org, "pro")  # unlimited questions: only credits are in play
     _agent, key = await deployed_agent(client, owner, org)
-    results = await asyncio.gather(*[ask(client, key, f"parallel {i}") for i in range(8)])
-    served = [r for r in results if r.status_code == 200 and r.json()["status"] == "completed"]
+    await asyncio.gather(*[ask(client, key, f"parallel {i}") for i in range(8)])
     assert await credit_balance(org) >= 0
     # every served answer was paid for: balance + 5 per served answer = the starting balance (a partial last debit is recorded as such)
     async with AsyncSessionLocal() as db:
