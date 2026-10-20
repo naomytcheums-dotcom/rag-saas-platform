@@ -1,0 +1,64 @@
+{
+  "_provenance": {
+    "captured": "2026-10-10",
+    "litellm_version": "1.99.0",
+    "purpose": "offline, deterministic reference for tests/test_default_models_are_routable.py",
+    "source": "litellm remote model_prices_and_context_window.json, fetched by litellm at import"
+  },
+  "entries": {
+    "claude-haiku-4-5": {
+      "input_cost_per_token": 1e-06,
+      "litellm_provider": "anthropic",
+      "mode": "chat",
+      "output_cost_per_token": 5e-06
+    },
+    "claude-haiku-4-5-20251001": {
+      "input_cost_per_token": 1e-06,
+      "litellm_provider": "anthropic",
+      "mode": "chat",
+      "output_cost_per_token": 5e-06
+    },
+    "claude-sonnet-5-5": {
+      "input_cost_per_token": 2e-06,
+      "litellm_provider": "anthropic",
+      "mode": "chat",
+      "output_cost_per_token": 1e-05
+    },
+    "gemini/gemini-2.5-flash": {
+      "input_cost_per_token": 3e-07,
+      "litellm_provider": "gemini",
+      "mode": "chat",
+      "output_cost_per_token": 2.5e-06
+    },
+    "gemini/gemini-2.5-pro": {
+      "input_cost_per_token": 1.25e-06,
+      "litellm_provider": "gemini",
+      "mode": "chat",
+      "output_cost_per_token": 1e-05
+    },
+    "gpt-4o": {
+      "input_cost_per_token": 2.5e-06,
+      "litellm_provider": "openai",
+      "mode": "chat",
+      "output_cost_per_token": 1e-05
+    },
+    "gpt-4o-mini": {
+      "input_cost_per_token": 1.5e-07,
+      "litellm_provider": "openai",
+      "mode": "chat",
+      "output_cost_per_token": 6e-07
+    },
+    "mistral/mistral-large-latest": {
+      "input_cost_per_token": 5e-07,
+      "litellm_provider": "mistral",
+      "mode": "chat",
+      "output_cost_per_token": 1.5e-06
+    },
+    "mistral/mistral-small-latest": {
+      "input_cost_per_token": 1.5e-07,
+      "litellm_provider": "mistral",
+      "mode": "chat",
+      "output_cost_per_token": 6e-07
+    }
+  }
+}

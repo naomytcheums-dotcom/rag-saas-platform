@@ -1,5 +1,6 @@
 .env
 .env.staging
+scripts/test_env/.stack.env
 staging-artifacts/
 __pycache__/
 *.pyc
