@@ -62,7 +62,7 @@ jobs:
       S3_DOCUMENTS_BUCKET_NAME: documents
       S3_VOICE_BUCKET_NAME: voice
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
