@@ -1,0 +1,1 @@
+This is a test document for Bob evidence. It contains some sample text about RAG systems.
