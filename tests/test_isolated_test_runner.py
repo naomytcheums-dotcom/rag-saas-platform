@@ -81,7 +81,7 @@ def test_only_documented_external_dependencies_may_stay_skipped():
         "",
     ):
         assert external_category(local_reason) is None, local_reason
-    assert len(EXTERNAL_SKIPS) == 5
+    assert len(EXTERNAL_SKIPS) == 9  # was 5: four documented classes added for tests/contracts and tests/llm_optin
 
 
 def test_the_model_hub_is_only_switched_off_on_request():
@@ -99,3 +99,17 @@ def test_the_webhook_capture_skip_reasons_are_documented_external_dependencies()
         source = (Path(__file__).parent / name).read_text(encoding="utf-8")
         reason = "".join(re.findall(r'"([^"]*)"', re.search(r"_WEBHOOK_SKIP_REASON = \((.*?)\n\)", source, re.DOTALL).group(1)))
         assert external_category(reason) == "payment-provider-sandbox", name
+
+def test_the_opt_in_and_heavy_tooling_skips_of_the_contract_suites_are_documented_not_run_reasons():
+    """tests/contracts and tests/llm_optin skip on purpose when a heavy or paid dependency is absent. Strict mode must report them as NOT RUN
+    (still SKIPPED, never counted as passed), not as failures of the machine, and must still fail on any other skip reason."""
+    documented = {
+        "real-LLM tests are opt-in: set RUN_REAL_LLM_TESTS=1": "opt-in-real-llm",
+        "real-LLM tests are opt-in: set RUN_REAL_LLM_TESTS=1 and the provider's API key (ANTHROPIC_API_KEY by default)": "opt-in-real-llm",
+        "needs Windows SAPI (pywin32), node, Playwright for node and the frontend node_modules": "heavy-local-tooling",
+        "docker with the nginx:1.29-alpine image is needed": "heavy-local-tooling",
+        "the local Jaeger (OTLP 4318 / query 16686) is not running": "heavy-local-tooling",
+    }
+    for reason, category in documented.items():
+        assert external_category(reason) == category, reason
+    assert external_category("DATABASE_URL is not reachable -- skipping RBAC integration tests") is None

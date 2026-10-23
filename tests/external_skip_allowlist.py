@@ -13,6 +13,12 @@ EXTERNAL_SKIPS = (
     ("third-party-account", r"NOTION_API_TOKEN is not configured", "a Notion integration token"),
     ("hosted-staging", r"Live staging tests require RAG_STAGING_TESTS=YES", "the hosted staging database and its guarded runner"),
     ("hosted-staging", r"Staging-only tenant policies are not provisioned", "the hosted staging catalog (77+ policies provisioned outside the migrations)"),
+    # Opt-in or heavy by design (tests/llm_optin, tests/contracts): they need a paid key or a local model server, or tooling that is not installed
+    # (Windows SAPI + node + Playwright, the nginx image, a Jaeger). Still reported as SKIPPED; the owner decides when to provide them.
+    ("opt-in-real-llm", r"real-LLM tests are opt-in", "RUN_REAL_LLM_TESTS=1 and a local Ollama or a provider key"),
+    ("heavy-local-tooling", r"needs Windows SAPI \(pywin32\), node, Playwright", "SAPI voices, node, Playwright and the frontend node_modules"),
+    ("heavy-local-tooling", r"docker with the nginx:[\d.]+-alpine image is needed", "Docker with the nginx image pulled (a download this machine makes very slowly)"),
+    ("heavy-local-tooling", r"the local Jaeger \(OTLP 4318 / query 16686\) is not running", "a local Jaeger all-in-one container"),
 )
 _COMPILED = tuple((category, re.compile(pattern), missing) for category, pattern, missing in EXTERNAL_SKIPS)
 
