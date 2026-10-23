@@ -51,6 +51,15 @@ foreach ($db in $databases) {
 }
 
 $env:PYTHONDONTWRITEBYTECODE = '1'
+# Alembic imports the application settings: give it the required ones (throw-away values) and never read a real .env file.
+$migrationEnv = @{
+    RAG_ENV_FILE = '.start-teststack.no-env-file'
+    JWT_SECRET_KEY = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
+    SESSION_MIDDLEWARE_SECRET = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
+    AUDIT_LOG_HMAC_SECRET_KEY = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
+    SUPPORT_EMAIL = 'support@test-stack.invalid'
+}
+foreach ($entry in $migrationEnv.GetEnumerator()) { Set-Item "Env:$($entry.Key)" $entry.Value }
 foreach ($db in $databases) {
     $url = "postgresql+asyncpg://rag_test:${password}@127.0.0.1:${PgPort}/$db"
     $env:DATABASE_URL = $url; $env:DATABASE_URL_TRANSACTION = $url
@@ -60,6 +69,7 @@ foreach ($db in $databases) {
     Pop-Location
 }
 Remove-Item Env:DATABASE_URL, Env:DATABASE_URL_TRANSACTION
+foreach ($name in $migrationEnv.Keys) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
 
 $env:S3_ENDPOINT_URL = "http://127.0.0.1:$MinioPort"
 & $python (Join-Path $root 'scripts\ci_create_buckets.py') 2>&1 | Out-Null  # an existing bucket is fine on a re-run
