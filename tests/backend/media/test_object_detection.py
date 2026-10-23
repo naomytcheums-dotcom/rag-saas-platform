@@ -6,6 +6,7 @@ the pipeline actually detects real objects; the rest mock the model
 boundary the same way OCR/ffmpeg tests mock their own real, separate
 binaries/models."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -92,7 +93,11 @@ def test_detect_objects_yolo_real_end_to_end_against_a_real_photo(monkeypatch, t
     confirmed by hand to real-world detect `['bus', 'person']` with the
     real YOLOv8n weights. Skipped (not failed) if the real weights
     can't be fetched (no network in this particular run)."""
-    monkeypatch.setattr(settings, "OBJECT_DETECTION_MODEL", str(tmp_path / "yolov8n.pt"))
+    # Use the weights already cached at the application's default path when they exist: pointing at an empty temporary path downloaded them from GitHub
+    # on every run, which made this test hang for minutes on a slow network. Without a cache the download (and the skip on failure) is unchanged.
+    default_weights = Path(settings.OBJECT_DETECTION_MODEL)
+    weights = default_weights if default_weights.is_file() else tmp_path / "yolov8n.pt"
+    monkeypatch.setattr(settings, "OBJECT_DETECTION_MODEL", str(weights))
     from ultralytics.utils import ASSETS
 
     photo_bytes = (ASSETS / "bus.jpg").read_bytes()
