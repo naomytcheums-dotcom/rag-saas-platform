@@ -48,10 +48,24 @@ _SENSITIVE_PATTERN = re.compile(
 )
 _EXTRA_PATTERNS = (
     (re.compile(r"\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE), r"\1 ***"),
-    (re.compile(r"\b((?:password|passwd|pwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*)(?!\*\*\*)[^\s,;&\"']{3,}", re.IGNORECASE), r"\1***"),
-    (re.compile(r"\b([a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s/@]+@", re.IGNORECASE), r"\1***@"),
-    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{10,}|\bsk-[A-Za-z0-9]{20,}|\bAKIA[0-9A-Z]{16}\b|\bre_[A-Za-z0-9]{20,}|\bxox[abp]-[A-Za-z0-9-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"), "***"),
+    (re.compile(r"\b((?:[a-z0-9]{1,24}[_-]){0,3}(?:password|passwd|pwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*)(?!\*\*\*)[^\s,;&\"']{3,}", re.IGNORECASE), r"\1***"),
+    (re.compile(r"\b([a-z][a-z0-9+.-]{1,19}://[^\s:/@]+:)[^\s/@]+@", re.IGNORECASE), r"\1***@"),
+    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{10,}|\bsk-[A-Za-z0-9]{20,}|\b[sr]k_(?:live|test)_[A-Za-z0-9]{10,}|\bwhsec_[A-Za-z0-9]{10,}|\bAKIA[0-9A-Z]{16}\b|\bre_[A-Za-z0-9]{20,}|\bxox[abp]-[A-Za-z0-9-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"), "***"),
 )
+
+_COOKIE_HEADER = re.compile(r"\b(set-cookie|cookie)(\s*:\s*)([^\r\n]*)", re.IGNORECASE)
+_COOKIE_ATTRIBUTES = frozenset({"path", "domain", "expires", "max-age", "samesite", "httponly", "secure", "partitioned", "priority"})
+
+
+def _mask_cookie_header(match: re.Match) -> str:
+    """Keeps cookie names and attributes (the line stays useful), masks every cookie VALUE: a cookie is a credential whatever its name."""
+    segments = []
+    for segment in match.group(3).split(";"):
+        name, separator, value = segment.partition("=")
+        if separator and value.strip() and name.strip().lower() not in _COOKIE_ATTRIBUTES:
+            segment = f"{name}=***"
+        segments.append(segment)
+    return f"{match.group(1)}{match.group(2)}{';'.join(segments)}"
 
 
 def get_request_id() -> str | None:
@@ -160,6 +174,7 @@ def mask_sensitive(message: str) -> str:
     Phase 5 of the 2026-10-12 audit: the quoted form above was the only one covered. Also masked: `Bearer`/`Basic` credentials, unquoted
     `password=...` / `token: ...` pairs, credentials inside a URL (`postgresql://user:password@host`) and well-known provider key shapes."""
     message = _SENSITIVE_PATTERN.sub(r"\1***\2", message)
+    message = _COOKIE_HEADER.sub(_mask_cookie_header, message)
     for pattern, replacement in _EXTRA_PATTERNS:
         message = pattern.sub(replacement, message)
     configured = _configured_secret_pattern()
