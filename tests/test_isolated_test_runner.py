@@ -113,3 +113,11 @@ def test_the_opt_in_and_heavy_tooling_skips_of_the_contract_suites_are_documente
     for reason, category in documented.items():
         assert external_category(reason) == category, reason
     assert external_category("DATABASE_URL is not reachable -- skipping RBAC integration tests") is None
+
+def test_the_windows_install_locations_reach_the_child_so_that_git_bash_can_be_found():
+    """tests/test_celery_worker_workflow.py looks for Git for Windows' bash under %ProgramFiles% when git is not on PATH. Those variables are path
+    plumbing, not credentials: the sanitized child must receive them (all ten workflow checks failed in the isolated runner without them)."""
+    parent = _parent(**{"ProgramFiles": r"C:\Program Files", "ProgramFiles(x86)": r"C:\Program Files (x86)", "ProgramW6432": r"C:\Program Files"})
+    env = build_test_environment(parent)
+    for name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        assert env[name] == parent[name], name

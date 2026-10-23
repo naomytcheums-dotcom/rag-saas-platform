@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 from api.security.runtime_guard import LOCAL_HOSTS, preview_refusals  # noqa: E402
 
 INHERITED = ("PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "LOCALAPPDATA",
-             "APPDATA", "PROGRAMDATA", "LANG", "LC_ALL", "PYTHONIOENCODING", "VIRTUAL_ENV")
+             "APPDATA", "PROGRAMDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LANG", "LC_ALL", "PYTHONIOENCODING", "VIRTUAL_ENV")
 # Placeholders that CI already uses (".circleci/config.yml"): they make the OAuth clients register, they open nothing.
 PLACEHOLDER = re.compile(r"(never[-_]?(a[-_])?real|placeholder)", re.IGNORECASE)
 ROUNDTRIP_MARKER = re.compile(r"(disposable|roundtrip|scratch|throwaway)", re.IGNORECASE)
