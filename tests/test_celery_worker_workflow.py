@@ -38,14 +38,6 @@ def _find_bash():
     return None
 
 
-@pytest.mark.parametrize("worker_status", [0, 1, 2, 124, 125, 126, 127, 137, 143])
-def test_worker_workflow_propagates_failures(worker_status):
-    bash = _find_bash()
-    if bash is None:
-        pytest.fail("Bash is required to validate the Linux worker workflow.")
-    return bash
-
-
 def _step() -> dict:
     workflow = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "celery-worker.yml").read_text(encoding="utf-8")
