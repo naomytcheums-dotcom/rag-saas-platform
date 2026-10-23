@@ -21,8 +21,8 @@ sys.path.insert(0, str(ROOT))
 from scripts.run_isolated_tests import IsolationRefused, build_test_environment  # noqa: E402
 
 PROVIDERS = {
-    "stripe": {"names": ("STRIPE_SECRET_KEY", "STRIPE_TEST_PRICE_ID"), "tests": ("tests/test_billing_stripe_live.py",), "test_key": "STRIPE_SECRET_KEY"},
-    "paystack": {"names": ("PAYSTACK_SECRET_KEY", "PAYSTACK_TEST_PLAN_CODE"), "tests": ("tests/test_billing_paystack_live.py",), "test_key": "PAYSTACK_SECRET_KEY"},
+    "stripe": {"names": ("STRIPE_SECRET_KEY", "STRIPE_TEST_PRICE_ID"), "optional": ("STRIPE_WEBHOOK_SECRET", "STRIPE_TEST_WEBHOOK_PAYLOAD_FILE", "STRIPE_TEST_WEBHOOK_SIGNATURE"), "tests": ("tests/test_billing_stripe_live.py",), "test_key": "STRIPE_SECRET_KEY"},
+    "paystack": {"names": ("PAYSTACK_SECRET_KEY", "PAYSTACK_TEST_PLAN_CODE"), "optional": ("PAYSTACK_TEST_WEBHOOK_PAYLOAD_FILE", "PAYSTACK_TEST_WEBHOOK_SIGNATURE"), "tests": ("tests/test_billing_paystack_live.py",), "test_key": "PAYSTACK_SECRET_KEY"},
     "google-drive": {"names": ("GOOGLE_DRIVE_REFRESH_TOKEN", "GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET"),
                      "tests": ("tests/test_google_drive_extraction_integration.py", "tests/test_documents_integration.py"), "test_key": None},
     "onedrive": {"names": ("ONEDRIVE_REFRESH_TOKEN", "ONEDRIVE_CLIENT_ID", "ONEDRIVE_CLIENT_SECRET"), "tests": ("tests/test_onedrive_extraction_integration.py",), "test_key": None},
@@ -49,6 +49,7 @@ def build_live_environment(parent: Mapping[str, str], provider: str, file_values
     missing = [name for name in spec["names"] if name not in chosen]
     if missing:
         raise IsolationRefused("the env file does not define: " + ", ".join(missing))
+    chosen.update({name: file_values[name] for name in spec.get("optional", ()) if file_values.get(name)})
     key_name = spec["test_key"]
     if key_name and not chosen[key_name].startswith(("sk_test_", "rk_test_")):
         raise IsolationRefused(f"{key_name} must be a TEST key (sk_test_...): a live or unrecognised key is refused")

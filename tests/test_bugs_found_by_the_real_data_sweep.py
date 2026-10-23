@@ -20,8 +20,7 @@ async def _owner(client, register_payload):
 async def test_agent_api_key_with_an_unknown_scope_is_a_400_not_an_unhandled_exception(client, register_payload):
     token, org_id = await _owner(client, register_payload)
     agent = await client.post(f"/organizations/{org_id}/agents", json={"name": "A", "system_prompt": "p"}, headers=_auth(token))
-    if agent.status_code not in (200, 201):
-        pytest.skip(f"could not create an agent in this test setup: {agent.status_code} {agent.text[:120]}")
+    assert agent.status_code in (200, 201), f"test setup failed, the agent could not be created: {agent.status_code} {agent.text[:120]}"
     response = await client.post(f"/agents/{agent.json()['id']}/api-keys", json={"name": "k", "scopes": ["nope"]}, headers=_auth(token))
     assert response.status_code == 400 and "scope" in response.json()["detail"].lower()
 
@@ -99,8 +98,7 @@ async def test_template_preview_and_test_with_a_context_missing_a_variable_are_4
         f"/organizations/{org_id}/notifications/templates",
         json={"notification_type": "custom_sweep", "title": "{{ greeting }}", "body": "{{ detail }}"}, headers=_auth(token),
     )
-    if template.status_code not in (200, 201):
-        pytest.skip(f"could not create a template in this test setup: {template.status_code} {template.text[:160]}")
+    assert template.status_code in (200, 201), f"test setup failed, the template could not be created: {template.status_code} {template.text[:160]}"
     for suffix in ("preview", "test"):
         response = await client.post(
             f"/organizations/{org_id}/notifications/templates/{suffix}", json={"notification_type": "custom_sweep", "context": {}}, headers=_auth(token),

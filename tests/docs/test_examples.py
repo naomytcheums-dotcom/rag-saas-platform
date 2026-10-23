@@ -30,8 +30,7 @@ PYTHON_DOC_FILES = [
 
 @pytest.mark.parametrize("md_file", PYTHON_DOC_FILES, ids=lambda p: p.name)
 def test_python_examples_parse(md_file: Path):
-    if not md_file.exists():
-        pytest.skip(f"{md_file} not found")
+    assert md_file.exists(), f"{md_file} is listed in PYTHON_DOC_FILES but does not exist: restore it or remove it from the list"
     blocks = list(_code_blocks(md_file, "python"))
     for block in blocks:
         try:

@@ -48,3 +48,15 @@ def test_env_file_parsing_ignores_comments_and_quotes(tmp_path):
     path = tmp_path / "x.env"
     path.write_text("# comment\n\nA=1\nB='two'\nC=\"three\"\nnot a pair\n", encoding="utf-8")
     assert read_env_file(path) == {"A": "1", "B": "two", "C": "three"}
+
+
+def test_the_optional_webhook_variables_are_passed_when_present_and_not_required():
+    base = {"STRIPE_SECRET_KEY": "sk_test_not_real", "STRIPE_TEST_PRICE_ID": "price_x"}
+    env = build_live_environment(LOCAL, "stripe", base)
+    assert "STRIPE_TEST_WEBHOOK_PAYLOAD_FILE" not in env
+    with_webhook = {**base, "STRIPE_WEBHOOK_SECRET": "whsec_not_real", "STRIPE_TEST_WEBHOOK_PAYLOAD_FILE": "C:/outside/event.json", "STRIPE_TEST_WEBHOOK_SIGNATURE": "t=1,v1=ab"}
+    env = build_live_environment(LOCAL, "stripe", with_webhook)
+    assert env["STRIPE_WEBHOOK_SECRET"] == "whsec_not_real" and env["STRIPE_TEST_WEBHOOK_SIGNATURE"] == "t=1,v1=ab"
+    paystack = build_live_environment(LOCAL, "paystack", {"PAYSTACK_SECRET_KEY": "sk_test_not_real", "PAYSTACK_TEST_PLAN_CODE": "PLN_x", "PAYSTACK_TEST_WEBHOOK_SIGNATURE": "ab"})
+    assert paystack["PAYSTACK_TEST_WEBHOOK_SIGNATURE"] == "ab"
+    assert "STRIPE_WEBHOOK_SECRET" not in paystack  # another provider's variable is never carried over

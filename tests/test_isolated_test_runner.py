@@ -89,3 +89,13 @@ def test_the_model_hub_is_only_switched_off_on_request():
     env = build_test_environment(_parent(RAG_TEST_HF_OFFLINE="1"))
     assert env["HF_HUB_OFFLINE"] == "1" and env["TRANSFORMERS_OFFLINE"] == "1"
     assert "HF_HUB_OFFLINE" not in build_test_environment(_parent(RAG_TEST_HF_OFFLINE="0"))
+
+
+def test_the_webhook_capture_skip_reasons_are_documented_external_dependencies():
+    import re
+    from pathlib import Path
+
+    for name in ("test_billing_stripe_live.py", "test_billing_paystack_live.py"):
+        source = (Path(__file__).parent / name).read_text(encoding="utf-8")
+        reason = "".join(re.findall(r'"([^"]*)"', re.search(r"_WEBHOOK_SKIP_REASON = \((.*?)\n\)", source, re.DOTALL).group(1)))
+        assert external_category(reason) == "payment-provider-sandbox", name
