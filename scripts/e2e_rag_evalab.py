@@ -136,7 +136,6 @@ def main() -> int:
         present = any(metric in k for k in keys) or any(k.startswith(metric.split("_")[0]) for k in keys)
         ok(E, f"7.2.x metric stored: {metric}", present, "")
     # independent recomputation of retrieval metrics
-    id_to_name = {v: k for k, v in ids.items()}
     mismatches = []
     by_q = {r.get("question_id"): r for r in rows1}
     for (q, doc, *_), qid in zip(QUESTIONS, qids):

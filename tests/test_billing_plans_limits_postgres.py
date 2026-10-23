@@ -493,7 +493,7 @@ async def test_downgrade_with_usage_above_the_new_limits_keeps_the_data_and_bloc
 
 
 async def test_local_cancel_then_reactivate_and_audit(client):
-    plans = await seed_catalogue(client)
+    await seed_catalogue(client)
     owner = await new_user(client)
     org = await new_org(client, owner)
     base = f"/organizations/{org}/billing"
@@ -508,7 +508,7 @@ async def test_cancel_of_a_paid_subscription_keeps_access_until_the_period_end_t
     from api.services.billing_usage import get_effective_plan
     import datetime as dt
 
-    plans = await seed_catalogue(client)
+    await seed_catalogue(client)
     owner = await new_user(client)
     org = await new_org(client, owner)
     await client.get(f"/organizations/{org}/billing/subscription", headers=_h(owner["token"]))

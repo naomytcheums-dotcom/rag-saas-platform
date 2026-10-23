@@ -162,7 +162,7 @@ def start_second_api(port: int, ollama_url: str, log_path: str) -> subprocess.Po
 def phase_c(api: Api) -> None:
     u = api.user("chat")
     api.settings(u, llm_provider="ollama", llm_model=MODEL)
-    ids = import_docs(api, u, CORPUS_X)
+    import_docs(api, u, CORPUS_X)
     agent = make_agent(api, u)
     tags = httpx.get("http://127.0.0.1:11434/api/tags", timeout=10).json()
     installed = [m["name"] for m in tags["models"]]
