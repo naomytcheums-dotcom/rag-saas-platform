@@ -161,7 +161,7 @@ jobs:
         # `.circleci/config.yml`'s own real, already-working job list
         # confirms this exact same exclusion is the established
         # precedent, not a new one invented here.
-        run: pytest -q -rfE --maxfail=20 --ignore=sdks/python/tests/test_client.py --ignore=tests/test_agent.py --ignore=tests/test_injection_test_set.py --ignore=tests/test_integrations.py --ignore=tests/test_regression.py --ignore=tests/test_voice.py --ignore=tests_pipeline/test_retrieval.py
+        run: pytest -q -rfE --maxfail=20 --cov=api --cov-report=term --ignore=sdks/python/tests/test_client.py --ignore=tests/test_agent.py --ignore=tests/test_injection_test_set.py --ignore=tests/test_integrations.py --ignore=tests/test_regression.py --ignore=tests/test_voice.py --ignore=tests_pipeline/test_retrieval.py
 
   backend-security:
     runs-on: ubuntu-latest
