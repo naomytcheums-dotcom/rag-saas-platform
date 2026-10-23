@@ -813,16 +813,26 @@ async def test_concurrent_answers_never_drive_the_balance_negative(client, _fake
     owner = await new_user(client)
     org = await new_org(client, owner)
     await client.get(f"/organizations/{org}/billing/credits", headers=_h(owner["token"]))
-    await set_balance(org, 3 * CALL_COST)
+    starting_balance = 3 * CALL_COST
+    await set_balance(org, starting_balance)
     await set_plan(org, "pro")  # unlimited questions: only credits are in play
     _agent, key = await deployed_agent(client, owner, org)
     results = await asyncio.gather(*[ask(client, key, f"parallel {i}") for i in range(8)])
+    codes = sorted(r.status_code for r in results)
     served = [r for r in results if r.status_code == 200 and r.json()["status"] == "completed"]
+    # Every request is either served or refused for lack of credits; none may fail with a server error or an auth error.
+    assert all(code in (200, 402) for code in codes), codes
+    # The balance pays for `starting_balance // CALL_COST` answers, so at least that many must be served: a 402 is only legitimate once the balance
+    # is exhausted. Without this the test passed when NO answer was served (nothing debited, balance untouched, ledger still adding up).
+    assert len(served) >= starting_balance // CALL_COST, codes
     assert await credit_balance(org) >= 0
-    # every served answer was paid for: balance + 5 per served answer = the starting balance (a partial last debit is recorded as such)
+    # The ledger adds up. NOT asserted, on purpose: that every served answer was paid for. The credit check happens before the provider call and the
+    # debit after it (BILL-008: min(balance, cost)), so requests started while the balance was still positive are all served and only the remaining
+    # balance is collected: 8 simultaneous requests on 15 credits served all 8 (measured on 2026-10-23, see audit-reports/test-remediation-2026-10-23/).
+    # Whether that is acceptable is a business decision, not something this test may decide.
     async with AsyncSessionLocal() as db:
         spent = -int(await db.scalar(select(func.coalesce(func.sum(CreditTransaction.amount), 0)).where(CreditTransaction.organization_id == org, CreditTransaction.type == CreditTransactionType.consume)))
-    assert spent == 3 * CALL_COST - await credit_balance(org)
+    assert spent == starting_balance - await credit_balance(org)
 
 
 # ================================================================================================== 5.3.10 deploy an agent to production
