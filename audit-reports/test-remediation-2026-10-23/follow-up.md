@@ -36,7 +36,15 @@ Chaque commit : `ruff check api` propre, `git diff --check` propre, balayage de 
 Le prompt de continuation exige, pour réintégrer le pilote : migration renumérotée (≥ 0146, une seule tête), rôle dédié à la place de `TO PUBLIC`, `FORCE`. Ce n'est pas qu'une renumérotation : avec `FORCE` et des politiques fondées sur `app.current_organization_id`, toute requête exécutée avant que l'organisation soit connue (webhooks, tâches Celery, lectures d'identité) **ne verrait aucune ligne**. Sans accès au rôle d'exécution réel de la base de production (NOT_VERIFIED depuis le début), je ne peux pas valider cet effet. Je ne l'ai donc pas fait.
 
 ## 6. Résultat de la suite sans services (Docker arrêté)
-RÉSULTAT_A_COMPLETER
+(Section restée vide dans le commit `46de583` par une erreur de ma part ; complétée ensuite. Les chiffres ci-dessous sont ceux mesurés l'après-midi du 2026-10-23.)
+Environnement : worktree sur `C:`, venv du dépôt principal, **sans** PostgreSQL / Redis / MinIO / worker (base factice injoignable, `RAG_ENV_FILE` inexistant, `HF_HUB_OFFLINE=1`). Sorties dans `C:\Users\NITROV15\rag-test-evidence\2026-10-23\`.
+| Contrôle | Résultat | Statut |
+|---|---|---|
+| Masquage de logs : `test_log_secret_masking_more_shapes` (30), `test_log_secret_masking` (19), `test_log_correlation`, `test_system_log_handler_dedupe`, `test_admin_dashboard` | 66 passés | PASS_VERIFIED |
+| 16 fichiers qui lisent des logs capturés et parlent de jetons, secrets ou cookies (`log-reader-files.txt`) | 539 passés, 30 ignorés, 2 désélectionnés, 0 échec (13 min 23, `log-readers.xml`) | PASS_VERIFIED |
+| Les 30 ignorés de ce groupe | 23 + 6 : `DATABASE_URL is not reachable` (documents, branding) ; 1 : bucket S3 non configuré | NOT_RUN (infrastructure) |
+| Lanceurs, assistants webhook, sites de skip durcis, YOLO | passés (§2 ; `9e1d2a8` : 5 passés, sans ignoré) | PASS_VERIFIED |
+Trois tentatives de passe complète sans services ont été interrompues par moi : deux figées sur le réseau (corrigé par `9e1d2a8`), la troisième avec 34 erreurs « E » à 3 % dont la cause est **lue en §8.1**. Aucun résultat de ces tentatives n'est utilisé. La passe complète avec services est en §8.2.
 
 ## 7. Incident de mesure, pour mémoire
 Une première exécution a semblé bloquée (0 % de CPU, connexion `140.82.121.4:443` en `CloseWait`) : `tests/backend/media/test_object_detection.py` télécharge les poids YOLO depuis GitHub quand `storage/ml_models/yolov8n.pt` est absent, et le worktree neuf ne l'avait pas. J'ai **copié** ce cache (SHA-256 identique, fichier non versionné) depuis le dépôt principal. Aucun résultat de cette exécution interrompue n'est utilisé.
