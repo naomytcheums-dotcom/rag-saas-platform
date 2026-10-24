@@ -8,13 +8,17 @@
    .\scripts\test_env\Run-IsolatedBatches.ps1 -OutDir ... -Only B3,B5        # re-run some batches
 
  Optional tools (set in the caller): RAG_TEST_EXTRA_PATH (tesseract / poppler directories), RAG_TEST_TESSDATA (eng + fra).
+ -Coverage: measures api/ with pytest-cov (--cov=api, the repo's [tool.coverage.run] from pyproject.toml, NO threshold) and keeps one data file per
+ batch, <OutDir>\.coverage.<batch>, so that batches can be combined (`coverage combine`) in any subset. A batch whose data file is missing is
+ reported in progress.txt as COVERAGE FILE MISSING.
  Output: <OutDir>\<batch>.xml / .txt / .files.txt and <OutDir>\progress.txt (exit code, duration and free memory per batch).
  A batch is never retried automatically: the first result is the result.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$OutDir,
     [string[]]$Only = @(),
-    [int]$MinFreeMB = 300
+    [int]$MinFreeMB = 300,
+    [switch]$Coverage
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -64,9 +68,19 @@ foreach ($name in $batches.Keys) {
     }
     $started = Get-Date
     "$name start $($started.ToString('o')) files=$($batches[$name].Count) freeMB=$([int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024))" | Add-Content $progress
-    & (Join-Path $PSScriptRoot 'Run-IsolatedSuite.ps1') -PytestArgs ($batches[$name] + @('-p', 'no:cacheprovider', "--basetemp=$tmp\bt-$name", "--junitxml=$OutDir\$name.xml")) *>&1 | Out-File -Encoding utf8 (Join-Path $OutDir "$name.txt")
+    $batchArgs = $batches[$name] + @('-p', 'no:cacheprovider', "--basetemp=$tmp\bt-$name", "--junitxml=$OutDir\$name.xml")
+    if ($Coverage) {
+        Remove-Item (Join-Path $root '.coverage') -ErrorAction SilentlyContinue   # a stale file would be mistaken for this batch's data
+        $batchArgs += @('--cov=api', '--cov-report=')
+    }
+    & (Join-Path $PSScriptRoot 'Run-IsolatedSuite.ps1') -PytestArgs $batchArgs *>&1 | Out-File -Encoding utf8 (Join-Path $OutDir "$name.txt")
     $code = $LASTEXITCODE
     $secs = [int]((Get-Date) - $started).TotalSeconds
     "$name end exit=$code seconds=$secs freeMB=$([int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024))" | Add-Content $progress
+    if ($Coverage) {
+        $data = Join-Path $root '.coverage'
+        if (Test-Path $data) { Move-Item $data (Join-Path $OutDir ".coverage.$name") -Force; "$name coverage data kept: .coverage.$name" | Add-Content $progress }
+        else { "$name COVERAGE FILE MISSING" | Add-Content $progress }
+    }
 }
 "all requested batches finished $((Get-Date).ToString('o'))" | Add-Content $progress
