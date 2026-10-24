@@ -40,3 +40,57 @@ RÉSULTAT_A_COMPLETER
 
 ## 7. Incident de mesure, pour mémoire
 Une première exécution a semblé bloquée (0 % de CPU, connexion `140.82.121.4:443` en `CloseWait`) : `tests/backend/media/test_object_detection.py` télécharge les poids YOLO depuis GitHub quand `storage/ml_models/yolov8n.pt` est absent, et le worktree neuf ne l'avait pas. J'ai **copié** ce cache (SHA-256 identique, fichier non versionné) depuis le dépôt principal. Aucun résultat de cette exécution interrompue n'est utilisé.
+## 8. Passage du 2026-10-23 soir (Docker démarré avec votre accord)
+Pile : conteneurs `rag-test-pg` / `-redis` / `-minio` (127.0.0.1 uniquement), 3 bases migrées à `0145` (tête unique). Les conteneurs `boutik-*` d'un autre projet n'ont pas été touchés. Sorties brutes : `C:\Users\NITROV15\rag-test-evidence\2026-10-23\` (`run-full\`, `e34\`, `*.xml`).
+
+### 8.1 Les 34 erreurs « E » à 3 % : cause lue (PASS_VERIFIED)
+Reproduites deux fois, au même endroit, sans services. Les 34 erreurs sont **toutes dans `tests/contracts/test_chat_integrations_contract.py`** et ont **la même cause** : `SecretEncryptionNotConfiguredError: SECRET_ENCRYPTION_KEY must be set`. Ce n'est **ni PostgreSQL ni Redis** : une variable de configuration que mon environnement minimal ne définissait pas. Le lanceur isolé la génère (clé aléatoire), donc ces tests passent dans la passe complète (lot B7). Aucune régression de mes commits.
+
+### 8.2 Passage complet sur `a7349e4` (577 fichiers, 8 lots, un pytest à la fois, 2 h)
+`Run-IsolatedBatches.ps1`, 2026-10-23 23:06 → 2026-10-24 01:02, lanceur isolé (PostgreSQL 17 / Redis / MinIO / worker Celery réels, `RAG_STRICT_SKIPS=1`).
+| Lot | Passés | Ignorés | Erreurs | Échecs |
+|---|---|---|---|---|
+| B1 | 545 | 0 | 0 | 0 |
+| B2 | 1622 | 8 | 8 | 0 |
+| B3 | 1299 | 4 | 13 | 1 |
+| B4 | 718 | 3 | 0 | 0 |
+| B5 | 1469 | 1 | 2 | 0 |
+| B6 | 1198 | 11 | 1 | 0 |
+| B7 | 192 | 34 | 0 | 0 |
+| B8 (7 fichiers exclus de la CI) | 75 | 0 | 0 | 0 |
+| **Total** | **7118** | **61** | **24** | **1** (= 7204) |
+**Aucun des 25 écarts ne vient du code testé** (fichier, cause, régression ?) :
+| Fichier | Nb | Cause | Régression de mes commits ? |
+|---|---|---|---|
+| `test_domains_email_postgres::test_changing_the_sending_address_end_to_end_through_resend` | 1 échec | mon lanceur utilisait un expéditeur `@isolated-tests.invalid` : le validateur d'e-mails refuse les TLD réservés, d'où 422 au lieu de 400 | **oui, mon lanceur** (outil de test, pas le code de l'application) : corrigé (`@example.com`) |
+| `test_clamav_real_daemon` | 8 | suite opt-in : daemon ClamAV absent (image volumineuse) | non : classée « lourde », ignorée |
+| `test_deploy_artifacts` | 5 | opt-in : Terraform / Helm et plugins réseau | non |
+| `test_deploy_dedicated_tenant_e2e` | 8 | opt-in : trois piles Docker construites depuis `Dockerfile.api` | non |
+| `test_tracing_real_collector` | 1 | opt-in : Jaeger absent | non |
+| `test_pgvector_real_search` | 1 | opt-in : variable `PGVECTOR_REAL_TEST` | non : **exécutée pour de vrai, passe** |
+| `test_prompt_injection_measured` | 1 | opt-in : `PROMPT_INJECTION_MEASURE` (modèle de 1,4 Go déjà en cache) | non : **exécutée pour de vrai, passe** |
+Comparaison avec `origin/main` : non nécessaire, chaque cause est établie et ne touche pas le code applicatif.
+
+### 8.3 Vérifications après correction (sur `480a84d`, pas une nouvelle passe complète)
+| Contrôle | Résultat | Statut |
+|---|---|---|
+| Les 7 fichiers en cause rejoués dans le lanceur strict | exit 0 : 0 erreur, 0 échec ; `domains_email` 13 passés ; pgvector 1 passé ; injection de prompt 1 passé ; 22 ignorés documentés (ClamAV 8, tenant dédié 8, Terraform/Helm 5, Jaeger 1) | PASS_VERIFIED |
+| `test_domains_email_postgres`, 3 passages consécutifs | 13 passés à chaque fois | PASS_VERIFIED |
+| 21 fichiers qui lisent `SUPPORT_EMAIL`, `EMAIL_FROM_ADDRESS` ou `.invalid` (le changement d'expéditeur n'a rien cassé) | 322 passés, 5 ignorés documentés, 0 erreur | PASS_VERIFIED |
+| **Passe complète unique sur le HEAD final `480a84d`** | **non relancée** (2 h) | **NOT_RUN** |
+Total reconstitué, à ne pas présenter comme une seule exécution : 7118 + 1 + 2 = 7121 passés, 61 + 22 = 83 ignorés, 0 erreur, 0 échec.
+
+### 8.4 `served` (étape 2) : le test passait bien à vide, et un constat métier
+Contrôle de mutation sur PostgreSQL (`audit-reports/.../served-*.txt`, commit `ece62d1`) :
+- ancien test, solde de départ forcé à 0 (rien ne peut être servi) : **passe** → il passait bien à vide ;
+- nouveau test, toutes les requêtes avec une clé invalide : **échoue** (`[401, 401, ...]`) ; sur le vrai code : passe, 5 fois de suite, et le module entier (34 passés).
+**Constat, non modifié (décision métier)** : 8 requêtes simultanées sur un solde de 15 crédits ont **toutes** été servies (3 payées, 5 non payées). Le solde ne devient jamais négatif (BILL-008), mais le contrôle de solde précède l'appel au fournisseur et le débit le suit. L'ancien commentaire (« chaque réponse servie a été payée ») était faux ; il est remplacé. Réservation avant l'appel ou dépassement borné accepté : à vous de trancher.
+
+### 8.5 Couverture (étape 3) : NOT_RUN
+`--cov=api --cov-report=term` est ajouté à l'étape « Run test suite » (`a7349e4`), une seule ligne modifiée, YAML valide, aucun seuil. **Le chiffre de couverture n'a pas été mesuré** : la passe locale n'activait pas la couverture. Les 83 % annoncés plus tôt restent une borne basse. Risque : la couverture ralentit le job (41 min mesurées sans, limite de 75).
+
+### 8.6 PR n°34 (lecture seule, aucune action)
+Ouverte, non brouillon, base `main` `711aebb` (identique à la mienne). Contrôles du 2026-10-20 sur `2c9356d` : `backend-tests`, `backend-postgres-tests`, `backend-security`, `frontend-checks`, `build-*` : succès ; CircleCI `api-tests` et `rag-pipeline-regression` : succès ; `bandit` et `mypy` : échec (non bloquants) ; état « unstable » à cause d'eux. **Elle touche 4 fichiers que je modifie aussi** : `scripts/e2e_rag_chat_scenarios.py`, `scripts/e2e_rag_evalab.py`, `tests/test_celery_worker_workflow.py`, `tests/test_billing_plans_limits_postgres.py`. Dans ce dernier, elle **supprime** la variable `served` (`await asyncio.gather(...)` sans résultat), là où j'ajoute l'assertion : **la fusion de la PR n°34 en premier entraînera un conflit** et ferait perdre ce contrôle si on garde sa version. Je n'ai ni jeton `gh` ni outil de fusion ; non fusionnée.
+
+### 8.7 Ce qui n'a pas été fait
+Passe complète unique sur le HEAD final ; mesure de couverture ; les 27 tests externes (Stripe, Paystack, Google Drive, OneDrive, Notion, staging) ; l'e2e Ollama, le tenant dédié, la démo ; le pilote RLS ; toute migration ; push, PR et fusion (en attente de votre accord).
