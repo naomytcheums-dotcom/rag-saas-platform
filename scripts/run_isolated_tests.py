@@ -36,6 +36,8 @@ INHERITED = ("PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC"
 # Placeholders that CI already uses (".circleci/config.yml"): they make the OAuth clients register, they open nothing.
 PLACEHOLDER = re.compile(r"(never[-_]?(a[-_])?real|placeholder)", re.IGNORECASE)
 ROUNDTRIP_MARKER = re.compile(r"(disposable|roundtrip|scratch|throwaway)", re.IGNORECASE)
+# Opt-in suites this local stack can really run (PostgreSQL + pgvector; the prompt-injection model from the local Hugging Face cache).
+LOCAL_OPT_INS = frozenset({"PGVECTOR_REAL_TEST", "PROMPT_INJECTION_MEASURE"})
 
 
 class IsolationRefused(ValueError):
@@ -76,6 +78,11 @@ def build_test_environment(parent: Mapping[str, str]) -> dict[str, str]:
         # that is NOT cached then fails loudly instead of being downloaded during a test.
         env["HF_HUB_OFFLINE"] = "1"
         env["TRANSFORMERS_OFFLINE"] = "1"
+    requested = [name.strip() for name in (parent.get("RAG_TEST_OPT_IN") or "").split(",") if name.strip()]
+    if any(name not in LOCAL_OPT_INS for name in requested):
+        raise IsolationRefused("RAG_TEST_OPT_IN accepts only: " + ", ".join(sorted(LOCAL_OPT_INS)))
+    for name in requested:
+        env[name] = "1"
     if tessdata:
         if not Path(tessdata).is_dir():
             raise IsolationRefused("RAG_TEST_TESSDATA is not an existing directory")
@@ -101,8 +108,8 @@ def build_test_environment(parent: Mapping[str, str]) -> dict[str, str]:
         "S3_DOCUMENTS_BUCKET_NAME": "documents",
         "S3_VOICE_BUCKET_NAME": "voice",
         "COOKIE_SECURE": "False",
-        "SUPPORT_EMAIL": "support@isolated-tests.invalid",
-        "EMAIL_FROM_ADDRESS": "onboarding@isolated-tests.invalid",
+        "SUPPORT_EMAIL": "support@example.com",
+        "EMAIL_FROM_ADDRESS": "onboarding@example.com",
         "RESEND_API_KEY": "re_placeholder_never_a_real_key",
         "GOOGLE_OAUTH_CLIENT_ID": "ci-only-google-client-id-never-real",
         "GOOGLE_OAUTH_CLIENT_SECRET": "ci-only-google-client-secret-never-real",
