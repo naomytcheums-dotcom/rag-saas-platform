@@ -81,7 +81,7 @@ def test_only_documented_external_dependencies_may_stay_skipped():
         "",
     ):
         assert external_category(local_reason) is None, local_reason
-    assert len(EXTERNAL_SKIPS) == 13  # was 5, then 9 (contracts and llm_optin), now four more image/download-heavy suites
+    assert len(EXTERNAL_SKIPS) == 15  # was 5, then 9 (contracts and llm_optin), 13 (image/download-heavy suites), 15 (two local opt-in suites)
 
 
 def test_the_model_hub_is_only_switched_off_on_request():
@@ -151,3 +151,12 @@ def test_the_image_and_download_heavy_suites_are_documented_not_run_reasons():
         "OTEL_REAL_TEST_JAEGER is not set (no real collector to export to)",
     ):
         assert external_category(reason) == "heavy-local-tooling", reason
+
+def test_the_two_local_opt_in_suites_are_documented_when_they_are_not_switched_on():
+    """Without RAG_TEST_OPT_IN the pgvector and prompt-injection suites skip with these reasons; strict mode must report them as NOT RUN, not as
+    failures (they errored in the default full run of 2026-10-24). They stay SKIPPED, never passed."""
+    for reason in (
+        "set PGVECTOR_REAL_TEST=1 (needs PostgreSQL + pgvector and the embedding model)",
+        "set PROMPT_INJECTION_MEASURE=1 (loads a 700 MB model)",
+    ):
+        assert external_category(reason) == "opt-in-local-suite", reason

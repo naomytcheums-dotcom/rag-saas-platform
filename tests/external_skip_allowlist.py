@@ -23,6 +23,9 @@ EXTERNAL_SKIPS = (
     ("heavy-local-tooling", r"set RUN_DEPLOY_TOOLING=1 \(needs Docker and the network\)", "Terraform / Helm / kubeconform and the provider plugins (network downloads)"),
     ("heavy-local-tooling", r"set RUN_DEPLOY_E2E=1 \(needs Docker and a built image\)", "the dedicated-tenant stacks built from Dockerfile.api (GBs of RAM and downloads)"),
     ("heavy-local-tooling", r"OTEL_REAL_TEST_JAEGER is not set", "a Jaeger all-in-one container to export spans to"),
+    # Runnable on the local stack when switched on with RAG_TEST_OPT_IN (scripts/run_isolated_tests.py); skipped, and documented, when it is not.
+    ("opt-in-local-suite", r"set PGVECTOR_REAL_TEST=1", "RAG_TEST_OPT_IN=PGVECTOR_REAL_TEST (PostgreSQL + pgvector and the cached embedding model)"),
+    ("opt-in-local-suite", r"set PROMPT_INJECTION_MEASURE=1", "RAG_TEST_OPT_IN=PROMPT_INJECTION_MEASURE (the 1.4 GB model already in the Hugging Face cache)"),
 )
 _COMPILED = tuple((category, re.compile(pattern), missing) for category, pattern, missing in EXTERNAL_SKIPS)
 
