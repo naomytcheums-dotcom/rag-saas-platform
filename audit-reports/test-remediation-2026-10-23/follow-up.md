@@ -102,3 +102,76 @@ Ouverte, non brouillon, base `main` `711aebb` (identique à la mienne). Contrôl
 
 ### 8.7 Ce qui n'a pas été fait
 Passe complète unique sur le HEAD final ; mesure de couverture ; les 27 tests externes (Stripe, Paystack, Google Drive, OneDrive, Notion, staging) ; l'e2e Ollama, le tenant dédié, la démo ; le pilote RLS ; toute migration ; push, PR et fusion (en attente de votre accord).
+## 9. Couverture mesurée de `api/` (point 13.1.6, objectif 90 %) : 2026-10-24
+Preuves hors dépôt : `C:\Users\NITROV15\rag-test-evidence\2026-10-24\` (`run-cov\` : `progress.txt`, `B1..B8.xml`, `.coverage.B1..B8`, `.coverage.OPTIN`, `.coverage.PR34`, `report-*.txt`, `summary-*.json`, `report-modules.txt` ; `ab-b4-nocov\`).
+
+### 9.1 Comment c'est mesuré (PASS_VERIFIED)
+- Commande : `Run-IsolatedBatches.ps1 -OutDir …\run-cov -Coverage` (option ajoutée dans le commit qui suit ; elle ajoute `--cov=api --cov-report=` et garde un fichier de données par lot). HEAD `3b34409`, seul ce script différait pendant la mesure ; `api/` et `tests/` sont inchangés. Pile locale PostgreSQL 17 / Redis / MinIO / worker Celery, `RAG_STRICT_SKIPS=1`, un pytest à la fois. 17:56 → 22:31 (4 h 35).
+- Configuration : celle de `pyproject.toml` (`[tool.coverage.run] concurrency = ["greenlet"]`), vérifiée appliquée avec la valeur par défaut de pytest-cov (`config_file=".coveragerc"` inexistant → coverage lit `pyproject.toml`). Couverture de **lignes** (pas de branches), coverage 7.16.0, **aucun seuil, aucune ligne omise, aucune modification de la configuration**.
+- Les **8 fichiers de données existent** (aucun lot manquant). Combinaison : `coverage combine --keep`.
+- Tests de cette passe : 7122 passés, 83 ignorés (tous documentés), 2 erreurs (les deux suites opt-in pgvector et injection de prompt, non activées ; lacune de mon allowlist corrigée dans le commit qui suit), 0 échec.
+- Les 577 fichiers de tests suivis par Git sont tous dans les 8 lots.
+
+### 9.2 Résultat
+| Périmètre | Lignes de `api/` | Manquantes | Couverture |
+|---|---|---|---|
+| **Variante CI : `B1`..`B7`** (les 7 fichiers `--ignore` de `backend-tests` = `B8`, exclus) | 50 683 (861 fichiers, 9 sans instruction) | 7 226 | **85,74 %** |
+| Sans exclusion : `B1`..`B8` | 50 683 | 7 226 | 85,74 % (`B8` seul : 37,84 %, uniquement des imports déjà couverts : il n'ajoute aucune ligne) |
+| + 2 suites opt-in (pgvector natif, injection de prompt), `RAG_TEST_OPT_IN` | 50 683 | 7 216 | 85,76 % (+10 lignes) |
+| + les 12 fichiers de tests de la PR n°34 (88 passés ; copiés temporairement depuis la branche distante puis supprimés ; **PR non fusionnée**) | 50 683 | 6 448 | **87,28 %** (+778 lignes) |
+| Les deux ensemble | 50 683 | 6 438 | 87,30 % |
+**90 % exige au plus 5 068 lignes manquantes** : il en faut 2 158 de moins qu'aujourd'hui, **1 380 de moins après la PR n°34**.
+Ce chiffre n'est **pas garanti identique** à celui de la CI (NOT_VERIFIED) : la CI tourne sous Linux et ignore des tests qui s'exécutent ici (PostgreSQL destructifs, worker Celery, OCR) ; son chiffre est donc probablement un peu inférieur à 85,74 %. Le premier run de la PR donnera le vrai chiffre.
+
+### 9.3 Ce qui n'est pas couvert faute de services ou de suites lourdes (indicatif, rapprochement par nom de module, pas par ligne)
+| Suite ignorée | Module correspondant | Lignes manquantes |
+|---|---|---|
+| Traçage vers un vrai Jaeger | `api/security/tracing.py` (25,4 %) | 44 |
+| Voix navigateur (SAPI + node + Playwright) | `api/services/voice.py` (69,9 %) | 104 |
+| Stripe live (4 tests) | `api/services/billing_stripe.py` (89,2 %) | 35 |
+| Paystack live (4 tests) | `api/services/billing_paystack.py` (76,4 % ; 97,6 % avec la PR n°34) | 50 (5 avec la PR n°34) |
+| Google Drive, OneDrive, Notion | `*_extraction.py` | 5 + 5 + 16 |
+| ClamAV réel, pgvector, injection de prompt | `clamav.py`, `retrieval_pipeline.py`, `prompt_injection_detection.py` | 6 + 1 + 2 (pgvector et injection : mesurés avec opt-in) |
+| Terraform/Helm, nginx TLS, tenant dédié (Docker) | aucun module de `api/` (fichiers `deploy/` ou conteneurs, non mesurés par pytest-cov) | 0 |
+**Majorant : 223 lignes (en comptant Paystack après la PR n°34) à 268 lignes (somme du tableau), soit environ 0,5 point** : si toutes ces suites tournaient, on passerait d'environ 85,7 % à 86,3 %. **L'écart avec 90 % vient donc surtout de tests absents, pas de suites ignorées.** (Les 27 tests externes : NOT_RUN_EXTERNAL_DEPENDENCY ; je ne les ai pas lancés.)
+
+### 9.4 Où sont les points (variante CI, par dossier)
+| Dossier | Lignes | Manquantes | Couverture | Part des manquantes |
+|---|---|---|---|---|
+| `api/services` | 20 785 | 2 724 | 86,9 % | 37,7 % |
+| `api/tasks` | 2 478 | 1 325 | 46,5 % | 18,3 % |
+| `api/alembic` (145 migrations) | 2 632 | 1 316 | 50,0 % | 18,2 % |
+| `api/routers` | 9 729 | 1 023 | 89,5 % | 14,2 % |
+| `api/security` | 5 216 | 737 | 85,9 % | 10,2 % |
+| reste (`tools`, `schemas`, `models`, racine) | 9 843 | 101 | 99 % | 1,4 % |
+Les 25 fichiers les moins couverts (≥ 20 lignes) sont dans `report-ci-like.txt` : en tête `alembic/versions/0088_…` (10,3 %), `0090_partie_12_billing` (15,8 %), `tasks/ab_tests` (18,9 %), `tasks/sales` (19,8 %), `tasks/plugins` (22,0 %), `0115_paystack_billing_support` (22,7 %), puis une douzaine de `services/*_extraction.py` à 23 %.
+**La PR n°34 règle déjà l'essentiel de `api/tasks`** : `ab_tests` 18,9 → 99,1 %, `sales` 19,8 → 95,3 %, `analytics` 26,5 → 100 %, `fine_tuning` 32,9 → 100 %, `api_key_maintenance` 23,9 → 100 %, `billing` 58,4 → 97,1 %, `airbyte_client` 43,8 → 100 %.
+
+### 9.5 Si l'on vise 90 % : propositions (AUCUN test écrit, en attente de votre accord ; gains estimés, NOT_VERIFIED)
+Restant après la PR n°34 : 6 448 lignes manquantes ; il en faut ≤ 5 068.
+| Priorité | Proposition | Lignes visées | Points |
+|---|---|---|---|
+| 1 | **Migrations Alembic exécutées dans le processus de test** : un test `upgrade head` puis `downgrade base` puis `upgrade head` sur une base jetable créée et supprimée par le test (nom contenant `test`). Aujourd'hui les migrations ne sont jouées que hors pytest (job CI, `Start-TestStack.ps1`), donc leurs corps ne comptent pas ; les 1 316 lignes manquantes sont presque toutes des `upgrade()`/`downgrade()` | environ 1 100 à 1 300 | environ +2,2 à +2,6 |
+| 2 | `api/security/documents.py` (310 manquantes / 1 282) : chemins d'ingestion en erreur (formats, S3, OCR, limites) avec des faux fournisseurs, comme les tests d'extraction existants | 150 à 250 | +0,3 à +0,5 |
+| 3 | `api/routers/crm.py` (242 / 452) : connecteurs CRM contre des faux fournisseurs locaux (méthode des tests de contrat Airbyte/Paystack de la PR n°34) | 150 à 200 | +0,3 à +0,4 |
+| 4 | `tasks/media.py` (95), `tasks/autonomous_agents.py` (78), `services/metadata_filtering.py` (70), `services/agent_orchestrator.py` (70) | 150 à 250 | +0,3 à +0,5 |
+| 5 | Observabilité : `security/tracing.py` (44) avec un exportateur de spans en mémoire, `routers/observability.py` (40), `loki_handler.py` (38), `alerting.py` (38) | 100 à 150 | +0,2 à +0,3 |
+Lecture : **1 + 2 + 3** couvrent en ordre de grandeur les 1 380 lignes à gagner une fois la PR n°34 fusionnée (1 400 à 1 750 lignes visées) ; 1 + 2 seules sont limites. Sans la PR n°34, il faut en plus les modules `api/tasks` qu'elle couvre. Règles tenues : aucun test affaibli, aucune ligne retirée de la mesure, configuration de couverture inchangée. Réserve sur la priorité 1 : tester des migrations dans le processus de test est un vrai test (il vérifie que la chaîne s'applique et se défait), mais il exige une base dédiée créée par le test et un compte autorisé à `CREATE DATABASE` ; à valider avec vous avant de l'écrire.
+
+### 9.6 Durée : `backend-tests` tiendra-t-il sous 75 minutes ?
+Mesure locale (même machine, mêmes lots ; temps en secondes) :
+| Lot | Sans couverture (10-23) | Avec couverture | Rapport |
+|---|---|---|---|
+| B1 | 404 | 2 510 | 6,21 |
+| B2 | 1 297 | 2 937 | 2,26 |
+| B3 | 1 087 | 4 316 | 3,97 |
+| B4 | 669 | 2 205 | 3,30 |
+| B5 | 1 336 | 2 256 | 1,69 |
+| B6 | 1 627 | 1 713 | 1,05 |
+| B7 | 455 | 463 | 1,02 |
+| **B1..B7** | **6 875 (115 min)** | **16 400 (273 min)** | **2,39** |
+**Contrôle A/B** (même soirée, `B4` sans couverture, 22:51) : 798 s contre 669 s le 23 octobre (bruit de machine de l'ordre de 20 %), contre 2 205 s avec couverture : **×2,76**. Le surcoût de la couverture est donc réel ; la dispersion entre lots (1,0 à 6,2) montre qu'il dépend fortement du contenu des tests.
+**Estimation pour la CI (NOT_VERIFIED)** : `backend-tests` a duré 41 min 22 (run n°202, 6 256 tests, dont l'installation) ; en appliquant le rapport mesuré (≈ 2,4, plage 2,0 à 2,8) soit à la durée totale (83 à 116 min), soit seulement à la partie tests (environ 36 min, plus environ 5 min d'installation : 77 à 106 min) : **environ 77 à 116 minutes dans tous les cas**. **Toutes les estimations dépassent la limite de 75 minutes.** Le garde-fou `tests/test_ci_backend_timeout.py` n'impose qu'un plancher (`limit >= 60`) : relever `timeout-minutes` (par exemple à 150) ne le casse pas. Recommandation : relever la limite dans la même PR (une ligne), ou mesurer la couverture dans un job séparé. Je n'ai rien modifié (la branche est déjà poussée) ; le premier run de la PR le confirmera ou l'infirmera.
+
+### 9.7 Ce qui n'a pas été fait
+Couverture de branches (non demandée) ; mesure sur Linux / CI ; tests de la §9.5 (en attente d'accord) ; les 27 tests externes ; push et PR.
