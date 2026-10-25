@@ -59,11 +59,15 @@ async def _ingest_records_as_documents(
         record_id = record.get("id") or record.get("key") or str(i)
         filename = f"{source}-{record_id}-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d%H%M%S')}.txt"
         try:
-            await upload_document(db, org_id, None, user_id, filename, text.encode("utf-8"))
+            # upload_document flushes the row before storing the file: a SAVEPOINT drops a record that fails half-way, never the others
+            async with db.begin_nested():
+                await upload_document(db, org_id, None, user_id, filename, text.encode("utf-8"))
             count += 1
         except Exception as exc:
             logger.warning("Failed to ingest %s record %s: %s", source, record_id, exc)
 
+    # get_db only closes the session: without this commit every imported document was rolled back after the response
+    await db.commit()
     return count
 
 
