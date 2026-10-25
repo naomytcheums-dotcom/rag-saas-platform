@@ -25,9 +25,11 @@ jobs:
     # slower per-test than this session's own dev machine (real bcrypt
     # hashing costs, real async DB round-trips, add up differently under
     # shared CPU). Measured again on PR #20 and on main: the suite is now bigger and the job is cancelled at 30 minutes with pytest
-    # still running, at about 61% after 27 minutes (so ~45 minutes in total on a standard runner). 75 minutes leaves headroom
+    # still running, at about 61% after 27 minutes (so ~45 minutes in total on a standard runner). 75 minutes left headroom before coverage was measured
     # without masking an actual hang. tests/test_ci_backend_timeout.py guards this limit.
-    timeout-minutes: 75
+    # 2026-10-24: with --cov=api the suite ran 2.4 times slower locally (115 -> 273 min over the same batches; A/B on one batch: x2.76), so the
+    # 41-minute job is expected to take about 77 to 116 minutes. 150 leaves headroom; a hang is still stopped.
+    timeout-minutes: 150
     # Phase 5, Étape 11 -- real fix for the ~15 auth/SSO test failures
     # traced in ROADMAP.md (Étape 10): a real Redis service for THIS
     # job specifically, so RATE_LIMIT_REDIS_URL points at something
