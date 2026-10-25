@@ -175,3 +175,59 @@ Mesure locale (même machine, mêmes lots ; temps en secondes) :
 
 ### 9.7 Ce qui n'a pas été fait
 Couverture de branches (non demandée) ; mesure sur Linux / CI ; tests de la §9.5 (en attente d'accord) ; les 27 tests externes ; push et PR.
+
+## 10. Couverture portée à 90 % avec de vrais tests : 2026-10-25
+Preuves hors dépôt : `C:\Users\NITROV15\rag-test-evidence\2026-10-25\` (`run-cov2\` : `progress.txt`, `B1..B8.txt/.xml/.files.txt`, `.coverage.B1..B8`, `.coverage.RERUN`, `report-ci-like.txt`, `report-all.txt`, `summary-*.json` ; `mf-*.txt`, `crm*.txt`, `media-*.txt`, `agents-*.txt`, `connectors-*.txt` pour les contrôles de mutation ; `rerun5-cov.txt`).
+
+### 10.1 Résultat : une passe unique sur `15913cf` (PASS_VERIFIED)
+- Commande : `Run-IsolatedBatches.ps1 -OutDir …\2026-10-25\run-cov2 -Coverage`, HEAD `15913cf`, même pile locale et même configuration que la §9 (`pyproject.toml`, `concurrency = ["greenlet"]`, lignes, aucun seuil, aucune exclusion ajoutée, aucun `pragma`). 8 fichiers de données présents, aucun lot manquant.
+
+| Périmètre | Lignes de `api/` | Manquantes | Couverture |
+|---|---|---|---|
+| Avant (§9, `3b34409`, variante CI `B1..B7`) | 50 683 | 7 226 | 85,74 % |
+| **Après, variante CI : `B1..B7`** (les 7 fichiers `--ignore` exclus) | 50 711 | **4 972** | **90,195 %** (45 739 / 50 711) |
+| Après, sans exclusion : `B1..B8` | 50 711 | 4 972 | 90,195 % (`B8` n'ajoute aucune ligne) |
+| Après + rejeu des 4 tests réparés en §10.3 | 50 711 | 4 967 | 90,205 % |
+**90 % est atteint, de justesse : 99 lignes de marge** (90 % autorise au plus 5 071 lignes manquantes sur 50 711). Le dénominateur gagne 28 lignes : `api/alembic/env.py` désormais exécuté (+26) et les 2 lignes de la correction CRM. Chiffre **local, Windows** : celui de la CI (Linux, quelques tests ignorés là-bas) reste NOT_VERIFIED et peut être légèrement inférieur, donc **éventuellement sous 90 %**.
+Tests de la passe : 7 406 passés, 85 ignorés (tous documentés, dont les tests externes), 23 désélectionnés, 3 échecs et 2 erreurs, tous d'environnement (§10.3).
+
+### 10.2 Modules touchés : avant / après (lignes manquantes ; « avant » = §9 sur `3b34409`)
+| Module | Avant | Après | Gagné | Commit | Mutations détectées |
+|---|---|---|---|---|---|
+| `api/alembic` (migrations + `env.py`) | 1 316 / 2 632 (50,0 %) | 12 / 2 658 (99,5 %) | 1 304 | `c4f611c` | 2 / 2 (`drop_column` rendu sans effet) |
+| `api/services/metadata_filtering.py` | 70 / 156 (55,1 %) | 3 / 156 (98,1 %) | 67 | `e7697dc` | 4 / 4 (borne `after` inclusive, `not_in` numérique, `min` exclusif, interrupteur ignoré) |
+| `api/routers/crm.py` | 242 / 452 (46,5 %) | 0 / 454 (100 %) | 242 | `6217612` (correctif + tests) | 1 / 1 (SAVEPOINT retiré) ; et 38 tests en échec avant le correctif |
+| `api/tasks/media.py` | 95 / 151 (37,1 %) | 2 / 151 (98,7 %) | 93 | `d92db0e` | 5 / 5 |
+| `api/tasks/autonomous_agents.py` | 78 / 106 (26,4 %) | 2 / 106 (98,1 %) | 76 | `15913cf` | 4 / 4 |
+| 27 connecteurs SaaS (`*_extraction.py`) | 566 / 800 (29,2 %) | 71 / 800 (91,1 %) | 495 | `687f215` | 10 / 10 (7 sur box, shopify, clickup, intercom, hubspot, trello, linear ; 3 refaites à part sur zoho et woocommerce) |
+Chaque mutation : code cassé volontairement, test relancé, échec constaté, fichier restauré octet pour octet, `git status` propre. Nouveaux fichiers de tests : `test_postgres_migration_roundtrip.py` (4), `test_metadata_filtering_semantics.py` (37), `test_crm_import_ingestion.py` (84), `test_media_tasks.py` (8), `test_saas_connector_contracts.py` (148), `test_autonomous_agent_tasks.py` (7). Aucun test existant modifié ni affaibli.
+
+### 10.3 Échecs de la passe : tous d'environnement, aucun dans un module touché
+| Test | Cause lue | Rejeu | Statut |
+|---|---|---|---|
+| `test_ocr.py` (2 erreurs), `test_documents_integration.py::test_process_document_ocrs_a_real_scanned_pdf` | J'ai lancé la passe sans `RAG_TEST_EXTRA_PATH`/`RAG_TEST_TESSDATA` : Tesseract et poppler absents du PATH du lanceur, le mode strict a (à juste titre) transformé le skip en échec | 3 passés avec les variables (`rerun5-cov.txt`) | PASS_VERIFIED |
+| `test_text_cleaning.py::test_clean_text_is_reasonably_fast_for_a_large_real_volume` | Seuil de performance : 8,85 s contre 5 s, sous couverture et machine chargée | passé seul | PASS_VERIFIED (sensible à la charge) |
+| `test_documents_integration.py::test_import_and_process_github_issue_runs_the_real_end_to_end_github_issue_pipeline` | Appel réel à `api.github.com` : `httpx.ReadTimeout`. `curl` mesure 21,7 s pour `GET /repos/github/docs/issues?per_page=1` depuis cette machine, le code coupe à 15 s (`_TIMEOUT_SECONDS`). Passait le 24/10 | échoue encore (même timeout) | NOT_VERIFIED (réseau) ; délai **non** modifié |
+- **Les 23 désélectionnés** (identifiés un par un) : les tests réseau GitHub marqués `network_flaky`, exclus par `addopts = -m "not network_flaky"` de `pyproject.toml`, comme en CI. Ce n'est pas une désélection ajoutée. Remarque : le test GitHub du tableau ci-dessus appelle lui aussi GitHub sans porter ce marqueur ; je ne l'ai pas changé (le marquer le retirerait de la passe par défaut, à décider par vous).
+
+### 10.4 Un vrai bug trouvé : les imports CRM ne créaient rien (FAIL_VERIFIED puis corrigé)
+Les 36 routes `POST /organizations/{org_id}/crm/<fournisseur>/import` répondaient `{"imported": N}` mais ne validaient jamais la transaction : `get_db` ferme la session sans `commit`, donc **tous les documents importés étaient annulés après la réponse**, et les objets S3 déjà écrits restaient orphelins. Preuve : 38 des nouveaux tests échouent sur le code d'origine (`crm1-before-fix.txt` : `0 == 3`). Correction (`6217612`) : `commit` en fin d'import, et un SAVEPOINT par enregistrement, pour qu'un enregistrement dont l'upload S3 échoue soit annulé seul au lieu d'être gardé sans fichier. Isolation : un import vers une autre organisation est refusé et n'y écrit rien (testé).
+
+### 10.5 Ce qui reste non couvert, classé (4 972 lignes)
+- **(a) testable sans service, non fait** : en tête `security/documents.py` (310), `tasks/ab_tests.py`, `sales.py`, `plugins.py` (≈ 85 chacun), `agent_orchestrator.py` (70), puis `tasks/analytics`, `workflows`, `billing`, `integrations`, `fine_tuning`, `api_key_maintenance`, `external_source_sync`, `airbyte_client`, `billing_paystack`. **La plupart des modules `api/tasks/*` cités sont couverts par la PR n°34** (non fusionnée) : je ne les ai pas dupliqués. Estimation sur les anciennes données : 90,40 % avec la PR n°34 en plus (NOT_VERIFIED sur le HEAD actuel).
+- **(b) exige un service absent** (pas un manque de tests) : traçage Jaeger (`security/tracing.py`, 44), voix navigateur (`services/voice.py`, 104), Stripe et Paystack live, ClamAV réel, Google Drive / OneDrive / Notion, tenant dédié, Terraform/Helm. Les 27 tests externes : NOT_RUN_EXTERNAL_DEPENDENCY.
+- **(c) code mort ou suspect, signalé, ni supprimé ni testé** :
+  - 9 connecteurs appellent un endpoint inexistant `GET {_BASE_URL}/records` (azure_devops, basecamp, bitbucket, coda, gitlab, miro, monday, smartsheet, wrike ; commit `16d444c`) : 243 lignes manquantes ;
+  - 9 connecteurs dont la requête ou l'authentification diffère de la documentation publique du fournisseur, NOT_VERIFIED (je n'ai écrit **aucun test de succès** qui figerait ces formes) : Salesforce (lit `records[].fields` sur `/sobjects/{x}`), Zendesk (jeton en `Bearer` au lieu de Basic `email/token`), Asana (`GET /tasks` sans projet), Jira (`/rest/api/3/search`, retiré par Atlassian en 2025 ; description ADF), Hive (`api_key` en paramètre, pas de `user_id`), Nifty (hôte et chemin), Pipefy (`Pipe.cards` inexistant), Process Street (`X-API-Key` attendu), Teamwork (Basic inversé, `todo-items`). Mineurs : SmartSuite (`limit` dans le corps), Shopify (version d'API `2024-01` plus supportée).
+- **Limite de mesure** : avec `concurrency = ["greenlet"]`, le code exécuté dans un thread (`asyncio.to_thread`, exécuteurs) n'est pas compté (vérifié par une sonde) : la couverture réelle est un peu **supérieure** au chiffre affiché. Configuration non modifiée.
+
+### 10.6 Durée de la suite avec couverture
+| Lot | 24/10 (`3b34409`) | 25/10 (`15913cf`) |
+|---|---|---|
+| B1..B7 | 16 400 s (273 min) | 23 518 s (392 min) |
+| B8 | — | 263 s |
+| Horloge murale | 4 h 35 | 6 h 36 (10:23 → 17:00) |
+Les nouveaux fichiers de tests pèsent environ 11 min sous couverture sur cette machine, dont 507 s pour `test_crm_import_ingestion.py` (84 tests, un compte et une organisation par test). Le reste de l'écart vient des fichiers **existants**, ralentis de ×2 à ×4 (par exemple `test_sweep_with_real_data.py` : 188 s → 1 013 s ; RAM libre entre 1 et 2 Go pendant la passe) : cause probable, la charge de la machine (NOT_VERIFIED). Pour la CI, j'estime environ +5 min par rapport à la §9.6, ce qui reste sous les 150 min de `backend-tests` (NOT_VERIFIED).
+
+### 10.7 Ce qui n'a pas été fait
+Mesure sur Linux / CI ; couverture de branches ; tests des modules couverts par la PR n°34 ; `security/documents.py` (310 lignes, prochain candidat) ; les 27 tests externes ; aucune PR ouverte ni fusionnée ; aucune migration modifiée.
